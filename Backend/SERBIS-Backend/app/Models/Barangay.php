@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\TracksHistory;
 
 #[Table('tbl_barangay', key: 'barangay_id')]
 #[Fillable(['barangay_name'])]

@@ -2,11 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Vehicle;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ServiceRequestController extends Controller
 {
+    public function adminIndex()
+    {
+        $requests = ServiceRequest::with(['resident', 'service', 'admin', 'vehicle'])
+            ->latest()
+            ->get();
+            
+        return response()->json(['data' => $requests]);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -28,23 +39,51 @@ class ServiceRequestController extends Controller
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
             'description' => 'required|string',
-            'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048', 
+            'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
+            'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
         ]);
 
-        // Handle the file upload
         $filePath = null;
         if ($request->hasFile('valid_id')) {
             $filePath = $request->file('valid_id')->store('ids', 'public');
         }
 
-        $serviceRequest = ServiceRequest::create([
-            'resident_id' => auth()->id(),
-            'service_id' => $validated['service_id'],
-            'description' => $validated['description'],
-            'valid_id' => $filePath, // Save the generated file path
-            'status' => 'Pending',
-            'processed_by' => null,
-        ]);
+        $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath) {
+            $vehicle = null;
+            $vehicleId = null;
+
+            if (!empty($validated['required_vehicle_type'])) {
+                $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
+                                  ->where('status', 'Available')
+                                  ->lockForUpdate()
+                                  ->first();
+
+                if (!$vehicle) {
+                    return false; 
+                }
+                $vehicleId = $vehicle->vehicle_id;
+            }
+
+            $newServiceRequest = ServiceRequest::create([
+                'resident_id' => $request->user()->getKey(),
+                'service_id' => $validated['service_id'],
+                'description' => $validated['description'],
+                'valid_id' => $filePath,
+                'status' => 'Pending',
+                'processed_by' => null,
+                'vehicle_id' => $vehicleId,
+            ]);
+
+            if ($vehicle) {
+                $vehicle->update(['status' => 'Dispatched']);
+            }
+
+            return $newServiceRequest;
+        });
+
+        if ($serviceRequest === false) {
+            return response()->json(['message' => 'No available vehicles at this time.'], 422);
+        }
 
         return response()->json($serviceRequest, 201);
     }

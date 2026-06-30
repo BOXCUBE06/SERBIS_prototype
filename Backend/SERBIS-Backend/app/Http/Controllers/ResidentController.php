@@ -56,24 +56,23 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate([
-            'barangay_id' => 'sometimes|required|integer|exists:tbl_barangay,barangay_id',
-            'first_name' => 'sometimes|required|string',
-            'middle_name' => 'nullable|string',
-            'last_name' => 'sometimes|required|string',
-            'phone_number' => 'sometimes|required|string',
-            'email_address' => 'sometimes|required|email|unique:tbl_residents,email_address,' . $id . ',resident_id',
-            'password' => 'sometimes|required|string|min:8',
-            'photo' => 'nullable|string',
-            'status' => 'sometimes|required|string',
-            'otp' => 'nullable|string',
-            'otp_verified_at' => 'nullable|date',
-        ]);
+    'first_name' => 'required|string',
+    'middle_name' => 'nullable|string',
+    'last_name' => 'required|string',
+    'phone_number' => 'required|string',
+    'email_address' => 'required|email|unique:tbl_residents,email_address,' . $id . ',resident_id',
+    'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+    'status' => 'required|string',
+    'password' => 'nullable|string|min:8', // Must be nullable on update
+]);
 
-        if (isset($validated['password'])) {
-            $validated['password'] = bcrypt($validated['password']);
-        }
+if (!empty($validated['password'])) {
+    $validated['password'] = bcrypt($validated['password']);
+} else {
+    unset($validated['password']); // Prevent overwriting with null
+}
 
-        $resident->update($validated);
+$resident->update($validated);
 
         return response()->json($resident);
     }

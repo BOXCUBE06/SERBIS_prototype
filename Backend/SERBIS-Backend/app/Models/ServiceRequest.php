@@ -7,12 +7,15 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'service_id', 'processed_by', 'description', 'valid_id', 'status', 'remarks'])]
+#[Fillable(['resident_id', 'service_id', 'processed_by', 'description', 'valid_id', 'status', 'remarks', 'vehicle_id'])]
 class ServiceRequest extends Model
 {
-    use HasFactory;
+    use HasFactory, TracksHistory;
+
+    protected $ignoreLogging = ['created_at', 'updated_at'];
 
     public function resident(): BelongsTo
     {
@@ -27,5 +30,10 @@ class ServiceRequest extends Model
     public function admin(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by', 'admin_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
     }
 }

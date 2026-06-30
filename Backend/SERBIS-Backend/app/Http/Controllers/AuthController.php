@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\User; // Represents Admins/Staff
 use App\Models\Resident;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +24,8 @@ class AuthController extends Controller
             'last_name' => $validated['last_name'],
             'role' => $validated['role'],
             'email_address' => $validated['email_address'],
-            'password' => $validated['password'],
+            // FIX: Passwords must be hashed before saving to the database
+            'password' => Hash::make($validated['password']), 
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -35,34 +36,50 @@ class AuthController extends Controller
         ], 201);
     }
 
-    public function login(Request $request)
+    // Endpoint specifically for the Web Frontend
+    public function adminLogin(Request $request)
     {
         $request->validate([
             'email_address' => 'required|email',
             'password' => 'required',
         ]);
 
-        // Check Admin table first
         $admin = User::where('email_address', $request->email_address)->first();
-        if ($admin && Hash::check($request->password, $admin->password)) {
+
+        if (!$admin || !Hash::check($request->password, $admin->password)) {
             return response()->json([
-                'token' => $admin->createToken('admin-token')->plainTextToken,
-                'role' => 'admin',
-                'user' => $admin
-            ]);
+                'message' => 'Unauthorized. MDRRMO Admin access only.'
+            ], 401);
         }
 
-        // Check Resident table second
+        return response()->json([
+            'token' => $admin->createToken('admin-token')->plainTextToken,
+            'role' => 'admin',
+            'user' => $admin
+        ], 200);
+    }
+
+    // Endpoint specifically for the Mobile App
+    public function residentLogin(Request $request)
+    {
+        $request->validate([
+            'email_address' => 'required|email',
+            'password' => 'required',
+        ]);
+
         $resident = Resident::where('email_address', $request->email_address)->first();
-        if ($resident && Hash::check($request->password, $resident->password)) {
+
+        if (!$resident || !Hash::check($request->password, $resident->password)) {
             return response()->json([
-                'token' => $resident->createToken('resident-token')->plainTextToken,
-                'role' => 'resident',
-                'user' => $resident
-            ]);
+                'message' => 'Invalid resident credentials.'
+            ], 401);
         }
 
-        return response()->json(['message' => 'Invalid credentials'], 401);
+        return response()->json([
+            'token' => $resident->createToken('resident-token')->plainTextToken,
+            'role' => 'resident',
+            'user' => $resident
+        ], 200);
     }
 
     public function logout(Request $request)
