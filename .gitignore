@@ -1,2 +1,7 @@
 Mobile/vendor/ 
 Mobile/build/ 
+Mobile/vendor/ 
+Mobile/build/ 
+build/ 
+node_modules/ 
+build/ 
