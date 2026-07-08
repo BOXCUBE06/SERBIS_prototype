@@ -1,10 +1,23 @@
+/// Services tab: service-request submission.
+///
+/// Lets a resident pick one of five [ServiceType]s (ambulance, hospital
+/// transfer, road clearing, relief goods, or a general inquiry) and fill in
+/// a form tailored to that category. On submit, a [ServiceRequest] is built
+/// from the form fields and added to the shared [AppState], which is what
+/// makes it immediately visible on the Track and Home tabs.
+///
+/// Each [ServiceType] has its own set of fields (see [_buildForm]); shared
+/// field widgets ([_Field], [_Dropdown], [_UploadField]) keep the per-type
+/// forms visually consistent without duplicating styling code.
+library serbis.screens.services;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/models.dart';
-import '../state/app_state.dart';
-import '../state/strings.dart';
+import '../models/request_models.dart';
+import '../state/request_store.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart';
+import '../widgets/shared_widgets.dart';
 
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
@@ -33,9 +46,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   // Using one map (rather than per-type state) keeps user input around if
   // they switch between request types and come back.
   final Map<String, TextEditingController> _controllers = {};
-
-  // Dropdown selections, keyed the same way as _controllers.
   final Map<String, String> _dropdowns = {};
+
+  /// Items currently checked in the Equipment / Item Request form.
+  final Set<String> _selectedItems = {};
 
   @override
   void initState() {
@@ -132,6 +146,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
           'Submitted $timeLabel',
         ];
         break;
+      case ServiceType.items:
+        final address = _orFallback(_text('item_address'), 'Address not specified');
+        final selected = _selectedItems.isEmpty ? ['Not specified'] : _selectedItems.toList();
+        metaLines = [
+          'Items: ${selected.join(', ')}',
+          address,
+          'Submitted $timeLabel',
+        ];
+        break;
     }
 
     final request = ServiceRequest(
@@ -204,15 +227,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   ServiceType.transfer,
                   ServiceType.road,
                   ServiceType.relief,
+                  ServiceType.items,
+                  ServiceType.inquiry,
                 ].map((t) => _TypeCard(type: t, selected: t == _selected, filipino: f, onTap: () => setState(() => _selected = t))).toList(),
-              ),
-              const SizedBox(height: 10),
-              _TypeCard(
-                type: ServiceType.inquiry,
-                selected: _selected == ServiceType.inquiry,
-                filipino: f,
-                onTap: () => setState(() => _selected = ServiceType.inquiry),
-                fullWidth: true,
               ),
             ],
           ),
@@ -240,6 +257,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ServiceType.road => tr(f, 'services.form.road'),
         ServiceType.relief => tr(f, 'services.form.relief'),
         ServiceType.inquiry => tr(f, 'services.form.inquiry'),
+        ServiceType.items => tr(f, 'services.form.items'),
       };
 
   Widget _buildForm(ServiceType t) {
@@ -374,7 +392,240 @@ class _ServicesScreenState extends State<ServicesScreen> {
             controller: _ctrl('inq_contact'),
           ),
         ]);
+      case ServiceType.items:
+        return _ItemRequestForm(
+          selectedItems: _selectedItems,
+          onToggle: (item) => setState(() {
+            if (_selectedItems.contains(item)) {
+              _selectedItems.remove(item);
+            } else {
+              _selectedItems.add(item);
+            }
+          }),
+          addressController: _ctrl('item_address'),
+          contactController: _ctrl('item_contact'),
+          notesController: _ctrl('item_notes'),
+        );
     }
+  }
+}
+
+/// The equipment / item request form.
+///
+/// Shows a checklist of the seven available items, each with a quantity
+/// stepper that appears once the item is checked. Also collects a delivery
+/// address, contact number, and optional notes.
+class _ItemRequestForm extends StatefulWidget {
+  final Set<String> selectedItems;
+  final ValueChanged<String> onToggle;
+  final TextEditingController addressController;
+  final TextEditingController contactController;
+  final TextEditingController notesController;
+
+  const _ItemRequestForm({
+    required this.selectedItems,
+    required this.onToggle,
+    required this.addressController,
+    required this.contactController,
+    required this.notesController,
+  });
+
+  @override
+  State<_ItemRequestForm> createState() => _ItemRequestFormState();
+}
+
+class _ItemRequestFormState extends State<_ItemRequestForm> {
+  /// Available equipment items with their icon.
+  static const List<(String key, IconData icon)> _items = [
+    ('Wheelchair', Icons.accessible_rounded),
+    ('Stretcher', Icons.airline_seat_flat_rounded),
+    ('First Aid Kit', Icons.medical_services_outlined),
+    ('Oxygen Tank', Icons.air_rounded),
+    ('Generator', Icons.electrical_services_rounded),
+    ('Megaphone', Icons.campaign_rounded),
+    ('Rescue Tools', Icons.hardware_rounded),
+  ];
+
+  /// Quantity per item, defaults to 1.
+  final Map<String, int> _quantities = {};
+
+  int _qty(String key) => _quantities[key] ?? 1;
+
+  void _increment(String key) => setState(() => _quantities[key] = _qty(key) + 1);
+  void _decrement(String key) {
+    final current = _qty(key);
+    if (current > 1) setState(() => _quantities[key] = current - 1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Item checklist ──
+        Text(
+          'Select the items you need',
+          style: AppText.display(size: 12, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Tap an item to select it. Adjust the quantity if you need more than one.',
+          style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Column(
+            children: _items.asMap().entries.map((entry) {
+              final i = entry.key;
+              final (key, icon) = entry.value;
+              final isSelected = widget.selectedItems.contains(key);
+              final isLast = i == _items.length - 1;
+
+              return Column(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.vertical(
+                      top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                      bottom: isLast ? const Radius.circular(14) : Radius.zero,
+                    ),
+                    onTap: () => widget.onToggle(key),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      child: Row(
+                        children: [
+                          // Checkbox
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.green700 : AppColors.surface,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected ? AppColors.green700 : AppColors.line,
+                                width: 1.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: isSelected
+                                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          // Icon + label
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.green50 : AppColors.paper,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(icon, size: 17, color: isSelected ? AppColors.green700 : AppColors.inkMuted),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              key,
+                              style: AppText.display(
+                                size: 13.5,
+                                weight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                color: isSelected ? AppColors.green900 : AppColors.ink,
+                              ),
+                            ),
+                          ),
+                          // Quantity stepper — only shown when item is selected
+                          if (isSelected)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _QtyButton(
+                                  icon: Icons.remove,
+                                  onTap: () => _decrement(key),
+                                  enabled: _qty(key) > 1,
+                                ),
+                                SizedBox(
+                                  width: 30,
+                                  child: Text(
+                                    '${_qty(key)}',
+                                    textAlign: TextAlign.center,
+                                    style: AppText.display(size: 14, weight: FontWeight.w700),
+                                  ),
+                                ),
+                                _QtyButton(icon: Icons.add, onTap: () => _increment(key), enabled: true),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (!isLast)
+                    const Divider(height: 1, thickness: 1, color: AppColors.line),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // ── Delivery address ──
+        _Field(
+          label: 'Delivery / pick-up address',
+          hint: 'Purok / street, barangay',
+          controller: widget.addressController,
+        ),
+
+        // ── Contact number ──
+        _Field(
+          label: 'Contact number',
+          hint: '09XXXXXXXXX',
+          keyboard: TextInputType.phone,
+          maxLength: 11,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          controller: widget.contactController,
+        ),
+
+        // ── Additional notes ──
+        _Field(
+          label: 'Additional notes (optional)',
+          hint: 'e.g. patient weight, location details',
+          lines: 3,
+          controller: widget.notesController,
+        ),
+      ],
+    );
+  }
+}
+
+/// Small ± quantity button used inside the item checklist.
+class _QtyButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _QtyButton({required this.icon, required this.onTap, required this.enabled});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.green50 : AppColors.paper,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: enabled ? AppColors.green700 : AppColors.line),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 14, color: enabled ? AppColors.green700 : AppColors.inkFaint),
+      ),
+    );
   }
 }
 

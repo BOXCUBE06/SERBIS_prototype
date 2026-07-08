@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../state/strings.dart';
-import '../models/models.dart';
-import '../state/app_state.dart';
+import '../state/translations.dart';
+import '../models/request_models.dart';
+import '../state/request_store.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart';
+import '../widgets/shared_widgets.dart';
 
 class TrackScreen extends StatefulWidget {
   final AppState appState;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../state/user_store.dart';
+import '../../state/account_store.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common.dart';
+import '../../widgets/shared_widgets.dart';
 
 /// Login screen.
 ///
@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
-    final user = widget.userStore.validate(_phoneCtrl.text, _passwordCtrl.text);
+    final AppUser? user = widget.userStore.authenticate(_phoneCtrl.text, _passwordCtrl.text) as AppUser?;
     setState(() => _loading = false);
 
     if (user == null) {

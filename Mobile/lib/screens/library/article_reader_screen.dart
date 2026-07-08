@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/library_articles.dart';
+import '../../data/safety_files.dart';
 import '../../theme/app_theme.dart';
 
 /// Full-screen reader for a [LibraryArticle]. Opened by tapping any item

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
-import 'models/models.dart';
+import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
-import 'state/app_state.dart';
-import 'state/user_store.dart';
+import 'state/request_store.dart';
+import 'state/account_store.dart';
+import 'state/api_service.dart';
 import 'theme/app_theme.dart';
-import 'widgets/common.dart';
-import 'widgets/sos_sheet.dart';
+import 'widgets/shared_widgets.dart';
+import 'widgets/sos_button.dart';
 
 void main() {
   runApp(const SerbisApp());
@@ -34,11 +35,11 @@ class SerbisApp extends StatelessWidget {
 /// Top-level switcher between the auth flow (Login / Register) and the
 /// main app shell.
 ///
-/// Accounts are real (created via Register and persisted on-device through
-/// [UserStore] — see `lib/state/user_store.dart`), but there is still no
-/// remote backend. After registering, residents are sent back to Login to
-/// verify their new credentials work, rather than being signed in
-/// automatically.
+/// Accounts and requests are now backed by the Laravel API through a
+/// single shared [ApiService] instance, created here and passed down to
+/// [UserStore] (for auth) and [AppState] (for requests). On startup, if a
+/// Sanctum token was saved from a previous session, the resident is signed
+/// back in automatically instead of being sent to the login screen.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -49,7 +50,8 @@ class AuthGate extends StatefulWidget {
 enum _AuthView { login, register }
 
 class _AuthGateState extends State<AuthGate> {
-  final UserStore _userStore = UserStore();
+  final ApiService _api = ApiService();
+  late final UserStore _userStore = UserStore(_api);
   bool _ready = false;
 
   AppUser? _currentUser;
@@ -59,7 +61,20 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _userStore.load().then((_) {
+    _userStore.load().then((_) async {
+      if (_userStore.isLoggedIn) {
+        try {
+          final userData = await _userStore.getUser();
+          if (!mounted) return;
+          setState(() {
+            _currentUser = AppUser.fromJson(userData);
+            _ready = true;
+          });
+          return;
+        } catch (_) {
+          // Saved token is invalid or expired — fall through to login.
+        }
+      }
       if (mounted) setState(() => _ready = true);
     });
   }
@@ -73,11 +88,14 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
-  void _logout() => setState(() {
-        _currentUser = null;
-        _view = _AuthView.login;
-        _loginInfoMessage = null;
-      });
+  void _logout() {
+    _userStore.logout();
+    setState(() {
+      _currentUser = null;
+      _view = _AuthView.login;
+      _loginInfoMessage = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +109,7 @@ class _AuthGateState extends State<AuthGate> {
     final user = _currentUser;
     if (user != null) {
       return RootShell(
+        api: _api,
         onLogout: _logout,
         initialName: user.name.isEmpty ? null : user.name,
         initialPhone: user.phone.isEmpty ? null : user.phone,
@@ -119,6 +138,7 @@ class _AuthGateState extends State<AuthGate> {
 /// Holds the bottom navigation, the persistent SOS button, and switches
 /// between the five main screens.
 class RootShell extends StatefulWidget {
+  final ApiService api;
   final VoidCallback onLogout;
   final String? initialName;
   final String? initialPhone;
@@ -126,6 +146,7 @@ class RootShell extends StatefulWidget {
 
   const RootShell({
     super.key,
+    required this.api,
     required this.onLogout,
     this.initialName,
     this.initialPhone,
@@ -139,7 +160,7 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _index = 0;
   ServiceType _serviceType = ServiceType.ambulance;
-  final AppState _appState = AppState();
+  late final AppState _appState = AppState(widget.api);
 
   @override
   void initState() {
@@ -147,6 +168,8 @@ class _RootShellState extends State<RootShell> {
     // Rebuild whenever a request is added or cancelled so Home/Track/etc.
     // reflect the latest data.
     _appState.addListener(_onAppStateChanged);
+    // Pull the resident's existing requests from the server on entry.
+    _appState.loadRequests();
   }
 
   @override

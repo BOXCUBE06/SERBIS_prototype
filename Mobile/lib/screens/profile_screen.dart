@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../data/library_articles.dart';
-import '../state/app_state.dart';
-import '../state/strings.dart';
+import '../data/safety_files.dart';
+import '../state/request_store.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart';
+import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
 
 class ProfileScreen extends StatefulWidget {

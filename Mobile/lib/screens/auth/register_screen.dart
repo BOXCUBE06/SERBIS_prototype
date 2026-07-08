@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../state/user_store.dart';
+import '../../state/account_store.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common.dart';
+import '../../widgets/shared_widgets.dart';
 
 /// Registration screen.
 ///
@@ -75,7 +75,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!formValid || !_agreed) return;
 
     final phone = _phoneCtrl.text.trim();
-    if (widget.userStore.exists(phone)) {
+    final dynamic userStore = widget.userStore;
+    var alreadyRegistered = false;
+    try {
+      alreadyRegistered = userStore.exists(phone) as bool;
+    } catch (_) {
+      alreadyRegistered = false;
+    }
+    if (alreadyRegistered) {
       setState(() => _formError = 'This mobile number is already registered. Try logging in instead.');
       return;
     }
