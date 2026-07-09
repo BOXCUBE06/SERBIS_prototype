@@ -1,90 +1,87 @@
 <template>
-  <v-container fluid class="bg-grey-lighten-4 fill-height align-start pa-8" style="background-color: #F4F7FC !important;">
-    <v-row justify="center">
-      <v-col cols="12" md="8" lg="6">
+  <v-container fluid class="fill-height align-start pa-6" style="background-color: #F4F7FC !important;">
+    <v-row justify="center" class="ma-0 w-100 mt-4">
+      <v-col cols="12" md="10" lg="8" xl="6" class="pa-0">
         
-        <v-card elevation="2" rounded="xl" class="pa-8 border-0">
-          <div class="d-flex align-center mb-6">
-            <v-avatar color="blue-lighten-5" size="50" class="mr-4 text-blue-darken-2">
-              <v-icon>mdi-message-text-fast</v-icon>
+        <v-card elevation="4" rounded="lg" class="bg-white fade-in w-100">
+          <div class="pa-8 border-b bg-white d-flex align-center gap-4">
+            <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
+              <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
             <div>
-              <h2 class="text-h5 font-weight-bold text-grey-darken-3">Targeted Text Blast</h2>
-              <div class="text-subtitle-2 text-grey">Send emergency alerts to specific barangays</div>
+              <h2 class="text-h4 font-weight-black text-grey-darken-4" style="line-height: 1.1; letter-spacing: -0.02em;">Targeted Text Blast</h2>
+              <div class="text-subtitle-1 font-weight-medium text-grey-darken-1 mt-2">Dispatch critical SMS alerts to specific barangays</div>
             </div>
           </div>
 
-          <v-alert v-if="alert.show" :type="alert.type" variant="tonal" class="mb-6" closable @click:close="alert.show = false">
-            {{ alert.message }}
-          </v-alert>
-
-          <v-form ref="form" @submit.prevent="sendSmsBlast">
-            
-            <h3 class="text-subtitle-2 font-weight-bold mb-2 text-grey-darken-2">Target Audience</h3>
-            <v-select
-              v-model="selectedBarangays"
-              :items="barangayOptions"
-              item-title="barangay_name"
-              item-value="barangay_id"
-              label="Select Barangays"
-              variant="outlined"
-              density="comfortable"
-              rounded="lg"
-              color="primary"
-              bg-color="white"
-              multiple
-              chips
-              closable-chips
-              persistent-hint
-              hint="Select specific barangays or choose 'All Barangays'"
-              :rules="[v => v.length > 0 || 'You must select at least one target']"
+          <v-card-text class="pa-8">
+            <v-alert 
+              v-if="alert.show" 
+              :type="alert.type" 
+              variant="tonal" 
+              class="mb-8" 
+              density="comfortable" 
+              rounded="lg" 
+              closable 
+              @click:close="alert.show = false"
             >
-              <template v-slot:prepend-item>
-                <v-list-item title="Select All" @click="selectAllBarangays">
-                  <template v-slot:prepend>
-                    <v-icon :color="isAllSelected ? 'primary' : ''">
-                      {{ isAllSelected ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline' }}
-                    </v-icon>
-                  </template>
-                </v-list-item>
-                <v-divider class="mb-2"></v-divider>
-              </template>
-            </v-select>
+              <span class="font-weight-medium">{{ alert.message }}</span>
+            </v-alert>
 
-            <h3 class="text-subtitle-2 font-weight-bold mb-2 mt-6 text-grey-darken-2">Message Content</h3>
-            <v-textarea
-              v-model="message"
-              label="SMS Message"
-              variant="outlined"
-              density="comfortable"
-              rounded="lg"
-              color="primary"
-              bg-color="white"
-              rows="4"
-              counter="160"
-              :rules="[
-                v => !!v || 'Message is required',
-                v => v.length <= 160 || 'Message exceeds 160 characters'
-              ]"
-              placeholder="e.g., MDRRMO Alert: Flood warning in your area. Evacuate to higher ground immediately."
-            ></v-textarea>
+            <v-form ref="form" @submit.prevent="sendSmsBlast">
+              
+              <div class="mb-6">
+                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1 mb-2">Target Audience</div>
+                <v-alert color="warning" variant="tonal" rounded="lg" class="border">
+                  <div class="d-flex align-center gap-3">
+                    <v-icon size="28" color="warning-darken-2">mdi-test-tube</v-icon>
+                    <div>
+                      <div class="font-weight-bold text-warning-darken-3">TEST MODE ACTIVE</div>
+                      <div class="text-body-2 text-warning-darken-4">System is currently locked to send SMS exclusively to 2 configured test numbers.</div>
+                    </div>
+                  </div>
+                </v-alert>
+              </div>
 
-            <v-card-actions class="px-0 pt-6 d-flex justify-end">
-              <v-btn 
-                color="primary" 
-                variant="flat" 
-                rounded="lg" 
-                class="px-8 text-none font-weight-bold" 
-                height="48" 
-                type="submit" 
-                :loading="loading"
-                :disabled="!isValid"
-              >
-                <v-icon start>mdi-send</v-icon> Send Text Blast
-              </v-btn>
-            </v-card-actions>
-          </v-form>
+              <div class="mb-2">
+                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1 mb-2">Message Content</div>
+                <v-textarea
+                  v-model="message"
+                  placeholder="e.g., MDRRMO Alert: Flood warning in your area. Evacuate to higher ground immediately."
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  color="error"
+                  bg-color="grey-lighten-5"
+                  rows="5"
+                  counter="160"
+                  class="font-weight-medium text-body-1"
+                  :rules="[
+                    v => !!v || 'An emergency message is required.',
+                    v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
+                  ]"
+                ></v-textarea>
+              </div>
 
+              <div class="pt-6 mt-4 border-t">
+                <v-btn 
+                  color="#0f4c3a" 
+                  variant="flat" 
+                  rounded="lg" 
+                  class="text-none font-weight-bold text-white w-100" 
+                  size="x-large"
+                  height="64"
+                  type="submit" 
+                  :loading="loading"
+                  :disabled="!isValid"
+                  elevation="2"
+                >
+                  <v-icon start size="24" class="mr-2">mdi-send</v-icon> 
+                  <span class="text-h6 font-weight-bold">Dispatch Test Blast</span>
+                </v-btn>
+              </div>
+            </v-form>
+          </v-card-text>
         </v-card>
       </v-col>
     </v-row>
@@ -92,11 +89,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 
 const message = ref('')
-const selectedBarangays = ref([])
-const barangays = ref([])
 const loading = ref(false)
 const form = ref(null)
 
@@ -112,40 +107,15 @@ const getHeaders = () => ({
   'Accept': 'application/json'
 })
 
-const fetchBarangays = async () => {
-  try {
-    const res = await fetch('http://localhost:8000/api/barangays', { headers: getHeaders() })
-    const data = await res.json()
-    barangays.value = data
-  } catch (error) {
-    console.error('Failed to fetch barangays:', error)
-  }
-}
-
-// Prepare options by adding 'All' logic
-const barangayOptions = computed(() => {
-  return [{ barangay_id: 'all', barangay_name: 'All Barangays' }, ...barangays.value]
-})
-
-const isAllSelected = computed(() => selectedBarangays.value.includes('all'))
-
-const selectAllBarangays = () => {
-  if (isAllSelected.value) {
-    selectedBarangays.value = []
-  } else {
-    selectedBarangays.value = ['all']
-  }
-}
-
 const isValid = computed(() => {
-  return message.value.length > 0 && message.value.length <= 160 && selectedBarangays.value.length > 0
+  return message.value.length > 0 && message.value.length <= 160
 })
 
 const sendSmsBlast = async () => {
   const { valid } = await form.value.validate()
   if (!valid) return
 
-  if (!confirm(`Are you sure you want to send this alert to ${isAllSelected.value ? 'ALL barangays' : selectedBarangays.value.length + ' barangay(s)'}?`)) return
+  if (!confirm(`TEST MODE: Are you sure you want to dispatch this alert? It will be sent to the 2 configured test numbers.`)) return
 
   loading.value = true
   alert.value.show = false
@@ -156,7 +126,7 @@ const sendSmsBlast = async () => {
       headers: getHeaders(),
       body: JSON.stringify({
         message: message.value,
-        barangays: selectedBarangays.value
+        barangays: ['test_mode_bypass'] // Fulfills backend validation without UI selection
       })
     })
 
@@ -167,12 +137,12 @@ const sendSmsBlast = async () => {
     alert.value = {
       show: true,
       type: 'success',
-      message: `Success: ${data.sent} messages sent. ${data.failed} failed.`
+      message: `Success: ${data.sent} test messages dispatched. ${data.failed} failed.`
     }
     
-    // Reset form after successful send
     message.value = ''
-    selectedBarangays.value = []
+    if (form.value) form.value.resetValidation()
+    
   } catch (error) {
     alert.value = {
       show: true,
@@ -183,8 +153,22 @@ const sendSmsBlast = async () => {
     loading.value = false
   }
 }
-
-onMounted(() => {
-  fetchBarangays()
-})
 </script>
+
+<style scoped>
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+.fade-in {
+  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+:deep(.v-field__input) {
+  line-height: 1.6;
+}
+</style>

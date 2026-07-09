@@ -1,96 +1,94 @@
 <template>
   <v-navigation-drawer
-    color="#113F36"
     theme="dark"
     permanent
     width="280"
-    class="border-0"
+    class="modern-drawer"
   >
-    <div class="pa-4 d-flex flex-column h-100">
+    <div class="pa-5 d-flex flex-column h-100">
       
-      <div class="d-flex align-center mb-4 mt-2 px-2">
-        <span class="text-h4 font-weight-black text-white" style="letter-spacing: 2px;">SERBIS</span>
+      <div class="d-flex align-center mb-8 mt-2 px-2">
+        <div class="logo-accent"></div>
+        <span class="text-h5 font-weight-black text-white tracking-widest">SERBIS</span>
       </div>
 
-      <v-divider class="mb-4"></v-divider>
-
-      <div class="text-caption font-weight-bold text-grey-lighten-1 mb-2 px-2 text-uppercase">Main Menu</div>
-      <v-list bg-color="transparent" density="compact" nav class="px-0">
-        <v-list-item
-          to="/"
-          prepend-icon="mdi-view-dashboard-outline"
-          title="Dashboard"
-          active-color="white"
-          class="rounded-lg mb-1 text-grey-lighten-1"
-        ></v-list-item>
-
-        <v-list-item to="/manage-requests" prepend-icon="mdi-clipboard-text-outline" title="Service Requests" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/borrowings" prepend-icon="mdi-hand-extended-outline" title="Borrow Requests" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/vehicles" prepend-icon="mdi-ambulance" title="Fleet Management" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/inventory" prepend-icon="mdi-toolbox-outline" title="Equipment Inventory" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/sms" prepend-icon="mdi-message-text-fast-outline" title="Text Blast (SMS)" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
+      <div class="text-overline font-weight-medium text-white-50 mb-2 px-2 tracking-widest">Main Menu</div>
+      <v-list bg-color="transparent" density="comfortable" nav class="px-0">
+        <v-list-item 
+          v-for="item in mainMenu" 
+          :key="item.to" 
+          :to="item.to" 
+          class="mb-1 nav-item" 
+          rounded="pill" 
+          active-class="active-nav-item" 
+          :ripple="false"
+        >
+          <template v-slot:prepend>
+            <v-avatar rounded="circle" size="36" class="nav-icon-avatar mr-4" color="transparent">
+              <v-icon size="20" color="grey-lighten-1">{{ item.icon }}</v-icon>
+            </v-avatar>
+          </template>
+          <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
+            {{ item.title }}
+          </v-list-item-title>
+        </v-list-item>
       </v-list>
 
-      <div class="text-caption font-weight-bold text-grey-lighten-1 mt-4 mb-2 px-2 text-uppercase">System</div>
-      <v-list bg-color="transparent" density="compact" nav class="px-0">
-        <v-list-item to="/services-config" prepend-icon="mdi-wrench-outline" title="Services" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/users" prepend-icon="mdi-account-group-outline" title="Users" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/files" prepend-icon="mdi-folder-outline" title="Files" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
-        <v-list-item to="/logs" prepend-icon="mdi-history" title="Logs" class="rounded-lg mb-1 text-grey-lighten-1"></v-list-item>
+      <div class="text-overline font-weight-medium text-white-50 mt-6 mb-2 px-2 tracking-widest">System</div>
+      <v-list bg-color="transparent" density="comfortable" nav class="px-0">
+        <v-list-item 
+          v-for="item in systemMenu" 
+          :key="item.to" 
+          :to="item.to" 
+          class="mb-1 nav-item" 
+          rounded="pill" 
+          active-class="active-nav-item" 
+          :ripple="false"
+        >
+          <template v-slot:prepend>
+            <v-avatar rounded="circle" size="36" class="nav-icon-avatar mr-4" color="transparent">
+              <v-icon size="20" color="grey-lighten-1">{{ item.icon }}</v-icon>
+            </v-avatar>
+          </template>
+          <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
+            {{ item.title }}
+          </v-list-item-title>
+        </v-list-item>
       </v-list>
 
       <v-spacer></v-spacer>
 
       <v-card 
-        color="rgba(255, 255, 255, 0.05)" 
-        border 
-        rounded="xl" 
-        elevation="0" 
-        class="pa-2 d-flex align-center mt-auto cursor-pointer profile-logout-card"
+        color="rgba(255, 255, 255, 0.03)" 
+        border="0" 
+        class="pa-3 d-flex align-center mt-auto profile-card"
+        style="cursor: pointer"
         @click="showLogoutDialog = true"
       >
-        <v-avatar size="36" color="grey-darken-3" class="mr-3">
-          <v-icon color="white">mdi-account-circle-outline</v-icon>
+        <v-avatar size="38" color="rgba(255, 255, 255, 0.1)" class="mr-3 avatar-soft">
+          <v-icon color="white" size="small">mdi-account-outline</v-icon>
         </v-avatar>
         <div>
           <div class="text-body-2 font-weight-bold text-white">MDRRMO Admin</div>
-          <div class="text-caption text-grey-lighten-1">Echague Panel</div>
+          <div class="text-caption text-white-50">Echague Panel</div>
         </div>
         <v-spacer></v-spacer>
-        <v-icon color="error" size="small" class="mr-2">mdi-logout-variant</v-icon>
+        <v-icon color="white-50" size="small" class="mr-1 logout-icon">mdi-logout</v-icon>
       </v-card>
     </div>
   </v-navigation-drawer>
 
-  <v-dialog v-model="showLogoutDialog" max-width="400" persistent>
-    <v-card rounded="xl" elevation="10">
-      <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-grey-darken-3">
-        Confirm Logout
-      </v-card-title>
-      
-      <v-card-text class="pa-6 pt-2 text-body-1 text-grey-darken-1">
+  <v-dialog v-model="showLogoutDialog" max-width="380" persistent>
+    <v-card rounded="xl" elevation="10" class="pb-2">
+      <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold">Confirm Logout</v-card-title>
+      <v-card-text class="px-6 py-2 text-body-2 text-grey-darken-1">
         Are you sure you want to log out of the SERBIS admin panel?
       </v-card-text>
-      
-      <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-2">
-        <v-btn 
-          color="grey-darken-1" 
-          variant="text" 
-          rounded="lg" 
-          class="px-4 text-none font-weight-bold" 
-          @click="showLogoutDialog = false" 
-          :disabled="isLoggingOut"
-        >
+      <v-card-actions class="pa-6 pt-4 d-flex justify-end" style="gap: 12px">
+        <v-btn color="grey-darken-2" variant="text" class="px-4 text-none" @click="showLogoutDialog = false" :disabled="isLoggingOut">
           Cancel
         </v-btn>
-        <v-btn 
-          color="error" 
-          variant="flat" 
-          rounded="lg" 
-          class="px-6 text-none font-weight-bold" 
-          @click="handleLogout" 
-          :loading="isLoggingOut"
-        >
+        <v-btn color="error" variant="flat" class="px-5 text-none" @click="handleLogout" :loading="isLoggingOut">
           Logout
         </v-btn>
       </v-card-actions>
@@ -102,22 +100,68 @@
 import { useAuth } from './index'
 
 const { isLoggingOut, showLogoutDialog, handleLogout } = useAuth()
+
+const mainMenu = [
+  { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
+  { to: '/manage-requests', icon: 'mdi-clipboard-text-outline', title: 'Service Requests' },
+  { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Borrow Requests' },
+  { to: '/vehicles', icon: 'mdi-ambulance', title: 'Fleet Management' },
+  { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Equipment Inventory' },
+  { to: '/sms', icon: 'mdi-message-text-fast-outline', title: 'Text Blast (SMS)' }
+]
+
+const systemMenu = [
+  { to: '/services-config', icon: 'mdi-wrench-outline', title: 'Services' },
+  { to: '/users', icon: 'mdi-account-group-outline', title: 'Users' },
+  { to: '/files', icon: 'mdi-folder-outline', title: 'Files' },
+  { to: '/logs', icon: 'mdi-history', title: 'Logs' }
+]
 </script>
 
 <style scoped>
-.gap-2 { gap: 8px; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 
-.v-list-item--active {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: white !important;
+.modern-drawer {
+  font-family: 'Inter', sans-serif;
+  /* Soft gradient emerging from the left-middle */
+  background: radial-gradient(circle at -10% 50%, #154c41 0%, #0A2620 80%) !important;
 }
 
-.cursor-pointer {
-  cursor: pointer;
+.tracking-widest { letter-spacing: 0.1em; text-transform: uppercase; }
+.text-white-50 { color: rgba(255, 255, 255, 0.5) !important; }
+
+.logo-accent {
+  width: 4px; height: 24px;
+  background-color: #fff;
+  margin-right: 12px; border-radius: 2px;
 }
 
-.profile-logout-card:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  transition: background-color 0.2s ease-in-out;
+/* Consolidated Transitions */
+.nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
+
+/* Nav Item Hover States */
+.nav-item:hover:not(.active-nav-item) {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  transform: translateX(4px);
+}
+.nav-item:hover:not(.active-nav-item) .nav-icon-avatar { background-color: rgba(255, 255, 255, 0.05) !important; }
+.nav-item:hover:not(.active-nav-item) .nav-label,
+.nav-item:hover:not(.active-nav-item) .v-icon { color: #fff !important; }
+
+/* Nav Item Active State */
+.active-nav-item {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%) !important;
+}
+.active-nav-item .nav-label, .active-nav-item .v-icon { color: #fff !important; font-weight: 700 !important; }
+.active-nav-item .nav-icon-avatar { border: 1px solid rgba(255, 255, 255, 0.15); }
+
+/* Profile Card Hover */
+.profile-card { border-radius: 12px !important; border: 1px solid rgba(255, 255, 255, 0.02) !important; }
+.profile-card:hover { background-color: rgba(255, 255, 255, 0.06) !important; border-color: rgba(255, 255, 255, 0.1) !important; transform: translateY(-2px); }
+.profile-card:hover .logout-icon { color: #ef4444 !important; transform: translateX(2px); }
+.profile-card:hover .avatar-soft { transform: scale(1.05); }
+
+
 </style>

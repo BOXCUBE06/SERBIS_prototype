@@ -1,118 +1,146 @@
 <template>
-  <v-container fluid class="bg-grey-lighten-4 fill-height align-start pa-8" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start px-6 px-md-10 pt-4 pb-10 page-background">
     <v-row>
       <v-col cols="12">
         <div class="d-flex justify-space-between align-center mb-6">
-          <div>
-            <h2 class="text-h5 font-weight-bold text-grey-darken-3">Fleet Management</h2>
-            <div class="text-subtitle-2 text-grey">Monitor unit availability and dispatch status</div>
-          </div>
+          <h2 class="text-h4 font-weight-bold text-grey-darken-4 tracking-tight">Fleet Management</h2>
           
-          <v-btn color="primary" variant="tonal" rounded="lg" class="text-none font-weight-bold">
-            <v-icon start>mdi-plus</v-icon> Add Unit
+          <v-btn 
+            color="#2E7D32" 
+            variant="flat" 
+            rounded="xl" 
+            class="px-6 text-none font-weight-bold btn-soft-shadow"
+            height="48"
+          >
+            <v-icon start size="20">mdi-plus</v-icon> Add Unit
           </v-btn>
         </div>
 
-        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">
+        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 soft-alert" density="compact" rounded="xl">
           {{ apiError }}
         </v-alert>
 
-        <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-6"></v-progress-linear>
+        <template v-if="loading">
+          <v-card elevation="0" rounded="xl" class="mb-8 pa-8 group-card">
+            <v-skeleton-loader type="heading" width="200" class="mb-6 bg-transparent"></v-skeleton-loader>
+            <v-row>
+              <v-col v-for="n in 4" :key="n" cols="12" sm="6" md="4" lg="3">
+                <v-skeleton-loader 
+                  type="list-item-avatar, text, text" 
+                  elevation="0" 
+                  class="rounded-xl border vehicle-card"
+                ></v-skeleton-loader>
+              </v-col>
+            </v-row>
+          </v-card>
+        </template>
 
-        <!-- Outer Box Grouping -->
-        <v-card 
-          v-for="(units, type) in groupedVehicles" 
-          :key="type" 
-          elevation="0" 
-          border 
-          rounded="xl" 
-          class="mb-6 pa-6 bg-white border-grey-lighten-3"
-        >
-          <!-- Removed bottom border, increased text size, redesigned unit count -->
-          <div class="d-flex align-baseline mb-4">
-            <h3 class="text-h4 font-weight-black text-grey-darken-4 mr-4">{{ type }}s</h3>
-            <span class="text-h6 text-primary font-weight-bold">
-              {{ units.length }} Unit{{ units.length !== 1 ? 's' : '' }}
-            </span>
-          </div>
-
-          <v-row>
-            <v-col v-for="vehicle in units" :key="vehicle.id || vehicle.vehicle_id" cols="12" sm="6" md="4" lg="3">
-              <v-card 
-                elevation="1" 
-                rounded="lg" 
-                :class="getCardTint(vehicle.status)"
-                class="transition-swing border"
+        <template v-else>
+          <v-card 
+            v-for="(units, type) in groupedVehicles" 
+            :key="type" 
+            elevation="0" 
+            rounded="xl" 
+            class="mb-8 pa-8 group-card"
+          >
+            <div class="d-flex align-center mb-6">
+              <h3 class="text-h4 font-weight-black text-grey-darken-4 mr-5 text-capitalize tracking-tight">{{ type }}s</h3>
+              <v-chip
+                color="#2E7D32"
+                variant="tonal"
+                size="large"
+                class="font-weight-bold px-4 text-body-1"
+                rounded="lg"
               >
-                <v-card-text class="pa-4">
-                  <div class="d-flex justify-space-between align-start mb-2">
-                    <div>
-                      <div class="text-h6 font-weight-bold">{{ vehicle.unit_identifier }}</div>
-                      <div class="text-caption text-grey-darken-2 font-weight-medium">{{ vehicle.specification || 'Standard Unit' }}</div>
-                    </div>
-                    <v-icon :color="getIconColor(vehicle.status)" size="large">
-                      {{ getVehicleIcon(type) }}
-                    </v-icon>
-                  </div>
+                {{ units.length }} Unit{{ units.length !== 1 ? 's' : '' }}
+              </v-chip>
+            </div>
 
-                  <!-- Inline Status Dropdown -->
-                  <div class="mt-4">
-                    <div class="text-caption font-weight-bold text-grey-darken-1 mb-1">CURRENT STATUS</div>
-                    <v-select
-                      v-model="vehicle.status"
-                      :items="statusOptions"
-                      variant="solo-filled"
-                      density="compact"
-                      hide-details
-                      rounded="lg"
-                      :bg-color="getSelectColor(vehicle.status)"
-                      flat
-                      @update:model-value="promptStatusChange(vehicle, $event)"
-                    ></v-select>
-                  </div>
-                </v-card-text>
-              </v-card>
-            </v-col>
-          </v-row>
-        </v-card>
+            <v-row>
+              <v-col v-for="vehicle in units" :key="vehicle.id || vehicle.vehicle_id" cols="12" sm="6" md="4" lg="3">
+                <v-card 
+                  elevation="0" 
+                  rounded="xl" 
+                  :class="['vehicle-card', getCardTint(vehicle.status)]"
+                >
+                  <v-card-text class="pa-5">
+                    <div class="d-flex justify-space-between align-start mb-3">
+                      <div>
+                        <div class="text-h6 font-weight-bold text-grey-darken-4">{{ vehicle.unit_identifier }}</div>
+                        <div class="text-body-2 text-grey-darken-1 font-weight-medium mt-1">{{ vehicle.specification || 'Standard Unit' }}</div>
+                      </div>
+                      <div :class="['icon-wrapper', getIconBgColor(vehicle.status)]">
+                        <v-icon :color="getIconColor(vehicle.status)" size="24">
+                          {{ getVehicleIcon(type) }}
+                        </v-icon>
+                      </div>
+                    </div>
+
+                    <div class="mt-5">
+                      <div class="text-overline font-weight-bold text-grey-darken-1 mb-2 tracking-widest">Status</div>
+                      <v-select
+                        v-model="vehicle.status"
+                        :items="statusOptions"
+                        variant="flat"
+                        density="comfortable"
+                        hide-details
+                        rounded="lg"
+                        class="status-select"
+                        :class="getSelectClass(vehicle.status)"
+                        @update:model-value="promptStatusChange(vehicle, $event)"
+                      >
+                        <template v-slot:selection="{ item }">
+                          <span class="font-weight-bold text-uppercase" :class="`text-${getIconColor(item.value)}`">
+                            {{ item.title }}
+                          </span>
+                        </template>
+                      </v-select>
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+          </v-card>
+        </template>
         
       </v-col>
     </v-row>
 
-    <!-- Status Confirmation Dialog -->
     <v-dialog v-model="statusDialog.show" max-width="420" persistent>
-      <v-card rounded="xl" elevation="10">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-grey-darken-3 d-flex align-center">
-          <v-icon color="warning" class="mr-2">mdi-alert-circle-outline</v-icon>
-          Confirm Status Update
+      <v-card class="soft-dialog pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-grey-darken-4 d-flex align-center">
+          <div class="icon-wrapper bg-warning-lighten-5 mr-4">
+            <v-icon color="warning" size="24">mdi-alert-outline</v-icon>
+          </div>
+          Update Status
         </v-card-title>
         
-        <v-card-text class="pa-6 pt-2 text-body-1 text-grey-darken-1">
+        <v-card-text class="px-6 py-4 text-body-1 text-grey-darken-1">
           Are you sure you want to change the status of 
-          <strong class="text-grey-darken-4">{{ statusDialog.vehicle?.unit_identifier }}</strong> to 
-          <strong :class="`text-${getIconColor(statusDialog.newStatus)}`">{{ statusDialog.newStatus }}</strong>?
+          <span class="font-weight-bold text-grey-darken-4">{{ statusDialog.vehicle?.unit_identifier }}</span> to 
+          <span class="font-weight-bold text-uppercase" :class="`text-${getIconColor(statusDialog.newStatus)}`">{{ statusDialog.newStatus }}</span>?
         </v-card-text>
         
-        <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-2">
+        <v-card-actions class="pa-6 pt-2 d-flex justify-end gap-3">
           <v-btn 
-            color="grey-darken-1" 
+            color="grey-darken-2" 
             variant="text" 
             rounded="lg" 
-            class="px-4 text-none font-weight-bold" 
+            class="px-5 text-none font-weight-medium" 
             @click="cancelStatusChange" 
             :disabled="statusDialog.loading"
           >
             Cancel
           </v-btn>
           <v-btn 
-            color="primary" 
+            color="#2E7D32" 
             variant="flat" 
             rounded="lg" 
-            class="px-6 text-none font-weight-bold" 
+            class="px-6 text-none font-weight-bold btn-soft-shadow" 
             @click="executeStatusChange" 
             :loading="statusDialog.loading"
           >
-            Update Status
+            Confirm
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -126,7 +154,11 @@ import { ref, computed, onMounted } from 'vue'
 const vehicles = ref([])
 const loading = ref(false)
 const apiError = ref('')
-const statusOptions = ['Available', 'Dispatched', 'Maintenance']
+const statusOptions = [
+  { title: 'Available', value: 'Available' },
+  { title: 'Dispatched', value: 'Dispatched' },
+  { title: 'Maintenance', value: 'Maintenance' }
+]
 
 const statusDialog = ref({
   show: false,
@@ -141,6 +173,14 @@ const getHeaders = () => ({
   'Accept': 'application/json'
 })
 
+const formatStatus = (status) => {
+  if (!status) return 'Available'
+  const s = status.toLowerCase()
+  if (s === 'dispatched') return 'Dispatched'
+  if (s === 'maintenance') return 'Maintenance'
+  return 'Available'
+}
+
 const fetchVehicles = async () => {
   loading.value = true
   try {
@@ -150,7 +190,8 @@ const fetchVehicles = async () => {
     
     vehicles.value = (Array.isArray(data) ? data : (data.data || [])).map(v => ({
       ...v,
-      originalStatus: v.status 
+      status: formatStatus(v.status),
+      originalStatus: formatStatus(v.status) 
     }))
   } catch (error) {
     apiError.value = error.message
@@ -214,25 +255,33 @@ const groupedVehicles = computed(() => {
 
 const getCardTint = (status) => {
   switch(status?.toLowerCase()) {
-    case 'dispatched': return 'bg-orange-lighten-5 border-orange-lighten-3'
-    case 'maintenance': return 'bg-red-lighten-5 border-red-lighten-3'
-    default: return 'bg-white border-grey-lighten-3'
+    case 'dispatched': return 'status-card-dispatched'
+    case 'maintenance': return 'status-card-maintenance'
+    default: return 'status-card-available'
   }
 }
 
-const getSelectColor = (status) => {
+const getSelectClass = (status) => {
   switch(status?.toLowerCase()) {
-    case 'dispatched': return 'orange-lighten-4'
-    case 'maintenance': return 'red-lighten-4'
-    default: return 'green-lighten-5'
+    case 'dispatched': return 'select-dispatched'
+    case 'maintenance': return 'select-maintenance'
+    default: return 'select-available'
+  }
+}
+
+const getIconBgColor = (status) => {
+  switch(status?.toLowerCase()) {
+    case 'dispatched': return 'bg-orange-lighten-5'
+    case 'maintenance': return 'bg-red-lighten-5'
+    default: return 'bg-green-lighten-5'
   }
 }
 
 const getIconColor = (status) => {
   switch(status?.toLowerCase()) {
-    case 'dispatched': return 'orange-darken-2'
-    case 'maintenance': return 'red-darken-2'
-    default: return 'green-darken-2'
+    case 'dispatched': return 'orange-darken-3'
+    case 'maintenance': return 'red-darken-3'
+    default: return 'green-darken-3'
   }
 }
 
@@ -250,8 +299,78 @@ onMounted(() => fetchVehicles())
 </script>
 
 <style scoped>
-.gap-2 { gap: 8px; }
-.transition-swing {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.5, 1);
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+
+* {
+  font-family: 'Inter', sans-serif;
+}
+
+.page-background {
+  background-color: #F8FAFC !important;
+}
+
+.tracking-tight { letter-spacing: -0.02em; }
+.tracking-widest { letter-spacing: 0.1em; }
+.gap-3 { gap: 12px; }
+
+.btn-soft-shadow {
+  box-shadow: 0 8px 16px -4px rgba(46, 125, 50, 0.25) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-soft-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -4px rgba(46, 125, 50, 0.3) !important;
+}
+
+.group-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.vehicle-card {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease !important;
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.03) !important;
+}
+
+.vehicle-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+.status-card-available { background-color: #FDFDFD !important; }
+.status-card-dispatched { background-color: #FFFCF9 !important; border-color: rgba(245, 124, 0, 0.3) !important; }
+.status-card-maintenance { background-color: #FFF9F9 !important; border-color: rgba(211, 47, 47, 0.25) !important; }
+
+.status-select :deep(.v-field) {
+  box-shadow: none !important;
+  transition: background-color 0.2s ease;
+}
+.select-available :deep(.v-field) { background-color: #F0F9F4 !important; }
+.select-dispatched :deep(.v-field) { background-color: #FFF3E0 !important; }
+.select-maintenance :deep(.v-field) { background-color: #FFEBEE !important; }
+
+.icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.soft-dialog {
+  border-radius: 20px !important;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+}
+.soft-alert {
+  box-shadow: 0 8px 16px -4px rgba(211, 47, 47, 0.1) !important;
+}
+
+.v-skeleton-loader {
+  background: rgba(0, 0, 0, 0.02) !important;
 }
 </style>

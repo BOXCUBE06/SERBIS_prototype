@@ -78,6 +78,11 @@ class EquipmentBorrowingController extends Controller
                 $borrowing->returned_at = now();
             }
 
+            if ($newStatus === 'Denied' && $oldStatus === 'Released') {
+                $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
+                $equipment->increment('available_quantity', $borrowing->quantity);
+}
+
             $borrowing->status = $newStatus;
             $borrowing->save();
 
