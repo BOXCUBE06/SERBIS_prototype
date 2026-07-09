@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-
 class SystemLog extends Model
 {
     protected $table = 'tbl_system_logs';
@@ -13,6 +12,7 @@ class SystemLog extends Model
 
     protected $fillable = [
         'admin_id',
+        'resident_id',
         'action_type',
         'auditable_type',
         'auditable_id',
@@ -22,7 +22,6 @@ class SystemLog extends Model
         'user_agent'
     ];
 
-    // Automatically converts the JSON strings to arrays when retrieved
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
@@ -30,7 +29,11 @@ class SystemLog extends Model
 
     public function admin(): BelongsTo
     {
-        // Adjust the second parameter if your User model uses a different primary key
        return $this->belongsTo(User::class, 'admin_id', 'admin_id');
+    }
+
+    public function resident(): BelongsTo
+    {
+       return $this->belongsTo(Resident::class, 'resident_id', 'resident_id');
     }
 }

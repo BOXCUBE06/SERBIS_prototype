@@ -2,63 +2,59 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Resident;
-use App\Models\Barangay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SmsController extends Controller
 {
-    // Fetch available barangays for the dropdown
-    public function getBarangays()
-    {
-        return response()->json(Barangay::all());
-    }
+    // 🧪 TEST MODE — hardcoded numbers, replace with real logic later
+    private array $testNumbers = [
+        '+639391145133', // replace with your number
+        '+639677161687', // replace with your friend's number
+    ];
 
     public function sendBlast(Request $request)
-    {
-        $validated = $request->validate([
-            'message' => 'required|string|max:160',
-            'barangays' => 'required|array', // Array of barangay IDs or ['all']
-            'barangays.*' => 'string' 
-        ]);
+{
+    $validated = $request->validate([
+        'message'     => 'required|string|max:160',
+        'barangays'   => 'required|array',
+        'barangays.*' => 'string'
+    ]);
 
-        $query = Resident::whereNotNull('phone_number');
+    $apiKey = env('SKYSMS_API_KEY');
 
-        // Apply targeting if 'all' is not selected
-        if (!in_array('all', $validated['barangays'])) {
-            $query->whereIn('barangay_id', $validated['barangays']);
-        }
+    // 🧪 TEST MODE — hardcoded numbers
+    $recipients = [
+        ['phone_number' => '+639391145133'], // your number
+        ['phone_number' => '+639677161687'], // friend's number
+    ];
 
-        // Chunking prevents server memory crashes when querying thousands of users
-        $successCount = 0;
-        $failCount = 0;
+    $response = Http::withHeaders([
+        'X-API-Key'    => $apiKey,
+        'Content-Type' => 'application/json',
+    ])->post('https://skysms.skyio.site/api/v1/sms/send -bulk', [
+        'recipients' => $recipients,
+        'message'    => $validated['message'],
+    ]);
 
-        $query->chunk(100, function ($residents) use ($validated, &$successCount, &$failCount) {
-            foreach ($residents as $resident) {
-                
-                // Example using a generic SMS API structure (Adapt to your specific provider)
-                $response = Http::post('https://api.your-sms-provider.com/messages', [
-                    'apikey' => env('SMS_API_KEY'),
-                    'number' => $resident->phone_number,
-                    'message' => $validated['message'],
-                    'sendername' => 'MDRRMO'
-                ]);
-
-                if ($response->successful()) {
-                    $successCount++;
-                    // Optional: Insert into tbl_sms_logs here
-                } else {
-                    $failCount++;
-                }
-            }
-        });
-
+    if ($response->successful()) {
         return response()->json([
-            'message' => 'Text blast processing completed.',
-            'sent' => $successCount,
-            'failed' => $failCount
+            'message' => 'Text blast completed.',
+            'sent'    => count($recipients),
+            'failed'  => 0
         ]);
     }
+
+    Log::error('SkySMS bulk failed', [
+        'status'   => $response->status(),
+        'response' => $response->body()
+    ]);
+
+    return response()->json([
+        'message' => 'Failed to send blast.',
+        'sent'    => 0,
+        'failed'  => count($recipients)
+    ], 500);
+}
 }

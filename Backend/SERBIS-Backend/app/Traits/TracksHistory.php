@@ -28,7 +28,7 @@ trait TracksHistory
         });
     }
 
-    protected function logAction($action, $oldValues, $newValues)
+   protected function logAction($action, $oldValues, $newValues)
     {
         $ignore = $this->ignoreLogging ?? ['created_at', 'updated_at', 'password', 'remember_token'];
 
@@ -39,8 +39,22 @@ trait TracksHistory
             return;
         }
 
+        $user = Auth::user();
+        $adminId = null;
+        $residentId = null;
+
+        // Check which Model class the logged-in user belongs to
+        if ($user) {
+            if ($user instanceof \App\Models\User) {
+                $adminId = $user->getKey();
+            } elseif ($user instanceof \App\Models\Resident) {
+                $residentId = $user->getKey();
+            }
+        }
+
         DB::table('tbl_system_logs')->insert([
-            'admin_id' => Auth::id(), 
+            'admin_id' => $adminId, 
+            'resident_id' => $residentId, 
             'action_type' => $action, 
             'auditable_type' => get_class($this),
             'auditable_id' => $this->getKey(),

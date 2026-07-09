@@ -56,7 +56,7 @@
 
             <template v-slot:item.actions="{ item }">
               <div class="d-flex gap-2 justify-end">
-                <v-btn icon variant="text" size="small" color="primary" :href="`http://localhost:8000/${item.file_path}`" target="_blank">
+                <v-btn icon variant="text" size="small" color="primary" :href="item.full_url" target="_blank">
                   <v-icon>mdi-download</v-icon>
                 </v-btn>
                 <v-btn icon variant="text" size="small" color="error" @click="deleteFile(item.material_id)">
@@ -264,6 +264,8 @@ const deleteFile = async (id) => {
   } catch (error) {
     alert(error.message)
   }
+
+  
 }
 
 onMounted(() => fetchFiles())

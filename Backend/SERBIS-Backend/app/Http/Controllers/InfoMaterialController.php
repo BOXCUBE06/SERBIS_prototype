@@ -41,4 +41,22 @@ class InfoMaterialController extends Controller
 
         return response()->json($material, 201);
     }
+
+    public function destroy($id)
+{
+    $material = InfoMaterial::find($id);
+
+    if (!$material) {
+        return response()->json(['message' => 'File not found'], 404);
+    }
+
+    // Delete the actual file from storage
+    $storagePath = str_replace('storage/', 'public/', $material->file_path);
+    Storage::delete($storagePath);
+
+    // Delete the DB record
+    $material->delete();
+
+    return response()->json(['message' => 'File deleted successfully']);
+}
 }
