@@ -52,29 +52,33 @@ class AnalyticsController extends Controller
         ];
 
         // 2. Fetch Recent Service Requests
-        $serviceRequests = ServiceRequest::with(['resident', 'service'])
+        $serviceRequests = ServiceRequest::with(['resident.barangay', 'service'])
             ->latest()
             ->take(5)
             ->get()
             ->map(function ($req) {
                 return [
                     'resident' => $req->resident ? $req->resident->first_name . ' ' . $req->resident->last_name : 'Unknown',
-                    'type' => $req->service ? $req->service->service_name : 'Unknown Service', // Adjust 'service_name' if your tbl_services uses a different column
-                    'date' => $req->created_at->format('F d, Y'),
+                    // Fetch the barangay name through the nested relationship
+                    'barangay' => ($req->resident && $req->resident->barangay) ? $req->resident->barangay->barangay_name : 'Unknown Barangay',
+                    'type' => $req->service ? $req->service->service_name : 'Unknown Service', 
+                    'date' => $req->created_at->format('M j, Y h:i A'),
                     'status' => $req->status,
                 ];
             });
 
         // 3. Fetch Recent Borrow Requests
-        $borrowRequests = EquipmentBorrowing::with(['resident', 'equipment'])
+        $borrowRequests = EquipmentBorrowing::with(['resident.barangay', 'equipment'])
             ->latest()
             ->take(5)
             ->get()
             ->map(function ($req) {
                 return [
                     'borrower' => $req->resident ? $req->resident->first_name . ' ' . $req->resident->last_name : 'Unknown',
+                    // Fetch the barangay name through the nested relationship
+                    'barangay' => ($req->resident && $req->resident->barangay) ? $req->resident->barangay->barangay_name : 'Unknown Barangay',
                     'equipment' => $req->equipment ? $req->equipment->item_name : 'Unknown Item',
-                    'date' => $req->created_at->format('F d, Y'),
+                    'date' => $req->created_at->format('M j, Y h:i A'),
                     'status' => $req->status,
                 ];
             });

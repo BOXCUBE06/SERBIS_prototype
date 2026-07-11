@@ -11,7 +11,8 @@ class EquipmentBorrowingController extends Controller
 {
     public function index()
     {
-        $borrowings = EquipmentBorrowing::with(['resident', 'equipment'])->orderBy('created_at', 'desc')->get();
+        // Added 'resident.barangay'
+        $borrowings = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->orderBy('created_at', 'desc')->get();
         return response()->json($borrowings);
     }
 
@@ -35,7 +36,8 @@ class EquipmentBorrowingController extends Controller
 
     public function show($id)
     {
-        $borrowing = EquipmentBorrowing::with(['resident', 'equipment'])->find($id);
+        // Added 'resident.barangay'
+        $borrowing = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->find($id);
 
         if (!$borrowing) {
             return response()->json(['message' => 'Borrowing record not found'], 404);

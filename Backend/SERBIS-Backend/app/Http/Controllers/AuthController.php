@@ -10,31 +10,30 @@ use Illuminate\Support\Facades\Hash;
 class AuthController extends Controller
 {
     public function register(Request $request)
-    {
-        $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'role' => 'required|string|max:50',
-            'email_address' => 'required|string|email|max:255|unique:tbl_user,email_address',
-            'password' => 'required|string|min:8',
-        ]);
+{
+    $validated = $request->validate([
+        'first_name' => 'required|string|max:255',
+        'last_name' => 'required|string|max:255',
+        'role' => 'required|string|max:50',
+        'email_address' => 'required|string|email|max:255|unique:tbl_residents,email_address',
+        'password' => 'required|string|min:8',
+    ]);
 
-        $user = User::create([
-            'first_name' => $validated['first_name'],
-            'last_name' => $validated['last_name'],
-            'role' => $validated['role'],
-            'email_address' => $validated['email_address'],
-            // FIX: Passwords must be hashed before saving to the database
-            'password' => Hash::make($validated['password']), 
-        ]);
+    $resident = Resident::create([
+        'first_name' => $validated['first_name'],
+        'last_name' => $validated['last_name'],
+        'role' => $validated['role'],
+        'email_address' => $validated['email_address'],
+        'password' => Hash::make($validated['password']),
+    ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+    $token = $resident->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ], 201);
-    }
+    return response()->json([
+        'user' => $resident,
+        'token' => $token,
+    ], 201);
+}
 
     // Endpoint specifically for the Web Frontend
     public function adminLogin(Request $request)
