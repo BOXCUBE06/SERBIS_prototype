@@ -9,9 +9,10 @@ use Illuminate\Support\Facades\DB;
 
 class ServiceRequestController extends Controller
 {
-    public function adminIndex()
+   public function adminIndex()
     {
-        $requests = ServiceRequest::with(['resident', 'service', 'admin', 'vehicle'])
+        // Added 'resident.barangay'
+        $requests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle'])
             ->latest()
             ->get();
             
@@ -23,10 +24,12 @@ class ServiceRequestController extends Controller
         $user = $request->user();
 
         if ($user instanceof \App\Models\User && $user->role === 'admin') {
-            $serviceRequests = ServiceRequest::with(['resident', 'service', 'admin'])->get();
+            // Added 'resident.barangay'
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->get();
         } else {
             $residentId = $user->getKey();
-            $serviceRequests = ServiceRequest::with(['resident', 'service', 'admin'])
+            // Added 'resident.barangay'
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])
                 ->where('resident_id', $residentId)
                 ->get();
         }
@@ -90,7 +93,8 @@ class ServiceRequestController extends Controller
 
     public function show($id)
     {
-        $serviceRequest = ServiceRequest::with(['resident', 'service', 'admin'])->find($id);
+        // Added 'resident.barangay'
+        $serviceRequest = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->find($id);
 
         if (!$serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
