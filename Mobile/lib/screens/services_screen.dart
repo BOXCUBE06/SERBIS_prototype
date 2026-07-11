@@ -13,11 +13,26 @@ library serbis.screens.services;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart' as fp;
 import '../models/request_models.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
+
+/// TEMPORARY: maps this app's local ServiceType enum to the backend's real
+/// tbl_services.service_id. Replace these numbers with whatever IDs your
+/// classmate's tbl_services table actually has (check phpMyAdmin -> browse
+/// tbl_services), or better — fetch GET /api/services on startup and match
+/// by name instead of hardcoding.
+const Map<ServiceType, int> _serviceIdMap = {
+  ServiceType.ambulance: 1,
+  ServiceType.transfer: 2,
+  ServiceType.road: 3,
+  ServiceType.relief: 4,
+  ServiceType.inquiry: 5,
+  ServiceType.items: 6,
+};
 
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
@@ -50,6 +65,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   /// Items currently checked in the Equipment / Item Request form.
   final Set<String> _selectedItems = {};
+
+  /// The valid-ID image the resident picked, required by the backend on
+  /// every submission (ServiceRequestController@store: 'valid_id' =>
+  /// required|file|mimes:jpg,jpeg,png|max:2048).
+  fp.PlatformFile? _validIdFile;
 
   @override
   void initState() {
@@ -89,7 +109,27 @@ class _ServicesScreenState extends State<ServicesScreen> {
     return 'Today, $hour12:$minute $period';
   }
 
-  void _submit() {
+  Future<void> _pickValidId() async {
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      withData: true, // ensures .bytes is populated (needed on web)
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() => _validIdFile = result.files.first);
+    }
+  }
+
+  Future<void> _submit() async {
+    // The backend requires a valid ID photo on every request — block
+    // submission client-side instead of letting it fail as a 422 later.
+    if (_validIdFile == null || _validIdFile!.bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
+      );
+      return;
+    }
+
     final refNo = widget.appState.nextRefNo();
     final timeLabel = _nowLabel();
 
@@ -157,7 +197,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
         break;
     }
 
+    // The backend only stores one free-text 'description' field (not a
+    // list) — join the per-type meta lines into one string for it.
+    final description = metaLines.join('\n');
+
     final request = ServiceRequest(
+      serviceId: _serviceIdMap[_selected],
+      description: description,
       type: _selected,
       refNo: refNo,
       status: ReqStatus.review,
@@ -170,7 +216,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ],
     );
 
-    widget.appState.addRequest(request);
+    await widget.appState.addRequest(
+      request,
+      validIdFileBytes: _validIdFile!.bytes!,
+      validIdFileName: _validIdFile!.name,
+    );
+
+    if (!mounted) return;
 
     final f = widget.appState.language == AppLanguage.filipino;
     showModalBottomSheet(
@@ -241,6 +293,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
             children: [
               SectionHeader(title: _formTitle(_selected, f)),
               _buildForm(_selected),
+              // Required on every submission — the backend rejects requests
+              // without a valid ID photo attached.
+              _ValidIdUploadField(
+                fileName: _validIdFile?.name,
+                onTap: _pickValidId,
+              ),
               const SizedBox(height: 6),
               AppButton(label: tr(f, 'common.submit_request'), onPressed: _submit),
             ],
@@ -407,6 +465,61 @@ class _ServicesScreenState extends State<ServicesScreen> {
           notesController: _ctrl('item_notes'),
         );
     }
+  }
+}
+
+/// Required valid-ID upload widget, shown at the bottom of every form
+/// regardless of service type (the backend requires this field on every
+/// submission, unlike the per-type optional [_UploadField] above).
+class _ValidIdUploadField extends StatelessWidget {
+  final String? fileName;
+  final VoidCallback onTap;
+
+  const _ValidIdUploadField({required this.fileName, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = fileName != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Valid ID (required)', style: AppText.display(size: 12, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+              decoration: BoxDecoration(
+                color: hasFile ? AppColors.green50 : AppColors.surface,
+                border: Border.all(color: hasFile ? AppColors.green700 : AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hasFile ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
+                    color: hasFile ? AppColors.green700 : AppColors.inkFaint,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      hasFile ? fileName! : 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
+                      style: AppText.body(size: 12, color: hasFile ? AppColors.green900 : AppColors.inkMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -692,8 +805,7 @@ class _TypeCard extends StatelessWidget {
     required this.selected,
     required this.filipino,
     required this.onTap,
-    this.fullWidth = false,
-  });
+  }) : fullWidth = false;
 
   @override
   Widget build(BuildContext context) {

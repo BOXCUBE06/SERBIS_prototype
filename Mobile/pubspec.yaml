@@ -1,5 +1,8 @@
 name: serbis
-description: "SERBIS - Echague MDRRMO mobile app"
+description: >
+  SERBIS — Echague MDRRMO mobile application. Lets residents submit and
+  track non-emergency service requests, and read offline disaster
+  preparedness materials in English or Filipino.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -7,12 +10,14 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  http: ^1.2.0
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
   google_fonts: ^6.2.1
+  http: ^1.2.0
   shared_preferences: ^2.2.2
+  file_picker: ^8.0.0
+
 
 dev_dependencies:
   flutter_test:

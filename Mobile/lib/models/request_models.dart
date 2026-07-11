@@ -128,8 +128,22 @@ class TimelineStep {
 
 enum RequestStepState { done, current, pending }
 
-/// A mock service request shown on the Track screen.
+/// A service request shown on the Track screen.
 class ServiceRequest {
+  /// The backend's real numeric primary key (tbl_service_request id).
+  /// Null for a request that only exists locally and hasn't been
+  /// confirmed by the server yet — the [refNo] is shown to the user in
+  /// the meantime, but [id] is what must be sent back to the server for
+  /// any update/cancel call.
+  final int? id;
+
+  /// The backend's tbl_services.service_id this request was filed under.
+  final int? serviceId;
+
+  /// Free-text description sent to the backend (ServiceRequestController
+  /// requires this field).
+  final String? description;
+
   final ServiceType type;
   final String refNo;
   final ReqStatus status;
@@ -139,6 +153,9 @@ class ServiceRequest {
   final bool cancellable;
 
   const ServiceRequest({
+    this.id,
+    this.serviceId,
+    this.description,
     required this.type,
     required this.refNo,
     required this.status,
@@ -149,6 +166,7 @@ class ServiceRequest {
   });
 
   ServiceRequest copyWith({
+    int? id,
     ReqStatus? status,
     List<String>? metaLines,
     List<TimelineStep>? timeline,
@@ -156,13 +174,61 @@ class ServiceRequest {
     bool? cancellable,
   }) {
     return ServiceRequest(
-      type: type,
-      refNo: refNo,
-      status: status ?? this.status,
-      metaLines: metaLines ?? this.metaLines,
-      timeline: timeline ?? this.timeline,
-      note: note ?? this.note,
+      id:          id ?? this.id,
+      serviceId:   serviceId,
+      description: description,
+      type:        type,
+      refNo:       refNo,
+      status:      status     ?? this.status,
+      metaLines:   metaLines  ?? this.metaLines,
+      timeline:    timeline   ?? this.timeline,
+      note:        note       ?? this.note,
       cancellable: cancellable ?? this.cancellable,
+    );
+  }
+
+  /// Builds a [ServiceRequest] from the JSON map returned by the Laravel
+  /// backend's GET /api/service-requests endpoint (see
+  /// ServiceRequestController@index / @store).
+  ///
+  /// The backend returns raw columns from tbl_service_request
+  /// (id, service_id, description, status, created_at, ...), not the
+  /// 'type'/'ref_no'/'meta' shape this app originally mocked — so most of
+  /// this is now reconstructed rather than read directly.
+  factory ServiceRequest.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as int? ??
+        int.tryParse(json['id']?.toString() ?? '');
+    final serviceId = json['service_id'] as int? ??
+        int.tryParse(json['service_id']?.toString() ?? '');
+
+    // The backend doesn't send a ServiceType-shaped 'type' field directly —
+    // if your Service model / relation include a name you can map it here.
+    // Falling back to 'inquiry' until this mapping is wired up against
+    // whatever tbl_services actually returns (e.g. json['service']['name']).
+    final type = ServiceType.inquiry;
+
+    // Map the server's status string to our ReqStatus enum
+    final statusStr = (json['status'] as String? ?? 'pending').toLowerCase();
+    final status = switch (statusStr) {
+      'scheduled' || 'dispatched' => ReqStatus.scheduled,
+      'completed' => ReqStatus.completed,
+      'cancelled' => ReqStatus.cancelled,
+      _ => ReqStatus.review,
+    };
+
+    return ServiceRequest(
+      id:          id,
+      serviceId:   serviceId,
+      description: json['description'] as String?,
+      type:        type,
+      refNo:       id != null ? 'SR-$id' : '',
+      status:      status,
+      metaLines: [
+        if (json['description'] != null) json['description'] as String,
+      ],
+      timeline:    const [], // timeline detail loaded separately if needed
+      note:        json['remarks'] as String?,
+      cancellable: status == ReqStatus.review || status == ReqStatus.scheduled,
     );
   }
 }

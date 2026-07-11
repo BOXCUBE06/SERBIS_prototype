@@ -1,94 +1,96 @@
+/// Account model and auth store for the SERBIS app.
+///
+/// [AppUser] represents a logged-in resident (data returned by Laravel).
+/// [UserStore] wraps [ApiService] to provide register / login / logout
+/// methods that the auth screens and [AuthGate] in main.dart call.
+///
+/// Previously this stored accounts in shared_preferences. Now it delegates
+/// to the Laravel backend via [ApiService].
+library serbis.state.user_store;
+
 import 'api_service.dart';
 
-/// A SERBIS account, as entered on the registration form and sent to the
-/// Laravel backend. The backend is now the source of truth — this class is
-/// just a convenient container for passing form data to [UserStore].
+/// A resident account as returned by the Laravel backend after login.
+///
+/// Field names match whatever your Laravel [Resident] model returns in the
+/// `user` key of the residentLogin response. Adjust the fromJson factory
+/// below if your column names differ.
 class AppUser {
-  final String name;
-  final String phone;
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String email;
   final String address;
-  final String password;
 
   const AppUser({
-    required this.name,
-    required this.phone,
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
     required this.address,
-    required this.password,
   });
 
-  AppUser copyWith({String? name, String? phone, String? address, String? password}) {
+  /// Full display name — "Juan Delacruz"
+  String get fullName => '$firstName $lastName'.trim();
+
+  /// Builds an [AppUser] from the JSON map returned by Laravel's
+  /// residentLogin endpoint. Adjust field names here if your Resident
+  /// model uses different column names (e.g. 'full_name' vs 'first_name').
+  factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
-      name: name ?? this.name,
-      phone: phone ?? this.phone,
-      address: address ?? this.address,
-      password: password ?? this.password,
+      id:        (json['id'] ?? '').toString(),
+      firstName: json['first_name'] as String? ?? '',
+      lastName:  json['last_name']  as String? ?? '',
+      email:     json['email_address'] as String?
+                 ?? json['email'] as String?
+                 ?? '',
+      address:   json['address'] as String? ?? '',
     );
   }
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'phone': phone,
-        'address': address,
-        'password': password,
-      };
-
-  factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
-        name: json['name'] as String? ?? '',
-        phone: json['phone'] as String? ?? '',
-        address: json['address'] as String? ?? '',
-        password: json['password'] as String? ?? '',
-      );
 }
 
-/// Thin wrapper around [ApiService] for auth-related calls.
-///
-/// There is no more local account storage — registration and login both go
-/// through the Laravel API. [ApiService] itself handles saving/loading the
-/// Sanctum token, so `UserStore` only needs to shape the requests/responses.
+/// Thin wrapper around [ApiService] that exposes the three auth operations
+/// the app needs: [register], [login], and [logout].
 class UserStore {
   final ApiService _api;
 
   UserStore(this._api);
 
-  /// Call once on app startup (e.g. in `AuthGate.initState`) so a
-  /// previously-saved token is restored before checking [isLoggedIn].
-  Future<void> load() => _api.loadToken();
+  /// Whether a Sanctum token is stored locally (i.e. the resident is still
+  /// logged in from a previous session).
+  bool get hasSession => _api.isLoggedIn;
 
-  /// Whether a valid auth token is currently stored.
-  bool get isLoggedIn => _api.isLoggedIn;
-
-  /// Registers a new account with the backend.
+  /// Registers a new resident account on the Laravel backend.
   ///
-  /// Returns `null` on success, or an error message string if the server
-  /// rejected the request (e.g. phone number already taken, validation
-  /// error). NOTE: this changed from returning `bool` to returning
-  /// `String?` — update any call sites that checked `if (registered)`.
-  Future<String?> register(AppUser user) async {
+  /// Returns null on success, or a human-readable error string on failure
+  /// (validation error, duplicate email, network error, etc.).
+  Future<String?> register({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String password,
+  }) {
     return _api.register(
-      name: user.name,
-      phone: user.phone,
-      address: user.address,
-      password: user.password,
+      firstName: firstName,
+      lastName:  lastName,
+      email:     email,
+      password:  password,
     );
   }
 
-  /// Logs in with phone + password.
+  /// Logs in a resident with [email] + [password].
   ///
-  /// Returns the logged-in user's data from the server on success, or
-  /// `null` if the credentials were rejected or the request failed.
-  Future<Map<String, dynamic>?> login(String phone, String password) async {
-    try {
-      return await _api.login(phone: phone, password: password);
-    } catch (e) {
-      return null;
-    }
+  /// Returns the logged-in [AppUser] on success, or throws a [String]
+  /// error message on failure (wrong credentials, network error, etc.).
+  Future<AppUser> login({
+    required String email,
+    required String password,
+  }) async {
+    final json = await _api.residentLogin(email: email, password: password);
+    return AppUser.fromJson(json);
   }
 
-  /// Logs out the current user and clears the stored token.
+  /// Logs out the resident — invalidates the server token and clears local
+  /// storage.
   Future<void> logout() => _api.logout();
-
-  /// Fetches the currently logged-in user's data from the server.
-  Future<Map<String, dynamic>> getUser() => _api.getUser();
-
-  Object? authenticate(String text, String text2) {}
 }

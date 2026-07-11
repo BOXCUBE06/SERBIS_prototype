@@ -1,3 +1,15 @@
+/// SERBIS — Echague MDRRMO mobile application.
+///
+/// Entry point of the app. Defines:
+///   - [SerbisApp]: the root [MaterialApp] widget.
+///   - [AuthGate]: decides whether the resident sees the Login/Register
+///     flow or the main app, and restores any previously logged-in
+///     session.
+///   - [RootShell]: the authenticated app shell — bottom navigation, the
+///     persistent SOS button, and the shared [AppState] instance passed
+///     down to every tab.
+library serbis.main;
+
 import 'package:flutter/material.dart';
 import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
@@ -7,9 +19,9 @@ import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
+import 'state/api_service.dart';
 import 'state/request_store.dart';
 import 'state/account_store.dart';
-import 'state/api_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/shared_widgets.dart';
 import 'widgets/sos_button.dart';
@@ -35,11 +47,11 @@ class SerbisApp extends StatelessWidget {
 /// Top-level switcher between the auth flow (Login / Register) and the
 /// main app shell.
 ///
-/// Accounts and requests are now backed by the Laravel API through a
-/// single shared [ApiService] instance, created here and passed down to
-/// [UserStore] (for auth) and [AppState] (for requests). On startup, if a
-/// Sanctum token was saved from a previous session, the resident is signed
-/// back in automatically instead of being sent to the login screen.
+/// Creates a single [ApiService] instance shared by [UserStore] (for auth)
+/// and [RootShell] (for request CRUD). On startup it calls
+/// [ApiService.loadToken] — if a Sanctum token is already saved locally
+/// from a previous session, the resident goes straight to the main app
+/// without logging in again.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -52,30 +64,26 @@ enum _AuthView { login, register }
 class _AuthGateState extends State<AuthGate> {
   final ApiService _api = ApiService();
   late final UserStore _userStore = UserStore(_api);
-  bool _ready = false;
 
-  AppUser? _currentUser;
-  _AuthView _view = _AuthView.login;
-  String? _loginInfoMessage;
+  bool      _ready            = false;
+  AppUser?  _currentUser;
+  _AuthView _view             = _AuthView.login;
+  String?   _loginInfoMessage;
 
   @override
   void initState() {
     super.initState();
-    _userStore.load().then((_) async {
-      if (_userStore.isLoggedIn) {
-        try {
-          final userData = await _userStore.getUser();
-          if (!mounted) return;
-          setState(() {
-            _currentUser = AppUser.fromJson(userData);
-            _ready = true;
-          });
-          return;
-        } catch (_) {
-          // Saved token is invalid or expired — fall through to login.
-        }
+    _api.loadToken().then((_) {
+      if (!mounted) return;
+      if (_api.isLoggedIn) {
+        setState(() {
+          _currentUser = const AppUser(
+            id: '', firstName: '', lastName: '', email: '', address: '');
+          _ready = true;
+        });
+      } else {
+        setState(() => _ready = true);
       }
-      if (mounted) setState(() => _ready = true);
     });
   }
 
@@ -84,7 +92,8 @@ class _AuthGateState extends State<AuthGate> {
   void _afterRegister() {
     setState(() {
       _view = _AuthView.login;
-      _loginInfoMessage = 'Account created! Please log in to verify your details.';
+      _loginInfoMessage =
+          'Account created! Please log in to verify your details.';
     });
   }
 
@@ -102,7 +111,8 @@ class _AuthGateState extends State<AuthGate> {
     if (!_ready) {
       return const Scaffold(
         backgroundColor: AppColors.paper,
-        body: Center(child: CircularProgressIndicator(color: AppColors.green700)),
+        body: Center(
+            child: CircularProgressIndicator(color: AppColors.green700)),
       );
     }
 
@@ -111,8 +121,8 @@ class _AuthGateState extends State<AuthGate> {
       return RootShell(
         api: _api,
         onLogout: _logout,
-        initialName: user.name.isEmpty ? null : user.name,
-        initialPhone: user.phone.isEmpty ? null : user.phone,
+        initialName: user.fullName.isEmpty ? null : user.fullName,
+        initialEmail: user.email.isEmpty ? null : user.email,
         initialAddress: user.address.isEmpty ? null : user.address,
       );
     }
@@ -141,7 +151,7 @@ class RootShell extends StatefulWidget {
   final ApiService api;
   final VoidCallback onLogout;
   final String? initialName;
-  final String? initialPhone;
+  final String? initialEmail;
   final String? initialAddress;
 
   const RootShell({
@@ -149,7 +159,7 @@ class RootShell extends StatefulWidget {
     required this.api,
     required this.onLogout,
     this.initialName,
-    this.initialPhone,
+    this.initialEmail,
     this.initialAddress,
   });
 
@@ -165,10 +175,8 @@ class _RootShellState extends State<RootShell> {
   @override
   void initState() {
     super.initState();
-    // Rebuild whenever a request is added or cancelled so Home/Track/etc.
-    // reflect the latest data.
     _appState.addListener(_onAppStateChanged);
-    // Pull the resident's existing requests from the server on entry.
+    // Load the resident's existing requests from the server on startup.
     _appState.loadRequests();
   }
 
@@ -231,7 +239,7 @@ class _RootShellState extends State<RootShell> {
         onOpenNotifications: onOpenNotifications,
         onOpenProfile: onOpenProfile,
         initialName: widget.initialName,
-        initialPhone: widget.initialPhone,
+        initialEmail: widget.initialEmail,
         initialAddress: widget.initialAddress,
       ),
     ];

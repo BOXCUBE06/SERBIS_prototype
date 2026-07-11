@@ -1,3 +1,6 @@
+
+library serbis.screens.profile;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/safety_files.dart';
@@ -13,7 +16,7 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenProfile;
   final String? initialName;
-  final String? initialPhone;
+  final String? initialEmail;
   final String? initialAddress;
 
   const ProfileScreen({
@@ -23,7 +26,7 @@ class ProfileScreen extends StatefulWidget {
     required this.onOpenNotifications,
     required this.onOpenProfile,
     this.initialName,
-    this.initialPhone,
+    this.initialEmail,
     this.initialAddress,
   });
 
@@ -35,7 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _smsAlerts = true;
   bool _pushNotifications = true;
   late String _name = widget.initialName ?? 'Juan Delacruz';
-  late String _phone = widget.initialPhone ?? '+63 939-1145-133';
+  late String _email = widget.initialEmail ?? '';
   late String _address = widget.initialAddress ?? 'Echague, Isabela';
 
   @override
@@ -95,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 12),
                   Text(_name, style: AppText.display(size: 18)),
                   const SizedBox(height: 5),
-                  _detailRow(Icons.phone_outlined, _phone),
+                  _detailRow(Icons.email_outlined, _email),
                   const SizedBox(height: 3),
                   _detailRow(Icons.place_outlined, _address),
                   const SizedBox(height: 16),
@@ -186,7 +189,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _editProfile(BuildContext context) async {
     final nameCtrl = TextEditingController(text: _name);
-    final phoneCtrl = TextEditingController(text: _phone);
+    final emailCtrl = TextEditingController(text: _email);
     final addressCtrl = TextEditingController(text: _address);
 
     final saved = await showModalBottomSheet<bool>(
@@ -216,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text('Update information', style: AppText.display(size: 18)),
               const SizedBox(height: 14),
               _editField('Full name', nameCtrl),
-              _editField('Contact number', phoneCtrl, keyboard: TextInputType.phone, maxLength: 11, digitsOnly: true),
+              _editField('Email address', emailCtrl, keyboard: TextInputType.emailAddress),
               _editField('Address', addressCtrl),
               const SizedBox(height: 6),
               AppButton(label: 'Save changes', onPressed: () => Navigator.pop(ctx, true)),
@@ -229,7 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (saved == true) {
       setState(() {
         _name = nameCtrl.text.trim().isEmpty ? _name : nameCtrl.text.trim();
-        _phone = phoneCtrl.text.trim().isEmpty ? _phone : phoneCtrl.text.trim();
+        _email = emailCtrl.text.trim().isEmpty ? _email : emailCtrl.text.trim();
         _address = addressCtrl.text.trim().isEmpty ? _address : addressCtrl.text.trim();
       });
       if (context.mounted) showAppSnackBar(context, 'Profile information updated.');
