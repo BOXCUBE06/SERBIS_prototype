@@ -1,7 +1,4 @@
-/// Login screen: the first screen unauthenticated residents see.
-///
-/// Sends the resident's email + password to the Laravel backend via
-/// [UserStore.login] → [ApiService.residentLogin].
+
 library serbis.screens.auth.login;
 
 import 'package:flutter/material.dart';
@@ -9,11 +6,7 @@ import '../../state/account_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
-/// Login screen.
-///
-/// Uses email address + password (matching the Laravel [Resident] model).
-/// On success the Sanctum token is stored locally and [onLoginSuccess] is
-/// called with the logged-in [AppUser].
+
 class LoginScreen extends StatefulWidget {
   final UserStore userStore;
   final void Function(AppUser user) onLoginSuccess;
@@ -60,7 +53,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       widget.onLoginSuccess(user);
     } on String catch (e) {
-      // Human-readable error thrown by ApiService / UserStore
       setState(() => _formError = e);
     } catch (e) {
       setState(() => _formError =
@@ -86,7 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Heading ──────────────────────────────────────────
                     Text(
                       'Welcome back',
                       style: AppText.display(size: 21),
@@ -100,8 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
                     ),
-
-                    // ── Success banner (after register) ──────────────────
                     if (widget.infoMessage != null) ...[
                       const SizedBox(height: 14),
                       Container(
@@ -129,8 +118,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
 
                     const SizedBox(height: 24),
-
-                    // ── Email field ──────────────────────────────────────
                     AuthTextField(
                       label: 'Email address',
                       hint: 'yourname@email.com',
@@ -146,8 +133,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                     ),
-
-                    // ── Password field ───────────────────────────────────
                     AuthTextField(
                       label: 'Password',
                       hint: 'Enter your password',
@@ -157,8 +142,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (v) =>
                           (v ?? '').isEmpty ? 'Enter your password' : null,
                     ),
-
-                    // ── API error banner ─────────────────────────────────
                     if (_formError != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -178,8 +161,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                       ),
-
-                    // ── Forgot password ──────────────────────────────────
                     Align(
                       alignment: Alignment.centerRight,
                       child: GestureDetector(
@@ -202,8 +183,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         loading: _loading,
                         onPressed: _submit),
                     const SizedBox(height: 18),
-
-                    // ── Go to Register ───────────────────────────────────
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

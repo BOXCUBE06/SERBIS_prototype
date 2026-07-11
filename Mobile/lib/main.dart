@@ -1,13 +1,4 @@
-/// SERBIS — Echague MDRRMO mobile application.
-///
-/// Entry point of the app. Defines:
-///   - [SerbisApp]: the root [MaterialApp] widget.
-///   - [AuthGate]: decides whether the resident sees the Login/Register
-///     flow or the main app, and restores any previously logged-in
-///     session.
-///   - [RootShell]: the authenticated app shell — bottom navigation, the
-///     persistent SOS button, and the shared [AppState] instance passed
-///     down to every tab.
+
 library serbis.main;
 
 import 'package:flutter/material.dart';
@@ -44,14 +35,6 @@ class SerbisApp extends StatelessWidget {
   }
 }
 
-/// Top-level switcher between the auth flow (Login / Register) and the
-/// main app shell.
-///
-/// Creates a single [ApiService] instance shared by [UserStore] (for auth)
-/// and [RootShell] (for request CRUD). On startup it calls
-/// [ApiService.loadToken] — if a Sanctum token is already saved locally
-/// from a previous session, the resident goes straight to the main app
-/// without logging in again.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -65,35 +48,47 @@ class _AuthGateState extends State<AuthGate> {
   final ApiService _api = ApiService();
   late final UserStore _userStore = UserStore(_api);
 
-  bool      _ready            = false;
-  AppUser?  _currentUser;
-  _AuthView _view             = _AuthView.login;
-  String?   _loginInfoMessage;
+  bool _ready = false;
+  AppUser? _currentUser;
+  _AuthView _view = _AuthView.login;
+  String? _loginInfoMessage;
 
   @override
   void initState() {
     super.initState();
     _api.loadToken().then((_) {
-      if (!mounted) return;
-      if (_api.isLoggedIn) {
-        setState(() {
-          _currentUser = const AppUser(
-            id: '', firstName: '', lastName: '', email: '', address: '');
-          _ready = true;
-        });
-      } else {
-        setState(() => _ready = true);
+      if (!mounted) {
+        return;
       }
+
+      setState(() {
+        _ready = true;
+        if (_api.isLoggedIn) {
+          _currentUser = const AppUser(
+            id: '',
+            firstName: '',
+            lastName: '',
+            email: '',
+            address: '',
+          );
+        } else {
+          _currentUser = null;
+        }
+      });
     });
   }
 
-  void _login(AppUser user) => setState(() => _currentUser = user);
+  void _login(AppUser user) {
+    setState(() {
+      _currentUser = user;
+      _ready = true;
+    });
+  }
 
   void _afterRegister() {
     setState(() {
       _view = _AuthView.login;
-      _loginInfoMessage =
-          'Account created! Please log in to verify your details.';
+      _loginInfoMessage = 'Account created! Please log in to verify your details.';
     });
   }
 
@@ -112,41 +107,47 @@ class _AuthGateState extends State<AuthGate> {
       return const Scaffold(
         backgroundColor: AppColors.paper,
         body: Center(
-            child: CircularProgressIndicator(color: AppColors.green700)),
+          child: CircularProgressIndicator(color: AppColors.green700),
+        ),
       );
     }
 
-    final user = _currentUser;
-    if (user != null) {
+    if (_currentUser != null) {
       return RootShell(
         api: _api,
         onLogout: _logout,
-        initialName: user.fullName.isEmpty ? null : user.fullName,
-        initialEmail: user.email.isEmpty ? null : user.email,
-        initialAddress: user.address.isEmpty ? null : user.address,
+        initialName: _currentUser!.fullName.isEmpty ? null : _currentUser!.fullName,
+        initialEmail: _currentUser!.email.isEmpty ? null : _currentUser!.email,
+        initialAddress: _currentUser!.address.isEmpty ? null : _currentUser!.address,
       );
     }
 
-    return _view == _AuthView.login
-        ? LoginScreen(
-            userStore: _userStore,
-            onLoginSuccess: _login,
-            onGoToRegister: () => setState(() {
-              _view = _AuthView.register;
-              _loginInfoMessage = null;
-            }),
-            infoMessage: _loginInfoMessage,
-          )
-        : RegisterScreen(
-            userStore: _userStore,
-            onRegisterSuccess: _afterRegister,
-            onGoToLogin: () => setState(() => _view = _AuthView.login),
-          );
+    if (_view == _AuthView.login) {
+      return LoginScreen(
+        userStore: _userStore,
+        onLoginSuccess: _login,
+        onGoToRegister: () {
+          setState(() {
+            _view = _AuthView.register;
+            _loginInfoMessage = null;
+          });
+        },
+        infoMessage: _loginInfoMessage,
+      );
+    }
+
+    return RegisterScreen(
+      userStore: _userStore,
+      onRegisterSuccess: _afterRegister,
+      onGoToLogin: () {
+        setState(() {
+          _view = _AuthView.login;
+        });
+      },
+    );
   }
 }
 
-/// Holds the bottom navigation, the persistent SOS button, and switches
-/// between the five main screens.
 class RootShell extends StatefulWidget {
   final ApiService api;
   final VoidCallback onLogout;
@@ -176,7 +177,6 @@ class _RootShellState extends State<RootShell> {
   void initState() {
     super.initState();
     _appState.addListener(_onAppStateChanged);
-    // Load the resident's existing requests from the server on startup.
     _appState.loadRequests();
   }
 

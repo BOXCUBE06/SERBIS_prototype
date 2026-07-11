@@ -25,11 +25,42 @@ class _TrackScreenState extends State<TrackScreen> {
   ReqStatus? _filter;
   final Set<String> _expanded = {};
 
+  void _changeFilter(ReqStatus? status) {
+    setState(() {
+      _filter = status;
+    });
+  }
+
+  void _toggleExpanded(String refNo) {
+    setState(() {
+      if (_expanded.contains(refNo)) {
+        _expanded.remove(refNo);
+      } else {
+        _expanded.add(refNo);
+      }
+    });
+  }
+
+  List<ServiceRequest> _getFilteredRequests(List<ServiceRequest> allRequests) {
+    if (_filter == null) {
+      return allRequests;
+    }
+
+    final filtered = <ServiceRequest>[];
+    for (final request in allRequests) {
+      if (request.status == _filter) {
+        filtered.add(request);
+      }
+    }
+    return filtered;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final f = widget.appState.language == AppLanguage.filipino;
+    final isFilipino = widget.appState.language == AppLanguage.filipino;
     final requests = widget.appState.requests;
-    final filtered = _filter == null ? requests : requests.where((r) => r.status == _filter).toList();
+    final filtered = _getFilteredRequests(requests);
+    final hasRequests = requests.isNotEmpty;
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -38,9 +69,9 @@ class _TrackScreenState extends State<TrackScreen> {
         const SizedBox(height: 22),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: SectionHeader(title: tr(f, 'track.title')),
+          child: SectionHeader(title: tr(isFilipino, 'track.title')),
         ),
-        if (requests.isEmpty)
+        if (!hasRequests)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: AppCard(
@@ -60,10 +91,10 @@ class _TrackScreenState extends State<TrackScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tr(f, 'track.empty_title'), style: AppText.display(size: 14.5)),
+                            Text(tr(isFilipino, 'track.empty_title'), style: AppText.display(size: 14.5)),
                             const SizedBox(height: 2),
                             Text(
-                              tr(f, 'track.empty_desc'),
+                              tr(isFilipino, 'track.empty_desc'),
                               style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
                             ),
                           ],
@@ -82,29 +113,23 @@ class _TrackScreenState extends State<TrackScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 22),
               children: [
-                _filterChip('${tr(f, "track.filter.all")} (${requests.length})', null, f),
-                _filterChip(tr(f, 'status.review'), ReqStatus.review, f),
-                _filterChip(tr(f, 'status.scheduled'), ReqStatus.scheduled, f),
-                _filterChip(tr(f, 'status.completed'), ReqStatus.completed, f),
-                _filterChip(tr(f, 'status.cancelled'), ReqStatus.cancelled, f),
+                _filterChip('${tr(isFilipino, "track.filter.all")} (${requests.length})', null, isFilipino),
+                _filterChip(tr(isFilipino, 'status.review'), ReqStatus.review, isFilipino),
+                _filterChip(tr(isFilipino, 'status.scheduled'), ReqStatus.scheduled, isFilipino),
+                _filterChip(tr(isFilipino, 'status.completed'), ReqStatus.completed, isFilipino),
+                _filterChip(tr(isFilipino, 'status.cancelled'), ReqStatus.cancelled, isFilipino),
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: Column(
-              children: filtered.map((r) => _RequestCard(
-                request: r,
-                expanded: _expanded.contains(r.refNo),
-                filipino: f,
-                onToggle: () => setState(() {
-                  if (_expanded.contains(r.refNo)) {
-                    _expanded.remove(r.refNo);
-                  } else {
-                    _expanded.add(r.refNo);
-                  }
-                }),
-                onCancel: () => widget.appState.cancelRequest(r.refNo),
+              children: filtered.map((request) => _RequestCard(
+                request: request,
+                expanded: _expanded.contains(request.refNo),
+                filipino: isFilipino,
+                onToggle: () => _toggleExpanded(request.refNo),
+                onCancel: () => widget.appState.cancelRequest(request.refNo),
               )).toList(),
             ),
           ),
@@ -121,7 +146,7 @@ class _TrackScreenState extends State<TrackScreen> {
       child: ChoiceChip(
         label: Text(label),
         selected: active,
-        onSelected: (_) => setState(() => _filter = status),
+        onSelected: (_) => _changeFilter(status),
         labelStyle: AppText.display(
           size: 12,
           weight: FontWeight.w600,
@@ -155,15 +180,22 @@ class _RequestCard extends StatelessWidget {
     required this.onCancel,
   });
 
+  Color _getAccentColor() {
+    if (request.status == ReqStatus.completed) {
+      return AppColors.green700;
+    }
+    if (request.status == ReqStatus.cancelled) {
+      return AppColors.inkFaint;
+    }
+    if (request.status == ReqStatus.scheduled) {
+      return AppColors.amber600;
+    }
+    return AppColors.blue600;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final f = filipino;
-    final accent = switch (request.status) {
-      ReqStatus.completed => AppColors.green700,
-      ReqStatus.cancelled => AppColors.inkFaint,
-      ReqStatus.scheduled => AppColors.amber600,
-      ReqStatus.review => AppColors.blue600,
-    };
+    final accent = _getAccentColor();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -181,13 +213,13 @@ class _RequestCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(request.type.titleFor(f), style: AppText.display(size: 14.5)),
+                      Text(request.type.titleFor(filipino), style: AppText.display(size: 14.5)),
                       const SizedBox(height: 2),
                       Text('Ref #${request.refNo}', style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
                     ],
                   ),
                 ),
-                StatusBadge(request.status, filipino: f),
+                StatusBadge(request.status, filipino: filipino),
               ],
             ),
             const SizedBox(height: 12),
@@ -212,7 +244,7 @@ class _RequestCard extends StatelessWidget {
             if (request.timeline.isNotEmpty) ...[
               const SizedBox(height: 12),
               AppButton(
-                label: expanded ? tr(f, 'common.hide_timeline') : tr(f, 'common.view_timeline'),
+                label: expanded ? tr(filipino, 'common.hide_timeline') : tr(filipino, 'common.view_timeline'),
                 icon: expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
                 style: AppButtonStyle.outline,
                 onPressed: onToggle,
@@ -230,9 +262,9 @@ class _RequestCard extends StatelessWidget {
             if (request.cancellable) ...[
               const SizedBox(height: 10),
               AppButton(
-                label: tr(f, 'common.cancel_request'),
+                label: tr(filipino, 'common.cancel_request'),
                 style: AppButtonStyle.ghostRed,
-                onPressed: () => showCancelDialog(context, request.refNo, onCancel, filipino: f),
+                onPressed: () => showCancelDialog(context, request.refNo, onCancel, filipino: filipino),
               ),
             ],
           ],

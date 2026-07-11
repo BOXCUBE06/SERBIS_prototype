@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'shared_widgets.dart';
 
-/// Bottom sheet listing direct-dial emergency hotlines.
-/// Opened from the persistent SOS button on every screen.
+
 class SosSheet extends StatelessWidget {
   const SosSheet({super.key});
 
@@ -101,8 +100,7 @@ class SosSheet extends StatelessWidget {
   }
 }
 
-/// Persistent floating "SOS" button with a subtle pulsing ring,
-/// shown above the bottom navigation on every screen.
+
 class SosFab extends StatefulWidget {
   const SosFab({super.key});
 

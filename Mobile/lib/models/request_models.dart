@@ -1,123 +1,203 @@
-/// Domain models for the SERBIS service-request system.
-///
-/// Defines the core data shapes used across the app: the categories of
-/// service a resident can request ([ServiceType]), the lifecycle status of
-/// a request ([ReqStatus]), the request itself ([ServiceRequest]), and its
-/// status history ([TimelineStep] / [RequestStepState]).
-///
-/// These are plain data classes with no business logic; request creation,
-/// storage, and mutation live in [AppState] (see `lib/state/app_state.dart`).
+
 library serbis.models;
 
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../state/translations.dart';
 
-/// Status of a submitted service request.
 enum ReqStatus { review, scheduled, completed, cancelled }
 
 extension ReqStatusX on ReqStatus {
-  String get label => switch (this) {
-        ReqStatus.review => 'Under review',
-        ReqStatus.scheduled => 'Scheduled',
-        ReqStatus.completed => 'Completed',
-        ReqStatus.cancelled => 'Cancelled',
-      };
+  String get label {
+    if (this == ReqStatus.review) {
+      return 'Under review';
+    }
+    if (this == ReqStatus.scheduled) {
+      return 'Scheduled';
+    }
+    if (this == ReqStatus.completed) {
+      return 'Completed';
+    }
+    return 'Cancelled';
+  }
 
-  /// Translated status label. Pass `appState.language == AppLanguage.filipino`.
-  String labelFor(bool filipino) => switch (this) {
-        ReqStatus.review => tr(filipino, 'status.review'),
-        ReqStatus.scheduled => tr(filipino, 'status.scheduled'),
-        ReqStatus.completed => tr(filipino, 'status.completed'),
-        ReqStatus.cancelled => tr(filipino, 'status.cancelled'),
-      };
+  String labelFor(bool filipino) {
+    if (this == ReqStatus.review) {
+      return tr(filipino, 'status.review');
+    }
+    if (this == ReqStatus.scheduled) {
+      return tr(filipino, 'status.scheduled');
+    }
+    if (this == ReqStatus.completed) {
+      return tr(filipino, 'status.completed');
+    }
+    return tr(filipino, 'status.cancelled');
+  }
 
-  Color get bg => switch (this) {
-        ReqStatus.review => AppColors.blue50,
-        ReqStatus.scheduled => AppColors.amber50,
-        ReqStatus.completed => AppColors.green50,
-        ReqStatus.cancelled => AppColors.grey50,
-      };
+  Color get bg {
+    if (this == ReqStatus.review) {
+      return AppColors.blue50;
+    }
+    if (this == ReqStatus.scheduled) {
+      return AppColors.amber50;
+    }
+    if (this == ReqStatus.completed) {
+      return AppColors.green50;
+    }
+    return AppColors.grey50;
+  }
 
-  Color get fg => switch (this) {
-        ReqStatus.review => AppColors.blue600,
-        ReqStatus.scheduled => AppColors.amber600,
-        ReqStatus.completed => AppColors.green700,
-        ReqStatus.cancelled => AppColors.inkFaint,
-      };
+  Color get fg {
+    if (this == ReqStatus.review) {
+      return AppColors.blue600;
+    }
+    if (this == ReqStatus.scheduled) {
+      return AppColors.amber600;
+    }
+    if (this == ReqStatus.completed) {
+      return AppColors.green700;
+    }
+    return AppColors.inkFaint;
+  }
 }
 
-/// The six service request categories residents can submit.
 enum ServiceType { ambulance, transfer, road, relief, inquiry, items }
 
 extension ServiceTypeX on ServiceType {
-  String get title => switch (this) {
-        ServiceType.ambulance => 'Medical Transport / Ambulance',
-        ServiceType.transfer => 'Hospital Transfer',
-        ServiceType.road => 'Road Clearing',
-        ServiceType.relief => 'Relief Goods',
-        ServiceType.inquiry => 'Information Inquiry',
-        ServiceType.items => 'Equipment / Item Request',
-      };
+  String get title {
+    if (this == ServiceType.ambulance) {
+      return 'Medical Transport / Ambulance';
+    }
+    if (this == ServiceType.transfer) {
+      return 'Hospital Transfer';
+    }
+    if (this == ServiceType.road) {
+      return 'Road Clearing';
+    }
+    if (this == ServiceType.relief) {
+      return 'Relief Goods';
+    }
+    if (this == ServiceType.inquiry) {
+      return 'Information Inquiry';
+    }
+    return 'Equipment / Item Request';
+  }
 
-  String get subtitle => switch (this) {
-        ServiceType.ambulance => 'Pick-up & drop-off',
-        ServiceType.transfer => 'Incl. dialysis patients',
-        ServiceType.road => 'Debris, fallen trees',
-        ServiceType.relief => 'Assistance request',
-        ServiceType.inquiry => 'General question to MDRRMO',
-        ServiceType.items => 'Wheelchair, stretcher & more',
-      };
+  String get subtitle {
+    if (this == ServiceType.ambulance) {
+      return 'Pick-up & drop-off';
+    }
+    if (this == ServiceType.transfer) {
+      return 'Incl. dialysis patients';
+    }
+    if (this == ServiceType.road) {
+      return 'Debris, fallen trees';
+    }
+    if (this == ServiceType.relief) {
+      return 'Assistance request';
+    }
+    if (this == ServiceType.inquiry) {
+      return 'General question to MDRRMO';
+    }
+    return 'Wheelchair, stretcher & more';
+  }
 
-  /// Translated display title. Pass `appState.language == AppLanguage.filipino`.
-  String titleFor(bool filipino) => switch (this) {
-        ServiceType.ambulance => tr(filipino, 'type.ambulance.title'),
-        ServiceType.transfer => tr(filipino, 'type.transfer.title'),
-        ServiceType.road => tr(filipino, 'type.road.title'),
-        ServiceType.relief => tr(filipino, 'type.relief.title'),
-        ServiceType.inquiry => tr(filipino, 'type.inquiry.title'),
-        ServiceType.items => tr(filipino, 'type.items.title'),
-      };
+  String titleFor(bool filipino) {
+    if (this == ServiceType.ambulance) {
+      return tr(filipino, 'type.ambulance.title');
+    }
+    if (this == ServiceType.transfer) {
+      return tr(filipino, 'type.transfer.title');
+    }
+    if (this == ServiceType.road) {
+      return tr(filipino, 'type.road.title');
+    }
+    if (this == ServiceType.relief) {
+      return tr(filipino, 'type.relief.title');
+    }
+    if (this == ServiceType.inquiry) {
+      return tr(filipino, 'type.inquiry.title');
+    }
+    return tr(filipino, 'type.items.title');
+  }
 
-  /// Translated subtitle. Pass `appState.language == AppLanguage.filipino`.
-  String subtitleFor(bool filipino) => switch (this) {
-        ServiceType.ambulance => tr(filipino, 'type.ambulance.subtitle'),
-        ServiceType.transfer => tr(filipino, 'type.transfer.subtitle'),
-        ServiceType.road => tr(filipino, 'type.road.subtitle'),
-        ServiceType.relief => tr(filipino, 'type.relief.subtitle'),
-        ServiceType.inquiry => tr(filipino, 'type.inquiry.subtitle'),
-        ServiceType.items => tr(filipino, 'type.items.subtitle'),
-      };
+  String subtitleFor(bool filipino) {
+    if (this == ServiceType.ambulance) {
+      return tr(filipino, 'type.ambulance.subtitle');
+    }
+    if (this == ServiceType.transfer) {
+      return tr(filipino, 'type.transfer.subtitle');
+    }
+    if (this == ServiceType.road) {
+      return tr(filipino, 'type.road.subtitle');
+    }
+    if (this == ServiceType.relief) {
+      return tr(filipino, 'type.relief.subtitle');
+    }
+    if (this == ServiceType.inquiry) {
+      return tr(filipino, 'type.inquiry.subtitle');
+    }
+    return tr(filipino, 'type.items.subtitle');
+  }
 
-  IconData get icon => switch (this) {
-        ServiceType.ambulance => Icons.local_hospital_rounded,
-        ServiceType.transfer => Icons.local_hospital_outlined,
-        ServiceType.road => Icons.construction_rounded,
-        ServiceType.relief => Icons.inventory_2_rounded,
-        ServiceType.inquiry => Icons.help_outline_rounded,
-        ServiceType.items => Icons.medical_services_rounded,
-      };
+  IconData get icon {
+    if (this == ServiceType.ambulance) {
+      return Icons.local_hospital_rounded;
+    }
+    if (this == ServiceType.transfer) {
+      return Icons.local_hospital_outlined;
+    }
+    if (this == ServiceType.road) {
+      return Icons.construction_rounded;
+    }
+    if (this == ServiceType.relief) {
+      return Icons.inventory_2_rounded;
+    }
+    if (this == ServiceType.inquiry) {
+      return Icons.help_outline_rounded;
+    }
+    return Icons.medical_services_rounded;
+  }
 
-  Color get bg => switch (this) {
-        ServiceType.ambulance => AppColors.red50,
-        ServiceType.transfer => AppColors.blue50,
-        ServiceType.road => AppColors.amber50,
-        ServiceType.relief => AppColors.green50,
-        ServiceType.inquiry => AppColors.grey50,
-        ServiceType.items => const Color(0xFFEDE7F6),
-      };
+  Color get bg {
+    if (this == ServiceType.ambulance) {
+      return AppColors.red50;
+    }
+    if (this == ServiceType.transfer) {
+      return AppColors.blue50;
+    }
+    if (this == ServiceType.road) {
+      return AppColors.amber50;
+    }
+    if (this == ServiceType.relief) {
+      return AppColors.green50;
+    }
+    if (this == ServiceType.inquiry) {
+      return AppColors.grey50;
+    }
+    return const Color(0xFFEDE7F6);
+  }
 
-  Color get fg => switch (this) {
-        ServiceType.ambulance => AppColors.red600,
-        ServiceType.transfer => AppColors.blue600,
-        ServiceType.road => AppColors.amber600,
-        ServiceType.relief => AppColors.green700,
-        ServiceType.inquiry => AppColors.inkMuted,
-        ServiceType.items => const Color(0xFF6A1B9A),
-      };
+  Color get fg {
+    if (this == ServiceType.ambulance) {
+      return AppColors.red600;
+    }
+    if (this == ServiceType.transfer) {
+      return AppColors.blue600;
+    }
+    if (this == ServiceType.road) {
+      return AppColors.amber600;
+    }
+    if (this == ServiceType.relief) {
+      return AppColors.green700;
+    }
+    if (this == ServiceType.inquiry) {
+      return AppColors.inkMuted;
+    }
+    return const Color(0xFF6A1B9A);
+  }
 }
 
-/// A single step in a request's status timeline.
 class TimelineStep {
   final String title;
   final String time;
@@ -128,22 +208,10 @@ class TimelineStep {
 
 enum RequestStepState { done, current, pending }
 
-/// A service request shown on the Track screen.
 class ServiceRequest {
-  /// The backend's real numeric primary key (tbl_service_request id).
-  /// Null for a request that only exists locally and hasn't been
-  /// confirmed by the server yet — the [refNo] is shown to the user in
-  /// the meantime, but [id] is what must be sent back to the server for
-  /// any update/cancel call.
   final int? id;
-
-  /// The backend's tbl_services.service_id this request was filed under.
   final int? serviceId;
-
-  /// Free-text description sent to the backend (ServiceRequestController
-  /// requires this field).
   final String? description;
-
   final ServiceType type;
   final String refNo;
   final ReqStatus status;
@@ -174,61 +242,63 @@ class ServiceRequest {
     bool? cancellable,
   }) {
     return ServiceRequest(
-      id:          id ?? this.id,
-      serviceId:   serviceId,
+      id: id ?? this.id,
+      serviceId: serviceId,
       description: description,
-      type:        type,
-      refNo:       refNo,
-      status:      status     ?? this.status,
-      metaLines:   metaLines  ?? this.metaLines,
-      timeline:    timeline   ?? this.timeline,
-      note:        note       ?? this.note,
+      type: type,
+      refNo: refNo,
+      status: status ?? this.status,
+      metaLines: metaLines ?? this.metaLines,
+      timeline: timeline ?? this.timeline,
+      note: note ?? this.note,
       cancellable: cancellable ?? this.cancellable,
     );
   }
 
-  /// Builds a [ServiceRequest] from the JSON map returned by the Laravel
-  /// backend's GET /api/service-requests endpoint (see
-  /// ServiceRequestController@index / @store).
-  ///
-  /// The backend returns raw columns from tbl_service_request
-  /// (id, service_id, description, status, created_at, ...), not the
-  /// 'type'/'ref_no'/'meta' shape this app originally mocked — so most of
-  /// this is now reconstructed rather than read directly.
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
-    final id = json['id'] as int? ??
-        int.tryParse(json['id']?.toString() ?? '');
-    final serviceId = json['service_id'] as int? ??
-        int.tryParse(json['service_id']?.toString() ?? '');
+    final idValue = json['id'];
+    final id = idValue is int ? idValue : int.tryParse(idValue?.toString() ?? '');
 
-    // The backend doesn't send a ServiceType-shaped 'type' field directly —
-    // if your Service model / relation include a name you can map it here.
-    // Falling back to 'inquiry' until this mapping is wired up against
-    // whatever tbl_services actually returns (e.g. json['service']['name']).
-    final type = ServiceType.inquiry;
+    final serviceIdValue = json['service_id'];
+    final serviceId = serviceIdValue is int
+        ? serviceIdValue
+        : int.tryParse(serviceIdValue?.toString() ?? '');
 
-    // Map the server's status string to our ReqStatus enum
-    final statusStr = (json['status'] as String? ?? 'pending').toLowerCase();
-    final status = switch (statusStr) {
-      'scheduled' || 'dispatched' => ReqStatus.scheduled,
-      'completed' => ReqStatus.completed,
-      'cancelled' => ReqStatus.cancelled,
-      _ => ReqStatus.review,
-    };
+    final description = json['description'] as String?;
+    final note = json['remarks'] as String?;
+
+    final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
+    final status = getStatusFromText(statusText);
+
+    final isActive = status == ReqStatus.review || status == ReqStatus.scheduled;
 
     return ServiceRequest(
-      id:          id,
-      serviceId:   serviceId,
-      description: json['description'] as String?,
-      type:        type,
-      refNo:       id != null ? 'SR-$id' : '',
-      status:      status,
-      metaLines: [
-        if (json['description'] != null) json['description'] as String,
-      ],
-      timeline:    const [], // timeline detail loaded separately if needed
-      note:        json['remarks'] as String?,
-      cancellable: status == ReqStatus.review || status == ReqStatus.scheduled,
+      id: id,
+      serviceId: serviceId,
+      description: description,
+      type: ServiceType.inquiry,
+      refNo: id != null ? 'SR-$id' : '',
+      status: status,
+      metaLines: description == null ? [] : [description],
+      timeline: const [],
+      note: note,
+      cancellable: isActive,
     );
   }
+}
+
+ReqStatus getStatusFromText(String statusText) {
+  if (statusText == 'scheduled' || statusText == 'dispatched') {
+    return ReqStatus.scheduled;
+  }
+
+  if (statusText == 'completed') {
+    return ReqStatus.completed;
+  }
+
+  if (statusText == 'cancelled') {
+    return ReqStatus.cancelled;
+  }
+
+  return ReqStatus.review;
 }

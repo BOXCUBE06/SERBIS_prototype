@@ -1,14 +1,4 @@
-/// Services tab: service-request submission.
-///
-/// Lets a resident pick one of five [ServiceType]s (ambulance, hospital
-/// transfer, road clearing, relief goods, or a general inquiry) and fill in
-/// a form tailored to that category. On submit, a [ServiceRequest] is built
-/// from the form fields and added to the shared [AppState], which is what
-/// makes it immediately visible on the Track and Home tabs.
-///
-/// Each [ServiceType] has its own set of fields (see [_buildForm]); shared
-/// field widgets ([_Field], [_Dropdown], [_UploadField]) keep the per-type
-/// forms visually consistent without duplicating styling code.
+
 library serbis.screens.services;
 
 import 'package:flutter/material.dart';
@@ -20,11 +10,7 @@ import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 
-/// TEMPORARY: maps this app's local ServiceType enum to the backend's real
-/// tbl_services.service_id. Replace these numbers with whatever IDs your
-/// classmate's tbl_services table actually has (check phpMyAdmin -> browse
-/// tbl_services), or better — fetch GET /api/services on startup and match
-/// by name instead of hardcoding.
+
 const Map<ServiceType, int> _serviceIdMap = {
   ServiceType.ambulance: 1,
   ServiceType.transfer: 2,
@@ -57,18 +43,11 @@ class ServicesScreen extends StatefulWidget {
 class _ServicesScreenState extends State<ServicesScreen> {
   late ServiceType _selected;
 
-  // All text fields across every service type, keyed by a unique field id.
-  // Using one map (rather than per-type state) keeps user input around if
-  // they switch between request types and come back.
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String> _dropdowns = {};
 
-  /// Items currently checked in the Equipment / Item Request form.
   final Set<String> _selectedItems = {};
 
-  /// The valid-ID image the resident picked, required by the backend on
-  /// every submission (ServiceRequestController@store: 'valid_id' =>
-  /// required|file|mimes:jpg,jpeg,png|max:2048).
   fp.PlatformFile? _validIdFile;
 
   @override
@@ -121,8 +100,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Future<void> _submit() async {
-    // The backend requires a valid ID photo on every request — block
-    // submission client-side instead of letting it fail as a 422 later.
     if (_validIdFile == null || _validIdFile!.bytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
@@ -196,9 +173,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ];
         break;
     }
-
-    // The backend only stores one free-text 'description' field (not a
-    // list) — join the per-type meta lines into one string for it.
     final description = metaLines.join('\n');
 
     final request = ServiceRequest(
@@ -293,8 +267,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
             children: [
               SectionHeader(title: _formTitle(_selected, f)),
               _buildForm(_selected),
-              // Required on every submission — the backend rejects requests
-              // without a valid ID photo attached.
               _ValidIdUploadField(
                 fileName: _validIdFile?.name,
                 onTap: _pickValidId,
@@ -468,9 +440,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 }
 
-/// Required valid-ID upload widget, shown at the bottom of every form
-/// regardless of service type (the backend requires this field on every
-/// submission, unlike the per-type optional [_UploadField] above).
 class _ValidIdUploadField extends StatelessWidget {
   final String? fileName;
   final VoidCallback onTap;
@@ -523,11 +492,6 @@ class _ValidIdUploadField extends StatelessWidget {
   }
 }
 
-/// The equipment / item request form.
-///
-/// Shows a checklist of the seven available items, each with a quantity
-/// stepper that appears once the item is checked. Also collects a delivery
-/// address, contact number, and optional notes.
 class _ItemRequestForm extends StatefulWidget {
   final Set<String> selectedItems;
   final ValueChanged<String> onToggle;
@@ -548,7 +512,6 @@ class _ItemRequestForm extends StatefulWidget {
 }
 
 class _ItemRequestFormState extends State<_ItemRequestForm> {
-  /// Available equipment items with their icon.
   static const List<(String key, IconData icon)> _items = [
     ('Wheelchair', Icons.accessible_rounded),
     ('Stretcher', Icons.airline_seat_flat_rounded),
@@ -558,8 +521,6 @@ class _ItemRequestFormState extends State<_ItemRequestForm> {
     ('Megaphone', Icons.campaign_rounded),
     ('Rescue Tools', Icons.hardware_rounded),
   ];
-
-  /// Quantity per item, defaults to 1.
   final Map<String, int> _quantities = {};
 
   int _qty(String key) => _quantities[key] ?? 1;

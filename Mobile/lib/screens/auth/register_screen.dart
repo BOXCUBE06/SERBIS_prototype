@@ -1,7 +1,4 @@
-/// Registration screen: where new residents create an account.
-///
-/// Sends resident details to the Laravel backend via
-/// [UserStore.register] → [ApiService.register].
+
 library serbis.screens.auth.register;
 
 import 'package:flutter/material.dart';
@@ -9,14 +6,7 @@ import '../../state/account_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
-/// Registration screen.
-///
-/// Collects first name, last name, email address, and password.
-/// Password rules: exactly 8 characters, must include one uppercase
-/// letter, one number, and one special character (e.g. Pasada1!).
-///
-/// On success, calls [onRegisterSuccess] which returns to Login with
-/// a "please log in to verify" message.
+
 class RegisterScreen extends StatefulWidget {
   final UserStore userStore;
   final VoidCallback onRegisterSuccess;
@@ -44,7 +34,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool    _loading    = false;
   String? _formError;
 
-  // Password validation patterns
   static final RegExp _upper   = RegExp(r'[A-Z]');
   static final RegExp _digit   = RegExp(r'[0-9]');
   static final RegExp _special = RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-]');
@@ -92,12 +81,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (error != null) {
-        // Server returned a validation / duplicate-email error
         setState(() => _formError = error);
         return;
       }
-
-      // Success — go back to Login with a confirmation banner
       widget.onRegisterSuccess();
     } catch (e) {
       if (mounted) {
@@ -125,7 +111,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Heading ─────────────────────────────────────────
                     Text('Create your account',
                         style: AppText.display(size: 20)),
                     const SizedBox(height: 4),
@@ -138,7 +123,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 22),
 
-                    // ── First name ───────────────────────────────────────
                     AuthTextField(
                       label: 'First name',
                       hint: 'e.g. Juan',
@@ -149,7 +133,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           : null,
                     ),
 
-                    // ── Last name ────────────────────────────────────────
                     AuthTextField(
                       label: 'Last name',
                       hint: 'e.g. Delacruz',
@@ -160,7 +143,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           : null,
                     ),
 
-                    // ── Email ────────────────────────────────────────────
                     AuthTextField(
                       label: 'Email address',
                       hint: 'yourname@email.com',
@@ -177,7 +159,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       },
                     ),
 
-                    // ── Password ─────────────────────────────────────────
                     AuthTextField(
                       label: 'Password',
                       hint: '8 chars: A-Z, 0-9, symbol',
@@ -198,7 +179,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
 
-                    // ── Confirm password ─────────────────────────────────
                     AuthTextField(
                       label: 'Confirm password',
                       hint: 'Re-enter your password',
@@ -215,7 +195,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       },
                     ),
 
-                    // ── API / server error ───────────────────────────────
                     if (_formError != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -236,7 +215,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
 
-                    // ── Privacy checkbox ─────────────────────────────────
                     const SizedBox(height: 4),
                     InkWell(
                       onTap: () => setState(() => _agreed = !_agreed),
@@ -282,7 +260,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onPressed: _submit),
                     const SizedBox(height: 18),
 
-                    // ── Go to Login ──────────────────────────────────────
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

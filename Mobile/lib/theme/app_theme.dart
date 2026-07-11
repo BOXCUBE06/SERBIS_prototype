@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Centralized color palette for the SERBIS app.
-/// Mirrors the redesigned mockup: deep forest green primary,
-/// warm paper background, and clear status accent colors.
+
 class AppColors {
   AppColors._();
 
@@ -38,8 +36,6 @@ class AppColors {
   );
 }
 
-/// Text style helpers. Headings use Lexend (built for reading clarity),
-/// body copy uses Inter.
 class AppText {
   AppText._();
 
