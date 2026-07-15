@@ -9,32 +9,6 @@ use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
-{
-    $validated = $request->validate([
-        'first_name' => 'required|string|max:255',
-        'last_name' => 'required|string|max:255',
-        'role' => 'required|string|max:50',
-        'email_address' => 'required|string|email|max:255|unique:tbl_residents,email_address',
-        'password' => 'required|string|min:8',
-    ]);
-
-    $resident = Resident::create([
-        'first_name' => $validated['first_name'],
-        'last_name' => $validated['last_name'],
-        'role' => $validated['role'],
-        'email_address' => $validated['email_address'],
-        'password' => Hash::make($validated['password']),
-    ]);
-
-    $token = $resident->createToken('auth_token')->plainTextToken;
-
-    return response()->json([
-        'user' => $resident,
-        'token' => $token,
-    ], 201);
-}
-
     // Endpoint specifically for the Web Frontend
     public function adminLogin(Request $request)
     {

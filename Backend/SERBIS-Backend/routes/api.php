@@ -15,7 +15,6 @@ use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\AnalyticsController;
 
-Route::post('/register', [AuthController::class, 'register']);
 Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 Route::post('/resident/login', [AuthController::class, 'residentLogin']);
 

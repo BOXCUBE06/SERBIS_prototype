@@ -19,9 +19,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 
 const route = useRoute()
 
-const isAuthPage = computed(() =>
-  route?.path === '/login' || route?.path === '/register'
-)
+const isAuthPage = computed(() => route?.path === '/login')
 </script>
 
 <style>

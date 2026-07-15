@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   { path: '/login', component: () => import('../views/LoginView.vue') },
-  { path: '/register', component: () => import('../views/RegisterView.vue') },
   { path: '/', component: () => import('../views/DashboardView.vue') },
   { path: '/users', component: () => import('../views/UsersView.vue') },
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue') },
@@ -22,7 +21,7 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('serbis_token')
-  const isAuthRoute = to.path === '/login' || to.path === '/register'
+  const isAuthRoute = to.path === '/login'
 
   if (!token && !isAuthRoute) return next('/login')
   if (token && isAuthRoute) return next('/')
