@@ -19,11 +19,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        env('ADMIN_FRONTEND_URL', 'https://admin.yourdomain.gov.ph'),
+    ],
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'X-Requested-With'],
 
     'exposed_headers' => [],
 
