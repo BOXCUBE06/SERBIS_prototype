@@ -2,9 +2,9 @@
 
 **Date:** 2026-07-15
 **Scope:** `Backend/SERBIS-Backend` — all controllers, models, routes, middleware, migrations, and config touched by the API.
-**Status:** **19 of 28 findings fixed and verified live** (updated 2026-07-16): #1–#9, #12, #13, #16, #17, #20, #21, #28, plus the #14/#18/#22 registration cluster. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, a path-traversal `PUT`, and a real browser with `fetch` stubbed.
+**Status:** **20 of 28 findings fixed and verified live** (updated 2026-07-16): #1–#9, #11, #12, #13, #16, #17, #20, #21, #28, plus the #14/#18/#22 registration cluster. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, a path-traversal `PUT`, and a real browser with `fetch` stubbed.
 
-**Open:** #10, #11, #15, #23 — all Medium/Low. **No Critical or High findings remain open.**
+**Open:** #10, #15, #23 — all Medium/Low. **No Critical or High findings remain open.** (#11 closed 2026-07-16 in `c737927`.)
 
 **#8 and #28 fixed 2026-07-16** (`c66a978`). #28 is new: `update()` accepted `valid_id` as a free-form string, which #8's streaming route would have turned into admin-to-arbitrary-file-read. It had to ship in the same commit — **the #8 fix sketch in this very document would have introduced it.**
 
@@ -646,9 +646,10 @@ Note: switching to `paginate()` changes the response shape (`{data: [...], meta:
 ---
 
 ### 11. Dashboard analytics loads full tables into PHP memory on every request, uncached
-**File:** `app/Http/Controllers/AnalyticsController.php:101-105`
+**File:** `app/Http/Controllers/AnalyticsController.php` (line numbers as of the original audit; the section has since been rewritten)
 
 ```php
+// before the fix:
 $serviceReqs = ServiceRequest::with('resident.barangay')->get();
 $borrowReqs = EquipmentBorrowing::with('resident.barangay')->get();
 $allRequests = $serviceReqs->concat($borrowReqs);
@@ -656,20 +657,17 @@ $allRequests = $serviceReqs->concat($borrowReqs);
 
 **Why it matters here:** The heatmap/pie/bar chart data is built by pulling every service request and every borrowing row into a Collection and grouping in PHP, on every single dashboard load, with zero caching. This is the most expensive controller in the app and the one most likely to get hit repeatedly (it's the admin landing page).
 
-**Fix — quick win, cache the whole payload for a short window:**
-```php
-public function index(Request $request): JsonResponse
-{
-    return response()->json(
-        Cache::remember('admin.dashboard', now()->addMinutes(2), function () {
-            // existing body
-        })
-    );
-}
-```
-Longer-term, replace the PHP-side `groupBy` for the heatmap/pie/bar sections with `GROUP BY` aggregate queries so the database does the counting instead of hydrating full Eloquent collections.
+**Fix — applied and verified 2026-07-16 (`c737927`).** Went straight to the longer-term option and skipped the cache: the heatmap/pie/bar sections now aggregate in SQL, so the database returns counts instead of rows. A TTL would have hidden the cost rather than removed it, and the recompute is cheap now.
 
-**Effort:** 30 min for the cache wrap; 2-3 hours to push the aggregations into SQL.
+Measured on the seeded dataset (20 residents, 30 service requests, 6 borrowings): **23 queries → 19 per dashboard load.** The count is the least interesting number — `tbl_service_request` and `tbl_equipment_borrowing` are each read one time *more* than before, but return ~8 aggregate rows instead of every row twice with `resident`/`barangay`/`service`/`equipment` hydrated per row and then discarded. The win is rows and hydration, and it grows with the table while the query count stays flat at 19.
+
+Also fixed in the same pass: `fillDates` was called twice per series to build the two halves of one array (`array_keys($fillDates(...))` and `array_values($fillDates(...))`), and the 7-day series is now derived from the same 30-day counts rather than re-querying.
+
+Output verified identical: `kpiStats`, `serviceRequests`, `borrowRequests`, `systemLogs` byte-identical; `mapData`, both pie datasets and both bar series match value-for-value. Ordering is now deterministic by count descending instead of row-encounter order (the frontend re-sorts both anyway).
+
+> **Constraint to remember — the inner joins drop rows with null FKs.** The aggregate queries inner-join `tbl_residents`/`tbl_barangay` (map) and `tbl_services`/`tbl_equipments` (pie). For the map this matches the old behaviour exactly, which bucketed such rows as `'Unknown Barangay'` and then rejected them. **For the pie it does not:** the old PHP `groupBy` emitted an `'Unknown'` bucket for a null `service_id`/`equipment_id`, and the join silently omits it instead. Verified 2026-07-16 that all five FK columns hold **zero nulls** (`service_id`, `resident_id` on `tbl_service_request`; `equipment_id`, `resident_id` on `tbl_equipment_borrowing`; `barangay_id` on `tbl_residents`), so nothing is dropped today. **Not a bug now — but if any of those columns ever becomes nullable, the pie under-counts silently, with no error and no empty bucket to notice.** Re-check the null counts before making any of them nullable.
+
+**Portability note (relevant to the Postgres port in `cloud-migration-plan.md`):** every construct used is standard SQL that MySQL and Postgres both accept — `JOIN`, `COUNT(*)`, `GROUP BY` on real columns, `ORDER BY` on an output alias, and `CAST(x AS DATE)`. Date *formatting* deliberately stays in PHP: `DATE_FORMAT()` is MySQL-only (Postgres spells it `to_char`) and the filled series is at most 30 rows. Verified by compiling the builders against Laravel's `pgsql` grammar (`toSql()` opens no socket); **executed only against the local MariaDB — not against a live Postgres.** This does introduce the codebase's first `selectRaw`/`groupByRaw`, so §0 of the migration plan ("zero raw SQL") is no longer strictly true — the raw fragments are standard SQL by construction, but they are no longer *automatically* portable and should be re-read during the port.
 
 ---
 
@@ -809,7 +807,7 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 **Fixed and verified live (19):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #12, #13, #16*, #17, #20, #21, #28, plus #14/#18/#22 — the registration cluster, resolved by **deleting** the flow (product decision: registration is mobile-only). `/api/register` → 404, both logins still 200/401, `npm run build` → exit 0. #24 and #25 were found and fixed while verifying #22.
 \* #16 is code-complete and verified with faked HTTP, but **unverified against the live vendor — no sandbox exists.** Needs a manual burner-number test; #21 means the UI can now drive it.
 
-**Open (4):** #10, #11, #15, #23. (#26 fixed in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **No Critical or High findings remain open.**
+**Open (3):** #10, #15, #23. (#11 fixed in `c737927`; #26 in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **No Critical or High findings remain open.**
 
 **#8 and #28 fixed 2026-07-16 (`c66a978`)** — backend and frontend together. #28 was found while planning #8 and had to ship with it: #8's streaming route would have turned #28's admin-settable path into arbitrary server file read. The audit's own #8 fix sketch would have shipped that hole.
 
@@ -833,7 +831,7 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 >
 > **Per-finding commits were not fully possible**, because several files mix findings: `ServiceRequestController.php` carries #2 and #8, and `routes/api.php` carries #17 and #8. Both rode along in `c66a978`, which says so in its message.
 >
-> **Still uncommitted and deliberately so:** the admin panel theming, `AnalyticsController.php` (heatmap feature work, not an audit fix — #11 remains open), and the `Mobile/` tree.
+> **Landed since (2026-07-16):** `9aa8951` admin panel theming; `caefc25` the dashboard heatmap (real PSA barangay boundaries — the choropleth had never worked, joining mock polygon names against prefixed seeder names, so every polygon rendered grey); `c737927` #11. **Still uncommitted:** the `Mobile/` tree (a groupmate's area) and `docs/cloud-migration-plan.md`.
 
 **Lesson worth keeping.** Committing the *report* is not committing the *fix*. For a full day this document asserted "14 of 22 fixed and verified live" — true of the working tree, false of the repository — and nothing in the audit process caught the gap, because verification ran against the working tree too. **A fix is not shipped until it is committed; check `git show HEAD:<file>`, not the file on disk.**
 
