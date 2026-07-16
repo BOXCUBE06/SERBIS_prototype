@@ -9,23 +9,29 @@ use Illuminate\Support\Facades\DB;
 
 class EquipmentBorrowingController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $user = $request->user();
+
         // Added 'resident.barangay'
-        $borrowings = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->orderBy('created_at', 'desc')->get();
-        return response()->json($borrowings);
+        $query = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->orderBy('created_at', 'desc');
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+        }
+
+        return response()->json($query->get());
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'resident_id' => 'required|exists:tbl_residents,resident_id',
             'equipment_id' => 'required|exists:tbl_equipments,equipment_id',
             'quantity' => 'required|integer|min:1',
         ]);
 
         $borrowing = EquipmentBorrowing::create([
-            'resident_id' => $validated['resident_id'],
+            'resident_id' => $request->user()->getKey(),
             'equipment_id' => $validated['equipment_id'],
             'quantity' => $validated['quantity'],
             'status' => 'Pending',
@@ -34,10 +40,18 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing, 201);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        $user = $request->user();
+
         // Added 'resident.barangay'
-        $borrowing = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->find($id);
+        $query = EquipmentBorrowing::with(['resident.barangay', 'equipment']);
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+        }
+
+        $borrowing = $query->find($id);
 
         if (!$borrowing) {
             return response()->json(['message' => 'Borrowing record not found'], 404);
@@ -67,6 +81,7 @@ class EquipmentBorrowingController extends Controller
             if ($newStatus === 'Released' && $oldStatus !== 'Released') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
                 if ($equipment->available_quantity < $borrowing->quantity) {
+                    DB::rollBack();
                     return response()->json(['message' => 'Not enough equipment available to release.'], 422);
                 }
                 $equipment->decrement('available_quantity', $borrowing->quantity);
