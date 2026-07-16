@@ -1,5 +1,5 @@
 <template>
-  <v-app theme="light">
+  <v-app>
     <AppSidebar v-if="!isAuthPage" />
     <v-main>
       <div v-if="!isAuthPage" class="outer-wrapper">
@@ -16,16 +16,23 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from '@/components/AppSidebar.vue'
+import { useAppTheme } from '@/composables/useAppTheme'
 
 const route = useRoute()
 
 const isAuthPage = computed(() => route?.path === '/login')
+
+useAppTheme().init()
 </script>
 
 <style>
+.v-application {
+  font-family: 'Inter', sans-serif !important;
+}
+
 .v-main {
   padding: 0 !important;
-  background-color: #0A2620; /* Matches the dark edge of the sidebar gradient */
+  background-color: #0A2620;
 }
 
 .v-main__wrap {
@@ -37,23 +44,22 @@ const isAuthPage = computed(() => route?.path === '/login')
   height: 100vh;
   padding: 12px;
   box-sizing: border-box;
-  margin-left: 280px;
+  margin-left: 260px; 
 }
 
 .inner-wrapper {
   flex: 1;
-  background-color: #F8FAFC; /* Matches the soft background used in internal pages */
+  background-color: rgb(var(--v-theme-background));
   border-radius: 24px;
   overflow-y: auto;
   height: 100%;
-  
-  /* Hide scrollbar but keep scroll functionality */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .inner-wrapper::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
 }
 
 .v-main .v-container {
@@ -64,11 +70,10 @@ const isAuthPage = computed(() => route?.path === '/login')
 .modern-drawer {
   font-family: 'Inter', sans-serif;
   background: radial-gradient(circle at -10% 50%, #154c41 0%, #0A2620 80%) !important;
-  border-right: none !important; /* Removes the 1px seam in the middle */
+  border-right: none !important;
 }
 
 .nav-item {
-  margin-right: 8px !important;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 </style>
