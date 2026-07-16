@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,6 +13,7 @@ use App\Traits\TracksHistory; // 1. Import the trait
 
 #[Table('tbl_residents', key: 'resident_id')]
 #[Fillable(['barangay_id', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'photo', 'status', 'email_address', 'otp', 'otp_verified_at'])]
+#[Hidden(['password', 'otp', 'remember_token'])]
 class Resident extends Authenticatable
 {
     // 2. Add TracksHistory to the used traits list
