@@ -32,15 +32,24 @@
               
               <div class="mb-6">
                 <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1 mb-2">Target Audience</div>
-                <v-alert color="warning" variant="tonal" rounded="lg" class="border">
-                  <div class="d-flex align-center gap-3">
-                    <v-icon size="28" color="warning-darken-2">mdi-test-tube</v-icon>
-                    <div>
-                      <div class="font-weight-bold text-warning-darken-3">TEST MODE ACTIVE</div>
-                      <div class="text-body-2 text-warning-darken-4">System is currently locked to send SMS exclusively to 2 configured test numbers.</div>
-                    </div>
-                  </div>
-                </v-alert>
+                <v-select
+                  v-model="selectedBarangays"
+                  :items="barangays"
+                  item-title="barangay_name"
+                  item-value="barangay_id"
+                  :loading="barangaysLoading"
+                  multiple
+                  chips
+                  closable-chips
+                  placeholder="Select one or more barangays"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  color="error"
+                  bg-color="grey-lighten-5"
+                  class="font-weight-medium"
+                  :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
+                ></v-select>
               </div>
 
               <div class="mb-2">
@@ -76,8 +85,8 @@
                   :disabled="!isValid"
                   elevation="2"
                 >
-                  <v-icon start size="24" class="mr-2">mdi-send</v-icon> 
-                  <span class="text-h6 font-weight-bold">Dispatch Test Blast</span>
+                  <v-icon start size="24" class="mr-2">mdi-send</v-icon>
+                  <span class="text-h6 font-weight-bold">Dispatch Blast</span>
                 </v-btn>
               </div>
             </v-form>
@@ -89,11 +98,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const message = ref('')
 const loading = ref(false)
 const form = ref(null)
+const barangays = ref([])
+const selectedBarangays = ref([])
+const barangaysLoading = ref(false)
 
 const alert = ref({
   show: false,
@@ -108,14 +120,41 @@ const getHeaders = () => ({
 })
 
 const isValid = computed(() => {
-  return message.value.length > 0 && message.value.length <= 160
+  return message.value.length > 0
+    && message.value.length <= 160
+    && selectedBarangays.value.length > 0
 })
+
+const fetchBarangays = async () => {
+  barangaysLoading.value = true
+  try {
+    const res = await fetch('http://localhost:8000/api/barangays', { headers: getHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Failed to load barangays')
+    barangays.value = data.data || data
+  } catch (error) {
+    alert.value = {
+      show: true,
+      type: 'error',
+      message: `Could not load barangays: ${error.message}`
+    }
+  } finally {
+    barangaysLoading.value = false
+  }
+}
+
+onMounted(fetchBarangays)
 
 const sendSmsBlast = async () => {
   const { valid } = await form.value.validate()
   if (!valid) return
 
-  if (!confirm(`TEST MODE: Are you sure you want to dispatch this alert? It will be sent to the 2 configured test numbers.`)) return
+  const targetNames = barangays.value
+    .filter(b => selectedBarangays.value.includes(b.barangay_id))
+    .map(b => b.barangay_name)
+    .join(', ')
+
+  if (!confirm(`Dispatch this alert to all active residents in: ${targetNames}?`)) return
 
   loading.value = true
   alert.value.show = false
@@ -126,7 +165,7 @@ const sendSmsBlast = async () => {
       headers: getHeaders(),
       body: JSON.stringify({
         message: message.value,
-        barangays: ['test_mode_bypass'] // Fulfills backend validation without UI selection
+        barangays: selectedBarangays.value
       })
     })
 
@@ -137,10 +176,11 @@ const sendSmsBlast = async () => {
     alert.value = {
       show: true,
       type: 'success',
-      message: `Success: ${data.sent} test messages dispatched. ${data.failed} failed.`
+      message: `Success: ${data.sent} messages dispatched. ${data.failed} failed.`
     }
-    
+
     message.value = ''
+    selectedBarangays.value = []
     if (form.value) form.value.resetValidation()
     
   } catch (error) {
