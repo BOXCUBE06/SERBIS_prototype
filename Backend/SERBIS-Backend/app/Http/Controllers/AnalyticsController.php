@@ -97,12 +97,77 @@ class AnalyticsController extends Controller
                 ];
             });
 
-        // Return the exact JSON structure expected by the Vue component
+         // 5. Calculate Heatmap (Choropleth) Data
+        $serviceReqs = ServiceRequest::with('resident.barangay')->get();
+        $borrowReqs = EquipmentBorrowing::with('resident.barangay')->get();
+        
+        // Merge both request types
+        $allRequests = $serviceReqs->concat($borrowReqs);
+
+        $mapData = $allRequests->groupBy(function ($req) {
+            return ($req->resident && $req->resident->barangay) ? $req->resident->barangay->barangay_name : 'Unknown Barangay';
+        })->map(function ($group, $barangayName) {
+            return [
+                'name' => $barangayName,
+                'requests' => $group->count()
+            ];
+        })->reject(function ($item) {
+            return $item['name'] === 'Unknown Barangay'; // Hide unknowns from the map
+        })->values();
+
+        // 6. Calculate Pie Chart Data (Services vs Items)
+        $pieServices = ServiceRequest::with('service')->get()
+            ->groupBy(function ($req) {
+                return $req->service ? $req->service->service_name : 'Unknown';
+            })->map->count();
+
+        $pieItems = EquipmentBorrowing::with('equipment')->get()
+            ->groupBy(function ($req) {
+                return $req->equipment ? $req->equipment->item_name : 'Unknown';
+            })->map->count();
+
+        // 7. Calculate Bar Chart Data (Weekly vs Monthly)
+        $last7Days = \Carbon\Carbon::today()->subDays(6);
+        $last30Days = \Carbon\Carbon::today()->subDays(29);
+
+        // Function to group by date
+        $groupByDate = function ($collection, $startDate) {
+            return $collection->where('created_at', '>=', $startDate)
+                ->groupBy(function ($item) {
+                    return $item->created_at->format('M d');
+                })->map->count();
+        };
+
+        $weekRequests = $groupByDate($allRequests, $last7Days);
+        $monthRequests = $groupByDate($allRequests, $last30Days);
+
+        // Fill in empty days with 0 for the Bar Chart
+        $fillDates = function ($counts, $days) {
+            $result = [];
+            for ($i = $days; $i >= 0; $i--) {
+                $date = \Carbon\Carbon::today()->subDays($i)->format('M d');
+                $result[$date] = $counts->get($date, 0);
+            }
+            return $result;
+        };
+
         return response()->json([
             'kpiStats' => $kpiStats,
             'serviceRequests' => $serviceRequests,
             'borrowRequests' => $borrowRequests,
             'systemLogs' => $systemLogs,
+            'mapData' => $mapData,
+            'charts' => [
+                'pie' => [
+                    'services' => ['labels' => $pieServices->keys(), 'data' => $pieServices->values()],
+                    'items' => ['labels' => $pieItems->keys(), 'data' => $pieItems->values()],
+                ],
+                'bar' => [
+                    'week' => ['labels' => array_keys($fillDates($weekRequests, 6)), 'data' => array_values($fillDates($weekRequests, 6))],
+                    'month' => ['labels' => array_keys($fillDates($monthRequests, 29)), 'data' => array_values($fillDates($monthRequests, 29))],
+                ]
+            ]
         ]);
+       
     }
 }

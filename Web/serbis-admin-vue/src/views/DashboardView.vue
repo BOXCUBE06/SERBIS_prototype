@@ -1,24 +1,25 @@
 <template>
-  <v-container fluid class="pa-6" style="background-color: #F8FAFB;">
-    
-    <!-- Header Section -->
-    <v-row class="mb-4 align-center">
-      <v-col cols="12" md="6">
-        <h1 class="text-h4 font-weight-black text-grey-darken-4 mb-1">Dashboard</h1>
-        <div class="text-subtitle-1 text-grey-darken-1">Welcome back! Here's what's happening today.</div>
-      </v-col>
-      <v-col cols="12" md="6" class="d-flex justify-end align-center gap-4">
-        <!-- Notifications Menu -->
+  <v-container fluid class="pa-6 dashboard-bg">
+
+    <!-- Toolbar -->
+    <div class="d-flex justify-space-between align-center flex-wrap gap-4 mb-6">
+      <div>
+        <h1 class="text-h4 font-weight-black mb-1">Dashboard</h1>
+        <div class="text-subtitle-1 text-medium-emphasis">Welcome back! Here's what's happening today.</div>
+      </div>
+
+      <div class="d-flex align-center gap-4 flex-wrap">
+        <!-- Global period filter — drives hero metric, overview chart & activity feed -->
+        <v-btn-toggle v-model="periodFilter" mandatory variant="outlined" color="primary" density="comfortable" divided rounded="lg">
+          <v-btn value="today" size="small" class="text-none font-weight-bold px-4">Today</v-btn>
+          <v-btn value="week" size="small" class="text-none font-weight-bold px-4">Week</v-btn>
+          <v-btn value="month" size="small" class="text-none font-weight-bold px-4">Month</v-btn>
+        </v-btn-toggle>
+
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
-            <v-btn 
-              icon="mdi-bell-outline" 
-              variant="outlined" 
-              color="grey-darken-2" 
-              v-bind="props" 
-              class="mr-4 bg-white"
-            >
-              <v-badge color="red" dot v-if="systemLogs.length > 0">
+            <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
+              <v-badge color="error" dot v-if="systemLogs.length > 0">
                 <v-icon>mdi-bell-outline</v-icon>
               </v-badge>
               <v-icon v-else>mdi-bell-outline</v-icon>
@@ -26,219 +27,205 @@
           </template>
           <v-card min-width="320" elevation="4" rounded="lg" class="border">
             <v-list density="compact" class="pa-0">
-              <v-list-subheader class="font-weight-bold text-uppercase bg-grey-lighten-4 py-2">System Logs</v-list-subheader>
+              <v-list-subheader class="font-weight-bold text-uppercase py-2">System Logs</v-list-subheader>
               <v-divider></v-divider>
               <template v-if="systemLogs.length">
                 <v-list-item v-for="(log, i) in systemLogs.slice(0, 5)" :key="'log-'+i" class="py-3 border-b">
                   <template v-slot:prepend>
-                    <v-avatar color="#E2F5ED" size="32" class="mr-3">
-                      <v-icon color="#2E8B75" size="small">mdi-history</v-icon>
+                    <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                      <v-icon color="primary" size="small">mdi-history</v-icon>
                     </v-avatar>
                   </template>
-                  <v-list-item-title class="text-body-2 font-weight-bold text-grey-darken-4">{{ log.action }}</v-list-item-title>
-                  <v-list-item-subtitle class="text-caption text-grey-darken-1">{{ log.user }} &bull; {{ log.module }}</v-list-item-subtitle>
+                  <v-list-item-title class="text-body-2 font-weight-bold">{{ log.action }}</v-list-item-title>
+                  <v-list-item-subtitle class="text-caption">{{ log.user }} &bull; {{ log.module }}</v-list-item-subtitle>
                   <template v-slot:append>
-                    <span class="text-caption text-grey">{{ log.time }}</span>
+                    <span class="text-caption text-medium-emphasis">{{ log.time }}</span>
                   </template>
                 </v-list-item>
               </template>
-              <div v-else class="pa-4 text-center text-caption text-grey">No recent logs</div>
+              <div v-else class="pa-4 text-center text-caption text-medium-emphasis">No recent logs</div>
             </v-list>
           </v-card>
         </v-menu>
 
-        <!-- Profile Avatar -->
-        <v-avatar color="#2E8B75" size="44" class="cursor-pointer font-weight-bold text-white shadow-sm">
-          J
-        </v-avatar>
+        <v-avatar color="primary" size="44" class="cursor-pointer font-weight-bold text-white">J</v-avatar>
+      </div>
+    </div>
+
+    <!-- Hero row -->
+    <v-row v-if="loading" class="mb-2">
+      <v-col cols="12" lg="7">
+        <v-card elevation="0" rounded="xl" class="pa-6" style="min-height: 220px;">
+          <v-skeleton-loader type="heading, text, image"></v-skeleton-loader>
+        </v-card>
+      </v-col>
+      <v-col cols="12" lg="5">
+        <v-skeleton-loader type="card@2"></v-skeleton-loader>
       </v-col>
     </v-row>
 
-    <!-- Main Layout Grid -->
-    <v-row>
-      
-      <!-- LEFT MAIN CONTENT (8 Columns) -->
-      <v-col cols="12" xl="9" lg="8">
-        
-        <!-- Row 1: KPI Cards -->
-        <v-row>
-          <template v-if="loading">
-            <v-col v-for="i in 4" :key="`kpi-skeleton-${i}`" cols="12" sm="6" lg="3">
-              <v-card elevation="0" border rounded="xl" class="pa-4 bg-white h-100">
-                <v-skeleton-loader type="list-item-two-line"></v-skeleton-loader>
-              </v-card>
-            </v-col>
-          </template>
+    <v-row v-else class="mb-2">
+      <!-- Headline metric -->
+      <v-col cols="12" lg="7">
+        <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 0 }">
+          <div class="d-flex justify-space-between align-start mb-2">
+            <div>
+              <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Total Requests</div>
+              <div class="text-caption text-medium-emphasis">{{ periodLabel }}</div>
+            </div>
+            <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
+              <v-icon color="primary" size="20">mdi-chart-line</v-icon>
+            </v-avatar>
+          </div>
+          <div class="text-h1 font-weight-black mb-4">{{ displayValues.hero ?? heroTotal }}</div>
+          <div style="height: 70px;">
+            <Line v-if="chartDataRaw" :data="heroSparklineData" :options="sparklineOptions" />
+          </div>
+        </v-card>
+      </v-col>
 
-          <template v-else>
-            <v-col v-for="stat in kpiStats" :key="stat.title" cols="12" sm="6" lg="3">
-              <v-card elevation="0" border rounded="xl" class="pa-4 bg-white h-100 d-flex flex-column">
-                <div class="d-flex align-center justify-space-between mb-3">
-                  <div class="d-flex align-center">
-                    <v-icon size="small" class="mr-2 text-grey-darken-2" :color="stat.color">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
-                    <span class="text-body-2 font-weight-bold text-grey-darken-2">{{ stat.title }}</span>
-                  </div>
-                  <v-icon size="small" class="text-grey-lighten-1">mdi-dots-horizontal</v-icon>
-                </div>
-                
-                <div class="d-flex align-center justify-space-between mb-2 mt-auto">
-                  <span class="text-h4 font-weight-black">{{ stat.value }}</span>
-                  <v-chip size="x-small" color="#2E8B75" variant="flat" class="font-weight-bold px-2 rounded">
-                    <v-icon start size="x-small">mdi-trending-up</v-icon>
-                    New
-                  </v-chip>
-                </div>
-                
-                <div class="text-caption text-success font-weight-medium" style="color: #2E8B75 !important;">
-                  {{ stat.subtitle }}
-                </div>
-              </v-card>
-            </v-col>
-          </template>
-        </v-row>
-
-        <!-- Row 2: Heatmap & Top Barangays -->
-        <v-row class="mt-2">
-          <!-- Heatmap -->
-          <v-col cols="12" md="6">
-            <v-card elevation="0" border rounded="xl" class="pa-5 bg-white h-100">
-              <div class="d-flex justify-space-between align-center mb-4">
-                <span class="text-body-1 font-weight-bold text-grey-darken-4">Incident Heatmap</span>
-                <v-icon color="grey-darken-1">mdi-map-marker-radius</v-icon>
-              </div>
-              <div id="heatmap" style="height: 350px; width: 100%; border-radius: 8px; z-index: 1;" class="bg-grey-lighten-4 border"></div>
-            </v-card>
-          </v-col>
-
-          <!-- Hotspot Barangays List -->
-          <v-col cols="12" md="6">
-            <v-card elevation="0" border rounded="xl" class="pa-5 bg-white h-100">
-              <div class="d-flex justify-space-between align-center mb-4">
-                <span class="text-body-1 font-weight-bold text-grey-darken-4">High Request Zones</span>
-                <v-icon color="grey-darken-1">mdi-fire</v-icon>
-              </div>
-              
-              <div class="d-flex flex-column gap-4 mt-2">
-                <div v-for="(brgy, index) in topBarangays" :key="index" class="w-100">
-                  <div class="d-flex justify-space-between align-center mb-1">
-                    <span class="text-body-2 font-weight-bold text-grey-darken-3">{{ brgy.name }}</span>
-                    <span class="text-caption font-weight-bold text-grey-darken-1">{{ brgy.requests }} Requests</span>
-                  </div>
-                  <v-progress-linear 
-                    :model-value="brgy.percentage" 
-                    :color="getHeatColor(brgy.percentage)" 
-                    height="8" 
-                    rounded 
-                    class="bg-grey-lighten-3"
-                  ></v-progress-linear>
-                </div>
-              </div>
-            </v-card>
-          </v-col>
-        </v-row>
-
-        <!-- Row 3: Lists (Services & Borrowing) -->
-        <v-row class="mt-2">
-          <!-- Recent Service Requests -->
-          <v-col cols="12" md="6">
-            <v-card elevation="0" border rounded="xl" class="pa-5 bg-white h-100">
-              <div class="mb-1">
-                <span class="text-h6 font-weight-bold text-grey-darken-4">Recent Service Requests</span>
-                <div class="text-caption text-grey-darken-1 mb-5">Incoming and ongoing requests</div>
-              </div>
-
-              <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
-
-              <div v-else class="d-flex flex-column gap-3">
-                <div v-for="(item, index) in serviceRequests.slice(0, 5)" :key="'srv-'+index" class="d-flex align-center mb-4">
-                  <v-avatar size="42" color="grey-lighten-4" class="mr-3 border">
-                    <v-icon color="#2E8B75" size="small">mdi-account</v-icon>
-                  </v-avatar>
-                  <div class="flex-grow-1 min-width-0">
-                    <div class="text-body-2 font-weight-bold text-truncate">{{ item.resident }}</div>
-                    <div class="text-caption text-grey-darken-1 text-truncate">{{ item.type }}</div>
-                  </div>
-                  <div class="d-flex align-center ml-2">
-                    <v-icon size="x-small" class="mr-1 text-grey">mdi-clock-outline</v-icon>
-                    <span class="text-caption text-grey-darken-1 mr-3">{{ item.date }}</span>
-                    <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold rounded">{{ item.status }}</v-chip>
-                  </div>
-                </div>
-              </div>
-            </v-card>
-          </v-col>
-
-          <!-- Recent Borrow Requests -->
-          <v-col cols="12" md="6">
-            <v-card elevation="0" border rounded="xl" class="pa-5 bg-white h-100">
-              <div class="mb-1">
-                <span class="text-h6 font-weight-bold text-grey-darken-4">Recent Borrow Requests</span>
-                <div class="text-caption text-grey-darken-1 mb-5">Latest equipment requests</div>
-              </div>
-
-              <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
-
-              <div v-else class="d-flex flex-column gap-3 mt-2">
-                <div v-for="(item, index) in borrowRequests.slice(0, 5)" :key="'brw-'+index" class="d-flex align-center mb-4">
-                  <div class="flex-grow-1 min-width-0">
-                    <div class="text-body-2 font-weight-bold text-truncate">{{ item.borrower }}</div>
-                    <div class="text-caption text-grey-darken-1 text-truncate">{{ item.equipment }}</div>
-                  </div>
-                  <div class="d-flex align-center flex-column align-end">
-                    <span class="text-caption font-weight-bold text-grey-darken-3 mb-1">{{ item.date }}</span>
-                    <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold rounded">{{ item.status }}</v-chip>
-                  </div>
-                </div>
-              </div>
+      <!-- Secondary stat grid -->
+      <v-col cols="12" lg="5">
+        <v-row dense class="h-100">
+          <v-col cols="6" v-for="(stat, i) in kpiStats" :key="stat.title">
+            <v-card elevation="0" rounded="xl" class="soft-card stagger-item pa-4 h-100" :style="{ '--stagger-i': i + 1 }">
+              <v-avatar :color="stat.color || 'primary'" variant="tonal" size="36" rounded="lg" class="mb-3">
+                <v-icon :color="stat.color || 'primary'" size="18">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
+              </v-avatar>
+              <div class="text-h5 font-weight-black mb-1">{{ displayValues[stat.title] ?? stat.value }}</div>
+              <div class="text-caption font-weight-bold text-medium-emphasis">{{ stat.title }}</div>
             </v-card>
           </v-col>
         </v-row>
       </v-col>
+    </v-row>
 
-      <!-- RIGHT SIDEBAR (4 Columns) -->
-      <v-col cols="12" xl="3" lg="4">
-        
-        <!-- Calendar Section -->
-        <v-card elevation="0" border rounded="xl" class="pa-4 bg-white mb-6 d-flex justify-center">
-          <v-date-picker 
-            v-model="selectedDate"
-            color="#2E8B75"
-            hide-header
-            elevation="0"
-            class="w-100 border-0"
-          ></v-date-picker>
+    <!-- Heatmap & Zones -->
+    <v-row class="mb-2">
+      <v-col cols="12" lg="7">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 2 }">
+          <v-card-item>
+            <v-card-title class="text-body-1 font-weight-bold">Incident Heatmap</v-card-title>
+            <v-card-subtitle>All-time distribution</v-card-subtitle>
+            <template v-slot:append>
+              <v-icon>mdi-map-marker-radius</v-icon>
+            </template>
+          </v-card-item>
+          <v-card-text class="pt-0">
+            <div ref="mapEl" style="height: 320px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
+          </v-card-text>
         </v-card>
+      </v-col>
 
-        <!-- Pie Chart (Service Volume) -->
-        <v-card elevation="0" border rounded="xl" class="pa-5 bg-white mb-6">
-          <div class="d-flex justify-space-between align-center mb-4">
-            <span class="text-body-1 font-weight-bold text-grey-darken-4">Service Volume</span>
-          </div>
-          <v-sheet height="200" color="transparent" class="d-flex align-center justify-center border border-dashed border-grey-lighten-2 rounded-lg">
-            <div class="text-center">
-              <v-icon size="x-large" color="#2E8B75">mdi-chart-pie</v-icon>
-              <div class="text-grey-darken-1 font-weight-bold mt-2">Pie Chart Component</div>
+      <v-col cols="12" lg="5">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 3 }">
+          <v-card-item>
+            <v-card-title class="text-body-1 font-weight-bold">High Request Zones</v-card-title>
+            <v-card-subtitle>All-time</v-card-subtitle>
+            <template v-slot:append>
+              <v-icon>mdi-fire</v-icon>
+            </template>
+          </v-card-item>
+          <v-card-text class="pt-2">
+            <div v-if="!topZones.length" class="text-center text-caption text-medium-emphasis py-8">
+              No zone activity yet
             </div>
-          </v-sheet>
+            <div v-else>
+              <div v-for="(brgy, index) in topZones" :key="index" class="d-flex align-center py-2">
+                <div class="rank-badge mr-3">{{ index + 1 }}</div>
+                <div class="flex-grow-1 min-width-0">
+                  <div class="d-flex justify-space-between align-center mb-1">
+                    <span class="text-body-2 font-weight-bold text-truncate">{{ brgy.name }}</span>
+                    <span class="text-caption font-weight-bold text-medium-emphasis ml-2">{{ brgy.requests }}</span>
+                  </div>
+                  <div class="subtle-surface rounded-pill" style="height: 6px; overflow: hidden;">
+                    <div class="rounded-pill h-100" :class="`bg-${getHeatColor(brgy.percentage)}`" :style="{ width: brgy.percentage + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Activity feed & charts -->
+    <v-row>
+      <v-col cols="12" lg="7">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 4 }">
+          <v-card-item class="pb-0">
+            <v-card-title class="text-body-1 font-weight-bold">Activity Feed</v-card-title>
+            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
+          </v-card-item>
+          <v-tabs v-model="feedTab" color="primary" density="compact" class="px-4">
+            <v-tab value="all" class="text-none font-weight-bold">All</v-tab>
+            <v-tab value="service" class="text-none font-weight-bold">Services</v-tab>
+            <v-tab value="borrow" class="text-none font-weight-bold">Borrowing</v-tab>
+          </v-tabs>
+          <v-divider></v-divider>
+
+          <v-card-text class="pt-2">
+            <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
+
+            <div v-else-if="!filteredFeed.length" class="text-center text-caption text-medium-emphasis py-8">
+              No activity {{ periodLabel.toLowerCase() }}
+            </div>
+
+            <v-list v-else density="comfortable" class="pa-0">
+              <v-list-item v-for="(item, index) in filteredFeed.slice(0, 8)" :key="index" class="px-0">
+                <template v-slot:prepend>
+                  <v-avatar color="primary" variant="tonal" size="40" class="mr-1">
+                    <v-icon color="primary" size="18">{{ item.icon }}</v-icon>
+                  </v-avatar>
+                </template>
+                <v-list-item-title class="text-body-2 font-weight-bold text-truncate">{{ item.name }}</v-list-item-title>
+                <v-list-item-subtitle class="text-caption text-truncate">{{ item.meta }} &bull; {{ item.date }}</v-list-item-subtitle>
+                <template v-slot:append>
+                  <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold">{{ item.status }}</v-chip>
+                </template>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="12" lg="5">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item mb-6" :style="{ '--stagger-i': 5 }">
+          <v-card-item class="pb-0">
+            <v-card-title class="text-body-1 font-weight-bold">Requests Overview</v-card-title>
+            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
+          </v-card-item>
+          <v-card-text class="pt-2">
+            <v-sheet height="200" color="transparent">
+              <Bar v-if="chartDataRaw" :data="barChartData" :options="chartOptions" />
+              <div class="d-flex align-center justify-center h-100" v-else>
+                <v-progress-circular indeterminate color="primary"></v-progress-circular>
+              </div>
+            </v-sheet>
+          </v-card-text>
         </v-card>
 
-        <!-- Bar Chart (Requests Overview) -->
-        <v-card elevation="0" border rounded="xl" class="pa-5 bg-white">
-          <div class="d-flex justify-space-between align-center mb-4">
-            <span class="text-body-1 font-weight-bold text-grey-darken-4">Requests Overview</span>
-            <v-btn-toggle v-model="chartToggle" color="#2E8B75" density="compact" variant="outlined" divided rounded="lg">
-              <v-btn size="small" class="text-none font-weight-bold" value="week">Week</v-btn>
-              <v-btn size="small" class="text-none font-weight-bold" value="month">Month</v-btn>
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 6 }">
+          <v-card-item class="pb-0">
+            <v-card-title class="text-body-1 font-weight-bold">Request Volume</v-card-title>
+            <v-card-subtitle>All-time by category</v-card-subtitle>
+          </v-card-item>
+          <div class="px-4 pb-2">
+            <v-btn-toggle v-model="volumeToggle" color="primary" density="compact" variant="outlined" divided rounded="lg">
+              <v-btn size="small" class="text-none font-weight-bold" value="services">Services</v-btn>
+              <v-btn size="small" class="text-none font-weight-bold" value="items">Items</v-btn>
             </v-btn-toggle>
           </div>
-          <v-sheet height="200" color="transparent" class="d-flex align-center justify-center border border-dashed border-grey-lighten-2 rounded-lg">
-            <div class="text-center">
-              <v-icon size="x-large" color="#2E8B75">mdi-chart-bar</v-icon>
-              <div class="text-grey-darken-1 font-weight-bold mt-2">Bar Chart Component</div>
-            </div>
-          </v-sheet>
+          <v-card-text class="pt-0">
+            <v-sheet height="220" color="transparent">
+              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" />
+              <div v-else-if="chartDataRaw" class="text-caption text-medium-emphasis text-center py-8">No data yet</div>
+              <div class="d-flex align-center justify-center h-100" v-else>
+                <v-progress-circular indeterminate color="primary"></v-progress-circular>
+              </div>
+            </v-sheet>
+          </v-card-text>
         </v-card>
-
       </v-col>
     </v-row>
 
@@ -246,7 +233,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import {
+  Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
+  BarElement, LineElement, PointElement, Filler
+} from 'chart.js'
+import { Bar, Line } from 'vue-chartjs'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+// Real PSA boundaries, Echague (PSGC PH023112000), filtered to the seeded
+// barangays. properties.name matches tbl_barangay.barangay_name exactly —
+// the choropleth joins on it, so the two must stay in step.
+import barangayBoundaries from '@/assets/echague-barangays.json'
+
+ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
 
 const kpiStats = ref([])
 const serviceRequests = ref([])
@@ -254,17 +254,39 @@ const borrowRequests = ref([])
 const systemLogs = ref([])
 const loading = ref(true)
 
-const chartToggle = ref('week')
-const selectedDate = ref(new Date())
+const chartDataRaw = ref(null)
+const volumeToggle = ref('services')
+const periodFilter = ref('week')
+const feedTab = ref('all')
 
-// Mock Data for Hotspot Barangays
-const topBarangays = ref([
-  { name: 'San Isidro', requests: 45, percentage: 85 },
-  { name: 'San Fabian', requests: 32, percentage: 65 },
-  { name: 'Maligaya', requests: 28, percentage: 55 },
-  { name: 'Buneg', requests: 15, percentage: 30 },
-  { name: 'Gumbuan', requests: 9, percentage: 15 },
-])
+const topBarangays = ref([]) // Raw data, feeds the Leaflet map
+
+const periodLabel = computed(() => ({ today: 'Today', week: 'Last 7 days', month: 'Last 30 days' }[periodFilter.value]))
+
+// Count-up animation for headline numbers on load / filter change
+const displayValues = reactive({})
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+const animateValue = (key, target) => {
+  const numTarget = Number(String(target).replace(/,/g, '')) || 0
+  if (reduceMotion) {
+    displayValues[key] = target
+    return
+  }
+  const duration = 600
+  const start = performance.now()
+  const step = (now) => {
+    const progress = Math.min((now - start) / duration, 1)
+    const eased = 1 - Math.pow(1 - progress, 3)
+    displayValues[key] = Math.round(numTarget * eased).toLocaleString()
+    if (progress < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
+watch(kpiStats, (stats) => {
+  stats.forEach(stat => animateValue(stat.title, stat.value))
+})
 
 const fetchDashboardData = async () => {
   loading.value = true
@@ -275,16 +297,18 @@ const fetchDashboardData = async () => {
         'Accept': 'application/json'
       }
     })
-    
+
     if (!response.ok) throw new Error('Network response error')
-    
+
     const data = await response.json()
 
     kpiStats.value = data.kpiStats || []
     serviceRequests.value = data.serviceRequests || []
     borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
-    
+    topBarangays.value = data.mapData || []
+    chartDataRaw.value = data.charts || null
+
   } catch (error) {
     console.error("Failed to load dashboard:", error)
   } finally {
@@ -295,63 +319,282 @@ const fetchDashboardData = async () => {
 const getStatusColor = (status) => {
   if (!status) return 'grey'
   const s = status.toLowerCase()
-  if (s === 'pending') return 'orange'
-  if (s === 'approved' || s === 'responding') return '#2E8B75'
-  if (s === 'resolved' || s === 'returned') return 'green'
-  if (s === 'rejected') return 'red'
+  if (s === 'pending') return 'warning'
+  if (s === 'approved' || s === 'responding') return 'primary'
+  if (s === 'resolved' || s === 'returned') return 'success'
+  if (s === 'rejected') return 'error'
   return 'grey'
 }
 
 const getHeatColor = (percentage) => {
-  if (percentage > 70) return 'red'
-  if (percentage > 40) return 'orange'
-  return '#2E8B75'
+  if (percentage > 70) return 'error'
+  if (percentage > 40) return 'warning'
+  return 'primary'
+}
+
+// Top 5 zones ranked by request volume, percentage relative to the busiest zone
+const topZones = computed(() => {
+  const list = topBarangays.value
+  if (!list.length) return []
+  const max = Math.max(...list.map(b => b.requests))
+  return [...list]
+    .sort((a, b) => b.requests - a.requests)
+    .slice(0, 5)
+    .map(b => ({ ...b, percentage: max > 0 ? Math.round((b.requests / max) * 100) : 0 }))
+})
+
+// Headline metric: real aggregate from the backend's day-by-day series (not the 5-item sample lists)
+const heroTotal = computed(() => {
+  if (!chartDataRaw.value) return 0
+  if (periodFilter.value === 'today') {
+    const series = chartDataRaw.value.bar.week
+    return series.data[series.data.length - 1] || 0
+  }
+  const series = chartDataRaw.value.bar[periodFilter.value]
+  return series.data.reduce((a, b) => a + b, 0)
+})
+
+watch(heroTotal, (val) => animateValue('hero', val))
+
+const heroSparklineData = computed(() => {
+  if (!chartDataRaw.value) return { labels: [], datasets: [] }
+  const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
+  const source = chartDataRaw.value.bar[key]
+  return {
+    labels: source.labels,
+    datasets: [{
+      data: source.data,
+      borderColor: '#2E8B75',
+      backgroundColor: 'rgba(46, 139, 117, 0.15)',
+      fill: true,
+      borderWidth: 2,
+      tension: 0.4
+    }]
+  }
+})
+
+const sparklineOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: { x: { display: false }, y: { display: false } },
+  elements: { point: { radius: 0 } }
+}
+
+// Unified activity feed — merges service + borrow requests into one timeline
+const unifiedFeed = computed(() => {
+  const svc = serviceRequests.value.map(item => ({
+    kind: 'service', name: item.resident, meta: item.type, date: item.date, status: item.status, icon: 'mdi-account'
+  }))
+  const brw = borrowRequests.value.map(item => ({
+    kind: 'borrow', name: item.borrower, meta: item.equipment, date: item.date, status: item.status, icon: 'mdi-toolbox-outline'
+  }))
+  return [...svc, ...brw].sort((a, b) => new Date(b.date) - new Date(a.date))
+})
+
+const isWithinPeriod = (dateStr, period) => {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return true
+  const now = new Date()
+  if (period === 'today') return d.toDateString() === now.toDateString()
+  if (period === 'week') { const wk = new Date(now); wk.setDate(now.getDate() - 7); return d >= wk }
+  if (period === 'month') { const mo = new Date(now); mo.setDate(now.getDate() - 30); return d >= mo }
+  return true
+}
+
+const filteredFeed = computed(() => {
+  return unifiedFeed.value.filter(item => {
+    if (feedTab.value !== 'all' && item.kind !== feedTab.value) return false
+    return isWithinPeriod(item.date, periodFilter.value)
+  })
+})
+
+const volumeChartData = computed(() => {
+  if (!chartDataRaw.value) return { labels: [], datasets: [] }
+  const source = chartDataRaw.value.pie[volumeToggle.value]
+  const paired = source.labels
+    .map((label, i) => ({ label, value: source.data[i] }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8)
+  return {
+    labels: paired.map(p => p.label),
+    datasets: [{
+      label: 'Requests',
+      backgroundColor: '#2E8B75',
+      borderRadius: 4,
+      barThickness: 14,
+      data: paired.map(p => p.value)
+    }]
+  }
+})
+
+const volumeChartOptions = {
+  indexAxis: 'y',
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { beginAtZero: true, ticks: { precision: 0 } },
+    y: { ticks: { font: { size: 11 } } }
+  }
+}
+
+const barChartData = computed(() => {
+  if (!chartDataRaw.value) return { labels: [], datasets: [] }
+  const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
+  const source = chartDataRaw.value.bar[key]
+  return {
+    labels: source.labels,
+    datasets: [{
+      label: 'Requests',
+      backgroundColor: '#2E8B75',
+      borderRadius: 4,
+      data: source.data
+    }]
+  }
+})
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+}
+
+// Define colors based on request density
+const getMapColor = (d) => {
+  return d > 30 ? '#d32f2f' : // High (Red)
+         d > 15 ? '#f57c00' : // Medium (Orange)
+         d > 0  ? '#2E8B75' : // Low (Green)
+                  '#e0e0e0';  // Zero requests (Grey)
+}
+
+const mapEl = ref(null)
+let map = null
+let geoLayer = null
+
+// Keyed on the exact backend name — no case folding, so a rename on either
+// side fails loudly as an unmatched grey polygon rather than silently.
+const requestCountByName = computed(() =>
+  Object.fromEntries(topBarangays.value.map(b => [b.name, b.requests]))
+)
+
+const styleFor = (feature) => ({
+  fillColor: getMapColor(requestCountByName.value[feature.properties.name] ?? 0),
+  weight: 2,
+  opacity: 1,
+  color: 'white',
+  dashArray: '3',
+  fillOpacity: 0.7,
+})
+
+const tooltipFor = (feature) => {
+  const name = feature.properties.name
+  const count = requestCountByName.value[name] ?? 0
+  return `<b>${name}</b><br>${count} ${count === 1 ? 'Request' : 'Requests'}`
 }
 
 onMounted(() => {
   fetchDashboardData()
 
-  // Inject Leaflet for Heatmap
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-  document.head.appendChild(link)
+  map = L.map(mapEl.value)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+  }).addTo(map)
 
-  const script = document.createElement('script')
-  script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-  script.onload = () => {
-    const heatScript = document.createElement('script')
-    heatScript.src = 'https://unpkg.com/leaflet.heat/dist/leaflet-heat.js'
-    heatScript.onload = () => {
-      if (!window.L) return
+  geoLayer = L.geoJSON(barangayBoundaries, {
+    style: styleFor,
+    onEachFeature: (feature, layer) => layer.bindTooltip(tooltipFor(feature)),
+  }).addTo(map)
 
-      const map = window.L.map('heatmap').setView([16.74, 121.62], 12)
-      
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-      }).addTo(map)
+  // Frame the barangays themselves rather than hardcoding a centre and zoom,
+  // so the view stays correct if the boundary file changes.
+  map.fitBounds(geoLayer.getBounds(), { padding: [12, 12] })
+})
 
-      const heatData = [
-        [16.745, 121.623, 0.9], // San Isidro area
-        [16.751, 121.615, 0.7], 
-        [16.732, 121.642, 0.8], // San Fabian area
-        [16.748, 121.630, 0.6], // Maligaya area
-        [16.730, 121.610, 0.5]  // Buneg area
-      ]
+// Repaint whenever counts arrive or change. The map is built on mount with
+// whatever data exists (usually none), so this — not a timer — is what makes
+// the fetch land.
+watch(requestCountByName, () => {
+  if (!geoLayer) return
+  geoLayer.setStyle(styleFor)
+  geoLayer.eachLayer((layer) => layer.setTooltipContent(tooltipFor(layer.feature)))
+})
 
-      window.L.heatLayer(heatData, {radius: 25, blur: 15}).addTo(map)
-    }
-    document.head.appendChild(heatScript)
-  }
-  document.head.appendChild(script)
+onUnmounted(() => {
+  map?.remove()
+  map = null
+  geoLayer = null
 })
 </script>
 
 <style scoped>
+.dashboard-bg {
+  background-color: rgb(var(--v-theme-background));
+}
 .min-width-0 {
   min-width: 0;
 }
 .gap-4 {
   gap: 16px;
+}
+
+/* Soft UI Evolution: layered shadow depth instead of flat borders, theme-aware */
+.soft-card {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.soft-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 10px rgba(var(--v-theme-on-surface), 0.06), 0 12px 24px rgba(var(--v-theme-on-surface), 0.14);
+}
+
+.hero-tint {
+  background: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.10), rgba(var(--v-theme-primary), 0.02));
+}
+
+.subtle-surface {
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+.rank-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
+  flex-shrink: 0;
+}
+
+.stagger-item {
+  animation: dashFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--stagger-i, 0) * 60ms);
+}
+
+@keyframes dashFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soft-card,
+  .soft-card:hover {
+    transition: none;
+    transform: none;
+  }
+  .stagger-item {
+    animation: none;
+  }
 }
 </style>

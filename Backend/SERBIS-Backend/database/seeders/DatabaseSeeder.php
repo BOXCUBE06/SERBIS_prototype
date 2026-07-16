@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             
             // 3. Relational/Analytics Tables
             ServiceRequestSeeder::class,
+            EquipmentBorrowingSeeder::class,
         ]);
     }
 }
