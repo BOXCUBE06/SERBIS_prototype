@@ -2,9 +2,13 @@
 
 **Date:** 2026-07-15
 **Scope:** `Backend/SERBIS-Backend` — all controllers, models, routes, middleware, migrations, and config touched by the API.
-**Status:** **14 of 22 findings fixed and verified live** (2026-07-15): #1–#7, #9, #12, #13, #16, #17, #20, #21. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, and a real browser with `fetch` stubbed.
+**Status:** **19 of 28 findings fixed and verified live** (updated 2026-07-16): #1–#9, #12, #13, #16, #17, #20, #21, #28, plus the #14/#18/#22 registration cluster. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, a path-traversal `PUT`, and a real browser with `fetch` stubbed.
 
-**Open:** #8 (public ID photos — top remaining risk), #10, #11, #14, #15, #18, #19, #22.
+**Open:** #10, #11, #15, #23 — all Medium/Low. **No Critical or High findings remain open.**
+
+**#8 and #28 fixed 2026-07-16** (`c66a978`). #28 is new: `update()` accepted `valid_id` as a free-form string, which #8's streaming route would have turned into admin-to-arbitrary-file-read. It had to ship in the same commit — **the #8 fix sketch in this very document would have introduced it.**
+
+> **Warning — the fixes below are almost entirely uncommitted.** `7b2a5bc` ("Add security/performance audit log") committed *this document only*: one file, 736 insertions, zero code. At HEAD, #2, #4, #5, #9 and #17 are all still live in committed code. Nothing has been pushed. Full working tree snapshotted 2026-07-16 at `wip/safety-snapshot-2026-07-16` (`3a4b2fe`). See "Status at 2026-07-16" at the end for detail.
 
 **Six findings — #17 through #22 — were discovered while fixing and verifying, not during the original read-only pass.** That ratio is the strongest argument in this document for exercising changes rather than reading them.
 
@@ -303,6 +307,45 @@ public function showValidId(Request $request, $id)
 
 **Effort:** 1-2 hours (includes migrating already-uploaded files and updating the frontend to call the new endpoint instead of rendering a direct URL).
 
+**FIXED + verified live 2026-07-16** (`c66a978`). Shipped shape, with three deliberate departures from the sketch above:
+
+```php
+// store() — private disk, uuid per file, resident-scoped directory
+$file = $request->file('valid_id');
+$filePath = $file->storeAs(
+    'valid-ids/'.$request->user()->getKey(),
+    (string) Str::uuid().'.'.$file->extension(),
+    'local'
+);
+```
+
+1. **404, not `abort_unless(..., 403)`.** A 403 confirms the request exists; `validId()` scopes the query *before* `find()`, exactly as #2's fix does, so a non-owner is told nothing. The sketch also called `findOrFail()` before its check, which discloses existence via 404-vs-403 either way.
+2. **`{uuid}.{ext}` under a per-resident directory**, not a flat `ids/`. The extension comes from `$file->extension()` (derived from content), never the client-supplied filename.
+3. **The path is hidden at the model layer**, which the sketch missed. `store()` on the private disk is pointless while `valid_id` is still serialized in every `index`/`show`/`adminIndex` response. `ServiceRequest` now carries `#[Hidden(['valid_id'])]` + `#[Appends(['has_valid_id'])]`; clients get a boolean and fetch bytes from the route.
+
+**Route keying — by request id, not resident id.** `valid_id` is a column on `tbl_service_request`, so a resident with N requests has N photos; a `/valid-ids/{residentId}` route cannot say which one. `GET /api/service-requests/{id}/valid-id` (as this sketch originally proposed) is the only unambiguous key, and it makes the ownership check identical to `show()`.
+
+**No data migration was needed** — the audit assumed one. Every one of the 50 existing rows had `valid_id = null` (`ServiceRequestSeeder.php:26`), and the three files under `storage/app/public/ids/` were **byte-identical duplicates of one test image** (`sha1 d6f8a66b…`) referenced by **zero** rows. They were unreferenced orphans and were deleted, not moved.
+
+**Verified live** (two-resident discipline, resident A = 1, B = 2, against a real upload):
+
+| Test | Result |
+|---|---|
+| B → A's ID | **404**, 39 bytes JSON, no image bytes |
+| A → own | **200** `image/jpeg`, sha1 matches source file exactly |
+| Admin → A's | **200**, same sha1 |
+| Unauthenticated | **401** |
+| `valid_id` in JSON (4 endpoints) | absent everywhere; `has_valid_id` present |
+| Old `/storage/ids/...` URL | **403**, HTML error page (`3c21`, not JPEG's `ffd8`) — no bytes served |
+
+The old public URL returns **403 rather than 404** under `php artisan serve`; either way no file is served, and `storage/app/public/` now holds only `.gitignore`.
+
+**Frontend** (`ManageRequestView.vue`): renders on `has_valid_id`, fetches the route with the existing `getHeaders()` and holds the image as a blob URL, revoked on request-switch and on unmount. Verified in a real browser: decoded 1200x801, exactly one `GET .../54/valid-id → 200` and **zero `/storage/` requests**; 6 switch cycles left all 6 prior blobs revoked and exactly one alive.
+
+> **Keeping `Accept: application/json` on that fetch is load-bearing.** Without it an expired token makes Laravel redirect to a nonexistent `login` route and return **500**, not 401.
+
+**This fix required #28** (below) to be closed in the same pass — without it, the new streaming route would have been strictly worse than the bug it fixes.
+
 ---
 
 ### 9. CORS allows any origin with any header
@@ -529,6 +572,50 @@ Note: `npx eslint` also fails to run in this project (module resolution error in
 
 ---
 
+## HIGH (discovered 2026-07-16 while planning #8)
+
+### 28. `update()` lets an admin set `valid_id` to any path — arbitrary file read once #8's route exists
+**File:** `app/Http/Controllers/ServiceRequestController.php:127` (pre-fix)
+
+```php
+$validated = $request->validate([
+    // ...
+    'valid_id' => 'nullable|string|max:255',   // free-form string
+    // ...
+]);
+
+$serviceRequest->update($validated);
+```
+
+**Why it matters here:** `valid_id` is a **storage path**, not user data, but `update()` accepted it as an arbitrary 255-char string and mass-assigned it (`valid_id` is in `#[Fillable]`). On its own this was near-harmless: the value only fed a `public`-disk URL the frontend concatenated, so a bogus path produced a broken image.
+
+**#8's fix is what makes it dangerous.** The moment a route streams `Storage::disk('local')->response($serviceRequest->valid_id)`, an admin-settable path becomes a **path-traversal primitive**:
+
+```
+PUT /api/service-requests/54   {"valid_id": "../../../../.env"}
+GET /api/service-requests/54/valid-id   ->  streams .env
+```
+
+That yields `APP_KEY`, `DB_PASSWORD`, and `SKYSMS_API_KEY` — an admin-to-arbitrary-server-file-read escalation. Laravel's `local` disk driver does not constrain the path for you here. **Shipping #8 without this fix would have been strictly worse than the bug #8 closes**: it converts a leak of ID photos into a leak of the whole server.
+
+**This is a separate vulnerability, not part of #8's original scope.** The read-only audit never flagged it, because in isolation it looks like sloppy validation rather than a security bug — it only becomes exploitable in combination with #8's fix. It was found while writing #8's implementation plan, by asking what the new route would trust.
+
+**Fix (shipped 2026-07-16, `c66a978`):** drop `valid_id` from `update()`'s validation entirely. Only `store()` writes that column; no legitimate flow has an admin hand-typing a storage path.
+
+```php
+// 'valid_id' is deliberately not accepted here. It is a storage path written
+// only by store(); allowing it to be set would let any admin point it at an
+// arbitrary file for validId() to stream back.
+```
+
+**Verified live 2026-07-16:** admin `PUT` with `{"valid_id": "../../../../.env"}` returned 200 (other fields applied), the stored `valid_id` was **unchanged**, and the route still streamed the correct JPEG (107255 bytes, sha1 matching the source) rather than `.env` contents.
+
+**Lesson:** a fix's blast radius includes what it makes *newly reachable*. `valid_id` was inert as a URL fragment and lethal as a filesystem path; the same untrusted string changed severity because a new consumer trusted it. When adding a component that reads a stored value, re-audit every writer of that value.
+
+**Effort:** 2 min (delete one validation rule). Mandatory prerequisite for #8.
+
+---
+
 ## MEDIUM
 
 ### 10. No pagination anywhere — every list endpoint returns the full table
@@ -695,7 +782,7 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 | 5 | Critical | No rate limiting anywhere | bootstrap/app.php:15 | 30 min |
 | 6 | High | Client-controlled `resident_id` on borrow create | EquipmentBorrowingController.php:19 | 10 min |
 | 7 | High | Dangling open transaction | EquipmentBorrowingController.php:69 | 10 min |
-| 8 | High | ID photos public, unauthenticated | ServiceRequestController.php:51 | 1-2 hr |
+| 8 | High | ID photos public, unauthenticated | ServiceRequestController.php:51 | done (`c66a978`) |
 | 9 | High | CORS wide open | config/cors.php:22 | 10 min |
 | 10 | Medium | No pagination, 9 endpoints | multiple | ~20 min each |
 | 11 | Medium | Dashboard loads full tables, uncached | AnalyticsController.php:101 | 30 min–3 hr |
@@ -715,13 +802,23 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 | 25 | Low | `useAppTheme.js` was plain JS in a TS project (TS7016 in `App.vue`, `AppSidebar.vue`). Masked by #24. Renamed `.js`→`.ts`; **fix is in the working tree, not committed** — the file has no importer at HEAD, so it lands with the uncommitted theming work. | src/composables/ | fixed, uncommitted |
 | 26 | High | `AdminSeeder` hardcodes `admin@serbis.com` / `password123` and `DatabaseSeeder` calls it **unconditionally — no environment guard**. `db:seed` or `migrate --seed` against production plants a known-credential admin on a DB holding government-ID scans. **Fixed 2026-07-15** (`f4a29c5`): guarded on `app()->environment(['local','testing'])` **and** skips when the admin already exists. Note the old blind `insert()` never overwrote a password — `email_address` is unique, so a re-seed aborted the whole run on a duplicate key. | AdminSeeder.php:21, DatabaseSeeder.php:12 | done |
 | 27 | High | **`ResidentSeeder` was the root cause of #19, and carried #26's credential problem.** Three defects in 20 lines: (a) hardcoded `Hash::make('password')` for all 20 residents; (b) unguarded — `DatabaseSeeder` called it in any environment; (c) **`Schema::disableForeignKeyConstraints()` wrapped around `'barangay_id' => rand(1, 6)`, while `BarangaySeeder` creates only ids 1–5** — `barangay_id` is the *only* FK on `tbl_residents`, so that call existed solely to suppress this check. ~97% of seed runs orphaned at least one resident (`1-(5/6)^20`). **Fixed 2026-07-15** (`8364705`): draws from real barangay ids, FK disabling removed, env-guarded, distinct `Str::password(16)` each. Verified on a scratch DB — 5 fresh runs, 100 residents, 0 orphans; old logic replayed on the same schema gave 3 orphans (proving the check can fail); 0/20 crack to common guesses vs 20/20 before. | ResidentSeeder.php:17,21,26 | done |
+| 28 | High | **`update()` accepted `valid_id` as a free-form string** — inert while it only fed a public URL, but #8's streaming route turns it into a path-traversal primitive: `PUT {"valid_id":"../../../../.env"}` then `GET .../valid-id` returns `APP_KEY` + `DB_PASSWORD`. Admin-to-arbitrary-file-read. **Separate vulnerability, not part of #8's scope** — invisible to the read-only audit because it is only exploitable *in combination with #8's fix*; found while planning #8. **Fixed 2026-07-16** (`c66a978`): rule dropped; only `store()` writes that column. Verified: traversal PUT ignored, path unchanged, route still streams the real JPEG. | ServiceRequestController.php:127 | done |
 
-### Status at 2026-07-15
+### Status at 2026-07-16
 
-**Fixed and verified live (17):** #1, #2, #3, #4, #5, #6, #7, #9, #12, #13, #16*, #17, #20, #21, plus #14/#18/#22 — the registration cluster, resolved by **deleting** the flow (product decision: registration is mobile-only). `/api/register` → 404, both logins still 200/401, `npm run build` → exit 0. #24 and #25 were found and fixed while verifying #22.
+**Fixed and verified live (19):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #12, #13, #16*, #17, #20, #21, #28, plus #14/#18/#22 — the registration cluster, resolved by **deleting** the flow (product decision: registration is mobile-only). `/api/register` → 404, both logins still 200/401, `npm run build` → exit 0. #24 and #25 were found and fixed while verifying #22.
 \* #16 is code-complete and verified with faked HTTP, but **unverified against the live vendor — no sandbox exists.** Needs a manual burner-number test; #21 means the UI can now drive it.
 
-**Open (5):** #8 (top risk), #10, #11, #15, #23. (#26 fixed in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.)
+**Open (4):** #10, #11, #15, #23. (#26 fixed in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **No Critical or High findings remain open.**
+
+**#8 and #28 fixed 2026-07-16 (`c66a978`)** — backend and frontend together. #28 was found while planning #8 and had to ship with it: #8's streaming route would have turned #28's admin-settable path into arbitrary server file read. The audit's own #8 fix sketch would have shipped that hole.
+
+> ### The fixes in this document are almost entirely uncommitted
+> **Discovered 2026-07-16.** Of the five commits made on 2026-07-15, `7b2a5bc` — "Add security/performance audit log" — touched **exactly one file: this document, 736 insertions, zero code**. The other four were the registration removal, `ignoreDeprecations`, and the two seeders.
+>
+> **Every other fix listed above exists only in the working tree.** At HEAD, `show($id)` still has no ownership scope (#2), the login routes have no throttle (#17), `Resident` has no `#[Hidden]` (#4), and CORS is still `*` (#9). The reflog shows no reverts and no resets — they were simply never staged. Nothing was ever pushed (`origin/update-admin-vue` is 5 commits behind), so this document has never been published; had it been, it would have been a precise exploitation guide to vulnerabilities still live in the committed code.
+>
+> A full working-tree snapshot was taken on 2026-07-16 at branch `wip/safety-snapshot-2026-07-16` (`3a4b2fe`) so this work cannot be lost to a stray checkout. **It still needs committing properly.** Beware: several files mix findings — `ServiceRequestController.php` carries #2 and #8; `routes/api.php` carries #17 and #8 — so per-finding commits are not cleanly possible.
 
 **#19 closed 2026-07-15.** Root cause was #27, fixed in `8364705`. The one orphan — resident 10, faker data — was deleted along with its 2 borrowings and the 2 `tbl_system_logs` rows referencing them (backed up first). **Integrity sweep result: 15 declared FKs and 5 polymorphic audit types checked — 0 orphans, 0 dangling refs system-wide.** Barangay distribution (4/3/5/3/6) now sums to 21 = total residents; that gap *was* the orphan.
 
