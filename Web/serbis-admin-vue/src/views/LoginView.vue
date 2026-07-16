@@ -11,6 +11,9 @@
             style="width: 220px; height: 220px; object-fit: contain; border-radius: 50%;"
             class="mb-6" 
           />
+          <!-- This panel is a fixed white gradient in both themes, so its text
+               must stay dark. Theme tokens (text-high-emphasis) resolve to white
+               in dark mode and make the title vanish against the white half. -->
           <h1 class="text-h2 font-weight-black text-grey-darken-4 mb-3" style="letter-spacing: 6px; line-height: 1.2; margin-top: -16px;">
             SERBIS
           </h1>

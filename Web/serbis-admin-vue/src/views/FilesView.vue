@@ -1,12 +1,12 @@
 <template>
-  <v-container fluid class="bg-grey-lighten-4 fill-height align-start pa-8" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-8 bg-background">
     <v-row>
       <v-col cols="12">
         <v-card elevation="2" rounded="xl" class="pa-6 border-0">
           
           <v-row class="mb-6" align="center" justify="space-between">
             <v-col cols="12" md="6">
-              <h2 class="text-h5 font-weight-bold text-grey-darken-3">File Management</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">File Management</h2>
               <div class="text-subtitle-2 text-grey">Upload and manage official MDRRMO documents and information materials</div>
             </v-col>
             
@@ -42,16 +42,16 @@
                 <v-icon :color="getFileIconColor(item.file_type)" size="large" class="mr-3">
                   {{ getFileIcon(item.file_type) }}
                 </v-icon>
-                <span class="font-weight-bold text-grey-darken-3">{{ item.title }}</span>
+                <span class="font-weight-bold text-high-emphasis">{{ item.title }}</span>
               </div>
             </template>
 
             <template v-slot:item.file_size="{ item }">
-              <span class="text-grey-darken-2">{{ formatBytes(item.file_size) }}</span>
+              <span class="text-medium-emphasis">{{ formatBytes(item.file_size) }}</span>
             </template>
 
             <template v-slot:item.created_at="{ item }">
-              <span class="text-grey-darken-2">{{ new Date(item.created_at).toLocaleDateString() }}</span>
+              <span class="text-medium-emphasis">{{ new Date(item.created_at).toLocaleDateString() }}</span>
             </template>
 
             <template v-slot:item.actions="{ item }">
@@ -72,7 +72,7 @@
     <v-dialog v-model="modal" max-width="500" persistent>
       <v-card rounded="xl" elevation="10">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b">
-          <span class="text-h6 font-weight-bold text-grey-darken-3">Upload Document</span>
+          <span class="text-h6 font-weight-bold text-high-emphasis">Upload Document</span>
           <v-btn icon="mdi-close" variant="text" size="small" color="grey" @click="modal = false"></v-btn>
         </v-card-title>
 
@@ -276,7 +276,7 @@ onMounted(() => fetchFiles())
 .gap-4 { gap: 16px; }
 .custom-table :deep(th) {
   font-weight: 600 !important;
-  color: #616161 !important;
-  border-bottom: 2px solid #EEEEEE !important;
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
+  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 </style>

@@ -500,6 +500,7 @@ onMounted(() => {
   map = L.map(mapEl.value)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap',
+    className: 'map-tiles',
   }).addTo(map)
 
   geoLayer = L.geoJSON(barangayBoundaries, {
@@ -556,6 +557,14 @@ onUnmounted(() => {
 
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+/* OSM ships only light tiles, so a raster filter is the one way to keep the
+   map from being a floodlight in dark mode without adding a tile provider (and
+   an API key). Applied to the tile layer alone — the choropleth lives in the
+   overlay pane above it and keeps its true colours. */
+.v-theme--dark .map-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.8);
 }
 
 .rank-badge {

@@ -1,11 +1,11 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-8" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-8 bg-background">
     <v-row>
       <v-col cols="12">
         <div class="d-flex justify-space-between align-center mb-6">
           <div>
-            <h2 class="text-h4 font-weight-black text-grey-darken-4">System Logs</h2>
-            <div class="text-subtitle-1 text-grey-darken-1">Monitor user activity and SMS broadcast history</div>
+            <h2 class="text-h4 font-weight-black text-high-emphasis">System Logs</h2>
+            <div class="text-subtitle-1 text-medium-emphasis">Monitor user activity and SMS broadcast history</div>
           </div>
           
           <v-text-field
@@ -21,7 +21,7 @@
           ></v-text-field>
         </div>
 
-        <v-card elevation="0" border rounded="xl" class="bg-white">
+        <v-card elevation="0" border rounded="xl" class="bg-surface">
           <v-tabs v-model="activeTab" color="primary" class="border-b px-4">
             <v-tab value="system" class="text-none font-weight-bold">
               <v-icon start>mdi-laptop</v-icon> System Activity

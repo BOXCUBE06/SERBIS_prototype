@@ -30,6 +30,17 @@ useAppTheme().init()
   font-family: 'Inter', sans-serif !important;
 }
 
+/* Shared theme-aware surfaces. Vuetify's own bg-surface-light resolves to a
+   fixed grey (#424242) that ignores the palette, so tint on-surface instead —
+   that tracks whichever theme is active. */
+.subtle-surface {
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+.subtle-border {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+}
+
 .v-main {
   padding: 0 !important;
   background-color: #0A2620;

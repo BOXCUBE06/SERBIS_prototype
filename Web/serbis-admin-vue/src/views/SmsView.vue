@@ -1,16 +1,16 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-6 bg-background">
     <v-row justify="center" class="ma-0 w-100 mt-4">
       <v-col cols="12" md="10" lg="8" xl="6" class="pa-0">
         
-        <v-card elevation="4" rounded="lg" class="bg-white fade-in w-100">
-          <div class="pa-8 border-b bg-white d-flex align-center gap-4">
+        <v-card elevation="4" rounded="lg" class="bg-surface fade-in w-100">
+          <div class="pa-8 border-b bg-surface d-flex align-center gap-4">
             <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
             <div>
-              <h2 class="text-h4 font-weight-black text-grey-darken-4" style="line-height: 1.1; letter-spacing: -0.02em;">Targeted Text Blast</h2>
-              <div class="text-subtitle-1 font-weight-medium text-grey-darken-1 mt-2">Dispatch critical SMS alerts to specific barangays</div>
+              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Targeted Text Blast</h2>
+              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">Dispatch critical SMS alerts to specific barangays</div>
             </div>
           </div>
 
@@ -31,7 +31,7 @@
             <v-form ref="form" @submit.prevent="sendSmsBlast">
               
               <div class="mb-6">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1 mb-2">Target Audience</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Target Audience</div>
                 <v-select
                   v-model="selectedBarangays"
                   :items="barangays"
@@ -53,7 +53,7 @@
               </div>
 
               <div class="mb-2">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1 mb-2">Message Content</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Message Content</div>
                 <v-textarea
                   v-model="message"
                   placeholder="e.g., MDRRMO Alert: Flood warning in your area. Evacuate to higher ground immediately."

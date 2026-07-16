@@ -1,5 +1,5 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-6 bg-background">
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
         
@@ -7,23 +7,23 @@
         <v-row class="mb-6">
           <v-col v-for="(metric, index) in metrics" :key="index" cols="12" md="3">
             <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line" elevation="3" rounded="lg"></v-skeleton-loader>
-            <v-card v-else elevation="3" rounded="lg" class="pa-6 bg-white d-flex align-center metric-card fade-in">
+            <v-card v-else elevation="3" rounded="lg" class="pa-6 bg-surface d-flex align-center metric-card fade-in">
               <v-avatar :color="metric.color" size="64" class="mr-5 rounded-lg">
                 <v-icon size="32" :class="metric.iconColor">{{ metric.icon }}</v-icon>
               </v-avatar>
               <div>
-                <div class="text-subtitle-2 text-uppercase font-weight-bold text-grey-darken-1">{{ metric.title }}</div>
-                <div class="custom-metric-number text-grey-darken-4 mt-2">{{ metric.value }}</div>
+                <div class="text-subtitle-2 text-uppercase font-weight-bold text-medium-emphasis">{{ metric.title }}</div>
+                <div class="custom-metric-number text-high-emphasis mt-2">{{ metric.value }}</div>
               </div>
             </v-card>
           </v-col>
         </v-row>
 
         <!-- Main Content -->
-        <v-card elevation="3" rounded="lg" class="bg-white w-100">
+        <v-card elevation="3" rounded="lg" class="bg-surface w-100">
           <div class="pa-6 border-b d-flex flex-row align-center justify-space-between gap-4">
             <div>
-              <h2 class="text-h5 font-weight-bold text-grey-darken-4">Equipment Inventory</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Inventory</h2>
             </div>
             
             <div class="d-flex gap-4 align-center">
@@ -67,19 +67,19 @@
             @click:row="openEditModal"
           >
             <template v-slot:item.item_name="{ item }">
-              <span class="font-weight-black text-grey-darken-4 text-h6">{{ item.item_name }}</span>
+              <span class="font-weight-black text-high-emphasis text-h6">{{ item.item_name }}</span>
             </template>
 
             <template v-slot:item.quantities="{ item }">
-              <div class="d-flex justify-center align-center bg-grey-lighten-4 rounded-pill px-4 py-2 mx-auto" style="width: fit-content;">
-                <span class="text-subtitle-1 font-weight-black" :class="item.available_quantity > 0 ? 'text-green-darken-3' : 'text-error'">{{ item.available_quantity }}</span>
-                <span class="text-subtitle-1 text-grey-darken-1 mx-2">/</span>
-                <span class="text-subtitle-1 font-weight-bold text-grey-darken-2">{{ item.total_quantity }}</span>
+              <div class="d-flex justify-center align-center subtle-surface rounded-pill px-4 py-2 mx-auto" style="width: fit-content;">
+                <span class="text-subtitle-1 font-weight-black" :class="item.available_quantity > 0 ? 'text-primary' : 'text-error'">{{ item.available_quantity }}</span>
+                <span class="text-subtitle-1 text-medium-emphasis mx-2">/</span>
+                <span class="text-subtitle-1 font-weight-bold text-medium-emphasis">{{ item.total_quantity }}</span>
               </div>
             </template>
 
             <template v-slot:item.updated_at="{ item }">
-              <span class="text-body-1 font-weight-medium text-grey-darken-2">{{ new Date(item.updated_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
+              <span class="text-body-1 font-weight-medium text-medium-emphasis">{{ new Date(item.updated_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
             </template>
 
             <template v-slot:item.status="{ item }">
@@ -101,8 +101,8 @@
     <!-- Modal -->
     <v-dialog v-model="modal.isOpen" max-width="500" persistent transition="dialog-fade-transition">
       <v-card rounded="lg" elevation="4">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-white">
-          <span class="text-h6 font-weight-bold text-grey-darken-4">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
+          <span class="text-h6 font-weight-bold text-high-emphasis">
             {{ modal.isEditing ? 'Edit Equipment' : 'Add New Equipment' }}
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" color="grey-darken-2" @click="closeModal"></v-btn>
@@ -123,7 +123,7 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field v-if="modal.isEditing" v-model.number="formData.available_quantity" label="Available Now" type="number" min="0" :max="formData.total_quantity" variant="outlined" density="comfortable" required></v-text-field>
-                <div v-else class="text-caption text-grey mt-2 text-center border rounded pa-3 bg-grey-lighten-4">Auto-syncs with total count</div>
+                <div v-else class="text-caption text-grey mt-2 text-center border rounded pa-3 subtle-surface">Auto-syncs with total count</div>
               </v-col>
               <v-col cols="12">
                 <v-select v-model="formData.status" :items="['Available', 'Unavailable']" label="Status" variant="outlined" density="comfortable" required></v-select>
@@ -132,7 +132,7 @@
           </v-form>
         </v-card-text>
 
-        <v-card-actions class="pa-6 pt-0 d-flex justify-start bg-white gap-3">
+        <v-card-actions class="pa-6 pt-0 d-flex justify-start bg-surface gap-3">
           <v-btn color="#0f4c3a" variant="flat" class="text-none font-weight-bold px-6 text-white" height="44" @click="saveEquipment" :loading="loading">Save Changes</v-btn>
           <v-btn v-if="modal.isEditing" color="error" variant="text" class="text-none font-weight-bold px-4" height="44" @click="deleteEquipment" :loading="deleteLoading">Delete</v-btn>
         </v-card-actions>
@@ -168,9 +168,9 @@ const totalAvailableItems = computed(() => equipments.value.reduce((acc, curr) =
 const depletedCategories = computed(() => equipments.value.filter(e => e.available_quantity === 0 || e.status === 'Unavailable').length)
 
 const metrics = computed(() => [
-  { title: 'Resource Categories', value: equipments.value.length, icon: 'mdi-toolbox-outline', color: 'green-lighten-5', iconColor: 'text-green-darken-3' },
-  { title: 'Total Items Owned', value: totalItems.value, icon: 'mdi-package-variant-closed', color: 'green-lighten-5', iconColor: 'text-green-darken-3' },
-  { title: 'Currently Available', value: totalAvailableItems.value, icon: 'mdi-check-all', color: 'green-lighten-5', iconColor: 'text-green-darken-3' },
+  { title: 'Resource Categories', value: equipments.value.length, icon: 'mdi-toolbox-outline', color: 'green-lighten-5', iconColor: 'text-primary' },
+  { title: 'Total Items Owned', value: totalItems.value, icon: 'mdi-package-variant-closed', color: 'green-lighten-5', iconColor: 'text-primary' },
+  { title: 'Currently Available', value: totalAvailableItems.value, icon: 'mdi-check-all', color: 'green-lighten-5', iconColor: 'text-primary' },
   { title: 'Depleted / Unavailable', value: depletedCategories.value, icon: 'mdi-alert-octagon-outline', color: 'red-lighten-5', iconColor: 'text-error' }
 ])
 
@@ -269,15 +269,15 @@ onMounted(fetchEquipments)
 .elegant-table :deep(th) {
   font-size: 1.1rem !important;
   font-weight: 700 !important;
-  color: #616161 !important;
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
   padding: 0 24px !important;
   height: 56px !important;
-  border-bottom: 2px solid #EEEEEE !important;
-  background-color: #ffffff !important;
+  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
 }
 .elegant-table :deep(td) {
   padding: 16px 24px !important;
-  border-bottom: 1px solid #F5F5F5 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .custom-metric-number {

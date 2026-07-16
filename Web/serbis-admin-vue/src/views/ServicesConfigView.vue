@@ -1,12 +1,12 @@
 <template>
-  <v-container fluid class="bg-grey-lighten-4 fill-height align-start pa-8" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-8 bg-background">
     <v-row>
       <v-col cols="12">
         <v-card elevation="2" rounded="xl" class="pa-6 border-0">
           
           <v-row class="mb-6" align="center" justify="space-between">
             <v-col cols="12" md="6">
-              <h2 class="text-h5 font-weight-bold text-grey-darken-3">Service Management</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">Service Management</h2>
               <div class="text-subtitle-2 text-grey">Configure the types of emergency and public services offered by the MDRRMO</div>
             </v-col>
             
@@ -38,7 +38,7 @@
             class="custom-table"
           >
             <template v-slot:item.service_name="{ item }">
-              <span class="font-weight-bold text-grey-darken-3">{{ item.service_name }}</span>
+              <span class="font-weight-bold text-high-emphasis">{{ item.service_name }}</span>
             </template>
 
             <template v-slot:item.actions="{ item }">
@@ -59,7 +59,7 @@
     <v-dialog v-model="modal" max-width="500" persistent>
       <v-card rounded="xl" elevation="10">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b">
-          <span class="text-h6 font-weight-bold text-grey-darken-3">
+          <span class="text-h6 font-weight-bold text-high-emphasis">
             {{ isEditing ? 'Edit Service' : 'Add New Service' }}
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" color="grey" @click="modal = false"></v-btn>
@@ -229,7 +229,7 @@ onMounted(() => fetchServices())
 .gap-4 { gap: 16px; }
 .custom-table :deep(th) {
   font-weight: 600 !important;
-  color: #616161 !important;
-  border-bottom: 2px solid #EEEEEE !important;
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
+  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 </style>  

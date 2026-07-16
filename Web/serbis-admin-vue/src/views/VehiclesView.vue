@@ -3,10 +3,10 @@
     <v-row>
       <v-col cols="12">
         <div class="d-flex justify-space-between align-center mb-6">
-          <h2 class="text-h4 font-weight-bold text-grey-darken-4 tracking-tight">Fleet Management</h2>
+          <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Fleet Management</h2>
           
           <v-btn 
-            color="#2E7D32" 
+            color="primary" 
             variant="flat" 
             rounded="xl" 
             class="px-6 text-none font-weight-bold btn-soft-shadow"
@@ -44,9 +44,9 @@
             class="mb-8 pa-8 group-card"
           >
             <div class="d-flex align-center mb-6">
-              <h3 class="text-h4 font-weight-black text-grey-darken-4 mr-5 text-capitalize tracking-tight">{{ type }}s</h3>
+              <h3 class="text-h4 font-weight-black text-high-emphasis mr-5 text-capitalize tracking-tight">{{ type }}s</h3>
               <v-chip
-                color="#2E7D32"
+                color="primary"
                 variant="tonal"
                 size="large"
                 class="font-weight-bold px-4 text-body-1"
@@ -66,8 +66,8 @@
                   <v-card-text class="pa-5">
                     <div class="d-flex justify-space-between align-start mb-3">
                       <div>
-                        <div class="text-h6 font-weight-bold text-grey-darken-4">{{ vehicle.unit_identifier }}</div>
-                        <div class="text-body-2 text-grey-darken-1 font-weight-medium mt-1">{{ vehicle.specification || 'Standard Unit' }}</div>
+                        <div class="text-h6 font-weight-bold text-high-emphasis">{{ vehicle.unit_identifier }}</div>
+                        <div class="text-body-2 text-medium-emphasis font-weight-medium mt-1">{{ vehicle.specification || 'Standard Unit' }}</div>
                       </div>
                       <div :class="['icon-wrapper', getIconBgColor(vehicle.status)]">
                         <v-icon :color="getIconColor(vehicle.status)" size="24">
@@ -77,7 +77,7 @@
                     </div>
 
                     <div class="mt-5">
-                      <div class="text-overline font-weight-bold text-grey-darken-1 mb-2 tracking-widest">Status</div>
+                      <div class="text-overline font-weight-bold text-medium-emphasis mb-2 tracking-widest">Status</div>
                       <v-select
                         v-model="vehicle.status"
                         :items="statusOptions"
@@ -108,16 +108,16 @@
 
     <v-dialog v-model="statusDialog.show" max-width="420" persistent>
       <v-card class="soft-dialog pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-grey-darken-4 d-flex align-center">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis d-flex align-center">
           <div class="icon-wrapper bg-warning-lighten-5 mr-4">
             <v-icon color="warning" size="24">mdi-alert-outline</v-icon>
           </div>
           Update Status
         </v-card-title>
         
-        <v-card-text class="px-6 py-4 text-body-1 text-grey-darken-1">
+        <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
           Are you sure you want to change the status of 
-          <span class="font-weight-bold text-grey-darken-4">{{ statusDialog.vehicle?.unit_identifier }}</span> to 
+          <span class="font-weight-bold text-high-emphasis">{{ statusDialog.vehicle?.unit_identifier }}</span> to 
           <span class="font-weight-bold text-uppercase" :class="`text-${getIconColor(statusDialog.newStatus)}`">{{ statusDialog.newStatus }}</span>?
         </v-card-text>
         
@@ -133,7 +133,7 @@
             Cancel
           </v-btn>
           <v-btn 
-            color="#2E7D32" 
+            color="primary" 
             variant="flat" 
             rounded="lg" 
             class="px-6 text-none font-weight-bold btn-soft-shadow" 
@@ -281,7 +281,7 @@ const getIconColor = (status) => {
   switch(status?.toLowerCase()) {
     case 'dispatched': return 'orange-darken-3'
     case 'maintenance': return 'red-darken-3'
-    default: return 'green-darken-3'
+    default: return 'primary'
   }
 }
 
@@ -306,7 +306,7 @@ onMounted(() => fetchVehicles())
 }
 
 .page-background {
-  background-color: #F8FAFC !important;
+  background-color: rgb(var(--v-theme-background)) !important;
 }
 
 .tracking-tight { letter-spacing: -0.02em; }
@@ -323,34 +323,37 @@ onMounted(() => fetchVehicles())
 }
 
 .group-card {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.04) !important;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+  box-shadow: 0 12px 40px -12px rgba(var(--v-theme-on-surface), 0.04) !important;
 }
 
 .vehicle-card {
-  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease !important;
-  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.03) !important;
+  box-shadow: 0 4px 12px -4px rgba(var(--v-theme-on-surface), 0.03) !important;
 }
 
 .vehicle-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.08) !important;
-  border-color: rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 16px 32px -8px rgba(var(--v-theme-on-surface), 0.08) !important;
+  border-color: rgba(var(--v-theme-on-surface), 0.2) !important;
 }
 
-.status-card-available { background-color: #FDFDFD !important; }
-.status-card-dispatched { background-color: #FFFCF9 !important; border-color: rgba(245, 124, 0, 0.3) !important; }
-.status-card-maintenance { background-color: #FFF9F9 !important; border-color: rgba(211, 47, 47, 0.25) !important; }
+/* Status tints were near-white hexes that read as "white card" on a dark
+   theme. Tint the status colour over the surface instead, so the cue survives
+   both themes. */
+.status-card-available { background-color: rgb(var(--v-theme-surface)) !important; }
+.status-card-dispatched { background-color: rgba(var(--v-theme-warning), 0.08) !important; border-color: rgba(var(--v-theme-warning), 0.3) !important; }
+.status-card-maintenance { background-color: rgba(var(--v-theme-error), 0.08) !important; border-color: rgba(var(--v-theme-error), 0.25) !important; }
 
 .status-select :deep(.v-field) {
   box-shadow: none !important;
   transition: background-color 0.2s ease;
 }
-.select-available :deep(.v-field) { background-color: #F0F9F4 !important; }
-.select-dispatched :deep(.v-field) { background-color: #FFF3E0 !important; }
-.select-maintenance :deep(.v-field) { background-color: #FFEBEE !important; }
+.select-available :deep(.v-field) { background-color: rgba(var(--v-theme-primary), 0.10) !important; }
+.select-dispatched :deep(.v-field) { background-color: rgba(var(--v-theme-warning), 0.14) !important; }
+.select-maintenance :deep(.v-field) { background-color: rgba(var(--v-theme-error), 0.14) !important; }
 
 .icon-wrapper {
   width: 44px;
@@ -364,13 +367,13 @@ onMounted(() => fetchVehicles())
 .soft-dialog {
   border-radius: 20px !important;
   box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.2) !important;
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.1) !important;
 }
 .soft-alert {
-  box-shadow: 0 8px 16px -4px rgba(211, 47, 47, 0.1) !important;
+  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-error), 0.1) !important;
 }
 
 .v-skeleton-loader {
-  background: rgba(0, 0, 0, 0.02) !important;
+  background: rgba(var(--v-theme-on-surface), 0.04) !important;
 }
 </style>

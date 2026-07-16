@@ -1,5 +1,5 @@
 <template>
-  <v-container fluid class="align-start pa-6" style="background-color: #F4F7FC !important; min-height: 100vh;">
+  <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
         
@@ -18,10 +18,10 @@
           </v-col>
         </v-row>
 
-        <v-card elevation="3" rounded="lg" class="bg-white w-100">
+        <v-card elevation="3" rounded="lg" class="bg-surface w-100">
           <div class="px-6 py-2 border-b d-flex flex-row align-center justify-space-between gap-4">
             <div>
-              <h2 class="text-h5 font-weight-bold text-grey-darken-4">Equipment Borrowing</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
             </div>
             
             <div class="d-flex gap-4 align-center">
@@ -70,24 +70,24 @@
                   {{ item.resident?.first_name?.charAt(0) || '' }}{{ item.resident?.last_name?.charAt(0) || '' }}
                 </v-avatar>
                 <div>
-                  <div class="font-weight-black text-grey-darken-4 text-h6">
+                  <div class="font-weight-black text-high-emphasis text-h6">
                     {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
                   </div>
-                  <div class="text-subtitle-1 font-weight-medium text-grey-darken-1 mt-1">{{ item.resident?.barangay?.barangay_name || 'N/A' }}</div>
+                  <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-1">{{ item.resident?.barangay?.barangay_name || 'N/A' }}</div>
                 </div>
               </div>
             </template>
 
             <template v-slot:item.equipment="{ item }">
-              <span class="font-weight-bold text-h6 text-grey-darken-3">{{ item.equipment?.item_name || 'Unknown' }}</span>
+              <span class="font-weight-bold text-h6 text-high-emphasis">{{ item.equipment?.item_name || 'Unknown' }}</span>
             </template>
 
             <template v-slot:item.quantity="{ item }">
-              <span class="font-weight-black text-h6 text-grey-darken-4">{{ item.quantity }}x</span>
+              <span class="font-weight-black text-h6 text-high-emphasis">{{ item.quantity }}x</span>
             </template>
 
             <template v-slot:item.created_at="{ item }">
-              <span class="text-subtitle-1 font-weight-bold text-grey-darken-2">
+              <span class="text-subtitle-1 font-weight-bold text-medium-emphasis">
                 {{ new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }}
               </span>
             </template>
@@ -111,9 +111,9 @@
 
     <v-dialog v-model="modal.isOpen" max-width="900" persistent transition="dialog-fade-transition">
       <v-card rounded="lg" elevation="4">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-white">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
-            <span class="text-h6 font-weight-bold text-grey-darken-4">Borrowing Request Details</span>
+            <span class="text-h6 font-weight-bold text-high-emphasis">Borrowing Request Details</span>
             <v-chip 
               :color="getStatusConfig(selectedRecord?.status).color" 
               :class="getStatusConfig(selectedRecord?.status).textClass"
@@ -130,57 +130,57 @@
 
         <v-card-text class="pa-0">
           <v-row class="ma-0 h-100">
-            <v-col cols="12" md="5" class="bg-grey-lighten-5 pa-6 border-e">
+            <v-col cols="12" md="5" class="subtle-surface pa-6 border-e">
               <div class="d-flex flex-column align-center mb-6">
                 <v-avatar color="blue-grey-lighten-4" size="80" class="mb-3">
                   <span class="text-h4 font-weight-black text-blue-grey-darken-3">
                     {{ selectedRecord?.resident?.first_name?.charAt(0) }}{{ selectedRecord?.resident?.last_name?.charAt(0) }}
                   </span>
                 </v-avatar>
-                <div class="text-h6 font-weight-bold text-center text-grey-darken-4">{{ selectedRecord?.resident?.first_name }} {{ selectedRecord?.resident?.last_name }}</div>
-                <div class="text-caption text-grey-darken-1 text-uppercase font-weight-bold mt-1">Resident Profile</div>
+                <div class="text-h6 font-weight-bold text-center text-high-emphasis">{{ selectedRecord?.resident?.first_name }} {{ selectedRecord?.resident?.last_name }}</div>
+                <div class="text-caption text-medium-emphasis text-uppercase font-weight-bold mt-1">Resident Profile</div>
               </div>
               
               <v-divider class="mb-4"></v-divider>
               
               <div class="mb-3">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Phone Number</div>
-                <div class="font-weight-medium text-body-1 text-grey-darken-4">{{ selectedRecord?.resident?.phone_number || 'N/A' }}</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone Number</div>
+                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedRecord?.resident?.phone_number || 'N/A' }}</div>
               </div>
               <div class="mb-3">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Barangay</div>
-                <div class="font-weight-medium text-body-1 text-grey-darken-4">{{ selectedRecord?.resident?.barangay?.barangay_name || 'N/A' }}</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
+                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedRecord?.resident?.barangay?.barangay_name || 'N/A' }}</div>
               </div>
             </v-col>
 
-            <v-col cols="12" md="7" class="pa-6 bg-white">
+            <v-col cols="12" md="7" class="pa-6 bg-surface">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">
                 {{ apiError }}
               </v-alert>
 
-              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-grey-darken-4 text-uppercase">Equipment Requested</h3>
+              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Equipment Requested</h3>
               
-              <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg bg-grey-lighten-5 d-flex justify-space-between align-center">
+              <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
                 <div>
-                  <div class="text-h5 font-weight-black text-grey-darken-4">{{ selectedRecord?.equipment?.item_name }}</div>
-                  <div class="text-subtitle-2 font-weight-medium text-grey-darken-1 mt-1">
-                    Current Stock Available: <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-green-darken-3' : 'text-error'">{{ selectedRecord?.equipment?.available_quantity }}</span>
+                  <div class="text-h5 font-weight-black text-high-emphasis">{{ selectedRecord?.equipment?.item_name }}</div>
+                  <div class="text-subtitle-2 font-weight-medium text-medium-emphasis mt-1">
+                    Current Stock Available: <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-primary' : 'text-error'">{{ selectedRecord?.equipment?.available_quantity }}</span>
                   </div>
                 </div>
-                <div class="text-h3 font-weight-black text-grey-darken-4">{{ selectedRecord?.quantity }}<span class="text-h5 text-grey-darken-1 ml-1">x</span></div>
+                <div class="text-h3 font-weight-black text-high-emphasis">{{ selectedRecord?.quantity }}<span class="text-h5 text-medium-emphasis ml-1">x</span></div>
               </v-card>
 
               <v-row class="mb-4">
                 <v-col cols="6">
-                  <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Requested On</div>
-                  <div class="font-weight-medium text-body-1 text-grey-darken-4">{{ new Date(selectedRecord?.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) }}</div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
+                  <div class="font-weight-medium text-body-1 text-high-emphasis">{{ new Date(selectedRecord?.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) }}</div>
                 </v-col>
                 <v-col cols="6" v-if="selectedRecord?.released_at">
-                  <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Released On</div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Released On</div>
                   <div class="font-weight-medium text-body-1 text-primary">{{ new Date(selectedRecord?.released_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) }}</div>
                 </v-col>
                 <v-col cols="6" v-if="selectedRecord?.returned_at">
-                  <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Returned On</div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Returned On</div>
                   <div class="font-weight-medium text-body-1 text-success">{{ new Date(selectedRecord?.returned_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) }}</div>
                 </v-col>
               </v-row>
@@ -188,7 +188,7 @@
           </v-row>
         </v-card-text>
 
-        <v-card-actions class="pa-6 d-flex justify-end bg-grey-lighten-5 border-t gap-3" v-if="selectedRecord?.status !== 'Returned' && selectedRecord?.status !== 'Denied'">
+        <v-card-actions class="pa-6 d-flex justify-end subtle-surface border-t gap-3" v-if="selectedRecord?.status !== 'Returned' && selectedRecord?.status !== 'Denied'">
           
           <template v-if="selectedRecord?.status === 'Pending'">
             <v-btn color="error" variant="text" class="px-6 text-none font-weight-bold" height="44" @click="updateStatus('Denied')" :loading="loading">
@@ -264,21 +264,21 @@ const metrics = computed(() => [
     title: 'Currently Released', 
     value: releasedCount.value, 
     icon: 'mdi-hand-extended-outline', 
-    bgClass: 'bg-white', 
+    bgClass: 'bg-surface', 
     avatarColor: 'blue-lighten-5', 
     iconColor: 'text-blue-darken-2',
-    titleClass: 'text-grey-darken-1',
-    valueClass: 'text-grey-darken-4'
+    titleClass: 'text-medium-emphasis',
+    valueClass: 'text-high-emphasis'
   },
   { 
     title: 'Returned', 
     value: returnedCount.value, 
     icon: 'mdi-check-circle-outline', 
-    bgClass: 'bg-white', 
+    bgClass: 'bg-surface', 
     avatarColor: 'green-lighten-5', 
     iconColor: 'text-green-darken-2',
-    titleClass: 'text-grey-darken-1',
-    valueClass: 'text-grey-darken-4'
+    titleClass: 'text-medium-emphasis',
+    valueClass: 'text-high-emphasis'
   }
 ])
 
@@ -310,7 +310,7 @@ const getStatusConfig = (status) => {
     case 'Released': return { color: 'cyan-lighten-4', textClass: 'text-cyan-darken-4' }
     case 'Returned': return { color: 'green-lighten-4', textClass: 'text-green-darken-4' }
     case 'Denied': return { color: 'red-lighten-4', textClass: 'text-red-darken-4' }
-    default: return { color: 'grey-lighten-4', textClass: 'text-grey-darken-4' }
+    default: return { color: 'grey-lighten-4', textClass: 'text-high-emphasis' }
   }
 }
 
@@ -405,11 +405,11 @@ onMounted(() => {
   color: #ffffff !important;
   padding: 0 24px !important;
   height: 56px !important;
-  border-bottom: 2px solid #EEEEEE !important;
+  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
   background-color: #0f4c3a !important;
 }
 .elegant-table :deep(td) {
   padding: 8px 24px !important; 
-  border-bottom: 1px solid #F5F5F5 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
 }
 </style>

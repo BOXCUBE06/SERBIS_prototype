@@ -1,13 +1,13 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-6 bg-background">
     <v-row class="ma-0 w-100 align-stretch" style="height: calc(100vh - 96px);">
       
       <v-col cols="8" class="pa-0 h-100">
-        <v-card elevation="3" rounded="lg" class="bg-white w-100 h-100 d-flex flex-column">
+        <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
           
           <div class="px-6 py-2 border-b d-flex flex-row align-center justify-space-between gap-4 flex-shrink-0">
             <div>
-              <h2 class="text-h5 font-weight-bold text-grey-darken-4">User Management</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">User Management</h2>
             </div>
             
             <div class="d-flex gap-4 align-center">
@@ -38,10 +38,10 @@
             </div>
           </div>
 
-          <div class="px-6 py-2 border-b bg-grey-lighten-5 d-flex align-center gap-2 overflow-x-auto flex-shrink-0">
+          <div class="px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0">
             <v-btn
               variant="text"
-              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === 'All' ? 'active-tab text-green-darken-4 font-weight-black' : 'text-grey-darken-1 font-weight-bold']"
+              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === 'All' ? 'active-tab text-green-darken-4 font-weight-black' : 'text-medium-emphasis font-weight-bold']"
               @click="filters.barangay = 'All'"
             >
               All Barangays
@@ -50,7 +50,7 @@
               v-for="b in barangays"
               :key="b.barangay_id"
               variant="text"
-              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === b.barangay_name ? 'active-tab text-green-darken-4 font-weight-black' : 'text-grey-darken-1 font-weight-bold']"
+              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === b.barangay_name ? 'active-tab text-green-darken-4 font-weight-black' : 'text-medium-emphasis font-weight-bold']"
               @click="filters.barangay = b.barangay_name"
             >
               {{ b.barangay_name }}
@@ -81,36 +81,39 @@
             </template>
 
             <template v-slot:item.fullName="{ item }">
-              <div class="font-weight-black text-grey-darken-4 text-body-1 transition-text">
+              <div class="font-weight-black text-high-emphasis text-body-1 transition-text">
                 {{ item.last_name || item.raw?.last_name }}, {{ item.first_name || item.raw?.first_name }} {{ item.middle_name || item.raw?.middle_name || '' }}
               </div>
             </template>
 
             <template v-slot:item.barangay_name="{ item }">
-              <span class="font-weight-bold text-subtitle-1 text-grey-darken-3 transition-text">
+              <span class="font-weight-bold text-subtitle-1 text-high-emphasis transition-text">
                 {{ item.barangay?.barangay_name || item.raw?.barangay?.barangay_name || item.barangay_name || item.raw?.barangay_name || 'N/A' }}
               </span>
             </template>
 
             <template v-slot:item.phone_number="{ item }">
-              <span class="text-body-1 font-weight-medium text-grey-darken-2 transition-text">
+              <span class="text-body-1 font-weight-medium text-medium-emphasis transition-text">
                 {{ item.phone_number || item.raw?.phone_number }}
               </span>
             </template>
 
             <template v-slot:item.email_address="{ item }">
-              <span class="text-body-1 font-weight-medium text-grey-darken-2 transition-text">
+              <span class="text-body-1 font-weight-medium text-medium-emphasis transition-text">
                 {{ item.email_address || item.raw?.email_address }}
               </span>
             </template>
 
             <template v-slot:item.status="{ item }">
-              <v-chip 
-                :color="(item.status || item.raw?.status) === 'Active' ? 'success' : 'grey'" 
-                size="default" 
-                label 
-                variant="flat" 
-                class="text-uppercase font-weight-bold px-4 text-white"
+              <!-- No text-white: success lightens to mint in the dark theme, so
+                   forcing white text drops it to ~2.2:1. Letting Vuetify pick the
+                   on-colour keeps it legible in both. -->
+              <v-chip
+                :color="(item.status || item.raw?.status) === 'Active' ? 'success' : 'grey'"
+                size="default"
+                label
+                variant="flat"
+                class="text-uppercase font-weight-bold px-4"
               >
                 {{ item.status || item.raw?.status }}
               </v-chip>
@@ -121,7 +124,7 @@
 
       <v-col cols="4" class="pa-0 pl-4 h-100">
         <transition name="slide-fade" mode="out-in">
-          <v-card v-if="selectedResident" key="profile" elevation="3" rounded="lg" class="bg-white h-100 d-flex flex-column relative pa-6">
+          <v-card v-if="selectedResident" key="profile" elevation="3" rounded="lg" class="bg-surface h-100 d-flex flex-column relative pa-6">
             <div class="absolute top-2 right-2">
               <v-btn icon="mdi-close" variant="text" size="small" color="grey" @click="selectedResident = null" class="transition-btn"></v-btn>
             </div>
@@ -133,8 +136,8 @@
                   {{ selectedResident.first_name?.charAt(0) }}{{ selectedResident.last_name?.charAt(0) }}
                 </span>
               </v-avatar>
-              <h3 class="text-h5 font-weight-bold text-grey-darken-4">{{ selectedResident.first_name }} {{ selectedResident.last_name }}</h3>
-              <v-chip :color="selectedResident.status === 'Active' ? 'success' : 'grey'" size="small" label variant="flat" class="mt-2 text-uppercase font-weight-bold text-white px-3">
+              <h3 class="text-h5 font-weight-bold text-high-emphasis">{{ selectedResident.first_name }} {{ selectedResident.last_name }}</h3>
+              <v-chip :color="selectedResident.status === 'Active' ? 'success' : 'grey'" size="small" label variant="flat" class="mt-2 text-uppercase font-weight-bold px-3">
                 {{ selectedResident.status }}
               </v-chip>
             </div>
@@ -142,21 +145,21 @@
             <v-divider class="my-6"></v-divider>
 
             <div class="flex-grow-1">
-              <h4 class="text-subtitle-1 font-weight-bold text-grey-darken-1 text-uppercase mb-4">About Resident</h4>
+              <h4 class="text-subtitle-1 font-weight-bold text-medium-emphasis text-uppercase mb-4">About Resident</h4>
               
               <div class="mb-4">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Barangay Location</div>
-                <div class="font-weight-bold text-h6 text-grey-darken-4">{{ selectedResident.barangay?.barangay_name || selectedResident.barangay_name || 'N/A' }}</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay Location</div>
+                <div class="font-weight-bold text-h6 text-high-emphasis">{{ selectedResident.barangay?.barangay_name || selectedResident.barangay_name || 'N/A' }}</div>
               </div>
 
               <div class="mb-4">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Phone Number</div>
-                <div class="font-weight-medium text-body-1 text-grey-darken-4">{{ selectedResident.phone_number }}</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone Number</div>
+                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedResident.phone_number }}</div>
               </div>
 
               <div class="mb-4">
-                <div class="text-caption text-uppercase font-weight-bold text-grey-darken-1">Email Address</div>
-                <div class="font-weight-medium text-body-1 text-grey-darken-4 text-truncate">{{ selectedResident.email_address }}</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Email Address</div>
+                <div class="font-weight-medium text-body-1 text-high-emphasis text-truncate">{{ selectedResident.email_address }}</div>
               </div>
             </div>
 
@@ -167,10 +170,10 @@
             </v-btn>
           </v-card>
 
-          <v-card v-else key="placeholder" elevation="3" rounded="lg" class="bg-white h-100 d-flex flex-column align-center justify-center pa-6 text-center">
+          <v-card v-else key="placeholder" elevation="3" rounded="lg" class="bg-surface h-100 d-flex flex-column align-center justify-center pa-6 text-center">
             <v-icon size="64" color="grey-lighten-2" class="mb-4">mdi-account-search</v-icon>
-            <h3 class="text-h6 font-weight-bold text-grey-darken-2">No User Selected</h3>
-            <p class="text-body-2 text-grey-darken-1 mt-2">Click on a user from the table to view their details.</p>
+            <h3 class="text-h6 font-weight-bold text-medium-emphasis">No User Selected</h3>
+            <p class="text-body-2 text-medium-emphasis mt-2">Click on a user from the table to view their details.</p>
           </v-card>
         </transition>
       </v-col>
@@ -178,8 +181,8 @@
 
     <v-dialog v-model="modal.isOpen" max-width="650" persistent>
       <v-card rounded="lg" elevation="10">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-white">
-          <span class="text-h6 font-weight-bold text-grey-darken-4">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
+          <span class="text-h6 font-weight-bold text-high-emphasis">
             {{ modal.isEditing ? 'Modify User Profile' : 'Add New User Account' }}
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" color="grey" @click="closeModal"></v-btn>
@@ -194,12 +197,12 @@
             <v-row>
               <v-col cols="12" class="d-flex align-center gap-4 mb-2">
                 <v-avatar color="grey-lighten-3" size="70">
-                  <span class="text-h5 text-grey-darken-1 font-weight-bold">
+                  <span class="text-h5 text-medium-emphasis font-weight-bold">
                     {{ formData.first_name?.charAt(0) || 'A' }}{{ formData.last_name?.charAt(0) || 'V' }}
                   </span>
                 </v-avatar>
                 <div>
-                  <div class="text-subtitle-2 font-weight-bold text-grey-darken-3 mb-1">Profile Picture</div>
+                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Profile Picture</div>
                   <v-btn variant="outlined" color="#0f4c3a" size="small" rounded="lg" class="text-none font-weight-bold">Change Photo</v-btn>
                 </div>
               </v-col>
@@ -230,7 +233,7 @@
               </v-col>
 
               <v-col cols="12">
-                <div class="text-subtitle-2 font-weight-bold text-grey-darken-3 mb-2">Account Status</div>
+                <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-2">Account Status</div>
                 <v-radio-group v-model="formData.status" inline hide-details color="#0f4c3a">
                   <v-radio label="Activate" value="Active"></v-radio>
                   <v-radio label="Deactivate" value="Deactivated"></v-radio>
@@ -240,7 +243,7 @@
           </v-form>
         </v-card-text>
 
-        <v-card-actions class="pa-6 pt-0 d-flex justify-start gap-2 bg-white">
+        <v-card-actions class="pa-6 pt-0 d-flex justify-start gap-2 bg-surface">
           <v-btn color="#0f4c3a" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold text-white" height="44" @click="saveUser" :loading="loading">
             Save Changes
           </v-btn>
@@ -436,9 +439,18 @@ onMounted(() => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-bottom: 3px solid transparent;
 }
+/* Deep brand green reads well on the light surface (9.9:1) but vanishes on the
+   dark one, so each theme gets the version that stays legible. The primary
+   token alone is not enough: it is mint in dark (good) but only 4.15:1 on
+   white (below AA). */
 .active-tab {
   border-bottom: 3px solid #0f4c3a !important;
   color: #0f4c3a !important;
+}
+
+.v-theme--dark .active-tab {
+  border-bottom-color: rgb(var(--v-theme-primary)) !important;
+  color: rgb(var(--v-theme-primary)) !important;
 }
 
 .transition-btn {
@@ -458,7 +470,7 @@ onMounted(() => {
 /* Ensure data truncates instead of stretching the column */
 .elegant-table :deep(td) {
   padding: 24px 24px !important;
-  border-bottom: 1px solid #F5F5F5 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -471,7 +483,9 @@ onMounted(() => {
   color: #ffffff !important;
   padding: 0 24px !important;
   height: 56px !important;
-  border-bottom: 2px solid #EEEEEE !important;
+  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
+  /* Fixed brand green, not the primary token: this header carries white text,
+     and primary lightens to mint in the dark theme (white-on-mint ~2.2:1). */
   background-color: #0f4c3a !important;
   white-space: nowrap !important;
 }
