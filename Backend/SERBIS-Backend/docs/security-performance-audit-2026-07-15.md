@@ -8,7 +8,7 @@
 
 **#8 and #28 fixed 2026-07-16** (`c66a978`). #28 is new: `update()` accepted `valid_id` as a free-form string, which #8's streaming route would have turned into admin-to-arbitrary-file-read. It had to ship in the same commit — **the #8 fix sketch in this very document would have introduced it.**
 
-> **Warning — the fixes below are almost entirely uncommitted.** `7b2a5bc` ("Add security/performance audit log") committed *this document only*: one file, 736 insertions, zero code. At HEAD, #2, #4, #5, #9 and #17 are all still live in committed code. Nothing has been pushed. Full working tree snapshotted 2026-07-16 at `wip/safety-snapshot-2026-07-16` (`3a4b2fe`). See "Status at 2026-07-16" at the end for detail.
+> **Committed 2026-07-16 — the fixes had been sitting uncommitted for a day.** `7b2a5bc` ("Add security/performance audit log") committed *this document only*: one file, 736 insertions, **zero code**, while every fix it describes stayed in the working tree. Discovered and resolved 2026-07-16: the whole set now sits in HEAD across nine commits (`c66a978`, `89ac79e`, `9358b9a`, `55839b7`, `b37d89d`, `e249c09`, `46aac35`, `6ef5efe`, `9672db8`). **Nothing has been pushed** — `origin/update-admin-vue` is still behind, so this document has never been public. See "Status at 2026-07-16" at the end.
 
 **Six findings — #17 through #22 — were discovered while fixing and verifying, not during the original read-only pass.** That ratio is the strongest argument in this document for exercising changes rather than reading them.
 
@@ -813,12 +813,29 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 
 **#8 and #28 fixed 2026-07-16 (`c66a978`)** — backend and frontend together. #28 was found while planning #8 and had to ship with it: #8's streaming route would have turned #28's admin-settable path into arbitrary server file read. The audit's own #8 fix sketch would have shipped that hole.
 
-> ### The fixes in this document are almost entirely uncommitted
-> **Discovered 2026-07-16.** Of the five commits made on 2026-07-15, `7b2a5bc` — "Add security/performance audit log" — touched **exactly one file: this document, 736 insertions, zero code**. The other four were the registration removal, `ignoreDeprecations`, and the two seeders.
+> ### The fixes were uncommitted for a day — resolved 2026-07-16
+> **How it happened.** Of the five commits made on 2026-07-15, `7b2a5bc` — "Add security/performance audit log" — touched **exactly one file: this document, 736 insertions, zero code**. The other four were real code but unrelated to these findings: the registration removal, `ignoreDeprecations`, and the two seeders. **Every fix described above was left in the working tree.** For a day, HEAD documented its own vulnerabilities in detail while still containing all of them — `show($id)` with no ownership scope, login routes with no throttle, `Resident` with no `#[Hidden]`, CORS at `*`. The reflog shows no reverts and no resets: they were simply never staged. A plausible reading is that the four that landed were self-contained single-file changes, while the fixes were spread across a tree that also held unrelated theming — but that is speculation about intent, not something git records.
 >
-> **Every other fix listed above exists only in the working tree.** At HEAD, `show($id)` still has no ownership scope (#2), the login routes have no throttle (#17), `Resident` has no `#[Hidden]` (#4), and CORS is still `*` (#9). The reflog shows no reverts and no resets — they were simply never staged. Nothing was ever pushed (`origin/update-admin-vue` is 5 commits behind), so this document has never been published; had it been, it would have been a precise exploitation guide to vulnerabilities still live in the committed code.
+> **Nothing was ever pushed.** `origin/update-admin-vue` remained behind throughout, so this document never reached GitHub. Had it been pushed while the repo was public (it was, until 2026-07-15), it would have been a precise exploitation guide to vulnerabilities live in the committed code.
 >
-> A full working-tree snapshot was taken on 2026-07-16 at branch `wip/safety-snapshot-2026-07-16` (`3a4b2fe`) so this work cannot be lost to a stray checkout. **It still needs committing properly.** Beware: several files mix findings — `ServiceRequestController.php` carries #2 and #8; `routes/api.php` carries #17 and #8 — so per-finding commits are not cleanly possible.
+> **Now committed**, after a full working-tree snapshot was taken at `wip/safety-snapshot-2026-07-16` (`3a4b2fe`) as a recovery point:
+>
+> | Commit | Findings |
+> |---|---|
+> | `c66a978` | #8, #28 — private disk + ownership-checked route; also carries #2's `show()` scoping and #17's `throttle:login`, which could not be split out |
+> | `9358b9a` | #1, #3, #6, #7 — borrowing IDORs, `resident_id` spoof, transaction leak |
+> | `55839b7` | #4 — `Resident` `#[Hidden]` |
+> | `b37d89d` | #5, #17 — `throttleApi('60,1')` + the named `login` limiter |
+> | `e249c09` | #9 — CORS restricted to `ADMIN_FRONTEND_URL` |
+> | `46aac35` | #12 — password policy |
+> | `6ef5efe` | #13 — `status` indexes |
+> | `9672db8` | #16, #20, #21 — SMS targeting, key via `config()`, barangay picker |
+>
+> **Per-finding commits were not fully possible**, because several files mix findings: `ServiceRequestController.php` carries #2 and #8, and `routes/api.php` carries #17 and #8. Both rode along in `c66a978`, which says so in its message.
+>
+> **Still uncommitted and deliberately so:** the admin panel theming, `AnalyticsController.php` (heatmap feature work, not an audit fix — #11 remains open), the `Mobile/` tree, and the untracked `obsidian-vault/`.
+
+**Lesson worth keeping.** Committing the *report* is not committing the *fix*. For a full day this document asserted "14 of 22 fixed and verified live" — true of the working tree, false of the repository — and nothing in the audit process caught the gap, because verification ran against the working tree too. **A fix is not shipped until it is committed; check `git show HEAD:<file>`, not the file on disk.**
 
 **#19 closed 2026-07-15.** Root cause was #27, fixed in `8364705`. The one orphan — resident 10, faker data — was deleted along with its 2 borrowings and the 2 `tbl_system_logs` rows referencing them (backed up first). **Integrity sweep result: 15 declared FKs and 5 polymorphic audit types checked — 0 orphans, 0 dangling refs system-wide.** Barangay distribution (4/3/5/3/6) now sums to 21 = total residents; that gap *was* the orphan.
 
