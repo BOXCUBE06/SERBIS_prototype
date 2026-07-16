@@ -6,6 +6,8 @@ use App\Models\Vehicle;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ServiceRequestController extends Controller
 {
@@ -48,7 +50,14 @@ class ServiceRequestController extends Controller
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
-            $filePath = $request->file('valid_id')->store('ids', 'public');
+            $file = $request->file('valid_id');
+
+            // Private disk: government ID photos must never be reachable by URL.
+            $filePath = $file->storeAs(
+                'valid-ids/'.$request->user()->getKey(),
+                (string) Str::uuid().'.'.$file->extension(),
+                'local'
+            );
         }
 
         $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath) {
@@ -91,16 +100,49 @@ class ServiceRequestController extends Controller
         return response()->json($serviceRequest, 201);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        $user = $request->user();
+
         // Added 'resident.barangay'
-        $serviceRequest = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->find($id);
+        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin']);
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+        }
+
+        $serviceRequest = $query->find($id);
 
         if (!$serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
         return response()->json($serviceRequest);
+    }
+
+    public function validId(Request $request, $id)
+    {
+        $user = $request->user();
+
+        $query = ServiceRequest::query();
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+        }
+
+        $serviceRequest = $query->find($id);
+
+        // 404 rather than 403 for a non-owner, so the response does not disclose
+        // that the request exists.
+        if (!$serviceRequest || !$serviceRequest->valid_id) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if (!Storage::disk('local')->exists($serviceRequest->valid_id)) {
+            return response()->json(['message' => 'Valid ID file not found'], 404);
+        }
+
+        return Storage::disk('local')->response($serviceRequest->valid_id);
     }
 
     public function update(Request $request, $id)
@@ -116,7 +158,9 @@ class ServiceRequestController extends Controller
             'service_id' => 'sometimes|required|integer|exists:tbl_services,service_id',
             'processed_by' => 'nullable|integer|exists:tbl_user,admin_id',
             'description' => 'nullable|string',
-            'valid_id' => 'nullable|string|max:255',
+            // 'valid_id' is deliberately not accepted here. It is a storage path written
+            // only by store(); allowing it to be set would let any admin point it at an
+            // arbitrary file for validId() to stream back.
             'status' => 'sometimes|required|string|max:50',
             'remarks' => 'nullable|string',
         ]);

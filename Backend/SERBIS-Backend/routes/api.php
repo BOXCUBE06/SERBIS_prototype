@@ -15,8 +15,8 @@ use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\AnalyticsController;
 
-Route::post('/admin/login', [AuthController::class, 'adminLogin']);
-Route::post('/resident/login', [AuthController::class, 'residentLogin']);
+Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
+Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middleware('throttle:login');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -26,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('equipments', [EquipmentController::class, 'index']);
     Route::get('services', [ServiceController::class, 'index']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
+    Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
     
     // Mobile endpoint to fetch published materials
@@ -44,7 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/logs/system', [SystemLogController::class, 'index']);
         
-        Route::post('/sms/blast', [SmsController::class, 'sendBlast']);
+        Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:3,60');
         Route::apiResource('vehicles', VehicleController::class);
         Route::apiResource('residents', ResidentController::class);
 
