@@ -833,7 +833,7 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 >
 > **Per-finding commits were not fully possible**, because several files mix findings: `ServiceRequestController.php` carries #2 and #8, and `routes/api.php` carries #17 and #8. Both rode along in `c66a978`, which says so in its message.
 >
-> **Still uncommitted and deliberately so:** the admin panel theming, `AnalyticsController.php` (heatmap feature work, not an audit fix — #11 remains open), the `Mobile/` tree, and the untracked `obsidian-vault/`.
+> **Still uncommitted and deliberately so:** the admin panel theming, `AnalyticsController.php` (heatmap feature work, not an audit fix — #11 remains open), and the `Mobile/` tree.
 
 **Lesson worth keeping.** Committing the *report* is not committing the *fix*. For a full day this document asserted "14 of 22 fixed and verified live" — true of the working tree, false of the repository — and nothing in the audit process caught the gap, because verification ran against the working tree too. **A fix is not shipped until it is committed; check `git show HEAD:<file>`, not the file on disk.**
 
