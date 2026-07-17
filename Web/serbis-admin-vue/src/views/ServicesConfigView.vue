@@ -112,6 +112,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { getToken } from '@/composables/authToken'
 
 const headers = [
   { title: 'Service Name', key: 'service_name' },
@@ -133,7 +134,7 @@ const formData = ref({
 })
 
 const getHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Content-Type': 'application/json',
   'Accept': 'application/json'
 })

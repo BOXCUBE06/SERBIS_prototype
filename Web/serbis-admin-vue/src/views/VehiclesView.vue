@@ -150,6 +150,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { getToken } from '@/composables/authToken'
 
 const vehicles = ref([])
 const loading = ref(false)
@@ -168,7 +169,7 @@ const statusDialog = ref({
 })
 
 const getHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Content-Type': 'application/json',
   'Accept': 'application/json'
 })

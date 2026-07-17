@@ -83,6 +83,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { getToken } from '@/composables/authToken'
 
 const activeTab = ref('system')
 const search = ref('')
@@ -110,7 +111,7 @@ const smsHeaders = [
 
 // Data Fetching
 const getHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Accept': 'application/json'
 })
 

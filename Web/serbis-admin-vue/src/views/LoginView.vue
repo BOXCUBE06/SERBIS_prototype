@@ -1,10 +1,10 @@
 <template>
-  <div class="split-viewport d-flex align-center justify-center overflow-hidden">
-    <v-row class="ma-0 fill-height w-100">
-      
+  <div class="split-viewport d-flex">
+    <v-row class="ma-0 w-100">
+
       <!-- Left Side -->
-      <v-col cols="12" md="5" class="d-flex flex-column align-center justify-center pa-8">
-        <div class="d-flex flex-column align-center text-center" style="margin-top: -80px;">
+      <v-col cols="12" md="5" class="brand-panel d-flex flex-column align-center justify-center pa-8">
+        <div class="d-flex flex-column align-center text-center">
           <img 
             src="@/assets/mdrrmo_logo.jpg" 
             alt="MDRRMO Logo"
@@ -14,7 +14,7 @@
           <!-- This panel is a fixed white gradient in both themes, so its text
                must stay dark. Theme tokens (text-high-emphasis) resolve to white
                in dark mode and make the title vanish against the white half. -->
-          <h1 class="text-h2 font-weight-black text-grey-darken-4 mb-3" style="letter-spacing: 6px; line-height: 1.2; margin-top: -16px;">
+          <h1 class="text-h2 font-weight-black text-grey-darken-4 mb-3" style="letter-spacing: 6px; line-height: 1.2;">
             SERBIS
           </h1>
           <div class="text-body-1 text-grey-darken-1 font-weight-medium" style="max-width: 350px; line-height: 1.8;">
@@ -24,13 +24,15 @@
       </v-col>
 
       <!-- Right Side -->
-      <v-col cols="12" md="7" class="d-flex flex-column align-center justify-center pa-8">
-        <div style="width: 100%; max-width: 420px; margin-top: -50px;">
+      <v-col cols="12" md="7" class="form-panel d-flex flex-column align-center justify-center pa-8">
+        <div style="width: 100%; max-width: 420px;">
           <v-form @submit.prevent="handleLogin" class="w-100">
             
-            <!-- Error Alert -->
+            <!-- Error Alert. role="alert" so a failed login is announced;
+                 without it the only failure signal is visual. -->
             <v-alert
   v-if="errorMessage"
+  role="alert"
   type="error"
   variant="flat"
   rounded="lg"
@@ -45,9 +47,12 @@
   </span>
 </v-alert>
 
-            <div class="text-body-2 text-white mb-2 font-weight-medium">Email</div>
+            <label for="login-email" class="d-block text-body-2 text-white mb-2 font-weight-medium">Email</label>
             <v-text-field
+              id="login-email"
               v-model="credentials.email_address"
+              type="email"
+              inputmode="email"
               placeholder="Example@serbis.com"
               variant="solo"
               bg-color="white"
@@ -55,14 +60,16 @@
               rounded="md"
               hide-details
               elevation="0"
-              autocomplete="off"
+              autofocus
+              autocomplete="username"
               class="mb-5 flat-input"
             ></v-text-field>
 
-            <div class="text-body-2 text-white mb-2 font-weight-medium">Password</div>
+            <label for="login-password" class="d-block text-body-2 text-white mb-2 font-weight-medium">Password</label>
             <v-text-field
+              id="login-password"
               v-model="credentials.password"
-              type="password"
+              :type="showPassword ? 'text' : 'password'"
               placeholder="********"
               variant="solo"
               bg-color="white"
@@ -70,34 +77,49 @@
               rounded="md"
               hide-details
               elevation="0"
-              autocomplete="off"
+              autocomplete="current-password"
               class="mb-4 flat-input"
-            ></v-text-field>
+            >
+              <template #append-inner>
+                <v-btn
+                  :icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+                  :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                  :aria-pressed="showPassword"
+                  variant="text"
+                  density="comfortable"
+                  size="small"
+                  color="grey-darken-1"
+                  @click="showPassword = !showPassword"
+                ></v-btn>
+              </template>
+            </v-text-field>
 
-            <div class="d-flex justify-space-between align-center mb-5">
-              <v-checkbox 
-                v-model="rememberMe" 
-                label="Remember me" 
-                density="compact" 
-                hide-details 
+            <!-- No "Recover password" link: there is no reset route and no
+                 mail transport behind it. Admins are provisioned by hand, so
+                 a forgotten password is a DB operation, not a self-serve flow.
+                 See audit #29. -->
+            <div class="d-flex align-center mb-5">
+              <v-checkbox
+                v-model="rememberMe"
+                label="Keep me signed in for 30 days"
+                density="compact"
+                hide-details
                 class="custom-checkbox"
               ></v-checkbox>
-              <a href="#" class="text-body-2 text-green-lighten-3 text-decoration-none hover-underline">
-                Recover password
-              </a>
             </div>
 
-            <v-btn 
-              type="submit" 
-              color="#66BB6A" 
-              block 
-              height="52" 
-              rounded="md" 
-              elevation="0" 
-              class="text-none font-weight-bold text-white text-body-1"
+            <v-btn
+              type="submit"
+              color="primary"
+              block
+              height="52"
+              rounded="md"
+              elevation="0"
+              class="text-none font-weight-bold text-body-1"
               :loading="loading"
+              :disabled="lockoutSeconds > 0"
             >
-              SIGN IN
+              {{ lockoutSeconds > 0 ? `LOCKED — ${lockoutSeconds}s` : 'SIGN IN' }}
             </v-btn>
 
           </v-form>
@@ -109,17 +131,48 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { setToken } from '@/composables/authToken'
 
 const router = useRouter()
 const loading = ref(false)
 const rememberMe = ref(false)
+const showPassword = ref(false)
 const errorMessage = ref('')
+const lockoutSeconds = ref(0)
+let lockoutTimer = null
+
+// The login route is throttled at 5/min per email+IP (AppServiceProvider).
+// Count the lockout down rather than leaving a dead button.
+const startLockout = (seconds) => {
+  clearInterval(lockoutTimer)
+  lockoutSeconds.value = seconds
+  lockoutTimer = setInterval(() => {
+    lockoutSeconds.value--
+    if (lockoutSeconds.value <= 0) {
+      clearInterval(lockoutTimer)
+      errorMessage.value = ''
+    }
+  }, 1000)
+}
+
+onUnmounted(() => clearInterval(lockoutTimer))
 
 const credentials = reactive({
   email_address: '',
   password: ''
+})
+
+// The throttle bucket is keyed per email, so a lockout on one address says
+// nothing about another. Editing the email releases the button — a typo'd
+// address must not lock the account the user actually meant.
+watch(() => credentials.email_address, () => {
+  if (lockoutSeconds.value > 0) {
+    clearInterval(lockoutTimer)
+    lockoutSeconds.value = 0
+    errorMessage.value = ''
+  }
 })
 
 const handleLogin = async () => {
@@ -139,10 +192,15 @@ const handleLogin = async () => {
     const data = await response.json()
 
     if (response.ok) {
-      localStorage.setItem('serbis_token', data.token)
+      setToken(data.token, rememberMe.value)
       router.push('/')
     } else if (response.status === 401) {
       errorMessage.value = 'Invalid email or password. Please try again.'
+    } else if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After'), 10)
+      const wait = Number.isNaN(retryAfter) ? 60 : retryAfter
+      startLockout(wait)
+      errorMessage.value = `Too many sign-in attempts. Wait ${wait} seconds, then try again.`
     } else if (response.status === 422) {
       // Laravel validation errors
       const errors = data.errors
@@ -163,15 +221,37 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
+/* min-height, not height: the form must be able to push the page taller and
+   scroll. This was `height: 100vh` on an `overflow-hidden` container, which
+   clipped SIGN IN out of reach below ~665px tall — 259px off-screen in
+   landscape, with no way to scroll to it. 100dvh so mobile browser chrome
+   does not eat the bottom of the form. */
 .split-viewport {
-  height: 100vh;
-  width: 100vw;
+  min-height: 100dvh;
+  width: 100%;
   background: linear-gradient(105deg, #ffffff 42%, #113F36 42%);
 }
 
+@supports not (height: 100dvh) {
+  .split-viewport { min-height: 100vh; }
+}
+
 @media (max-width: 959px) {
+  /* Stacked, the columns break where the content ends, but a single background
+     seam sits at a fixed 40% and cannot track that. The brand subtitle used to
+     spill past it onto the green at 2.55:1 — dark grey on dark green. Give each
+     panel its own background so text always sits on the half it was coloured
+     for, and let the container's green fill any slack below the form. */
   .split-viewport {
-    background: linear-gradient(180deg, #ffffff 40%, #113F36 40%);
+    background: #113F36;
+  }
+
+  .brand-panel {
+    background: #ffffff;
+  }
+
+  .form-panel {
+    background: #113F36;
   }
 }
 
@@ -180,17 +260,10 @@ const handleLogin = async () => {
   border-radius: 6px;
 }
 
-/* Hide the browser autofill key icon */
-.flat-input :deep(.v-field__append-inner),
-.flat-input :deep(input::-webkit-credentials-auto-fill-button),
-.flat-input :deep(input::-webkit-contacts-auto-fill-button) {
-  display: none !important;
-  visibility: hidden !important;
-}
-
-.flat-input :deep(.v-icon) {
-  display: none !important;
-}
+/* The password-manager autofill buttons are deliberately left visible — admins
+   should be able to use a manager here. These fields previously hid them, and
+   hid every .v-icon with them, which also silently swallowed the show/hide
+   password toggle. */
 
 .custom-checkbox :deep(.v-label) {
   color: white !important;

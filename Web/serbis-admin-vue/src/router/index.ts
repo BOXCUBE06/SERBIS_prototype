@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getToken } from '../composables/authToken'
 
 const routes = [
   { path: '/login', component: () => import('../views/LoginView.vue') },
@@ -20,7 +21,9 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('serbis_token')
+  // getToken() returns null on an expired token and clears it, so an expired
+  // session is bounced to /login on the next navigation.
+  const token = getToken()
   const isAuthRoute = to.path === '/login'
 
   if (!token && !isAuthRoute) return next('/login')

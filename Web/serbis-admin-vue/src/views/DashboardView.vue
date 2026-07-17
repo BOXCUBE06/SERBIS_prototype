@@ -234,6 +234,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { getToken } from '@/composables/authToken'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
   BarElement, LineElement, PointElement, Filler
@@ -293,7 +294,7 @@ const fetchDashboardData = async () => {
   try {
     const response = await fetch('http://localhost:8000/api/admin/dashboard', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Accept': 'application/json'
       }
     })
@@ -364,8 +365,8 @@ const heroSparklineData = computed(() => {
     labels: source.labels,
     datasets: [{
       data: source.data,
-      borderColor: '#2E8B75',
-      backgroundColor: 'rgba(46, 139, 117, 0.15)',
+      borderColor: '#297A67',
+      backgroundColor: 'rgba(41, 122, 103, 0.15)',
       fill: true,
       borderWidth: 2,
       tension: 0.4
@@ -420,7 +421,7 @@ const volumeChartData = computed(() => {
     labels: paired.map(p => p.label),
     datasets: [{
       label: 'Requests',
-      backgroundColor: '#2E8B75',
+      backgroundColor: '#297A67',
       borderRadius: 4,
       barThickness: 14,
       data: paired.map(p => p.value)
@@ -447,7 +448,7 @@ const barChartData = computed(() => {
     labels: source.labels,
     datasets: [{
       label: 'Requests',
-      backgroundColor: '#2E8B75',
+      backgroundColor: '#297A67',
       borderRadius: 4,
       data: source.data
     }]

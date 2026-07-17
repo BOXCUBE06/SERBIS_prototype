@@ -240,6 +240,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { getToken } from '@/composables/authToken'
 
 const requests = ref([])
 const vehicles = ref([])
@@ -332,7 +333,7 @@ const getStatusColor = (status) => {
 }
 
 const getHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Content-Type': 'application/json',
   'Accept': 'application/json'
 })

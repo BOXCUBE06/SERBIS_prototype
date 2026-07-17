@@ -27,7 +27,9 @@ return [
 
     'allowed_headers' => ['Content-Type', 'Authorization', 'X-Requested-With'],
 
-    'exposed_headers' => [],
+    // Retry-After is not a CORS-safelisted response header, so without this the
+    // admin panel cannot read it and has to guess at the throttle window.
+    'exposed_headers' => ['Retry-After'],
 
     'max_age' => 0,
 

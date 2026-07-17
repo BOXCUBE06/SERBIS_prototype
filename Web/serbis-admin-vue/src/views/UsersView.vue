@@ -262,6 +262,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { getToken } from '@/composables/authToken'
 
 const headers = [
   { title: '', key: 'photo', sortable: false, align: 'center', width: '80px' },
@@ -316,7 +317,7 @@ const filteredAndSortedResidents = computed(() => {
 })
 
 const getHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Content-Type': 'application/json',
   'Accept': 'application/json'
 })
