@@ -19,11 +19,14 @@ export default createVuetify({
       light: {
         dark: false,
         colors: {
-          primary: '#2E8B75',
+          // #297A67 rather than the lighter #2E8B75: white-on-primary needs
+          // 4.5:1 for AA and #2E8B75 only reaches 4.15:1. Keep success in step
+          // with primary — they are meant to read as the same green.
+          primary: '#297A67',
           secondary: '#0A2620',
           background: '#F8FAFC',
           surface: '#FFFFFF',
-          success: '#2E8B75',
+          success: '#297A67',
           warning: '#F57C00',
           error: '#D32F2F',
           info: '#1976D2',
