@@ -2,9 +2,11 @@
 
 **Date:** 2026-07-15
 **Scope:** `Backend/SERBIS-Backend` — all controllers, models, routes, middleware, migrations, and config touched by the API.
-**Status:** **20 of 28 findings fixed and verified live** (updated 2026-07-16): #1–#9, #11, #12, #13, #16, #17, #20, #21, #28, plus the #14/#18/#22 registration cluster. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, a path-traversal `PUT`, and a real browser with `fetch` stubbed.
+**Status:** **20 of 30 findings fixed and verified live** (updated 2026-07-17): #1–#9, #11, #12, #13, #16, #17, #20, #21, #28, plus the #14/#18/#22 registration cluster. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, a path-traversal `PUT`, and a real browser with `fetch` stubbed.
 
-**Open:** #10, #15, #23 — all Medium/Low. **No Critical or High findings remain open.** (#11 closed 2026-07-16 in `c737927`.)
+**Open:** #10, #15, #23, #29 — Medium/Low — **and #30, High.** (#11 closed 2026-07-16 in `c737927`.)
+
+**2026-07-17: a High is open again.** #30 — Sanctum tokens never expire, so a leaked admin or resident token is a permanent credential. Found while wiring the login page's "Remember me", which can only ever be browser hygiene while the server has no notion of a session ending. #29 (no admin creation route; admins exist only by direct DB insert) is the operational half of the same gap. Neither is fixed: #30 needs a decision about mobile re-auth, and `Mobile/` is a groupmate's area.
 
 **#8 and #28 fixed 2026-07-16** (`c66a978`). #28 is new: `update()` accepted `valid_id` as a free-form string, which #8's streaming route would have turned into admin-to-arbitrary-file-read. It had to ship in the same commit — **the #8 fix sketch in this very document would have introduced it.**
 
@@ -616,6 +618,60 @@ That yields `APP_KEY`, `DB_PASSWORD`, and `SKYSMS_API_KEY` — an admin-to-arbit
 
 ---
 
+## HIGH (discovered 2026-07-17 while polishing the login page)
+
+### 30. Sanctum tokens never expire — a leaked token is valid forever
+**Files:** `config/sanctum.php:53`, `app/Http/Controllers/AuthController.php:29` (admin), `:52` (resident)
+
+```php
+// config/sanctum.php
+'expiration' => null,          // no global TTL
+
+// AuthController.php
+$admin->createToken('admin-token')->plainTextToken;      // no expiresAt argument
+$resident->createToken('resident-token')->plainTextToken;
+```
+
+**Both layers are off.** Sanctum expires a personal access token if *either* `expiration` is set globally or `createToken()` is passed an `expiresAt`. Neither is. There is also no `sanctum:prune-expired` on the schedule — nothing to prune, because nothing expires. **This covers resident tokens as well as admin**, so it reaches the mobile app, not just the panel.
+
+**Why it matters:** a token issued once is a permanent credential. Logout revokes the current token server-side, but any copy captured before that — from `localStorage` via XSS, a shared machine, a synced browser profile, a proxy log — stays valid indefinitely. There is no expiry to outlive it and no rotation to invalidate it. The panel reads government ID scans (#8), so the blast radius of one leaked admin token is the whole resident record set.
+
+**This is the real issue behind #29 and behind "Remember me".** The login page now stores a client-side expiry (30 days ticked / 8 hours unticked, `composables/authToken.ts`), and the router guard drops the token once it passes. That is **browser hygiene, not security** — it shortens how long *this browser* volunteers the token on a shared desk. It does nothing to a token that has already left the browser, because the API will still accept it. Do not read the 8-hour default as a session limit; the server has no such concept.
+
+**Fix:** set `'expiration' => 60 * 8` (minutes) in `config/sanctum.php` for a real server-side TTL, and schedule `sanctum:prune-expired` to clear the rows. Expect a decision first: an 8-hour server TTL means residents on mobile get signed out every 8 hours unless a refresh flow exists, and there isn't one. A longer resident TTL with a short admin TTL needs per-token `expiresAt` at `createToken()` rather than the global setting.
+
+**Not fixed.** Needs the mobile side considered — `Mobile/` is a groupmate's area.
+
+**Effort:** 10 min for the config + schedule; the resident/mobile re-auth question is the actual work.
+
+---
+
+## MEDIUM (discovered 2026-07-17 while polishing the login page)
+
+### 29. No admin creation route — admins exist only by direct DB insert
+**Files:** `routes/api.php` (absence), `database/seeders/AdminSeeder.php:18`
+
+There is **no endpoint that creates an admin**. `routes/api.php` has `/admin/login` and a set of `is.admin` reads/writes, but nothing that inserts into `tbl_user` with an admin role. The only thing that ever creates one is `AdminSeeder`, which correctly refuses to run outside local/testing (#26's fix):
+
+```php
+if (! app()->environment(['local', 'testing'])) {
+    $this->command?->warn('AdminSeeder skipped: refuses to seed a default admin outside local/testing...');
+    return;
+}
+```
+
+**Consequence:** on a real deployment there is no supported way to create the *first* admin, or any subsequent one. Onboarding an MDRRMO staff member means a hand-written `INSERT` with a `Hash::make()`'d password. A forgotten password is the same operation — there is no reset route and `MAIL_MAILER=log` with `MAIL_USERNAME=null`, so no mail transport exists to send one through even if there were.
+
+**This is why the login page has no "Recover password" link.** It was a dead `href="#"` and was removed 2026-07-17 rather than wired: a self-serve email reset is not proportionate for accounts that are provisioned by hand, and would require standing up SMTP for a handful of users. The link promised a flow that has no backend and no plausible near-term one.
+
+**Future work — admin-manages-admin from the Users view.** The proportionate fix is an authenticated `is.admin` route to create another admin and reset a peer's password, surfaced in `UsersView.vue`. No mail server needed. Note the ordering problem this does not solve: it presumes an admin already exists, so first-admin provisioning stays a deploy step (an artisan command guarded to run once, or a documented seeder invocation) rather than a UI flow.
+
+**Not a vulnerability** — nothing is exposed. It is a deployment and operations gap that surfaces the first time someone who is not the developer needs an account.
+
+**Effort:** 1-2 hr for the admin-manages-admin routes + UI; separate from the first-admin provisioning decision.
+
+---
+
 ## MEDIUM
 
 ### 10. No pagination anywhere — every list endpoint returns the full table
@@ -801,13 +857,15 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 | 26 | High | `AdminSeeder` hardcodes `admin@serbis.com` / `password123` and `DatabaseSeeder` calls it **unconditionally — no environment guard**. `db:seed` or `migrate --seed` against production plants a known-credential admin on a DB holding government-ID scans. **Fixed 2026-07-15** (`f4a29c5`): guarded on `app()->environment(['local','testing'])` **and** skips when the admin already exists. Note the old blind `insert()` never overwrote a password — `email_address` is unique, so a re-seed aborted the whole run on a duplicate key. | AdminSeeder.php:21, DatabaseSeeder.php:12 | done |
 | 27 | High | **`ResidentSeeder` was the root cause of #19, and carried #26's credential problem.** Three defects in 20 lines: (a) hardcoded `Hash::make('password')` for all 20 residents; (b) unguarded — `DatabaseSeeder` called it in any environment; (c) **`Schema::disableForeignKeyConstraints()` wrapped around `'barangay_id' => rand(1, 6)`, while `BarangaySeeder` creates only ids 1–5** — `barangay_id` is the *only* FK on `tbl_residents`, so that call existed solely to suppress this check. ~97% of seed runs orphaned at least one resident (`1-(5/6)^20`). **Fixed 2026-07-15** (`8364705`): draws from real barangay ids, FK disabling removed, env-guarded, distinct `Str::password(16)` each. Verified on a scratch DB — 5 fresh runs, 100 residents, 0 orphans; old logic replayed on the same schema gave 3 orphans (proving the check can fail); 0/20 crack to common guesses vs 20/20 before. | ResidentSeeder.php:17,21,26 | done |
 | 28 | High | **`update()` accepted `valid_id` as a free-form string** — inert while it only fed a public URL, but #8's streaming route turns it into a path-traversal primitive: `PUT {"valid_id":"../../../../.env"}` then `GET .../valid-id` returns `APP_KEY` + `DB_PASSWORD`. Admin-to-arbitrary-file-read. **Separate vulnerability, not part of #8's scope** — invisible to the read-only audit because it is only exploitable *in combination with #8's fix*; found while planning #8. **Fixed 2026-07-16** (`c66a978`): rule dropped; only `store()` writes that column. Verified: traversal PUT ignored, path unchanged, route still streams the real JPEG. | ServiceRequestController.php:127 | done |
+| 29 | Medium | **No admin creation route anywhere.** `AdminSeeder` refuses to run outside local/testing (correctly, per #26), and no endpoint creates an admin — so on a real deployment the first and every subsequent admin is a hand-written `INSERT`. A forgotten password is the same manual operation: no reset route exists, and `MAIL_MAILER=log` / `MAIL_USERNAME=null` means no mail transport to send one through. This is why the dead `Recover password` link was **removed** 2026-07-17 rather than wired — email reset is not proportionate for hand-provisioned accounts. Future work: admin-manages-admin from `UsersView.vue` (no mail needed); first-admin provisioning stays a deploy step. Not a vulnerability — an operations gap. | routes/api.php (absence), AdminSeeder.php:18 | 1-2 hr |
+| 30 | High | **Sanctum tokens never expire — a leaked token is valid forever.** `'expiration' => null` *and* `createToken()` passes no `expiresAt`, so neither expiry layer is active; no `sanctum:prune-expired` scheduled. Covers **resident tokens too**, so it reaches the mobile app. Logout revokes the current token, but any copy taken beforehand (XSS on `localStorage`, shared machine, synced profile) stays valid indefinitely against a system holding government ID scans (#8). The login page's new 30-day/8-hour "Remember me" expiry is **browser hygiene, not security** — it shortens how long this browser offers the token; the API still accepts a token that left it. Fix: `'expiration' => 60 * 8` + prune schedule — **gated on deciding mobile re-auth**, since residents have no refresh flow and `Mobile/` is a groupmate's area. | config/sanctum.php:53, AuthController.php:29,52 | 10 min + mobile decision |
 
 ### Status at 2026-07-16
 
 **Fixed and verified live (19):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #12, #13, #16*, #17, #20, #21, #28, plus #14/#18/#22 — the registration cluster, resolved by **deleting** the flow (product decision: registration is mobile-only). `/api/register` → 404, both logins still 200/401, `npm run build` → exit 0. #24 and #25 were found and fixed while verifying #22.
 \* #16 is code-complete and verified with faked HTTP, but **unverified against the live vendor — no sandbox exists.** Needs a manual burner-number test; #21 means the UI can now drive it.
 
-**Open (3):** #10, #15, #23. (#11 fixed in `c737927`; #26 in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **No Critical or High findings remain open.**
+**Open (5):** #10, #15, #23, #29 (Medium/Low) and **#30 (High)**. (#11 fixed in `c737927`; #26 in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **#29 and #30 were added 2026-07-17** — see "Status at 2026-07-17" below. The claim that no High findings remained open held only until the login page was looked at properly.
 
 **#8 and #28 fixed 2026-07-16 (`c66a978`)** — backend and frontend together. #28 was found while planning #8 and had to ship with it: #8's streaming route would have turned #28's admin-settable path into arbitrary server file read. The audit's own #8 fix sketch would have shipped that hole.
 
@@ -846,3 +904,19 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 **Cluster worth noting:** #14 (dead `role` validation), #18 (`/api/register` 500s), and #22 (0-byte `RegisterView.vue`) are all the same unfinished registration feature, seen from three angles. They should be decided together — most likely by removing the flow if admins are seeded and residents register via the mobile app.
 
 No mass-assignment holes were found (every model has `$fillable`/`#[Fillable]`, no `request()->all()` anywhere), no raw SQL interpolation (`DB::raw`/`whereRaw`), and no hardcoded secrets — the SkySMS key correctly comes from `env()`.
+
+---
+
+### Status at 2026-07-17
+
+**Two findings added, both from polishing the login page: #29 (Medium, no admin creation route) and #30 (High, Sanctum tokens never expire).** Neither is fixed. #30 reopens the High column.
+
+**The login page had never been audited.** It is unauthenticated, and the browser-based passes only ever scanned authenticated routes — the same blind spot that let a white-on-white login title ship in dark mode. Reading it properly turned up, beyond #29/#30: white text on `#66BB6A` at **2.37:1** (a third green, matching no token), `<div>` elements standing in for `<label>`, `autocomplete="off"` on both fields plus CSS hiding the browser's own password-manager buttons, and **no 429 branch at all** — the throttle added in `b37d89d` (#5/#17) reported itself to the user as "Something went wrong. Please try again later." A throttle nobody can distinguish from a server error is a throttle that trains users to keep clicking.
+
+**Fixed 2026-07-17 (frontend + one config line, uncommitted at time of writing):** the 429 branch with a `Retry-After` countdown; primary darkened `#2E8B75` → `#297A67` app-wide (4.15:1 → **5.15:1** white-on-primary, verified in a live browser in both themes — the palette decision this document's theming notes had previously deferred); real `<label for>`; `autocomplete="username"` / `current-password`; a keyboard-reachable show/hide toggle; `role="alert"` on the error; `Recover password` removed (#29); `Remember me` wired to a client-side expiry (30 days / 8 hours, `composables/authToken.ts`) — which is where #30 came from.
+
+**`Retry-After` was unreadable and would have failed silently.** It is not a CORS-safelisted response header and `config/cors.php` had `'exposed_headers' => []`, so `response.headers.get('Retry-After')` returned `null` and the countdown fell back to a hardcoded 60s. It would have *looked* correct — a plausible number, ticking down, never matching the server. Added `'exposed_headers' => ['Retry-After']`; verified live it now reads the real value (57, then 48) rather than the fallback.
+
+**A fix introduced a bug that only driving it could catch.** The lockout initially disabled the submit button form-wide, but the limiter is keyed **per email** (`by('email:'.$email.'|'.$request->ip())`). Locking out one address therefore blocked a *different* account — a typo'd email would lock the account the user actually meant. Caught when a Playwright click timed out against a button that had no business being disabled; a watcher on the email field now releases it. `npm run build` would have passed either way.
+
+**Lesson, consistent with #17–#22 and #28:** every one of these was invisible to a green build, and two of them (`Retry-After` returning `null`, the per-email lockout) would have presented as working software. The audit's own scanning tools missed the entire page because it sits before the login wall. **Scope the check to what users actually touch, including the parts that come before authentication.**
