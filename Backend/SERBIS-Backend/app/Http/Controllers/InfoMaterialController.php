@@ -28,13 +28,16 @@ class InfoMaterialController extends Controller
         ]);
 
         $file = $request->file('file');
-        
-        $path = $file->store('public/info_materials');
+
+        // Store on the 'public' disk (storage/app/public) so the /storage symlink
+        // can serve it. The default 'local' disk roots at storage/app/private in
+        // Laravel 11+, which is not web-accessible.
+        $path = $file->store('info_materials', 'public');
 
         $material = InfoMaterial::create([
             'uploader_id' => $request->user()->admin_id,
             'title' => $request->title,
-            'file_path' => str_replace('public/', 'storage/', $path),
+            'file_path' => 'storage/' . $path,
             'file_type' => $file->getClientOriginalExtension(),
             'file_size' => $file->getSize(),
         ]);
@@ -50,9 +53,8 @@ class InfoMaterialController extends Controller
         return response()->json(['message' => 'File not found'], 404);
     }
 
-    // Delete the actual file from storage
-    $storagePath = str_replace('storage/', 'public/', $material->file_path);
-    Storage::delete($storagePath);
+    // Delete the actual file from the public disk (file_path is "storage/<path>")
+    Storage::disk('public')->delete(str_replace('storage/', '', $material->file_path));
 
     // Delete the DB record
     $material->delete();
