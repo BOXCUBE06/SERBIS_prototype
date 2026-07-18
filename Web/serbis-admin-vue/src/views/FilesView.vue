@@ -30,6 +30,19 @@
                 </v-slide-group-item>
               </v-slide-group>
 
+              <v-select
+                v-model="dateFilter"
+                :items="dateFilters"
+                item-title="label"
+                item-value="value"
+                prepend-inner-icon="mdi-calendar-range"
+                variant="outlined"
+                density="compact"
+                hide-details
+                rounded="lg"
+                class="date-field"
+              ></v-select>
+
               <v-text-field
                 v-model="search"
                 prepend-inner-icon="mdi-magnify"
@@ -247,6 +260,32 @@ const typeFilters = [
   { label: 'Archives', value: 'archive' },
 ]
 
+const dateFilter = ref('all')
+const dateFilters = [
+  { label: 'Any time', value: 'all' },
+  { label: 'Today', value: 'today' },
+  { label: 'This week', value: 'week' },
+  { label: 'This month', value: 'month' },
+]
+
+// Earliest created_at that passes the current date filter (null = no limit).
+const dateThreshold = () => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  if (dateFilter.value === 'today') return d
+  if (dateFilter.value === 'week') {
+    // Start of the current week (Monday).
+    const day = (d.getDay() + 6) % 7
+    d.setDate(d.getDate() - day)
+    return d
+  }
+  if (dateFilter.value === 'month') {
+    d.setDate(1)
+    return d
+  }
+  return null
+}
+
 const snackbar = ref({ show: false, text: '', color: 'success' })
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 
@@ -263,10 +302,12 @@ const category = (ext) => {
 
 const visibleFiles = computed(() => {
   const q = search.value.trim().toLowerCase()
+  const since = dateThreshold()
   return files.value.filter((f) => {
     const matchesType = typeFilter.value === 'all' || category(f.file_type) === typeFilter.value
     const matchesSearch = !q || (f.title || '').toLowerCase().includes(q)
-    return matchesType && matchesSearch
+    const matchesDate = !since || new Date(f.created_at) >= since
+    return matchesType && matchesSearch && matchesDate
   })
 })
 
@@ -415,6 +456,7 @@ onMounted(fetchFiles)
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
 .search-field { max-width: 240px; }
+.date-field { max-width: 170px; }
 .type-filter { max-width: 100%; }
 
 /* Dropzone */
