@@ -2,149 +2,222 @@
   <v-container fluid class="fill-height align-start px-6 px-md-10 pt-4 pb-10 page-background">
     <v-row>
       <v-col cols="12">
-        <div class="d-flex justify-space-between align-center mb-6">
-          <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Fleet Management</h2>
-          
-          <v-btn 
-            color="primary" 
-            variant="flat" 
-            rounded="xl" 
-            class="px-6 text-none font-weight-bold btn-soft-shadow"
-            height="48"
-          >
+
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
+          <div>
+            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Fleet Management</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">Live readiness across every emergency unit</div>
+          </div>
+          <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Unit
           </v-btn>
         </div>
 
-        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 soft-alert" density="compact" rounded="xl">
-          {{ apiError }}
-        </v-alert>
+        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
+        <!-- Readiness overview -->
+        <v-card v-if="!loading && vehicles.length" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
+          <div class="d-flex flex-wrap align-center justify-space-between gap-6">
+            <div class="readiness-headline">
+              <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Fleet Readiness</div>
+              <div class="d-flex align-end gap-2">
+                <span class="readiness-number text-high-emphasis">{{ counts.Available }}</span>
+                <span class="text-h6 text-medium-emphasis mb-1">/ {{ vehicles.length }} ready</span>
+              </div>
+              <div class="composition-bar mt-3">
+                <span class="seg seg-available" :style="{ width: pct('Available') }" :title="`Available ${counts.Available}`"></span>
+                <span class="seg seg-dispatched" :style="{ width: pct('Dispatched') }" :title="`Dispatched ${counts.Dispatched}`"></span>
+                <span class="seg seg-maintenance" :style="{ width: pct('Maintenance') }" :title="`Maintenance ${counts.Maintenance}`"></span>
+              </div>
+            </div>
+
+            <div class="d-flex gap-3 flex-wrap">
+              <button
+                v-for="s in STATUSES"
+                :key="s"
+                type="button"
+                class="stat-tile"
+                :class="[{ 'stat-tile--active': statusFilter === s }, `tile-${s.toLowerCase()}`]"
+                @click="statusFilter = statusFilter === s ? 'All' : s"
+              >
+                <span class="dot" :class="`dot-${s.toLowerCase()}`" :data-live="s === 'Available'"></span>
+                <span class="stat-value text-high-emphasis">{{ counts[s] }}</span>
+                <span class="stat-label text-medium-emphasis">{{ statusMeta[s].label }}</span>
+              </button>
+            </div>
+          </div>
+        </v-card>
+
+        <!-- Controls -->
+        <div v-if="!loading && vehicles.length" class="d-flex flex-wrap align-center gap-3 mb-6">
+          <v-text-field
+            v-model="search"
+            prepend-inner-icon="mdi-magnify"
+            placeholder="Search unit or spec..."
+            variant="outlined" density="compact" hide-details rounded="lg"
+            class="control-field"
+          ></v-text-field>
+          <v-select
+            v-model="typeFilter"
+            :items="typeOptions"
+            prepend-inner-icon="mdi-shape-outline"
+            variant="outlined" density="compact" hide-details rounded="lg"
+            class="control-field-sm"
+          ></v-select>
+          <v-chip
+            v-if="statusFilter !== 'All'"
+            closable
+            :color="statusMeta[statusFilter]?.color"
+            variant="flat"
+            class="font-weight-bold"
+            @click:close="statusFilter = 'All'"
+          >{{ statusFilter }}</v-chip>
+        </div>
+
+        <!-- Loading -->
         <template v-if="loading">
           <v-card elevation="0" rounded="xl" class="mb-8 pa-8 group-card">
             <v-skeleton-loader type="heading" width="200" class="mb-6 bg-transparent"></v-skeleton-loader>
             <v-row>
               <v-col v-for="n in 4" :key="n" cols="12" sm="6" md="4" lg="3">
-                <v-skeleton-loader 
-                  type="list-item-avatar, text, text" 
-                  elevation="0" 
-                  class="rounded-xl border vehicle-card"
-                ></v-skeleton-loader>
+                <v-skeleton-loader type="list-item-avatar, text, text" class="rounded-xl border"></v-skeleton-loader>
               </v-col>
             </v-row>
           </v-card>
         </template>
 
+        <!-- Empty -->
+        <div v-else-if="!filteredVehicles.length" class="empty-state group-card">
+          <v-icon size="48" class="text-medium-emphasis mb-3">mdi-truck-remove-outline</v-icon>
+          <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
+            {{ vehicles.length ? 'No units match your filters' : 'No units in the fleet yet' }}
+          </div>
+          <div class="text-body-2 text-medium-emphasis">
+            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first emergency unit to get started.' }}
+          </div>
+        </div>
+
+        <!-- Grouped fleet -->
         <template v-else>
-          <v-card 
-            v-for="(units, type) in groupedVehicles" 
-            :key="type" 
-            elevation="0" 
-            rounded="xl" 
-            class="mb-8 pa-8 group-card"
-          >
-            <div class="d-flex align-center mb-6">
-              <h3 class="text-h4 font-weight-black text-high-emphasis mr-5 text-capitalize tracking-tight">{{ type }}s</h3>
-              <v-chip
-                color="primary"
-                variant="tonal"
-                size="large"
-                class="font-weight-bold px-4 text-body-1"
-                rounded="lg"
-              >
-                {{ units.length }} Unit{{ units.length !== 1 ? 's' : '' }}
+          <v-card v-for="(units, type) in groupedVehicles" :key="type" elevation="0" rounded="xl" class="mb-8 pa-6 pa-md-8 group-card">
+            <div class="d-flex align-center flex-wrap gap-3 mb-6">
+              <div class="type-badge"><v-icon size="22" color="primary">{{ getVehicleIcon(type) }}</v-icon></div>
+              <h3 class="text-h5 font-weight-black text-high-emphasis text-capitalize tracking-tight">{{ type }}s</h3>
+              <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold" rounded="lg">
+                {{ units.length }} unit{{ units.length !== 1 ? 's' : '' }}
               </v-chip>
+              <span class="text-caption text-medium-emphasis">{{ availableIn(units) }} ready</span>
             </div>
 
             <v-row>
-              <v-col v-for="vehicle in units" :key="vehicle.id || vehicle.vehicle_id" cols="12" sm="6" md="4" lg="3">
-                <v-card 
-                  elevation="0" 
-                  rounded="xl" 
-                  :class="['vehicle-card', getCardTint(vehicle.status)]"
-                >
+              <v-col v-for="vehicle in units" :key="vehicle.vehicle_id || vehicle.id" cols="12" sm="6" md="4" lg="3">
+                <v-card elevation="0" rounded="xl" class="vehicle-card" :class="`accent-${vehicle.status.toLowerCase()}`">
                   <v-card-text class="pa-5">
-                    <div class="d-flex justify-space-between align-start mb-3">
-                      <div>
-                        <div class="text-h6 font-weight-bold text-high-emphasis">{{ vehicle.unit_identifier }}</div>
-                        <div class="text-body-2 text-medium-emphasis font-weight-medium mt-1">{{ vehicle.specification || 'Standard Unit' }}</div>
+                    <div class="d-flex justify-space-between align-start mb-4">
+                      <div class="d-flex align-center gap-3 min-w-0">
+                        <div class="icon-wrapper" :class="`iconbg-${vehicle.status.toLowerCase()}`">
+                          <v-icon :color="statusMeta[vehicle.status].color" size="24">{{ getVehicleIcon(type) }}</v-icon>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-h6 font-weight-bold text-high-emphasis text-truncate">{{ vehicle.unit_identifier }}</div>
+                          <div class="text-body-2 text-medium-emphasis font-weight-medium text-truncate">{{ vehicle.specification || 'Standard Unit' }}</div>
+                        </div>
                       </div>
-                      <div :class="['icon-wrapper', getIconBgColor(vehicle.status)]">
-                        <v-icon :color="getIconColor(vehicle.status)" size="24">
-                          {{ getVehicleIcon(type) }}
-                        </v-icon>
-                      </div>
+
+                      <v-menu location="bottom end">
+                        <template v-slot:activator="{ props }">
+                          <v-btn icon="mdi-dots-vertical" variant="text" size="small" v-bind="props" :aria-label="`Actions for ${vehicle.unit_identifier}`"></v-btn>
+                        </template>
+                        <v-list density="compact" rounded="lg">
+                          <v-list-item prepend-icon="mdi-pencil-outline" title="Edit" @click="openEdit(vehicle)"></v-list-item>
+                          <v-list-item prepend-icon="mdi-delete-outline" title="Delete" class="text-error" @click="askDelete(vehicle)"></v-list-item>
+                        </v-list>
+                      </v-menu>
                     </div>
 
-                    <div class="mt-5">
-                      <div class="text-overline font-weight-bold text-medium-emphasis mb-2 tracking-widest">Status</div>
-                      <v-select
-                        v-model="vehicle.status"
-                        :items="statusOptions"
-                        variant="flat"
-                        density="comfortable"
-                        hide-details
-                        rounded="lg"
-                        class="status-select"
-                        :class="getSelectClass(vehicle.status)"
-                        @update:model-value="promptStatusChange(vehicle, $event)"
-                      >
-                        <template v-slot:selection="{ item }">
-                          <span class="font-weight-bold text-uppercase" :class="`text-${getIconColor(item.value)}`">
-                            {{ item.title }}
-                          </span>
-                        </template>
-                      </v-select>
-                    </div>
+                    <v-menu location="bottom">
+                      <template v-slot:activator="{ props }">
+                        <button type="button" class="status-pill" :class="`pill-${vehicle.status.toLowerCase()}`" v-bind="props">
+                          <span class="dot" :class="`dot-${vehicle.status.toLowerCase()}`" :data-live="vehicle.status === 'Available'"></span>
+                          <span class="font-weight-bold text-uppercase">{{ vehicle.status }}</span>
+                          <v-icon size="16" class="ml-auto">mdi-chevron-down</v-icon>
+                        </button>
+                      </template>
+                      <v-list density="compact" rounded="lg">
+                        <v-list-item
+                          v-for="s in STATUSES" :key="s"
+                          :disabled="s === vehicle.status"
+                          @click="promptStatusChange(vehicle, s)"
+                        >
+                          <template v-slot:prepend><span class="dot mr-3" :class="`dot-${s.toLowerCase()}`"></span></template>
+                          <v-list-item-title>{{ s }}</v-list-item-title>
+                        </v-list-item>
+                      </v-list>
+                    </v-menu>
                   </v-card-text>
                 </v-card>
               </v-col>
             </v-row>
           </v-card>
         </template>
-        
+
       </v-col>
     </v-row>
 
-    <v-dialog v-model="statusDialog.show" max-width="420" persistent>
-      <v-card class="soft-dialog pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis d-flex align-center">
-          <div class="icon-wrapper bg-warning-lighten-5 mr-4">
-            <v-icon color="warning" size="24">mdi-alert-outline</v-icon>
-          </div>
-          Update Status
-        </v-card-title>
-        
+    <!-- Status confirm -->
+    <v-dialog v-model="statusDialog.show" max-width="420">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Update status</v-card-title>
         <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
-          Are you sure you want to change the status of 
-          <span class="font-weight-bold text-high-emphasis">{{ statusDialog.vehicle?.unit_identifier }}</span> to 
-          <span class="font-weight-bold text-uppercase" :class="`text-${getIconColor(statusDialog.newStatus)}`">{{ statusDialog.newStatus }}</span>?
+          Change <span class="font-weight-bold text-high-emphasis">{{ statusDialog.vehicle?.unit_identifier }}</span> to
+          <span class="font-weight-bold text-uppercase" :class="`text-${statusMeta[statusDialog.newStatus]?.color}`">{{ statusDialog.newStatus }}</span>?
         </v-card-text>
-        
-        <v-card-actions class="pa-6 pt-2 d-flex justify-end gap-3">
-          <v-btn 
-            color="grey-darken-2" 
-            variant="text" 
-            rounded="lg" 
-            class="px-5 text-none font-weight-medium" 
-            @click="cancelStatusChange" 
-            :disabled="statusDialog.loading"
-          >
-            Cancel
-          </v-btn>
-          <v-btn 
-            color="primary" 
-            variant="flat" 
-            rounded="lg" 
-            class="px-6 text-none font-weight-bold btn-soft-shadow" 
-            @click="executeStatusChange" 
-            :loading="statusDialog.loading"
-          >
-            Confirm
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="statusDialog.loading" @click="executeStatusChange">Confirm</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Add / Edit -->
+    <v-dialog v-model="formDialog.show" max-width="480" persistent>
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
+          <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit unit' : 'Add unit' }}</span>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="formDialog.show = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="px-6 py-2">
+          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ formDialog.error }}</v-alert>
+          <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+          <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
+          <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+          <v-select v-model="form.status" :items="STATUSES" label="Status *" variant="outlined" density="comfortable" rounded="lg"></v-select>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="saveVehicle">
+            {{ formDialog.editing ? 'Save' : 'Add unit' }}
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Delete confirm -->
+    <v-dialog v-model="deleteDialog.show" max-width="420">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Delete unit?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          <strong class="text-high-emphasis">{{ deleteDialog.vehicle?.unit_identifier }}</strong> will be permanently removed from the fleet. This cannot be undone.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
+          <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="deleteDialog.loading" @click="confirmDelete">Delete</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3500" location="bottom right" rounded="lg">{{ snackbar.text }}</v-snackbar>
   </v-container>
 </template>
 
@@ -152,48 +225,85 @@
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 
+const API = 'http://localhost:8000/api/vehicles'
+const STATUSES = ['Available', 'Dispatched', 'Maintenance']
+const VEHICLE_TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat']
+
+// Available = primary green (success tracks primary), Dispatched = warning, Maintenance = error.
+const statusMeta = {
+  Available: { color: 'primary', label: 'Available' },
+  Dispatched: { color: 'warning', label: 'Dispatched' },
+  Maintenance: { color: 'error', label: 'Maintenance' },
+}
+
 const vehicles = ref([])
 const loading = ref(false)
 const apiError = ref('')
-const statusOptions = [
-  { title: 'Available', value: 'Available' },
-  { title: 'Dispatched', value: 'Dispatched' },
-  { title: 'Maintenance', value: 'Maintenance' }
-]
+const search = ref('')
+const typeFilter = ref('All')
+const statusFilter = ref('All')
 
-const statusDialog = ref({
-  show: false,
-  vehicle: null,
-  newStatus: '',
-  loading: false
-})
+const statusDialog = ref({ show: false, vehicle: null, newStatus: '', loading: false })
+const formDialog = ref({ show: false, editing: false, loading: false, error: '' })
+const deleteDialog = ref({ show: false, vehicle: null, loading: false })
+const form = ref({ unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' })
+const snackbar = ref({ show: false, text: '', color: 'success' })
 
-const getHeaders = () => ({
-  'Authorization': `Bearer ${getToken()}`,
-  'Content-Type': 'application/json',
-  'Accept': 'application/json'
-})
+const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
+const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
 const formatStatus = (status) => {
-  if (!status) return 'Available'
-  const s = status.toLowerCase()
+  const s = (status || '').toLowerCase()
   if (s === 'dispatched') return 'Dispatched'
   if (s === 'maintenance') return 'Maintenance'
   return 'Available'
 }
 
+const counts = computed(() => {
+  const c = { Available: 0, Dispatched: 0, Maintenance: 0 }
+  for (const v of vehicles.value) c[v.status] = (c[v.status] || 0) + 1
+  return c
+})
+const pct = (s) => vehicles.value.length ? `${(counts.value[s] / vehicles.value.length) * 100}%` : '0%'
+
+const typeOptions = computed(() => ['All', ...VEHICLE_TYPES.filter((t) => vehicles.value.some((v) => v.type === t))])
+
+const filteredVehicles = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return vehicles.value.filter((v) => {
+    const matchesType = typeFilter.value === 'All' || v.type === typeFilter.value
+    const matchesStatus = statusFilter.value === 'All' || v.status === statusFilter.value
+    const matchesSearch = !q ||
+      (v.unit_identifier || '').toLowerCase().includes(q) ||
+      (v.specification || '').toLowerCase().includes(q)
+    return matchesType && matchesStatus && matchesSearch
+  })
+})
+
+const groupedVehicles = computed(() =>
+  filteredVehicles.value.reduce((acc, v) => {
+    const type = v.type || 'Other'
+    ;(acc[type] ||= []).push(v)
+    return acc
+  }, {})
+)
+
+const availableIn = (units) => units.filter((u) => u.status === 'Available').length
+
+const getVehicleIcon = (type) => ({
+  ambulance: 'mdi-ambulance',
+  'fire truck': 'mdi-fire-truck',
+  'rescue vehicle': 'mdi-car-emergency',
+  boat: 'mdi-ferry',
+}[type?.toLowerCase()] || 'mdi-car')
+
 const fetchVehicles = async () => {
   loading.value = true
   try {
-    const res = await fetch('http://localhost:8000/api/vehicles', { headers: getHeaders() })
+    const res = await fetch(API, { headers: getHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || 'Failed to fetch fleet data')
-    
-    vehicles.value = (Array.isArray(data) ? data : (data.data || [])).map(v => ({
-      ...v,
-      status: formatStatus(v.status),
-      originalStatus: formatStatus(v.status) 
-    }))
+    vehicles.value = (Array.isArray(data) ? data : (data.data || [])).map((v) => ({ ...v, status: formatStatus(v.status) }))
   } catch (error) {
     apiError.value = error.message
     vehicles.value = []
@@ -202,179 +312,224 @@ const fetchVehicles = async () => {
   }
 }
 
+// --- Status change (commits only after confirm; no optimistic mutation) ---
 const promptStatusChange = (vehicle, newStatus) => {
-  statusDialog.value = {
-    show: true,
-    vehicle: vehicle,
-    newStatus: newStatus,
-    loading: false
-  }
-}
-
-const cancelStatusChange = () => {
-  if (statusDialog.value.vehicle) {
-    statusDialog.value.vehicle.status = statusDialog.value.vehicle.originalStatus
-  }
-  statusDialog.value.show = false
+  if (newStatus === vehicle.status) return
+  statusDialog.value = { show: true, vehicle, newStatus, loading: false }
 }
 
 const executeStatusChange = async () => {
-  const vehicle = statusDialog.value.vehicle
+  const { vehicle, newStatus } = statusDialog.value
   statusDialog.value.loading = true
   apiError.value = ''
-  
-  const id = vehicle.id || vehicle.vehicle_id
-
+  const id = vehicle.vehicle_id || vehicle.id
   try {
-    const res = await fetch(`http://localhost:8000/api/vehicles/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({ status: vehicle.status })
-    })
-
+    const res = await fetch(`${API}/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: newStatus }) })
     if (!res.ok) throw new Error('Failed to update status')
-    
-    vehicle.originalStatus = vehicle.status
+    vehicle.status = newStatus
     statusDialog.value.show = false
+    notify(`${vehicle.unit_identifier} set to ${newStatus}`)
   } catch (error) {
     apiError.value = `Error updating ${vehicle.unit_identifier}: ${error.message}`
-    vehicle.status = vehicle.originalStatus
-    statusDialog.value.show = false
+    notify(error.message, 'error')
   } finally {
     statusDialog.value.loading = false
   }
 }
 
-const groupedVehicles = computed(() => {
-  return vehicles.value.reduce((acc, vehicle) => {
-    const type = vehicle.type || 'Other'
-    if (!acc[type]) acc[type] = []
-    acc[type].push(vehicle)
-    return acc
-  }, {})
-})
+// --- Add / Edit ---
+const openAdd = () => {
+  form.value = { unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' }
+  formDialog.value = { show: true, editing: false, loading: false, error: '' }
+}
+const openEdit = (vehicle) => {
+  form.value = {
+    vehicle_id: vehicle.vehicle_id || vehicle.id,
+    unit_identifier: vehicle.unit_identifier,
+    type: vehicle.type,
+    specification: vehicle.specification || '',
+    status: vehicle.status,
+  }
+  formDialog.value = { show: true, editing: true, loading: false, error: '' }
+}
 
-const getCardTint = (status) => {
-  switch(status?.toLowerCase()) {
-    case 'dispatched': return 'status-card-dispatched'
-    case 'maintenance': return 'status-card-maintenance'
-    default: return 'status-card-available'
+const saveVehicle = async () => {
+  if (!form.value.unit_identifier.trim() || !form.value.type || !form.value.status) {
+    formDialog.value.error = 'Unit identifier, type and status are required.'
+    return
+  }
+  formDialog.value.loading = true
+  formDialog.value.error = ''
+  const editing = formDialog.value.editing
+  const url = editing ? `${API}/${form.value.vehicle_id}` : API
+  const payload = {
+    unit_identifier: form.value.unit_identifier.trim(),
+    type: form.value.type,
+    specification: form.value.specification?.trim() || null,
+    status: form.value.status,
+  }
+  try {
+    const res = await fetch(url, { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
+      throw new Error(msg)
+    }
+    await fetchVehicles()
+    formDialog.value.show = false
+    notify(editing ? 'Unit updated' : 'Unit added')
+  } catch (error) {
+    formDialog.value.error = error.message
+  } finally {
+    formDialog.value.loading = false
   }
 }
 
-const getSelectClass = (status) => {
-  switch(status?.toLowerCase()) {
-    case 'dispatched': return 'select-dispatched'
-    case 'maintenance': return 'select-maintenance'
-    default: return 'select-available'
+// --- Delete ---
+const askDelete = (vehicle) => { deleteDialog.value = { show: true, vehicle, loading: false } }
+const confirmDelete = async () => {
+  const vehicle = deleteDialog.value.vehicle
+  deleteDialog.value.loading = true
+  const id = vehicle.vehicle_id || vehicle.id
+  try {
+    const res = await fetch(`${API}/${id}`, { method: 'DELETE', headers: getHeaders() })
+    if (!res.ok) throw new Error('Delete failed')
+    await fetchVehicles()
+    deleteDialog.value.show = false
+    notify('Unit deleted')
+  } catch (error) {
+    notify(error.message, 'error')
+  } finally {
+    deleteDialog.value.loading = false
   }
 }
 
-const getIconBgColor = (status) => {
-  switch(status?.toLowerCase()) {
-    case 'dispatched': return 'bg-orange-lighten-5'
-    case 'maintenance': return 'bg-red-lighten-5'
-    default: return 'bg-green-lighten-5'
-  }
-}
-
-const getIconColor = (status) => {
-  switch(status?.toLowerCase()) {
-    case 'dispatched': return 'orange-darken-3'
-    case 'maintenance': return 'red-darken-3'
-    default: return 'primary'
-  }
-}
-
-const getVehicleIcon = (type) => {
-  switch(type?.toLowerCase()) {
-    case 'ambulance': return 'mdi-ambulance'
-    case 'fire truck': return 'mdi-fire-truck'
-    case 'rescue vehicle': return 'mdi-car-emergency'
-    case 'boat': return 'mdi-ferry'
-    default: return 'mdi-car'
-  }
-}
-
-onMounted(() => fetchVehicles())
+onMounted(fetchVehicles)
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-
-* {
-  font-family: 'Inter', sans-serif;
-}
-
-.page-background {
-  background-color: rgb(var(--v-theme-background)) !important;
-}
-
+.page-background { background-color: rgb(var(--v-theme-background)) !important; }
 .tracking-tight { letter-spacing: -0.02em; }
-.tracking-widest { letter-spacing: 0.1em; }
+.tracking-widest { letter-spacing: 0.12em; }
+.gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.gap-6 { gap: 24px; }
+.min-w-0 { min-width: 0; }
+.control-field { width: 260px; max-width: 100%; }
+.control-field-sm { width: 180px; max-width: 100%; }
 
-.btn-soft-shadow {
-  box-shadow: 0 8px 16px -4px rgba(46, 125, 50, 0.25) !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.btn-soft-shadow:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 20px -4px rgba(46, 125, 50, 0.3) !important;
-}
+.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
-  box-shadow: 0 12px 40px -12px rgba(var(--v-theme-on-surface), 0.04) !important;
+  box-shadow: 0 12px 40px -12px rgba(var(--v-theme-on-surface), 0.05) !important;
 }
 
+/* Readiness overview */
+.readiness-number { font-size: 3rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+.composition-bar {
+  display: flex;
+  height: 10px;
+  width: 260px;
+  max-width: 60vw;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.composition-bar .seg { height: 100%; transition: width 0.4s ease; }
+.seg-available { background: rgb(var(--v-theme-primary)); }
+.seg-dispatched { background: rgb(var(--v-theme-warning)); }
+.seg-maintenance { background: rgb(var(--v-theme-error)); }
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 104px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  background: rgba(var(--v-theme-on-surface), 0.02);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+  text-align: left;
+}
+.stat-tile:hover { transform: translateY(-2px); }
+.stat-tile--active.tile-available { border-color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), 0.08); }
+.stat-tile--active.tile-dispatched { border-color: rgb(var(--v-theme-warning)); background: rgba(var(--v-theme-warning), 0.1); }
+.stat-tile--active.tile-maintenance { border-color: rgb(var(--v-theme-error)); background: rgba(var(--v-theme-error), 0.1); }
+.stat-value { font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
+.stat-label { font-size: 0.75rem; font-weight: 600; }
+
+/* Status dots */
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.dot-available { background: rgb(var(--v-theme-primary)); }
+.dot-dispatched { background: rgb(var(--v-theme-warning)); }
+.dot-maintenance { background: rgb(var(--v-theme-error)); }
+.dot[data-live="true"] { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0.5); animation: livePulse 2s infinite; }
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(var(--v-theme-primary), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0); }
+}
+
+/* Type badge in group headers */
+.type-badge {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(var(--v-theme-primary), 0.12);
+}
+
+/* Vehicle cards */
 .vehicle-card {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease !important;
-  box-shadow: 0 4px 12px -4px rgba(var(--v-theme-on-surface), 0.03) !important;
+  border-left-width: 4px !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease !important;
 }
-
 .vehicle-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px -8px rgba(var(--v-theme-on-surface), 0.08) !important;
-  border-color: rgba(var(--v-theme-on-surface), 0.2) !important;
+  box-shadow: 0 16px 32px -8px rgba(var(--v-theme-on-surface), 0.1) !important;
 }
+.accent-available { border-left-color: rgb(var(--v-theme-primary)) !important; }
+.accent-dispatched { border-left-color: rgb(var(--v-theme-warning)) !important; background-color: rgba(var(--v-theme-warning), 0.04) !important; }
+.accent-maintenance { border-left-color: rgb(var(--v-theme-error)) !important; background-color: rgba(var(--v-theme-error), 0.04) !important; }
 
-/* Status tints were near-white hexes that read as "white card" on a dark
-   theme. Tint the status colour over the surface instead, so the cue survives
-   both themes. */
-.status-card-available { background-color: rgb(var(--v-theme-surface)) !important; }
-.status-card-dispatched { background-color: rgba(var(--v-theme-warning), 0.08) !important; border-color: rgba(var(--v-theme-warning), 0.3) !important; }
-.status-card-maintenance { background-color: rgba(var(--v-theme-error), 0.08) !important; border-color: rgba(var(--v-theme-error), 0.25) !important; }
+.icon-wrapper { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
+.iconbg-available { background: rgba(var(--v-theme-primary), 0.12); }
+.iconbg-dispatched { background: rgba(var(--v-theme-warning), 0.14); }
+.iconbg-maintenance { background: rgba(var(--v-theme-error), 0.14); }
 
-.status-select :deep(.v-field) {
-  box-shadow: none !important;
-  transition: background-color 0.2s ease;
-}
-.select-available :deep(.v-field) { background-color: rgba(var(--v-theme-primary), 0.10) !important; }
-.select-dispatched :deep(.v-field) { background-color: rgba(var(--v-theme-warning), 0.14) !important; }
-.select-maintenance :deep(.v-field) { background-color: rgba(var(--v-theme-error), 0.14) !important; }
-
-.icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+/* Status pill (opens the change menu) */
+.status-pill {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  border: none;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.status-pill:hover { filter: brightness(0.97); }
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
+.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
+.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 64px 16px; border-radius: 16px;
 }
 
-.soft-dialog {
-  border-radius: 20px !important;
-  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.2) !important;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1) !important;
-}
-.soft-alert {
-  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-error), 0.1) !important;
-}
-
-.v-skeleton-loader {
-  background: rgba(var(--v-theme-on-surface), 0.04) !important;
+@media (prefers-reduced-motion: reduce) {
+  .vehicle-card, .stat-tile, .composition-bar .seg { transition: none; }
+  .vehicle-card:hover, .stat-tile:hover { transform: none; }
+  .dot[data-live="true"] { animation: none; }
 }
 </style>
