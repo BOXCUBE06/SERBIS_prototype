@@ -1,17 +1,21 @@
+
+library serbis.main;
+
 import 'package:flutter/material.dart';
-import 'models/models.dart';
+import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
-import 'state/app_state.dart';
-import 'state/user_store.dart';
+import 'state/api_service.dart';
+import 'state/request_store.dart';
+import 'state/account_store.dart';
 import 'theme/app_theme.dart';
-import 'widgets/common.dart';
-import 'widgets/sos_sheet.dart';
+import 'widgets/shared_widgets.dart';
+import 'widgets/sos_button.dart';
 
 void main() {
   runApp(const SerbisApp());
@@ -31,14 +35,6 @@ class SerbisApp extends StatelessWidget {
   }
 }
 
-/// Top-level switcher between the auth flow (Login / Register) and the
-/// main app shell.
-///
-/// Accounts are real (created via Register and persisted on-device through
-/// [UserStore] — see `lib/state/user_store.dart`), but there is still no
-/// remote backend. After registering, residents are sent back to Login to
-/// verify their new credentials work, rather than being signed in
-/// automatically.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -49,9 +45,10 @@ class AuthGate extends StatefulWidget {
 enum _AuthView { login, register }
 
 class _AuthGateState extends State<AuthGate> {
-  final UserStore _userStore = UserStore();
-  bool _ready = false;
+  final ApiService _api = ApiService();
+  late final UserStore _userStore = UserStore(_api);
 
+  bool _ready = false;
   AppUser? _currentUser;
   _AuthView _view = _AuthView.login;
   String? _loginInfoMessage;
@@ -59,12 +56,34 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _userStore.load().then((_) {
-      if (mounted) setState(() => _ready = true);
+    _api.loadToken().then((_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _ready = true;
+        if (_api.isLoggedIn) {
+          _currentUser = const AppUser(
+            id: '',
+            firstName: '',
+            lastName: '',
+            email: '',
+            address: '',
+          );
+        } else {
+          _currentUser = null;
+        }
+      });
     });
   }
 
-  void _login(AppUser user) => setState(() => _currentUser = user);
+  void _login(AppUser user) {
+    setState(() {
+      _currentUser = user;
+      _ready = true;
+    });
+  }
 
   void _afterRegister() {
     setState(() {
@@ -73,62 +92,75 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
-  void _logout() => setState(() {
-        _currentUser = null;
-        _view = _AuthView.login;
-        _loginInfoMessage = null;
-      });
+  void _logout() {
+    _userStore.logout();
+    setState(() {
+      _currentUser = null;
+      _view = _AuthView.login;
+      _loginInfoMessage = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
       return const Scaffold(
         backgroundColor: AppColors.paper,
-        body: Center(child: CircularProgressIndicator(color: AppColors.green700)),
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.green700),
+        ),
       );
     }
 
-    final user = _currentUser;
-    if (user != null) {
+    if (_currentUser != null) {
       return RootShell(
+        api: _api,
         onLogout: _logout,
-        initialName: user.name.isEmpty ? null : user.name,
-        initialPhone: user.phone.isEmpty ? null : user.phone,
-        initialAddress: user.address.isEmpty ? null : user.address,
+        initialName: _currentUser!.fullName.isEmpty ? null : _currentUser!.fullName,
+        initialEmail: _currentUser!.email.isEmpty ? null : _currentUser!.email,
+        initialAddress: _currentUser!.address.isEmpty ? null : _currentUser!.address,
       );
     }
 
-    return _view == _AuthView.login
-        ? LoginScreen(
-            userStore: _userStore,
-            onLoginSuccess: _login,
-            onGoToRegister: () => setState(() {
-              _view = _AuthView.register;
-              _loginInfoMessage = null;
-            }),
-            infoMessage: _loginInfoMessage,
-          )
-        : RegisterScreen(
-            userStore: _userStore,
-            onRegisterSuccess: _afterRegister,
-            onGoToLogin: () => setState(() => _view = _AuthView.login),
-          );
+    if (_view == _AuthView.login) {
+      return LoginScreen(
+        userStore: _userStore,
+        onLoginSuccess: _login,
+        onGoToRegister: () {
+          setState(() {
+            _view = _AuthView.register;
+            _loginInfoMessage = null;
+          });
+        },
+        infoMessage: _loginInfoMessage,
+      );
+    }
+
+    return RegisterScreen(
+      userStore: _userStore,
+      onRegisterSuccess: _afterRegister,
+      onGoToLogin: () {
+        setState(() {
+          _view = _AuthView.login;
+        });
+      },
+    );
   }
 }
 
-/// Holds the bottom navigation, the persistent SOS button, and switches
-/// between the five main screens.
 class RootShell extends StatefulWidget {
+  final ApiService api;
   final VoidCallback onLogout;
   final String? initialName;
-  final String? initialPhone;
+  final String? initialEmail;
   final String? initialAddress;
 
   const RootShell({
     super.key,
+    required this.api,
     required this.onLogout,
     this.initialName,
-    this.initialPhone,
+    this.initialEmail,
     this.initialAddress,
   });
 
@@ -139,14 +171,13 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _index = 0;
   ServiceType _serviceType = ServiceType.ambulance;
-  final AppState _appState = AppState();
+  late final AppState _appState = AppState(widget.api);
 
   @override
   void initState() {
     super.initState();
-    // Rebuild whenever a request is added or cancelled so Home/Track/etc.
-    // reflect the latest data.
     _appState.addListener(_onAppStateChanged);
+    _appState.loadRequests();
   }
 
   @override
@@ -208,7 +239,7 @@ class _RootShellState extends State<RootShell> {
         onOpenNotifications: onOpenNotifications,
         onOpenProfile: onOpenProfile,
         initialName: widget.initialName,
-        initialPhone: widget.initialPhone,
+        initialEmail: widget.initialEmail,
         initialAddress: widget.initialAddress,
       ),
     ];

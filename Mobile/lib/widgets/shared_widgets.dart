@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/models.dart';
+import '../models/request_models.dart';
 import '../theme/app_theme.dart';
 
-/// Compact branded header bar shown at the top of every screen
-/// (Home, Services, Track, Library, Profile).
 class AppHeader extends StatelessWidget {
   final VoidCallback? onNotificationsTap;
   final VoidCallback? onProfileTap;
@@ -129,7 +127,7 @@ class AppHeader extends StatelessWidget {
   }
 }
 
-/// Section title with an optional trailing text action ("View all" etc).
+
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;
@@ -159,8 +157,6 @@ class SectionHeader extends StatelessWidget {
     );
   }
 }
-
-/// Generic white rounded card with the app's soft shadow & border.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -203,7 +199,6 @@ class AppCard extends StatelessWidget {
   }
 }
 
-/// Small rounded icon container, used for request/announcement/category icons.
 class IconBadge extends StatelessWidget {
   final IconData icon;
   final Color bg;
@@ -234,7 +229,6 @@ class IconBadge extends StatelessWidget {
   }
 }
 
-/// Pill-shaped status badge (Under review / Scheduled / Completed / Cancelled).
 class StatusBadge extends StatelessWidget {
   final ReqStatus status;
   final bool filipino;
@@ -253,8 +247,6 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-/// "Saved" / "Download" pill used in the offline library.
-/// Tapping "Download" simulates saving the item for offline use.
 class OfflinePill extends StatefulWidget {
   final bool saved;
   final String? label;
@@ -317,7 +309,6 @@ class _OfflinePillState extends State<OfflinePill> {
   }
 }
 
-/// Primary / outline / ghost buttons that match the mockup styling.
 class AppButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -408,8 +399,6 @@ class AppButton extends StatelessWidget {
 }
 
 enum AppButtonStyle { primary, outline, ghostRed }
-
-/// Labeled text field with validation, used on the Login/Register screens.
 class AuthTextField extends StatefulWidget {
   final String label;
   final String hint;
@@ -507,9 +496,6 @@ class _AuthTextFieldState extends State<AuthTextField> {
   }
 }
 
-/// Shows a confirmation dialog before cancelling a request. If confirmed,
-/// calls [onConfirmed] (which should update the underlying request status)
-/// and then shows a snackbar. Used by the Cancel buttons on Home and Track.
 void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirmed, {bool filipino = false}) {
   showDialog(
     context: context,
@@ -555,7 +541,6 @@ void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirm
   );
 }
 
-/// Small helper for consistent snackbar feedback across the app.
 void showAppSnackBar(BuildContext context, String message) {
   ScaffoldMessenger.of(context).clearSnackBars();
   ScaffoldMessenger.of(context).showSnackBar(
@@ -570,8 +555,6 @@ void showAppSnackBar(BuildContext context, String message) {
   );
 }
 
-/// Bottom sheet listing recent announcements / notifications.
-/// Opened from the bell icon on Home.
 class NotificationsSheet extends StatelessWidget {
   final bool filipino;
   const NotificationsSheet({super.key, this.filipino = false});

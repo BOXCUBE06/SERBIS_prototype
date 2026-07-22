@@ -1,10 +1,24 @@
+
+library serbis.screens.services;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/models.dart';
-import '../state/app_state.dart';
-import '../state/strings.dart';
+import 'package:file_picker/file_picker.dart' as fp;
+import '../models/request_models.dart';
+import '../state/request_store.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart';
+import '../widgets/shared_widgets.dart';
+
+
+const Map<ServiceType, int> _serviceIdMap = {
+  ServiceType.ambulance: 1,
+  ServiceType.transfer: 2,
+  ServiceType.road: 3,
+  ServiceType.relief: 4,
+  ServiceType.inquiry: 5,
+  ServiceType.items: 6,
+};
 
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
@@ -29,13 +43,12 @@ class ServicesScreen extends StatefulWidget {
 class _ServicesScreenState extends State<ServicesScreen> {
   late ServiceType _selected;
 
-  // All text fields across every service type, keyed by a unique field id.
-  // Using one map (rather than per-type state) keeps user input around if
-  // they switch between request types and come back.
   final Map<String, TextEditingController> _controllers = {};
-
-  // Dropdown selections, keyed the same way as _controllers.
   final Map<String, String> _dropdowns = {};
+
+  final Set<String> _selectedItems = {};
+
+  fp.PlatformFile? _validIdFile;
 
   @override
   void initState() {
@@ -75,7 +88,25 @@ class _ServicesScreenState extends State<ServicesScreen> {
     return 'Today, $hour12:$minute $period';
   }
 
-  void _submit() {
+  Future<void> _pickValidId() async {
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      withData: true, // ensures .bytes is populated (needed on web)
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() => _validIdFile = result.files.first);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_validIdFile == null || _validIdFile!.bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
+      );
+      return;
+    }
+
     final refNo = widget.appState.nextRefNo();
     final timeLabel = _nowLabel();
 
@@ -132,9 +163,21 @@ class _ServicesScreenState extends State<ServicesScreen> {
           'Submitted $timeLabel',
         ];
         break;
+      case ServiceType.items:
+        final address = _orFallback(_text('item_address'), 'Address not specified');
+        final selected = _selectedItems.isEmpty ? ['Not specified'] : _selectedItems.toList();
+        metaLines = [
+          'Items: ${selected.join(', ')}',
+          address,
+          'Submitted $timeLabel',
+        ];
+        break;
     }
+    final description = metaLines.join('\n');
 
     final request = ServiceRequest(
+      serviceId: _serviceIdMap[_selected],
+      description: description,
       type: _selected,
       refNo: refNo,
       status: ReqStatus.review,
@@ -147,7 +190,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ],
     );
 
-    widget.appState.addRequest(request);
+    await widget.appState.addRequest(
+      request,
+      validIdFileBytes: _validIdFile!.bytes!,
+      validIdFileName: _validIdFile!.name,
+    );
+
+    if (!mounted) return;
 
     final f = widget.appState.language == AppLanguage.filipino;
     showModalBottomSheet(
@@ -204,15 +253,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   ServiceType.transfer,
                   ServiceType.road,
                   ServiceType.relief,
+                  ServiceType.items,
+                  ServiceType.inquiry,
                 ].map((t) => _TypeCard(type: t, selected: t == _selected, filipino: f, onTap: () => setState(() => _selected = t))).toList(),
-              ),
-              const SizedBox(height: 10),
-              _TypeCard(
-                type: ServiceType.inquiry,
-                selected: _selected == ServiceType.inquiry,
-                filipino: f,
-                onTap: () => setState(() => _selected = ServiceType.inquiry),
-                fullWidth: true,
               ),
             ],
           ),
@@ -224,6 +267,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
             children: [
               SectionHeader(title: _formTitle(_selected, f)),
               _buildForm(_selected),
+              _ValidIdUploadField(
+                fileName: _validIdFile?.name,
+                onTap: _pickValidId,
+              ),
               const SizedBox(height: 6),
               AppButton(label: tr(f, 'common.submit_request'), onPressed: _submit),
             ],
@@ -240,6 +287,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ServiceType.road => tr(f, 'services.form.road'),
         ServiceType.relief => tr(f, 'services.form.relief'),
         ServiceType.inquiry => tr(f, 'services.form.inquiry'),
+        ServiceType.items => tr(f, 'services.form.items'),
       };
 
   Widget _buildForm(ServiceType t) {
@@ -374,7 +422,284 @@ class _ServicesScreenState extends State<ServicesScreen> {
             controller: _ctrl('inq_contact'),
           ),
         ]);
+      case ServiceType.items:
+        return _ItemRequestForm(
+          selectedItems: _selectedItems,
+          onToggle: (item) => setState(() {
+            if (_selectedItems.contains(item)) {
+              _selectedItems.remove(item);
+            } else {
+              _selectedItems.add(item);
+            }
+          }),
+          addressController: _ctrl('item_address'),
+          contactController: _ctrl('item_contact'),
+          notesController: _ctrl('item_notes'),
+        );
     }
+  }
+}
+
+class _ValidIdUploadField extends StatelessWidget {
+  final String? fileName;
+  final VoidCallback onTap;
+
+  const _ValidIdUploadField({required this.fileName, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = fileName != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Valid ID (required)', style: AppText.display(size: 12, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+              decoration: BoxDecoration(
+                color: hasFile ? AppColors.green50 : AppColors.surface,
+                border: Border.all(color: hasFile ? AppColors.green700 : AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hasFile ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
+                    color: hasFile ? AppColors.green700 : AppColors.inkFaint,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      hasFile ? fileName! : 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
+                      style: AppText.body(size: 12, color: hasFile ? AppColors.green900 : AppColors.inkMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemRequestForm extends StatefulWidget {
+  final Set<String> selectedItems;
+  final ValueChanged<String> onToggle;
+  final TextEditingController addressController;
+  final TextEditingController contactController;
+  final TextEditingController notesController;
+
+  const _ItemRequestForm({
+    required this.selectedItems,
+    required this.onToggle,
+    required this.addressController,
+    required this.contactController,
+    required this.notesController,
+  });
+
+  @override
+  State<_ItemRequestForm> createState() => _ItemRequestFormState();
+}
+
+class _ItemRequestFormState extends State<_ItemRequestForm> {
+  static const List<(String key, IconData icon)> _items = [
+    ('Wheelchair', Icons.accessible_rounded),
+    ('Stretcher', Icons.airline_seat_flat_rounded),
+    ('First Aid Kit', Icons.medical_services_outlined),
+    ('Oxygen Tank', Icons.air_rounded),
+    ('Generator', Icons.electrical_services_rounded),
+    ('Megaphone', Icons.campaign_rounded),
+    ('Rescue Tools', Icons.hardware_rounded),
+  ];
+  final Map<String, int> _quantities = {};
+
+  int _qty(String key) => _quantities[key] ?? 1;
+
+  void _increment(String key) => setState(() => _quantities[key] = _qty(key) + 1);
+  void _decrement(String key) {
+    final current = _qty(key);
+    if (current > 1) setState(() => _quantities[key] = current - 1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Item checklist ──
+        Text(
+          'Select the items you need',
+          style: AppText.display(size: 12, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Tap an item to select it. Adjust the quantity if you need more than one.',
+          style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Column(
+            children: _items.asMap().entries.map((entry) {
+              final i = entry.key;
+              final (key, icon) = entry.value;
+              final isSelected = widget.selectedItems.contains(key);
+              final isLast = i == _items.length - 1;
+
+              return Column(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.vertical(
+                      top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                      bottom: isLast ? const Radius.circular(14) : Radius.zero,
+                    ),
+                    onTap: () => widget.onToggle(key),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      child: Row(
+                        children: [
+                          // Checkbox
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.green700 : AppColors.surface,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected ? AppColors.green700 : AppColors.line,
+                                width: 1.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: isSelected
+                                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          // Icon + label
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.green50 : AppColors.paper,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(icon, size: 17, color: isSelected ? AppColors.green700 : AppColors.inkMuted),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              key,
+                              style: AppText.display(
+                                size: 13.5,
+                                weight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                color: isSelected ? AppColors.green900 : AppColors.ink,
+                              ),
+                            ),
+                          ),
+                          // Quantity stepper — only shown when item is selected
+                          if (isSelected)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _QtyButton(
+                                  icon: Icons.remove,
+                                  onTap: () => _decrement(key),
+                                  enabled: _qty(key) > 1,
+                                ),
+                                SizedBox(
+                                  width: 30,
+                                  child: Text(
+                                    '${_qty(key)}',
+                                    textAlign: TextAlign.center,
+                                    style: AppText.display(size: 14, weight: FontWeight.w700),
+                                  ),
+                                ),
+                                _QtyButton(icon: Icons.add, onTap: () => _increment(key), enabled: true),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (!isLast)
+                    const Divider(height: 1, thickness: 1, color: AppColors.line),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // ── Delivery address ──
+        _Field(
+          label: 'Delivery / pick-up address',
+          hint: 'Purok / street, barangay',
+          controller: widget.addressController,
+        ),
+
+        // ── Contact number ──
+        _Field(
+          label: 'Contact number',
+          hint: '09XXXXXXXXX',
+          keyboard: TextInputType.phone,
+          maxLength: 11,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          controller: widget.contactController,
+        ),
+
+        // ── Additional notes ──
+        _Field(
+          label: 'Additional notes (optional)',
+          hint: 'e.g. patient weight, location details',
+          lines: 3,
+          controller: widget.notesController,
+        ),
+      ],
+    );
+  }
+}
+
+/// Small ± quantity button used inside the item checklist.
+class _QtyButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _QtyButton({required this.icon, required this.onTap, required this.enabled});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.green50 : AppColors.paper,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: enabled ? AppColors.green700 : AppColors.line),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 14, color: enabled ? AppColors.green700 : AppColors.inkFaint),
+      ),
+    );
   }
 }
 
@@ -441,8 +766,7 @@ class _TypeCard extends StatelessWidget {
     required this.selected,
     required this.filipino,
     required this.onTap,
-    this.fullWidth = false,
-  });
+  }) : fullWidth = false;
 
   @override
   Widget build(BuildContext context) {

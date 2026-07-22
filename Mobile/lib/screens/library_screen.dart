@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../data/library_articles.dart';
-import '../state/app_state.dart';
+import '../data/safety_files.dart';
+import '../state/request_store.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart';
+import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
 
 class LibraryScreen extends StatelessWidget {

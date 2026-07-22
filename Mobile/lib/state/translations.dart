@@ -1,15 +1,5 @@
-/// Centralized English / Filipino translations for static UI text shared
-/// across Home, Services, Track, Library, and Profile.
-///
-/// Usage: `tr(filipino, 'home.active_request')` where `filipino` is
-/// `appState.language == AppLanguage.filipino`.
-///
-/// This covers headers, section titles, buttons, status labels, empty
-/// states, and other chrome that appears regardless of what a resident has
-/// typed into a form. Free-form user input (form field values) and
-/// already-submitted request data are not retroactively translated.
+
 const Map<String, (String, String)> _strings = {
-  // ---- Common ----
   'common.cancel': ('Cancel', 'Kanselahin'),
   'common.submit_request': ('Submit request', 'Isumite ang Kahilingan'),
   'common.view_details': ('View details', 'Tingnan ang Detalye'),
@@ -19,13 +9,11 @@ const Map<String, (String, String)> _strings = {
   'common.cancel_request': ('Cancel request', 'Kanselahin ang Kahilingan'),
   'common.calling': ('Calling', 'Tumatawag sa'),
 
-  // ---- Status badges ----
   'status.review': ('Under review', 'Sinusuri'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
   'status.completed': ('Completed', 'Natapos'),
   'status.cancelled': ('Cancelled', 'Kinansela'),
 
-  // ---- Service types ----
   'type.ambulance.title': ('Medical Transport / Ambulance', 'Medical Transport / Ambulansya'),
   'type.ambulance.subtitle': ('Pick-up & drop-off', 'Pagsundo at paghatid'),
   'type.transfer.title': ('Hospital Transfer', 'Paglilipat sa Ospital'),
@@ -37,7 +25,6 @@ const Map<String, (String, String)> _strings = {
   'type.inquiry.title': ('Information Inquiry', 'Katanungan / Impormasyon'),
   'type.inquiry.subtitle': ('General question to MDRRMO', 'Pangkalahatang tanong sa MDRRMO'),
 
-  // ---- Home ----
   'home.active_request': ('Active Service Request', 'Aktibong Kahilingan'),
   'home.no_active_title': ('No active requests', 'Walang aktibong kahilingan'),
   'home.no_active_desc': (
@@ -97,7 +84,6 @@ const Map<String, (String, String)> _strings = {
   ),
   'services.confirm.view_track': ('View in Track', 'Tingnan sa Track'),
 
-  // ---- Track ----
   'track.title': ('Track Your Requests', 'Subaybayan ang Iyong mga Kahilingan'),
   'track.empty_title': ('No requests yet', 'Walang kahilingan pa'),
   'track.empty_desc': (
@@ -108,7 +94,6 @@ const Map<String, (String, String)> _strings = {
   ),
   'track.filter.all': ('All', 'Lahat'),
 
-  // ---- Library ----
   'library.title': ('Safety Library', 'Aklatan ng Kaligtasan'),
   'library.hotlines': ('Emergency Hotlines', 'Mga Hotline ng Emerhensiya'),
   'library.first_aid': ('Basic First Aid', 'Pangunahing Lunas (First Aid)'),
@@ -118,7 +103,6 @@ const Map<String, (String, String)> _strings = {
   'library.fire': ('Fire (BFP)', 'Bumbero (BFP)'),
   'library.national_emergency': ('National Emergency', 'Pambansang Emerhensiya'),
 
-  // ---- Profile ----
   'profile.title': ('My Profile', 'Aking Profile'),
   'profile.update_info': ('Update information', 'I-update ang Impormasyon'),
   'profile.notifications': ('Notifications', 'Mga Abiso'),
@@ -140,10 +124,6 @@ const Map<String, (String, String)> _strings = {
   'profile.offline_title': ('Offline Materials', 'Mga Offline na Materyal'),
 };
 
-/// Returns the translation for [key] in Filipino if [filipino] is true,
-/// otherwise English. Falls back to the key itself if not found, so a
-/// missing translation is visible (rather than crashing) during
-/// development.
 String tr(bool filipino, String key) {
   final pair = _strings[key];
   if (pair == null) return key;
