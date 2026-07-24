@@ -1,8 +1,11 @@
 *.log
 .DS_Store
 .env
-.env.backup
-.env.production
+# Catch every local variant (.env.backup-before-transfer, .env.local, .env.old...).
+# The stock list only matched two exact names, so an ad-hoc backup of a populated
+# .env sat untracked and unignored, one `git add -A` away from being committed.
+.env.*
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 /.codex
