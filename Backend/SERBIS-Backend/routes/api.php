@@ -17,9 +17,13 @@ use App\Http\Controllers\AnalyticsController;
 
 Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
 Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middleware('throttle:login');
+// Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
+// the submitted email address as well as the IP.
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
 
     // Endpoints requiring read/write access from the mobile application
     Route::get('barangays', [BarangayController::class, 'index']);
@@ -27,6 +31,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('services', [ServiceController::class, 'index']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
     Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
+    // Owner-scoped cancel. The general update() stays admin-only below.
+    Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
     
     // Mobile endpoint to fetch published materials

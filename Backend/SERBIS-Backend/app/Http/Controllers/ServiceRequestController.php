@@ -145,6 +145,56 @@ class ServiceRequestController extends Controller
         return Storage::disk('local')->response($serviceRequest->valid_id);
     }
 
+    // Resident-facing cancel, kept separate from update() on purpose: update() is
+    // admin-only and accepts resident_id, processed_by and an arbitrary status, so
+    // opening it to residents would let one rewrite another resident's request.
+    // This route writes exactly one value.
+    public function cancel(Request $request, $id)
+    {
+        $user = $request->user();
+
+        $query = ServiceRequest::query();
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+        }
+
+        $serviceRequest = $query->find($id);
+
+        // 404 rather than 403 for a non-owner, matching show() and validId(): the
+        // response must not disclose that the request exists.
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        // Once a unit is Responding the cancellation is an operational decision,
+        // not a resident one — the crew is already moving.
+        if ($serviceRequest->status !== 'Pending') {
+            return response()->json([
+                'message' => 'Only a pending request can be cancelled.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($serviceRequest) {
+            // store() can attach and dispatch a vehicle while the request is still
+            // Pending, so cancelling has to hand the unit back or it leaks out of
+            // the fleet with no request pointing at it.
+            if ($serviceRequest->vehicle_id) {
+                $vehicle = Vehicle::where('vehicle_id', $serviceRequest->vehicle_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($vehicle && $vehicle->status === 'Dispatched') {
+                    $vehicle->update(['status' => 'Available']);
+                }
+            }
+
+            $serviceRequest->update(['status' => 'Cancelled']);
+        });
+
+        return response()->json($serviceRequest);
+    }
+
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
