@@ -56,25 +56,63 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _api.loadToken().then((_) {
-      if (!mounted) {
-        return;
-      }
+    _api.onUnauthorized = _onSessionExpired;
+    _restoreSession();
+  }
 
-      setState(() {
-        _ready = true;
-        if (_api.isLoggedIn) {
-          _currentUser = const AppUser(
-            id: '',
-            firstName: '',
-            lastName: '',
-            email: '',
-            address: '',
-          );
-        } else {
-          _currentUser = null;
+  /// A stored token carries no profile with it, so it has to be exchanged for
+  /// one on every relaunch. Skipping this is what left the app authenticated
+  /// with a blank name, email and address until the resident logged out and
+  /// back in.
+  Future<void> _restoreSession() async {
+    await _api.loadToken();
+
+    if (_api.isLoggedIn) {
+      try {
+        final user = await _userStore.currentUser();
+        if (!mounted) {
+          return;
         }
-      });
+
+        setState(() {
+          _currentUser = user;
+          _ready = true;
+        });
+        return;
+      } on ApiException catch (e) {
+        if (!mounted) {
+          return;
+        }
+
+        // A rejected token has already been cleared by ApiService. If the server
+        // was merely unreachable the token is left alone, so logging in again
+        // once there is a connection will work.
+        _loginInfoMessage = e.isUnauthorized
+            ? 'Your session expired. Please log in again.'
+            : e.message;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _ready = true;
+      _currentUser = null;
+    });
+  }
+
+  /// Fired by ApiService when a stored token is rejected mid-session.
+  void _onSessionExpired() {
+    if (!mounted || _currentUser == null) {
+      return;
+    }
+
+    setState(() {
+      _currentUser = null;
+      _view = _AuthView.login;
+      _loginInfoMessage = 'Your session expired. Please log in again.';
     });
   }
 
@@ -186,7 +224,22 @@ class _RootShellState extends State<RootShell> {
     super.dispose();
   }
 
-  void _onAppStateChanged() => setState(() {});
+  void _onAppStateChanged() {
+    setState(() {});
+
+    // Single drain point for store failures, so every screen reports them the
+    // same way instead of each one swallowing its own.
+    final error = _appState.takeError();
+    if (error == null) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        showAppSnackBar(context, error, isError: true);
+      }
+    });
+  }
 
   void _goTo(int index) => setState(() => _index = index);
 

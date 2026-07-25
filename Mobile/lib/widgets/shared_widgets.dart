@@ -541,16 +541,17 @@ void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirm
   );
 }
 
-void showAppSnackBar(BuildContext context, String message) {
+void showAppSnackBar(BuildContext context, String message, {bool isError = false}) {
   ScaffoldMessenger.of(context).clearSnackBars();
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(message, style: AppText.display(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
-      backgroundColor: AppColors.green900,
+      backgroundColor: isError ? AppColors.red600 : AppColors.green900,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.fromLTRB(22, 0, 22, 90),
-      duration: const Duration(seconds: 2),
+      // Failures need longer on screen than confirmations.
+      duration: Duration(seconds: isError ? 4 : 2),
     ),
   );
 }

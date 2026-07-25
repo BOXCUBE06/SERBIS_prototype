@@ -19,11 +19,48 @@ extension AppLanguageX on AppLanguage {
 class AppState extends ChangeNotifier {
   final ApiService _api;
   final List<ServiceRequest> requests = [];
+  final List<ServiceCatalogItem> services = [];
 
   AppState(this._api);
 
   AppLanguage language = AppLanguage.english;
   int _refCounter = 101;
+
+  /// Last failure worth showing the resident. The shell drains this into a
+  /// snackbar; every one of these used to be discarded by a bare `catch (_) {}`,
+  /// so a dead network and an empty list looked identical.
+  String? lastError;
+
+  /// Read-and-clear, so one failure produces exactly one snackbar.
+  String? takeError() {
+    final error = lastError;
+    lastError = null;
+    return error;
+  }
+
+  void _fail(Object error) {
+    lastError = error is ApiException
+        ? error.message
+        : 'Something went wrong. Please try again.';
+    notifyListeners();
+  }
+
+  Future<void> loadServices() async {
+    try {
+      final list = await _api.getServices();
+      services
+        ..clear()
+        ..addAll(list.map(ServiceCatalogItem.fromJson));
+      notifyListeners();
+    } catch (_) {
+      // Deliberately not routed to `lastError`: the services screen renders its
+      // own inline "couldn't load, retry" panel off an empty list, and a
+      // snackbar on top of it would report the same failure twice. A 401 still
+      // reaches the shell through ApiService.onUnauthorized.
+      services.clear();
+      notifyListeners();
+    }
+  }
 
   void setLanguage(AppLanguage value) {
     if (language == value) {
@@ -48,7 +85,9 @@ class AppState extends ChangeNotifier {
         requests.add(ServiceRequest.fromJson(item));
       }
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      _fail(e);
+    }
   }
 
   Future<void> addRequest(
@@ -79,7 +118,13 @@ class AppState extends ChangeNotifier {
         requests[index] = confirmed;
         notifyListeners();
       }
-    } catch (_) {}
+    } catch (e) {
+      // The optimistic row never reached the server, so drop it. Leaving it in
+      // place is what made a 422 "No available vehicles at this time." look like
+      // a filed request that MDRRMO would never see.
+      requests.remove(request);
+      _fail(e);
+    }
   }
 
   Future<void> cancelRequest(String refNo) async {
@@ -115,7 +160,15 @@ class AppState extends ChangeNotifier {
 
     try {
       await _api.cancelRequest(current.id!);
-    } catch (_) {}
+    } catch (e) {
+      // Put the request back the way it was — the server still has it open, and
+      // showing it as cancelled would strand the resident with no way to undo.
+      final index = requests.indexWhere((item) => item.refNo == refNo);
+      if (index != -1) {
+        requests[index] = current;
+      }
+      _fail(e);
+    }
   }
 
   ServiceRequest? get activeRequest {

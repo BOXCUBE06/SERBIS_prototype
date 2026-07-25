@@ -2,6 +2,7 @@
 library serbis.screens.auth.login;
 
 import 'package:flutter/material.dart';
+import '../../state/api_service.dart';
 import '../../state/account_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
@@ -52,9 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       widget.onLoginSuccess(user);
-    } on String catch (e) {
-      setState(() => _formError = e);
-    } catch (e) {
+    } on ApiException catch (e) {
+      // Already resident-readable: "Invalid resident credentials." on a bad
+      // password, the connection message when the server is unreachable.
+      setState(() => _formError = e.message);
+    } catch (_) {
       setState(() => _formError =
           'Cannot connect to server. Check your connection.');
     } finally {

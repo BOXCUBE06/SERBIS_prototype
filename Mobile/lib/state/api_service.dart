@@ -4,14 +4,41 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// A failed API call. Carries the HTTP status so callers can tell a dead
+/// network (`statusCode == null`) from a real rejection, and a message that is
+/// already safe to show a resident.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  /// The token was rejected. Distinct from a failed login, which the auth
+  /// endpoints report as a plain message instead.
+  bool get isUnauthorized => statusCode == 401;
+
+  /// No response at all — offline, wrong base URL, or a timeout.
+  bool get isNetwork => statusCode == null;
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000/api',
   );
   static const String _tokenKey = 'serbis_token_v1';
+  static const String _networkMessage =
+      'Cannot connect to server. Check your internet connection.';
 
   String? _token;
+
+  /// Fired when a stored token is rejected, so the shell can drop to the login
+  /// screen instead of showing empty lists. Never fired for the auth endpoints,
+  /// where a 401 just means the password was wrong.
+  void Function()? onUnauthorized;
 
   Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -47,82 +74,156 @@ class ApiService {
 
   Future<Map<String, dynamic>> _post(
     String path,
-    Map<String, dynamic> body,
-  ) async {
-    final response = await http
-        .post(
-          Uri.parse('$_baseUrl$path'),
-          headers: _headers,
-          body: jsonEncode(body),
-        )
-        .timeout(const Duration(seconds: 15));
-
-    return _decode(response);
+    Map<String, dynamic> body, {
+    bool isAuthEndpoint = false,
+  }) {
+    return _send(
+      () => http.post(
+        Uri.parse('$_baseUrl$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      ),
+      isAuthEndpoint: isAuthEndpoint,
+    );
   }
 
-  Future<Map<String, dynamic>> _get(String path) async {
-    final response = await http
-        .get(Uri.parse('$_baseUrl$path'), headers: _headers)
-        .timeout(const Duration(seconds: 15));
-
-    return _decode(response);
+  Future<Map<String, dynamic>> _get(String path) {
+    return _send(
+      () => http.get(Uri.parse('$_baseUrl$path'), headers: _headers),
+    );
   }
 
-  Future<Map<String, dynamic>> _patch(String path, [Map<String, dynamic>? body]) async {
-    final response = await http
-        .patch(
-          Uri.parse('$_baseUrl$path'),
-          headers: _headers,
-          body: body != null ? jsonEncode(body) : null,
-        )
-        .timeout(const Duration(seconds: 15));
-
-    return _decode(response);
+  Future<Map<String, dynamic>> _patch(
+    String path, [
+    Map<String, dynamic>? body,
+  ]) {
+    return _send(
+      () => http.patch(
+        Uri.parse('$_baseUrl$path'),
+        headers: _headers,
+        body: body != null ? jsonEncode(body) : null,
+      ),
+    );
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
+  /// Runs a request and normalises every failure mode into an [ApiException].
+  /// Transport errors are caught here rather than by importing `dart:io`, which
+  /// would break the web build — `http` throws `ClientException` there and
+  /// `SocketException` on native, and both are plain `Exception`s.
+  Future<Map<String, dynamic>> _send(
+    Future<http.Response> Function() call, {
+    bool isAuthEndpoint = false,
+  }) async {
+    http.Response response;
+
+    try {
+      response = await call().timeout(const Duration(seconds: 15));
+    } catch (_) {
+      throw const ApiException(_networkMessage);
+    }
+
+    return _decode(response, isAuthEndpoint: isAuthEndpoint);
+  }
+
+  /// Inspects the status before the body. Previously every response was decoded
+  /// blindly and a failure returned `{}` or, worse, the string
+  /// `"Unauthenticated."` where a list was expected — which read as "you have no
+  /// requests" rather than "your session expired".
+  Map<String, dynamic> _decode(
+    http.Response response, {
+    bool isAuthEndpoint = false,
+  }) {
+    final status = response.statusCode;
+    final ok = status >= 200 && status < 300;
+
+    Map<String, dynamic>? body;
     try {
       final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      return {'data': decoded};
+      body = decoded is Map<String, dynamic> ? decoded : {'data': decoded};
     } catch (_) {
-      return {};
+      body = null;
     }
+
+    if (ok) {
+      if (body == null) {
+        throw ApiException(
+          'Unexpected response from server.',
+          statusCode: status,
+        );
+      }
+      return body;
+    }
+
+    // A rejected stored token means the session is over. Auth endpoints are
+    // exempt: there a 401 is just "wrong email or password".
+    if (status == 401 && !isAuthEndpoint) {
+      _clearToken();
+      onUnauthorized?.call();
+    }
+
+    throw ApiException(_errorMessage(body, status), statusCode: status);
+  }
+
+  /// Laravel reports validation failures under `errors` and everything else
+  /// under `message`. Fall back to something a resident can act on.
+  String _errorMessage(Map<String, dynamic>? body, int status) {
+    final errors = body?['errors'];
+    if (errors is Map<String, dynamic> && errors.isNotEmpty) {
+      final first = errors.values.first;
+      if (first is List && first.isNotEmpty) {
+        return first.first.toString();
+      }
+      if (first is String) {
+        return first;
+      }
+    }
+
+    final message = body?['message'];
+    if (message is String && message.isNotEmpty) {
+      // The framework default is meaningless to a resident.
+      if (message != 'Unauthenticated.') {
+        return message;
+      }
+    }
+
+    if (status == 401) return 'Your session expired. Please log in again.';
+    if (status == 403) return 'You are not allowed to do that.';
+    if (status == 404) return 'Not found.';
+    if (status >= 500) return 'The server had a problem. Please try again.';
+    return 'Request failed ($status).';
   }
 
   Future<String?> register({
     required String firstName,
+    String? middleName,
     required String lastName,
+    required int barangayId,
+    required String phoneNumber,
     required String email,
     required String password,
   }) async {
     try {
-      final data = await _post('/register', {
-        'first_name': firstName,
-        'last_name': lastName,
-        'role': 'resident',
-        'email_address': email,
-        'password': password,
-        'password_confirmation': password,
-      });
-
-      if (data['errors'] != null) {
-        final errors = data['errors'] as Map<String, dynamic>;
-        final first = errors.values.first;
-        if (first is List && first.isNotEmpty) {
-          return first.first as String;
-        }
-      }
-
-      if (data['message'] != null && data['token'] == null) {
-        return data['message'] as String;
-      }
+      // No 'role': it is not a column on tbl_residents and the server assigns
+      // status itself. barangay_id and phone_number are both required there.
+      await _post(
+        '/register',
+        {
+          'first_name': firstName,
+          if (middleName != null && middleName.isNotEmpty)
+            'middle_name': middleName,
+          'last_name': lastName,
+          'barangay_id': barangayId,
+          'phone_number': phoneNumber,
+          'email_address': email,
+          'password': password,
+          'password_confirmation': password,
+        },
+        isAuthEndpoint: true,
+      );
 
       return null;
-    } catch (e) {
-      return 'Cannot connect to server. Check your internet connection.';
+    } on ApiException catch (e) {
+      return e.message;
     }
   }
 
@@ -130,39 +231,67 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    try {
-      final data = await _post('/resident/login', {
-        'email_address': email,
-        'password': password,
-      });
+    final data = await _post(
+      '/resident/login',
+      {'email_address': email, 'password': password},
+      isAuthEndpoint: true,
+    );
 
-      if (data['token'] != null) {
-        await _saveToken(data['token'] as String);
-        return (data['user'] as Map<String, dynamic>?) ?? {};
-      }
-
-      throw data['message'] ?? 'Invalid credentials.';
-    } on String {
-      rethrow;
-    } catch (e) {
-      throw 'Cannot connect to server. Check your internet connection.';
+    if (data['token'] != null) {
+      await _saveToken(data['token'] as String);
+      return (data['user'] as Map<String, dynamic>?) ?? {};
     }
+
+    throw const ApiException('Invalid credentials.');
+  }
+
+  /// Rebuilds the signed-in resident from a stored token on relaunch.
+  Future<Map<String, dynamic>> me() async {
+    final data = await _get('/me');
+    return (data['user'] as Map<String, dynamic>?) ?? {};
+  }
+
+  /// Public on the backend so the register screen can populate its picker
+  /// before the resident has an account.
+  Future<List<Map<String, dynamic>>> getBarangays() async {
+    final data = await _get('/barangays');
+    return _listFrom(data, 'barangays');
   }
 
   Future<void> logout() async {
     try {
       await _post('/logout', {});
-    } catch (_) {}
+    } catch (_) {
+      // Best effort. The local token is dropped either way.
+    }
 
     await _clearToken();
   }
 
   Future<List<Map<String, dynamic>>> getRequests() async {
     final data = await _get('/service-requests');
-    final raw = data['data'] ?? data['requests'] ?? data.values.first;
+    return _listFrom(data, 'requests');
+  }
+
+  Future<List<Map<String, dynamic>>> getServices() async {
+    final data = await _get('/services');
+    return _listFrom(data, 'services');
+  }
+
+  /// Unwraps a collection that may arrive bare, under `data`, or under a named
+  /// key depending on whether the controller paginates.
+  List<Map<String, dynamic>> _listFrom(
+    Map<String, dynamic> data,
+    String namedKey,
+  ) {
+    final raw = data['data'] ??
+        data[namedKey] ??
+        (data.isEmpty ? null : data.values.first);
+
     if (raw is List) {
-      return raw.cast<Map<String, dynamic>>();
+      return raw.whereType<Map<String, dynamic>>().toList();
     }
+
     return [];
   }
 
@@ -195,12 +324,21 @@ class ApiService {
       ),
     );
 
-    final streamed = await request.send().timeout(const Duration(seconds: 30));
-    final response = await http.Response.fromStream(streamed);
+    http.Response response;
+    try {
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 30));
+      response = await http.Response.fromStream(streamed);
+    } catch (_) {
+      throw const ApiException(_networkMessage);
+    }
+
     return _decode(response);
   }
 
   Future<void> cancelRequest(int requestId) async {
-    await _patch('/service-requests/$requestId', {'status': 'Cancelled'});
+    // Resident-scoped route; the controller sets status = 'Cancelled' itself and
+    // rejects anything but the owner's own Pending request. No body needed.
+    await _patch('/service-requests/$requestId/cancel');
   }
 }
