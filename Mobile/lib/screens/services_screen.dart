@@ -433,7 +433,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       children: _services
           .map((s) => _TypeCard(
                 title: s.nameLocalized,
-                subtitle: s.description ?? '',
+                subtitle: s.displayDescription,
                 icon: s.icon,
                 selected: s.id == _selected?.id,
                 onTap: () => setState(() => _selected = s),

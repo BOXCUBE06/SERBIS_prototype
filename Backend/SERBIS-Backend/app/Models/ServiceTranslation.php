@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Table('tbl_service_translations', key: 'service_translation_id')]
-#[Fillable(['service_id', 'locale', 'name'])]
+#[Fillable(['service_id', 'locale', 'name', 'description'])]
 class ServiceTranslation extends Model
 {
     use HasFactory;

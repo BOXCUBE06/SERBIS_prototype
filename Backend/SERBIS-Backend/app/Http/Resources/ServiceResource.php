@@ -26,6 +26,7 @@ class ServiceResource extends JsonResource
             'service_name' => $this->service_name,
             'name_localized' => $this->nameForLocale($locale),
             'description' => $this->description,
+            'description_localized' => $this->descriptionForLocale($locale),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -30,13 +30,40 @@ class Service extends Model
      */
     public function nameForLocale(string $locale): string
     {
+        $match = $this->translationFor($locale);
+
+        return $match->name ?? $this->service_name;
+    }
+
+    /**
+     * Resolved separately from the name: `description` is nullable, so a locale
+     * can carry a translated name and no blurb. Each field falls back on its
+     * own rather than forcing the pair to come from the same row.
+     */
+    public function descriptionForLocale(string $locale): ?string
+    {
+        $match = $this->translationFor($locale);
+
+        if ($match !== null && $match->description !== null && $match->description !== '') {
+            return $match->description;
+        }
+
+        $english = $this->translationFor(ServiceTranslation::fallbackLocale());
+
+        if ($english !== null && $english->description !== null && $english->description !== '') {
+            return $english->description;
+        }
+
+        return $this->description;
+    }
+
+    private function translationFor(string $locale): ?ServiceTranslation
+    {
         $translations = $this->relationLoaded('translations')
             ? $this->translations
             : $this->translations()->get();
 
-        $match = $translations->firstWhere('locale', $locale)
+        return $translations->firstWhere('locale', $locale)
             ?? $translations->firstWhere('locale', ServiceTranslation::fallbackLocale());
-
-        return $match->name ?? $this->service_name;
     }
 }

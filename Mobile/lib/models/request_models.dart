@@ -212,12 +212,21 @@ class ServiceCatalogItem {
     required this.name,
     required this.nameLocalized,
     this.description,
+    this.descriptionLocalized,
   });
+
+  /// What the UI shows: the localized blurb where there is one, the English
+  /// column otherwise.
+  String get displayDescription => descriptionLocalized ?? description ?? '';
 
   /// The service's name in the language the catalogue was fetched in. The
   /// server resolves this from tbl_service_translations and falls back to
   /// English, so it is never blank.
   final String nameLocalized;
+
+  /// The blurb in the same language. Falls back independently of the name: a
+  /// locale can have a translated name and no translated description.
+  final String? descriptionLocalized;
 
   factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) {
     final idValue = json['service_id'] ?? json['id'];
@@ -226,12 +235,17 @@ class ServiceCatalogItem {
         : int.tryParse(idValue?.toString() ?? '') ?? 0;
     final name = (json['service_name'] ?? json['name'] ?? '') as String;
     final localized = json['name_localized'] as String?;
+    final localizedDescription = json['description_localized'] as String?;
     return ServiceCatalogItem(
       id: id,
       name: name,
-      // Older builds of the API do not send name_localized at all.
+      // Older builds of the API send neither localized field.
       nameLocalized: localized == null || localized.isEmpty ? name : localized,
       description: json['description'] as String?,
+      descriptionLocalized:
+          localizedDescription == null || localizedDescription.isEmpty
+              ? null
+              : localizedDescription,
     );
   }
 
