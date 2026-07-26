@@ -37,20 +37,35 @@ class AppState extends ChangeNotifier {
     return error;
   }
 
-  /// Names a parsed row from the catalogue when the payload did not name it
-  /// itself. `POST /service-requests` returns the model without its `service`
-  /// relation, so a request would otherwise sit under the wrong label from the
-  /// moment it was filed until the next launch.
+  /// The locale sent to the API, derived from the language toggle. The server
+  /// falls back to English for a locale it has no rows for, so this is safe to
+  /// send even once Yogad is offered in the UI but not yet translated.
+  String get locale => language == AppLanguage.filipino ? 'fil' : 'en';
+
+  /// Names a parsed row from the catalogue, which always wins over the name the
+  /// row carries: `GET /service-requests` embeds the untranslated
+  /// `service.service_name`, while the catalogue was fetched in the resident's
+  /// own language. `POST`'s 201 embeds no service at all, so without this a
+  /// request would sit unlabelled from the moment it was filed.
   ServiceRequest _resolveService(ServiceRequest request) {
-    if (request.serviceName != null && request.serviceName!.isNotEmpty) {
-      return request;
-    }
     for (final service in services) {
       if (service.id == request.serviceId) {
-        return request.copyWith(serviceName: service.name);
+        return request.copyWith(
+          serviceName: service.nameLocalized,
+          // English too: the icon and colour are keyed on it.
+          serviceNameEn: service.name,
+        );
       }
     }
+    // Catalogue not loaded yet: keep whatever the payload named it. The next
+    // loadServices() relabels every row.
     return request;
+  }
+
+  void _relabelRequests() {
+    for (var i = 0; i < requests.length; i++) {
+      requests[i] = _resolveService(requests[i]);
+    }
   }
 
   void _fail(Object error) {
@@ -62,10 +77,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> loadServices() async {
     try {
-      final list = await _api.getServices();
+      final list = await _api.getServices(locale: locale);
       services
         ..clear()
         ..addAll(list.map(ServiceCatalogItem.fromJson));
+      // Rows already on screen were labelled before this catalogue arrived, or
+      // in the previous language.
+      _relabelRequests();
       notifyListeners();
     } catch (_) {
       // Deliberately not routed to `lastError`: the services screen renders its
@@ -84,6 +102,12 @@ class AppState extends ChangeNotifier {
 
     language = value;
     notifyListeners();
+
+    // Service names live on the server, so switching language means refetching
+    // the catalogue; loadServices relabels the open requests when it lands.
+    // Not awaited: the rest of the UI translates from local strings immediately
+    // and must not wait on the network to do it.
+    loadServices();
   }
 
   Future<void> loadRequests() async {

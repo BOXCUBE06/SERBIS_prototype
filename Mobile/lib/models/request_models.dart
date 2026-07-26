@@ -210,21 +210,33 @@ class ServiceCatalogItem {
   const ServiceCatalogItem({
     required this.id,
     required this.name,
+    required this.nameLocalized,
     this.description,
   });
+
+  /// The service's name in the language the catalogue was fetched in. The
+  /// server resolves this from tbl_service_translations and falls back to
+  /// English, so it is never blank.
+  final String nameLocalized;
 
   factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) {
     final idValue = json['service_id'] ?? json['id'];
     final id = idValue is int
         ? idValue
         : int.tryParse(idValue?.toString() ?? '') ?? 0;
+    final name = (json['service_name'] ?? json['name'] ?? '') as String;
+    final localized = json['name_localized'] as String?;
     return ServiceCatalogItem(
       id: id,
-      name: (json['service_name'] ?? json['name'] ?? '') as String,
+      name: name,
+      // Older builds of the API do not send name_localized at all.
+      nameLocalized: localized == null || localized.isEmpty ? name : localized,
       description: json['description'] as String?,
     );
   }
 
+  // Keyed on the English name so a Tagalog label cannot change which form or
+  // icon a service gets.
   ServiceFormKind get formKind => formKindForServiceName(name);
   IconData get icon => iconForServiceName(name);
 }
@@ -337,10 +349,16 @@ class ServiceRequest {
   final String? note;
   final bool cancellable;
 
-  /// The catalogue's own `service_name`, when the row came with one. Display
-  /// prefers this over [type]: the enum has six values against the catalogue's
-  /// ten, so it cannot name a Fire Rescue or a Sandbagging request at all.
+  /// The service's name in the resident's language, when the row resolved to
+  /// one. Display prefers this over [type]: the enum has six values against the
+  /// catalogue's ten, so it cannot name a Fire Rescue or a Sandbagging request.
   final String? serviceName;
+
+  /// The untranslated name, kept alongside because the icon and colour are
+  /// chosen by English keyword. Matching on the translated name silently drops
+  /// every service to the default grey badge -- "Ambulansya / Tugong Medikal"
+  /// does not contain "ambulance".
+  final String? serviceNameEn;
 
   const ServiceRequest({
     this.id,
@@ -354,23 +372,39 @@ class ServiceRequest {
     this.note,
     this.cancellable = false,
     this.serviceName,
+    this.serviceNameEn,
   });
 
   bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
+
+  /// The name the badge is chosen from: always English, falling back to the
+  /// localized name only if the English one was never resolved.
+  String? get _badgeKey {
+    if (serviceNameEn != null && serviceNameEn!.isNotEmpty) {
+      return serviceNameEn;
+    }
+    return _hasServiceName ? serviceName : null;
+  }
 
   /// Title for a request card. Falls back to the enum only for a row with no
   /// resolved service, which now means a local row awaiting its first response.
   String displayTitle(bool filipino) =>
       _hasServiceName ? serviceName! : type.titleFor(filipino);
 
-  IconData get displayIcon =>
-      _hasServiceName ? badgeForServiceName(serviceName!).icon : type.icon;
+  IconData get displayIcon {
+    final key = _badgeKey;
+    return key == null ? type.icon : badgeForServiceName(key).icon;
+  }
 
-  Color get displayBg =>
-      _hasServiceName ? badgeForServiceName(serviceName!).bg : type.bg;
+  Color get displayBg {
+    final key = _badgeKey;
+    return key == null ? type.bg : badgeForServiceName(key).bg;
+  }
 
-  Color get displayFg =>
-      _hasServiceName ? badgeForServiceName(serviceName!).fg : type.fg;
+  Color get displayFg {
+    final key = _badgeKey;
+    return key == null ? type.fg : badgeForServiceName(key).fg;
+  }
 
   ServiceRequest copyWith({
     int? id,
@@ -380,13 +414,18 @@ class ServiceRequest {
     String? note,
     bool? cancellable,
     String? serviceName,
+    String? serviceNameEn,
   }) {
     return ServiceRequest(
       id: id ?? this.id,
       serviceId: serviceId,
       description: description,
-      type: serviceName != null ? serviceTypeForServiceName(serviceName) : type,
+      // Derived from the English name: the enum's keywords are English.
+      type: serviceNameEn != null
+          ? serviceTypeForServiceName(serviceNameEn)
+          : type,
       serviceName: serviceName ?? this.serviceName,
+      serviceNameEn: serviceNameEn ?? this.serviceNameEn,
       refNo: refNo,
       status: status ?? this.status,
       metaLines: metaLines ?? this.metaLines,
@@ -431,6 +470,9 @@ class ServiceRequest {
           ? ServiceType.inquiry
           : serviceTypeForServiceName(serviceName),
       serviceName: serviceName,
+      // The embedded relation is the untranslated column, so it doubles as the
+      // badge key until the catalogue supplies a localized name.
+      serviceNameEn: serviceName,
       refNo: id != null ? 'SR-$id' : '',
       status: status,
       metaLines: description == null ? [] : [description],

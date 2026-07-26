@@ -273,8 +273,10 @@ class ApiService {
     return _listFrom(data, 'requests');
   }
 
-  Future<List<Map<String, dynamic>>> getServices() async {
-    final data = await _get('/services');
+  /// [locale] is a BCP 47 subtag ('en', 'fil'). The server falls back to English
+  /// for any locale it has no rows for, so an unsupported one is safe to send.
+  Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async {
+    final data = await _get('/services?locale=$locale');
     return _listFrom(data, 'services');
   }
 

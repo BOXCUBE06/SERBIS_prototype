@@ -216,6 +216,10 @@ class _RootShellState extends State<RootShell> {
     super.initState();
     _appState.addListener(_onAppStateChanged);
     _appState.loadRequests();
+    // Service names are server-side, so Track and the Home card cannot label
+    // themselves in the resident's language until the catalogue is in hand.
+    // Waiting for a visit to the Services tab would show English until then.
+    _appState.loadServices();
   }
 
   @override

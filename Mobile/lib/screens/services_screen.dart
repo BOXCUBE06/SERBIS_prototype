@@ -128,6 +128,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   String _dropdownValue(String key, List<String> items) => _dropdowns[key] ?? items.first;
 
+  /// [_selected] is captured when the tile is tapped, so it goes stale the
+  /// moment the catalogue is refetched in another language. Re-resolving by id
+  /// keeps the form header in step with the tile above it.
+  ServiceCatalogItem? get _currentSelection {
+    final selected = _selected;
+    if (selected == null) {
+      return null;
+    }
+    for (final service in _services) {
+      if (service.id == selected.id) {
+        return service;
+      }
+    }
+    return selected;
+  }
+
   String _text(String key) => _ctrl(key).text.trim();
 
   String _orFallback(String value, String fallback) => value.isEmpty ? fallback : value;
@@ -349,14 +365,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ],
           ),
         ),
-        if (_selected != null)
+        if (_currentSelection != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionHeader(title: _selected!.name),
-                _buildForm(_selected!.formKind),
+                SectionHeader(title: _currentSelection!.nameLocalized),
+                _buildForm(_currentSelection!.formKind),
                 _ValidIdUploadField(
                   fileName: _validIdFile?.name,
                   onTap: _pickValidId,
@@ -416,7 +432,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       childAspectRatio: 1.5,
       children: _services
           .map((s) => _TypeCard(
-                title: s.name,
+                title: s.nameLocalized,
                 subtitle: s.description ?? '',
                 icon: s.icon,
                 selected: s.id == _selected?.id,
