@@ -91,16 +91,16 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           IconBadge(
-                            icon: activeRequest.type.icon,
-                            bg: activeRequest.type.bg,
-                            fg: activeRequest.type.fg,
+                            icon: activeRequest.displayIcon,
+                            bg: activeRequest.displayBg,
+                            fg: activeRequest.displayFg,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(activeRequest.type.titleFor(f), style: AppText.display(size: 14.5)),
+                                Text(activeRequest.displayTitle(f), style: AppText.display(size: 14.5)),
                                 const SizedBox(height: 2),
                                 Text(
                                     activeRequest.refNo.isEmpty

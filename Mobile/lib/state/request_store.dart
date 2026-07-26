@@ -37,6 +37,22 @@ class AppState extends ChangeNotifier {
     return error;
   }
 
+  /// Names a parsed row from the catalogue when the payload did not name it
+  /// itself. `POST /service-requests` returns the model without its `service`
+  /// relation, so a request would otherwise sit under the wrong label from the
+  /// moment it was filed until the next launch.
+  ServiceRequest _resolveService(ServiceRequest request) {
+    if (request.serviceName != null && request.serviceName!.isNotEmpty) {
+      return request;
+    }
+    for (final service in services) {
+      if (service.id == request.serviceId) {
+        return request.copyWith(serviceName: service.name);
+      }
+    }
+    return request;
+  }
+
   void _fail(Object error) {
     lastError = error is ApiException
         ? error.message
@@ -75,7 +91,7 @@ class AppState extends ChangeNotifier {
       final list = await _api.getRequests();
       requests.clear();
       for (final item in list) {
-        requests.add(ServiceRequest.fromJson(item));
+        requests.add(_resolveService(ServiceRequest.fromJson(item)));
       }
       notifyListeners();
     } catch (e) {
@@ -111,7 +127,7 @@ class AppState extends ChangeNotifier {
         requiredVehicleType: requiredVehicleType,
       );
 
-      final confirmed = ServiceRequest.fromJson(result);
+      final confirmed = _resolveService(ServiceRequest.fromJson(result));
       final index = requests.indexOf(request);
       if (index != -1) {
         requests[index] = confirmed;

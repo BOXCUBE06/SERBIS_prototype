@@ -257,28 +257,59 @@ ServiceFormKind formKindForServiceName(String name) {
   return ServiceFormKind.generic;
 }
 
-IconData iconForServiceName(String name) {
+IconData iconForServiceName(String name) => badgeForServiceName(name).icon;
+
+/// Icon and badge colours for a catalogue service, chosen together from one set
+/// of keywords so a card can never pair one service's icon with another's
+/// palette. Keyed on `service_name` because the catalogue has ten services and
+/// [ServiceType] only enumerates six — four of them, including Fire Rescue and
+/// Search and Rescue, have no enum member at all.
+({IconData icon, Color bg, Color fg}) badgeForServiceName(String name) {
   final n = name.toLowerCase();
   if (n.contains('ambulance') || n.contains('medical') || n.contains('health')) {
-    return Icons.local_hospital_rounded;
+    return (icon: Icons.local_hospital_rounded, bg: AppColors.red50, fg: AppColors.red600);
   }
-  if (n.contains('fire')) return Icons.local_fire_department_rounded;
-  if (n.contains('flood') || n.contains('evac')) return Icons.water_rounded;
+  if (n.contains('fire')) {
+    return (icon: Icons.local_fire_department_rounded, bg: AppColors.red50, fg: AppColors.red600);
+  }
+  if (n.contains('flood') || n.contains('evac')) {
+    return (icon: Icons.water_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
+  }
   if (n.contains('road') || n.contains('debris') || n.contains('clearing')) {
-    return Icons.construction_rounded;
+    return (icon: Icons.construction_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
   }
   if (n.contains('relief') || n.contains('goods') || n.contains('food')) {
-    return Icons.inventory_2_rounded;
+    return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
   }
   if (n.contains('search') || n.contains('rescue')) {
-    return Icons.travel_explore_rounded;
+    return (icon: Icons.travel_explore_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
   }
   if (n.contains('power') || n.contains('line') || n.contains('electric')) {
-    return Icons.bolt_rounded;
+    return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
   }
-  if (n.contains('animal')) return Icons.pets_rounded;
-  if (n.contains('sandbag')) return Icons.shield_rounded;
-  return Icons.emergency_rounded;
+  if (n.contains('animal')) {
+    return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
+  }
+  if (n.contains('sandbag')) {
+    return (icon: Icons.shield_rounded, bg: AppColors.green50, fg: AppColors.green700);
+  }
+  return (icon: Icons.emergency_rounded, bg: AppColors.grey50, fg: AppColors.inkMuted);
+}
+
+/// Best-effort [ServiceType] for a catalogue service. Only for the code paths
+/// that still take an enum; display goes through `service_name` instead, which
+/// is why nothing here has to invent a value for Fire Rescue.
+ServiceType serviceTypeForServiceName(String name) {
+  switch (formKindForServiceName(name)) {
+    case ServiceFormKind.ambulance:
+      return ServiceType.ambulance;
+    case ServiceFormKind.road:
+      return ServiceType.road;
+    case ServiceFormKind.relief:
+      return ServiceType.relief;
+    case ServiceFormKind.generic:
+      return ServiceType.inquiry;
+  }
 }
 
 class TimelineStep {
@@ -303,6 +334,11 @@ class ServiceRequest {
   final String? note;
   final bool cancellable;
 
+  /// The catalogue's own `service_name`, when the row came with one. Display
+  /// prefers this over [type]: the enum has six values against the catalogue's
+  /// ten, so it cannot name a Fire Rescue or a Sandbagging request at all.
+  final String? serviceName;
+
   const ServiceRequest({
     this.id,
     this.serviceId,
@@ -314,7 +350,24 @@ class ServiceRequest {
     required this.timeline,
     this.note,
     this.cancellable = false,
+    this.serviceName,
   });
+
+  bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
+
+  /// Title for a request card. Falls back to the enum only for a row with no
+  /// resolved service, which now means a local row awaiting its first response.
+  String displayTitle(bool filipino) =>
+      _hasServiceName ? serviceName! : type.titleFor(filipino);
+
+  IconData get displayIcon =>
+      _hasServiceName ? badgeForServiceName(serviceName!).icon : type.icon;
+
+  Color get displayBg =>
+      _hasServiceName ? badgeForServiceName(serviceName!).bg : type.bg;
+
+  Color get displayFg =>
+      _hasServiceName ? badgeForServiceName(serviceName!).fg : type.fg;
 
   ServiceRequest copyWith({
     int? id,
@@ -323,12 +376,14 @@ class ServiceRequest {
     List<TimelineStep>? timeline,
     String? note,
     bool? cancellable,
+    String? serviceName,
   }) {
     return ServiceRequest(
       id: id ?? this.id,
       serviceId: serviceId,
       description: description,
-      type: type,
+      type: serviceName != null ? serviceTypeForServiceName(serviceName) : type,
+      serviceName: serviceName ?? this.serviceName,
       refNo: refNo,
       status: status ?? this.status,
       metaLines: metaLines ?? this.metaLines,
@@ -350,6 +405,14 @@ class ServiceRequest {
     final description = json['description'] as String?;
     final note = json['remarks'] as String?;
 
+    // GET /api/service-requests eager-loads the relation, so the row names its
+    // own service. POST's 201 does not (`store()` returns the model unloaded),
+    // which is why AppState resolves service_id against the catalogue as well.
+    final service = json['service'];
+    final serviceName = service is Map<String, dynamic>
+        ? service['service_name'] as String?
+        : null;
+
     final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
     final status = getStatusFromText(statusText);
 
@@ -359,7 +422,12 @@ class ServiceRequest {
       id: id,
       serviceId: serviceId,
       description: description,
-      type: ServiceType.inquiry,
+      // Was hardcoded to ServiceType.inquiry, which labelled every server-loaded
+      // row -- ambulance requests included -- "Information Inquiry".
+      type: serviceName == null
+          ? ServiceType.inquiry
+          : serviceTypeForServiceName(serviceName),
+      serviceName: serviceName,
       refNo: id != null ? 'SR-$id' : '',
       status: status,
       metaLines: description == null ? [] : [description],

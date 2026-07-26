@@ -214,13 +214,13 @@ class _RequestCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconBadge(icon: request.type.icon, bg: request.type.bg, fg: request.type.fg),
+                IconBadge(icon: request.displayIcon, bg: request.displayBg, fg: request.displayFg),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(request.type.titleFor(filipino), style: AppText.display(size: 14.5)),
+                      Text(request.displayTitle(filipino), style: AppText.display(size: 14.5)),
                       const SizedBox(height: 2),
                       Text(
                         request.refNo.isEmpty
