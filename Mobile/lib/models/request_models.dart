@@ -281,14 +281,17 @@ IconData iconForServiceName(String name) => badgeForServiceName(name).icon;
   if (n.contains('relief') || n.contains('goods') || n.contains('food')) {
     return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
   }
+  // Before the 'rescue' test on purpose: "Animal Rescue" contains "rescue", so
+  // the general branch used to swallow it and render the Search-and-Rescue
+  // icon. Specific names have to be matched ahead of the family keyword.
+  if (n.contains('animal')) {
+    return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
+  }
   if (n.contains('search') || n.contains('rescue')) {
     return (icon: Icons.travel_explore_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
   }
   if (n.contains('power') || n.contains('line') || n.contains('electric')) {
     return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
-  }
-  if (n.contains('animal')) {
-    return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
   }
   if (n.contains('sandbag')) {
     return (icon: Icons.shield_rounded, bg: AppColors.green50, fg: AppColors.green700);
