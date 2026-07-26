@@ -128,6 +128,20 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   String _orFallback(String value, String fallback) => value.isEmpty ? fallback : value;
 
+  /// The controller key of the contact number a dispatcher must have for this
+  /// form, or null where a callback number is not part of the response.
+  String? _requiredContactKey(ServiceFormKind kind) {
+    switch (kind) {
+      case ServiceFormKind.ambulance:
+        return 'amb_contact';
+      case ServiceFormKind.relief:
+        return 'relief_contact';
+      case ServiceFormKind.road:
+      case ServiceFormKind.generic:
+        return null;
+    }
+  }
+
   String _nowLabel() {
     final now = DateTime.now();
     final hour12 = now.hour % 12 == 0 ? 12 : now.hour % 12;
@@ -163,6 +177,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return;
     }
 
+    // A dispatcher who cannot call back cannot dispatch. Enforced here rather
+    // than in _Field because these are plain TextFields, not a Form.
+    final contactKey = _requiredContactKey(service.formKind);
+    if (contactKey != null && _text(contactKey).isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a contact number so MDRRMO can reach you.')),
+      );
+      return;
+    }
+
     final timeLabel = _nowLabel();
 
     late List<String> metaLines;
@@ -175,6 +199,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
           service.name,
           'Patient: $patient',
           '$pickup → $destination',
+          'Condition: ${_orFallback(_text('amb_notes'), 'Not described')}',
+          'Contact: ${_text('amb_contact')}',
           'Submitted $timeLabel',
         ];
         break;
@@ -185,6 +211,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           service.name,
           location,
           'Obstruction: $obstruction',
+          'Description: ${_orFallback(_text('road_description'), 'No description provided')}',
           'Submitted $timeLabel',
         ];
         break;
@@ -196,7 +223,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
           service.name,
           'Household head: $head',
           address,
+          'Household size: ${_orFallback(_text('relief_size'), 'Not specified')}',
           'Assistance: $assistance',
+          'Contact: ${_text('relief_contact')}',
           'Submitted $timeLabel',
         ];
         break;
