@@ -46,6 +46,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// code showed a success sheet instead.
   bool _submitFailed = false;
 
+  /// True while the multipart POST is in flight, so the button can show a
+  /// spinner and refuse repeat taps.
+  bool _submitting = false;
+
   @override
   void initState() {
     super.initState();
@@ -162,6 +166,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Future<void> _submit() async {
+    // The multipart upload carries a photo and has a 30-second timeout. Without
+    // this guard every extra tap in that window filed another live request in
+    // the dispatcher's queue.
+    if (_submitting) {
+      return;
+    }
+
     if (_validIdFile == null || _validIdFile!.bytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
@@ -260,11 +271,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ],
     );
 
-    final confirmed = await widget.appState.addRequest(
-      request,
-      validIdFileBytes: _validIdFile!.bytes!,
-      validIdFileName: _validIdFile!.name,
-    );
+    setState(() => _submitting = true);
+
+    ServiceRequest? confirmed;
+    try {
+      confirmed = await widget.appState.addRequest(
+        request,
+        validIdFileBytes: _validIdFile!.bytes!,
+        validIdFileName: _validIdFile!.name,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      } else {
+        _submitting = false;
+      }
+    }
 
     if (!mounted) return;
 
@@ -278,13 +300,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     setState(() => _submitFailed = false);
 
+    // A mutable local is not promoted inside a closure, and the sheet's builder
+    // is one.
+    final filed = confirmed;
+
     final f = widget.appState.language == AppLanguage.filipino;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _ConfirmationSheet(
-        refNo: confirmed.refNo,
+        refNo: filed.refNo,
         filipino: f,
         onViewTrack: () {
           Navigator.pop(context);
@@ -337,7 +363,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ),
                 if (_submitFailed) _SubmitErrorCard(filipino: f, onRetry: _submit),
                 const SizedBox(height: 6),
-                AppButton(label: tr(f, 'common.submit_request'), onPressed: _submit),
+                AppButton(
+                  label: tr(f, 'common.submit_request'),
+                  onPressed: _submit,
+                  loading: _submitting,
+                ),
               ],
             ),
           ),
