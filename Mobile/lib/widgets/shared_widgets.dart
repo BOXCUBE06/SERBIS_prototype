@@ -143,8 +143,17 @@ class SectionHeader extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
-          if (actionLabel != null)
+          // Flexible, not Expanded: a short title still sits next to its action
+          // instead of being pushed apart. Without it the Row demanded the
+          // title's natural width and "Subaybayan ang Iyong mga Kahilingan"
+          // overflowed by 22px at 360, striped banner and all.
+          Flexible(
+            child: Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
+          ),
+          if (actionLabel != null) ...[
+            const SizedBox(width: 12),
+            // The action is the smaller target and must stay tappable, so it
+            // keeps its width and the title wraps around it.
             GestureDetector(
               onTap: onAction,
               child: Text(
@@ -152,6 +161,7 @@ class SectionHeader extends StatelessWidget {
                 style: AppText.display(size: 12, weight: FontWeight.w600, color: AppColors.green700),
               ),
             ),
+          ],
         ],
       ),
     );
@@ -344,7 +354,17 @@ class AppButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) Padding(padding: const EdgeInsets.only(right: 7), child: Icon(icon, size: 16, color: fg)),
-              Text(label, style: AppText.display(size: 13, weight: FontWeight.w600, color: fg)),
+              // Flexible so a label wider than the button wraps rather than
+              // overflowing: two side-by-side buttons at 360 gave "Tingnan ang
+              // Detalye" less width than it wanted. Centred so a wrapped second
+              // line stays under the first rather than ragged left.
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppText.display(size: 13, weight: FontWeight.w600, color: fg),
+                ),
+              ),
             ],
           );
 
