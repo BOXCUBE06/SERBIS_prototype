@@ -113,7 +113,10 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M2 — Stop discarding five form fields before submitting**
+- [x] **M2 — Stop discarding five form fields before submitting**
+      **Done 2026-07-26 (`fcf4459`).** Verified live: blank contact refused on
+      the ambulance form, and `tbl_service_request.description` for SR-31 came
+      back carrying `Condition:` and `Contact:`.
       **Severity:** Critical
       **Category:** Correctness
       **Location:** `Mobile/lib/screens/services_screen.dart:166-208` (builds
@@ -141,7 +144,10 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M3 — Don't show the success sheet when the submit failed**
+- [x] **M3 — Don't show the success sheet when the submit failed**
+      **Done 2026-07-26 (`982ca1c`).** Verified live with the backend stopped
+      mid-flow: no success sheet, persistent error card with Retry, entered
+      values and the ID photo kept, and no phantom row left in Track.
       **Severity:** Critical
       **Category:** Error Handling & Observability
       **Location:** `Mobile/lib/screens/services_screen.dart:227-248`
@@ -164,7 +170,10 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M4 — Use the server's reference number, not a client-side counter**
+- [x] **M4 — Use the server's reference number, not a client-side counter**
+      **Done 2026-07-26 (`982ca1c`).** Verified live: the sheet read
+      `Reference #SR-31` against DB `request_id=31`. There is no reference
+      column on the server — `request_id` is the only identity it returns.
       **Severity:** Critical
       **Category:** Correctness
       **Location:** `Mobile/lib/state/request_store.dart:27,48-52`;
@@ -263,7 +272,13 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M8 — Stop announcing "cancelled" before the server confirms it**
+- [x] **M8 — Stop announcing "cancelled" before the server confirms it**
+      **Done 2026-07-26 (`04524aa`).** Verified live both ways: with the server
+      stopped, spinner then no green message and the row reverted to Under
+      review; with it running, green message and DB `status=Cancelled`.
+      Signature is `Future<bool>`, not the `Future<void>` this entry specified —
+      `cancelRequest` catches its own exception for the M5 rollback, so it never
+      throws and "resolved without throwing" cannot distinguish the two.
       **Severity:** High
       **Category:** Error Handling & Observability
       **Location:** `Mobile/lib/widgets/shared_widgets.dart:524-532`
@@ -432,7 +447,10 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M15 — The submit button has no in-flight guard**
+- [x] **M15 — The submit button has no in-flight guard**
+      **Done 2026-07-26 (`69fdbdb`).** Verified live: with the POST delayed 6 s,
+      three taps on Submit produced one row (32 → 33) and the button showed its
+      spinner disabled throughout.
       **Severity:** High
       **Category:** UX Gaps
       **Location:** `Mobile/lib/screens/services_screen.dart:145,293`
@@ -452,7 +470,17 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M16 — Every server-loaded request renders as "Information Inquiry"**
+- [x] **M16 — Every server-loaded request renders as "Information Inquiry"**
+      **Done 2026-07-26 (`6b2a77b`, `df5cf17`).** Label now comes from the
+      catalogue's `service_name`, resolved from the eager-loaded relation on
+      GET and from the catalogue on POST's 201, which carries no `service`.
+      Verified on screen for six services — Ambulance, Road Clearing, Fire
+      Rescue, Search and Rescue, Animal Rescue, Sandbagging — each cross-checked
+      against its stored `service_id`. Rendering the four keyword-only ones
+      exposed a second bug, fixed in `df5cf17`: "Animal Rescue" was caught by the
+      generic `rescue` branch and drew the Search-and-Rescue icon.
+      **Known regression:** `displayTitle` returns the raw English
+      `service_name`, so the six enum types lost their Filipino titles.
       **Severity:** High
       **Category:** Correctness
       **Location:** `Mobile/lib/models/request_models.dart:362`
