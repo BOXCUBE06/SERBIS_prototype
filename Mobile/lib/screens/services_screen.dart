@@ -423,22 +423,42 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
       );
     }
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 1.5,
-      children: _services
-          .map((s) => _TypeCard(
-                title: s.nameLocalized,
-                subtitle: s.displayDescription,
-                icon: s.icon,
-                selected: s.id == _selected?.id,
-                onTap: () => setState(() => _selected = s),
-              ))
-          .toList(),
+    // Rows of two rather than a GridView: childAspectRatio pinned every tile to
+    // one height, so the longest label decided what got clipped. Here the row
+    // is as tall as its taller tile and no taller, and IntrinsicHeight keeps the
+    // pair matched so the grid still reads as a grid.
+    final rows = <Widget>[];
+    for (var i = 0; i < _services.length; i += 2) {
+      final left = _services[i];
+      final right = i + 1 < _services.length ? _services[i + 1] : null;
+
+      rows.add(Padding(
+        padding: EdgeInsets.only(bottom: i + 2 < _services.length ? 10 : 0),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _serviceCard(left)),
+              const SizedBox(width: 10),
+              // An odd-length catalogue leaves a hole rather than a
+              // double-width tile.
+              Expanded(child: right == null ? const SizedBox.shrink() : _serviceCard(right)),
+            ],
+          ),
+        ),
+      ));
+    }
+
+    return Column(children: rows);
+  }
+
+  Widget _serviceCard(ServiceCatalogItem service) {
+    return _TypeCard(
+      title: service.nameLocalized,
+      subtitle: service.displayDescription,
+      icon: service.icon,
+      selected: service.id == _selected?.id,
+      onTap: () => setState(() => _selected = service),
     );
   }
 
@@ -686,16 +706,17 @@ class _TypeCard extends StatelessWidget {
             Text(
               title,
               style: AppText.display(size: 12, weight: FontWeight.w600, height: 1.25),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
             if (subtitle.isNotEmpty) ...[
               const SizedBox(height: 2),
+              // No maxLines and no ellipsis on purpose. Capping at one line cut
+              // every Tagalog blurb mid-word, and capping at two still truncates
+              // the longest of them at 360 px. Yogad is coming and will be
+              // longer again, so the tile grows to the text rather than the text
+              // being cut to the tile.
               Text(
                 subtitle,
                 style: AppText.body(size: 10.5, color: AppColors.inkMuted),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ],
