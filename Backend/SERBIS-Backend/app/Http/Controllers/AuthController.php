@@ -114,7 +114,9 @@ class AuthController extends Controller
         return response()->json([
             'token' => $resident->createToken('resident-token')->plainTextToken,
             'role' => 'resident',
-            'user' => $resident
+            // Load the barangay relation so the mobile profile has a location on
+            // login, matching what /me returns. Residents have no address column.
+            'user' => $resident->load('barangay')
         ], 200);
     }
 

@@ -20,13 +20,16 @@ Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middle
 // Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
 // the submitted email address as well as the IP.
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
+// Public on purpose: the mobile register screen must show a barangay picker
+// before the resident has an account, and barangay_id is required to sign up.
+// The row is nothing but an id and a name, and the write routes stay admin-only.
+Route::get('barangays', [BarangayController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
     // Endpoints requiring read/write access from the mobile application
-    Route::get('barangays', [BarangayController::class, 'index']);
     Route::get('equipments', [EquipmentController::class, 'index']);
     Route::get('services', [ServiceController::class, 'index']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);

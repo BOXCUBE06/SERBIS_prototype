@@ -198,6 +198,89 @@ extension ServiceTypeX on ServiceType {
   }
 }
 
+/// A real service row from `GET /api/services` — the single source of truth for
+/// `service_id`. Replaces the old hardcoded `ServiceType -> id` map that filed an
+/// ambulance request as *Flood Evacuation* (every id passed `exists` validation,
+/// so the misfiling was silent).
+class ServiceCatalogItem {
+  final int id;
+  final String name;
+  final String? description;
+
+  const ServiceCatalogItem({
+    required this.id,
+    required this.name,
+    this.description,
+  });
+
+  factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) {
+    final idValue = json['service_id'] ?? json['id'];
+    final id = idValue is int
+        ? idValue
+        : int.tryParse(idValue?.toString() ?? '') ?? 0;
+    return ServiceCatalogItem(
+      id: id,
+      name: (json['service_name'] ?? json['name'] ?? '') as String,
+      description: json['description'] as String?,
+    );
+  }
+
+  ServiceFormKind get formKind => formKindForServiceName(name);
+  IconData get icon => iconForServiceName(name);
+}
+
+/// Which guided form to show for a catalogue service. Named services reuse the
+/// existing rich forms; anything unrecognised gets the generic description form,
+/// so a service the admin adds later still works without a code change.
+enum ServiceFormKind { ambulance, road, relief, generic }
+
+ServiceFormKind formKindForServiceName(String name) {
+  final n = name.toLowerCase();
+  if (n.contains('ambulance') ||
+      n.contains('medical') ||
+      n.contains('health') ||
+      n.contains('transfer')) {
+    return ServiceFormKind.ambulance;
+  }
+  if (n.contains('road') ||
+      n.contains('clearing') ||
+      n.contains('debris') ||
+      n.contains('tree')) {
+    return ServiceFormKind.road;
+  }
+  if (n.contains('relief') ||
+      n.contains('goods') ||
+      n.contains('food') ||
+      n.contains('sandbag')) {
+    return ServiceFormKind.relief;
+  }
+  return ServiceFormKind.generic;
+}
+
+IconData iconForServiceName(String name) {
+  final n = name.toLowerCase();
+  if (n.contains('ambulance') || n.contains('medical') || n.contains('health')) {
+    return Icons.local_hospital_rounded;
+  }
+  if (n.contains('fire')) return Icons.local_fire_department_rounded;
+  if (n.contains('flood') || n.contains('evac')) return Icons.water_rounded;
+  if (n.contains('road') || n.contains('debris') || n.contains('clearing')) {
+    return Icons.construction_rounded;
+  }
+  if (n.contains('relief') || n.contains('goods') || n.contains('food')) {
+    return Icons.inventory_2_rounded;
+  }
+  if (n.contains('search') || n.contains('rescue')) {
+    return Icons.travel_explore_rounded;
+  }
+  if (n.contains('power') || n.contains('line') || n.contains('electric')) {
+    return Icons.bolt_rounded;
+  }
+  if (n.contains('animal')) return Icons.pets_rounded;
+  if (n.contains('sandbag')) return Icons.shield_rounded;
+  return Icons.emergency_rounded;
+}
+
 class TimelineStep {
   final String title;
   final String time;
@@ -256,7 +339,7 @@ class ServiceRequest {
   }
 
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
-    final idValue = json['id'];
+    final idValue = json['request_id'] ?? json['id'];
     final id = idValue is int ? idValue : int.tryParse(idValue?.toString() ?? '');
 
     final serviceIdValue = json['service_id'];
@@ -288,17 +371,22 @@ class ServiceRequest {
 }
 
 ReqStatus getStatusFromText(String statusText) {
-  if (statusText == 'scheduled' || statusText == 'dispatched') {
+  // Backend vocabulary: Pending / Responding / Resolved / Disapproved / Cancelled.
+  // 'scheduled'/'dispatched'/'completed' are kept for legacy/local rows.
+  if (statusText == 'scheduled' ||
+      statusText == 'dispatched' ||
+      statusText == 'responding') {
     return ReqStatus.scheduled;
   }
 
-  if (statusText == 'completed') {
+  if (statusText == 'completed' || statusText == 'resolved') {
     return ReqStatus.completed;
   }
 
-  if (statusText == 'cancelled') {
+  if (statusText == 'cancelled' || statusText == 'disapproved') {
     return ReqStatus.cancelled;
   }
 
+  // Pending and anything unknown fall through to "Under review".
   return ReqStatus.review;
 }
