@@ -19,9 +19,16 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
+    'allowed_origins' => array_filter([
         env('ADMIN_FRONTEND_URL', 'https://admin.yourdomain.gov.ph'),
-    ],
+
+        // Local development only. The Flutter app's web build is served from its
+        // own port, so without this every API call it makes is blocked by the
+        // browser before it reaches Laravel. Guarded on APP_ENV rather than
+        // app()->environment(), which is not resolvable this early: the container
+        // binds 'env' only after every config file has been loaded.
+        env('APP_ENV') === 'local' ? env('MOBILE_DEV_URL') : null,
+    ]),
 
     'allowed_origins_patterns' => [],
 
