@@ -500,56 +500,142 @@ class _AuthTextFieldState extends State<AuthTextField> {
 /// has to read naturally without one rather than printing a bare `#`.
 String _refSuffix(String refNo) => refNo.isEmpty ? '' : ' #$refNo';
 
-void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirmed, {bool filipino = false}) {
+/// [onConfirmed] must resolve to `true` only once the server has accepted the
+/// cancellation. The success message waits for it — the previous version fired
+/// the "has been cancelled" snackbar the instant the button was tapped, before
+/// any HTTP call had run and regardless of its outcome.
+void showCancelDialog(
+  BuildContext context,
+  String refNo,
+  Future<bool> Function() onConfirmed, {
+  bool filipino = false,
+}) {
   showDialog(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: Text(
-        filipino ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
-        style: AppText.display(size: 16),
-      ),
-      content: Text(
-        filipino
-            ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(refNo)}? Hindi na maibabalik ang aksyon na ito.'
-            : 'Are you sure you want to cancel request${_refSuffix(refNo)}? This action cannot be undone.',
-        style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(
-            filipino ? 'Panatilihin' : 'Keep request',
-            style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.inkMuted),
-          ),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.pop(ctx);
-            onConfirmed();
-            showAppSnackBar(
-              context,
-              filipino
-                  ? 'Nakansela na ang kahilingan${_refSuffix(refNo)}.'
-                  : 'Request${_refSuffix(refNo)} has been cancelled.',
-            );
-          },
-          style: TextButton.styleFrom(backgroundColor: AppColors.red50, foregroundColor: AppColors.red600),
-          child: Text(
-            filipino ? 'Kanselahin' : 'Cancel request',
-            style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.red600),
-          ),
-        ),
-      ],
+    // The request is mid-flight once confirm is tapped; dismissing the dialog
+    // under it would leave the resident with no answer either way.
+    barrierDismissible: false,
+    builder: (ctx) => _CancelDialog(
+      refNo: refNo,
+      filipino: filipino,
+      onConfirmed: onConfirmed,
     ),
   );
 }
 
+class _CancelDialog extends StatefulWidget {
+  final String refNo;
+  final bool filipino;
+  final Future<bool> Function() onConfirmed;
+
+  const _CancelDialog({
+    required this.refNo,
+    required this.filipino,
+    required this.onConfirmed,
+  });
+
+  @override
+  State<_CancelDialog> createState() => _CancelDialogState();
+}
+
+class _CancelDialogState extends State<_CancelDialog> {
+  bool _busy = false;
+
+  Future<void> _confirm() async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+
+    // Resolved before the await: the messenger lives above this dialog's route
+    // and survives the pop, while this State's context does not.
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final cancelled = await widget.onConfirmed();
+
+    if (!mounted) {
+      return;
+    }
+    navigator.pop();
+
+    if (cancelled) {
+      final f = widget.filipino;
+      showAppSnackBarOn(
+        messenger,
+        f
+            ? 'Nakansela na ang kahilingan${_refSuffix(widget.refNo)}.'
+            : 'Request${_refSuffix(widget.refNo)} has been cancelled.',
+      );
+    }
+    // On failure the store has already rolled the row back and set lastError,
+    // which the shell drains into a red snackbar. Saying anything here would
+    // duplicate it.
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.filipino;
+    return PopScope(
+      canPop: !_busy,
+      child: AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
+          style: AppText.display(size: 16),
+        ),
+        content: Text(
+          f
+              ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
+              : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
+          style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.pop(context),
+            child: Text(
+              f ? 'Panatilihin' : 'Keep request',
+              style: AppText.display(
+                size: 13,
+                weight: FontWeight.w600,
+                color: _busy ? AppColors.inkFaint : AppColors.inkMuted,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _busy ? null : _confirm,
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.red50,
+              foregroundColor: AppColors.red600,
+            ),
+            child: _busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.red600),
+                  )
+                : Text(
+                    f ? 'Kanselahin' : 'Cancel request',
+                    style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.red600),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 void showAppSnackBar(BuildContext context, String message, {bool isError = false}) {
-  ScaffoldMessenger.of(context).clearSnackBars();
-  ScaffoldMessenger.of(context).showSnackBar(
+  showAppSnackBarOn(ScaffoldMessenger.of(context), message, isError: isError);
+}
+
+/// Same snackbar, addressed to a messenger captured before an await. A caller
+/// that pops its own route first has no usable BuildContext left.
+void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool isError = false}) {
+  messenger.clearSnackBars();
+  messenger.showSnackBar(
     SnackBar(
       content: Text(message, style: AppText.display(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
       backgroundColor: isError ? AppColors.red600 : AppColors.green900,
