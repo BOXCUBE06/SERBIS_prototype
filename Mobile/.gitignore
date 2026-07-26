@@ -33,6 +33,15 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Plugin registrants, rewritten by the tool on every `flutter pub get` and
+# every build. They carry no reviewable content and churn on any machine that
+# runs the app, so three of them showed as modified after every session.
+# The desktop targets spell the directory lowercase, macOS capitalises it.
+**/flutter/generated_plugin_registrant.cc
+**/flutter/generated_plugin_registrant.h
+**/flutter/generated_plugins.cmake
+**/Flutter/GeneratedPluginRegistrant.swift
+
 # Symbolication related
 app.*.symbols
 
