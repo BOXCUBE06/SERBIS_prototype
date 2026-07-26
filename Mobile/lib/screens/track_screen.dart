@@ -23,7 +23,12 @@ class TrackScreen extends StatefulWidget {
 
 class _TrackScreenState extends State<TrackScreen> {
   ReqStatus? _filter;
-  final Set<String> _expanded = {};
+  final Set<int> _expanded = {};
+
+  /// Keyed on the server's request id. `refNo` is empty for a row that has not
+  /// been confirmed yet, so every in-flight row shared one key and expanding
+  /// any of them expanded all of them.
+  int _keyFor(ServiceRequest request) => request.id ?? identityHashCode(request);
 
   void _changeFilter(ReqStatus? status) {
     setState(() {
@@ -31,12 +36,12 @@ class _TrackScreenState extends State<TrackScreen> {
     });
   }
 
-  void _toggleExpanded(String refNo) {
+  void _toggleExpanded(int key) {
     setState(() {
-      if (_expanded.contains(refNo)) {
-        _expanded.remove(refNo);
+      if (_expanded.contains(key)) {
+        _expanded.remove(key);
       } else {
-        _expanded.add(refNo);
+        _expanded.add(key);
       }
     });
   }
@@ -126,10 +131,10 @@ class _TrackScreenState extends State<TrackScreen> {
             child: Column(
               children: filtered.map((request) => _RequestCard(
                 request: request,
-                expanded: _expanded.contains(request.refNo),
+                expanded: _expanded.contains(_keyFor(request)),
                 filipino: isFilipino,
-                onToggle: () => _toggleExpanded(request.refNo),
-                onCancel: () => widget.appState.cancelRequest(request.refNo),
+                onToggle: () => _toggleExpanded(_keyFor(request)),
+                onCancel: () => widget.appState.cancelRequest(request.id),
               )).toList(),
             ),
           ),
@@ -170,7 +175,9 @@ class _RequestCard extends StatelessWidget {
   final bool expanded;
   final bool filipino;
   final VoidCallback onToggle;
-  final VoidCallback onCancel;
+  /// Resolves to `true` only when the server confirmed the cancellation, so the
+  /// dialog can hold its success message until then.
+  final Future<bool> Function() onCancel;
 
   const _RequestCard({
     required this.request,
@@ -215,7 +222,12 @@ class _RequestCard extends StatelessWidget {
                     children: [
                       Text(request.type.titleFor(filipino), style: AppText.display(size: 14.5)),
                       const SizedBox(height: 2),
-                      Text('Ref #${request.refNo}', style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                      Text(
+                        request.refNo.isEmpty
+                            ? (filipino ? 'Naghihintay ng reference number' : 'Reference number pending')
+                            : 'Ref #${request.refNo}',
+                        style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                      ),
                     ],
                   ),
                 ),

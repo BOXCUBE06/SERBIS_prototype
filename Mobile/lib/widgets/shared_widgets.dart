@@ -496,6 +496,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
   }
 }
 
+/// A request still in flight has no server reference number yet, so the copy
+/// has to read naturally without one rather than printing a bare `#`.
+String _refSuffix(String refNo) => refNo.isEmpty ? '' : ' #$refNo';
+
 void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirmed, {bool filipino = false}) {
   showDialog(
     context: context,
@@ -508,8 +512,8 @@ void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirm
       ),
       content: Text(
         filipino
-            ? 'Sigurado ka bang ikakansela ang kahilingan #$refNo? Hindi na maibabalik ang aksyon na ito.'
-            : 'Are you sure you want to cancel request #$refNo? This action cannot be undone.',
+            ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(refNo)}? Hindi na maibabalik ang aksyon na ito.'
+            : 'Are you sure you want to cancel request${_refSuffix(refNo)}? This action cannot be undone.',
         style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -527,7 +531,9 @@ void showCancelDialog(BuildContext context, String refNo, VoidCallback onConfirm
             onConfirmed();
             showAppSnackBar(
               context,
-              filipino ? 'Nakansela na ang kahilingan #$refNo.' : 'Request #$refNo has been cancelled.',
+              filipino
+                  ? 'Nakansela na ang kahilingan${_refSuffix(refNo)}.'
+                  : 'Request${_refSuffix(refNo)} has been cancelled.',
             );
           },
           style: TextButton.styleFrom(backgroundColor: AppColors.red50, foregroundColor: AppColors.red600),

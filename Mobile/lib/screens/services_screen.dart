@@ -41,6 +41,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   fp.PlatformFile? _validIdFile;
 
+  /// True after a submit that never reached the server. Drives a persistent
+  /// error card with Retry — a snackbar alone auto-dismisses, and the previous
+  /// code showed a success sheet instead.
+  bool _submitFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -158,7 +163,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return;
     }
 
-    final refNo = widget.appState.nextRefNo();
     final timeLabel = _nowLabel();
 
     late List<String> metaLines;
@@ -213,7 +217,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       serviceId: service.id,
       description: description,
       type: _typeForKind(service.formKind),
-      refNo: refNo,
+      // Empty until the server answers: the reference number is the server's
+      // request_id, and inventing one locally gave the resident a number that
+      // matched no record in tbl_service_request.
+      refNo: '',
       status: ReqStatus.review,
       cancellable: true,
       metaLines: metaLines,
@@ -224,7 +231,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ],
     );
 
-    await widget.appState.addRequest(
+    final confirmed = await widget.appState.addRequest(
       request,
       validIdFileBytes: _validIdFile!.bytes!,
       validIdFileName: _validIdFile!.name,
@@ -232,13 +239,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     if (!mounted) return;
 
+    // The submit failed and the optimistic row has already been rolled back.
+    // Keep every entered value and the attached photo so Retry costs one tap,
+    // and show nothing that could be read as "help is on the way".
+    if (confirmed == null) {
+      setState(() => _submitFailed = true);
+      return;
+    }
+
+    setState(() => _submitFailed = false);
+
     final f = widget.appState.language == AppLanguage.filipino;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _ConfirmationSheet(
-        refNo: refNo,
+        refNo: confirmed.refNo,
         filipino: f,
         onViewTrack: () {
           Navigator.pop(context);
@@ -289,6 +306,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   fileName: _validIdFile?.name,
                   onTap: _pickValidId,
                 ),
+                if (_submitFailed) _SubmitErrorCard(filipino: f, onRetry: _submit),
                 const SizedBox(height: 6),
                 AppButton(label: tr(f, 'common.submit_request'), onPressed: _submit),
               ],
@@ -749,6 +767,55 @@ class _UploadField extends StatelessWidget {
                 Text('Tap to upload a photo of the site', style: AppText.body(size: 12, color: AppColors.inkMuted)),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of the confirmation sheet when the submit failed. Stays on
+/// screen — unlike the error snackbar the shell drains — because the resident
+/// has to know the request was never filed.
+class _SubmitErrorCard extends StatelessWidget {
+  final bool filipino;
+  final VoidCallback onRetry;
+
+  const _SubmitErrorCard({required this.filipino, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AppColors.red50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 18, color: AppColors.red600),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  filipino
+                      ? 'Hindi naipadala ang kahilingan. Nandito pa ang mga detalye mo — subukang muli.'
+                      : "Your request wasn't sent. Your details are still here — tap Retry to send them again.",
+                  style: AppText.body(size: 12, color: AppColors.red600, height: 1.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          AppButton(
+            label: filipino ? 'Subukang muli' : 'Retry',
+            style: AppButtonStyle.outline,
+            onPressed: onRetry,
           ),
         ],
       ),

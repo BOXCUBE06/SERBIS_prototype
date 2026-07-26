@@ -24,7 +24,6 @@ class AppState extends ChangeNotifier {
   AppState(this._api);
 
   AppLanguage language = AppLanguage.english;
-  int _refCounter = 101;
 
   /// Last failure worth showing the resident. The shell drains this into a
   /// snackbar; every one of these used to be discarded by a bare `catch (_) {}`,
@@ -71,12 +70,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  String nextRefNo() {
-    final ref = 'QR-2026-${_refCounter.toString().padLeft(3, '0')}';
-    _refCounter = _refCounter + 1;
-    return ref;
-  }
-
   Future<void> loadRequests() async {
     try {
       final list = await _api.getRequests();
@@ -90,7 +83,10 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> addRequest(
+  /// Returns the server-confirmed row, or `null` if the request never reached
+  /// MDRRMO. Callers must not announce success on a `null` — that is what let a
+  /// 422 render a green confirmation sheet with a reference number.
+  Future<ServiceRequest?> addRequest(
     ServiceRequest request, {
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -100,7 +96,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     if (request.serviceId == null || request.description == null) {
-      return;
+      requests.remove(request);
+      lastError = 'This request is incomplete. Please choose a service and try again.';
+      notifyListeners();
+      return null;
     }
 
     try {
@@ -118,25 +117,37 @@ class AppState extends ChangeNotifier {
         requests[index] = confirmed;
         notifyListeners();
       }
+      return confirmed;
     } catch (e) {
       // The optimistic row never reached the server, so drop it. Leaving it in
       // place is what made a 422 "No available vehicles at this time." look like
       // a filed request that MDRRMO would never see.
       requests.remove(request);
       _fail(e);
+      return null;
     }
   }
 
-  Future<void> cancelRequest(String refNo) async {
-    final index = requests.indexWhere((item) => item.refNo == refNo);
+  /// Keyed on the server's `request_id`, never on `refNo`: an unconfirmed row
+  /// carries an empty ref, so every in-flight request would match the same key.
+  /// Returns `true` only once the server has accepted the cancellation.
+  Future<bool> cancelRequest(int? id) async {
+    if (id == null) {
+      // Still in flight: the server has no record to cancel yet.
+      lastError = 'This request is still being sent. Please wait a moment and try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final index = requests.indexWhere((item) => item.id == id);
     if (index == -1) {
-      return;
+      return false;
     }
 
     final current = requests[index];
     if (current.status == ReqStatus.cancelled ||
         current.status == ReqStatus.completed) {
-      return;
+      return false;
     }
 
     requests[index] = current.copyWith(
@@ -154,20 +165,18 @@ class AppState extends ChangeNotifier {
     );
     notifyListeners();
 
-    if (current.id == null) {
-      return;
-    }
-
     try {
-      await _api.cancelRequest(current.id!);
+      await _api.cancelRequest(id);
+      return true;
     } catch (e) {
       // Put the request back the way it was — the server still has it open, and
       // showing it as cancelled would strand the resident with no way to undo.
-      final index = requests.indexWhere((item) => item.refNo == refNo);
-      if (index != -1) {
-        requests[index] = current;
+      final restoreAt = requests.indexWhere((item) => item.id == id);
+      if (restoreAt != -1) {
+        requests[restoreAt] = current;
       }
       _fail(e);
+      return false;
     }
   }
 

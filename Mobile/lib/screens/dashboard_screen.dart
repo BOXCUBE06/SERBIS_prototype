@@ -102,7 +102,10 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 Text(activeRequest.type.titleFor(f), style: AppText.display(size: 14.5)),
                                 const SizedBox(height: 2),
-                                Text('Ref #${activeRequest.refNo}',
+                                Text(
+                                    activeRequest.refNo.isEmpty
+                                        ? (f ? 'Naghihintay ng reference number' : 'Reference number pending')
+                                        : 'Ref #${activeRequest.refNo}',
                                     style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
                               ],
                             ),
@@ -146,7 +149,7 @@ class HomeScreen extends StatelessWidget {
                                 onPressed: () => showCancelDialog(
                                   context,
                                   activeRequest.refNo,
-                                  () => appState.cancelRequest(activeRequest.refNo),
+                                  () => appState.cancelRequest(activeRequest.id),
                                   filipino: f,
                                 ),
                               ),
