@@ -1,6 +1,7 @@
 library serbis.state.api_service;
 
 import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,6 +31,16 @@ class ApiService {
     defaultValue: 'http://127.0.0.1:8000/api',
   );
   static const String _tokenKey = 'serbis_token_v1';
+
+  /// Keychain on iOS, EncryptedSharedPreferences on Android. The token used to
+  /// sit in plain `SharedPreferences`, which is a readable XML file on a rooted
+  /// device and survives in device backups — and Sanctum tokens never expire,
+  /// so a lifted one is a permanent credential to an account holding a
+  /// government ID scan.
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
   static const String _networkMessage =
       'Cannot connect to server. Check your internet connection.';
 
@@ -40,21 +51,68 @@ class ApiService {
   /// where a 401 just means the password was wrong.
   void Function()? onUnauthorized;
 
+  /// Reads the stored token, moving it out of the legacy plain-text
+  /// `SharedPreferences` entry the first time this runs. Without that one-time
+  /// migration every existing install would be silently logged out by the
+  /// switch to secure storage.
   Future<void> loadToken() async {
+    _token = await _readSecureToken();
+    if (isLoggedIn) {
+      return;
+    }
+
+    // Legacy read path. Keep for exactly one release, then delete this block
+    // and the `shared_preferences` import with it.
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString(_tokenKey);
+    final legacy = prefs.getString(_tokenKey);
+    if (legacy == null || legacy.isEmpty) {
+      return;
+    }
+
+    _token = legacy;
+    // Only drop the old copy once the new one is actually written, or a failed
+    // write loses the session it was migrating.
+    if (await _writeSecureToken(legacy)) {
+      await prefs.remove(_tokenKey);
+    }
   }
 
   bool get isLoggedIn => _token != null && _token!.isNotEmpty;
 
+  Future<String?> _readSecureToken() async {
+    try {
+      return await _secureStorage.read(key: _tokenKey);
+    } catch (_) {
+      // An Android restore-from-backup can leave the entry unreadable: the
+      // ciphertext is restored but the Keystore key that decrypts it is not.
+      // Drop it instead of failing every launch from here on.
+      await _secureStorage.delete(key: _tokenKey).catchError((_) {});
+      return null;
+    }
+  }
+
+  /// Returns whether the write landed. There is deliberately no plain-prefs
+  /// fallback — that would put the token straight back where this task moved
+  /// it from.
+  Future<bool> _writeSecureToken(String token) async {
+    try {
+      await _secureStorage.write(key: _tokenKey, value: token);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _saveToken(String token) async {
     _token = token;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await _writeSecureToken(token);
   }
 
   Future<void> _clearToken() async {
     _token = null;
+    await _secureStorage.delete(key: _tokenKey).catchError((_) {});
+    // Also clear the legacy entry: a token issued before this release may still
+    // be sitting there if the migration write failed.
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
   }
