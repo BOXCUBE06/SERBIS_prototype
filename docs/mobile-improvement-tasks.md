@@ -320,7 +320,21 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M10 — The offline "Download / Saved" pill saves nothing**
+- [x] **M10 — The offline "Download / Saved" pill saves nothing**
+      **Done 2026-07-28.** `state/material_cache.dart` (+ `_io` / `_unsupported`
+      halves behind a conditional import, because importing `dart:io` at all
+      breaks the web build) writes materials to
+      `<app documents>/materials/<id>.<ext>` and keeps an index in
+      `SharedPreferences`. `OfflinePill` is now stateless and only draws
+      `AppState.savedMaterials`; the 700 ms `Future.delayed` is gone. Downloads
+      write to a `.part` sibling and rename, so a killed download cannot leave a
+      truncated file the index calls complete, and `loadIndex` prunes any entry
+      whose file has vanished. Profile's "5 saved · 4.2 MB used" is computed
+      from the index and its list offers a real Remove. Bundled articles show a
+      non-tappable "Saved" — they ship in the binary, which is the one honest
+      claim in the old UI. Covered by 8 tests in `test/material_cache_test.dart`
+      asserting against a real temp directory. **Not verified on a device**: no
+      Chrome on the XAMPP box, and web has no documents directory by design.
       **Severity:** High
       **Category:** UX Gaps (also Correctness)
       **Location:** `Mobile/lib/widgets/shared_widgets.dart:264-279`
@@ -344,7 +358,17 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M11 — Library content is 694 lines of hardcoded Dart; `/info-materials` is never called**
+- [x] **M11 — Library content is 694 lines of hardcoded Dart; `/info-materials` is never called**
+      **Done 2026-07-28.** `ApiService.getInfoMaterials()` + `InfoMaterial`
+      model + `AppState.loadMaterials()`, rendered by a new "MDRRMO Documents"
+      section in the Library. The index loads before the network so the list is
+      on screen with no signal; a failed refresh renders the saved copies with a
+      "showing your saved copies" notice and a Retry, never an empty Library.
+      The duplicated list in `_OfflineMaterialsPage` is gone. The bundled
+      articles stay as the fallback for a fresh install with no signal, as the
+      fix note asked. Covered by 8 tests in `test/materials_store_test.dart`.
+      **Left open — a downloaded file cannot be opened yet** (see M33); this
+      change makes the cache real, not the viewer.
       **Severity:** High
       **Category:** Correctness (hardcoded values that should come from the API)
       **Location:** `Mobile/lib/data/safety_files.dart` (688 lines);
@@ -857,6 +881,26 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
+- [ ] **M33 — A downloaded material cannot be opened**
+      **Severity:** High
+      **Category:** UX Gaps
+      **Location:** `Mobile/lib/screens/library_screen.dart` (`_MaterialRow`),
+      `Mobile/lib/state/material_cache.dart`
+      **Problem:** Added by M10/M11 and recorded rather than faked. The cache
+      writes the real file and the row honestly reports "Saved", but tapping the
+      row does nothing — there is no viewer and no handoff to one, so a resident
+      who downloads the Evacuation Center Map before a storm cannot look at it.
+      The rich in-app articles are unaffected; this is only the server-published
+      PDFs and images.
+      **Fix:** Open the cached file through `open_filex` (or `url_launcher` with
+      a `file://` URI plus an Android `FileProvider`), falling back to the
+      material's `full_url` in the browser while online and it is not yet saved.
+      Land it with M1, which adds `url_launcher` anyway.
+      **Effort:** M
+      **Blocks:** —
+
+---
+
 ## Not findings — checked and correct
 
 Recorded so the next audit doesn't re-derive them.
@@ -894,7 +938,7 @@ Recorded so the next audit doesn't re-derive them.
 | 3. Auth & session | M7 (+ M6, M12 via the branch) |
 | 4. Build & release readiness | M9, M14, M20, M29 |
 | 5. Code structure | M18, M27, M31 |
-| 6. UX gaps | M1, M10, M15, M23, M24, M25, M26, M32 |
+| 6. UX gaps | M1, M10, M15, M23, M24, M25, M26, M32, M33 |
 
 Gaps-report items deliberately **not** repeated here: C1–C7 (closed on
 `mobile-c1-c6-c7`), C8 `required_vehicle_type` (dropped by the five-feature

@@ -338,6 +338,39 @@ class ApiService {
     return _listFrom(data, 'services');
   }
 
+  Future<List<Map<String, dynamic>>> getInfoMaterials() async {
+    final data = await _get('/info-materials');
+    return _listFrom(data, 'materials');
+  }
+
+  /// Fetches a published material's bytes from its absolute `full_url`, which
+  /// points at the public storage disk rather than at `/api`. The auth header
+  /// goes along anyway: it costs nothing on a public file and keeps working if
+  /// the route is ever moved behind Sanctum.
+  ///
+  /// A longer timeout than the JSON calls — this is a file over a rural
+  /// connection, and 15 s would fail a download that was progressing fine.
+  Future<List<int>> downloadFile(String url) async {
+    http.Response response;
+
+    try {
+      response = await http
+          .get(Uri.parse(url), headers: _headers)
+          .timeout(const Duration(seconds: 60));
+    } catch (_) {
+      throw const ApiException(_networkMessage);
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        'Could not download this file.',
+        statusCode: response.statusCode,
+      );
+    }
+
+    return response.bodyBytes;
+  }
+
   /// Unwraps a collection that may arrive bare, under `data`, or under a named
   /// key depending on whether the controller paginates.
   List<Map<String, dynamic>> _listFrom(

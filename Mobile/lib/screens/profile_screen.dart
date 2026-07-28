@@ -4,6 +4,7 @@ library serbis.screens.profile;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/safety_files.dart';
+import '../state/material_cache.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -154,10 +155,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _SettingsRow(
                 icon: Icons.download_outlined,
                 title: tr(filipino, 'profile.offline_materials'),
-                subtitle: '5 saved · 4.2 MB used',
+                // Counted off the cache index. It used to read a hardcoded
+                // "5 saved · 4.2 MB used" on a device with nothing saved.
+                subtitle: _offlineSummary(filipino),
                 trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => _OfflineMaterialsPage(filipino: filipino)),
+                  MaterialPageRoute(
+                    builder: (_) => _OfflineMaterialsPage(
+                      appState: widget.appState,
+                      filipino: filipino,
+                    ),
+                  ),
                 ),
               ),
               _SettingsRow(
@@ -283,6 +291,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  String _offlineSummary(bool filipino) {
+    final saved = widget.appState.savedMaterials.values;
+    if (saved.isEmpty) {
+      return filipino
+          ? 'Mga artikulo lang ng app'
+          : 'App articles only';
+    }
+
+    var bytes = 0;
+    for (final entry in saved) {
+      bytes += entry.sizeBytes;
+    }
+
+    final size = bytes < 1024 * 1024
+        ? '${(bytes / 1024).round()} KB'
+        : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+
+    return filipino
+        ? '${saved.length} na-save · $size'
+        : '${saved.length} saved · $size';
+  }
+
   Future<void> _pickLanguage(BuildContext context) async {
     const options = [AppLanguage.english, AppLanguage.filipino];
     final current = widget.appState.language;
@@ -385,25 +415,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-/// Simple list of saved/available offline materials, opened from the
-/// "Offline materials" row on Profile.
-class _OfflineMaterialsPage extends StatelessWidget {
+/// What is actually available with no signal: the articles compiled into the
+/// app, and the MDRRMO documents downloaded to this device.
+///
+/// The list used to be eight hardcoded `(article, pages, saved)` tuples — a
+/// second copy of the Library's own literals, kept in sync by hand, with
+/// "saved" flags that described nothing on disk.
+class _OfflineMaterialsPage extends StatefulWidget {
+  final AppState appState;
   final bool filipino;
-  const _OfflineMaterialsPage({required this.filipino});
+
+  const _OfflineMaterialsPage({required this.appState, required this.filipino});
+
+  @override
+  State<_OfflineMaterialsPage> createState() => _OfflineMaterialsPageState();
+}
+
+class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
+  bool get filipino => widget.filipino;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.appState.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.appState.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _remove(CachedMaterial entry) async {
+    await widget.appState.removeMaterialOffline(entry.id);
+    if (!mounted) {
+      return;
+    }
+
+    showAppSnackBar(
+      context,
+      filipino
+          ? 'Tinanggal ang ${entry.title} sa device na ito.'
+          : '${entry.title} removed from this device.',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // (article key, page count label override, saved)
-    final items = [
-      ('cpr', filipino ? '4 na pahina' : '4 pages', true),
-      ('burns', filipino ? '3 pahina' : '3 pages', true),
-      ('wound_care', filipino ? '2 pahina' : '2 pages', true),
-      ('before', null, true),
-      ('evacuation_map', null, true),
-      ('during', null, false),
-      ('after', null, false),
-      ('drrm_plan', null, false),
-    ];
+    final downloaded = widget.appState.savedMaterials.values.toList()
+      ..sort((a, b) => b.savedAt.compareTo(a.savedAt));
+
+    // Every bundled article ships inside the binary, so all of them are
+    // offline-available — there is no per-article saved state to track.
+    final articleKeys = libraryArticles.keys.toList();
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -432,14 +502,102 @@ class _OfflineMaterialsPage extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 6),
+            child: SectionHeader(
+              title: filipino
+                  ? 'Mga Na-download na Dokumento'
+                  : 'Downloaded Documents',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: downloaded.isEmpty
+                ? Container(
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border.all(color: AppColors.line),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      filipino
+                          ? 'Wala pang na-download. Buksan ang Aklatan at pindutin ang I-download.'
+                          : 'Nothing downloaded yet. Open the Library and tap Download.',
+                      style: AppText.body(size: 12, color: AppColors.inkMuted),
+                    ),
+                  )
+                : Column(
+                    children: downloaded.map((entry) {
+                      final material = entry.toMaterial();
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border.all(color: AppColors.line),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(13),
+                          child: Row(
+                            children: [
+                              IconBadge(
+                                icon: material.icon,
+                                bg: AppColors.green50,
+                                fg: AppColors.green700,
+                                size: 36,
+                                iconSize: 17,
+                                radius: 10,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      entry.title,
+                                      style: AppText.display(size: 13, weight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        material.typeLabel,
+                                        if (material.sizeLabel.isNotEmpty) material.sizeLabel,
+                                      ].join(' · '),
+                                      style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => _remove(entry),
+                                tooltip: filipino ? 'Tanggalin' : 'Remove',
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 19,
+                                  color: AppColors.inkMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 6),
+            child: SectionHeader(
+              title: filipino ? 'Kasama sa App' : 'Included in the App',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
             child: Column(
-              children: items.map((i) {
-                final article = libraryArticles[i.$1]!;
+              children: articleKeys.map((key) {
+                final article = libraryArticles[key]!;
                 final title = article.titleFor(filipino: filipino);
                 final subtitle = article.subtitleFor(filipino: filipino);
-                final pages = i.$2;
-                final saved = i.$3;
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 9),
@@ -469,14 +627,14 @@ class _OfflineMaterialsPage extends StatelessWidget {
                                   Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
                                   const SizedBox(height: 2),
                                   Text(
-                                    pages == null ? subtitle : '$subtitle · $pages',
+                                    subtitle,
                                     style: AppText.body(size: 11.5, color: AppColors.inkMuted),
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 8),
-                            OfflinePill(saved: saved, label: title),
+                            OfflinePill(saved: true, filipino: filipino),
                             const SizedBox(width: 6),
                             const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.inkFaint),
                           ],

@@ -257,59 +257,58 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-class OfflinePill extends StatefulWidget {
+/// Shows whether a material is available offline, and offers to download it
+/// when it is not.
+///
+/// Deliberately stateless: it used to own a `_saved` bool that a 700 ms
+/// `Future.delayed` flipped, so the pill reported "Saved" over an empty disk and
+/// forgot even that on the next rebuild. The truth now lives in the cache index
+/// (`AppState.savedMaterials`), and this widget only draws it. [onTap] null
+/// means there is nothing to download — either the content is already saved, or
+/// it ships inside the app.
+class OfflinePill extends StatelessWidget {
   final bool saved;
-  final String? label;
+  final bool loading;
   final bool filipino;
-  const OfflinePill({super.key, required this.saved, this.label, this.filipino = false});
+  final VoidCallback? onTap;
 
-  @override
-  State<OfflinePill> createState() => _OfflinePillState();
-}
-
-class _OfflinePillState extends State<OfflinePill> {
-  late bool _saved = widget.saved;
-  bool _loading = false;
-
-  Future<void> _handleTap() async {
-    if (_saved || _loading) return;
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _saved = true;
-    });
-    showAppSnackBar(
-      context,
-      widget.filipino
-          ? '${widget.label ?? 'Item'} ay na-save para sa offline na gamit.'
-          : '${widget.label ?? 'Item'} saved for offline use.',
-    );
-  }
+  const OfflinePill({
+    super.key,
+    required this.saved,
+    this.loading = false,
+    this.filipino = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final String label;
+    if (loading) {
+      label = filipino ? 'Sine-save...' : 'Saving...';
+    } else if (saved) {
+      label = filipino ? 'Na-save' : 'Saved';
+    } else {
+      label = filipino ? 'I-download' : 'Download';
+    }
+
     return GestureDetector(
-      onTap: _handleTap,
+      onTap: loading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(20)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _loading
+            loading
                 ? const SizedBox(
                     width: 12,
                     height: 12,
                     child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
                   )
-                : Icon(_saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 12, color: AppColors.green700),
+                : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 12, color: AppColors.green700),
             const SizedBox(width: 4),
             Text(
-              _loading
-                  ? (widget.filipino ? 'Sine-save...' : 'Saving...')
-                  : (_saved ? (widget.filipino ? 'Na-save' : 'Saved') : (widget.filipino ? 'I-download' : 'Download')),
+              label,
               style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
             ),
           ],

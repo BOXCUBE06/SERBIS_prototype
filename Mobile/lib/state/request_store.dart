@@ -2,8 +2,10 @@
 library serbis.state.app_state;
 
 import 'package:flutter/foundation.dart';
+import '../models/info_material.dart';
 import '../models/request_models.dart';
 import 'api_service.dart';
+import 'material_cache.dart';
 
 enum AppLanguage { english, filipino }
 
@@ -18,10 +20,40 @@ extension AppLanguageX on AppLanguage {
 
 class AppState extends ChangeNotifier {
   final ApiService _api;
+  final MaterialCache _materialCache;
   final List<ServiceRequest> requests = [];
   final List<ServiceCatalogItem> services = [];
 
-  AppState(this._api);
+  /// Materials published by MDRRMO. Comes from `GET /info-materials`, or from
+  /// the offline index when the server cannot be reached.
+  final List<InfoMaterial> materials = [];
+
+  /// id -> the copy on this device. Drives the "Saved" state; nothing else may.
+  Map<int, CachedMaterial> savedMaterials = <int, CachedMaterial>{};
+
+  /// Downloads in flight, so a second tap cannot start a second download of the
+  /// same file.
+  final Set<int> savingMaterialIds = <int>{};
+
+  bool materialsLoading = false;
+  String? materialsError;
+
+  /// True when the list on screen came from the device, not the server. The
+  /// Library says so — a resident reading a week-old advisory during a flood
+  /// needs to know it might be stale.
+  bool materialsFromCache = false;
+
+  AppState(this._api, {MaterialCache? materialCache})
+      : _materialCache =
+            materialCache ?? MaterialCache(download: _api.downloadFile);
+
+  /// False on web, where there is nowhere to write. The download affordance is
+  /// hidden entirely rather than offered and failing.
+  bool get canSaveOffline => _materialCache.isSupported;
+
+  bool isSavedOffline(int id) => savedMaterials.containsKey(id);
+
+  bool isSavingOffline(int id) => savingMaterialIds.contains(id);
 
   AppLanguage language = AppLanguage.english;
 
@@ -93,6 +125,80 @@ class AppState extends ChangeNotifier {
       services.clear();
       notifyListeners();
     }
+  }
+
+  /// Loads the offline index first, then refreshes from the server. The index
+  /// comes first on purpose: it is instant and works with no signal, so the
+  /// Library has content on screen before the network is even tried.
+  ///
+  /// A failed refresh is not an empty Library. Saved copies are rendered
+  /// instead, flagged as such — this is scope item #4, and "no signal" is the
+  /// exact condition the feature exists for.
+  Future<void> loadMaterials() async {
+    materialsLoading = true;
+    notifyListeners();
+
+    savedMaterials = await _materialCache.loadIndex();
+
+    try {
+      final list = await _api.getInfoMaterials();
+      materials
+        ..clear()
+        ..addAll(list.map(InfoMaterial.fromJson));
+      materialsFromCache = false;
+      materialsError = null;
+    } catch (error) {
+      final offline = savedMaterials.values.toList()
+        ..sort((a, b) => b.savedAt.compareTo(a.savedAt));
+      materials
+        ..clear()
+        ..addAll(offline.map((entry) => entry.toMaterial()));
+      materialsFromCache = materials.isNotEmpty;
+      materialsError = error is ApiException
+          ? error.message
+          : 'Something went wrong. Please try again.';
+    }
+
+    materialsLoading = false;
+    notifyListeners();
+  }
+
+  /// Returns whether the file is now on the device. The caller must not
+  /// announce "saved" on a false — announcing it anyway is what made the old
+  /// pill a placebo.
+  Future<bool> saveMaterialOffline(InfoMaterial material) async {
+    if (!canSaveOffline ||
+        savingMaterialIds.contains(material.id) ||
+        savedMaterials.containsKey(material.id)) {
+      return false;
+    }
+
+    savingMaterialIds.add(material.id);
+    notifyListeners();
+
+    final entry = await _materialCache.save(material);
+
+    savingMaterialIds.remove(material.id);
+    if (entry != null) {
+      savedMaterials = <int, CachedMaterial>{...savedMaterials, entry.id: entry};
+    }
+    notifyListeners();
+
+    return entry != null;
+  }
+
+  Future<void> removeMaterialOffline(int id) async {
+    await _materialCache.remove(id);
+    final next = <int, CachedMaterial>{...savedMaterials}..remove(id);
+    savedMaterials = next;
+
+    // The row itself only exists because of the saved copy when the list came
+    // from the cache; drop it too rather than leave a title pointing at nothing.
+    if (materialsFromCache) {
+      materials.removeWhere((material) => material.id == id);
+    }
+
+    notifyListeners();
   }
 
   void setLanguage(AppLanguage value) {

@@ -220,6 +220,9 @@ class _RootShellState extends State<RootShell> {
     // themselves in the resident's language until the catalogue is in hand.
     // Waiting for a visit to the Services tab would show English until then.
     _appState.loadServices();
+    // Loads the offline index too, so Profile can report what is on the device
+    // even if the Library tab is never opened this launch.
+    _appState.loadMaterials();
   }
 
   @override

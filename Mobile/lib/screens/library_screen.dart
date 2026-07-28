@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/safety_files.dart';
+import '../models/info_material.dart';
 import '../state/request_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
@@ -47,6 +48,8 @@ class LibraryScreen extends StatelessWidget {
                         style: AppText.display(size: 14.5),
                       ),
                     ),
+                    // Hotlines are compiled into the app, so they are genuinely
+                    // available with no signal. Nothing to download.
                     OfflinePill(saved: true, filipino: filipino),
                   ],
                 ),
@@ -65,9 +68,9 @@ class LibraryScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeader(title: filipino ? 'Pangunahing Lunas (First Aid)' : 'Basic First Aid'),
-              _LibItem(articleKey: 'cpr', pages: filipino ? '4 na pahina' : '4 pages', saved: true, filipino: filipino),
-              _LibItem(articleKey: 'burns', pages: filipino ? '3 pahina' : '3 pages', saved: true, filipino: filipino),
-              _LibItem(articleKey: 'wound_care', pages: filipino ? '2 pahina' : '2 pages', saved: true, filipino: filipino),
+              _LibItem(articleKey: 'cpr', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
+              _LibItem(articleKey: 'burns', pages: filipino ? '3 pahina' : '3 pages', filipino: filipino),
+              _LibItem(articleKey: 'wound_care', pages: filipino ? '2 pahina' : '2 pages', filipino: filipino),
             ],
           ),
         ),
@@ -77,32 +80,25 @@ class LibraryScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeader(title: filipino ? 'Paghahanda sa Sakuna' : 'Disaster Preparedness'),
-              _LibItem(articleKey: 'before', pages: filipino ? '5 pahina' : '5 pages', saved: true, filipino: filipino),
-              _LibItem(articleKey: 'during', pages: filipino ? '4 na pahina' : '4 pages', saved: false, filipino: filipino),
-              _LibItem(articleKey: 'after', pages: filipino ? '4 na pahina' : '4 pages', saved: false, filipino: filipino),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: filipino ? 'Mga Dokumento ng MDRRMO' : 'MDRRMO Documents'),
+              _LibItem(articleKey: 'before', pages: filipino ? '5 pahina' : '5 pages', filipino: filipino),
+              _LibItem(articleKey: 'during', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
+              _LibItem(articleKey: 'after', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
               _LibItem(
                 articleKey: 'drrm_plan',
                 pages: filipino ? 'Buod · 4 bahagi' : 'Summary · 4 sections',
-                saved: false,
                 filipino: filipino,
               ),
               _LibItem(
                 articleKey: 'evacuation_map',
                 pages: filipino ? 'Buod · 4 bahagi' : 'Summary · 4 sections',
-                saved: true,
                 filipino: filipino,
               ),
             ],
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          child: _PublishedMaterials(appState: appState, filipino: filipino),
         ),
         const SizedBox(height: 110),
       ],
@@ -129,19 +125,20 @@ class LibraryScreen extends StatelessWidget {
 }
 
 /// A tappable library item — opens the corresponding [LibraryArticle] in
-/// the [ArticleReaderScreen], in the selected language. The trailing
-/// [OfflinePill] still toggles the saved/download state independently of
-/// the tap-to-read action.
+/// the [ArticleReaderScreen], in the selected language.
+///
+/// Its pill is always "Saved" and never tappable: these articles are compiled
+/// into the app, so they are readable with no signal and there is nothing to
+/// download. The old per-row `saved:` literals said otherwise for four of the
+/// eight rows, which was simply wrong.
 class _LibItem extends StatelessWidget {
   final String articleKey;
   final String pages;
-  final bool saved;
   final bool filipino;
 
   const _LibItem({
     required this.articleKey,
     required this.pages,
-    required this.saved,
     required this.filipino,
   });
 
@@ -183,13 +180,213 @@ class _LibItem extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                OfflinePill(saved: saved, label: title, filipino: filipino),
+                OfflinePill(saved: true, filipino: filipino),
                 const SizedBox(width: 6),
                 const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.inkFaint),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Materials published by MDRRMO through the admin panel, fetched from
+/// `GET /info-materials`. Before this section existed the endpoint had no
+/// caller at all, so an advisory published during a live disaster could not
+/// reach a resident without an app release.
+class _PublishedMaterials extends StatelessWidget {
+  final AppState appState;
+  final bool filipino;
+
+  const _PublishedMaterials({required this.appState, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final materials = appState.materials;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: filipino ? 'Mga Dokumento ng MDRRMO' : 'MDRRMO Documents',
+        ),
+        if (appState.materialsLoading && materials.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else if (materials.isEmpty)
+          _Notice(
+            text: appState.materialsError ??
+                (filipino
+                    ? 'Wala pang nakalathalang dokumento.'
+                    : 'No documents published yet.'),
+            onRetry: appState.materialsError == null
+                ? null
+                : () => appState.loadMaterials(),
+            filipino: filipino,
+          )
+        else ...[
+          if (appState.materialsFromCache)
+            _Notice(
+              text: filipino
+                  ? 'Naka-save na kopya ang ipinapakita. Hindi maabot ang server.'
+                  : 'Showing your saved copies. The server could not be reached.',
+              onRetry: () => appState.loadMaterials(),
+              filipino: filipino,
+            ),
+          for (final material in materials)
+            _MaterialRow(
+              material: material,
+              appState: appState,
+              filipino: filipino,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MaterialRow extends StatelessWidget {
+  final InfoMaterial material;
+  final AppState appState;
+  final bool filipino;
+
+  const _MaterialRow({
+    required this.material,
+    required this.appState,
+    required this.filipino,
+  });
+
+  Future<void> _save(BuildContext context) async {
+    final saved = await appState.saveMaterialOffline(material);
+    if (!context.mounted) {
+      return;
+    }
+
+    // Only claim success on a true. The old pill announced "saved for offline
+    // use" unconditionally, having written nothing at all.
+    showAppSnackBar(
+      context,
+      saved
+          ? (filipino
+              ? '${material.title} ay na-save para sa offline na gamit.'
+              : '${material.title} saved for offline use.')
+          : (filipino
+              ? 'Hindi ma-download ang ${material.title}.'
+              : 'Could not download ${material.title}.'),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final saved = appState.isSavedOffline(material.id);
+    final saving = appState.isSavingOffline(material.id);
+    final meta = [
+      material.typeLabel,
+      if (material.sizeLabel.isNotEmpty) material.sizeLabel,
+    ].join(' · ');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(13),
+        child: Row(
+          children: [
+            IconBadge(
+              icon: material.icon,
+              bg: AppColors.green50,
+              fg: AppColors.green700,
+              size: 40,
+              iconSize: 19,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    material.title,
+                    style: AppText.display(size: 13, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    meta,
+                    style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Web has nowhere to write, so it gets no download affordance at
+            // all rather than a button that can only fail.
+            if (appState.canSaveOffline)
+              OfflinePill(
+                saved: saved,
+                loading: saving,
+                filipino: filipino,
+                onTap: saved ? null : () => _save(context),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Notice extends StatelessWidget {
+  final String text;
+  final VoidCallback? onRetry;
+  final bool filipino;
+
+  const _Notice({required this.text, this.onRetry, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.body(size: 12, color: AppColors.inkMuted),
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onRetry,
+              child: Text(
+                filipino ? 'Subukan muli' : 'Retry',
+                style: AppText.display(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: AppColors.green700,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
