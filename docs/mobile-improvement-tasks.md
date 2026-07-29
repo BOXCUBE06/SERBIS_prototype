@@ -615,7 +615,9 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
       passing tests, added alongside the fixes that needed them: M7 (token
       storage), M10/M11 and M33 (cache, store, open routes), M14 (base URL), and
       M22/M31 (`api_response_parsing_test.dart` — the list unwrapper,
-      `ServiceRequest.fromJson`, `AppUser.fromJson`). Still missing the rest of
+      `ServiceRequest.fromJson`, `AppUser.fromJson`) and M21
+      (`requests_refresh_test.dart` — the refresh guards, and the first widget
+      tests of a main screen). Still missing the rest of
       what this task asks for: `ServiceCatalogItem.fromJson`,
       `getStatusFromText`, the 401/422 body shapes, `AppState` submit/cancel
       against a mocked `ApiService` (the M5 rollback), and any CI wiring —
@@ -686,7 +688,40 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M21 — Request list is fetched once per launch and never refreshed**
+- [x] **M21 — Request list is fetched once per launch and never refreshed**
+      **Done 2026-07-29.** All four routes the task asked for: `RefreshIndicator`
+      on Track and Home, a refetch when either becomes the visible tab, a
+      refetch on `AppLifecycleState.resumed`, and a 45 s poll that runs only
+      while one of those two tabs is foregrounded. The poll lives in
+      `_RootShellState`, not in the screens: they sit in an `IndexedStack` and
+      are never unmounted, so a screen cannot tell whether it is on top.
+      Repeated fetching needed three guards in `loadRequests`, each covering a
+      way the old once-per-launch call could not fail:
+      • **single-flight** — the poll, a tab switch and a resume can all land
+      within a second, and two fetches both `clear()`ing the same list drops
+      rows.
+      • **pending rows are carried across** — a request submitted seconds ago
+      has no server id and the server does not know about it, so a refresh
+      landing mid-POST would wipe it off the screen *and* strand `addRequest`,
+      which holds that exact object to swap for the confirmed row.
+      • **`silent`** — a background poll with no signal must not stack a
+      snackbar over the screen every 45 s. A pull-to-refresh is not silent.
+      Plus a `maxAge` so tapping between Home and Track is not a request each
+      way, not stamped on failure so a retry is never skipped.
+      Verified: `test/requests_refresh_test.dart` — 9 store tests over all of
+      the above, plus 2 widget tests that fling the Track screen and assert the
+      refetch. Mutation-checked: replacing `onRefresh` with a no-op fails both
+      widget tests, and so does `ClampingScrollPhysics`. 50/50 tests pass,
+      `flutter analyze` stays at its 25-issue baseline,
+      `flutter build web --release` still compiles.
+      **Not verified:** the lifecycle and poll paths themselves — no widget test
+      drives `didChangeAppLifecycleState` or waits out a 45 s timer, and neither
+      has been exercised on a device.
+      **Note:** the explicit `AlwaysScrollableScrollPhysics` on both lists is
+      redundant today — a `ListView` with no controller is `primary` and gets it
+      free — and is stated so the pull survives either list being given a
+      controller. Removing it does not fail the tests; changing the physics to
+      one that cannot overscroll does.
       **Severity:** Medium
       **Category:** Correctness (state desync)
       **Location:** `Mobile/lib/main.dart:177-181`;

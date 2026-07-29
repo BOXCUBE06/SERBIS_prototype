@@ -260,16 +260,66 @@ class AppState extends ChangeNotifier {
     loadServices();
   }
 
-  Future<void> loadRequests() async {
+  /// True while a fetch is in flight. One at a time: the poll, the pull, the
+  /// tab switch and the resume can all fire within a second of each other, and
+  /// two overlapping fetches both `clear()` the same list.
+  bool _requestsInFlight = false;
+
+  /// When the list last came back from the server. Drives [maxAge], so
+  /// arriving on a tab does not refetch a list that is seconds old.
+  DateTime? _requestsFetchedAt;
+
+  @visibleForTesting
+  DateTime? get requestsFetchedAt => _requestsFetchedAt;
+
+  /// Refetches the resident's requests.
+  ///
+  /// The dispatcher can move a request from Pending to Responding to Resolved
+  /// while the app is open, and this used to run exactly once per launch, so
+  /// the resident watched "Under review" until they killed the process.
+  ///
+  /// [silent] suppresses the error: a background poll that fails must not put
+  /// a snackbar over the screen every 45 seconds, and the list already on
+  /// screen stays there. A pull-to-refresh is not silent — the resident asked,
+  /// so they get an answer.
+  ///
+  /// [maxAge] skips the fetch entirely when the list is younger than it, so
+  /// tapping between Home and Track does not hit the server each time.
+  Future<void> loadRequests({bool silent = false, Duration? maxAge}) async {
+    if (_requestsInFlight) {
+      return;
+    }
+
+    if (maxAge != null &&
+        _requestsFetchedAt != null &&
+        DateTime.now().difference(_requestsFetchedAt!) < maxAge) {
+      return;
+    }
+
+    _requestsInFlight = true;
+
     try {
       final list = await _api.getRequests();
-      requests.clear();
-      for (final item in list) {
-        requests.add(_resolveService(ServiceRequest.fromJson(item)));
-      }
+
+      // A request submitted seconds ago has no server id yet, and the server
+      // does not know about it, so a refetch would wipe it off the screen —
+      // and `addRequest` holds a reference to that exact object to swap for the
+      // confirmed row, which it would then never find. Carry them across.
+      final pending = requests.where((item) => item.id == null).toList();
+
+      requests
+        ..clear()
+        ..addAll(pending)
+        ..addAll(list.map((item) => _resolveService(ServiceRequest.fromJson(item))));
+
+      _requestsFetchedAt = DateTime.now();
       notifyListeners();
     } catch (e) {
-      _fail(e);
+      if (!silent) {
+        _fail(e);
+      }
+    } finally {
+      _requestsInFlight = false;
     }
   }
 

@@ -1,6 +1,8 @@
 
 library serbis.main;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
@@ -261,16 +263,35 @@ class RootShell extends StatefulWidget {
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
+  /// Tabs whose content goes stale on its own, because the dispatcher moves a
+  /// request through its statuses server-side. Home shows the active request
+  /// card; Track shows the list.
+  static const Set<int> _statusTabs = {0, 2};
+
+  /// Long enough not to hammer a rural connection, short enough that a resident
+  /// watching for the ambulance sees the change without doing anything. An
+  /// interim measure — this is what push notifications are for.
+  static const Duration _pollInterval = Duration(seconds: 45);
+
+  /// Arriving on a status tab refetches, but not if the list is this fresh.
+  /// Otherwise tapping between Home and Track is a request each way.
+  static const Duration _tabRefreshMaxAge = Duration(seconds: 15);
+
   int _index = 0;
   ServiceType _serviceType = ServiceType.ambulance;
   late final AppState _appState = AppState(widget.api);
 
+  Timer? _poll;
+  bool _foreground = true;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _appState.addListener(_onAppStateChanged);
     _appState.loadRequests();
+    _syncPolling();
     // Service names are server-side, so Track and the Home card cannot label
     // themselves in the resident's language until the catalogue is in hand.
     // Waiting for a visit to the Services tab would show English until then.
@@ -282,8 +303,43 @@ class _RootShellState extends State<RootShell> {
 
   @override
   void dispose() {
+    _poll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _appState.removeListener(_onAppStateChanged);
     super.dispose();
+  }
+
+  /// A backgrounded app must not keep polling — it drains a battery a resident
+  /// may need for a phone call. Coming back refetches immediately rather than
+  /// waiting out the interval, because time spent away is exactly when the
+  /// status is most likely to have changed.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+
+    if (foreground && !_foreground) {
+      _appState.loadRequests(silent: true);
+    }
+
+    _foreground = foreground;
+    _syncPolling();
+  }
+
+  void _syncPolling() {
+    final wanted = _foreground && _statusTabs.contains(_index);
+
+    if (!wanted) {
+      _poll?.cancel();
+      _poll = null;
+      return;
+    }
+
+    _poll ??= Timer.periodic(
+      _pollInterval,
+      // Silent: a poll the resident did not ask for must not stack snackbars
+      // over the screen every interval while the signal is out.
+      (_) => _appState.loadRequests(silent: true),
+    );
   }
 
   void _onAppStateChanged() {
@@ -303,13 +359,25 @@ class _RootShellState extends State<RootShell> {
     });
   }
 
-  void _goTo(int index) => setState(() => _index = index);
+  /// The screens live in an `IndexedStack`, so switching tabs never remounts
+  /// them and an `initState` fetch fires once per launch. Refetching here is
+  /// what makes a tab switch mean anything.
+  void _goTo(int index) {
+    setState(() => _index = index);
+
+    if (_statusTabs.contains(index)) {
+      _appState.loadRequests(silent: true, maxAge: _tabRefreshMaxAge);
+    }
+
+    _syncPolling();
+  }
 
   void _openService(ServiceType type) {
     setState(() {
       _serviceType = type;
       _index = 1;
     });
+    _syncPolling();
   }
 
   @override

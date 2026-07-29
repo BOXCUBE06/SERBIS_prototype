@@ -67,8 +67,14 @@ class _TrackScreenState extends State<TrackScreen> {
     final filtered = _getFilteredRequests(requests);
     final hasRequests = requests.isNotEmpty;
 
-    return ListView(
+    final list = ListView(
       padding: EdgeInsets.zero,
+      // Stated rather than inherited. A `ListView` gets this for free only
+      // while it is `primary`, which it stops being the moment anyone gives it
+      // a controller — and the default physics refuse to overscroll a list that
+      // fits, which kills the pull on the empty state, the screen where a
+      // refresh is most useful.
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         AppHeader(onNotificationsTap: widget.onOpenNotifications, onProfileTap: widget.onOpenProfile),
         const SizedBox(height: 22),
@@ -141,6 +147,13 @@ class _TrackScreenState extends State<TrackScreen> {
         ],
         const SizedBox(height: 110),
       ],
+    );
+
+    return RefreshIndicator(
+      color: AppColors.green700,
+      // Not silent: the resident pulled, so a failure owes them an answer.
+      onRefresh: () => widget.appState.loadRequests(),
+      child: list,
     );
   }
 

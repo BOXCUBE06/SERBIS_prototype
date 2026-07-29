@@ -30,8 +30,11 @@ class HomeScreen extends StatelessWidget {
     final f = appState.language == AppLanguage.filipino;
     final activeRequest = appState.activeRequest;
 
-    return ListView(
+    final list = ListView(
       padding: EdgeInsets.zero,
+      // See TrackScreen: stated so the pull survives this list being given a
+      // controller and losing `primary`.
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
         const SizedBox(height: 22),
@@ -231,6 +234,12 @@ class HomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 110),
       ],
+    );
+
+    return RefreshIndicator(
+      color: AppColors.green700,
+      onRefresh: () => appState.loadRequests(),
+      child: list,
     );
   }
 
