@@ -84,6 +84,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
 const activeTab = ref('system')
 const search = ref('')
@@ -119,8 +120,8 @@ const fetchLogs = async () => {
   loading.value = true
   try {
     const [systemRes, smsRes] = await Promise.all([
-      fetch('http://localhost:8000/api/logs/system', { headers: getHeaders() }),
-      fetch('http://localhost:8000/api/logs/sms', { headers: getHeaders() })
+      fetch(`${API_BASE}/logs/system`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/logs/sms`, { headers: getHeaders() })
     ])
 
     const systemData = await systemRes.json()

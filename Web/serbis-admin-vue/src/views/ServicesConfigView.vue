@@ -309,8 +309,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
-const API = 'http://localhost:8000/api/services'
+const API = `${API_BASE}/services`
 
 // Categories are derived from the service name — the API stores no category
 // column. They group a long list and drive the filter; every row also shows the

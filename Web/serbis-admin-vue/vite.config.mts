@@ -1,12 +1,31 @@
 import { fileURLToPath, URL } from 'node:url'
 import Vue from '@vitejs/plugin-vue'
 import Fonts from 'unplugin-fonts/vite'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import Vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
+
+// Catch a missing API base while the build is running rather than in the
+// browser. Without it the bundle still builds, `import.meta.env.VITE_API_BASE`
+// inlines as undefined, and the panel white-screens on load — a deploy that
+// looks green and is dead. Build only; `vite dev` has .env.development.
+const requireApiBase = {
+  name: 'serbis:require-api-base',
+  apply: 'build',
+  config (_config: unknown, { mode }: { mode: string }) {
+    if (!loadEnv(mode, process.cwd(), 'VITE_').VITE_API_BASE) {
+      throw new Error(
+        'VITE_API_BASE is not set, so this build would point at nothing. Set it in '
+        + 'the build environment (e.g. the host\'s variables) to the API root '
+        + 'including /api — see .env.example.',
+      )
+    }
+  },
+} as const
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    requireApiBase,
     Vue({
       template: { transformAssetUrls },
     }),

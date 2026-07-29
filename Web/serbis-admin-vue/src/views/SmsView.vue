@@ -100,6 +100,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
 const message = ref('')
 const loading = ref(false)
@@ -129,7 +130,7 @@ const isValid = computed(() => {
 const fetchBarangays = async () => {
   barangaysLoading.value = true
   try {
-    const res = await fetch('http://localhost:8000/api/barangays', { headers: getHeaders() })
+    const res = await fetch(`${API_BASE}/barangays`, { headers: getHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || 'Failed to load barangays')
     barangays.value = data.data || data
@@ -161,7 +162,7 @@ const sendSmsBlast = async () => {
   alert.value.show = false
 
   try {
-    const res = await fetch('http://localhost:8000/api/sms/blast', {
+    const res = await fetch(`${API_BASE}/sms/blast`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({

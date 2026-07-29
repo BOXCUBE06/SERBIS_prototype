@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken, clearToken } from '../composables/authToken'
+import { API_BASE } from '../config/api'
 
 export function useAuth() {
   const router = useRouter()
@@ -12,7 +13,7 @@ export function useAuth() {
     const token = getToken()
 
     try {
-      await fetch('http://localhost:8000/api/logout', {
+      await fetch(`${API_BASE}/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

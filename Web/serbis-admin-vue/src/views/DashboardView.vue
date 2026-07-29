@@ -246,6 +246,7 @@ import 'leaflet/dist/leaflet.css'
 // barangays. properties.name matches tbl_barangay.barangay_name exactly —
 // the choropleth joins on it, so the two must stay in step.
 import barangayBoundaries from '@/assets/echague-barangays.json'
+import { API_BASE } from '@/config/api'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
 
@@ -292,7 +293,7 @@ watch(kpiStats, (stats) => {
 const fetchDashboardData = async () => {
   loading.value = true
   try {
-    const response = await fetch('http://localhost:8000/api/admin/dashboard', {
+    const response = await fetch(`${API_BASE}/admin/dashboard`, {
       headers: {
         'Authorization': `Bearer ${getToken()}`,
         'Accept': 'application/json'

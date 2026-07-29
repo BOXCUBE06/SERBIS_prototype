@@ -374,9 +374,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
-const API = 'http://localhost:8000/api'
 const { mdAndUp } = useDisplay()
 
 const headers = [
@@ -474,7 +474,7 @@ const rowProps = ({ item }) => {
 }
 
 const fetchResidents = async () => {
-  const res = await fetch(`${API}/residents`, { headers: getHeaders() })
+  const res = await fetch(`${API_BASE}/residents`, { headers: getHeaders() })
   const data = await res.json()
   if (!res.ok) throw new Error(data.message || 'Failed to load residents')
   residents.value = data.data || data
@@ -487,7 +487,7 @@ const fetchResidents = async () => {
 }
 
 const fetchBarangays = async () => {
-  const res = await fetch(`${API}/barangays`, { headers: getHeaders() })
+  const res = await fetch(`${API_BASE}/barangays`, { headers: getHeaders() })
   const data = await res.json()
   if (!res.ok) throw new Error(data.message || 'Failed to load barangays')
   barangays.value = data.data || data
@@ -545,7 +545,7 @@ const saveUser = async () => {
   if (editing && !payload.password) delete payload.password
   try {
     const res = await fetch(
-      editing ? `${API}/residents/${modal.value.targetId}` : `${API}/residents`,
+      editing ? `${API_BASE}/residents/${modal.value.targetId}` : `${API_BASE}/residents`,
       { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) },
     )
     if (!res.ok) throw new Error(await errorFrom(res))
@@ -563,7 +563,7 @@ const toggleStatus = async (item) => {
   const next = item.status === 'Active' ? 'Deactivated' : 'Active'
   statusToggleLoading.value = true
   try {
-    const res = await fetch(`${API}/residents/${idOf(item)}`, {
+    const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -592,7 +592,7 @@ const confirmDelete = async () => {
   const item = deleteDialog.value.item
   deleteDialog.value.loading = true
   try {
-    const res = await fetch(`${API}/residents/${idOf(item)}`, { method: 'DELETE', headers: getHeaders() })
+    const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, { method: 'DELETE', headers: getHeaders() })
     if (!res.ok) throw new Error(await errorFrom(res))
     selectedResident.value = null
     await fetchResidents()

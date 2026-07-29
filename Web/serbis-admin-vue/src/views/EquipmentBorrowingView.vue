@@ -232,6 +232,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
 // Status colours: saturated 700-level ramp, each AA with white text as a badge,
 // legible on both light and dark surfaces. Semantic (data-viz), not brand tokens —
@@ -310,7 +311,7 @@ const getHeaders = () => ({
 
 const fetchData = async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/borrowings', { headers: getHeaders() })
+    const res = await fetch(`${API_BASE}/borrowings`, { headers: getHeaders() })
     const data = await res.json()
     borrowings.value = data.data || data
   } catch (error) {
@@ -337,7 +338,7 @@ const updateStatus = async (record, newStatus) => {
   processingId.value = id
   apiError.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/borrowings/${id}`, {
+    const res = await fetch(`${API_BASE}/borrowings/${id}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({ status: newStatus }),

@@ -241,6 +241,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
 const requests = ref([])
 const vehicles = ref([])
@@ -357,7 +358,7 @@ const loadValidId = async (item) => {
 
   validIdLoading.value = true
   try {
-    const res = await fetch(`http://localhost:8000/api/service-requests/${id}/valid-id`, { headers: getHeaders() })
+    const res = await fetch(`${API_BASE}/service-requests/${id}/valid-id`, { headers: getHeaders() })
     if (!res.ok) throw new Error('Could not load the attached ID.')
     const blob = await res.blob()
     if (validIdFor.value !== id) return
@@ -372,8 +373,8 @@ const loadValidId = async (item) => {
 const fetchData = async () => {
   try {
     const [reqRes, vehRes] = await Promise.all([
-      fetch('http://localhost:8000/api/admin/service-requests', { headers: getHeaders() }),
-      fetch('http://localhost:8000/api/vehicles', { headers: getHeaders() })
+      fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
     ])
     const reqData = await reqRes.json()
     const vehData = await vehRes.json()
@@ -421,7 +422,7 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
   const id = itemId(targetRequest)
 
   try {
-    const res = await fetch(`http://localhost:8000/api/service-requests/${id}`, {
+    const res = await fetch(`${API_BASE}/service-requests/${id}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -437,7 +438,7 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     }
 
     if (newStatus === 'Responding' && formData.value.vehicle_id) {
-      await fetch(`http://localhost:8000/api/vehicles/${formData.value.vehicle_id}`, {
+      await fetch(`${API_BASE}/vehicles/${formData.value.vehicle_id}`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({ status: 'Dispatched' })
@@ -455,7 +456,7 @@ const bulkDisapprove = async () => {
   bulkLoading.value = true
   const targets = requests.value.filter(r => selectedIds.has(itemId(r)))
   try {
-    await Promise.all(targets.map(r => fetch(`http://localhost:8000/api/service-requests/${itemId(r)}`, {
+    await Promise.all(targets.map(r => fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({ status: 'Disapproved', remarks: r.remarks || '', vehicle_id: r.vehicle_id })

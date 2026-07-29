@@ -143,6 +143,7 @@
 import { ref, reactive, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { setToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
 const router = useRouter()
 const loading = ref(false)
@@ -189,7 +190,7 @@ const handleLogin = async () => {
   errorMessage.value = ''
 
   try {
-    const response = await fetch('http://localhost:8000/api/admin/login', {
+    const response = await fetch(`${API_BASE}/admin/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

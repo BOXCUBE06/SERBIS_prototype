@@ -224,8 +224,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
-const API = 'http://localhost:8000/api/vehicles'
+const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']
 const VEHICLE_TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat']
 

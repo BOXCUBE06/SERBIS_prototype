@@ -180,8 +180,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
-const API = 'http://localhost:8000/api/equipments'
+const API = `${API_BASE}/equipments`
 
 const stateMeta = {
   available: { color: 'primary' },
