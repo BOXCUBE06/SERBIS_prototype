@@ -479,7 +479,32 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M14 — API base URL defaults to `127.0.0.1`**
+- [x] **M14 — API base URL defaults to `127.0.0.1`**
+      **Done 2026-07-29.** The default is gone rather than replaced: no
+      production domain exists yet (the cloud plan still writes `api.<domain>`),
+      and the panel made the same call in `Web/serbis-admin-vue/src/config/api.ts`
+      — a fallback is how a build ships pointing at nothing. `ApiService.baseUrl`
+      is now `String.fromEnvironment('API_BASE_URL')` with no `defaultValue`,
+      trailing slashes stripped, and `main()` refuses to start an unconfigured
+      build, showing a red screen naming the missing define. When the domain is
+      picked it goes in the build environment, not in the source.
+      Verified live in a real `flutter build web --release`: built with no
+      define and served, the app shows *"This build has no API address"* and
+      the `flutter run --dart-define=...` command; rebuilt with
+      `--dart-define=API_BASE_URL=http://localhost:8000/api`, the login screen
+      renders as before. `test/api_base_url_test.dart` passes under both
+      `flutter test` and `flutter test --dart-define=API_BASE_URL=https://api.example.test/api//`
+      (the second also proves the trailing slashes are stripped); restoring the
+      old `defaultValue` fails 2 of its 3 tests, so they are not vacuous.
+      `flutter analyze` is back to its 25-issue baseline and all 24 tests pass.
+      Cleartext: the main manifest now sets `android:usesCleartextTraffic="false"`
+      and `android/app/src/debug/res/xml/network_security_config.xml` re-permits
+      it for `10.0.2.2`, `localhost` and `127.0.0.1` only — under `src/debug/`,
+      so it is never merged into profile or release. Both commands and the
+      per-target addresses are documented in the new `Mobile/README.md`.
+      **Not verified:** the Android manifest merge. This box has no Android SDK
+      (`flutter build apk` exits with "No Android SDK found"), so the XML is
+      only checked for well-formedness. Confirm on a machine with the SDK.
       **Severity:** High
       **Category:** Build & Release Readiness
       **Location:** `Mobile/lib/state/api_service.dart:8-11`

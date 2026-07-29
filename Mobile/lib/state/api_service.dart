@@ -26,10 +26,27 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static const String _baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000/api',
-  );
+  static const String _rawBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  /// The API root, including `/api`. Supplied at build time by
+  /// `--dart-define=API_BASE_URL=...`; see `Mobile/README.md` for the commands.
+  ///
+  /// There is deliberately no default. This used to fall back to
+  /// `http://127.0.0.1:8000/api`, which on a handset is the handset itself, so
+  /// a build made without the flag installed fine, launched fine, and then
+  /// failed every single call with a socket error a resident cannot interpret.
+  /// A missing value is now caught in `main()` before any screen is drawn — the
+  /// build breaks loudly for whoever made it instead of quietly for whoever
+  /// installed it. A default would also have to be an `http://` URL, which
+  /// Android 9+ and iOS ATS block in release regardless.
+  ///
+  /// A trailing slash would turn every `'$baseUrl/service-requests'` into
+  /// `//service-requests`, which some proxies read as protocol-relative.
+  static final String baseUrl = _rawBaseUrl.replaceAll(RegExp(r'/+$'), '');
+
+  /// False when the build was produced without `--dart-define=API_BASE_URL`.
+  static bool get isConfigured => baseUrl.isNotEmpty;
+
   static const String _tokenKey = 'serbis_token_v1';
 
   /// Keychain on iOS, EncryptedSharedPreferences on Android. The token used to
@@ -137,7 +154,7 @@ class ApiService {
   }) {
     return _send(
       () => http.post(
-        Uri.parse('$_baseUrl$path'),
+        Uri.parse('$baseUrl$path'),
         headers: _headers,
         body: jsonEncode(body),
       ),
@@ -147,7 +164,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> _get(String path) {
     return _send(
-      () => http.get(Uri.parse('$_baseUrl$path'), headers: _headers),
+      () => http.get(Uri.parse('$baseUrl$path'), headers: _headers),
     );
   }
 
@@ -157,7 +174,7 @@ class ApiService {
   ]) {
     return _send(
       () => http.patch(
-        Uri.parse('$_baseUrl$path'),
+        Uri.parse('$baseUrl$path'),
         headers: _headers,
         body: body != null ? jsonEncode(body) : null,
       ),
@@ -395,7 +412,7 @@ class ApiService {
     required String validIdFileName,
     String? requiredVehicleType,
   }) async {
-    final uri = Uri.parse('$_baseUrl/service-requests');
+    final uri = Uri.parse('$baseUrl/service-requests');
     final request = http.MultipartRequest('POST', uri);
 
     request.headers.addAll({

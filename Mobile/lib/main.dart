@@ -18,7 +18,62 @@ import 'widgets/shared_widgets.dart';
 import 'widgets/sos_button.dart';
 
 void main() {
+  // A build with no `--dart-define=API_BASE_URL` has nowhere to send its calls.
+  // Stop here rather than letting every screen fail one request at a time with
+  // "Cannot connect to server", which looks like a dead network and sends the
+  // resident to reboot their phone. See `Mobile/README.md`.
+  if (!ApiService.isConfigured) {
+    runApp(const _MisconfiguredApp());
+    return;
+  }
+
   runApp(const SerbisApp());
+}
+
+/// Shown instead of the app when the build is missing its API base URL. Not
+/// styled with the app theme on purpose: this is a message to whoever produced
+/// the build, and it has to render even if everything else is broken.
+class _MisconfiguredApp extends StatelessWidget {
+  const _MisconfiguredApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Color(0xFF7F1D1D),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.build_circle_outlined, color: Colors.white, size: 56),
+                SizedBox(height: 16),
+                Text(
+                  'This build has no API address',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'It was compiled without API_BASE_URL, so it cannot reach the '
+                  'server. Rebuild with:\n\n'
+                  'flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class SerbisApp extends StatelessWidget {
