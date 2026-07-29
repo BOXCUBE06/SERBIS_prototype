@@ -19,6 +19,11 @@ dependencies:
   flutter_secure_storage: ^9.2.0
   file_picker: ^8.0.0
   path_provider: ^2.1.5
+  # A downloaded material is only useful if it can be opened: open_filex hands
+  # the cached file to the platform viewer (and to Android's FileProvider),
+  # url_launcher opens the server copy when there is no saved one.
+  open_filex: ^4.5.0
+  url_launcher: ^6.3.0
 
 
 dev_dependencies:

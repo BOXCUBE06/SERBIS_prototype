@@ -5,9 +5,27 @@ import 'package:flutter/foundation.dart';
 import '../models/info_material.dart';
 import '../models/request_models.dart';
 import 'api_service.dart';
+import 'file_opener.dart';
 import 'material_cache.dart';
 
 enum AppLanguage { english, filipino }
+
+/// What happened when a resident tapped a published material. The Library
+/// reports each case differently: "no viewer installed" and "you are offline"
+/// need different things from the resident.
+enum MaterialOpenResult {
+  /// Opened the copy on this device. The only case that works with no signal.
+  openedSaved,
+
+  /// Opened the server's copy in a browser or external viewer.
+  openedOnline,
+
+  /// A saved copy exists but nothing on this device can display it.
+  noViewer,
+
+  /// Nothing to open: not saved, and the server copy could not be reached.
+  unavailable,
+}
 
 extension AppLanguageX on AppLanguage {
   String get label {
@@ -43,9 +61,12 @@ class AppState extends ChangeNotifier {
   /// needs to know it might be stale.
   bool materialsFromCache = false;
 
-  AppState(this._api, {MaterialCache? materialCache})
+  final FileOpener _fileOpener;
+
+  AppState(this._api, {MaterialCache? materialCache, FileOpener? fileOpener})
       : _materialCache =
-            materialCache ?? MaterialCache(download: _api.downloadFile);
+            materialCache ?? MaterialCache(download: _api.downloadFile),
+        _fileOpener = fileOpener ?? const FileOpener();
 
   /// False on web, where there is nowhere to write. The download affordance is
   /// hidden entirely rather than offered and failing.
@@ -185,6 +206,29 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     return entry != null;
+  }
+
+  /// Opens [material], preferring the copy on this device.
+  ///
+  /// The saved copy comes first because it is the one that survives a dead
+  /// network — which is the whole point of having saved it. If it cannot be
+  /// displayed (no PDF viewer installed, file gone since the index was read)
+  /// the server copy is still worth trying while there is signal, so a missing
+  /// viewer is not reported until both routes have failed.
+  Future<MaterialOpenResult> openMaterial(InfoMaterial material) async {
+    final saved = savedMaterials[material.id];
+
+    if (saved != null && await _fileOpener.openFile(saved.path)) {
+      return MaterialOpenResult.openedSaved;
+    }
+
+    if (material.url.isNotEmpty && await _fileOpener.openUrl(material.url)) {
+      return MaterialOpenResult.openedOnline;
+    }
+
+    return saved != null
+        ? MaterialOpenResult.noViewer
+        : MaterialOpenResult.unavailable;
   }
 
   Future<void> removeMaterialOffline(int id) async {

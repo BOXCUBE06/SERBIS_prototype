@@ -286,6 +286,39 @@ class _MaterialRow extends StatelessWidget {
     );
   }
 
+  /// Tapping the row displays the material. The saved copy is handed to the
+  /// platform viewer; without one, the server copy opens in the browser.
+  Future<void> _open(BuildContext context) async {
+    final result = await appState.openMaterial(material);
+    if (!context.mounted) {
+      return;
+    }
+
+    switch (result) {
+      case MaterialOpenResult.openedSaved:
+      case MaterialOpenResult.openedOnline:
+        // Something else is on screen now; a snackbar under it would only be
+        // read after the resident comes back.
+        return;
+      case MaterialOpenResult.noViewer:
+        showAppSnackBar(
+          context,
+          filipino
+              ? 'Walang app sa teleponong ito na makakabukas ng ${material.typeLabel}.'
+              : 'No app on this phone can open a ${material.typeLabel}.',
+          isError: true,
+        );
+      case MaterialOpenResult.unavailable:
+        showAppSnackBar(
+          context,
+          filipino
+              ? 'Hindi mabuksan ang ${material.title}. I-save ito habang may koneksyon.'
+              : 'Could not open ${material.title}. Save it while you have a connection.',
+          isError: true,
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final saved = appState.isSavedOffline(material.id);
@@ -302,45 +335,60 @@ class _MaterialRow extends StatelessWidget {
         border: Border.all(color: AppColors.line),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Row(
-          children: [
-            IconBadge(
-              icon: material.icon,
-              bg: AppColors.green50,
-              fg: AppColors.green700,
-              size: 40,
-              iconSize: 19,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    material.title,
-                    style: AppText.display(size: 13, weight: FontWeight.w600),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _open(context),
+          child: Padding(
+            padding: const EdgeInsets.all(13),
+            child: Row(
+              children: [
+                IconBadge(
+                  icon: material.icon,
+                  bg: AppColors.green50,
+                  fg: AppColors.green700,
+                  size: 40,
+                  iconSize: 19,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        material.title,
+                        style: AppText.display(size: 13, weight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        meta,
+                        style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    meta,
-                    style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                ),
+                const SizedBox(width: 8),
+                // Web has nowhere to write, so it gets no download affordance at
+                // all rather than a button that can only fail.
+                if (appState.canSaveOffline) ...[
+                  OfflinePill(
+                    saved: saved,
+                    loading: saving,
+                    filipino: filipino,
+                    onTap: saved ? null : () => _save(context),
                   ),
+                  const SizedBox(width: 6),
                 ],
-              ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: AppColors.inkFaint,
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            // Web has nowhere to write, so it gets no download affordance at
-            // all rather than a button that can only fail.
-            if (appState.canSaveOffline)
-              OfflinePill(
-                saved: saved,
-                loading: saving,
-                filipino: filipino,
-                onTap: saved ? null : () => _save(context),
-              ),
-          ],
+          ),
         ),
       ),
     );

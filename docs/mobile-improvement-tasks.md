@@ -937,7 +937,28 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M33 — A downloaded material cannot be opened**
+- [x] **M33 — A downloaded material cannot be opened**
+      **Done 2026-07-29.** Not landed with M1 — hotlines were deferred, and this
+      needed no part of them. `_MaterialRow` is now an `InkWell` calling the new
+      `AppState.openMaterial`, which tries the saved copy first
+      (`lib/state/file_opener_io.dart`, `open_filex`, which carries the Android
+      `FileProvider`) and falls back to the server copy in a browser
+      (`url_launcher`). Saved-first because the saved copy is the one that works
+      with no signal, which is why it was saved. A saved file no viewer can
+      display still tries the server rather than dead-ending, so the "no PDF
+      viewer installed" message is only shown once both routes have failed;
+      a row that exists only because of the offline index has an empty `url`
+      and says so instead of pretending. `open_filex` is behind the same
+      conditional import as `MaterialCache`, so the web build is untouched —
+      it has no saved copies and takes the `url_launcher` route, which works
+      there.
+      Verified: `test/material_open_test.dart` — 5 store tests over every
+      route, plus a widget test that scrolls to the row and taps it. Replacing
+      the row's `onTap` with `null` fails that widget test, so it tests the
+      wiring and not the store. 30/30 tests pass, `flutter analyze` stays at its
+      25-issue baseline, `flutter build web --release` still compiles.
+      **Not verified:** the handoff itself — that Android/iOS actually opens the
+      cached PDF. That needs a device; this box has no Android SDK.
       **Severity:** High
       **Category:** UX Gaps
       **Location:** `Mobile/lib/screens/library_screen.dart` (`_MaterialRow`),
