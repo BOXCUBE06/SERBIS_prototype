@@ -1,6 +1,7 @@
 library serbis.state.api_service;
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -330,7 +331,7 @@ class ApiService {
   /// before the resident has an account.
   Future<List<Map<String, dynamic>>> getBarangays() async {
     final data = await _get('/barangays');
-    return _listFrom(data, 'barangays');
+    return listFrom(data);
   }
 
   Future<void> logout() async {
@@ -345,19 +346,19 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> getRequests() async {
     final data = await _get('/service-requests');
-    return _listFrom(data, 'requests');
+    return listFrom(data);
   }
 
   /// [locale] is a BCP 47 subtag ('en', 'fil'). The server falls back to English
   /// for any locale it has no rows for, so an unsupported one is safe to send.
   Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async {
     final data = await _get('/services?locale=$locale');
-    return _listFrom(data, 'services');
+    return listFrom(data);
   }
 
   Future<List<Map<String, dynamic>>> getInfoMaterials() async {
     final data = await _get('/info-materials');
-    return _listFrom(data, 'materials');
+    return listFrom(data);
   }
 
   /// Fetches a published material's bytes from its absolute `full_url`, which
@@ -388,15 +389,21 @@ class ApiService {
     return response.bodyBytes;
   }
 
-  /// Unwraps a collection that may arrive bare, under `data`, or under a named
-  /// key depending on whether the controller paginates.
-  List<Map<String, dynamic>> _listFrom(
-    Map<String, dynamic> data,
-    String namedKey,
-  ) {
-    final raw = data['data'] ??
-        data[namedKey] ??
-        (data.isEmpty ? null : data.values.first);
+  /// Unwraps a list response. Every collection endpoint this app calls arrives
+  /// under `data`: the paginating controllers emit it themselves, Laravel's
+  /// resource collections wrap in it, and `_decode` wraps a bare JSON array in
+  /// it too. There used to be fallbacks to a named key and then to
+  /// `values.first`; both were guesses at a shape the backend never sends, and
+  /// `values.first` threw `Bad state: No element` on any non-JSON body — an
+  /// nginx error page or a captive-portal interstitial decoded to `{}`.
+  ///
+  /// A missing `data` now yields an empty list rather than an exception,
+  /// because a caller showing "nothing yet" is recoverable where a crash on the
+  /// Track screen is not. Malformed rows are dropped individually so one bad
+  /// record does not discard the whole response.
+  @visibleForTesting
+  static List<Map<String, dynamic>> listFrom(Map<String, dynamic> data) {
+    final raw = data['data'];
 
     if (raw is List) {
       return raw.whereType<Map<String, dynamic>>().toList();

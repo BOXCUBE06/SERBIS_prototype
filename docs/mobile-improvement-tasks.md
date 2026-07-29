@@ -611,6 +611,15 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 ---
 
 - [ ] **M18 — No tests of any kind**
+      **Partly addressed, still open.** `Mobile/test/` now exists with 39
+      passing tests, added alongside the fixes that needed them: M7 (token
+      storage), M10/M11 and M33 (cache, store, open routes), M14 (base URL), and
+      M22/M31 (`api_response_parsing_test.dart` — the list unwrapper,
+      `ServiceRequest.fromJson`, `AppUser.fromJson`). Still missing the rest of
+      what this task asks for: `ServiceCatalogItem.fromJson`,
+      `getStatusFromText`, the 401/422 body shapes, `AppState` submit/cancel
+      against a mocked `ApiService` (the M5 rollback), and any CI wiring —
+      `flutter test` is still run by hand.
       **Severity:** High
       **Category:** Code Structure
       **Location:** `Mobile/` — no `test/` directory exists
@@ -698,7 +707,22 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M22 — `getRequests` crashes on an empty or non-JSON response body**
+- [x] **M22 — `getRequests` crashes on an empty or non-JSON response body**
+      **Done 2026-07-29.** Took the "better" option: the shared unwrapper (by
+      then `_listFrom`, one helper behind all four list endpoints) now reads
+      `data['data']` and nothing else. That is the shape all four actually send
+      — `ServiceRequestController::index` emits `{"data": [...]}` itself,
+      `ServiceResource::collection` wraps in it, and `_decode` wraps the bare
+      arrays from `/info-materials` and `/barangays` in it too — so the named-key
+      and `values.first` guesses were unreachable as well as unsafe. A body that
+      decoded to `{}` now yields an empty list instead of throwing
+      `Bad state: No element`; the `whereType` that replaced the blind `cast`
+      was already in place from the `ApiException` work. Renamed to
+      `ApiService.listFrom`, `@visibleForTesting`, since it had no test.
+      Verified: `test/api_response_parsing_test.dart` — 5 unwrapper tests
+      covering `{}`, a missing `data`, a non-list `data`, and a list with junk
+      elements. 39/39 tests pass; `flutter analyze` stays at its 25-issue
+      baseline. Landed with M30 and M31.
       **Severity:** Medium
       **Category:** Correctness (unchecked cast)
       **Location:** `Mobile/lib/state/api_service.dart:162`
@@ -881,7 +905,12 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M30 — `_services` aliases the store's mutable list**
+- [x] **M30 — `_services` aliases the store's mutable list**
+      **Done 2026-07-29.** `_services = List.of(widget.appState.services)`.
+      Kept the local field rather than reading the store in `build`: the screen
+      does not listen to the store, so reading it directly would have been the
+      same aliasing bug wearing a different shape, and `_selected` has to stay
+      consistent with whatever list the grid is drawing.
       **Severity:** Low
       **Category:** Correctness
       **Location:** `Mobile/lib/screens/services_screen.dart:54`
@@ -900,7 +929,22 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M31 — Dead compatibility fallbacks in JSON parsing**
+- [x] **M31 — Dead compatibility fallbacks in JSON parsing**
+      **Done 2026-07-29.** All four removed: `json['email']` and
+      `json['address']` in `account_store.dart`, `json['id']` in
+      `ServiceRequest.fromJson`, and `data['requests']` in the list unwrapper
+      (the last one as part of M22's rewrite). Checked each against the
+      controllers first — `/me` and `residentLogin` emit `email_address` and a
+      `barangay` relation with no `address` column, and
+      `ServiceRequestController` emits `request_id`.
+      Verified: `test/api_response_parsing_test.dart` covers the real shapes and
+      asserts that a row without `request_id` now parses to a null id and an
+      empty ref instead of quietly borrowing `id`.
+      **Still open (deliberately):** the sibling `?? json['id']` fallbacks this
+      task did not name — `account_store.dart` (`resident_id`),
+      `request_models.dart:232` (`service_id`), `info_material.dart`
+      (`files_id`), `BarangayOption` (`barangay_id`/`name`). Same class of dead
+      guess, left alone rather than widening a Low-severity cleanup unasked.
       **Severity:** Low
       **Category:** Code Structure
       **Location:** `Mobile/lib/state/account_store.dart:33` (`json['email']`);

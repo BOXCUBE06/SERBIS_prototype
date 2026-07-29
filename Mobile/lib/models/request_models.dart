@@ -450,7 +450,7 @@ class ServiceRequest {
   }
 
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
-    final idValue = json['request_id'] ?? json['id'];
+    final idValue = json['request_id'];
     final id = idValue is int ? idValue : int.tryParse(idValue?.toString() ?? '');
 
     final serviceIdValue = json['service_id'];

@@ -60,7 +60,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
     await widget.appState.loadServices();
     if (!mounted) return;
     setState(() {
-      _services = widget.appState.services;
+      // A copy, not the store's list. `AppState.loadServices` mutates that list
+      // in place (`..clear()..addAll()`), so aliasing it let a later reload —
+      // or a failed one, which clears it — rewrite the grid with no `setState`
+      // while `_selected` still pointed at a row that had been removed.
+      _services = List.of(widget.appState.services);
       _loadingServices = false;
       _selected = _defaultSelection(_services, widget.initialType);
     });

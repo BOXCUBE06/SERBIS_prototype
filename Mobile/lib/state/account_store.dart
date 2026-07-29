@@ -30,8 +30,8 @@ class AppUser {
       id: (json['resident_id'] ?? json['id'] ?? '').toString(),
       firstName: json['first_name'] as String? ?? '',
       lastName: json['last_name'] as String? ?? '',
-      email: json['email_address'] as String? ?? json['email'] as String? ?? '',
-      address: json['address'] as String? ?? barangayName ?? '',
+      email: json['email_address'] as String? ?? '',
+      address: barangayName ?? '',
     );
   }
 }
