@@ -198,12 +198,18 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M5 — Roll back optimistic updates when the server rejects them**
+- [x] **M5 — Roll back optimistic updates when the server rejects them**
+      **Done — landed with the `mobile-c1-c6-c7` merge (`0ce1c00`); box ticked
+      2026-07-29.** `request_store.dart` now routes both failure paths through
+      `_fail(e)` and removes the optimistic row: `requests.remove(request)` on
+      the submit path (`:245`) and on the cancel path (`:271`). No bare
+      `catch (_) {}` remains on either mutation. **Confirmed by reading the
+      merged code, not by a live 422** — the entry asked for a live rejection
+      and that has not been run.
       **Severity:** Critical
       **Category:** Correctness
       **Location:** `Mobile/lib/state/request_store.dart:71-93` (insert, then
       `catch (_) {}` at `:93`); `:108-129` (cancel, then `catch (_) {}` at `:129`)
-      **Status:** **[fixed on mobile-c1-c6-c7]**
       **Problem:** Both mutations write local state first and discard the
       exception. A 422 "No available vehicles at this time." leaves a Pending
       request on the resident's Track screen that MDRRMO never received, and it
@@ -219,13 +225,20 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M6 — Inspect the HTTP status code; a 401 is not an empty list**
+- [x] **M6 — Inspect the HTTP status code; a 401 is not an empty list**
+      **Done — landed with the `mobile-c1-c6-c7` merge (`0ce1c00`); box ticked
+      2026-07-29.** `api_service.dart:11` defines `ApiException(message,
+      {statusCode})` with `isUnauthorized` (`:19`) and `isNetwork`
+      (`statusCode == null`, `:22`); `:219` fires `onUnauthorized`, wired to
+      `_onSessionExpired` at `main.dart:59`. The entry's specific check passes:
+      the `data.values.first` fallback is now guarded by `data.isEmpty ? null :`
+      (`:382`), so an empty map no longer throws `Bad state: No element`.
+      **Confirmed by reading the merged code, not against a live 401.**
       **Severity:** Critical
       **Category:** Error Handling & Observability
       **Location:** `Mobile/lib/state/api_service.dart:83-93` (`_decode` drops
       `response.statusCode` entirely and returns `{}` on non-JSON);
       `:160-167` (`getRequests`)
-      **Status:** **[fixed on mobile-c1-c6-c7]**
       **Problem:** `_decode` never looks at the status. On a 401 the body is
       `{"message":"Unauthenticated."}`, so `data['data'] ?? data['requests'] ??
       data.values.first` yields the *string* `"Unauthenticated."`, which is not a
@@ -250,7 +263,16 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M7 — Move the auth token out of plain SharedPreferences**
+- [x] **M7 — Move the auth token out of plain SharedPreferences**
+      **Done 2026-07-28 (`fa778d2`).** `flutter_secure_storage: ^9.2.0`
+      (`pubspec.yaml:19`) with `AndroidOptions(encryptedSharedPreferences: true)`
+      — Keychain on iOS, EncryptedSharedPreferences on Android. The one-time
+      legacy migration is in place: `loadToken` still reads the old
+      `serbis_token_v1` prefs key, writes it to secure storage and deletes it,
+      so existing installs are not logged out. Carries the project's first
+      tests — `test/api_service_token_test.dart`, 5 cases over `loadToken`.
+      **Never run on a device**; the token TTL decision for audit #30 is still
+      open.
       **Severity:** High
       **Category:** Auth & Session
       **Location:** `Mobile/lib/state/api_service.dart:12,16-33`
@@ -395,12 +417,21 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M12 — Registration password rule is wrong in both directions**
+- [x] **M12 — Registration password rule is wrong in both directions**
+      **Done — landed with the `mobile-c1-c6-c7` merge (`0ce1c00`); box ticked
+      2026-07-29.** `register_screen.dart` now validates `length < 8` (`:95`)
+      plus `_upper` / `_lower` / `_digit` (`:45-47`), matching the backend's
+      `Password::min(8)->mixedCase()->numbers()`. Both `maxLength: 8` caps are
+      gone — no `maxLength` remains in the file. The C1 gaps are closed too: a
+      barangay picker fed by `GET /barangays` (`:40-43`, `:112-124`) and a
+      `_phoneCtrl` mobile-number field (`:198-204`). `GET barangays` sits
+      outside the `auth:sanctum` group at `routes/api.php:26`, so a
+      signing-up resident can reach it. **Route confirmed by reading the route
+      file, not exercised live.**
       **Severity:** High
       **Category:** Correctness
       **Location:** `Mobile/lib/screens/auth/register_screen.dart:51-59`,
       and `maxLength: 8` at `:168` and `:188`
-      **Status:** **[fixed on mobile-c1-c6-c7]**
       **Problem:** `_validatePassword` requires **exactly** 8 characters
       (`value.length != 8`) plus a special character, and never checks for a
       lowercase letter. The backend requires
