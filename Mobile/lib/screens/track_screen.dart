@@ -3,6 +3,7 @@ import '../state/translations.dart';
 import '../models/request_models.dart';
 import '../state/request_store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/offline_banner.dart';
 import '../widgets/shared_widgets.dart';
 
 class TrackScreen extends StatefulWidget {
@@ -82,6 +83,17 @@ class _TrackScreenState extends State<TrackScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: SectionHeader(title: tr(isFilipino, 'track.title')),
         ),
+        // These rows came off the device, not the server. The dispatcher may
+        // have moved any of them since; saying when they were last confirmed is
+        // the difference between stale information and wrong information.
+        if (hasRequests && widget.appState.requestsFromCache)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+            child: StaleDataNote(
+              filipino: isFilipino,
+              lastUpdated: widget.appState.requestsFetchedAt,
+            ),
+          ),
         if (!hasRequests)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),

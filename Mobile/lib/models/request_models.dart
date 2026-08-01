@@ -621,6 +621,61 @@ class ServiceRequest {
   }
 }
 
+/// Everything needed to redraw a request card with no network, written to the
+/// device after each successful fetch. See `state/request_cache.dart`.
+extension ServiceRequestCache on ServiceRequest {
+  Map<String, dynamic> toCacheJson() => <String, dynamic>{
+        'id': id,
+        'service_id': serviceId,
+        'description': description,
+        'type': type.name,
+        'ref_no': refNo,
+        'status': status.name,
+        'meta_lines': metaLines,
+        'note': note,
+        'cancellable': cancellable,
+        'created_at': createdAt?.toIso8601String(),
+        'updated_at': updatedAt?.toIso8601String(),
+        'service_name': serviceName,
+        'service_name_en': serviceNameEn,
+      };
+
+  /// Rebuilds a cached row, or returns null for an entry this version of the
+  /// app cannot read. A cache is not a contract: one unreadable row must not
+  /// take the rest of the list with it.
+  static ServiceRequest? fromCacheJson(Object? json) {
+    if (json is! Map) return null;
+
+    final id = json['id'];
+    // Only server-confirmed rows are cached. An id-less row was never filed,
+    // and showing one after a relaunch would claim a request that MDRRMO has
+    // no record of.
+    if (id is! int) return null;
+
+    return ServiceRequest(
+      id: id,
+      serviceId: json['service_id'] is int ? json['service_id'] as int : null,
+      description: json['description'] as String?,
+      type: ServiceType.values.firstWhere(
+        (value) => value.name == json['type'],
+        orElse: () => ServiceType.inquiry,
+      ),
+      refNo: json['ref_no'] as String? ?? '',
+      status: ReqStatus.values.firstWhere(
+        (value) => value.name == json['status'],
+        orElse: () => ReqStatus.review,
+      ),
+      metaLines: (json['meta_lines'] as List?)?.whereType<String>().toList() ?? const [],
+      note: json['note'] as String?,
+      cancellable: json['cancellable'] == true,
+      createdAt: _parseTimestamp(json['created_at']),
+      updatedAt: _parseTimestamp(json['updated_at']),
+      serviceName: json['service_name'] as String?,
+      serviceNameEn: json['service_name_en'] as String?,
+    );
+  }
+}
+
 /// Reads one of the row's timestamps, tolerating a null or an unparseable
 /// value: a timeline with one honest step beats a crash on a malformed date.
 DateTime? _parseTimestamp(dynamic value) {

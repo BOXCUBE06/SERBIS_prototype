@@ -59,6 +59,21 @@ const Map<String, (String, String)> _strings = {
   ),
   'home.ann.no_date': ('Date not recorded', 'Walang naitalang petsa'),
 
+  // ---- Offline ----
+  'offline.title': (
+    "No connection to MDRRMO. Requests can't be sent.",
+    'Walang koneksyon sa MDRRMO. Hindi maipapadala ang mga kahilingan.',
+  ),
+  'offline.last_updated': ('Last updated', 'Huling na-update'),
+  'offline.never_updated': (
+    'Nothing has been loaded on this device yet.',
+    'Wala pang na-load sa device na ito.',
+  ),
+  'offline.saved_copy': (
+    'Saved copy',
+    'Naka-save na kopya',
+  ),
+
   // ---- Notifications ----
   'notif.empty_title': ('No updates yet', 'Wala pang update'),
   'notif.empty_body': (

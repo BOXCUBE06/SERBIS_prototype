@@ -16,6 +16,7 @@ import 'state/api_service.dart';
 import 'state/request_store.dart';
 import 'state/account_store.dart';
 import 'theme/app_theme.dart';
+import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
 import 'widgets/sos_button.dart';
 
@@ -290,6 +291,10 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _appState.addListener(_onAppStateChanged);
+    // The rows the server last sent, straight off the device. Instant, works
+    // with no signal, and gives the fetch below something to replace instead of
+    // an empty Track screen saying "No requests yet" during a flood.
+    _appState.hydrateRequests();
     _appState.loadRequests();
     _syncPolling();
     // Service names are server-side, so Track and the Home card cannot label
@@ -421,7 +426,12 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       ),
       ProfileScreen(
         appState: _appState,
-        onLogout: widget.onLogout,
+        // The cached rows name this resident's own requests. The next person to
+        // use the phone must not open the app onto them.
+        onLogout: () {
+          _appState.clearRequestCache();
+          widget.onLogout();
+        },
         onOpenNotifications: onOpenNotifications,
         onOpenProfile: onOpenProfile,
         initialName: widget.initialName,
@@ -435,7 +445,19 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       body: SafeArea(
         top: false,
         bottom: false,
-        child: IndexedStack(index: _index, children: screens),
+        child: Column(
+          children: [
+            // Above every screen, not inside one: being unable to reach MDRRMO
+            // is true of the whole app, and the resident must see it wherever
+            // they happen to be standing.
+            if (_appState.isOffline)
+              OfflineBanner(
+                filipino: _appState.language == AppLanguage.filipino,
+                lastUpdated: _appState.requestsFetchedAt,
+              ),
+            Expanded(child: IndexedStack(index: _index, children: screens)),
+          ],
+        ),
       ),
       floatingActionButton: const SosFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

@@ -7,6 +7,7 @@ import '../models/request_models.dart';
 import 'api_service.dart';
 import 'file_opener.dart';
 import 'material_cache.dart';
+import 'request_cache.dart';
 
 enum AppLanguage { english, filipino }
 
@@ -62,11 +63,17 @@ class AppState extends ChangeNotifier {
   bool materialsFromCache = false;
 
   final FileOpener _fileOpener;
+  final RequestCache _requestCache;
 
-  AppState(this._api, {MaterialCache? materialCache, FileOpener? fileOpener})
-      : _materialCache =
+  AppState(
+    this._api, {
+    MaterialCache? materialCache,
+    FileOpener? fileOpener,
+    RequestCache? requestCache,
+  })  : _materialCache =
             materialCache ?? MaterialCache(download: _api.downloadFile),
-        _fileOpener = fileOpener ?? const FileOpener();
+        _fileOpener = fileOpener ?? const FileOpener(),
+        _requestCache = requestCache ?? RequestCache();
 
   /// False on web, where there is nowhere to write. The download affordance is
   /// hidden entirely rather than offered and failing.
@@ -269,8 +276,50 @@ class AppState extends ChangeNotifier {
   /// arriving on a tab does not refetch a list that is seconds old.
   DateTime? _requestsFetchedAt;
 
-  @visibleForTesting
   DateTime? get requestsFetchedAt => _requestsFetchedAt;
+
+  /// True when the rows on screen came off the device rather than the server
+  /// this launch. Cleared by the first successful fetch.
+  bool requestsFromCache = false;
+
+  /// True when the last attempt to reach MDRRMO got no response at all.
+  ///
+  /// Derived from real request outcomes, not from the OS connectivity flag. A
+  /// phone showing full bars on a congested tower is exactly the case this app
+  /// exists for, and `connectivity_plus` reports that phone as online; a
+  /// request that timed out is evidence, a radio link is not. The cost is that
+  /// this cannot know the network is gone until something has tried — so the
+  /// banner appears on the first failed poll rather than the instant the signal
+  /// drops.
+  bool isOffline = false;
+
+  /// Loads the last list the server sent, so an offline launch has something to
+  /// show before — and if need be instead of — the first fetch.
+  ///
+  /// Never overwrites rows already on screen: a fetch that lands first wins,
+  /// because it is newer by definition.
+  Future<void> hydrateRequests() async {
+    final cached = await _requestCache.load();
+    if (cached == null || requests.isNotEmpty || _requestsFetchedAt != null) {
+      return;
+    }
+
+    requests.addAll(cached.requests.map(_resolveService));
+    _requestsFetchedAt = cached.fetchedAt;
+    requestsFromCache = true;
+    notifyListeners();
+  }
+
+  /// Drops the cached rows. Called on logout: the next resident to use this
+  /// phone must not open the app onto someone else's requests.
+  Future<void> clearRequestCache() async {
+    requests.clear();
+    _requestsFetchedAt = null;
+    requestsFromCache = false;
+    isOffline = false;
+    await _requestCache.clear();
+    notifyListeners();
+  }
 
   /// Refetches the resident's requests.
   ///
@@ -313,10 +362,24 @@ class AppState extends ChangeNotifier {
         ..addAll(list.map((item) => _resolveService(ServiceRequest.fromJson(item))));
 
       _requestsFetchedAt = DateTime.now();
+      requestsFromCache = false;
+      isOffline = false;
       notifyListeners();
+
+      // Not awaited: the screen is already correct, and a slow write must not
+      // hold up the refresh that produced it.
+      _requestCache.save(requests, _requestsFetchedAt!);
     } catch (e) {
+      // A network failure is the offline case; a 401 or a 500 is the server
+      // answering, which means the connection is fine and the banner would be
+      // a lie.
+      isOffline = e is! ApiException || e.isNetwork;
       if (!silent) {
         _fail(e);
+      } else {
+        // Silent only means no snackbar. The banner still has to appear, and
+        // that needs a rebuild.
+        notifyListeners();
       }
     } finally {
       _requestsInFlight = false;

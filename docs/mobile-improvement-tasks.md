@@ -878,7 +878,51 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M23 — No offline handling and no connectivity awareness**
+- [x] **M23 — No offline handling and no connectivity awareness**
+      **Done 2026-08-02.** Two of the task's three parts landed; the third was
+      declined on purpose, see below.
+      • **The request list is persisted.** `state/request_cache.dart` writes the
+      rows and the fetch time to `shared_preferences` after every successful
+      load, and `hydrateRequests()` reads them at launch before the first fetch.
+      An offline launch now opens onto what MDRRMO last said, labelled
+      **"Saved copy · Last updated \<time\>"**, instead of the cheerful
+      "No requests yet" card. A fetch that lands first wins — it is newer by
+      definition. Cached rows keep status, ref and timestamps, so M26's timeline
+      works with no signal.
+      • **A persistent offline banner** sits above every screen, not inside one:
+      being unable to reach MDRRMO is true of the whole app.
+      • **Rows are cleared on logout.** They name this resident's requests, and
+      the next person to use the phone must not open onto them.
+      **Connectivity is derived from request outcomes, not from
+      `connectivity_plus`** — a deliberate departure from the task's wording.
+      A phone showing full bars on a congested tower is exactly the case this
+      app exists for, and the OS flag calls that phone online; a request that
+      timed out is evidence, a radio link is not. So `isOffline` is set by a
+      fetch that got no response (`ApiException.isNetwork`) and cleared by any
+      answer. A 401 or a 500 is the server *answering*: no banner, because
+      telling a resident to check their signal over a server fault sends them to
+      fix the wrong thing. The cost is stated plainly: nothing knows the network
+      is gone until something has tried, so the banner appears on the first
+      failed poll (≤45 s, M21) rather than the instant the signal drops.
+      **Queueing was declined, not forgotten.** The task says to decide
+      deliberately, and this is the decision: nothing is queued. A silently
+      queued ambulance request is more dangerous than a rejected one, the SOS
+      dial path (M1) that would have to be offered alongside it does not exist
+      yet, and the banner therefore states in as many words that requests cannot
+      be sent. Revisit **after M1**.
+      Verified: `test/offline_test.dart` — 16 tests (write-through, rehydration,
+      a fetch beating the cache, logout clearing it, a corrupt cache, a cache
+      with no fetch time, the four `isOffline` transitions including the silent
+      poll, and the three surfaces). Mutation-checked: removing the id filter in
+      `RequestCache.save` fails "an unsent row is never persisted" — and that
+      test asserts on the *written* JSON, because the reader drops id-less rows
+      too and checking only `load()` passed against the mutation. 116/116 tests
+      pass, `flutter analyze` steady at 22, `flutter build web --release`
+      compiles.
+      **Not verified:** never run on a device, and no test kills the network
+      mid-session — the transitions are driven through a fake API, not a real
+      radio. The composed-but-unsent form is still lost if the app is killed
+      while the resident is typing; only submitted-and-confirmed rows are cached.
       **Severity:** Medium
       **Category:** UX Gaps
       **Location:** app-wide; nearest thing is
