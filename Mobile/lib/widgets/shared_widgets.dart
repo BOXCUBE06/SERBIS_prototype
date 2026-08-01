@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/request_models.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
 
 class AppHeader extends StatelessWidget {
@@ -81,7 +82,12 @@ class AppHeader extends StatelessWidget {
                 Row(
                   children: [
                     if (onNotificationsTap != null)
-                      GestureDetector(onTap: onNotificationsTap, child: _circleIcon(Icons.notifications_outlined, badge: true)),
+                      // No unread dot: it was hardcoded on, so it announced
+                      // unread news on a launch where nothing had happened and
+                      // stayed on after the sheet was read. There is no feed to
+                      // count against yet, and a permanent indicator teaches
+                      // residents to ignore the one that will matter.
+                      GestureDetector(onTap: onNotificationsTap, child: _circleIcon(Icons.notifications_outlined)),
                     if (onNotificationsTap != null && onProfileTap != null) const SizedBox(width: 8),
                     if (onProfileTap != null)
                       GestureDetector(onTap: onProfileTap, child: _circleIcon(Icons.person_outline_rounded)),
@@ -94,7 +100,7 @@ class AppHeader extends StatelessWidget {
     );
   }
 
-  Widget _circleIcon(IconData icon, {bool badge = false}) {
+  Widget _circleIcon(IconData icon) {
     return Container(
       width: 36,
       height: 36,
@@ -103,26 +109,8 @@ class AppHeader extends StatelessWidget {
         color: Colors.white.withOpacity(.06),
         border: Border.all(color: Colors.white.withOpacity(.16)),
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, size: 17, color: Colors.white),
-          if (badge)
-            Positioned(
-              top: 7,
-              right: 8,
-              child: Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.amber600,
-                  border: Border.all(color: AppColors.green900, width: 1.5),
-                ),
-              ),
-            ),
-        ],
-      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 17, color: Colors.white),
     );
   }
 }
@@ -667,17 +655,45 @@ void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool i
   );
 }
 
+/// The bell sheet.
+///
+/// It used to hold one hardcoded welcome message and nothing else, so a
+/// resident who tapped the bell during a flood read "We're glad to have you
+/// with Echague MDRRMO". There is still no advisory feed on the backend, so
+/// this shows the only real updates the app has: the state of the resident's
+/// own requests, each with the timestamp the row actually carries.
 class NotificationsSheet extends StatelessWidget {
   final bool filipino;
-  const NotificationsSheet({super.key, this.filipino = false});
+  final List<ServiceRequest> requests;
 
-  static void show(BuildContext context, {bool filipino = false}) {
+  const NotificationsSheet({
+    super.key,
+    this.filipino = false,
+    this.requests = const [],
+  });
+
+  static void show(
+    BuildContext context, {
+    bool filipino = false,
+    List<ServiceRequest> requests = const [],
+  }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => NotificationsSheet(filipino: filipino),
+      builder: (_) => NotificationsSheet(filipino: filipino, requests: requests),
     );
+  }
+
+  /// Newest movement first — that is the order a notification list is read in.
+  /// A request with no timestamps sorts last rather than to the top.
+  List<ServiceRequest> get _ordered {
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    return [...requests]..sort((a, b) {
+        final left = a.updatedAt ?? a.createdAt ?? epoch;
+        final right = b.updatedAt ?? b.createdAt ?? epoch;
+        return right.compareTo(left);
+      });
   }
 
   @override
@@ -712,38 +728,118 @@ class NotificationsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.green50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.green50),
+          if (requests.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.green50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.green50),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.green700),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    tr(filipino, 'notif.empty_title'),
+                    style: AppText.display(size: 15, color: AppColors.green900),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tr(filipino, 'notif.empty_body'),
+                    style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            // Bounded so a resident with a long history gets a scrollable sheet
+            // instead of one that runs off the screen.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * .5,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final request in _ordered)
+                    _RequestUpdateTile(request: request, filipino: filipino),
+                ],
+              ),
             ),
+            const SizedBox(height: 8),
+            // Says what this list is, so nobody reads the absence of a flood
+            // warning here as the absence of a flood.
+            Text(
+              tr(filipino, 'notif.scope_note'),
+              style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestUpdateTile extends StatelessWidget {
+  final ServiceRequest request;
+  final bool filipino;
+
+  const _RequestUpdateTile({required this.request, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final at = request.updatedAt ?? request.createdAt;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconBadge(
+            icon: request.displayIcon,
+            bg: request.status.bg,
+            fg: request.status.fg,
+            size: 36,
+            iconSize: 17,
+            radius: 10,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.shield_outlined, size: 22, color: AppColors.green700),
-                ),
-                const SizedBox(height: 12),
                 Text(
-                  filipino ? 'Maligayang pagdating sa SERBIS!' : 'Welcome to SERBIS!',
-                  style: AppText.display(size: 15, color: AppColors.green900),
+                  request.displayTitle(filipino),
+                  style: AppText.display(size: 13, weight: FontWeight.w600),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 3),
                 Text(
-                  filipino
-                      ? 'Natutuwa kaming maging bahagi ka ng komunidad ng Echague MDRRMO. '
-                          'Dito mo makikita ang mga abiso at update tungkol sa iyong mga '
-                          'kahilingan sa serbisyo.'
-                      : "We're glad to have you with Echague MDRRMO. Updates about your "
-                          'service requests and important advisories will appear here.',
-                  style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
+                  at == null
+                      ? tr(filipino, 'timeline.time_unknown')
+                      : formatTimelineTime(at, filipino),
+                  style: AppText.body(size: 11, color: AppColors.inkFaint),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  request.refNo.isEmpty
+                      ? request.status.labelFor(filipino)
+                      : '${request.status.labelFor(filipino)} · ${request.refNo}',
+                  style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
                 ),
               ],
             ),

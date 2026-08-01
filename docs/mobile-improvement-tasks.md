@@ -682,7 +682,46 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M19 — Announcements and notifications are hardcoded placeholder copy**
+- [x] **M19 — Announcements and notifications are hardcoded placeholder copy**
+      **Done 2026-08-01.** Every invented string is gone, and both surfaces now
+      render data the app actually has rather than nothing:
+      • **Home "Announcements"** lists what MDRRMO has published — the two most
+      recent rows of `GET /info-materials`, already fetched at launch and cached
+      offline by M10/M11 — with each material's real `created_at`. The tile taps
+      through to the Library. `InfoMaterial` gained `publishedAt` (parsed
+      `toLocal()`, as in M26) and the offline index carries it, so a saved copy
+      is still dated from when MDRRMO published it and not from when this device
+      downloaded it. An index written before this change still loads; it just
+      has no date, and an undated material sorts last and says "Date not
+      recorded" instead of borrowing a neighbour's date. Empty, failed and
+      served-from-cache each get their own line.
+      • **The permanent NEW badge** is gone — it was hardcoded `true`, so it was
+      on for every resident on every launch forever.
+      • **The permanent unread dot** is gone from the bell for the same reason.
+      • **The bell sheet** held one hardcoded welcome message, so a resident who
+      tapped it during a flood read "We're glad to have you with Echague
+      MDRRMO". It now lists the resident's own requests, newest movement first,
+      each with the real timestamp off the row and its status; with none it says
+      "No updates yet" rather than greeting them.
+      Verified: `test/announcements_test.dart` — 17 tests (the date on the model
+      and through the offline index round-trip, the ordering, the undated
+      material, all three Home states, the absent NEW badge, the absent bell
+      dot, the sheet's list/ordering/empty state/translation). Mutation-checked:
+      neutralising the sort comparator fails the ordering tests. 90/90 tests
+      pass, `flutter analyze` steady at 23.
+      **Not done — and this is the part that matters:** there is still no
+      advisory feed. The backend has SMS blasts and no `GET /api/advisories`, so
+      a weather warning MDRRMO sends by SMS does not reach this app at all. What
+      landed replaces fiction with the truth the app holds; it does not make the
+      bell an emergency channel. The sheet says so in as many words — "MDRRMO
+      advisories are not sent here yet" — so nobody reads the absence of a flood
+      warning there as the absence of a flood. **Filed: `GET /api/advisories`,
+      resident-scoped by barangay**, plus the decision of whether an SMS blast
+      is the same object as an in-app advisory.
+      **Note:** a `Responding` row shows as "Scheduled" in the sheet, because
+      that is the label `status.scheduled` carries app-wide. Wrong vocabulary,
+      but it is the same wrong vocabulary as every other screen — worth one
+      pass over `ReqStatusX.labelFor` rather than a local fix here.
       **Severity:** Medium
       **Category:** Correctness
       **Location:** `Mobile/lib/screens/dashboard_screen.dart:209-225`;

@@ -45,19 +45,29 @@ const Map<String, (String, String)> _strings = {
   'home.need_help_now': ('Need help now?', 'Kailangan ng tulong ngayon?'),
   'home.announcements': ('Announcements', 'Mga Abiso'),
   'home.info_center': ('Info center', 'Sentro ng Impormasyon'),
-  'home.ann1.title': ('New materials uploaded', 'Bagong materyal na na-upload'),
-  'home.ann1.time': ('Today · 8:12 AM', 'Ngayon · 8:12 AM'),
-  'home.ann1.desc': (
-    'Updated flood preparedness guide and evacuation map are now available offline in the Library.',
-    'Available na sa Library nang offline ang na-update na gabay sa pag-iwas sa baha at mapa ng evacuation.',
+  'home.ann.empty': (
+    'MDRRMO has not published anything yet.',
+    'Wala pang nailalathalang materyal ang MDRRMO.',
   ),
-  'home.ann2.title': ('Weather advisory', 'Babala sa Panahon'),
-  'home.ann2.time': ('Yesterday · 4:30 PM', 'Kahapon · 4:30 PM'),
-  'home.ann2.desc': (
-    'Light to moderate rains expected over Isabela through the weekend. '
-        'Residents near riverbanks advised to stay alert.',
-    'Inaasahan ang magaan hanggang katamtamang ulan sa Isabela hanggang weekend. '
-        'Pinapaalalahanan ang mga residenteng malapit sa ilog na mag-ingat.',
+  'home.ann.failed': (
+    "Couldn't load announcements.",
+    'Hindi ma-load ang mga abiso.',
+  ),
+  'home.ann.offline': (
+    'Saved copies — not refreshed from MDRRMO.',
+    'Mga naka-save na kopya — hindi pa na-refresh mula sa MDRRMO.',
+  ),
+  'home.ann.no_date': ('Date not recorded', 'Walang naitalang petsa'),
+
+  // ---- Notifications ----
+  'notif.empty_title': ('No updates yet', 'Wala pang update'),
+  'notif.empty_body': (
+    'Updates about your service requests appear here once you have submitted one.',
+    'Lilitaw dito ang mga update tungkol sa iyong mga kahilingan sa serbisyo kapag nagsumite ka na.',
+  ),
+  'notif.scope_note': (
+    'Updates about your own requests only. MDRRMO advisories are not sent here yet.',
+    'Mga update lamang sa sarili mong kahilingan. Hindi pa dito ipinapadala ang mga abiso ng MDRRMO.',
   ),
   'home.status.review': (
     'Your request has been forwarded to MDRRMO for review. '

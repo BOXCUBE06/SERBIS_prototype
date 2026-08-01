@@ -15,6 +15,11 @@ class CachedMaterial {
   final String path;
   final DateTime savedAt;
 
+  /// The material's publication date, carried into the index so an offline
+  /// Home screen dates its announcements from when MDRRMO published them and
+  /// not from when this device happened to download them.
+  final DateTime? publishedAt;
+
   const CachedMaterial({
     required this.id,
     required this.title,
@@ -22,6 +27,7 @@ class CachedMaterial {
     required this.sizeBytes,
     required this.path,
     required this.savedAt,
+    this.publishedAt,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -31,6 +37,7 @@ class CachedMaterial {
         'size': sizeBytes,
         'path': path,
         'saved_at': savedAt.toIso8601String(),
+        if (publishedAt != null) 'published_at': publishedAt!.toIso8601String(),
       };
 
   static CachedMaterial? fromJson(Object? json) {
@@ -47,6 +54,9 @@ class CachedMaterial {
       path: path,
       savedAt:
           DateTime.tryParse(json['saved_at'] as String? ?? '') ?? DateTime(1970),
+      // Absent from indexes written before publication dates were carried, so
+      // an upgrade must not drop those entries — it just has no date to show.
+      publishedAt: DateTime.tryParse(json['published_at'] as String? ?? ''),
     );
   }
 
@@ -58,6 +68,7 @@ class CachedMaterial {
         fileType: fileType,
         sizeBytes: sizeBytes,
         url: '',
+        publishedAt: publishedAt,
       );
 }
 

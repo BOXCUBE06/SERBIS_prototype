@@ -113,6 +113,7 @@ class IoMaterialCache implements MaterialCache {
         sizeBytes: bytes.length,
         path: file.path,
         savedAt: DateTime.now(),
+        publishedAt: material.publishedAt,
       );
 
       final index = await loadIndex();

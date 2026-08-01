@@ -385,6 +385,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     final onOpenNotifications = () => NotificationsSheet.show(
           context,
           filipino: _appState.language == AppLanguage.filipino,
+          // A copy: the sheet must not hold the store's mutable list, which a
+          // poll landing behind the sheet would mutate underneath it (M30).
+          requests: [..._appState.requests],
         );
     final onOpenProfile = () => _goTo(4);
 

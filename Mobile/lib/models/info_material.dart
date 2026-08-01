@@ -16,12 +16,19 @@ class InfoMaterial {
   /// launch, so the copy on disk is all there is.
   final String url;
 
+  /// When MDRRMO published it — the row's `created_at`. Null when the server
+  /// did not send one, and the surfaces that show a date must say so rather
+  /// than print a stand-in: this is the only date the Home screen has, and an
+  /// invented one is exactly the placeholder this replaced.
+  final DateTime? publishedAt;
+
   const InfoMaterial({
     required this.id,
     required this.title,
     required this.fileType,
     required this.sizeBytes,
     required this.url,
+    this.publishedAt,
   });
 
   factory InfoMaterial.fromJson(Map<String, dynamic> json) {
@@ -31,7 +38,15 @@ class InfoMaterial {
       fileType: (json['file_type'] as String?)?.toLowerCase() ?? '',
       sizeBytes: _intOf(json['file_size']),
       url: (json['full_url'] as String?) ?? '',
+      // Laravel serialises UTC; without toLocal() a material published this
+      // morning reads as yesterday evening in the Philippines.
+      publishedAt: _dateOf(json['created_at']),
     );
+  }
+
+  static DateTime? _dateOf(Object? value) {
+    if (value is! String || value.isEmpty) return null;
+    return DateTime.tryParse(value)?.toLocal();
   }
 
   static int _intOf(Object? value) {

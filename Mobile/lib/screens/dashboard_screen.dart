@@ -212,23 +212,12 @@ class HomeScreen extends StatelessWidget {
                 actionLabel: tr(f, 'home.info_center'),
                 onAction: onOpenLibrary,
               ),
-              _AnnouncementTile(
-                icon: Icons.download_rounded,
-                iconBg: AppColors.green50,
-                iconFg: AppColors.green700,
-                title: tr(f, 'home.ann1.title'),
-                isNew: true,
-                time: tr(f, 'home.ann1.time'),
-                desc: tr(f, 'home.ann1.desc'),
-              ),
-              _AnnouncementTile(
-                icon: Icons.campaign_outlined,
-                iconBg: AppColors.amber50,
-                iconFg: AppColors.amber600,
-                title: tr(f, 'home.ann2.title'),
-                time: tr(f, 'home.ann2.time'),
-                desc: tr(f, 'home.ann2.desc'),
-              ),
+              // What MDRRMO has actually published, newest first. This section
+              // used to be two fixed tiles with invented timestamps ("Today ·
+              // 8:12 AM") and one permanently flagged NEW, so a resident who
+              // opened the app during a flood read a weather advisory written
+              // months earlier in a translation file.
+              ..._announcements(f),
             ],
           ),
         ),
@@ -241,6 +230,55 @@ class HomeScreen extends StatelessWidget {
       onRefresh: () => appState.loadRequests(),
       child: list,
     );
+  }
+
+  /// The two most recent published materials, or an honest line about why
+  /// there are none. Home shows a short list; the Library shows all of them,
+  /// which is what the section header's action opens.
+  List<Widget> _announcements(bool f) {
+    if (appState.materials.isEmpty) {
+      if (appState.materialsLoading) {
+        return const [SizedBox.shrink()];
+      }
+      return [
+        _AnnouncementNote(
+          text: appState.materialsError == null
+              ? tr(f, 'home.ann.empty')
+              : tr(f, 'home.ann.failed'),
+        ),
+      ];
+    }
+
+    // The server sends them newest-first, but the offline index is ordered by
+    // download time, so sort here rather than trust either.
+    final latest = [...appState.materials]..sort((a, b) {
+        final left = a.publishedAt;
+        final right = b.publishedAt;
+        if (left == null && right == null) return 0;
+        // A material with no date sinks: it cannot be claimed to be recent.
+        if (left == null) return 1;
+        if (right == null) return -1;
+        return right.compareTo(left);
+      });
+
+    return [
+      for (final material in latest.take(2))
+        _AnnouncementTile(
+          icon: material.icon,
+          iconBg: AppColors.green50,
+          iconFg: AppColors.green700,
+          title: material.title,
+          time: material.publishedAt == null
+              ? tr(f, 'home.ann.no_date')
+              : formatTimelineTime(material.publishedAt!, f),
+          desc: [material.typeLabel, material.sizeLabel]
+              .where((part) => part.isNotEmpty)
+              .join(' · '),
+          onTap: onOpenLibrary,
+        ),
+      if (appState.materialsFromCache)
+        _AnnouncementNote(text: tr(f, 'home.ann.offline')),
+    ];
   }
 
   String _statusMessage(bool f, ReqStatus status) => switch (status) {
@@ -292,7 +330,7 @@ class _AnnouncementTile extends StatelessWidget {
   final String title;
   final String time;
   final String desc;
-  final bool isNew;
+  final VoidCallback? onTap;
 
   const _AnnouncementTile({
     required this.icon,
@@ -301,12 +339,15 @@ class _AnnouncementTile extends StatelessWidget {
     required this.title,
     required this.time,
     required this.desc,
-    this.isNew = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -323,17 +364,9 @@ class _AnnouncementTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(title, style: AppText.display(size: 13, weight: FontWeight.w600))),
-                    if (isNew)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(6)),
-                        child: Text('NEW', style: AppText.display(size: 9, weight: FontWeight.w700, color: AppColors.red600, letterSpacing: .5)),
-                      ),
-                  ],
-                ),
+                // The NEW badge that used to sit here was hardcoded true, so it
+                // never came off. A flag that is always on is not information.
+                Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Text(time, style: AppText.body(size: 11, color: AppColors.inkFaint)),
                 const SizedBox(height: 4),
@@ -343,6 +376,23 @@ class _AnnouncementTile extends StatelessWidget {
           ),
         ],
       ),
+      ),
+    );
+  }
+}
+
+/// A one-line explanation in place of, or under, the announcement tiles: no
+/// materials published yet, the fetch failed, or these are saved copies.
+class _AnnouncementNote extends StatelessWidget {
+  final String text;
+
+  const _AnnouncementNote({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(text, style: AppText.body(size: 12, color: AppColors.inkMuted)),
     );
   }
 }
