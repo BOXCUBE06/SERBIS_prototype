@@ -839,7 +839,22 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M24 — Road form's "Attach photo" upload box does nothing**
+- [x] **M24 — Road form's "Attach photo" upload box does nothing**
+      **Done 2026-08-01 by removal.** Took the delete option, not the wire-it-up
+      one: `store()` accepts only `valid_id`, so the functional version is a
+      backend change, and until that exists a second upload box can only ever be
+      decoration. Both the usage and the `_UploadField` class are gone; nothing
+      else referenced it. The road form now ends at Description, and the only
+      upload control left on the screen — `_ValidIdUploadField` — is the one that
+      works, so two identical-looking boxes no longer behave differently.
+      **Filed for the backend: a second multipart file on
+      `POST /service-requests`** (site photo, optional, road obstruction only).
+      Wiring the widget back is then a `fp.FilePicker` call alongside
+      `_pickValidId`.
+      **Not verified live** — deletion of an inert widget, covered by
+      `flutter analyze` (25 issues, unchanged baseline) and 55/55 tests passing.
+      No test asserted the box's absence; the widget had no behaviour to assert
+      on either side of the change.
       **Severity:** Medium
       **Category:** UX Gaps
       **Location:** `Mobile/lib/screens/services_screen.dart:393`, widget defined

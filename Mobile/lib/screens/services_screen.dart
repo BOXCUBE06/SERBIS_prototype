@@ -507,7 +507,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
             lines: 3,
             controller: _ctrl('road_description'),
           ),
-          const _UploadField(label: 'Attach photo (optional)'),
         ]);
       case ServiceFormKind.relief:
         return Column(children: [
@@ -832,40 +831,6 @@ class _Dropdown extends StatelessWidget {
                   if (v != null) onChanged(v);
                 },
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UploadField extends StatelessWidget {
-  final String label;
-  const _UploadField({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 22),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.line, width: 1.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.cloud_upload_outlined, color: AppColors.inkFaint, size: 22),
-                const SizedBox(height: 6),
-                Text('Tap to upload a photo of the site', style: AppText.body(size: 12, color: AppColors.inkMuted)),
-              ],
             ),
           ),
         ],
