@@ -133,6 +133,12 @@ void main() {
     // built-in articles, so the row is not built until it is scrolled to.
     final row = find.text('Evacuation Center Map');
     await tester.scrollUntilVisible(row, 300);
+    // `scrollUntilVisible` stops as soon as the finder matches, and a ListView
+    // builds a screen's worth beyond the viewport — so the row can be found
+    // while still sitting below the fold, and the tap then lands on nothing.
+    // It did once the hotline card above it grew a line per contact.
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
     await tester.tap(row);
     await tester.pumpAndSettle();
 

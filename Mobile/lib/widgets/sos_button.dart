@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/hotlines.dart';
 import '../theme/app_theme.dart';
 import 'shared_widgets.dart';
 
@@ -38,7 +39,14 @@ class SosSheet extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Emergency hotlines', style: AppText.display(size: 18)),
+              // Expanded for the same reason SectionHeader and AppButton got it:
+              // a Row of Text + trailing button clips the moment the text is
+              // wider than the row. Surfaced here by the widget test's fallback
+              // font, which is far wider than the real typeface — so this is
+              // hardening, not a confirmed overflow on a device.
+              Expanded(
+                child: Text('Emergency hotlines', style: AppText.display(size: 18)),
+              ),
               IconButton(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.green700),
@@ -52,19 +60,21 @@ class SosSheet extends StatelessWidget {
             style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6),
           ),
           const SizedBox(height: 14),
-          _hotlineRow(context, Icons.shield_outlined, AppColors.red50, AppColors.red600, 'MDRRMO', '0917-123-4567 / 0943-132-0604'),
-          const SizedBox(height: 8),
-          _hotlineRow(context, Icons.local_police_outlined, AppColors.blue50, AppColors.blue600, 'Police (PNP)', '0917-681-6913 · 117'),
-          const SizedBox(height: 8),
-          _hotlineRow(context, Icons.local_fire_department_outlined, AppColors.amber50, AppColors.amber600, 'Fire (BFP)', '0917-500-2585 · 116'),
-          const SizedBox(height: 8),
-          _hotlineRow(context, Icons.warning_amber_rounded, AppColors.red50, AppColors.red600, 'National Emergency', '911'),
+          // English labels because this whole sheet is untranslated — its title
+          // and its instruction above are hardcoded English too, and a list of
+          // Filipino labels under an English heading reads worse than either.
+          for (var i = 0; i < kHotlines.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _hotlineRow(context, kHotlines[i]),
+          ],
         ],
       ),
     );
   }
 
-  Widget _hotlineRow(BuildContext context, IconData icon, Color bg, Color fg, String title, String sub) {
+  Widget _hotlineRow(BuildContext context, Hotline hotline) {
+    final title = hotline.label;
+    final sub = hotline.numbersLine;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () {
@@ -80,7 +90,14 @@ class SosSheet extends StatelessWidget {
         ),
         child: Row(
           children: [
-            IconBadge(icon: icon, bg: bg, fg: fg, size: 36, iconSize: 17, radius: 10),
+            IconBadge(
+              icon: hotline.icon,
+              bg: hotline.iconBg,
+              fg: hotline.iconFg,
+              size: 36,
+              iconSize: 17,
+              radius: 10,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

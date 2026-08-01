@@ -961,7 +961,49 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M28 — MDRRMO hotline numbers are hardcoded in three files and disagree**
+- [x] **M28 — MDRRMO hotline numbers are hardcoded in three files and disagree**
+      **Done 2026-08-01 — the cheap half. `Mobile/lib/data/hotlines.dart`** holds
+      one `const kHotlines`, and the SOS sheet, the Library card and the Services
+      safety notice all render it. The three no longer *can* disagree.
+      **Merged to the superset, so two surfaces gained numbers:** MDRRMO's second
+      duty line `0943-132-0604` and the PNP/BFP mobiles existed only on the SOS
+      sheet, and the Library and safety notice showed the short list without
+      saying it was short. Every surface now renders `numbersLine` — all numbers,
+      joined — rather than picking one.
+      **Someone still has to confirm the numbers themselves.** `0917-123-4567`
+      reads like placeholder digits; consolidating turned three wrong numbers
+      into one wrong number, which is progress but not correctness.
+      **Still open, filed rather than done: `GET /api/hotlines`** cached through
+      M10's offline layer, with `kHotlines` as the fallback when the cache is
+      empty. Until that exists a duty-number change needs a new release, and the
+      app displays a number nobody answers until it ships. Cached hotlines must
+      be readable with no network — that is the whole point of the endpoint.
+      **Two layout changes fell out of it,** because the joined string is roughly
+      twice as wide as the single number these rows used to carry:
+      • the Library row is now two deliberate lines (label, then numbers in
+      green, call icon right) instead of label-and-number opposed on one, which
+      wrapped on any narrow phone;
+      • the SOS sheet's header `Text` is wrapped in `Expanded`. That one is
+      hardening, not a confirmed device bug — the overflow appeared under the
+      widget test's fallback font, which is far wider than the real typeface.
+      **The SOS sheet stays English**, including these labels. Its title and its
+      instruction line are hardcoded English too, and Filipino labels under an
+      English heading read worse than either; localising the sheet is its own
+      task.
+      Verified: `test/hotlines_test.dart`, 5 tests — every surface renders every
+      hotline's label and full `numbersLine`, at a 360px-wide viewport so a
+      RenderFlex overflow fails the run. Mutation-checked: rendering
+      `numbers.first` in the Library instead of `numbersLine` fails it.
+      61/61 tests pass, `flutter analyze` steady at 23.
+      **Not exercised live** — every surface here is behind a resident login and
+      `ResidentSeeder` issues random per-resident passwords, so no seeded login
+      is known on this box (same blocker as M13).
+      **One existing test needed repairing, not the app:**
+      `material_open_test.dart`'s tap missed once the hotline card above it grew
+      a line per contact. `scrollUntilVisible` stops as soon as the finder
+      matches, and a `ListView` builds a screenful past the viewport — so the row
+      was found while still below the fold. Added `ensureVisible`. Worth
+      remembering: that test passed for the wrong reason before.
       **Severity:** Medium
       **Category:** Correctness (hardcoded values that should come from config)
       **Location:** `Mobile/lib/widgets/sos_button.dart:55-61`;

@@ -4,6 +4,7 @@ library serbis.screens.services;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart' as fp;
+import '../data/hotlines.dart';
 import '../models/request_models.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
@@ -648,10 +649,10 @@ class _SafetyNotice extends StatelessWidget {
                   style: AppText.body(size: 12, color: const Color(0xFF7A3527), height: 1.6),
                 ),
                 const SizedBox(height: 8),
-                _hotlineLine('MDRRMO — 0917-123-4567'),
-                _hotlineLine(f ? 'Pulis (PNP) — 117' : 'Police (PNP) — 117'),
-                _hotlineLine(f ? 'Bumbero (BFP) — 116' : 'Fire (BFP) — 116'),
-                _hotlineLine(f ? 'Pambansang Emerhensiya — 911' : 'National Emergency — 911'),
+                for (final hotline in kHotlines)
+                  _hotlineLine(
+                    '${hotline.labelFor(filipino: f)} — ${hotline.numbersLine}',
+                  ),
               ],
             ),
           ),

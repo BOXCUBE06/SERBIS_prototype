@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/hotlines.dart';
 import '../data/safety_files.dart';
 import '../models/info_material.dart';
 import '../state/request_store.dart';
@@ -54,10 +55,12 @@ class LibraryScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _hotlineRow(context, 'MDRRMO', '0917-123-4567'),
-                _hotlineRow(context, filipino ? 'Pulis (PNP)' : 'Police (PNP)', '117'),
-                _hotlineRow(context, filipino ? 'Bumbero (BFP)' : 'Fire (BFP)', '116'),
-                _hotlineRow(context, filipino ? 'Pambansang Emerhensiya' : 'National Emergency', '911'),
+                for (final hotline in kHotlines)
+                  _hotlineRow(
+                    context,
+                    hotline.labelFor(filipino: filipino),
+                    hotline.numbersLine,
+                  ),
               ],
             ),
           ),
@@ -111,12 +114,26 @@ class LibraryScreen extends StatelessWidget {
       onTap: () => showAppSnackBar(context, 'Calling $label · $number'),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
+        // Two deliberate lines rather than label-and-number on one: most of
+        // these contacts have two numbers now, and a single line put a ~190px
+        // number string opposite the label and wrapped it on any narrow phone.
         child: Row(
           children: [
-            Expanded(child: Text(label, style: AppText.display(size: 12.5, weight: FontWeight.w600))),
-            Icon(Icons.call_rounded, size: 13, color: AppColors.green700),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppText.display(size: 12.5, weight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    number,
+                    style: AppText.display(size: 12.5, weight: FontWeight.w700, color: AppColors.green700),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(width: 6),
-            Text(number, style: AppText.display(size: 12.5, weight: FontWeight.w700, color: AppColors.green700)),
+            Icon(Icons.call_rounded, size: 13, color: AppColors.green700),
           ],
         ),
       ),
