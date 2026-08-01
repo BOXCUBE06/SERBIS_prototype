@@ -56,7 +56,6 @@ ServiceRequest _pending() => const ServiceRequest(
       refNo: '',
       status: ReqStatus.review,
       metaLines: <String>[],
-      timeline: <TimelineStep>[],
     );
 
 void main() {

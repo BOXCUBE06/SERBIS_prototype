@@ -10,6 +10,15 @@ const Map<String, (String, String)> _strings = {
   'common.calling': ('Calling', 'Tumatawag sa'),
   'common.close': ('Close', 'Isara'),
 
+  'timeline.submitted': ('Request submitted', 'Naisumite ang kahilingan'),
+  'timeline.review': ('Under review by MDRRMO', 'Sinusuri ng MDRRMO'),
+  'timeline.responding': ('MDRRMO is responding', 'Tumutugon ang MDRRMO'),
+  'timeline.completed': ('Completed', 'Natapos'),
+  'timeline.cancelled': ('Cancelled', 'Kinansela'),
+  'timeline.awaiting': ('Waiting', 'Naghihintay'),
+  'timeline.time_unknown': ('Time not recorded', 'Walang naitalang oras'),
+  'timeline.today': ('Today', 'Ngayon'),
+
   'status.review': ('Under review', 'Sinusuri'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
   'status.completed': ('Completed', 'Natapos'),

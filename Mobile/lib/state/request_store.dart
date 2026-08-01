@@ -394,14 +394,10 @@ class AppState extends ChangeNotifier {
       status: ReqStatus.cancelled,
       cancellable: false,
       note: 'You cancelled this request.',
-      timeline: [
-        ...current.timeline.where((step) => step.state == RequestStepState.done),
-        const TimelineStep(
-          'Request cancelled',
-          'Just now',
-          RequestStepState.done,
-        ),
-      ],
+      // The timeline reads its last step off status and updatedAt, so stamping
+      // the cancellation time is all it takes; the step no longer has to be
+      // assembled by hand here and cannot disagree with the status.
+      updatedAt: DateTime.now(),
     );
     notifyListeners();
 

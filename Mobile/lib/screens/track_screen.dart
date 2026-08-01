@@ -266,24 +266,26 @@ class _RequestCard extends StatelessWidget {
                 decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                 child: Text(request.note!, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6)),
               ),
-            if (request.timeline.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              AppButton(
-                label: expanded ? tr(filipino, 'common.hide_timeline') : tr(filipino, 'common.view_timeline'),
-                icon: expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                style: AppButtonStyle.outline,
-                onPressed: onToggle,
+            // No isNotEmpty guard any more: the timeline is derived from the
+            // request's own status and timestamps, so every card has one --
+            // including the server-loaded rows that used to lose the button
+            // entirely after a relaunch.
+            const SizedBox(height: 12),
+            AppButton(
+              label: expanded ? tr(filipino, 'common.hide_timeline') : tr(filipino, 'common.view_timeline'),
+              icon: expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              style: AppButtonStyle.outline,
+              onPressed: onToggle,
+            ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 200),
+              crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+              firstChild: const SizedBox(width: double.infinity),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: _Timeline(steps: request.timelineFor(filipino)),
               ),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 200),
-                crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                firstChild: const SizedBox(width: double.infinity),
-                secondChild: Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: _Timeline(steps: request.timeline),
-                ),
-              ),
-            ],
+            ),
             if (request.cancellable) ...[
               const SizedBox(height: 10),
               AppButton(

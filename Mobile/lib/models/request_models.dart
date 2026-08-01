@@ -351,6 +351,35 @@ class TimelineStep {
 
 enum RequestStepState { done, current, pending }
 
+/// Renders a timestamp the way the request cards do: "Today, 3:04 PM" for
+/// today, "Aug 1, 3:04 PM" otherwise.
+///
+/// Only the word "Today" is translated. Month abbreviations are left in
+/// English because that is what the rest of the app and the LGU's own forms
+/// use, and inventing Filipino ones here would be a guess.
+String formatTimelineTime(DateTime at, bool filipino) {
+  final local = at.toLocal();
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  final clock = '$hour12:$minute $period';
+
+  final now = DateTime.now();
+  final isToday = local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day;
+
+  if (isToday) {
+    return '${tr(filipino, 'timeline.today')}, $clock';
+  }
+
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${months[local.month - 1]} ${local.day}, $clock';
+}
+
 class ServiceRequest {
   final int? id;
   final int? serviceId;
@@ -359,9 +388,18 @@ class ServiceRequest {
   final String refNo;
   final ReqStatus status;
   final List<String> metaLines;
-  final List<TimelineStep> timeline;
   final String? note;
   final bool cancellable;
+
+  /// When the request was filed. The server's `created_at`; for a row that has
+  /// not reached the server yet, the moment the resident pressed submit.
+  final DateTime? createdAt;
+
+  /// The row's `updated_at`. This is the last time *any* column changed, not
+  /// specifically the status, so the timeline presents it as when the request
+  /// last moved rather than claiming a precise status-change time. A real
+  /// status-change log would need a resident-scoped history endpoint.
+  final DateTime? updatedAt;
 
   /// The service's name in the resident's language, when the row resolved to
   /// one. Display prefers this over [type]: the enum has six values against the
@@ -382,9 +420,10 @@ class ServiceRequest {
     required this.refNo,
     required this.status,
     required this.metaLines,
-    required this.timeline,
     this.note,
     this.cancellable = false,
+    this.createdAt,
+    this.updatedAt,
     this.serviceName,
     this.serviceNameEn,
   });
@@ -420,13 +459,94 @@ class ServiceRequest {
     return key == null ? type.fg : badgeForServiceName(key).fg;
   }
 
+  /// The progress timeline, derived rather than stored.
+  ///
+  /// It used to be a list built once at submit time and left empty by
+  /// [ServiceRequest.fromJson], so it existed only for rows created in the
+  /// current session and vanished on relaunch -- exactly when a resident most
+  /// wants to know what is happening. Deriving it means every row has one,
+  /// including rows loaded from the server, and the steps cannot drift out of
+  /// step with [status].
+  ///
+  /// Every time shown is a real timestamp. A step whose time is not known says
+  /// so instead of printing a placeholder.
+  List<TimelineStep> timelineFor(bool filipino) {
+    final submitted = TimelineStep(
+      tr(filipino, 'timeline.submitted'),
+      createdAt == null
+          ? tr(filipino, 'timeline.time_unknown')
+          : formatTimelineTime(createdAt!, filipino),
+      RequestStepState.done,
+    );
+
+    // `updated_at` equal to `created_at` means nothing has happened to the row
+    // since it was filed, so there is no second timestamp to report.
+    final movedAt = updatedAt != null &&
+            createdAt != null &&
+            updatedAt!.isAtSameMomentAs(createdAt!)
+        ? null
+        : updatedAt;
+    final movedLabel = movedAt == null
+        ? tr(filipino, 'timeline.time_unknown')
+        : formatTimelineTime(movedAt, filipino);
+
+    switch (status) {
+      case ReqStatus.review:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.review'),
+            tr(filipino, 'timeline.awaiting'),
+            RequestStepState.current,
+          ),
+          TimelineStep(
+            tr(filipino, 'timeline.completed'),
+            tr(filipino, 'timeline.awaiting'),
+            RequestStepState.pending,
+          ),
+        ];
+      case ReqStatus.scheduled:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.responding'),
+            movedLabel,
+            RequestStepState.current,
+          ),
+          TimelineStep(
+            tr(filipino, 'timeline.completed'),
+            tr(filipino, 'timeline.awaiting'),
+            RequestStepState.pending,
+          ),
+        ];
+      case ReqStatus.completed:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.completed'),
+            movedLabel,
+            RequestStepState.done,
+          ),
+        ];
+      case ReqStatus.cancelled:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.cancelled'),
+            movedLabel,
+            RequestStepState.done,
+          ),
+        ];
+    }
+  }
+
   ServiceRequest copyWith({
     int? id,
     ReqStatus? status,
     List<String>? metaLines,
-    List<TimelineStep>? timeline,
     String? note,
     bool? cancellable,
+    DateTime? updatedAt,
     String? serviceName,
     String? serviceNameEn,
   }) {
@@ -443,9 +563,10 @@ class ServiceRequest {
       refNo: refNo,
       status: status ?? this.status,
       metaLines: metaLines ?? this.metaLines,
-      timeline: timeline ?? this.timeline,
       note: note ?? this.note,
       cancellable: cancellable ?? this.cancellable,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -490,11 +611,23 @@ class ServiceRequest {
       refNo: id != null ? 'SR-$id' : '',
       status: status,
       metaLines: description == null ? [] : [description],
-      timeline: const [],
       note: note,
       cancellable: isActive,
+      // Laravel serialises timestamps as UTC ISO strings; without toLocal()
+      // every timeline entry would read eight hours early in the Philippines.
+      createdAt: _parseTimestamp(json['created_at']),
+      updatedAt: _parseTimestamp(json['updated_at']),
     );
   }
+}
+
+/// Reads one of the row's timestamps, tolerating a null or an unparseable
+/// value: a timeline with one honest step beats a crash on a malformed date.
+DateTime? _parseTimestamp(dynamic value) {
+  if (value is! String || value.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toLocal();
 }
 
 ReqStatus getStatusFromText(String statusText) {

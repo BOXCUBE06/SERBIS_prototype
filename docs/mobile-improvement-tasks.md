@@ -939,7 +939,49 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M26 — Server-loaded requests have no timeline, so the tracking UI vanishes**
+- [x] **M26 — Server-loaded requests have no timeline, so the tracking UI vanishes**
+      **Done 2026-08-01.** Took the first option — derive the timeline from
+      `status` + `created_at` + `updated_at`, no backend work. The stored
+      `timeline` field is gone from `ServiceRequest` entirely, replaced by
+      `timelineFor(filipino)`, so there is no list left to be empty and the
+      Track card renders the block unconditionally. Two bugs died with the
+      field: the steps can no longer disagree with `status` (the old
+      hand-assembled cancel path appended "Request cancelled" after whatever
+      was already there, so a cancelled request could still show "Completed"
+      ahead of it), and the steps are now translated — they used to be English
+      literals built at submit time, so a Filipino-speaking resident read
+      English.
+      Every time shown is a real timestamp, never a placeholder:
+      • **`toLocal()` on parse** — Laravel serialises UTC, so without it every
+      entry read eight hours early in the Philippines.
+      • **no invented times** — a null or unparseable timestamp renders
+      "Time not recorded", and `updated_at == created_at` (nothing has happened
+      to the row since it was filed) is treated as no second timestamp rather
+      than as the moment the request moved.
+      • the locally-submitted row stamps `createdAt: DateTime.now()` and the
+      local cancel stamps `updatedAt`, so a row still has a real time before
+      the server's copy comes back.
+      Verified: `test/request_timeline_test.dart` — 11 model/store tests (one
+      per status, the UTC conversion, the missing and the malformed timestamp,
+      the untouched row, the translation, the cancel stamp) plus 1 widget test
+      that pumps the Track screen with a row from `fromJson`, taps
+      "View timeline" and reads the steps. Mutation-checked: putting the block
+      back behind a guard that hides it fails the widget test. 73/73 tests pass,
+      `flutter analyze` is at 23 issues (down from 25 — the removed literals),
+      `flutter build web --release` compiles.
+      **Not verified:** never run on a device.
+      **Known gap:** a `Disapproved` row reads "Cancelled" in its last step.
+      `getStatusFromText` folds `disapproved` into `ReqStatus.cancelled`, so the
+      timeline cannot tell a resident whose request the MDRRMO refused apart
+      from one who withdrew it themselves. That is the enum's limit, not the
+      timeline's — fixing it means a sixth status, and it is worth doing.
+      **Note:** `updated_at` is the last time *any* column changed, not
+      specifically the status, so the middle step presents it as when the
+      request last moved rather than claiming a precise status-change time.
+      Real per-status timestamps still need the resident-scoped history endpoint
+      the task describes; this is the honest version of what the row already
+      carries. Month abbreviations stay English — the rest of the app and the
+      LGU's forms use them, and inventing Filipino ones here would be a guess.
       **Severity:** Medium
       **Category:** UX Gaps
       **Location:** `Mobile/lib/models/request_models.dart:366`;

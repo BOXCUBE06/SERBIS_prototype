@@ -285,11 +285,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
       status: ReqStatus.review,
       cancellable: true,
       metaLines: metaLines,
-      timeline: [
-        TimelineStep('Request submitted', timeLabel, RequestStepState.done),
-        const TimelineStep('Forwarded to MDRRMO for review', 'Pending', RequestStepState.pending),
-        const TimelineStep('Completed', 'Pending', RequestStepState.pending),
-      ],
+      // The server's created_at replaces this the moment the row comes back;
+      // until then the timeline still has a real submission time to show.
+      createdAt: DateTime.now(),
     );
 
     setState(() => _submitting = true);
