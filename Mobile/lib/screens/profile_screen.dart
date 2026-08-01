@@ -2,7 +2,6 @@
 library serbis.screens.profile;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../data/safety_files.dart';
 import '../state/material_cache.dart';
 import '../state/request_store.dart';
@@ -38,9 +37,15 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _smsAlerts = true;
   bool _pushNotifications = true;
-  late String _name = widget.initialName ?? 'Juan Delacruz';
-  late String _email = widget.initialEmail ?? '';
-  late String _address = widget.initialAddress ?? 'Echague, Isabela';
+
+  /// Straight off the signed-in resident, with no invented fallback. The
+  /// defaults used to be `'Juan Delacruz'` and `'Echague, Isabela'`, so a
+  /// profile that failed to load showed a plausible name and a municipality
+  /// that is not a barangay — and the barangay on the resident row is what
+  /// every request is dispatched on. A missing value now says so.
+  String get _name => widget.initialName?.trim() ?? '';
+  String get _email => widget.initialEmail?.trim() ?? '';
+  String get _address => widget.initialAddress?.trim() ?? '';
 
   @override
   Widget build(BuildContext context) {
@@ -59,51 +64,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: AppCard(
               child: Column(
                 children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          color: AppColors.green50,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.surface, width: 3),
-                          boxShadow: [
-                            BoxShadow(color: AppColors.green900.withOpacity(.06), blurRadius: 12, offset: const Offset(0, 4)),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.person_outline_rounded, size: 36, color: AppColors.green700),
-                      ),
-                      Positioned(
-                        bottom: -2,
-                        right: -2,
-                        child: GestureDetector(
-                          onTap: () => showAppSnackBar(context, 'Photo picker would open here.'),
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: AppColors.green700,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.surface, width: 2),
-                            ),
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.edit_rounded, size: 13, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
+                  // No edit badge on the avatar: it opened a snackbar reading
+                  // "Photo picker would open here." and nothing else. M32 adds
+                  // it back when there is a picker behind it.
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: AppColors.green50,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.surface, width: 3),
+                      boxShadow: [
+                        BoxShadow(color: AppColors.green900.withOpacity(.06), blurRadius: 12, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.person_outline_rounded, size: 36, color: AppColors.green700),
                   ),
                   const SizedBox(height: 12),
-                  Text(_name, style: AppText.display(size: 18)),
+                  Text(
+                    _name.isEmpty ? tr(filipino, 'profile.value_missing') : _name,
+                    style: AppText.display(
+                      size: 18,
+                      color: _name.isEmpty ? AppColors.inkMuted : AppColors.ink,
+                    ),
+                  ),
                   const SizedBox(height: 5),
-                  _detailRow(Icons.email_outlined, _email),
+                  _detailRow(Icons.email_outlined, _email, filipino),
                   const SizedBox(height: 3),
-                  _detailRow(Icons.place_outlined, _address),
+                  _detailRow(Icons.place_outlined, _address, filipino),
                   const SizedBox(height: 16),
-                  AppButton(label: tr(filipino, 'profile.update_info'), onPressed: () => _editProfile(context)),
+                  AppButton(
+                    label: tr(filipino, 'profile.account_details'),
+                    style: AppButtonStyle.outline,
+                    onPressed: () => _showAccountDetails(context, filipino),
+                  ),
                 ],
               ),
             ),
@@ -184,76 +179,89 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _detailRow(IconData icon, String text) {
+  Widget _detailRow(IconData icon, String text, bool filipino) {
+    final missing = text.isEmpty;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(icon, size: 14, color: AppColors.inkFaint),
         const SizedBox(width: 6),
-        Text(text, style: AppText.body(size: 12.5, color: AppColors.inkMuted)),
+        Flexible(
+          child: Text(
+            missing ? tr(filipino, 'profile.value_missing') : text,
+            style: AppText.body(
+              size: 12.5,
+              color: missing ? AppColors.inkFaint : AppColors.inkMuted,
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Future<void> _editProfile(BuildContext context) async {
-    final nameCtrl = TextEditingController(text: _name);
-    final emailCtrl = TextEditingController(text: _email);
-    final addressCtrl = TextEditingController(text: _address);
-
-    final saved = await showModalBottomSheet<bool>(
+  /// Read-only on purpose. The sheet used to hold three `TextField`s and a
+  /// "Save changes" button that wrote to three local `String`s and reported
+  /// "Profile information updated." — no API call existed, the values were gone
+  /// on the next launch, and the admin panel never saw them. That is worse than
+  /// no edit at all for the barangay, which is the field an emergency request is
+  /// dispatched on: a resident who moved would be told the move was recorded.
+  /// Wire this back up when the backend has a resident-scoped `PATCH /me`.
+  Future<void> _showAccountDetails(BuildContext context, bool filipino) {
+    return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
-                ),
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
               ),
-              Text('Update information', style: AppText.display(size: 18)),
-              const SizedBox(height: 14),
-              _editField('Full name', nameCtrl),
-              _editField('Email address', emailCtrl, keyboard: TextInputType.emailAddress),
-              _editField('Address', addressCtrl),
-              const SizedBox(height: 6),
-              AppButton(label: 'Save changes', onPressed: () => Navigator.pop(ctx, true)),
-            ],
-          ),
+            ),
+            Text(tr(filipino, 'profile.account_details'), style: AppText.display(size: 18)),
+            const SizedBox(height: 14),
+            _readOnlyField(tr(filipino, 'profile.full_name'), _name, filipino),
+            _readOnlyField(tr(filipino, 'profile.email'), _email, filipino),
+            _readOnlyField(tr(filipino, 'profile.barangay'), _address, filipino),
+            const SizedBox(height: 2),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 15, color: AppColors.inkFaint),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    tr(filipino, 'profile.contact_to_update'),
+                    style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            AppButton(
+              label: tr(filipino, 'common.close'),
+              style: AppButtonStyle.outline,
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
         ),
       ),
     );
-
-    if (saved == true) {
-      setState(() {
-        _name = nameCtrl.text.trim().isEmpty ? _name : nameCtrl.text.trim();
-        _email = emailCtrl.text.trim().isEmpty ? _email : emailCtrl.text.trim();
-        _address = addressCtrl.text.trim().isEmpty ? _address : addressCtrl.text.trim();
-      });
-      if (context.mounted) showAppSnackBar(context, 'Profile information updated.');
-    }
   }
 
-  Widget _editField(
-    String label,
-    TextEditingController controller, {
-    TextInputType keyboard = TextInputType.text,
-    int? maxLength,
-    bool digitsOnly = false,
-  }) {
+  Widget _readOnlyField(String label, String value, bool filipino) {
+    final missing = value.isEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 13),
       child: Column(
@@ -261,28 +269,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
           const SizedBox(height: 6),
-          TextField(
-            controller: controller,
-            keyboardType: keyboard,
-            maxLength: maxLength,
-            inputFormatters: digitsOnly ? [FilteringTextInputFormatter.digitsOnly] : null,
-            style: AppText.body(size: 13),
-            decoration: InputDecoration(
-              counterText: '',
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.paper,
+              border: Border.all(color: AppColors.line, width: 1.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              missing ? tr(filipino, 'profile.value_missing') : value,
+              style: AppText.body(
+                size: 13,
+                color: missing ? AppColors.inkFaint : AppColors.ink,
               ),
             ),
           ),

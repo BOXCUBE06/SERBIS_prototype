@@ -8,6 +8,7 @@ const Map<String, (String, String)> _strings = {
   'common.hide_timeline': ('Hide timeline', 'Itago ang Timeline'),
   'common.cancel_request': ('Cancel request', 'Kanselahin ang Kahilingan'),
   'common.calling': ('Calling', 'Tumatawag sa'),
+  'common.close': ('Close', 'Isara'),
 
   'status.review': ('Under review', 'Sinusuri'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
@@ -104,7 +105,19 @@ const Map<String, (String, String)> _strings = {
   'library.national_emergency': ('National Emergency', 'Pambansang Emerhensiya'),
 
   'profile.title': ('My Profile', 'Aking Profile'),
-  'profile.update_info': ('Update information', 'I-update ang Impormasyon'),
+  // The sheet is read-only until a resident-scoped PATCH exists on the backend,
+  // so the button no longer promises an update it cannot perform.
+  'profile.account_details': ('Account details', 'Mga Detalye ng Account'),
+  'profile.full_name': ('Full name', 'Buong Pangalan'),
+  'profile.email': ('Email address', 'Email Address'),
+  'profile.barangay': ('Barangay', 'Barangay'),
+  'profile.contact_to_update': (
+    'Contact MDRRMO to update your details.',
+    'Makipag-ugnayan sa MDRRMO para i-update ang iyong mga detalye.',
+  ),
+  // Shown in place of a value the server did not send. Never a plausible-looking
+  // placeholder: the barangay here is what an emergency request is dispatched on.
+  'profile.value_missing': ('Not on file', 'Wala sa talaan'),
   'profile.notifications': ('Notifications', 'Mga Abiso'),
   'profile.sms_alerts': ('SMS alerts', 'SMS Alerts'),
   'profile.sms_alerts_desc': (

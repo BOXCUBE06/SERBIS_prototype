@@ -454,6 +454,41 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 ---
 
 - [ ] **M13 — Profile screen shows invented identity and its "save" is local-only**
+      **Interim fix landed 2026-08-01. Still open on the third fiction only:**
+      there is no way for a resident to change their own details, because the
+      backend has no resident-scoped update route. **Filed: `PATCH /me`** —
+      resident-scoped, must not accept `status` or `role`, and whether
+      `barangay_id` is self-service at all is a product decision, not a coding
+      one: it is the field every request is dispatched on, and a resident who
+      can move themselves between barangays can redirect their own dispatch.
+      Until it exists the screen states the limit instead of faking a write.
+      What landed:
+      - The `'Juan Delacruz'` / `'Echague, Isabela'` defaults are gone. The three
+        values come straight off the signed-in resident; a value the server did
+        not send renders as **"Not on file"** in a muted colour, on the card and
+        in the sheet. Never a plausible substitute — `AnalyticsController.php:116`
+        and every request read locate a request through
+        `tbl_residents.barangay_id`, so a made-up location is a triage risk.
+      - The edit sheet is **read-only**: three boxed values, no `TextField`, no
+        "Save changes", and a line reading *"Contact MDRRMO to update your
+        details."* — matching the existing "Forgot password?" copy. The button
+        that opens it now says **"Account details"**, not "Update information".
+      - The avatar's edit badge is **removed**, which also closes **M32** (it
+        was a snackbar reading "Photo picker would open here." and nothing else).
+        M32 becomes *implement a picker*, and its Location line is now stale.
+      - The offline row's `'5 saved · 4.2 MB used'` was already computed from
+        M10's index; nothing to do there.
+      - New strings are translated (`profile.account_details`, `profile.full_name`,
+        `profile.email`, `profile.barangay`, `profile.contact_to_update`,
+        `profile.value_missing`, `common.close`); `profile.update_info` is gone.
+      **Verified by test, not by driving the app.** `test/profile_identity_test.dart`,
+      5 widget tests (55 total, `flutter analyze` back to its 25-issue baseline).
+      Both halves were mutation-checked: restoring the two fake defaults fails
+      "a profile with no values shows no invented identity", and putting a
+      `TextField` + "Save changes" back in the sheet fails "the details sheet is
+      read-only and offers no save". **Not exercised live** — reaching this
+      screen needs a resident login, and the seeded residents' passwords are
+      random per `ResidentSeeder` and unknown here.
       **Severity:** High
       **Category:** Correctness (also UX Gaps)
       **Location:** `Mobile/lib/screens/profile_screen.dart:40-42,82,157,190-239`
@@ -999,7 +1034,12 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M32 — Avatar photo picker is a placeholder message**
+- [x] **M32 — Avatar photo picker is a placeholder message**
+      **Closed 2026-08-01 by removal, alongside M13's interim fix.** The badge
+      is gone, so no build ships the words "would open here." Implementing a
+      real picker is now new work, not a fix: it needs the `photo` column
+      written through the same resident-scoped `PATCH /me` M13 filed. The
+      Location line below is stale — the `Stack` it named no longer exists.
       **Severity:** Low
       **Category:** UX Gaps
       **Location:** `Mobile/lib/screens/profile_screen.dart:82`
