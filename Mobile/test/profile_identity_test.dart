@@ -126,4 +126,23 @@ void main() {
 
     expect(find.byIcon(Icons.edit_rounded), findsNothing);
   });
+
+  testWidgets('the profile offers no notification consent it cannot honour',
+      (tester) async {
+    // M25. Both switches defaulted to on and wrote to local bools that reset on
+    // rebuild, while SmsController kept blasting every Active resident in the
+    // selected barangays — so switching SMS alerts off told a resident they had
+    // opted out of a paid message they went on receiving. There is no Switch
+    // anywhere else on this screen, so byType is the whole guard.
+    await _pumpProfile(tester, name: 'Maria Santos');
+
+    expect(find.byType(Switch), findsNothing);
+    expect(find.text('SMS alerts'), findsNothing);
+    expect(find.text('Push notifications'), findsNothing);
+    expect(find.text('Notifications'), findsNothing);
+
+    // The section it lived in is gone, not emptied — Account settings is the
+    // first section under the card now.
+    expect(find.text('Account settings'), findsOneWidget);
+  });
 }

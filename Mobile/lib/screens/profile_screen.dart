@@ -35,9 +35,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _smsAlerts = true;
-  bool _pushNotifications = true;
-
   /// Straight off the signed-in resident, with no invented fallback. The
   /// defaults used to be `'Juan Delacruz'` and `'Echague, Isabela'`, so a
   /// profile that failed to load showed a plausible name and a municipality
@@ -103,37 +100,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: tr(filipino, 'profile.notifications')),
-              _SettingsRow(
-                icon: Icons.campaign_outlined,
-                title: tr(filipino, 'profile.sms_alerts'),
-                subtitle: tr(filipino, 'profile.sms_alerts_desc'),
-                trailing: Switch(
-                  value: _smsAlerts,
-                  activeColor: Colors.white,
-                  activeTrackColor: AppColors.green700,
-                  onChanged: (v) => setState(() => _smsAlerts = v),
-                ),
-              ),
-              _SettingsRow(
-                icon: Icons.notifications_outlined,
-                title: tr(filipino, 'profile.push'),
-                subtitle: tr(filipino, 'profile.push_desc'),
-                trailing: Switch(
-                  value: _pushNotifications,
-                  activeColor: Colors.white,
-                  activeTrackColor: AppColors.green700,
-                  onChanged: (v) => setState(() => _pushNotifications = v),
-                ),
-              ),
-            ],
-          ),
-        ),
+        // No Notifications section. The two switches here were consent controls
+        // over nothing: both wrote to local bools that reset on rebuild, and
+        // SmsController blasts every Active resident in the selected barangays
+        // regardless — so a resident who turned SMS alerts off still got the
+        // paid SMS, having been told they had opted out. Push had even less
+        // behind it (no FCM, no firebase_messaging anywhere in the app). They
+        // come back when there is a resident-scoped preference the backend
+        // actually honours; see M25.
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
           child: Column(

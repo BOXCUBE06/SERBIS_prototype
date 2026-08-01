@@ -875,7 +875,25 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M25 — SMS and push notification toggles are decorative**
+- [x] **M25 — SMS and push notification toggles are decorative**
+      **Done 2026-08-01 by removal.** Took the honest interim the task named:
+      a consent control that does nothing is worse than no control, and there
+      is no resident-scoped preference on the backend to bind either switch to.
+      The whole Notifications section is gone rather than emptied — header, both
+      `_SettingsRow`s, the `_smsAlerts` / `_pushNotifications` fields, and the
+      five now-unreferenced `profile.*` translation keys. Account settings is
+      the first section under the profile card now. Push went regardless of any
+      future preference endpoint: there is no FCM and no `firebase_messaging`
+      anywhere in the app, so that row was never going to work.
+      **Filed for the backend: resident-scoped notification preferences**, which
+      `SmsController` must then honour in its recipient query — the switch is
+      only worth restoring once opting out actually stops the paid SMS.
+      Verified: `test/profile_identity_test.dart` gains a fifth test asserting
+      no `Switch` and none of the three labels survive on the screen (there is
+      no other `Switch` on it, so `byType` is the whole guard). Mutation-checked
+      — putting a single switch row back fails it. 56/56 tests pass;
+      `flutter analyze` drops 25 → **23**, the two lost issues being the
+      `activeColor` deprecations on the deleted switches.
       **Severity:** Medium
       **Category:** UX Gaps
       **Location:** `Mobile/lib/screens/profile_screen.dart:116-137`

@@ -118,17 +118,6 @@ const Map<String, (String, String)> _strings = {
   // Shown in place of a value the server did not send. Never a plausible-looking
   // placeholder: the barangay here is what an emergency request is dispatched on.
   'profile.value_missing': ('Not on file', 'Wala sa talaan'),
-  'profile.notifications': ('Notifications', 'Mga Abiso'),
-  'profile.sms_alerts': ('SMS alerts', 'SMS Alerts'),
-  'profile.sms_alerts_desc': (
-    'Receive advisories from MDRRMO via SMS',
-    'Tumanggap ng mga abiso mula sa MDRRMO sa pamamagitan ng SMS',
-  ),
-  'profile.push': ('Push notifications', 'Push Notifications'),
-  'profile.push_desc': (
-    'Updates on your service requests',
-    'Mga update sa iyong mga kahilingan sa serbisyo',
-  ),
   'profile.account_settings': ('Account settings', 'Mga Setting ng Account'),
   'profile.language': ('Language', 'Wika'),
   'profile.offline_materials': ('Offline materials', 'Mga Offline na Materyal'),
