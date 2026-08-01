@@ -704,7 +704,32 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M20 — App is named "mobileapp" on the home screen**
+- [x] **M20 — App is named "mobileapp" on the home screen**
+      **Done 2026-08-01.** Every user-visible label now reads `SERBIS`:
+      `AndroidManifest.xml` `android:label`, iOS `CFBundleDisplayName` and
+      `CFBundleName`, the Linux window/header-bar title, and the Windows
+      `FileDescription`/`ProductName`. Went wider than the task's two files
+      because the same placeholder was in six — the M28 "hardcoded in three
+      files" class again.
+      **The web build was included and had two more placeholders the task did
+      not name:** `web/index.html` `<title>` and `web/manifest.json`
+      `name`/`short_name` said `mobileapp`, and both `description` fields said
+      "A new Flutter project.". Title and manifest name now carry the same
+      string `main.dart:87` gives `MaterialApp.title` — `SERBIS — Echague
+      MDRRMO` — with `short_name` kept to `SERBIS` for the launcher.
+      **Identifiers were deliberately not touched**, so this is a display-label
+      change only: `applicationId`/`namespace` `com.example.mobileapp`, the
+      Windows `InternalName`/`OriginalFilename`, the CMake `BINARY_NAME`s and
+      the macOS `PRODUCT_NAME` still say `mobileapp`. The app ID rename is M9,
+      which is deferred (not shipping to the Play Store), and on Android it also
+      means moving the Kotlin package directory. macOS's `PRODUCT_NAME` is both
+      the display name and the bundle name, so it was left rather than renamed
+      blind on a box with no mac.
+      **Not verified live on Android or iOS** — no Android SDK and no mac on
+      this box (see the environment note). The web half was verified by running
+      `flutter build web` and reading the emitted `build/web/index.html` and
+      `manifest.json` — both carry the new strings. `flutter analyze` unchanged
+      at 23; no Dart file was touched.
       **Severity:** Medium
       **Category:** Build & Release Readiness (also UX Gaps)
       **Location:** `Mobile/android/app/src/main/AndroidManifest.xml:5`;

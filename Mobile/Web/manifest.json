@@ -1,11 +1,11 @@
 {
-    "name": "mobileapp",
-    "short_name": "mobileapp",
+    "name": "SERBIS — Echague MDRRMO",
+    "short_name": "SERBIS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Request emergency and disaster-response services from Echague MDRRMO.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
