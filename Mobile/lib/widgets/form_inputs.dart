@@ -1,0 +1,136 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../theme/app_theme.dart';
+
+/// The app's labelled text field. Lived as `_Field` inside the services screen,
+/// where nothing else could reach it.
+class AppTextField extends StatelessWidget {
+  final String label;
+  final String hint;
+  final int lines;
+  final TextInputType keyboard;
+  final TextEditingController controller;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
+
+  const AppTextField({
+    super.key,
+    required this.label,
+    required this.hint,
+    required this.controller,
+    this.lines = 1,
+    this.keyboard = TextInputType.text,
+    this.maxLength,
+    this.inputFormatters,
+  });
+
+  /// The 11-digit numbers-only phone field, spelled once instead of at each of
+  /// the four call sites that used to repeat the formatter and the length.
+  factory AppTextField.phone({
+    Key? key,
+    String label = 'Contact number',
+    required TextEditingController controller,
+  }) =>
+      AppTextField(
+        key: key,
+        label: label,
+        hint: '09XXXXXXXXX',
+        controller: controller,
+        keyboard: TextInputType.phone,
+        maxLength: 11,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: controller,
+            maxLines: lines,
+            keyboardType: keyboard,
+            maxLength: maxLength,
+            inputFormatters: inputFormatters,
+            style: AppText.body(size: 13),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
+              counterText: '',
+              filled: true,
+              fillColor: AppColors.surface,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The app's labelled dropdown. Was `_Dropdown` in the services screen.
+class AppDropdown extends StatelessWidget {
+  final String label;
+  final List<String> items;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const AppDropdown({
+    super.key,
+    required this.label,
+    required this.items,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.line, width: 1.5),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                isExpanded: true,
+                icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
+                style: AppText.body(size: 13, color: AppColors.ink),
+                items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+                onChanged: (v) {
+                  if (v != null) onChanged(v);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

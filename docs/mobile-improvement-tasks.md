@@ -1043,7 +1043,53 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M27 — `services_screen.dart` is 746 lines doing six jobs**
+- [x] **M27 — `services_screen.dart` is 746 lines doing six jobs**
+      **Done 2026-08-01.** Targeted extraction as the task specifies, no
+      rewrite. The file was 929 lines by the time this was picked up; it is now
+      **349**, and does the three jobs only it can do: fetch the catalogue,
+      track the selection, submit.
+      What moved:
+      • `models/service_forms.dart` — `AmbulanceFormData`, `RoadFormData`,
+      `ReliefFormData`, `GenericFormData` under a sealed `ServiceFormData`.
+      Each owns its controllers as named properties and exposes
+      `metaLines(serviceName:, submittedLabel:)` and `requiredContactNumber`.
+      The `Map<String, TextEditingController>` and every `'amb_patient'`-style
+      key are gone.
+      • `widgets/form_inputs.dart` — `AppTextField` (was `_Field`) and
+      `AppDropdown` (was `_Dropdown`), plus an `AppTextField.phone` factory: the
+      digits-only formatter and the 11-cap were repeated at all four phone
+      fields and are now spelled once.
+      • `widgets/service_widgets.dart` — `SafetyNotice`, `ServiceTypeCard`,
+      `ValidIdUploadField`, `SubmitErrorCard`, `ConfirmationSheet`, `ServiceGrid`.
+      • `widgets/service_form_fields.dart` — the four form layouts, switching on
+      the sealed type.
+      **Why this kills the M2 bug class:** the old `_ctrl('amb_notes')` created
+      a controller on demand, so a field could be rendered, typed into and never
+      read, and the analyzer had nothing to say. The screen and the description
+      now read the same typed object, and `test/service_forms_test.dart` pumps
+      each form, fills **every** input on screen with a distinct value and
+      asserts each one reaches the description. A field dropped from
+      `metaLines` fails that test — verified by deleting the ambulance
+      "Condition" line, which does.
+      Also folded in: `_nowLabel()` was a fourth private copy of the 12-hour
+      clock formatter and is now `formatTimelineTime(..., false)` — English on
+      purpose, because that string is read by a dispatcher in the admin panel.
+      Verified: `test/service_forms_test.dart` — 10 tests (the four
+      every-field-reaches-the-dispatcher checks, the description's shape, blank
+      and whitespace-only values, which forms require a callback number, the
+      dropdown writing through to the model, the phone field's formatter).
+      100/100 tests pass — including the pre-existing Services-screen tests,
+      which the refactor had to leave untouched to be worth anything —
+      `flutter analyze` 22 issues (down from 23), `flutter build web --release`
+      compiles.
+      **Not verified:** never run on a device. No test drives the screen's own
+      submit path end to end; the guards there (in-flight, missing ID, missing
+      contact) are unchanged code and still uncovered, which is M18's problem.
+      **Left alone deliberately:** `shared_widgets.dart` (755 lines) and
+      `profile_screen.dart` (689) are named in this task too. Splitting them is
+      the same exercise with none of the same urgency — neither holds a
+      stringly-typed data path — and doing it in the same change would have
+      buried the part that matters.
       **Severity:** Medium
       **Category:** Code Structure
       **Location:** `Mobile/lib/screens/services_screen.dart` (746 lines);
