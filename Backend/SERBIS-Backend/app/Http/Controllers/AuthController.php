@@ -6,6 +6,7 @@ use App\Models\User; // Represents Admins/Staff
 use App\Models\Resident;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -69,6 +70,59 @@ class AuthController extends Controller
         return response()->json([
             'role' => 'admin',
             'user' => $user,
+        ]);
+    }
+
+    // Resident-scoped profile update. Deliberately not part of the admin
+    // ResidentController::update(), which accepts status and barangay_id and is
+    // reachable only behind is.admin — opening that to residents would hand every
+    // resident the admin's own write surface.
+    public function updateMe(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof Resident) {
+            return response()->json([
+                'message' => 'This endpoint is for resident accounts.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'first_name'    => 'sometimes|required|string|max:255',
+            'middle_name'   => 'nullable|string|max:255',
+            'last_name'     => 'sometimes|required|string|max:255',
+            'phone_number'  => 'sometimes|required|string|max:20',
+            'email_address' => [
+                'sometimes',
+                'required',
+                'email',
+                Rule::unique('tbl_residents', 'email_address')->ignore($user->getKey(), 'resident_id'),
+            ],
+        ]);
+
+        // Assigned key by key, never a splat of $validated. Four columns are
+        // absent from the rules above and must stay that way:
+        //
+        //   barangay_id  every service request is dispatched on it, so a resident
+        //                who could move themselves could redirect their own
+        //                dispatch. Changing barangay is an MDRRMO operation.
+        //   status       an Inactive account could otherwise activate itself and
+        //                opt an unverified number into billed SMS.
+        //   photo        no upload route writes it; it is a free-form URL that the
+        //                admin panel renders.
+        //   password     a change needs the current password, which is a separate
+        //                endpoint, not a field on a profile PATCH.
+        foreach (['first_name', 'middle_name', 'last_name', 'phone_number', 'email_address'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $user->{$field} = $validated[$field];
+            }
+        }
+
+        $user->save();
+
+        return response()->json([
+            'role' => 'resident',
+            'user' => $user->load('barangay'),
         ]);
     }
 

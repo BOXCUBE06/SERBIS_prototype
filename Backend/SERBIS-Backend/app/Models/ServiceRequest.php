@@ -12,9 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'service_id', 'processed_by', 'description', 'valid_id', 'status', 'remarks', 'vehicle_id'])]
-#[Hidden(['valid_id'])]
-#[Appends(['has_valid_id'])]
+#[Fillable(['resident_id', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id'])]
+#[Hidden(['valid_id', 'site_photo'])]
+#[Appends(['has_valid_id', 'has_site_photo'])]
 class ServiceRequest extends Model
 {
     use HasFactory, TracksHistory;
@@ -29,6 +29,16 @@ class ServiceRequest extends Model
     public function getHasValidIdAttribute(): bool
     {
         return ! empty($this->valid_id);
+    }
+
+    /**
+     * The site photo is hidden for the same reason as `valid_id`: the column is
+     * a storage path, and a path handed to a client is a path a client can ask
+     * for. It is served by GET /api/service-requests/{id}/site-photo.
+     */
+    public function getHasSitePhotoAttribute(): bool
+    {
+        return ! empty($this->site_photo);
     }
 
     public function resident(): BelongsTo

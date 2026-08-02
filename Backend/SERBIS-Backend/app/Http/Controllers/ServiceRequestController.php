@@ -45,6 +45,10 @@ class ServiceRequestController extends Controller
             'service_id' => 'required|exists:tbl_services,service_id',
             'description' => 'required|string',
             'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
+            // Optional second upload: a photo of the site, for the road-clearing
+            // form. Not required, because most requests are filed in conditions
+            // where stopping to photograph anything is the wrong advice.
+            'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
         ]);
 
@@ -60,6 +64,17 @@ class ServiceRequestController extends Controller
             );
         }
 
+        $sitePhotoPath = null;
+        if ($request->hasFile('site_photo')) {
+            $photo = $request->file('site_photo');
+
+            $sitePhotoPath = $photo->storeAs(
+                'site-photos/'.$request->user()->getKey(),
+                (string) Str::uuid().'.'.$photo->extension(),
+                self::privateDisk()
+            );
+        }
+
         // The upload has to happen before the transaction — it is a filesystem
         // write, so a rollback does not undo it. Every path out of here that does
         // not create a row must therefore delete the file by hand, or a failed
@@ -67,7 +82,7 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -88,6 +103,7 @@ class ServiceRequestController extends Controller
                     'service_id' => $validated['service_id'],
                     'description' => $validated['description'],
                     'valid_id' => $filePath,
+                    'site_photo' => $sitePhotoPath,
                     'status' => 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
@@ -101,12 +117,14 @@ class ServiceRequestController extends Controller
             });
         } catch (\Throwable $e) {
             $this->discardUpload($filePath);
+            $this->discardUpload($sitePhotoPath);
 
             throw $e;
         }
 
         if ($serviceRequest === false) {
             $this->discardUpload($filePath);
+            $this->discardUpload($sitePhotoPath);
 
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
@@ -181,6 +199,34 @@ class ServiceRequestController extends Controller
         }
 
         return Storage::disk(self::privateDisk())->response($serviceRequest->valid_id);
+    }
+
+    // Same ownership rules as validId(). A site photo is less sensitive than a
+    // government ID, but it still shows a named resident's street, and serving
+    // it by public URL would be the mistake audit #8 already cost us once.
+    public function sitePhoto(Request $request, $id)
+    {
+        $user = $request->user();
+
+        $query = ServiceRequest::query();
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+        }
+
+        $serviceRequest = $query->find($id);
+
+        // 404 rather than 403 for a non-owner, so the response does not disclose
+        // that the request exists.
+        if (!$serviceRequest || !$serviceRequest->site_photo) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if (!Storage::disk(self::privateDisk())->exists($serviceRequest->site_photo)) {
+            return response()->json(['message' => 'Site photo file not found'], 404);
+        }
+
+        return Storage::disk(self::privateDisk())->response($serviceRequest->site_photo);
     }
 
     // Resident-facing cancel, kept separate from update() on purpose: update() is

@@ -28,12 +28,19 @@ Route::get('barangays', [BarangayController::class, 'index']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
+    // see the controller for why each one is excluded.
+    Route::patch('/me', [AuthController::class, 'updateMe']);
 
     // Endpoints requiring read/write access from the mobile application
     Route::get('equipments', [EquipmentController::class, 'index']);
     Route::get('services', [ServiceController::class, 'index']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
     Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
+    Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto']);
+    // What the MDRRMO has texted to this resident's barangay. Scoped to blasts
+    // they were actually a recipient of, not to their barangay membership.
+    Route::get('advisories', [SmsController::class, 'advisories']);
     // Owner-scoped cancel. The general update() stays admin-only below.
     Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);

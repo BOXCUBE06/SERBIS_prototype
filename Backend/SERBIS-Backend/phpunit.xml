@@ -23,8 +23,18 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!-- MySQL, not the sqlite default Laravel ships. Several migrations are
+             MySQL-only (dropping a foreign key by name, for one), so the schema
+             cannot be built on sqlite at all — and testing against a different
+             engine than production would be the wrong trade even if it could.
+             Create the database once: CREATE DATABASE serbis_phpunit; it is
+             dropped and rebuilt by RefreshDatabase on every run. -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="serbis_phpunit"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
