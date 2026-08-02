@@ -4,7 +4,7 @@
 **Scope:** `Backend/SERBIS-Backend` — all controllers, models, routes, middleware, migrations, and config touched by the API.
 **Status:** **20 of 30 findings fixed and verified live** (updated 2026-07-17): #1–#9, #11, #12, #13, #16, #17, #20, #21, #28, plus the #14/#18/#22 registration cluster. Every fix was exercised for real — IDOR probes from a non-owner, a `resident_id` spoof attempt, a forced insufficient-stock 422 checked against `information_schema.innodb_trx`, rapid-login throttle probes, CORS preflights, `EXPLAIN` with an `IGNORE INDEX` control, faked-HTTP blast targeting, a `config:cache` round-trip, a path-traversal `PUT`, and a real browser with `fetch` stubbed.
 
-**Open:** #10, #15, #23, #29 — Medium/Low — **and #30, High.** (#11 closed 2026-07-16 in `c737927`.)
+**Open:** #10, #23, #29 — Medium/Low — **and #30, High.** (#11 closed 2026-07-16 in `c737927`; #15 closed 2026-08-02 — OTP is dead code and will not be built.)
 
 **2026-07-17: a High is open again.** #30 — Sanctum tokens never expire, so a leaked admin or resident token is a permanent credential. Found while wiring the login page's "Remember me", which can only ever be browser hygiene while the server has no notion of a session ending. #29 (no admin creation route; admins exist only by direct DB insert) is the operational half of the same gap. Neither is fixed: #30 needs a decision about mobile re-auth, and `Mobile/` is a groupmate's area.
 
@@ -799,6 +799,16 @@ These are mobile-app OTP-verification fields; letting an admin set `otp_verified
 
 **Effort:** 10 min.
 
+**FIXED 2026-08-02 — and the premise was wrong in a way worth recording: there is no mobile OTP verification.** The whole flow is imaginary. `otp` and `otp_verified_at` exist in the migration, in `$fillable`, in this controller's rules and in `ResidentSeeder`, and **nowhere else in the repository** — nothing generates a code, sends one, or checks one; there is no verify route; and a grep of `Web/serbis-admin-vue/src` and `Mobile/lib` returns zero hits in both. So the fields were not "an odd surface on a real feature", they were the only trace of a feature that was never built.
+
+**Decision (user, 2026-08-02): do not build OTP.** The purpose it would serve is already covered — self-registered residents land on `Inactive` and an admin activates them, which is phone verification with a human in the loop. Building it properly would mean hashing, expiry, resend throttling and a mobile screen, and **SkySMS has no sandbox**, so every test is a real billed SMS to a real handset (see #16). The columns are left in place, unreachable, rather than dropped: a migration that removes them forecloses the feature for no present benefit.
+
+**Both rules removed, and both methods now assign columns explicitly instead of splatting `$validated`.** `store()` had `Resident::create($validated)` and `update()` had `$resident->update($validated)` — the same shape that carried the dead `role` rule into `/api/register` (#14/#18). With a splat, one added validation rule is all it takes to make a new column client-settable; `status` stays writable on purpose, because activating a resident is the admin's job.
+
+**Verified live against a running server, with a control.** Admin-authenticated `POST /api/residents` carrying `"otp":"999999"` and `"otp_verified_at":"2020-01-01"` returns **201** with both columns **NULL** in the database; the same injection on `PUT /api/residents/{id}` is likewise ignored, and omitting `password` on the update leaves the stored bcrypt hash untouched rather than nulling it. **The control is what makes that meaningful:** the same request replayed against the pre-fix code (stashed, re-run, restored) wrote `otp = 999999` and `otp_verified_at = 2020-01-01 00:00:00`, so the check can fail. All three test residents were deleted afterwards; the table is back to 21 rows.
+
+**Noticed while tracing this, not fixed — `photo` is the same kind of dead column, with a live consumer.** `'photo' => 'nullable|string'` is an admin-settable free-form string, there is no upload route that writes it, every seeded row is `null` — and `UsersView.vue:135` and `ResidentDetailPanel.vue:10` bind it straight into `<v-img :src>`. It is not #28's file-read (nothing streams it server-side), but an arbitrary URL rendered in the admin panel is an off-site request on every list render. Worth a decision: constrain it to an uploaded path, or drop it.
+
 ### 16. SMS blast ignores its own `barangays` validation (functional, not security)
 **File:** `SmsController.php:19-31`
 
@@ -843,7 +853,7 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 | 12 | Medium | Password policy length-only | AuthController.php:19 | 10 min |
 | 13 | Medium | Missing index on `status` | 2 migrations | 15 min |
 | 14 | Low | Dead `role` validation | AuthController.php:17 | 5 min |
-| 15 | Low | OTP fields in admin CRUD | ResidentController.php:28 | 10 min |
+| 15 | Low | OTP fields in admin CRUD. **Fixed 2026-08-02**: both rules removed and both methods now assign columns explicitly instead of splatting `$validated`. The premise was wrong — there is no OTP flow anywhere in the repo, and the decision is not to build one. Verified live with a control. | ResidentController.php:29-30,66 | done |
 | 16 | — | SMS blast dead code + malformed URL | SmsController.php | 15 min |
 | 17 | High | Throttle IP-keyed + double-counted, CGNAT lockout | bootstrap/app.php:16, routes/api.php:18 | 30 min |
 | 18 | High | `/api/register` 500s on every request (`barangay_id`) | AuthController.php:22 | 20 min |
@@ -865,7 +875,7 @@ The endpoint validates a `barangays` targeting array but never uses it — it al
 **Fixed and verified live (19):** #1, #2, #3, #4, #5, #6, #7, #8, #9, #12, #13, #16*, #17, #20, #21, #28, plus #14/#18/#22 — the registration cluster, resolved by **deleting** the flow (product decision: registration is mobile-only). `/api/register` → 404, both logins still 200/401, `npm run build` → exit 0. #24 and #25 were found and fixed while verifying #22.
 \* #16 is code-complete and verified with faked HTTP, but **unverified against the live vendor — no sandbox exists.** Needs a manual burner-number test; #21 means the UI can now drive it.
 
-**Open (5):** #10, #15, #23, #29 (Medium/Low) and **#30 (High)**. (#11 fixed in `c737927`; #26 in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **#29 and #30 were added 2026-07-17** — see "Status at 2026-07-17" below. The claim that no High findings remained open held only until the login page was looked at properly.
+**Open (4):** #10, #23, #29 (Medium/Low) and **#30 (High)**. (#15 closed 2026-08-02.) (#11 fixed in `c737927`; #26 in `f4a29c5`; #27 in `8364705`; #19 closed by data fix.) **#29 and #30 were added 2026-07-17** — see "Status at 2026-07-17" below. The claim that no High findings remained open held only until the login page was looked at properly.
 
 **#8 and #28 fixed 2026-07-16 (`c66a978`)** — backend and frontend together. #28 was found while planning #8 and had to ship with it: #8's streaming route would have turned #28's admin-settable path into arbitrary server file read. The audit's own #8 fix sketch would have shipped that hole.
 
