@@ -30,7 +30,7 @@
 
               <v-select
                 v-model="filters.status"
-                :items="['All', 'Active', 'Deactivated']"
+                :items="RESIDENT_STATUS_FILTER_ITEMS"
                 label="Status"
                 variant="outlined"
                 density="comfortable"
@@ -172,11 +172,11 @@
             <template v-slot:item.status="{ item }">
               <!-- Custom pill rather than a Vuetify chip: the flat grey chip Vuetify
                    renders for "Deactivated" pairs white on #9E9E9E (2.68:1) in both
-                   themes. These tint the surface token instead, so both states pass
-                   AA in light and dark. -->
-              <span class="status-pill" :class="item.status === 'Active' ? 'pill-active' : 'pill-inactive'">
-                <span class="status-dot" :class="item.status === 'Active' ? 'dot-active' : 'dot-inactive'"></span>
-                {{ item.status }}
+                   themes. These tint the surface token instead, so all three states
+                   pass AA in light and dark. -->
+              <span class="status-pill" :class="residentStatusPillClass(item.status)">
+                <span class="status-dot" :class="residentStatusDotClass(item.status)"></span>
+                {{ residentStatusLabel(item.status) }}
               </span>
             </template>
           </v-data-table>
@@ -308,9 +308,13 @@
 
               <v-col cols="12">
                 <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-2">Account Status</div>
+                <!-- "Pending" is offered so that editing a self-registered resident
+                     round-trips: without it the group renders with nothing selected
+                     for the one status an admin most often opens. -->
                 <v-radio-group v-model="formData.status" inline hide-details color="#0f4c3a">
-                  <v-radio label="Active" value="Active"></v-radio>
-                  <v-radio label="Deactivated" value="Deactivated"></v-radio>
+                  <v-radio label="Active" :value="RESIDENT_STATUS.active"></v-radio>
+                  <v-radio label="Pending" :value="RESIDENT_STATUS.pending"></v-radio>
+                  <v-radio label="Deactivated" :value="RESIDENT_STATUS.deactivated"></v-radio>
                 </v-radio-group>
               </v-col>
             </v-row>
@@ -374,6 +378,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
+import {
+  RESIDENT_STATUS,
+  RESIDENT_STATUS_FILTER_ITEMS,
+  residentStatusDotClass,
+  residentStatusLabel,
+  residentStatusPillClass,
+} from '@/composables/residentStatus'
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
@@ -406,7 +417,7 @@ const statusToggleLoading = ref(false)
 
 const formData = ref({
   first_name: '', middle_name: '', last_name: '', phone_number: '',
-  email_address: '', password: '', barangay_id: null, status: 'Active',
+  email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
 })
 
 const showSidePanel = computed(() => mdAndUp.value)
@@ -509,7 +520,7 @@ const openAddModal = () => {
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
-    email_address: '', password: '', barangay_id: null, status: 'Active',
+    email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
 }
@@ -560,7 +571,11 @@ const saveUser = async () => {
 }
 
 const toggleStatus = async (item) => {
-  const next = item.status === 'Active' ? 'Deactivated' : 'Active'
+  // Pending and Deactivated both toggle to Active — activating a new signup and
+  // re-enabling a suspended account are the same write.
+  const next = item.status === RESIDENT_STATUS.active
+    ? RESIDENT_STATUS.deactivated
+    : RESIDENT_STATUS.active
   statusToggleLoading.value = true
   try {
     const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
@@ -578,7 +593,7 @@ const toggleStatus = async (item) => {
     })
     if (!res.ok) throw new Error(await errorFrom(res))
     await fetchResidents()
-    notify(next === 'Active' ? 'Account activated' : 'Account deactivated')
+    notify(next === RESIDENT_STATUS.active ? 'Account activated' : 'Account deactivated')
   } catch (error) {
     notify(error.message, 'error')
   } finally {
@@ -712,9 +727,20 @@ onMounted(loadAll)
   background: rgba(var(--v-theme-on-surface), 0.1);
   color: rgba(var(--v-theme-on-surface), 0.82);
 }
+/* Pending. The warning token itself is #F57C00 in light, which is 3.0:1 on
+   white — the pill text is 12px bold, so it needs 4.5:1, not the large-text
+   3:1. Hardcode a darker amber for the text (6.2:1 over the tint) and keep
+   the token for the tint and the dot. In dark the token is light enough to
+   use directly. */
+.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: #8A4B00; }
+.v-theme--dark .pill-pending {
+  background: rgba(var(--v-theme-warning), 0.1);
+  color: rgb(var(--v-theme-warning));
+}
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dot-active { background: rgb(var(--v-theme-primary)); }
 .dot-inactive { background: rgba(var(--v-theme-on-surface), 0.5); }
+.dot-pending { background: rgb(var(--v-theme-warning)); }
 
 .kbd {
   display: inline-block;

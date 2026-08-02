@@ -15,9 +15,9 @@
         {{ resident.first_name }} {{ resident.last_name }}
       </h3>
 
-      <span class="status-pill mt-3" :class="resident.status === 'Active' ? 'pill-active' : 'pill-inactive'">
-        <span class="status-dot" :class="resident.status === 'Active' ? 'dot-active' : 'dot-inactive'"></span>
-        {{ resident.status }}
+      <span class="status-pill mt-3" :class="residentStatusPillClass(resident.status)">
+        <span class="status-dot" :class="residentStatusDotClass(resident.status)"></span>
+        {{ residentStatusLabel(resident.status) }}
       </span>
     </div>
 
@@ -70,7 +70,7 @@
       </v-btn>
 
       <v-btn
-        :color="resident.status === 'Active' ? 'warning' : 'primary'"
+        :color="isActive ? 'warning' : 'primary'"
         variant="tonal"
         height="48"
         rounded="lg"
@@ -79,8 +79,8 @@
         :loading="statusLoading"
         @click="$emit('toggle-status', resident)"
       >
-        <v-icon start>{{ resident.status === 'Active' ? 'mdi-account-cancel-outline' : 'mdi-account-check-outline' }}</v-icon>
-        {{ resident.status === 'Active' ? 'Deactivate account' : 'Activate account' }}
+        <v-icon start>{{ isActive ? 'mdi-account-cancel-outline' : 'mdi-account-check-outline' }}</v-icon>
+        {{ isActive ? 'Deactivate account' : 'Activate account' }}
       </v-btn>
 
       <v-btn
@@ -100,6 +100,12 @@
 
 <script setup>
 import { computed } from 'vue'
+import {
+  RESIDENT_STATUS,
+  residentStatusDotClass,
+  residentStatusLabel,
+  residentStatusPillClass,
+} from '@/composables/residentStatus'
 
 const props = defineProps({
   resident: { type: Object, required: true },
@@ -107,6 +113,9 @@ const props = defineProps({
 })
 
 defineEmits(['close', 'edit', 'toggle-status', 'delete'])
+
+// Pending and Deactivated share the action: both offer "Activate account".
+const isActive = computed(() => props.resident.status === RESIDENT_STATUS.active)
 
 const residentId = computed(() => props.resident.resident_id ?? props.resident.id)
 const initials = computed(() =>
@@ -146,9 +155,16 @@ const registeredOn = computed(() => {
 }
 .pill-active { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary)); }
 .pill-inactive { background: rgba(var(--v-theme-on-surface), 0.1); color: rgba(var(--v-theme-on-surface), 0.82); }
+/* Pending — see UsersView for why the light-theme text colour is hardcoded. */
+.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: #8A4B00; }
+.v-theme--dark .pill-pending {
+  background: rgba(var(--v-theme-warning), 0.1);
+  color: rgb(var(--v-theme-warning));
+}
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dot-active { background: rgb(var(--v-theme-primary)); }
 .dot-inactive { background: rgba(var(--v-theme-on-surface), 0.5); }
+.dot-pending { background: rgb(var(--v-theme-warning)); }
 
 .detail-scroll { overflow-y: auto; }
 .detail-actions { border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
