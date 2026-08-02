@@ -2,11 +2,15 @@
  * Token storage with a client-side expiry.
  *
  * "Remember me" only chooses how long this browser keeps the token:
- * 30 days when ticked, 8 hours when not. The token itself never expires
- * server-side (audit #30), so this shortens the window on a shared office
- * machine — it does not limit the lifetime of a token that has already
- * leaked. Read getToken() as "a token this browser is still willing to
- * use", not "a token the API still accepts".
+ * 30 days when ticked, 8 hours when not. Read getToken() as "a token this
+ * browser is still willing to use", not "a token the API still accepts".
+ *
+ * The server now caps an admin token at 8 hours of its own (audit #30,
+ * config/sanctum.php), which is the shorter of the two, so ticking "Remember
+ * me" no longer extends a working session past that — it only decides how
+ * long a dead token loiters in localStorage. When the server expiry lands
+ * first, the 401 interceptor in apiSession.ts clears it and returns the admin
+ * to /login with a notice.
  */
 
 const TOKEN_KEY = 'serbis_token'

@@ -72,6 +72,13 @@ class AuthController extends Controller
         ]);
     }
 
+    // Both logins issue a token with an explicit expiry (audit #30). Before this,
+    // a token was valid forever: logout revoked the one in hand, but any copy
+    // taken beforehand — from localStorage via XSS, a shared machine, a proxy log
+    // — stayed usable indefinitely. The two lifetimes differ on purpose; see
+    // config/sanctum.php for why. The client-side expiry in the Vue app is
+    // browser hygiene and is not what enforces this.
+
     // Endpoint specifically for the Web Frontend
     public function adminLogin(Request $request)
     {
@@ -89,7 +96,11 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'token' => $admin->createToken('admin-token')->plainTextToken,
+            'token' => $admin->createToken(
+                'admin-token',
+                ['*'],
+                now()->addMinutes(config('sanctum.admin_expiration')),
+            )->plainTextToken,
             'role' => 'admin',
             'user' => $admin
         ], 200);
@@ -112,7 +123,11 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'token' => $resident->createToken('resident-token')->plainTextToken,
+            'token' => $resident->createToken(
+                'resident-token',
+                ['*'],
+                now()->addMinutes(config('sanctum.resident_expiration')),
+            )->plainTextToken,
             'role' => 'resident',
             // Load the barangay relation so the mobile profile has a location on
             // login, matching what /me returns. Residents have no address column.

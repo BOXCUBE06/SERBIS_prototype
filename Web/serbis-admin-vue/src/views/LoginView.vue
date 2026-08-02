@@ -31,6 +31,25 @@
         <div class="form-block">
           <v-form @submit.prevent="handleLogin" class="w-100">
             
+            <!-- Session-expiry notice. Not an error — the admin did nothing
+                 wrong — so it must not look like a failed sign-in. Without it,
+                 an expired token drops the visitor here with no explanation. -->
+            <v-alert
+              v-if="sessionExpired"
+              role="status"
+              variant="flat"
+              rounded="lg"
+              density="comfortable"
+              class="mb-4"
+              closable
+              @click:close="sessionExpired = false"
+              style="background-color: rgba(245, 165, 36, 0.15); border: 1px solid rgba(245, 165, 36, 0.4);"
+            >
+              <span class="text-body-2 font-weight-medium" style="color: #ffe0b2;">
+                Your session expired. Sign in again to continue.
+              </span>
+            </v-alert>
+
             <!-- Error Alert. role="alert" so a failed login is announced;
                  without it the only failure signal is visual. -->
             <v-alert
@@ -102,9 +121,13 @@
                  a forgotten password is a DB operation, not a self-serve flow.
                  See audit #29. -->
             <div class="d-flex align-center mb-5">
+              <!-- Was "for 30 days", which stopped being true when admin tokens
+                   gained an 8-hour server-side TTL (audit #30): the server ends
+                   the session first regardless of this box. It still decides how
+                   long a dead token sits in localStorage on a shared desk. -->
               <v-checkbox
                 v-model="rememberMe"
-                label="Keep me signed in for 30 days"
+                label="Keep me signed in on this device"
                 density="compact"
                 hide-details
                 class="custom-checkbox"
@@ -141,11 +164,16 @@
 
 <script setup>
 import { ref, reactive, watch, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { setToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 
 const router = useRouter()
+const route = useRoute()
+
+// Set by the 401 interceptor when a token expires mid-session (see
+// composables/apiSession.ts), never by a failed sign-in.
+const sessionExpired = ref(route.query.expired === '1')
 const loading = ref(false)
 const rememberMe = ref(false)
 const showPassword = ref(false)
