@@ -13,6 +13,11 @@ const routes = [
   { path: '/vehicles', component: () => import('../views/VehiclesView.vue') },
   { path: '/inventory', component: () => import('../views/EquipmentInventoryView.vue') },
   { path: '/borrowings', component: () => import('../views/EquipmentBorrowingView.vue') },
+  // Catch-all last: without it an unknown path matched no route and rendered a
+  // blank page inside the shell, which reads as a broken app rather than a bad
+  // link. The guard below still bounces an unauthenticated visitor to /login,
+  // so this is only ever reached by a signed-in admin.
+  { path: '/:pathMatch(.*)*', component: () => import('../views/NotFoundView.vue') },
 ]
 
 const router = createRouter({
