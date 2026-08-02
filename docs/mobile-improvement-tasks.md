@@ -620,7 +620,35 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M17 — No logging on any error path**
+- [x] **M17 — No logging on any error path**
+      **Done 2026-08-02.** `lib/state/app_log.dart` — `AppLog` over
+      `dart:developer`'s `log()`, plus an 80-entry ring buffer, wired into all
+      29 `catch` sites across `api_service`, `request_store`, `request_cache`,
+      `material_cache_io`, `file_opener`, `file_opener_io`, both auth screens
+      and `main`. Every HTTP line names its method and path; `_send` and
+      `_decode` now take the endpoint so a failure says which call it was.
+      **A crash reporter was rejected, not deferred.** This app holds
+      government ID scans, and shipping failures to a third party is not a
+      trade to make on a resident's behalf. The doc's fallback was built
+      instead: Profile → **Report a problem** shows the buffer and copies it to
+      the clipboard. It sits *above* Log out deliberately — logout clears the
+      buffer, so a resident who signs out to "start fresh" before reporting
+      would otherwise destroy the evidence.
+      **The no-PII rule is enforced in one place, not at 29 call sites.**
+      `AppLog.describeError` reduces any non-`ApiException` to its **type
+      only**, because `jsonDecode`'s `FormatException` stringifies the source it
+      choked on — logging it verbatim writes a slice of the response body.
+      `ApiException` is the sole exception and is logged in full: its message
+      was written to be shown and is already on the resident's screen.
+      Mutation-checked — swapping `runtimeType.toString()` for `toString()`
+      fails three tests.
+      **The lines are shown, not just copied.** A resident about to send this to
+      an LGU can read it first, which is also what keeps the no-PII rule honest.
+      23 new tests (`app_log_test.dart`, `problem_report_test.dart`); suite
+      116 → **139**; `flutter analyze` unchanged at 22.
+      **Not exercised on a device** — no Android SDK on this box, so the
+      clipboard path is proven by a mocked `SystemChannels.platform`, not by a
+      real paste.
       **Severity:** High
       **Category:** Error Handling & Observability
       **Location:** `Mobile/lib/state/request_store.dart:36,62,93,129`;

@@ -13,6 +13,7 @@ import 'screens/profile_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'state/api_service.dart';
+import 'state/app_log.dart';
 import 'state/request_store.dart';
 import 'state/account_store.dart';
 import 'theme/app_theme.dart';
@@ -138,6 +139,11 @@ class _AuthGateState extends State<AuthGate> {
         });
         return;
       } on ApiException catch (e) {
+        // Before `mounted` is checked: a failure that happens as the widget is
+        // going away is still a failure, and returning early would drop it.
+        AppLog.warn('session', 'restore from stored token',
+            reason: e.isUnauthorized ? 'token rejected' : 'server unreachable');
+
         if (!mounted) {
           return;
         }

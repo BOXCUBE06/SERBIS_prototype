@@ -2,7 +2,9 @@
 library serbis.screens.profile;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../data/safety_files.dart';
+import '../state/app_log.dart';
 import '../state/material_cache.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
@@ -137,6 +139,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+              // Sits above Log out on purpose: logging out clears the buffer,
+              // so a resident who signs out to "start fresh" and then reports
+              // the bug has already destroyed the evidence.
+              _SettingsRow(
+                icon: Icons.bug_report_outlined,
+                title: tr(filipino, 'profile.report_problem'),
+                subtitle: AppLog.isEmpty
+                    ? tr(filipino, 'profile.report_none')
+                    : tr(filipino, 'profile.report_events')
+                        .replaceFirst('{n}', '${AppLog.entries.length}'),
+                trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+                onTap: () => _showProblemReport(context, filipino),
+              ),
               _SettingsRow(
                 icon: Icons.logout_rounded,
                 title: tr(filipino, 'profile.logout'),
@@ -260,6 +275,122 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The app's only route from a field failure to somebody who can act on it.
+  ///
+  /// There is no crash reporter and no server-side client error log, so a
+  /// resident saying "it didn't work" is otherwise the entire bug report. This
+  /// hands them the last [AppLog.maxEntries] events to paste into a message.
+  ///
+  /// The lines are shown, not just copied. A resident is about to send this to
+  /// a local government office, and telling them it contains nothing sensitive
+  /// is worth less than letting them read it — which is also the check that
+  /// keeps the no-PII rule honest, because a leak would be visible right here.
+  Future<void> _showProblemReport(BuildContext context, bool filipino) {
+    final entries = AppLog.entries;
+
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+            Text(tr(filipino, 'profile.report_problem'), style: AppText.display(size: 18)),
+            const SizedBox(height: 8),
+            Text(
+              tr(filipino, entries.isEmpty ? 'profile.report_empty' : 'profile.report_explain'),
+              style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.5),
+            ),
+            if (entries.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                // Roughly ten lines. Enough to see what kind of thing is in
+                // there without the sheet swallowing the screen.
+                constraints: const BoxConstraints(maxHeight: 190),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.paper,
+                    border: Border.all(color: AppColors.line, width: 1.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Scrollbar(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(11),
+                      // Newest first here, oldest first in the copied text. On
+                      // screen the resident wants the thing that just failed;
+                      // in the report whoever reads it wants the sequence.
+                      itemCount: entries.length,
+                      itemBuilder: (_, index) {
+                        final entry = entries[entries.length - 1 - index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            entry.format(),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 10.5,
+                              height: 1.45,
+                              color: AppColors.inkMuted,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                tr(filipino, 'profile.report_send'),
+                style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              AppButton(
+                label: tr(filipino, 'profile.report_copy'),
+                onPressed: () async {
+                  // Captured before the await and the pop: this sheet's own
+                  // context is dead by the time the snackbar goes up.
+                  final messenger = ScaffoldMessenger.of(ctx);
+                  await Clipboard.setData(ClipboardData(text: AppLog.export()));
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                  }
+                  showAppSnackBarOn(
+                    messenger,
+                    tr(filipino, 'profile.report_copied'),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ] else
+              const SizedBox(height: 16),
+            AppButton(
+              label: tr(filipino, 'common.close'),
+              style: AppButtonStyle.outline,
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
       ),
     );
   }

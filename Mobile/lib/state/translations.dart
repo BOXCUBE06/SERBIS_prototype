@@ -158,6 +158,31 @@ const Map<String, (String, String)> _strings = {
   'profile.offline_materials_desc': ('{n} saved · {size} used', '{n} naka-save · {size} ang nagamit'),
   'profile.logout': ('Log out', 'Mag-log Out'),
   'profile.offline_title': ('Offline Materials', 'Mga Offline na Materyal'),
+
+  // The app records what went wrong so a resident can hand it to MDRRMO. There
+  // is no crash reporter and no server-side client error log: this is a system
+  // holding government ID scans, and shipping its failures to a third party is
+  // not a trade this project gets to make on residents' behalf.
+  'profile.report_problem': ('Report a problem', 'Mag-ulat ng Problema'),
+  'profile.report_events': ('{n} events recorded', '{n} kaganapan ang naitala'),
+  'profile.report_none': ('Nothing recorded yet', 'Wala pang naitala'),
+  'profile.report_explain': (
+    'This copies a list of what the app tried to do and what failed. It holds '
+        'no password, no ID photo and nothing you typed into a request.',
+    'Kokopyahin nito ang listahan ng sinubukan ng app at kung ano ang nabigo. '
+        'Walang password, walang larawan ng ID, at wala sa mga isinulat mo sa '
+        'kahilingan.',
+  ),
+  'profile.report_send': (
+    'Paste it into a message or email to MDRRMO.',
+    'I-paste ito sa mensahe o email sa MDRRMO.',
+  ),
+  'profile.report_empty': (
+    'Nothing has failed since you opened the app, so there is nothing to send.',
+    'Walang nabigo mula nang buksan mo ang app, kaya wala pang maipapadala.',
+  ),
+  'profile.report_copy': ('Copy report', 'Kopyahin ang Ulat'),
+  'profile.report_copied': ('Report copied.', 'Nakopya ang ulat.'),
 };
 
 String tr(bool filipino, String key) {

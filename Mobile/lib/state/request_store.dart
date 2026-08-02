@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/info_material.dart';
 import '../models/request_models.dart';
 import 'api_service.dart';
+import 'app_log.dart';
 import 'file_opener.dart';
 import 'material_cache.dart';
 import 'request_cache.dart';
@@ -38,6 +39,12 @@ extension AppLanguageX on AppLanguage {
 }
 
 class AppState extends ChangeNotifier {
+  /// Log area for the store. The HTTP layer logs the call itself; these lines
+  /// record what the app then did with the failure — emptied a list, rolled a
+  /// row back, fell through to the cache — which is the part a resident's
+  /// description of the bug will be about.
+  static const String _logArea = 'requests';
+
   final ApiService _api;
   final MaterialCache _materialCache;
   final List<ServiceRequest> requests = [];
@@ -145,11 +152,18 @@ class AppState extends ChangeNotifier {
       // in the previous language.
       _relabelRequests();
       notifyListeners();
-    } catch (_) {
+    } catch (error) {
       // Deliberately not routed to `lastError`: the services screen renders its
       // own inline "couldn't load, retry" panel off an empty list, and a
       // snackbar on top of it would report the same failure twice. A 401 still
       // reaches the shell through ApiService.onUnauthorized.
+      //
+      // The log line is what makes that silence recoverable. An empty catalogue
+      // and a catalogue the server genuinely has no rows for look identical on
+      // screen, and the difference decides whether the resident can file
+      // anything at all.
+      AppLog.error(_logArea, 'load service catalogue', error: error,
+          reason: 'catalogue emptied');
       services.clear();
       notifyListeners();
     }
@@ -185,6 +199,11 @@ class AppState extends ChangeNotifier {
       materialsError = error is ApiException
           ? error.message
           : 'Something went wrong. Please try again.';
+
+      // Counts, not titles: how many saved documents the resident fell back to
+      // is the diagnostic, and which documents they are is their business.
+      AppLog.error(_logArea, 'load materials', error: error,
+          reason: 'fell back to ${materials.length} saved');
     }
 
     materialsLoading = false;
@@ -317,6 +336,10 @@ class AppState extends ChangeNotifier {
     _requestsFetchedAt = null;
     requestsFromCache = false;
     isOffline = false;
+    // The log lines name this resident's own request ids and what they tried to
+    // do. They go out with the rows for the same reason the rows do — the next
+    // person to use this phone must not be handed either.
+    AppLog.clear();
     await _requestCache.clear();
     notifyListeners();
   }
@@ -374,6 +397,13 @@ class AppState extends ChangeNotifier {
       // answering, which means the connection is fine and the banner would be
       // a lie.
       isOffline = e is! ApiException || e.isNetwork;
+
+      // `silent` suppresses the snackbar, never the log — a poll failing every
+      // 45 seconds with nothing on screen is precisely the condition that
+      // produces an unreproducible report.
+      AppLog.error(_logArea, 'load requests', error: e,
+          reason: silent ? 'background poll' : 'resident-initiated');
+
       if (!silent) {
         _fail(e);
       } else {
@@ -401,6 +431,10 @@ class AppState extends ChangeNotifier {
     if (request.serviceId == null || request.description == null) {
       requests.remove(request);
       lastError = 'This request is incomplete. Please choose a service and try again.';
+      // Never reachable from the form, which validates both. If this line ever
+      // shows up in a report, the form and the model have drifted apart.
+      AppLog.error(_logArea, 'submit request',
+          reason: 'blocked before sending: incomplete');
       notifyListeners();
       return null;
     }
@@ -415,6 +449,15 @@ class AppState extends ChangeNotifier {
       );
 
       final confirmed = _resolveService(ServiceRequest.fromJson(result));
+
+      // The one line most worth having. "I filed a request and MDRRMO says
+      // there is no record" is the report this app cannot afford to be unable
+      // to answer, and the server's own id is what settles it. The id is the
+      // resident's own, and the log never leaves their device unless they send
+      // it.
+      AppLog.info(_logArea, 'submit request',
+          reason: 'accepted as request ${confirmed.id}');
+
       final index = requests.indexOf(request);
       if (index != -1) {
         requests[index] = confirmed;
@@ -426,6 +469,8 @@ class AppState extends ChangeNotifier {
       // place is what made a 422 "No available vehicles at this time." look like
       // a filed request that MDRRMO would never see.
       requests.remove(request);
+      AppLog.error(_logArea, 'submit request', error: e,
+          reason: 'rolled back, not filed');
       _fail(e);
       return null;
     }
@@ -474,6 +519,8 @@ class AppState extends ChangeNotifier {
       if (restoreAt != -1) {
         requests[restoreAt] = current;
       }
+      AppLog.error(_logArea, 'cancel request $id', error: e,
+          reason: 'rolled back, still open');
       _fail(e);
       return false;
     }

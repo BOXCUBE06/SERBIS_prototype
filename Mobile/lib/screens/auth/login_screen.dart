@@ -4,6 +4,7 @@ library serbis.screens.auth.login;
 import 'package:flutter/material.dart';
 import '../../state/api_service.dart';
 import '../../state/account_store.dart';
+import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
@@ -56,8 +57,13 @@ class _LoginScreenState extends State<LoginScreen> {
     } on ApiException catch (e) {
       // Already resident-readable: "Invalid resident credentials." on a bad
       // password, the connection message when the server is unreachable.
+      // Already logged by ApiService with its status; the email is deliberately
+      // not added here.
       setState(() => _formError = e.message);
-    } catch (_) {
+    } catch (error) {
+      // Anything that is not an ApiException got past the HTTP layer's own
+      // normalisation, so nothing has logged it yet.
+      AppLog.error('auth', 'resident login', error: error);
       setState(() => _formError =
           'Cannot connect to server. Check your connection.');
     } finally {

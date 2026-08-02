@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/request_models.dart';
+import 'app_log.dart';
 
 /// What was on the Track screen the last time the server answered.
 class CachedRequests {
@@ -23,6 +24,7 @@ class CachedRequests {
 /// goes in here — the auth token lives in secure storage (M7) — but the rows do
 /// name the resident's own requests, so the store is cleared on logout.
 class RequestCache {
+  static const _logArea = 'cache';
   static const _rowsKey = 'serbis.requests.cache.v1';
   static const _fetchedAtKey = 'serbis.requests.cache.fetched_at.v1';
 
@@ -45,9 +47,12 @@ class RequestCache {
       final prefs = await _prefs();
       await prefs.setString(_rowsKey, jsonEncode(rows));
       await prefs.setString(_fetchedAtKey, fetchedAt.toIso8601String());
-    } catch (_) {
+    } catch (error) {
       // A cache that cannot be written is a missing cache, not a failed
-      // refresh. The list on screen is already correct.
+      // refresh. The list on screen is already correct — but the next offline
+      // launch will show nothing, and this is the only trace of why.
+      AppLog.error(_logArea, 'write request cache', error: error,
+          reason: '${rows.length} rows not persisted');
     }
   }
 
@@ -75,7 +80,12 @@ class RequestCache {
       if (fetchedAt == null) return null;
 
       return CachedRequests(requests: requests, fetchedAt: fetchedAt);
-    } catch (_) {
+    } catch (error) {
+      // Treated as absent so the app still starts, which means the resident
+      // sees "No requests yet" on an offline launch with no hint that rows
+      // exist and could not be read.
+      AppLog.error(_logArea, 'read request cache', error: error,
+          reason: 'treated as empty');
       return null;
     }
   }
@@ -85,8 +95,12 @@ class RequestCache {
       final prefs = await _prefs();
       await prefs.remove(_rowsKey);
       await prefs.remove(_fetchedAtKey);
-    } catch (_) {
-      // Nothing to do: a cache that cannot be cleared could not be read either.
+    } catch (error) {
+      // This one is not merely cosmetic: it runs on logout, so a failure here
+      // leaves one resident's rows on a shared phone. Logged at error even
+      // though nothing on screen changes.
+      AppLog.error(_logArea, 'clear request cache', error: error,
+          reason: 'previous rows may remain on device');
     }
   }
 }

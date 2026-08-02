@@ -6,27 +6,17 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A failed API call. Carries the HTTP status so callers can tell a dead
-/// network (`statusCode == null`) from a real rejection, and a message that is
-/// already safe to show a resident.
-class ApiException implements Exception {
-  final String message;
-  final int? statusCode;
+import 'api_exception.dart';
+import 'app_log.dart';
 
-  const ApiException(this.message, {this.statusCode});
-
-  /// The token was rejected. Distinct from a failed login, which the auth
-  /// endpoints report as a plain message instead.
-  bool get isUnauthorized => statusCode == 401;
-
-  /// No response at all — offline, wrong base URL, or a timeout.
-  bool get isNetwork => statusCode == null;
-
-  @override
-  String toString() => message;
-}
+export 'api_exception.dart';
 
 class ApiService {
+  /// Log area for everything in this file. Every line the HTTP layer writes
+  /// names the method and path it was attempting; none of them carries a
+  /// request body, a token, or an uploaded file — see [AppLog].
+  static const String _logArea = 'api';
+
   static const String _rawBaseUrl = String.fromEnvironment('API_BASE_URL');
 
   /// The API root, including `/api`. Supplied at build time by
@@ -100,10 +90,15 @@ class ApiService {
   Future<String?> _readSecureToken() async {
     try {
       return await _secureStorage.read(key: _tokenKey);
-    } catch (_) {
+    } catch (error) {
       // An Android restore-from-backup can leave the entry unreadable: the
       // ciphertext is restored but the Keystore key that decrypts it is not.
       // Drop it instead of failing every launch from here on.
+      //
+      // Worth a line: from the resident's side this is indistinguishable from
+      // never having logged in, so without it a "it keeps signing me out"
+      // report has nothing behind it.
+      AppLog.error(_logArea, 'read stored token', error: error);
       await _secureStorage.delete(key: _tokenKey).catchError((_) {});
       return null;
     }
@@ -116,7 +111,11 @@ class ApiService {
     try {
       await _secureStorage.write(key: _tokenKey, value: token);
       return true;
-    } catch (_) {
+    } catch (error) {
+      // The token itself is never logged, only that storing it failed. A
+      // resident hitting this is logged out again on the next launch with no
+      // explanation, which is otherwise invisible.
+      AppLog.error(_logArea, 'store token', error: error);
       return false;
     }
   }
@@ -159,6 +158,7 @@ class ApiService {
         headers: _headers,
         body: jsonEncode(body),
       ),
+      endpoint: 'POST $path',
       isAuthEndpoint: isAuthEndpoint,
     );
   }
@@ -166,6 +166,7 @@ class ApiService {
   Future<Map<String, dynamic>> _get(String path) {
     return _send(
       () => http.get(Uri.parse('$baseUrl$path'), headers: _headers),
+      endpoint: 'GET $path',
     );
   }
 
@@ -179,6 +180,7 @@ class ApiService {
         headers: _headers,
         body: body != null ? jsonEncode(body) : null,
       ),
+      endpoint: 'PATCH $path',
     );
   }
 
@@ -188,17 +190,23 @@ class ApiService {
   /// `SocketException` on native, and both are plain `Exception`s.
   Future<Map<String, dynamic>> _send(
     Future<http.Response> Function() call, {
+    required String endpoint,
     bool isAuthEndpoint = false,
   }) async {
     http.Response response;
 
     try {
       response = await call().timeout(const Duration(seconds: 15));
-    } catch (_) {
+    } catch (error) {
+      // The transport error type is the whole diagnostic value here: a
+      // TimeoutException, a SocketException and a ClientException mean three
+      // different things (server slow, server unreachable, request malformed)
+      // and the resident sees the same sentence for all three.
+      AppLog.error(_logArea, endpoint, error: error, reason: 'no response');
       throw const ApiException(_networkMessage);
     }
 
-    return _decode(response, isAuthEndpoint: isAuthEndpoint);
+    return _decode(response, endpoint: endpoint, isAuthEndpoint: isAuthEndpoint);
   }
 
   /// Inspects the status before the body. Previously every response was decoded
@@ -207,6 +215,7 @@ class ApiService {
   /// requests" rather than "your session expired".
   Map<String, dynamic> _decode(
     http.Response response, {
+    required String endpoint,
     bool isAuthEndpoint = false,
   }) {
     final status = response.statusCode;
@@ -217,6 +226,15 @@ class ApiService {
       final decoded = jsonDecode(response.body);
       body = decoded is Map<String, dynamic> ? decoded : {'data': decoded};
     } catch (_) {
+      // Not passed to AppLog.error: a FormatException stringifies the source it
+      // failed on, and the source here is the response body. The length is
+      // logged instead — it separates "empty reply" from "an HTML error page
+      // where JSON was expected" without writing any of it down.
+      AppLog.warn(
+        _logArea,
+        endpoint,
+        reason: 'body was not JSON (${response.bodyBytes.length} bytes)',
+      );
       body = null;
     }
 
@@ -233,11 +251,14 @@ class ApiService {
     // A rejected stored token means the session is over. Auth endpoints are
     // exempt: there a 401 is just "wrong email or password".
     if (status == 401 && !isAuthEndpoint) {
+      AppLog.warn(_logArea, endpoint, reason: 'token rejected, signing out');
       _clearToken();
       onUnauthorized?.call();
     }
 
-    throw ApiException(_errorMessage(body, status), statusCode: status);
+    final message = _errorMessage(body, status);
+    AppLog.error(_logArea, endpoint, status: status, reason: message);
+    throw ApiException(message, statusCode: status);
   }
 
   /// Laravel reports validation failures under `errors` and everything else
@@ -338,7 +359,9 @@ class ApiService {
     try {
       await _post('/logout', {});
     } catch (_) {
-      // Best effort. The local token is dropped either way.
+      // Best effort, and already logged by _send/_decode. The local token is
+      // dropped either way, so there is nothing further to record — but note
+      // the server-side token survives, and Sanctum tokens do not expire.
     }
 
     await _clearToken();
@@ -375,11 +398,19 @@ class ApiService {
       response = await http
           .get(Uri.parse(url), headers: _headers)
           .timeout(const Duration(seconds: 60));
-    } catch (_) {
+    } catch (error) {
+      // The URL is not logged. It is a `full_url` off the public storage disk,
+      // so it carries no credential — but it names the exact document this
+      // resident was reading, and the point of the offline library is that
+      // people read evacuation and health material privately.
+      AppLog.error(_logArea, 'download material', error: error,
+          reason: 'no response');
       throw const ApiException(_networkMessage);
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      AppLog.error(_logArea, 'download material',
+          status: response.statusCode, reason: 'rejected');
       throw ApiException(
         'Could not download this file.',
         statusCode: response.statusCode,
@@ -446,11 +477,18 @@ class ApiService {
       final streamed =
           await request.send().timeout(const Duration(seconds: 30));
       response = await http.Response.fromStream(streamed);
-    } catch (_) {
+    } catch (error) {
+      // Neither the description nor the ID image is logged — the description is
+      // free text a resident typed under duress (a patient's condition, a
+      // callback number) and the image is a government ID. Only the size of the
+      // upload, which is what distinguishes a timeout on a large photo from a
+      // dead connection.
+      AppLog.error(_logArea, 'POST /service-requests', error: error,
+          reason: 'no response, ${validIdFileBytes.length} byte upload');
       throw const ApiException(_networkMessage);
     }
 
-    return _decode(response);
+    return _decode(response, endpoint: 'POST /service-requests');
   }
 
   Future<void> cancelRequest(int requestId) async {

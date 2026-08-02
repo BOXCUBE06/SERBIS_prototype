@@ -1,5 +1,6 @@
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_log.dart';
 import 'file_opener_unsupported.dart'
     if (dart.library.io) 'file_opener_io.dart' as platform;
 
@@ -26,13 +27,20 @@ class FileOpener {
   Future<bool> openUrl(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme) {
+      // A material row whose `full_url` is relative or empty. The resident sees
+      // "nothing can open this", which is indistinguishable from having no
+      // viewer installed — a backend problem wearing a device problem's face.
+      AppLog.error('materials', 'open material URL',
+          reason: 'malformed or schemeless URL');
       return false;
     }
 
     try {
       return await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
+    } catch (error) {
       // A missing platform implementation throws rather than returning false.
+      // The URL is left out on purpose; see ApiService.downloadFile.
+      AppLog.error('materials', 'open material URL', error: error);
       return false;
     }
   }

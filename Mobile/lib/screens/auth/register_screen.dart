@@ -3,6 +3,7 @@ library serbis.screens.auth.register;
 
 import 'package:flutter/material.dart';
 import '../../state/account_store.dart';
+import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
@@ -66,7 +67,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _barangays        = list;
         _loadingBarangays = false;
       });
-    } catch (_) {
+    } catch (error) {
+      // `barangay_id` is required by the backend, so an unloadable picker means
+      // nobody can register at all — the highest-stakes silent failure in the
+      // app, and it renders as one retry panel.
+      AppLog.error('auth', 'load barangays', error: error,
+          reason: 'registration blocked');
       if (!mounted) return;
       setState(() {
         _loadingBarangays = false;
@@ -134,7 +140,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
       widget.onRegisterSuccess();
-    } catch (e) {
+    } catch (error) {
+      // `UserStore.register` converts an ApiException into a returned message
+      // rather than throwing, so anything arriving here escaped the HTTP layer
+      // and has not been logged. No field values: this method holds the
+      // password, the phone number and the email.
+      AppLog.error('auth', 'register', error: error);
       if (mounted) {
         setState(() =>
             _formError = 'Cannot connect to server. Check your connection.');

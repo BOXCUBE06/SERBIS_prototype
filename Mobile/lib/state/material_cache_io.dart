@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/info_material.dart';
+import 'app_log.dart';
 import 'material_cache.dart';
 
 MaterialCache createMaterialCache({
@@ -21,6 +22,7 @@ MaterialCache createMaterialCache({
 /// `<app documents>/materials/<id>.<ext>`; the index lives in
 /// `SharedPreferences` under one JSON key.
 class IoMaterialCache implements MaterialCache {
+  static const String _logArea = 'materials';
   static const String _indexKey = 'serbis_materials_index_v1';
   static const String _folder = 'materials';
 
@@ -47,6 +49,10 @@ class IoMaterialCache implements MaterialCache {
       final value = jsonDecode(raw);
       decoded = value is List ? value : <dynamic>[];
     } catch (_) {
+      // The exception is not passed on: a FormatException carries the text it
+      // could not parse, which here is the index itself.
+      AppLog.error(_logArea, 'read offline index',
+          reason: 'unreadable, discarded (${raw.length} chars)');
       await prefs.remove(_indexKey);
       return <int, CachedMaterial>{};
     }
@@ -71,6 +77,12 @@ class IoMaterialCache implements MaterialCache {
     }
 
     if (pruned) {
+      // Files vanish for reasons outside the app — a storage cleaner, an OS
+      // clearing app data under pressure. Recording it is what separates "the
+      // download never worked" from "it worked and something removed it",
+      // which are different bugs with different owners.
+      AppLog.warn(_logArea, 'read offline index',
+          reason: 'pruned entries with no file, ${index.length} remain');
       await _writeIndex(prefs, index);
     }
 
@@ -85,10 +97,19 @@ class IoMaterialCache implements MaterialCache {
     try {
       bytes = await _download(material.url);
     } catch (_) {
+      // Already logged with its status by ApiService.downloadFile. Only the
+      // outcome is added here: the caller returns false and the pill stays
+      // un-saved, which is the behaviour a resident would report.
+      AppLog.warn(_logArea, 'save material ${material.id}',
+          reason: 'download failed, nothing written');
       return null;
     }
 
-    if (bytes.isEmpty) return null;
+    if (bytes.isEmpty) {
+      AppLog.warn(_logArea, 'save material ${material.id}',
+          reason: 'server returned an empty file');
+      return null;
+    }
 
     try {
       final directory = Directory(
@@ -121,7 +142,12 @@ class IoMaterialCache implements MaterialCache {
       await _writeIndex(await SharedPreferences.getInstance(), index);
 
       return entry;
-    } catch (_) {
+    } catch (error) {
+      // A full disk lands here, and so does a documents directory the platform
+      // will not hand over. Both present to the resident as a Download button
+      // that does nothing.
+      AppLog.error(_logArea, 'save material ${material.id}', error: error,
+          reason: 'write failed, ${bytes.length} bytes discarded');
       return null;
     }
   }
@@ -137,9 +163,13 @@ class IoMaterialCache implements MaterialCache {
       if (await file.exists()) {
         await file.delete();
       }
-    } catch (_) {
+    } catch (error) {
       // The index entry goes either way: a file we cannot delete must not keep
-      // claiming to be saved.
+      // claiming to be saved. That leaves the bytes on disk with nothing
+      // pointing at them, so the space is unaccounted for — worth a line, since
+      // the Profile screen reports storage used from the index.
+      AppLog.error(_logArea, 'remove material $id', error: error,
+          reason: 'index entry dropped, file may remain');
     }
 
     await _writeIndex(await SharedPreferences.getInstance(), index);
