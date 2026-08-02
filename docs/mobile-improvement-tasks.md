@@ -1252,7 +1252,42 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 
 ---
 
-- [ ] **M29 — `google_fonts` fetches typefaces over the network at runtime**
+- [x] **M29 — `google_fonts` fetches typefaces over the network at runtime**
+      **Done 2026-08-02.** Dependency dropped entirely rather than kept and
+      configured — leaving it in place would let one `GoogleFonts.lexend()` call
+      reintroduce the startup request with nothing else changing. Eight static
+      TTFs in `assets/fonts/` (Lexend and Inter, weights 400/500/600/700, the
+      four the UI actually uses), declared under `flutter: fonts:`.
+      `AppText.display`/`body` are plain `TextStyle(fontFamily: …)` and
+      `GoogleFonts.interTextTheme` became `base.textTheme.apply(fontFamily:)`.
+      **~400 KB, not the 1–2 MB the task estimated** — these are Latin subsets
+      (~230 glyphs). Coverage was verified by parsing each file's `cmap` rather
+      than assumed: `ñ`, the accented vowels and `·` (which this UI uses as a
+      separator throughout) are all present. **A third language will need them
+      re-cut.**
+      **Static instances, not the variable fonts.** `google/fonts` ships Lexend
+      and Inter as variable only; reaching a variable font's `wght` axis needs
+      `fontVariations` on every `TextStyle`, which `ThemeData.textTheme` would
+      not carry. Static per-weight files were pulled from the CSS API, which
+      only serves TTF (rather than WOFF, which Flutter cannot load) to a legacy
+      user agent.
+      **This whole failure class is silent**: a missing asset, a renamed file or
+      a misspelled family does not fail the build, it falls back to the platform
+      font and reads as a styling slip. `app_fonts_test.dart` (8 tests) asserts
+      every declared asset exists on disk and every UI weight is declared.
+      **What the tests cannot prove:** `flutter_test` does not load bundled
+      fonts, so nothing here shows a glyph reaching a screen. Verified in a real
+      browser instead: served the web build, confirmed all eight files load from
+      `/assets/assets/fonts/`, and read `FontManifest.json` back as
+      `Lexend 4 weights, Inter 4 weights`. Headings render Lexend and body
+      renders Inter.
+      **One gstatic request survives, and it is not this app's.** Flutter web's
+      CanvasKit still pulls **Roboto** from `fonts.gstatic.com` as the engine's
+      own fallback — it is not `google_fonts` and not reachable from app code.
+      It does not occur on Android or iOS, where the platform supplies the
+      fallback, and the handset is the delivery target; web is the dev harness.
+      So "no startup font request" is true of the app's own typefaces on device,
+      **not** of the web build as a whole.
       **Severity:** Low
       **Category:** Build & Release Readiness
       **Location:** `Mobile/lib/theme/app_theme.dart:49,63,75`;
