@@ -93,6 +93,26 @@ Two Supabase-specific traps to design around (both in §6 risks):
 - Read: line 16 — `asset($item->file_path)` builds the URL from the app origin. Breaks the moment files live off-host; must become `Storage::url()`/`temporaryUrl()`.
 - Delete: line 55 reverses the string surgery — fragile, works only while the path convention holds.
 
+### Groundwork done 2026-08-02
+
+The host-independent half of this section is now in the code, so choosing a
+provider is a configuration change rather than a refactor:
+
+- **`config/filesystems.php` gained `uploads.private` / `uploads.public`**, read
+  from `UPLOADS_PRIVATE_DISK` / `UPLOADS_PUBLIC_DISK` and defaulting to today's
+  local disks. `ServiceRequestController` and `InfoMaterialController` no longer
+  name a disk; they ask the config. Pointing either at `s3` needs no code edit.
+- **`InfoMaterialController` stores the bare disk-relative path** instead of
+  `'storage/'.$path`, and `full_url` now comes from `Storage::disk(...)->url()`
+  rather than `asset()`. The `str_replace` path surgery this section calls out is
+  gone; rows written before the change still resolve, via `relativePath()`.
+- **A `Procfile`** carries the release-phase sequence (`config:cache`,
+  `route:cache`, `migrate --force`, `storage:link`) and a `worker` process for
+  the scheduler, which now has a job to run (`sanctum:prune-expired`).
+
+Still open here, because both depend on the provider: the signed-URL read flow
+for `resident-ids`, and migrating the existing local files into buckets.
+
 ### Target design
 
 Two buckets on S3-compatible storage (Supabase Storage exposes an S3-compatible API **[VERIFY]**; Cloudflare R2 free tier is the fallback **[VERIFY]**). The `s3` disk is already scaffolded at `config/filesystems.php:50` and `.env.example:59-63` — configuration, not new plumbing.
@@ -129,6 +149,8 @@ What changes when localhost stops being true, by file:
 | `SKYSMS_API_KEY` | in local `.env` | host's secret manager, never in the repo. Read via `config('services.skysms.key')` (`SmsController.php:39`) — already `config:cache`-safe per the audit's #20 fix |
 
 **CORS (`config/cors.php:23`):** single allowed origin from `ADMIN_FRONTEND_URL`, failing closed to a placeholder — correct design, just set the var. The mobile app needs **no CORS entry** (CORS is a browser mechanism; Flutter HTTP is unaffected). If the admin panel gets preview deploys (Netlify/Pages `*.preview` URLs), either pin one production origin or use `allowed_origins_patterns` deliberately — do not wildcard.
+
+**Proxy trust — DONE 2026-08-02.** `$middleware->trustProxies(at: '*', headers: ...)` is in `bootstrap/app.php`, verified with a temporary probe route: with `X-Forwarded-*` present the app now reports scheme `https` and the real client IP `203.0.113.7` instead of `http` and `127.0.0.1`. Narrow `at:` if the PHP port is ever exposed directly. Original analysis kept below.
 
 **Proxy trust — new requirement, easy to miss:** on any PaaS the app sits behind a reverse proxy, so `$request->ip()` returns the proxy's IP unless proxies are trusted. Both `throttle:login` (credential+IP keyed) and `throttleApi('60,1')` (`bootstrap/app.php:16`) degrade to a single shared bucket for *all users* — the CGNAT-lockout failure mode from audit #17, self-inflicted. Add `$middleware->trustProxies(at: '*')` (or the platform's proxy CIDR) in `bootstrap/app.php`. Also required for `https` detection so signed URLs generate with the right scheme.
 

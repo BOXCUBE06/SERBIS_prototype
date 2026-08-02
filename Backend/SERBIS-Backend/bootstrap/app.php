@@ -13,6 +13,24 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind a TLS-terminating proxy (any PaaS, or nginx in front of php-fpm)
+        // every request arrives from the proxy over plain HTTP. Untrusted, that
+        // means asset() and url() emit http:// links on an https:// site, and —
+        // worse — throttleApi() keys its rate limit on the proxy's IP for every
+        // unauthenticated request, so all callers share one 60/min bucket and
+        // login stops working under any real load.
+        //
+        // Trusting '*' is the correct setting for a platform that assigns proxy
+        // IPs dynamically, and is only safe because the app is not reachable
+        // except through that proxy. If this is ever deployed somewhere the PHP
+        // port is exposed directly, narrow this to the proxy's addresses —
+        // otherwise a client can spoof X-Forwarded-For and pick its own rate
+        // limit bucket.
+        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_FOR
+            | Request::HEADER_X_FORWARDED_HOST
+            | Request::HEADER_X_FORWARDED_PORT
+            | Request::HEADER_X_FORWARDED_PROTO);
+
         $middleware->throttleApi('60,1');
         // API-only app: there is no `login` route to redirect a guest to, and
         // Laravel's default guest redirect resolves route('login') eagerly, so an

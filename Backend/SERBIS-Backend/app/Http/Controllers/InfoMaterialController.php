@@ -11,9 +11,13 @@ class InfoMaterialController extends Controller
     public function index()
     {
         $materials = InfoMaterial::orderBy('created_at', 'desc')->get();
-        
+
         $materials->transform(function ($item) {
-            $item->full_url = asset($item->file_path);
+            // Ask the disk for the URL instead of building one with asset().
+            // On the local disk this resolves to the same /storage/... path as
+            // before; on object storage it is the bucket's URL, which asset()
+            // could never produce.
+            $item->full_url = Storage::disk(self::publicDisk())->url(self::relativePath($item->file_path));
             return $item;
         });
 
@@ -29,15 +33,19 @@ class InfoMaterialController extends Controller
 
         $file = $request->file('file');
 
-        // Store on the 'public' disk (storage/app/public) so the /storage symlink
-        // can serve it. The default 'local' disk roots at storage/app/private in
+        // Public disk (storage/app/public locally) so the /storage symlink can
+        // serve it. The default 'local' disk roots at storage/app/private in
         // Laravel 11+, which is not web-accessible.
-        $path = $file->store('info_materials', 'public');
+        $path = $file->store('info_materials', self::publicDisk());
 
         $material = InfoMaterial::create([
             'uploader_id' => $request->user()->admin_id,
             'title' => $request->title,
-            'file_path' => 'storage/' . $path,
+            // Disk-relative, with no 'storage/' prefix: that prefix is a fact
+            // about the local symlink, not about the file, and it is wrong the
+            // moment this disk becomes a bucket. Rows written before this keep
+            // the prefix and are handled by relativePath().
+            'file_path' => $path,
             'file_type' => $file->getClientOriginalExtension(),
             'file_size' => $file->getSize(),
         ]);
@@ -53,12 +61,24 @@ class InfoMaterialController extends Controller
         return response()->json(['message' => 'File not found'], 404);
     }
 
-    // Delete the actual file from the public disk (file_path is "storage/<path>")
-    Storage::disk('public')->delete(str_replace('storage/', '', $material->file_path));
+    Storage::disk(self::publicDisk())->delete(self::relativePath($material->file_path));
 
     // Delete the DB record
     $material->delete();
 
     return response()->json(['message' => 'File deleted successfully']);
 }
+
+    private static function publicDisk(): string
+    {
+        return config('filesystems.uploads.public');
+    }
+
+    // Rows created before the path shape changed are stored as "storage/<path>",
+    // which is a URL fragment rather than a disk path. Strip it so both shapes
+    // address the same file.
+    private static function relativePath(?string $filePath): string
+    {
+        return preg_replace('#^storage/#', '', (string) $filePath);
+    }
 }

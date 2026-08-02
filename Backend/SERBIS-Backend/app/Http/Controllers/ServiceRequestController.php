@@ -56,48 +56,86 @@ class ServiceRequestController extends Controller
             $filePath = $file->storeAs(
                 'valid-ids/'.$request->user()->getKey(),
                 (string) Str::uuid().'.'.$file->extension(),
-                'local'
+                self::privateDisk()
             );
         }
 
-        $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath) {
-            $vehicle = null;
-            $vehicleId = null;
+        // The upload has to happen before the transaction — it is a filesystem
+        // write, so a rollback does not undo it. Every path out of here that does
+        // not create a row must therefore delete the file by hand, or a failed
+        // submit leaves a government ID photo on disk that nothing points at and
+        // nothing ever cleans up. The no-vehicle path below is not an edge case:
+        // it fires whenever the fleet is busy, which is exactly when people file.
+        try {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath) {
+                $vehicle = null;
+                $vehicleId = null;
 
-            if (!empty($validated['required_vehicle_type'])) {
-                $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
-                                  ->where('status', 'Available')
-                                  ->lockForUpdate()
-                                  ->first();
+                if (!empty($validated['required_vehicle_type'])) {
+                    $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
+                                      ->where('status', 'Available')
+                                      ->lockForUpdate()
+                                      ->first();
 
-                if (!$vehicle) {
-                    return false; 
+                    if (!$vehicle) {
+                        return false;
+                    }
+                    $vehicleId = $vehicle->vehicle_id;
                 }
-                $vehicleId = $vehicle->vehicle_id;
-            }
 
-            $newServiceRequest = ServiceRequest::create([
-                'resident_id' => $request->user()->getKey(),
-                'service_id' => $validated['service_id'],
-                'description' => $validated['description'],
-                'valid_id' => $filePath,
-                'status' => 'Pending',
-                'processed_by' => null,
-                'vehicle_id' => $vehicleId,
-            ]);
+                $newServiceRequest = ServiceRequest::create([
+                    'resident_id' => $request->user()->getKey(),
+                    'service_id' => $validated['service_id'],
+                    'description' => $validated['description'],
+                    'valid_id' => $filePath,
+                    'status' => 'Pending',
+                    'processed_by' => null,
+                    'vehicle_id' => $vehicleId,
+                ]);
 
-            if ($vehicle) {
-                $vehicle->update(['status' => 'Dispatched']);
-            }
+                if ($vehicle) {
+                    $vehicle->update(['status' => 'Dispatched']);
+                }
 
-            return $newServiceRequest;
-        });
+                return $newServiceRequest;
+            });
+        } catch (\Throwable $e) {
+            $this->discardUpload($filePath);
+
+            throw $e;
+        }
 
         if ($serviceRequest === false) {
+            $this->discardUpload($filePath);
+
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
         return response()->json($serviceRequest, 201);
+    }
+
+    // Deleting the upload is best-effort on purpose: the caller is already on a
+    // failure path, and a storage error here would replace the real reason for
+    // the failure with a misleading one.
+    private function discardUpload(?string $filePath): void
+    {
+        if (!$filePath) {
+            return;
+        }
+
+        try {
+            Storage::disk(self::privateDisk())->delete($filePath);
+        } catch (\Throwable) {
+            // Leaving the file behind is the lesser failure.
+        }
+    }
+
+    // Government ID scans live wherever the deployment says. On a host with an
+    // ephemeral filesystem this must be object storage, or every scan is lost
+    // at the next deploy while the request rows that reference them survive.
+    private static function privateDisk(): string
+    {
+        return config('filesystems.uploads.private');
     }
 
     public function show(Request $request, $id)
@@ -138,11 +176,11 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
-        if (!Storage::disk('local')->exists($serviceRequest->valid_id)) {
+        if (!Storage::disk(self::privateDisk())->exists($serviceRequest->valid_id)) {
             return response()->json(['message' => 'Valid ID file not found'], 404);
         }
 
-        return Storage::disk('local')->response($serviceRequest->valid_id);
+        return Storage::disk(self::privateDisk())->response($serviceRequest->valid_id);
     }
 
     // Resident-facing cancel, kept separate from update() on purpose: update() is
