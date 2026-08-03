@@ -318,14 +318,27 @@ const fetchDashboardData = async () => {
   }
 }
 
+// The feed merges two models that use two different status vocabularies:
+//   ServiceRequest     — Pending, Responding, Resolved, Cancelled, Disapproved
+//   EquipmentBorrowing — Pending, Approved, Released, Returned, Denied
+// Only six of those nine were listed, and the one error branch tested for
+// 'Rejected', which neither model writes. Every refused item — Denied,
+// Disapproved, Cancelled — fell through to grey and read as an unknown state,
+// so no red ever reached this feed.
 const getStatusColor = (status) => {
   if (!status) return 'grey'
-  const s = status.toLowerCase()
-  if (s === 'pending') return 'warning'
-  if (s === 'approved' || s === 'responding') return 'primary'
-  if (s === 'resolved' || s === 'returned') return 'success'
-  if (s === 'rejected') return 'error'
-  return 'grey'
+  switch (status.toLowerCase()) {
+    case 'pending': return 'warning'
+    case 'approved':
+    case 'responding':
+    case 'released': return 'primary'
+    case 'resolved':
+    case 'returned': return 'success'
+    case 'cancelled':
+    case 'disapproved':
+    case 'denied': return 'error'
+    default: return 'grey'
+  }
 }
 
 const getHeatColor = (percentage) => {
