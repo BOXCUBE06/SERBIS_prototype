@@ -58,7 +58,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('is.admin')->group(function () {
         // Administrative Operations
-        Route::get('/admin/analytics', [AnalyticsController::class, 'getAdvancedAnalytics']);
+        // GET /admin/analytics used to be registered here against
+        // AnalyticsController::getAdvancedAnalytics, a method that does not
+        // exist and never did — the route 500'd on any request. No client ever
+        // called it; /admin/dashboard below is the panel's analytics source.
         Route::get('/admin/service-requests', [ServiceRequestController::class, 'adminIndex']);
         Route::get('/admin/dashboard', [\App\Http\Controllers\AnalyticsController::class, 'index']);
 
@@ -68,6 +71,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/admin/info-materials/{id}', [InfoMaterialController::class, 'destroy']);
 
         Route::get('/logs/system', [SystemLogController::class, 'index']);
+        // The Logs page's second tab. It had been fetching this since the page
+        // was written; the route simply never existed.
+        Route::get('/logs/sms', [SmsController::class, 'history']);
         
         Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:3,60');
         Route::apiResource('vehicles', VehicleController::class);

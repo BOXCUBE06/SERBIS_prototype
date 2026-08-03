@@ -113,6 +113,55 @@ class SmsController extends Controller
     }
 
     /**
+     * The admin panel's SMS History tab.
+     *
+     * The tab has existed for as long as the Logs page has, fetching GET
+     * /logs/sms — a route that was never registered, so the table was handed a
+     * 404 body where its rows should have been. Nothing was recorded to serve
+     * it either until 2026-08-03; sendBlast() posted to the vendor and
+     * persisted nothing at all.
+     *
+     * Shaped to the keys the table already asks for (user.name, message,
+     * recipient_count) rather than returning the model raw, mirroring
+     * SystemLogController. The recipient count is a withCount, not a loaded
+     * relation: a blast to a whole municipality is thousands of rows and the
+     * table shows a number.
+     */
+    public function history()
+    {
+        $logs = SmsLog::query()
+            ->with([
+                'sender:admin_id,first_name,last_name',
+                'barangay:barangay_id,barangay_name',
+            ])
+            ->withCount('recipients')
+            ->latest()
+            ->get();
+
+        $mapped = $logs->map(fn (SmsLog $log) => [
+            'sms_log_id'      => $log->sms_log_id,
+            'created_at'      => $log->created_at,
+            'user'            => [
+                // A blast outlives the admin who sent it: tbl_user rows can be
+                // removed, and a history row with a blank sender is worse than
+                // one that says so.
+                'name' => $log->sender
+                    ? $log->sender->first_name.' '.$log->sender->last_name
+                    : 'Unknown sender',
+            ],
+            'barangay'        => $log->barangay?->barangay_name ?? 'Unknown barangay',
+            'message'         => $log->message_body,
+            'recipient_count' => $log->recipients_count,
+            // 'Sent' or 'Failed'. Failed rows are shown here on purpose — this is
+            // the record somebody consults after a blast did not arrive. Only the
+            // resident-facing advisory feed filters them out.
+            'status'          => $log->status,
+        ]);
+
+        return response()->json(['success' => true, 'data' => $mapped]);
+    }
+
+    /**
      * One log row per barangay, and one recipient row per resident under it. The
      * vendor call is a single request for everyone, but "what was sent to my
      * barangay" is the question the record has to answer.
