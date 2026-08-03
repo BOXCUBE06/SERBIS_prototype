@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../state/translations.dart';
 
-enum ReqStatus { review, scheduled, completed, cancelled }
+/// `disapproved` is deliberately not folded into `cancelled`. They are opposite
+/// actors: the resident withdraws a request, the MDRRMO refuses one. Telling a
+/// resident they cancelled a request the agency turned down is wrong, and it
+/// hides that there are remarks explaining the refusal.
+enum ReqStatus { review, scheduled, completed, cancelled, disapproved }
 
 extension ReqStatusX on ReqStatus {
   String get label {
@@ -17,6 +21,9 @@ extension ReqStatusX on ReqStatus {
     }
     if (this == ReqStatus.completed) {
       return 'Completed';
+    }
+    if (this == ReqStatus.disapproved) {
+      return 'Not approved';
     }
     return 'Cancelled';
   }
@@ -31,6 +38,9 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.completed) {
       return tr(filipino, 'status.completed');
     }
+    if (this == ReqStatus.disapproved) {
+      return tr(filipino, 'status.disapproved');
+    }
     return tr(filipino, 'status.cancelled');
   }
 
@@ -44,6 +54,9 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.completed) {
       return AppColors.green50;
     }
+    if (this == ReqStatus.disapproved) {
+      return AppColors.red50;
+    }
     return AppColors.grey50;
   }
 
@@ -56,6 +69,9 @@ extension ReqStatusX on ReqStatus {
     }
     if (this == ReqStatus.completed) {
       return AppColors.green700;
+    }
+    if (this == ReqStatus.disapproved) {
+      return AppColors.red600;
     }
     return AppColors.inkFaint;
   }
@@ -537,6 +553,15 @@ class ServiceRequest {
             RequestStepState.done,
           ),
         ];
+      case ReqStatus.disapproved:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.disapproved'),
+            movedLabel,
+            RequestStepState.done,
+          ),
+        ];
     }
   }
 
@@ -698,7 +723,14 @@ ReqStatus getStatusFromText(String statusText) {
     return ReqStatus.completed;
   }
 
-  if (statusText == 'cancelled' || statusText == 'disapproved') {
+  // Kept apart: 'cancelled' is the resident's own withdrawal, 'disapproved' is
+  // the MDRRMO refusing. Folding them told the resident they had cancelled a
+  // request the agency turned down.
+  if (statusText == 'disapproved') {
+    return ReqStatus.disapproved;
+  }
+
+  if (statusText == 'cancelled') {
     return ReqStatus.cancelled;
   }
 

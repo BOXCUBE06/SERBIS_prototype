@@ -493,8 +493,11 @@ class AppState extends ChangeNotifier {
     }
 
     final current = requests[index];
+    // A disapproved request is closed too: the MDRRMO already refused it, so
+    // there is nothing left for the resident to withdraw.
     if (current.status == ReqStatus.cancelled ||
-        current.status == ReqStatus.completed) {
+        current.status == ReqStatus.completed ||
+        current.status == ReqStatus.disapproved) {
       return false;
     }
 

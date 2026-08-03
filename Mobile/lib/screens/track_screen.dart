@@ -141,6 +141,7 @@ class _TrackScreenState extends State<TrackScreen> {
                 _filterChip(tr(isFilipino, 'status.scheduled'), ReqStatus.scheduled, isFilipino),
                 _filterChip(tr(isFilipino, 'status.completed'), ReqStatus.completed, isFilipino),
                 _filterChip(tr(isFilipino, 'status.cancelled'), ReqStatus.cancelled, isFilipino),
+                _filterChip(tr(isFilipino, 'status.disapproved'), ReqStatus.disapproved, isFilipino),
               ],
             ),
           ),
@@ -218,6 +219,9 @@ class _RequestCard extends StatelessWidget {
     }
     if (request.status == ReqStatus.cancelled) {
       return AppColors.inkFaint;
+    }
+    if (request.status == ReqStatus.disapproved) {
+      return AppColors.red600;
     }
     if (request.status == ReqStatus.scheduled) {
       return AppColors.amber600;

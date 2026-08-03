@@ -286,6 +286,7 @@ class HomeScreen extends StatelessWidget {
         ReqStatus.scheduled => tr(f, 'home.status.scheduled'),
         ReqStatus.completed => tr(f, 'home.status.completed'),
         ReqStatus.cancelled => tr(f, 'home.status.cancelled'),
+        ReqStatus.disapproved => tr(f, 'home.status.disapproved'),
       };
 }
 

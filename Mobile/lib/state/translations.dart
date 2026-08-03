@@ -15,6 +15,7 @@ const Map<String, (String, String)> _strings = {
   'timeline.responding': ('MDRRMO is responding', 'Tumutugon ang MDRRMO'),
   'timeline.completed': ('Completed', 'Natapos'),
   'timeline.cancelled': ('Cancelled', 'Kinansela'),
+  'timeline.disapproved': ('Not approved by MDRRMO', 'Hindi inaprubahan ng MDRRMO'),
   'timeline.awaiting': ('Waiting', 'Naghihintay'),
   'timeline.time_unknown': ('Time not recorded', 'Walang naitalang oras'),
   'timeline.today': ('Today', 'Ngayon'),
@@ -23,6 +24,7 @@ const Map<String, (String, String)> _strings = {
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
   'status.completed': ('Completed', 'Natapos'),
   'status.cancelled': ('Cancelled', 'Kinansela'),
+  'status.disapproved': ('Not approved', 'Hindi inaprubahan'),
 
   'type.ambulance.title': ('Medical Transport / Ambulance', 'Medical Transport / Ambulansya'),
   'type.ambulance.subtitle': ('Pick-up & drop-off', 'Pagsundo at paghatid'),
@@ -98,6 +100,10 @@ const Map<String, (String, String)> _strings = {
   ),
   'home.status.completed': ('This request has been completed.', 'Natapos na ang kahilingang ito.'),
   'home.status.cancelled': ('This request has been cancelled.', 'Nakansela na ang kahilingang ito.'),
+  'home.status.disapproved': (
+    'MDRRMO did not approve this request.',
+    'Hindi inaprubahan ng MDRRMO ang kahilingang ito.',
+  ),
 
   // ---- Services ----
   'services.title': ('Service Request', 'Kahilingan sa Serbisyo'),
