@@ -14,6 +14,15 @@ class AppTextField extends StatelessWidget {
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
 
+  /// Message shown under the field, and the cue that turns its border red.
+  /// Null when the field is fine — the profile edit sheet is the first caller
+  /// that can reject what was typed.
+  final String? errorText;
+
+  /// Greys the field out while a save is in flight, so a second tap cannot
+  /// edit a value that is already being sent.
+  final bool enabled;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -23,6 +32,8 @@ class AppTextField extends StatelessWidget {
     this.keyboard = TextInputType.text,
     this.maxLength,
     this.inputFormatters,
+    this.errorText,
+    this.enabled = true,
   });
 
   /// The 11-digit numbers-only phone field, spelled once instead of at each of
@@ -31,6 +42,8 @@ class AppTextField extends StatelessWidget {
     Key? key,
     String label = 'Contact number',
     required TextEditingController controller,
+    String? errorText,
+    bool enabled = true,
   }) =>
       AppTextField(
         key: key,
@@ -40,6 +53,8 @@ class AppTextField extends StatelessWidget {
         keyboard: TextInputType.phone,
         maxLength: 11,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        errorText: errorText,
+        enabled: enabled,
       );
 
   @override
@@ -57,10 +72,13 @@ class AppTextField extends StatelessWidget {
             keyboardType: keyboard,
             maxLength: maxLength,
             inputFormatters: inputFormatters,
+            enabled: enabled,
             style: AppText.body(size: 13),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
+              errorText: errorText,
+              errorStyle: AppText.body(size: 11, color: AppColors.red600),
               counterText: '',
               filled: true,
               fillColor: AppColors.surface,
@@ -73,9 +91,21 @@ class AppTextField extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: AppColors.line, width: 1.5),
               ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
             ),
           ),

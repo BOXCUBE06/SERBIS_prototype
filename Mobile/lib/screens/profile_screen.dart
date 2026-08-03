@@ -14,6 +14,7 @@ import '../state/material_cache.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/form_inputs.dart';
 import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
 
@@ -332,93 +333,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Read-only on purpose. The sheet used to hold three `TextField`s and a
-  /// "Save changes" button that wrote to three local `String`s and reported
-  /// "Profile information updated." — no API call existed, the values were gone
-  /// on the next launch, and the admin panel never saw them. That is worse than
-  /// no edit at all for the barangay, which is the field an emergency request is
-  /// dispatched on: a resident who moved would be told the move was recorded.
-  /// Wire this back up when the backend has a resident-scoped `PATCH /me`.
+  /// The resident's own contact details, editable since `PATCH /me` shipped.
+  ///
+  /// This sheet was read-only for a while on purpose. Before that it held three
+  /// `TextField`s and a "Save changes" button that wrote to three local
+  /// `String`s and reported "Profile information updated." — no API call
+  /// existed, the values were gone on the next launch, and the admin panel
+  /// never saw them. The fake control was deleted rather than left in place,
+  /// and the backend work filed; this is that work landing.
+  ///
+  /// The barangay stays read-only, and that is not an oversight: it is the
+  /// field every service request is dispatched on, so a resident who could move
+  /// themselves could redirect their own dispatch. The endpoint refuses it too.
   Future<void> _showAccountDetails(BuildContext context, bool filipino) {
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      builder: (ctx) => Padding(
+        // Lifts the sheet clear of the keyboard: without this the field being
+        // typed into sits under it, which on a short phone is every field.
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _EditDetailsSheet(
+          user: widget.user,
+          userStore: widget.userStore,
+          filipino: filipino,
+          barangay: _address,
+          onSaved: (updated) {
+            widget.onUserChanged(updated);
+            _say(tr(filipino, 'profile.saved'));
+          },
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
-              ),
-            ),
-            Text(tr(filipino, 'profile.account_details'), style: AppText.display(size: 18)),
-            const SizedBox(height: 14),
-            _readOnlyField(tr(filipino, 'profile.full_name'), _name, filipino),
-            _readOnlyField(tr(filipino, 'profile.email'), _email, filipino),
-            _readOnlyField(tr(filipino, 'profile.barangay'), _address, filipino),
-            const SizedBox(height: 2),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline_rounded, size: 15, color: AppColors.inkFaint),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    tr(filipino, 'profile.contact_to_update'),
-                    style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            AppButton(
-              label: tr(filipino, 'common.close'),
-              style: AppButtonStyle.outline,
-              onPressed: () => Navigator.pop(ctx),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _readOnlyField(String label, String value, bool filipino) {
-    final missing = value.isEmpty;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.paper,
-              border: Border.all(color: AppColors.line, width: 1.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              missing ? tr(filipino, 'profile.value_missing') : value,
-              style: AppText.body(
-                size: 13,
-                color: missing ? AppColors.inkFaint : AppColors.ink,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1072,6 +1017,313 @@ class _SettingsRow extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The editable half of "Account details".
+///
+/// Its own widget rather than a `StatefulBuilder` inside the sheet: it owns five
+/// controllers, per-field errors and an in-flight flag, and a sheet that rebuilt
+/// from the parent would drop what was being typed.
+class _EditDetailsSheet extends StatefulWidget {
+  final AppUser user;
+  final UserStore userStore;
+  final bool filipino;
+
+  /// Read-only, shown for context. Not editable here or on the endpoint.
+  final String barangay;
+  final ValueChanged<AppUser> onSaved;
+
+  const _EditDetailsSheet({
+    required this.user,
+    required this.userStore,
+    required this.filipino,
+    required this.barangay,
+    required this.onSaved,
+  });
+
+  @override
+  State<_EditDetailsSheet> createState() => _EditDetailsSheetState();
+}
+
+class _EditDetailsSheetState extends State<_EditDetailsSheet> {
+  late final TextEditingController _first =
+      TextEditingController(text: widget.user.firstName);
+  late final TextEditingController _middle =
+      TextEditingController(text: widget.user.middleName);
+  late final TextEditingController _last =
+      TextEditingController(text: widget.user.lastName);
+  late final TextEditingController _phone =
+      TextEditingController(text: widget.user.phone);
+  late final TextEditingController _email =
+      TextEditingController(text: widget.user.email);
+
+  final Map<String, String> _errors = {};
+  String? _formError;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _first.dispose();
+    _middle.dispose();
+    _last.dispose();
+    _phone.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  String _tr(String key) => tr(widget.filipino, key);
+
+  /// Mirrors the backend rules rather than trusting them to be reached: a round
+  /// trip to be told a field is blank is a slow answer on a rural connection.
+  /// The server still validates — this only saves the trip.
+  bool _validate() {
+    final errors = <String, String>{};
+
+    if (_first.text.trim().isEmpty) errors['first'] = _tr('profile.required');
+    if (_last.text.trim().isEmpty) errors['last'] = _tr('profile.required');
+
+    final phone = _phone.text.trim();
+    if (phone.isEmpty) {
+      errors['phone'] = _tr('profile.required');
+    } else if (phone.length != 11 || !phone.startsWith('09')) {
+      // The field is digits-only and capped at 11 by AppTextField.phone, so the
+      // only reachable failures are "too short" and "does not start 09".
+      errors['phone'] = _tr('profile.phone_invalid');
+    }
+
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      errors['email'] = _tr('profile.required');
+    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      errors['email'] = _tr('profile.email_invalid');
+    }
+
+    setState(() {
+      _errors
+        ..clear()
+        ..addAll(errors);
+    });
+
+    return errors.isEmpty;
+  }
+
+  /// Only what actually changed is sent. PATCH leaves an absent key alone, so an
+  /// unchanged email is never re-submitted — which matters because the backend's
+  /// unique rule would otherwise be checked against the resident's own row on
+  /// every save.
+  Map<String, String?> _changes() {
+    final changed = <String, String?>{};
+    void diff(String key, String current, String original) {
+      if (current != original) changed[key] = current;
+    }
+
+    diff('first', _first.text.trim(), widget.user.firstName);
+    diff('middle', _middle.text.trim(), widget.user.middleName);
+    diff('last', _last.text.trim(), widget.user.lastName);
+    diff('phone', _phone.text.trim(), widget.user.phone);
+    diff('email', _email.text.trim(), widget.user.email);
+
+    return changed;
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (!_validate()) return;
+
+    final changes = _changes();
+    if (changes.isEmpty) {
+      setState(() => _formError = _tr('profile.no_changes'));
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _formError = null;
+    });
+
+    try {
+      final updated = await widget.userStore.updateProfile(
+        firstName: changes['first'],
+        middleName: changes['middle'],
+        lastName: changes['last'],
+        phoneNumber: changes['phone'],
+        email: changes['email'],
+      );
+
+      if (!mounted) return;
+      // Pop before reporting: the snackbar belongs to the screen underneath, and
+      // one shown over a closing sheet is dismissed along with it.
+      Navigator.pop(context);
+      widget.onSaved(updated);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      // The server's message is shown as-is. A 422 here is a real rejection the
+      // resident has to act on — a duplicate email is the common one — and the
+      // field-level checks above cannot know about it.
+      setState(() => _formError = e.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Text(_tr('profile.account_details'), style: AppText.display(size: 18)),
+            const SizedBox(height: 14),
+            AppTextField(
+              label: _tr('profile.first_name'),
+              hint: '',
+              controller: _first,
+              errorText: _errors['first'],
+              enabled: !_saving,
+            ),
+            AppTextField(
+              label: _tr('profile.middle_name_optional'),
+              hint: '',
+              controller: _middle,
+              enabled: !_saving,
+            ),
+            AppTextField(
+              label: _tr('profile.last_name'),
+              hint: '',
+              controller: _last,
+              errorText: _errors['last'],
+              enabled: !_saving,
+            ),
+            AppTextField.phone(
+              label: _tr('profile.phone'),
+              controller: _phone,
+              errorText: _errors['phone'],
+              enabled: !_saving,
+            ),
+            AppTextField(
+              label: _tr('profile.email'),
+              hint: '',
+              controller: _email,
+              keyboard: TextInputType.emailAddress,
+              errorText: _errors['email'],
+              enabled: !_saving,
+            ),
+            _ReadOnlyField(
+              label: _tr('profile.barangay'),
+              value: widget.barangay,
+              filipino: widget.filipino,
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.lock_outline_rounded,
+                    size: 15, color: AppColors.inkFaint),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    _tr('profile.barangay_locked'),
+                    style: AppText.body(
+                        size: 12, color: AppColors.inkMuted, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+            if (_formError != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                decoration: BoxDecoration(
+                  color: AppColors.red50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _formError!,
+                  style: AppText.body(size: 12, color: AppColors.red600, height: 1.4),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            AppButton(
+              label: _tr('profile.save'),
+              loading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+            const SizedBox(height: 8),
+            AppButton(
+              label: _tr('common.cancel'),
+              style: AppButtonStyle.outline,
+              onPressed: _saving ? null : () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A value the resident can see but not change. Kept visually distinct from an
+/// editable field — paper fill, no focus colour — so "locked" reads before the
+/// explanation under it does.
+class _ReadOnlyField extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool filipino;
+
+  const _ReadOnlyField({
+    required this.label,
+    required this.value,
+    required this.filipino,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final missing = value.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.paper,
+              border: Border.all(color: AppColors.line, width: 1.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              missing ? tr(filipino, 'profile.value_missing') : value,
+              style: AppText.body(
+                size: 13,
+                color: missing ? AppColors.inkFaint : AppColors.ink,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

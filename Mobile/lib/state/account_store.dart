@@ -6,8 +6,17 @@ import 'api_service.dart';
 class AppUser {
   final String id;
   final String firstName;
+
+  /// Optional on `tbl_residents`, and optional here. An empty string means the
+  /// resident has none on file, which is different from not having loaded it.
+  final String middleName;
   final String lastName;
   final String email;
+
+  /// The number the MDRRMO calls back on. Editable by the resident through
+  /// `PATCH /me`; it is not the number SMS blasts are keyed on being correct,
+  /// so a typo here costs the resident a callback, not an alert.
+  final String phone;
   final String address;
 
   /// Whether a profile photo has been uploaded. The path is never sent to a
@@ -18,8 +27,10 @@ class AppUser {
   const AppUser({
     required this.id,
     required this.firstName,
+    this.middleName = '',
     required this.lastName,
     required this.email,
+    this.phone = '',
     required this.address,
     this.hasPhoto = false,
   });
@@ -35,12 +46,21 @@ class AppUser {
         .toUpperCase();
   }
 
-  AppUser copyWith({bool? hasPhoto}) {
+  AppUser copyWith({
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? email,
+    String? phone,
+    bool? hasPhoto,
+  }) {
     return AppUser(
       id: id,
-      firstName: firstName,
-      lastName: lastName,
-      email: email,
+      firstName: firstName ?? this.firstName,
+      middleName: middleName ?? this.middleName,
+      lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
       address: address,
       hasPhoto: hasPhoto ?? this.hasPhoto,
     );
@@ -55,8 +75,10 @@ class AppUser {
     return AppUser(
       id: (json['resident_id'] ?? json['id'] ?? '').toString(),
       firstName: json['first_name'] as String? ?? '',
+      middleName: json['middle_name'] as String? ?? '',
       lastName: json['last_name'] as String? ?? '',
       email: json['email_address'] as String? ?? '',
+      phone: json['phone_number'] as String? ?? '',
       address: barangayName ?? '',
       hasPhoto: json['has_photo'] == true,
     );
@@ -122,6 +144,25 @@ class UserStore {
     required String password,
   }) async {
     final json = await _api.residentLogin(email: email, password: password);
+    return AppUser.fromJson(json);
+  }
+
+  /// Saves the resident's own contact details and returns the refreshed
+  /// profile, so the caller does not have to re-fetch `/me` to see the result.
+  Future<AppUser> updateProfile({
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? phoneNumber,
+    String? email,
+  }) async {
+    final json = await _api.updateProfile(
+      firstName: firstName,
+      middleName: middleName,
+      lastName: lastName,
+      phoneNumber: phoneNumber,
+      email: email,
+    );
     return AppUser.fromJson(json);
   }
 

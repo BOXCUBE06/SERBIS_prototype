@@ -152,12 +152,26 @@ const Map<String, (String, String)> _strings = {
   // The sheet is read-only until a resident-scoped PATCH exists on the backend,
   // so the button no longer promises an update it cannot perform.
   'profile.account_details': ('Account details', 'Mga Detalye ng Account'),
-  'profile.full_name': ('Full name', 'Buong Pangalan'),
   'profile.email': ('Email address', 'Email Address'),
   'profile.barangay': ('Barangay', 'Barangay'),
-  'profile.contact_to_update': (
-    'Contact MDRRMO to update your details.',
-    'Makipag-ugnayan sa MDRRMO para i-update ang iyong mga detalye.',
+  // The barangay stays read-only: it is the field every service request is
+  // dispatched on, so moving is an MDRRMO operation, not a self-service edit.
+  'profile.barangay_locked': (
+    'Contact MDRRMO to change your barangay — it is what your requests are dispatched on.',
+    'Makipag-ugnayan sa MDRRMO para palitan ang iyong barangay — ito ang batayan ng pagpapadala sa iyong mga kahilingan.',
+  ),
+  'profile.first_name': ('First name', 'Pangalan'),
+  'profile.middle_name_optional': ('Middle name (optional)', 'Gitnang Pangalan (opsyonal)'),
+  'profile.last_name': ('Last name', 'Apelyido'),
+  'profile.phone': ('Mobile number', 'Numero ng Telepono'),
+  'profile.save': ('Save changes', 'I-save ang Pagbabago'),
+  'profile.saved': ('Profile updated.', 'Na-update ang profile.'),
+  'profile.no_changes': ('Nothing to save.', 'Walang isasave.'),
+  'profile.required': ('Required', 'Kailangan'),
+  'profile.email_invalid': ('Enter a valid email address.', 'Maglagay ng wastong email address.'),
+  'profile.phone_invalid': (
+    'Enter a valid mobile number.',
+    'Maglagay ng wastong numero ng telepono.',
   ),
   // Shown in place of a value the server did not send. Never a plausible-looking
   // placeholder: the barangay here is what an emergency request is dispatched on.

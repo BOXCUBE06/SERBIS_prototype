@@ -348,6 +348,34 @@ class ApiService {
     return (data['user'] as Map<String, dynamic>?) ?? {};
   }
 
+  /// Resident-scoped profile edit. Only the five fields the backend accepts are
+  /// sent; `barangay_id`, `status`, `photo` and `password` are refused there and
+  /// have no business being offered here — the barangay in particular is what
+  /// every service request is dispatched on.
+  ///
+  /// Fields are omitted when null rather than sent empty, because the endpoint
+  /// is a PATCH: an absent key leaves the column alone, while an empty string
+  /// would clear it. `middleName` is the exception — it is nullable on the
+  /// resident row, so an empty string there is a real value meaning "none".
+  Future<Map<String, dynamic>> updateProfile({
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? phoneNumber,
+    String? email,
+  }) async {
+    final body = <String, dynamic>{
+      if (firstName != null) 'first_name': firstName,
+      if (middleName != null) 'middle_name': middleName.isEmpty ? null : middleName,
+      if (lastName != null) 'last_name': lastName,
+      if (phoneNumber != null) 'phone_number': phoneNumber,
+      if (email != null) 'email_address': email,
+    };
+
+    final data = await _patch('/me', body);
+    return (data['user'] as Map<String, dynamic>?) ?? {};
+  }
+
   /// Public on the backend so the register screen can populate its picker
   /// before the resident has an account.
   Future<List<Map<String, dynamic>>> getBarangays() async {

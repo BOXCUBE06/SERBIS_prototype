@@ -99,8 +99,12 @@ void main() {
     expect(find.text('Not on file'), findsNothing);
   });
 
-  testWidgets('the details sheet is read-only and offers no save',
+  testWidgets('the details sheet edits contact fields but never the barangay',
       (tester) async {
+    // This sheet was read-only while PATCH /me did not exist — offering an edit
+    // the backend could not perform is what the original bug was. The endpoint
+    // shipped, so the edit is real now; what must not come back is a writable
+    // barangay, which is the field a request is dispatched on.
     await _pumpProfile(
       tester,
       name: 'Maria Santos',
@@ -111,13 +115,18 @@ void main() {
     await tester.tap(find.text('Account details'));
     await tester.pumpAndSettle();
 
-    // Nothing editable, nothing that claims a write.
-    expect(find.byType(TextField), findsNothing);
-    expect(find.text('Save changes'), findsNothing);
-    expect(find.text('Contact MDRRMO to update your details.'), findsOneWidget);
+    // First, middle, last, phone, email — and nothing for the barangay.
+    expect(find.byType(TextField), findsNWidgets(5));
+    expect(find.text('Save changes'), findsOneWidget);
 
-    // The values are still shown — read-only, not hidden.
+    // The barangay is still shown, still read-only, and now says why.
     expect(find.text('San Fabian'), findsWidgets);
+    expect(
+      find.text(
+        'Contact MDRRMO to change your barangay — it is what your requests are dispatched on.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the sheet marks a missing barangay rather than blanking it',
