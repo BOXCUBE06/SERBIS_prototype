@@ -437,13 +437,11 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
       throw new Error(errData.message || 'Failed to update request')
     }
 
-    if (newStatus === 'Responding' && formData.value.vehicle_id) {
-      await fetch(`${API_BASE}/vehicles/${formData.value.vehicle_id}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ status: 'Dispatched' })
-      })
-    }
+    // The vehicle's own status used to be flipped here, by a second request.
+    // The server now owns it: PUT /service-requests/{id} attaches the unit and
+    // moves it to Dispatched, and returns it to Available on a terminal status.
+    // Doing it from here could only ever handle the dispatch half — nothing was
+    // releasing the unit afterwards, so the fleet drained one vehicle at a time.
     await fetchData()
   } catch (error) {
     apiError.value = error.message

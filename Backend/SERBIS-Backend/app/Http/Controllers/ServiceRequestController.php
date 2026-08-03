@@ -11,6 +11,22 @@ use Illuminate\Support\Str;
 
 class ServiceRequestController extends Controller
 {
+    /**
+     * The status column's whole vocabulary. Seeders, the admin panel's tabs and
+     * the mobile ReqStatus enum all already agree on these five; the column was
+     * simply never constrained to them, so a typo in a client wrote a status no
+     * screen could render and no filter could find.
+     */
+    private const STATUSES = ['Pending', 'Responding', 'Resolved', 'Cancelled', 'Disapproved'];
+
+    /**
+     * Statuses that end the request. A unit held by one of these is not coming
+     * back on its own — nothing else in the system ever returns it to the fleet,
+     * so every vehicle dispatched was leaving Available permanently and the
+     * picker emptied out after one dispatch per vehicle.
+     */
+    private const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
+
    public function adminIndex()
     {
         // Added 'resident.barangay'
@@ -279,6 +295,73 @@ class ServiceRequestController extends Controller
         return response()->json($serviceRequest);
     }
 
+    /**
+     * Keeps tbl_vehicles in step with the request being updated.
+     *
+     * Runs inside update()'s transaction and takes the same lockForUpdate() that
+     * store() and cancel() take, so two admins dispatching at once cannot both
+     * claim the same unit.
+     *
+     * Three cases, in this order:
+     *   1. the request moves to a terminal status  — hand the unit back
+     *   2. the attached unit is being swapped      — hand the old one back
+     *   3. a unit is attached and the request is live — mark it Dispatched
+     *
+     * Order matters: a terminal update that also carries a vehicle_id (the panel
+     * sends the current one on every PUT, including Disapprove) must release,
+     * not re-dispatch.
+     */
+    private function syncFleet(ServiceRequest $serviceRequest, array $validated): void
+    {
+        $currentVehicleId = $serviceRequest->vehicle_id;
+        $incomingVehicleId = array_key_exists('vehicle_id', $validated)
+            ? $validated['vehicle_id']
+            : $currentVehicleId;
+
+        $status = $validated['status'] ?? $serviceRequest->status;
+        $isTerminal = in_array($status, self::TERMINAL_STATUSES, true);
+
+        if ($isTerminal) {
+            $this->releaseVehicle($currentVehicleId);
+            $this->releaseVehicle($incomingVehicleId);
+
+            return;
+        }
+
+        if ($currentVehicleId && $currentVehicleId !== $incomingVehicleId) {
+            $this->releaseVehicle($currentVehicleId);
+        }
+
+        if ($incomingVehicleId) {
+            $vehicle = Vehicle::where('vehicle_id', $incomingVehicleId)
+                ->lockForUpdate()
+                ->first();
+
+            // Only Available is promoted. A unit already Dispatched to this same
+            // request stays as it is, and one under Maintenance is not quietly
+            // pressed into service by a status change.
+            if ($vehicle && $vehicle->status === 'Available') {
+                $vehicle->update(['status' => 'Dispatched']);
+            }
+        }
+    }
+
+    /** Returns a dispatched unit to the fleet. Ignores one already Available. */
+    private function releaseVehicle(?int $vehicleId): void
+    {
+        if (!$vehicleId) {
+            return;
+        }
+
+        $vehicle = Vehicle::where('vehicle_id', $vehicleId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($vehicle && $vehicle->status === 'Dispatched') {
+            $vehicle->update(['status' => 'Available']);
+        }
+    }
+
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
@@ -295,13 +378,23 @@ class ServiceRequestController extends Controller
             // 'valid_id' is deliberately not accepted here. It is a storage path written
             // only by store(); allowing it to be set would let any admin point it at an
             // arbitrary file for validId() to stream back.
-            'status' => 'sometimes|required|string|max:50',
+            //
+            // The panel has always sent vehicle_id with every dispatch, but it was
+            // absent from these rules, so validate() dropped it and the request was
+            // never attached to the unit that answered it. The detail panel then read
+            // back "Vehicle Unknown".
+            'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id',
+            'status' => 'sometimes|required|in:'.implode(',', self::STATUSES),
             'remarks' => 'nullable|string',
         ]);
 
-        $serviceRequest->update($validated);
+        DB::transaction(function () use ($serviceRequest, $validated) {
+            $this->syncFleet($serviceRequest, $validated);
 
-        return response()->json($serviceRequest);
+            $serviceRequest->update($validated);
+        });
+
+        return response()->json($serviceRequest->fresh(['vehicle']));
     }
 
     public function destroy($id)
