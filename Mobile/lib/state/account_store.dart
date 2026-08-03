@@ -10,15 +10,41 @@ class AppUser {
   final String email;
   final String address;
 
+  /// Whether a profile photo has been uploaded. The path is never sent to a
+  /// client — the server answers this flag and serves the image from
+  /// `GET /residents/{id}/photo`.
+  final bool hasPhoto;
+
   const AppUser({
     required this.id,
     required this.firstName,
     required this.lastName,
     required this.email,
     required this.address,
+    this.hasPhoto = false,
   });
 
   String get fullName => '$firstName $lastName'.trim();
+
+  /// Two letters for the avatar when there is no photo. Empty when the profile
+  /// carries no name at all, so nothing invented appears in the circle.
+  String get initials {
+    final first = firstName.trim();
+    final last = lastName.trim();
+    return '${first.isEmpty ? '' : first[0]}${last.isEmpty ? '' : last[0]}'
+        .toUpperCase();
+  }
+
+  AppUser copyWith({bool? hasPhoto}) {
+    return AppUser(
+      id: id,
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      address: address,
+      hasPhoto: hasPhoto ?? this.hasPhoto,
+    );
+  }
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     // tbl_residents has no address column; location is the barangay relation.
@@ -32,6 +58,7 @@ class AppUser {
       lastName: json['last_name'] as String? ?? '',
       email: json['email_address'] as String? ?? '',
       address: barangayName ?? '',
+      hasPhoto: json['has_photo'] == true,
     );
   }
 }
@@ -97,6 +124,23 @@ class UserStore {
     final json = await _api.residentLogin(email: email, password: password);
     return AppUser.fromJson(json);
   }
+
+  /// Uploads a new profile photo and returns the refreshed profile.
+  Future<AppUser> setProfilePhoto({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final json = await _api.uploadProfilePhoto(bytes: bytes, fileName: fileName);
+    return AppUser.fromJson(json);
+  }
+
+  Future<AppUser> removeProfilePhoto() async {
+    return AppUser.fromJson(await _api.deleteProfilePhoto());
+  }
+
+  /// Image bytes for the avatar, or null when there is nothing stored.
+  Future<List<int>?> profilePhoto(String residentId) =>
+      _api.fetchProfilePhoto(residentId);
 
   Future<void> logout() => _api.logout();
 }

@@ -132,7 +132,11 @@
 
             <template v-slot:item.photo="{ item }">
               <v-avatar :color="undefined" size="42" class="my-2 avatar-tint">
-                <v-img v-if="item.photo" :src="item.photo" :alt="`Photo of ${item.first_name} ${item.last_name}`"></v-img>
+                <v-img
+                  v-if="photoUrls[idOf(item)]"
+                  :src="photoUrls[idOf(item)]"
+                  :alt="`Photo of ${item.first_name} ${item.last_name}`"
+                ></v-img>
                 <span v-else class="avatar-initials">
                   {{ initials(item) }}
                 </span>
@@ -375,9 +379,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
+import {
+  forgetResidentPhoto,
+  releaseResidentPhotos,
+  residentPhotoUrl,
+} from '@/composables/residentPhoto'
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_FILTER_ITEMS,
@@ -400,6 +409,9 @@ const headers = [
 ]
 
 const residents = ref([])
+// resident_id -> object URL. Only rows the server says have a photo are ever
+// fetched; the rest fall through to initials without a request.
+const photoUrls = ref({})
 const barangays = ref([])
 const search = ref('')
 const initialLoad = ref(true)
@@ -494,6 +506,20 @@ const fetchResidents = async () => {
   if (selectedResident.value) {
     const id = idOf(selectedResident.value)
     selectedResident.value = residents.value.find((r) => idOf(r) === id) || null
+  }
+  loadPhotos()
+}
+
+// Not awaited by fetchResidents: the table is useful the moment the rows land,
+// and an avatar that arrives a beat later is not worth blocking it for.
+const loadPhotos = () => {
+  for (const resident of residents.value) {
+    if (!resident.has_photo) continue
+
+    const id = idOf(resident)
+    residentPhotoUrl(id).then((url) => {
+      if (url) photoUrls.value = { ...photoUrls.value, [id]: url }
+    })
   }
 }
 
@@ -609,6 +635,10 @@ const confirmDelete = async () => {
   try {
     const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, { method: 'DELETE', headers: getHeaders() })
     if (!res.ok) throw new Error(await errorFrom(res))
+    // The row is gone; keeping its blob alive would hand the next resident to
+    // take that id someone else's face.
+    forgetResidentPhoto(idOf(item))
+    delete photoUrls.value[idOf(item)]
     selectedResident.value = null
     await fetchResidents()
     deleteDialog.value.show = false
@@ -621,6 +651,9 @@ const confirmDelete = async () => {
 }
 
 onMounted(loadAll)
+// One blob per resident would otherwise survive every visit to this view for
+// the life of the tab.
+onUnmounted(releaseResidentPhotos)
 </script>
 
 <style scoped>
@@ -660,7 +693,9 @@ onMounted(loadAll)
   border-radius: 50%;
 }
 .avatar-initials {
-  color: rgb(var(--v-theme-primary));
+  /* Not primary: the table avatar draws these at body size, where primary on
+     the 14% tint is 4.25:1 and fails AA. See the token in plugins/vuetify.ts. */
+  color: rgb(var(--v-theme-primary-strong));
   font-weight: 800;
   letter-spacing: 0.02em;
 }

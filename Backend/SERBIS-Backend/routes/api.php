@@ -31,6 +31,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
     // see the controller for why each one is excluded.
     Route::patch('/me', [AuthController::class, 'updateMe']);
+    // The resident's own profile photo. Kept off PATCH /me because it is a
+    // multipart upload, not a column the resident types into.
+    Route::post('/me/photo', [ResidentController::class, 'uploadMyPhoto']);
+    Route::delete('/me/photo', [ResidentController::class, 'deleteMyPhoto']);
+    // Read is wider than write: staff render one photo per row in the resident
+    // list, so this sits outside the is.admin group and does its own check.
+    // Registered before the admin apiResource so it is never shadowed by it.
+    Route::get('residents/{id}/photo', [ResidentController::class, 'photo']);
 
     // Endpoints requiring read/write access from the mobile application
     Route::get('equipments', [EquipmentController::class, 'index']);

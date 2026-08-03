@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:serbis/screens/profile_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/app_log.dart';
 import 'package:serbis/state/request_store.dart';
@@ -24,7 +25,18 @@ class _FakeApi extends ApiService {
   @override
   Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async =>
       <Map<String, dynamic>>[];
+
+  @override
+  Future<List<int>?> fetchProfilePhoto(String residentId) async => null;
 }
+
+const _user = AppUser(
+  id: '1',
+  firstName: 'Maria',
+  lastName: 'Santos',
+  email: 'maria@example.com',
+  address: 'San Fabian',
+);
 
 Future<void> _pumpProfile(WidgetTester tester, {AppState? appState}) async {
   // Phone-shaped: the default 800x600 clips this screen and the Report row,
@@ -38,6 +50,9 @@ Future<void> _pumpProfile(WidgetTester tester, {AppState? appState}) async {
     home: Scaffold(
       body: ProfileScreen(
         appState: appState ?? AppState(_FakeApi()),
+        userStore: UserStore(_FakeApi()),
+        user: _user,
+        onUserChanged: (_) {},
         onLogout: () {},
         onOpenNotifications: () {},
         onOpenProfile: () {},

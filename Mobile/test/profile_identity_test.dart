@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/screens/profile_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
@@ -23,6 +24,24 @@ class _FakeApi extends ApiService {
   @override
   Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async =>
       <Map<String, dynamic>>[];
+
+  @override
+  Future<List<int>?> fetchProfilePhoto(String residentId) async => null;
+}
+
+/// The screen takes the whole resident now, so the old `name` string is split
+/// back into the two columns it comes from.
+AppUser _userFrom(String? name, String? email, String? address) {
+  final parts = (name ?? '').trim().split(RegExp(r'\s+'))
+    ..removeWhere((part) => part.isEmpty);
+
+  return AppUser(
+    id: '1',
+    firstName: parts.isEmpty ? '' : parts.first,
+    lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+    email: email ?? '',
+    address: address ?? '',
+  );
 }
 
 Future<void> _pumpProfile(
@@ -43,12 +62,12 @@ Future<void> _pumpProfile(
     home: Scaffold(
       body: ProfileScreen(
         appState: AppState(_FakeApi()),
+        userStore: UserStore(_FakeApi()),
+        user: _userFrom(name, email, address),
+        onUserChanged: (_) {},
         onLogout: () {},
         onOpenNotifications: () {},
         onOpenProfile: () {},
-        initialName: name,
-        initialEmail: email,
-        initialAddress: address,
       ),
     ),
   ));
@@ -119,12 +138,49 @@ void main() {
     expect(find.text('Not on file'), findsNWidgets(2));
   });
 
-  testWidgets('the avatar carries no edit affordance without a picker',
-      (tester) async {
-    // It used to open a snackbar reading "Photo picker would open here."
+  testWidgets('the avatar edit badge opens a real photo sheet', (tester) async {
+    // M32 removed this badge because it only opened a snackbar reading "Photo
+    // picker would open here." There is an upload behind it now, so the badge
+    // is back — and it must lead somewhere that acts.
     await _pumpProfile(tester, name: 'Maria Santos');
 
-    expect(find.byIcon(Icons.edit_rounded), findsNothing);
+    expect(find.byIcon(Icons.edit_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.edit_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose a photo'), findsOneWidget);
+    expect(find.text('Photo picker would open here.'), findsNothing);
+  });
+
+  testWidgets('remove is offered only when there is a photo to remove',
+      (tester) async {
+    await _pumpProfile(tester, name: 'Maria Santos');
+
+    await tester.tap(find.byIcon(Icons.edit_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove photo'), findsNothing);
+  });
+
+  testWidgets('a named resident with no photo gets their initials',
+      (tester) async {
+    await _pumpProfile(tester, name: 'Maria Santos');
+
+    expect(find.text('MS'), findsOneWidget);
+  });
+
+  testWidgets('an empty profile gets the neutral icon, not a monogram',
+      (tester) async {
+    // The whole point of the identity work: nothing invented in the circle.
+    // Scoped by size — the header carries the same icon at 17.
+    await _pumpProfile(tester);
+
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is Icon && w.icon == Icons.person_outline_rounded && w.size == 36),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the profile offers no notification consent it cannot honour',

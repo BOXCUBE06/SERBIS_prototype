@@ -108,8 +108,8 @@ class AuthController extends Controller
         //                dispatch. Changing barangay is an MDRRMO operation.
         //   status       an Inactive account could otherwise activate itself and
         //                opt an unverified number into billed SMS.
-        //   photo        no upload route writes it; it is a free-form URL that the
-        //                admin panel renders.
+        //   photo        it is a storage path now, not a value anyone types.
+        //                POST /me/photo owns it — see ResidentController.
         //   password     a change needs the current password, which is a separate
         //                endpoint, not a field on a profile PATCH.
         foreach (['first_name', 'middle_name', 'last_name', 'phone_number', 'email_address'] as $field) {

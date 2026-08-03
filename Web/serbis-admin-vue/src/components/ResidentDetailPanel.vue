@@ -7,7 +7,7 @@
 
     <div class="px-6 pt-2 d-flex flex-column align-center text-center">
       <v-avatar size="96" class="avatar-tint mb-4">
-        <v-img v-if="resident.photo" :src="resident.photo" :alt="`Photo of ${resident.first_name} ${resident.last_name}`"></v-img>
+        <v-img v-if="photoUrl" :src="photoUrl" :alt="`Photo of ${resident.first_name} ${resident.last_name}`"></v-img>
         <span v-else class="avatar-initials text-h4">{{ initials }}</span>
       </v-avatar>
 
@@ -99,7 +99,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   RESIDENT_STATUS,
   residentStatusDotClass,
@@ -118,6 +119,23 @@ defineEmits(['close', 'edit', 'toggle-status', 'delete'])
 const isActive = computed(() => props.resident.status === RESIDENT_STATUS.active)
 
 const residentId = computed(() => props.resident.resident_id ?? props.resident.id)
+
+// The panel is reused as the selection moves down the list, so the photo is
+// keyed off the id and cleared first — otherwise the previous resident's face
+// stays on screen under the new resident's name until the fetch returns.
+const photoUrl = ref(null)
+watch(
+  () => [residentId.value, props.resident.has_photo],
+  ([id, hasPhoto]) => {
+    photoUrl.value = null
+    if (!hasPhoto || id == null) return
+
+    residentPhotoUrl(id).then((url) => {
+      if (residentId.value === id) photoUrl.value = url
+    })
+  },
+  { immediate: true },
+)
 const initials = computed(() =>
   `${(props.resident.first_name || '').charAt(0)}${(props.resident.last_name || '').charAt(0)}`.toUpperCase(),
 )
@@ -138,7 +156,7 @@ const registeredOn = computed(() => {
 /* Avatar — the old blue-on-light-blue pairing measured 3.28:1. Tinting the
    primary token keeps the soft look and passes AA in both themes. */
 .avatar-tint { background: rgba(var(--v-theme-primary), 0.14) !important; }
-.avatar-initials { color: rgb(var(--v-theme-primary)); font-weight: 800; letter-spacing: 0.02em; }
+.avatar-initials { color: rgb(var(--v-theme-primary-strong)); font-weight: 800; letter-spacing: 0.02em; }
 
 /* Status pill — replaces the flat grey chip, which rendered white on #9E9E9E (2.68:1). */
 .status-pill {

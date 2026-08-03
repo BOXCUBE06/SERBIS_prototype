@@ -217,10 +217,13 @@ class _AuthGateState extends State<AuthGate> {
     if (_currentUser != null) {
       return RootShell(
         api: _api,
+        userStore: _userStore,
+        user: _currentUser!,
+        // The profile screen can now change the resident row (their photo), so
+        // the copy held here has to move with it or the next rebuild reinstates
+        // the old avatar.
+        onUserChanged: (user) => setState(() => _currentUser = user),
         onLogout: _logout,
-        initialName: _currentUser!.fullName.isEmpty ? null : _currentUser!.fullName,
-        initialEmail: _currentUser!.email.isEmpty ? null : _currentUser!.email,
-        initialAddress: _currentUser!.address.isEmpty ? null : _currentUser!.address,
       );
     }
 
@@ -252,18 +255,18 @@ class _AuthGateState extends State<AuthGate> {
 
 class RootShell extends StatefulWidget {
   final ApiService api;
+  final UserStore userStore;
+  final AppUser user;
+  final ValueChanged<AppUser> onUserChanged;
   final VoidCallback onLogout;
-  final String? initialName;
-  final String? initialEmail;
-  final String? initialAddress;
 
   const RootShell({
     super.key,
     required this.api,
+    required this.userStore,
+    required this.user,
+    required this.onUserChanged,
     required this.onLogout,
-    this.initialName,
-    this.initialEmail,
-    this.initialAddress,
   });
 
   @override
@@ -440,9 +443,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         },
         onOpenNotifications: onOpenNotifications,
         onOpenProfile: onOpenProfile,
-        initialName: widget.initialName,
-        initialEmail: widget.initialEmail,
-        initialAddress: widget.initialAddress,
+        userStore: widget.userStore,
+        user: widget.user,
+        onUserChanged: widget.onUserChanged,
       ),
     ];
 

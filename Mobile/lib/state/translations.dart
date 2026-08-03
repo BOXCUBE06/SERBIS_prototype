@@ -145,6 +145,10 @@ const Map<String, (String, String)> _strings = {
   'library.national_emergency': ('National Emergency', 'Pambansang Emerhensiya'),
 
   'profile.title': ('My Profile', 'Aking Profile'),
+  'profile.photo': ('Profile photo', 'Larawan sa Profile'),
+  'profile.photo_change': ('Change profile photo', 'Palitan ang larawan sa profile'),
+  'profile.photo_choose': ('Choose a photo', 'Pumili ng larawan'),
+  'profile.photo_remove': ('Remove photo', 'Alisin ang larawan'),
   // The sheet is read-only until a resident-scoped PATCH exists on the backend,
   // so the button no longer promises an update it cannot perform.
   'profile.account_details': ('Account details', 'Mga Detalye ng Account'),

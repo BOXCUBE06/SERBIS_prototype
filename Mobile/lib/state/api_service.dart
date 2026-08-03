@@ -491,6 +491,90 @@ class ApiService {
     return _decode(response, endpoint: 'POST /service-requests');
   }
 
+  /// Replaces the signed-in resident's profile photo. Returns the updated
+  /// resident row, so the caller does not have to re-fetch `/me` to learn that
+  /// `has_photo` is now true.
+  Future<Map<String, dynamic>> uploadProfilePhoto({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final uri = Uri.parse('$baseUrl/me/photo');
+    final request = http.MultipartRequest('POST', uri);
+
+    request.headers.addAll({
+      'Accept': 'application/json',
+      if (_token != null) 'Authorization': 'Bearer $_token',
+    });
+
+    request.files.add(
+      http.MultipartFile.fromBytes('photo', bytes, filename: fileName),
+    );
+
+    http.Response response;
+    try {
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 30));
+      response = await http.Response.fromStream(streamed);
+    } catch (error) {
+      // The image itself is never logged — it is a photograph of the resident.
+      // Only its size, which separates a timeout on a large upload from a dead
+      // connection.
+      AppLog.error(_logArea, 'POST /me/photo', error: error,
+          reason: 'no response, ${bytes.length} byte upload');
+      throw const ApiException(_networkMessage);
+    }
+
+    final body = _decode(response, endpoint: 'POST /me/photo');
+    return (body['user'] as Map<String, dynamic>?) ?? {};
+  }
+
+  /// Drops the photo and the file behind it, returning the resident to initials.
+  Future<Map<String, dynamic>> deleteProfilePhoto() async {
+    final body = await _send(
+      () => http.delete(Uri.parse('$baseUrl/me/photo'), headers: _headers),
+      endpoint: 'DELETE /me/photo',
+    );
+    return (body['user'] as Map<String, dynamic>?) ?? {};
+  }
+
+  /// The image bytes for a resident's profile photo, or null when there is
+  /// nothing to show.
+  ///
+  /// Bytes rather than a URL for `Image.network`: the route is behind
+  /// `auth:sanctum`, and on the web build an `<img src>` carries no
+  /// Authorization header, so a URL would 401 on exactly one of the two
+  /// platforms the app ships to.
+  Future<List<int>?> fetchProfilePhoto(String residentId) async {
+    final uri = Uri.parse('$baseUrl/residents/$residentId/photo');
+    const endpoint = 'GET /residents/{id}/photo';
+
+    http.Response response;
+    try {
+      response = await http
+          .get(uri, headers: {
+            'Accept': '*/*',
+            if (_token != null) 'Authorization': 'Bearer $_token',
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (error) {
+      AppLog.error(_logArea, endpoint, error: error, reason: 'no response');
+      return null;
+    }
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+
+    // A 404 is the ordinary answer for a resident who has not uploaded one, so
+    // it is not an error. Anything else is worth a line, but never a thrown
+    // exception: a missing avatar must not take a screen down with it.
+    if (response.statusCode != 404) {
+      AppLog.warn(_logArea, endpoint, reason: 'status ${response.statusCode}');
+    }
+
+    return null;
+  }
+
   Future<void> cancelRequest(int requestId) async {
     // Resident-scoped route; the controller sets status = 'Cancelled' itself and
     // rejects anything but the owner's own Pending request. No body needed.

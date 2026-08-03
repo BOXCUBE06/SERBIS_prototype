@@ -1,9 +1,14 @@
 
 library serbis.screens.profile;
 
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../data/safety_files.dart';
+import '../state/account_store.dart';
+import '../state/api_service.dart';
 import '../state/app_log.dart';
 import '../state/material_cache.dart';
 import '../state/request_store.dart';
@@ -14,22 +19,25 @@ import 'library/article_reader_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final AppState appState;
+  final UserStore userStore;
+  final AppUser user;
+
+  /// Fired when the resident changes their own photo, so the shell's copy of
+  /// the profile does not go stale behind this screen.
+  final ValueChanged<AppUser> onUserChanged;
   final VoidCallback onLogout;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenProfile;
-  final String? initialName;
-  final String? initialEmail;
-  final String? initialAddress;
 
   const ProfileScreen({
     super.key,
     required this.appState,
+    required this.userStore,
+    required this.user,
+    required this.onUserChanged,
     required this.onLogout,
     required this.onOpenNotifications,
     required this.onOpenProfile,
-    this.initialName,
-    this.initialEmail,
-    this.initialAddress,
   });
 
   @override
@@ -42,9 +50,155 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// profile that failed to load showed a plausible name and a municipality
   /// that is not a barangay — and the barangay on the resident row is what
   /// every request is dispatched on. A missing value now says so.
-  String get _name => widget.initialName?.trim() ?? '';
-  String get _email => widget.initialEmail?.trim() ?? '';
-  String get _address => widget.initialAddress?.trim() ?? '';
+  String get _name => widget.user.fullName.trim();
+  String get _email => widget.user.email.trim();
+  String get _address => widget.user.address.trim();
+
+  /// The decoded photo, held here rather than re-fetched on every rebuild. The
+  /// route is authenticated, so this is bytes and not a URL — see
+  /// [ApiService.fetchProfilePhoto].
+  Uint8List? _photo;
+  bool _photoBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPhoto();
+  }
+
+  @override
+  void didUpdateWidget(ProfileScreen old) {
+    super.didUpdateWidget(old);
+    if (old.user.hasPhoto != widget.user.hasPhoto ||
+        old.user.id != widget.user.id) {
+      _loadPhoto();
+    }
+  }
+
+  Future<void> _loadPhoto() async {
+    if (!widget.user.hasPhoto || widget.user.id.isEmpty) {
+      if (mounted) setState(() => _photo = null);
+      return;
+    }
+
+    final bytes = await widget.userStore.profilePhoto(widget.user.id);
+    if (!mounted) return;
+    setState(() => _photo = bytes == null ? null : Uint8List.fromList(bytes));
+  }
+
+  Future<void> _pickPhoto(bool filipino) async {
+    if (_photoBusy) return;
+
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      withData: true, // ensures .bytes is populated (needed on web)
+    );
+
+    final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+    if (file?.bytes == null) {
+      return;
+    }
+
+    setState(() => _photoBusy = true);
+    try {
+      final updated = await widget.userStore.setProfilePhoto(
+        bytes: file!.bytes!,
+        fileName: file.name,
+      );
+      if (!mounted) return;
+      // Show the bytes that were just uploaded rather than fetching them back:
+      // the resident already chose this image, and a round trip on a rural
+      // connection is a visible delay for no new information.
+      setState(() => _photo = Uint8List.fromList(file.bytes!));
+      widget.onUserChanged(updated);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _say(e.message);
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  Future<void> _removePhoto(bool filipino) async {
+    if (_photoBusy) return;
+
+    setState(() => _photoBusy = true);
+    try {
+      final updated = await widget.userStore.removeProfilePhoto();
+      if (!mounted) return;
+      setState(() => _photo = null);
+      widget.onUserChanged(updated);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _say(e.message);
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// One sheet for both actions, so "remove" is only offered when there is
+  /// something to remove.
+  Future<void> _showPhotoActions(BuildContext context, bool filipino) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Text(tr(filipino, 'profile.photo'), style: AppText.display(size: 18)),
+            const SizedBox(height: 14),
+            AppButton(
+              label: tr(filipino, 'profile.photo_choose'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _pickPhoto(filipino);
+              },
+            ),
+            if (widget.user.hasPhoto) ...[
+              const SizedBox(height: 10),
+              AppButton(
+                label: tr(filipino, 'profile.photo_remove'),
+                style: AppButtonStyle.outline,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _removePhoto(filipino);
+                },
+              ),
+            ],
+            const SizedBox(height: 10),
+            AppButton(
+              label: tr(filipino, 'common.close'),
+              style: AppButtonStyle.outline,
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,22 +217,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: AppCard(
               child: Column(
                 children: [
-                  // No edit badge on the avatar: it opened a snackbar reading
-                  // "Photo picker would open here." and nothing else. M32 adds
-                  // it back when there is a picker behind it.
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      color: AppColors.green50,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.surface, width: 3),
-                      boxShadow: [
-                        BoxShadow(color: AppColors.green900.withOpacity(.06), blurRadius: 12, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.person_outline_rounded, size: 36, color: AppColors.green700),
+                  _Avatar(
+                    photo: _photo,
+                    initials: widget.user.initials,
+                    busy: _photoBusy,
+                    filipino: filipino,
+                    onTap: () => _showPhotoActions(context, filipino),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -752,6 +896,119 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The profile photo, its initials fallback, and the badge that opens the
+/// picker. The badge is the affordance M32 removed when it led to a snackbar
+/// reading "Photo picker would open here."; there is a picker behind it now.
+class _Avatar extends StatelessWidget {
+  final Uint8List? photo;
+  final String initials;
+  final bool busy;
+  final bool filipino;
+  final VoidCallback onTap;
+
+  const _Avatar({
+    required this.photo,
+    required this.initials,
+    required this.busy,
+    required this.filipino,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: tr(filipino, 'profile.photo_change'),
+      child: InkWell(
+        onTap: busy ? null : onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 92,
+          height: 92,
+          child: Stack(
+            children: [
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  color: AppColors.green50,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.surface, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.green900.withOpacity(.06),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                clipBehavior: Clip.antiAlias,
+                child: _face(),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.green700,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.surface, width: 2),
+                  ),
+                  alignment: Alignment.center,
+                  child: busy
+                      ? const SizedBox(
+                          width: 13,
+                          height: 13,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.surface,
+                          ),
+                        )
+                      : const Icon(Icons.edit_rounded,
+                          size: 14, color: AppColors.surface),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _face() {
+    if (photo != null) {
+      return Image.memory(
+        photo!,
+        width: 84,
+        height: 84,
+        fit: BoxFit.cover,
+        // A corrupt or truncated image must not take the profile screen down;
+        // fall back to the same placeholder an empty profile gets.
+        errorBuilder: (_, __, ___) => _placeholder(),
+      );
+    }
+
+    return _placeholder();
+  }
+
+  Widget _placeholder() {
+    // Initials only when there is a real name behind them. A profile that
+    // failed to load shows the neutral icon rather than an invented monogram.
+    if (initials.isEmpty) {
+      return const Icon(Icons.person_outline_rounded,
+          size: 36, color: AppColors.green700);
+    }
+
+    return Text(
+      initials,
+      style: AppText.display(size: 28, color: AppColors.green700),
     );
   }
 }
