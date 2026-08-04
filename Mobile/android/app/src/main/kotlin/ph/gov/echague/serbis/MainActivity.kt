@@ -1,4 +1,4 @@
-package com.example.mobileapp
+package ph.gov.echague.serbis
 
 import io.flutter.embedding.android.FlutterActivity
 
