@@ -33,6 +33,10 @@ export default createVuetify({
           success: '#297A67',
           warning: '#F57C00',
           error: '#D32F2F',
+          // The same problem as primary-strong, on the error ramp. Error text on
+          // rgba(error, 0.1) over white is 4.28:1 and fails AA; this is 5.62:1.
+          // On the plain surface #D32F2F is 4.98:1 and stays as it is.
+          'error-strong': '#B3261E',
           info: '#1976D2',
         },
       },
@@ -50,6 +54,10 @@ export default createVuetify({
           success: '#34C39A',
           warning: '#F5A524',
           error: '#F16565',
+          // Already 4.93:1 on the same tint over the dark surface, so the dark
+          // theme keeps its own error and the key exists only to let the CSS be
+          // written once — the same arrangement primary-strong uses.
+          'error-strong': '#F16565',
           info: '#4F9EF8',
         },
       },

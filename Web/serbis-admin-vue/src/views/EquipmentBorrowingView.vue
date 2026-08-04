@@ -68,30 +68,37 @@
         </header>
 
         <div class="kanban-body">
-          <div
+          <!-- The card is no longer itself a button. It used to be a
+               role="button" div wrapping action buttons neutralised with
+               @click.stop, so four pixels of misclick between "Approve" and
+               card background produced a modal instead of a state change.
+               Identity and actions are siblings now, and the hover lift went
+               with it: columns of liftable cards are the visual grammar of
+               drag-and-drop, which this board has never implemented. -->
+          <article
             v-for="item in grouped[col.status]"
             :key="item.borrow_id || item.id"
             class="kanban-card"
-            role="button"
-            tabindex="0"
-            @click="openDetail(item)"
-            @keydown.enter="openDetail(item)"
+            :class="{ 'kanban-card--overdue': isOverdue(item) }"
           >
-            <div class="d-flex align-center gap-2 mb-2">
+            <button
+              type="button"
+              class="card-identity"
+              :aria-label="`Open details for ${item.resident?.last_name}, ${item.resident?.first_name}`"
+              @click="openDetail(item)"
+            >
               <v-avatar size="34" color="rgba(var(--v-theme-primary), 0.14)">
-                <span class="text-caption font-weight-bold text-primary">
-                  {{ initials(item.resident) }}
-                </span>
+                <span class="avatar-initials">{{ initials(item.resident) }}</span>
               </v-avatar>
-              <div class="min-w-0 flex-grow-1">
-                <div class="text-body-2 font-weight-bold text-high-emphasis text-truncate">
+              <span class="min-w-0 flex-grow-1">
+                <span class="d-block resident-name text-truncate">
                   {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-                </div>
-                <div class="text-caption text-medium-emphasis text-truncate">
+                </span>
+                <span class="d-block text-caption text-medium-emphasis text-truncate">
                   {{ item.resident?.barangay?.barangay_name || 'N/A' }}
-                </div>
-              </div>
-            </div>
+                </span>
+              </span>
+            </button>
 
             <div class="equip-line">
               <v-icon size="16" class="text-medium-emphasis mr-1">mdi-package-variant-closed</v-icon>
@@ -110,40 +117,56 @@
               Only {{ item.equipment?.available_quantity ?? 0 }} in stock
             </div>
 
-            <div class="d-flex align-center justify-space-between mt-2">
-              <span class="text-caption text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
-
-              <div class="d-flex gap-1" @click.stop>
-                <template v-if="item.status === 'Pending'">
-                  <v-btn
-                    size="x-small" variant="text" color="error" class="text-none"
-                    :loading="processingId === (item.borrow_id || item.id)"
-                    @click="updateStatus(item, 'Denied')"
-                  >Deny</v-btn>
-                  <v-btn
-                    size="x-small" variant="flat" color="primary" class="text-none px-3"
-                    :loading="processingId === (item.borrow_id || item.id)"
-                    @click="updateStatus(item, 'Approved')"
-                  >Approve</v-btn>
-                </template>
-                <v-btn
-                  v-else-if="item.status === 'Approved'"
-                  size="x-small" variant="flat" color="primary" class="text-none px-3"
-                  :loading="processingId === (item.borrow_id || item.id)"
-                  @click="updateStatus(item, 'Released')"
-                >Release</v-btn>
-                <v-btn
-                  v-else-if="item.status === 'Released'"
-                  size="x-small" variant="flat" color="primary" class="text-none px-3"
-                  :loading="processingId === (item.borrow_id || item.id)"
-                  @click="updateStatus(item, 'Returned')"
-                >Confirm return</v-btn>
-                <v-icon v-else size="16" :style="{ color: col.accent }">
-                  {{ item.status === 'Denied' ? 'mdi-close-circle' : 'mdi-check-circle' }}
-                </v-icon>
-              </div>
+            <!-- Both chips carry their own words. Overdue is never the red
+                 alone: a card that has simply been waiting a while and one that
+                 is a week late must read differently in greyscale. -->
+            <div class="card-meta">
+              <span class="meta-chip">
+                <v-icon size="13" class="mr-1">mdi-clock-outline</v-icon>{{ agingLabel(item) }}
+              </span>
+              <span
+                v-if="dueLabel(item)"
+                class="meta-chip"
+                :class="{ 'meta-chip--alert': isOverdue(item) }"
+              >
+                <v-icon size="13" class="mr-1">
+                  {{ isOverdue(item) ? 'mdi-alert-circle-outline' : 'mdi-calendar-arrow-right' }}
+                </v-icon>{{ dueLabel(item) }}
+              </span>
             </div>
-          </div>
+
+            <!-- Deny is outlined rather than tonal: Vuetify's tonal variant
+                 draws the label on a 12% tint of the same colour, which is the
+                 pairing that already failed AA three times on this page. On the
+                 card surface the red measures 4.98:1, and the border carries
+                 the weight that makes it the equal of Approve. -->
+            <div class="card-actions">
+              <template v-if="item.status === 'Pending'">
+                <v-btn
+                  size="small" variant="outlined" color="error" class="text-none font-weight-bold flex-grow-1"
+                  :loading="processingId === (item.borrow_id || item.id)"
+                  @click="requestAction(item, 'Denied')"
+                >Deny</v-btn>
+                <v-btn
+                  size="small" variant="flat" color="primary" class="text-none font-weight-bold flex-grow-1"
+                  :loading="processingId === (item.borrow_id || item.id)"
+                  @click="requestAction(item, 'Approved')"
+                >Approve</v-btn>
+              </template>
+              <v-btn
+                v-else-if="item.status === 'Approved'"
+                block size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+                :loading="processingId === (item.borrow_id || item.id)"
+                @click="requestAction(item, 'Released')"
+              >Release to resident</v-btn>
+              <v-btn
+                v-else-if="item.status === 'Released'"
+                block size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+                :loading="processingId === (item.borrow_id || item.id)"
+                @click="requestAction(item, 'Returned')"
+              >Confirm return</v-btn>
+            </div>
+          </article>
 
           <div v-if="!grouped[col.status].length" class="kanban-empty text-caption text-medium-emphasis">
             Nothing here
@@ -160,11 +183,16 @@
            the board uses; the table's own filter would run a second pass over
            `resident` and `equipment`, whose values are objects rather than
            text, and drop rows that in fact matched. -->
+      <!-- Rows open the same detail modal the board does. Denied records live
+           only here, and the denial reason is only rendered in that modal, so
+           without this the reason would be written and never read. -->
       <v-data-table
         :headers="historyHeaders"
         :items="historyItems"
         density="comfortable"
-        class="bg-transparent"
+        class="bg-transparent history-table"
+        hover
+        @click:row="(_event, { item }) => openDetail(item)"
       >
         <template v-slot:item.status="{ item }">
           <!-- Icon + text, never colour alone: Returned and Denied are the one
@@ -252,6 +280,18 @@
             <v-col cols="12" md="7" class="pa-6 bg-surface">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
+              <v-alert
+                v-if="selectedRecord?.status === 'Denied'"
+                type="error" variant="tonal" class="mb-4" density="compact"
+                :title="'Request denied'"
+              >{{ selectedRecord?.denial_reason || 'No reason was recorded.' }}</v-alert>
+
+              <v-alert
+                v-else-if="isOverdue(selectedRecord)"
+                type="error" variant="tonal" class="mb-4" density="compact"
+                :title="dueLabel(selectedRecord)"
+              >This item was due back on {{ fmtDate(selectedRecord?.due_date) }} and has not been returned.</v-alert>
+
               <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Equipment Requested</h3>
               <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
                 <div>
@@ -271,6 +311,13 @@
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
                   <div class="font-weight-medium text-body-1 text-high-emphasis">{{ fmtDateTime(selectedRecord?.created_at) }}</div>
                 </v-col>
+                <v-col cols="6" v-if="selectedRecord?.due_date">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Due Back On</div>
+                  <div
+                    class="font-weight-medium text-body-1"
+                    :class="isOverdue(selectedRecord) ? 'text-error' : 'text-high-emphasis'"
+                  >{{ fmtDate(selectedRecord?.due_date) }}</div>
+                </v-col>
                 <v-col cols="6" v-if="selectedRecord?.released_at">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Released On</div>
                   <div class="font-weight-medium text-body-1 text-primary">{{ fmtDateTime(selectedRecord?.released_at) }}</div>
@@ -289,11 +336,72 @@
           class="pa-6 d-flex justify-end subtle-surface border-t gap-3"
         >
           <template v-if="selectedRecord.status === 'Pending'">
-            <v-btn color="error" variant="text" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="updateStatus(selectedRecord, 'Denied')">Deny Request</v-btn>
-            <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="updateStatus(selectedRecord, 'Approved')">Approve Request</v-btn>
+            <v-btn color="error" variant="outlined" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny Request</v-btn>
+            <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve Request</v-btn>
           </template>
-          <v-btn v-else-if="selectedRecord.status === 'Approved'" color="primary" variant="flat" class="px-6 text-none font-weight-bold w-100" height="44" :loading="loading" @click="updateStatus(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
-          <v-btn v-else-if="selectedRecord.status === 'Released'" color="success" variant="flat" class="px-6 text-none font-weight-bold w-100" height="44" :loading="loading" @click="updateStatus(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
+          <v-btn v-else-if="selectedRecord.status === 'Approved'" color="primary" variant="flat" class="px-6 text-none font-weight-bold w-100" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
+          <v-btn v-else-if="selectedRecord.status === 'Released'" color="success" variant="flat" class="px-6 text-none font-weight-bold w-100" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- One dialog for the three transitions that need something from the
+         operator before they fire. Approve and Release need a due date, or
+         "overdue" has no definition and the column stays empty forever. Deny
+         needs a reason, which is the only thing the resident is ever told.
+         Confirm-return needs neither, but it increments stock with no undo, so
+         it asks before it moves. Release is the one that can skip: a request
+         approved through this panel already carries its date. -->
+    <v-dialog v-model="actionDialog.open" max-width="440" @after-leave="clearActionDialog">
+      <v-card rounded="lg">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          {{ actionCopy.title }}
+        </v-card-title>
+        <v-card-text class="px-5 pt-2">
+          <div class="text-body-2 text-medium-emphasis mb-4">{{ actionCopy.body }}</div>
+
+          <!-- The other two modes render the failure under their own field. -->
+          <v-alert
+            v-if="actionDialog.mode === 'confirm' && actionDialog.error"
+            type="error" variant="tonal" density="compact" class="mb-4"
+          >{{ actionDialog.error }}</v-alert>
+
+          <v-text-field
+            v-if="actionDialog.mode === 'due'"
+            v-model="actionDialog.dueDate"
+            type="date"
+            :min="todayInput()"
+            label="Due back on"
+            variant="outlined"
+            density="comfortable"
+            :error-messages="actionDialog.error"
+            @update:model-value="actionDialog.error = ''"
+          ></v-text-field>
+
+          <v-textarea
+            v-else-if="actionDialog.mode === 'deny'"
+            v-model="actionDialog.reason"
+            label="Reason for denial"
+            hint="The resident is shown this. Say what would make a future request succeed."
+            persistent-hint
+            variant="outlined"
+            rows="3"
+            counter="255"
+            maxlength="255"
+            :error-messages="actionDialog.error"
+            @update:model-value="actionDialog.error = ''"
+          ></v-textarea>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="actionDialog.open = false">Cancel</v-btn>
+          <v-btn
+            :color="actionDialog.status === 'Denied' ? 'error' : 'primary'"
+            variant="flat"
+            class="px-6 text-none font-weight-bold"
+            height="44"
+            :loading="loading"
+            @click="confirmAction"
+          >{{ actionCopy.confirm }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -331,6 +439,17 @@ const apiError = ref('')
 const modal = ref({ isOpen: false })
 const selectedRecord = ref(null)
 const snackbar = ref({ show: false, text: '', color: 'success' })
+
+const emptyAction = () => ({
+  open: false,
+  mode: null,
+  status: null,
+  record: null,
+  dueDate: '',
+  reason: '',
+  error: '',
+})
+const actionDialog = ref(emptyAction())
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 
@@ -398,15 +517,76 @@ const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.qu
 const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
 const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
 
-const relativeDate = (iso) => {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-  if (days <= 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
-const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
+
+// `due_date` is a calendar date, not an instant. `new Date('2026-08-10')` parses
+// as UTC midnight, which is the 9th in any timezone west of Greenwich and shifts
+// the whole overdue calculation by a day; building from the parts keeps it local.
+// The slice tolerates a legacy row that serialised a time along with the date.
+const parseDay = (value) => {
+  if (!value) return null
+  const [y, m, d] = String(value).slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(y, m - 1, d)
+}
+// Two kinds of value reach this. `due_date` is a bare calendar date and must be
+// read as-is; `created_at` is a UTC instant and must be converted, or a record
+// filed at 21:00 Manila time reports the previous day. Anything carrying a time
+// is an instant.
+const fmtDate = (value) => {
+  if (!value) return ''
+  const hasTime = /[T ]\d{2}:/.test(String(value))
+  const d = hasTime ? new Date(value) : parseDay(value)
+  return d ? d.toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
+}
+
+const pad = (n) => String(n).padStart(2, '0')
+const toDateInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const todayInput = () => toDateInput(new Date())
+const daysFromToday = (n) => {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return toDateInput(d)
+}
+
+// Whole days between today and the due date, both taken at local midnight so a
+// request due later today reads 0 rather than a fraction of a day.
+const dueDelta = (item) => {
+  const due = parseDay(item?.due_date)
+  if (!due) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((due - today) / 86400000)
+}
+
+// A returned or denied record cannot be overdue, however far past its date it
+// sits — the item is back, or it never left.
+const isOverdue = (item) => {
+  if (!item || terminalStatuses.includes(item.status)) return false
+  const delta = dueDelta(item)
+  return delta !== null && delta < 0
+}
+
+const dueLabel = (item) => {
+  const delta = dueDelta(item)
+  if (delta === null) return ''
+  if (delta < 0) return `${-delta} day${delta === -1 ? '' : 's'} overdue`
+  if (delta === 0) return 'Due today'
+  if (delta === 1) return 'Due tomorrow'
+  return `Due in ${delta} days`
+}
+
+// Aging measures from the moment the record entered its current stage, so a
+// released item reports how long it has been out rather than how long ago the
+// resident first asked. `released_at` is null on rows released before it was
+// recorded, hence the fallback.
+const agingLabel = (item) => {
+  const released = item.status === 'Released'
+  const anchor = (released && item.released_at) || item.created_at
+  const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
+  if (days <= 0) return released ? 'Out today' : 'Today'
+  return `${days}d ${released ? 'out' : 'waiting'}`
+}
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -437,7 +617,72 @@ const closeModal = () => {
   selectedRecord.value = null
 }
 
-const updateStatus = async (record, newStatus) => {
+// Default fortnight-minus-a-week: a week is the office's usual loan and the
+// operator can move it in the dialog. It is a default, never a silent write —
+// the date is always shown before the request goes out.
+const DEFAULT_LOAN_DAYS = 7
+
+const requestAction = (record, newStatus) => {
+  const next = { ...emptyAction(), open: true, status: newStatus, record }
+  if (newStatus === 'Denied') {
+    next.mode = 'deny'
+  } else if (newStatus === 'Approved') {
+    next.mode = 'due'
+    next.dueDate = record.due_date ? String(record.due_date).slice(0, 10) : daysFromToday(DEFAULT_LOAN_DAYS)
+  } else if (newStatus === 'Released') {
+    // A request approved through this panel already carries a date, so releasing
+    // it asks nothing. Rows approved before due dates existed still need one —
+    // otherwise they leave the shelf with no date and can never be overdue.
+    if (record.due_date) return updateStatus(record, newStatus)
+    next.mode = 'due'
+    next.dueDate = daysFromToday(DEFAULT_LOAN_DAYS)
+  } else {
+    next.mode = 'confirm'
+  }
+  actionDialog.value = next
+}
+
+const actionCopy = computed(() => {
+  const record = actionDialog.value.record
+  const who = `${record?.resident?.first_name || ''} ${record?.resident?.last_name || ''}`.trim() || 'this resident'
+  const what = record?.equipment?.item_name || 'the equipment'
+  switch (actionDialog.value.mode) {
+    case 'deny':
+      return { title: 'Deny this request', body: `${who} asked for ${what}.`, confirm: 'Deny request' }
+    case 'due':
+      return {
+        title: actionDialog.value.status === 'Approved' ? 'Approve this request' : 'Release to resident',
+        body: `Set the date ${who} is expected to bring ${what} back.`,
+        confirm: actionDialog.value.status === 'Approved' ? 'Approve request' : 'Release',
+      }
+    default:
+      return {
+        title: 'Confirm the return',
+        body: `This puts ${record?.quantity ?? ''}× ${what} back into stock. There is no undo.`,
+        confirm: 'Confirm return',
+      }
+  }
+})
+
+const clearActionDialog = () => { actionDialog.value = emptyAction() }
+
+const confirmAction = () => {
+  const { mode, status, record, dueDate, reason } = actionDialog.value
+  if (mode === 'due' && !dueDate) {
+    actionDialog.value.error = 'Pick a due date'
+    return
+  }
+  if (mode === 'deny' && !reason.trim()) {
+    actionDialog.value.error = 'Give a reason — the resident is shown this'
+    return
+  }
+  const extra = {}
+  if (mode === 'due') extra.due_date = dueDate
+  if (mode === 'deny') extra.denial_reason = reason.trim()
+  return updateStatus(record, status, extra)
+}
+
+const updateStatus = async (record, newStatus, extra = {}) => {
   const id = record.borrow_id || record.id
   loading.value = true
   processingId.value = id
@@ -446,7 +691,7 @@ const updateStatus = async (record, newStatus) => {
     const res = await fetch(`${API_BASE}/borrowings/${id}`, {
       method: 'PUT',
       headers: getHeaders(),
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify({ status: newStatus, ...extra }),
     })
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
@@ -454,9 +699,13 @@ const updateStatus = async (record, newStatus) => {
     }
     await fetchData()
     notify(`Request marked ${newStatus}`)
+    actionDialog.value.open = false
     if (modal.value.isOpen) closeModal()
   } catch (error) {
+    // The dialog stays open on failure. Closing it would drop a typed denial
+    // reason on the floor and leave the snackbar as the only trace of the error.
     apiError.value = error.message
+    actionDialog.value.error = error.message
     notify(error.message, 'error')
   } finally {
     loading.value = false
@@ -543,39 +792,110 @@ onMounted(fetchData)
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   border-radius: 12px;
   padding: 12px;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease;
 }
-.kanban-card:hover,
-.kanban-card:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(var(--v-theme-on-surface), 0.12);
-  outline: none;
+
+/* An overdue card is marked three ways — a red left edge, a red border, and a
+   chip that says how many days — because the edge alone is colour carrying
+   meaning, which is the finding this page already had three of. */
+.kanban-card--overdue {
+  border-color: rgba(var(--v-theme-error), 0.55);
+  box-shadow: inset 3px 0 0 0 rgb(var(--v-theme-error));
+}
+
+/* Only the identity block opens the record. It is a real <button>, so Enter and
+   Space both work and the accessible name comes from aria-label rather than
+   from whatever the concatenated card text happened to say. */
+.card-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 2px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+}
+.card-identity:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+.resident-name {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+}
+
+/* primary-strong, not primary: the initials sit on a 14% tint of primary, where
+   primary itself measures 4.25:1 and fails AA at this size. 6.61:1 here. */
+.avatar-initials {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary-strong));
 }
 
 .equip-line { display: flex; align-items: center; min-width: 0; }
+/* Same tint problem as the initials, measured on 12%: 4.40:1 before, 6.78:1 now. */
 .qty-pill {
   margin-left: auto;
   font-size: 0.75rem;
   font-weight: 700;
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-primary-strong));
   background-color: rgba(var(--v-theme-primary), 0.12);
   padding: 1px 8px;
   border-radius: 8px;
   white-space: nowrap;
 }
 
+/* Was 0.72rem — 11.5px, under the 12px floor — in error on an error tint, which
+   measured 4.28:1. error-strong on the same tint is 5.62:1. */
 .stock-warn {
   display: flex;
   align-items: center;
   margin-top: 8px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-error-strong));
   background-color: rgba(var(--v-theme-error), 0.1);
   padding: 3px 8px;
   border-radius: 8px;
 }
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.meta-chip--alert {
+  color: rgb(var(--v-theme-error-strong));
+  background-color: rgba(var(--v-theme-error), 0.1);
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.history-table :deep(tbody tr) { cursor: pointer; }
 
 .kanban-empty {
   text-align: center;
@@ -586,6 +906,5 @@ onMounted(fetchData)
 
 @media (prefers-reduced-motion: reduce) {
   .kanban-card { transition: none; }
-  .kanban-card:hover { transform: none; }
 }
 </style>
