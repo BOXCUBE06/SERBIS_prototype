@@ -17,9 +17,20 @@ class EquipmentBorrowing extends Model
         'resident_id',
         'equipment_id',
         'quantity',
+        'due_date',
         'status',
+        'denial_reason',
         'released_at',
         'returned_at'
+    ];
+
+    /**
+     * Without the format, a date column serialises with a time and a timezone
+     * the column does not actually store, and the panel would have to strip it
+     * back off before comparing against today.
+     */
+    protected $casts = [
+        'due_date' => 'date:Y-m-d',
     ];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];

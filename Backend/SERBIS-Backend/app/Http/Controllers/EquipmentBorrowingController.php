@@ -69,6 +69,10 @@ class EquipmentBorrowingController extends Controller
 
         $validated = $request->validate([
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
+            // Both optional: a status change on its own is still a valid call,
+            // and only two of the five transitions carry either of these.
+            'due_date' => 'sometimes|nullable|date',
+            'denial_reason' => 'sometimes|nullable|string|max:255',
         ]);
 
         $newStatus = $validated['status'];
@@ -99,6 +103,24 @@ class EquipmentBorrowingController extends Controller
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
                 $equipment->increment('available_quantity', $borrowing->quantity);
 }
+
+            // Assigned key by key rather than by splat: `status` is handled by
+            // the transition logic above, and a splat would let a caller write
+            // any other fillable column through this route.
+            if (array_key_exists('due_date', $validated)) {
+                $borrowing->due_date = $validated['due_date'];
+            }
+
+            // Only a denial carries a reason. Moving off Denied clears it, or a
+            // request re-approved after a refusal keeps explaining a refusal
+            // that no longer applies.
+            if ($newStatus === 'Denied') {
+                if (array_key_exists('denial_reason', $validated)) {
+                    $borrowing->denial_reason = $validated['denial_reason'];
+                }
+            } else {
+                $borrowing->denial_reason = null;
+            }
 
             $borrowing->status = $newStatus;
             $borrowing->save();
