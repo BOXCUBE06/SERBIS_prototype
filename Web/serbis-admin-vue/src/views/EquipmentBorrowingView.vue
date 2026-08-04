@@ -33,12 +33,28 @@
       </div>
     </div>
 
-    <!-- Board -->
+    <!-- Returned and Denied are finished work. They were taking 40% of the
+         board's width from the three states that still need a decision, and
+         they are the two that grow without bound as the office keeps operating,
+         so they are the two that cannot stay on a fixed-width board. -->
+    <v-tabs v-model="activeTab" color="primary" class="mb-4 border-b">
+      <v-tab value="board" class="text-none font-weight-bold">
+        <v-icon start>mdi-view-column-outline</v-icon>
+        Active pipeline
+        <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ activeCount }}</v-chip>
+      </v-tab>
+      <v-tab value="history" class="text-none font-weight-bold">
+        <v-icon start>mdi-archive-outline</v-icon>
+        History
+        <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ historyItems.length }}</v-chip>
+      </v-tab>
+    </v-tabs>
+
     <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-    <div v-else class="kanban-board">
+    <div v-else-if="activeTab === 'board'" class="kanban-board">
       <section
-        v-for="col in visibleColumns"
+        v-for="col in boardColumns"
         :key="col.status"
         class="kanban-column subtle-surface"
         :class="{ 'kanban-column--muted': col.muted }"
@@ -135,6 +151,65 @@
         </div>
       </section>
     </div>
+
+    <!-- History. A table rather than columns: this list only ever grows, and
+         the questions asked of it are lookups ("did the Cruz family return the
+         generator?") rather than the glance the board exists to serve. -->
+    <v-card v-else elevation="0" border rounded="xl" class="bg-surface">
+      <!-- No :search prop. `historyItems` has already applied the same search
+           the board uses; the table's own filter would run a second pass over
+           `resident` and `equipment`, whose values are objects rather than
+           text, and drop rows that in fact matched. -->
+      <v-data-table
+        :headers="historyHeaders"
+        :items="historyItems"
+        density="comfortable"
+        class="bg-transparent"
+      >
+        <template v-slot:item.status="{ item }">
+          <!-- Icon + text, never colour alone: Returned and Denied are the one
+               pair on this page a red/green-blind user must still tell apart. -->
+          <v-chip
+            size="small"
+            variant="flat"
+            class="font-weight-bold"
+            :style="{ backgroundColor: statusAccent(item.status), color: '#FFFFFF' }"
+          >
+            <v-icon start size="14">{{ statusIcon(item.status) }}</v-icon>
+            {{ item.status }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.resident="{ item }">
+          <span class="font-weight-bold text-high-emphasis">
+            {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
+          </span>
+        </template>
+
+        <template v-slot:item.barangay="{ item }">
+          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+        </template>
+
+        <template v-slot:item.equipment="{ item }">
+          {{ item.equipment?.item_name || 'Unknown' }}
+          <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+        </template>
+
+        <template v-slot:item.created_at="{ item }">
+          {{ fmtDate(item.created_at) }}
+        </template>
+
+        <template v-slot:no-data>
+          <div class="text-center py-12">
+            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-archive-outline</v-icon>
+            <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests yet</div>
+            <div class="text-caption text-medium-emphasis">
+              Returned and denied requests are kept here once they leave the board.
+            </div>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
 
     <!-- Detail modal (full record + fallback actions) -->
     <v-dialog v-model="modal.isOpen" max-width="900" persistent transition="dialog-fade-transition">
@@ -246,6 +321,7 @@ const columns = [
 ]
 
 const borrowings = ref([])
+const activeTab = ref('board')
 const search = ref('')
 const itemFilter = ref('All items')
 const initialLoad = ref(true)
@@ -258,7 +334,20 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 
-const visibleColumns = computed(() => columns)
+// The board carries only what still needs a decision. Three columns fit the
+// available width at 1366px; five never did — the fifth started at x=1184 in a
+// 1058px space, so Denied was off-screen on every laptop and only the 1920px
+// development machine ever showed the whole pipeline.
+const boardColumns = computed(() => columns.filter((c) => !c.terminal))
+const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
+
+const historyHeaders = [
+  { title: 'Resident', key: 'resident', width: '22%' },
+  { title: 'Barangay', key: 'barangay', width: '16%' },
+  { title: 'Equipment', key: 'equipment', width: '26%' },
+  { title: 'Requested', key: 'created_at', width: '18%' },
+  { title: 'Outcome', key: 'status', align: 'center', width: '18%' },
+]
 
 // Distinct equipment names present in the current requests, for the item filter.
 const itemOptions = computed(() => {
@@ -290,9 +379,24 @@ const grouped = computed(() => {
   return out
 })
 
+// Terminal records, same item + search filters as the board so a search spans
+// both tabs rather than quietly applying to one of them.
+const historyItems = computed(() =>
+  borrowings.value
+    .filter((b) => terminalStatuses.includes(b.status) && matchesItem(b) && matchesSearch(b))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+)
+
+// Counts the tab badges show. The board count is what is left to act on, which
+// is the number the operator actually needs.
+const activeCount = computed(() =>
+  boardColumns.value.reduce((n, col) => n + grouped.value[col.status].length, 0),
+)
+
 const initials = (r) => `${r?.first_name?.charAt(0) || ''}${r?.last_name?.charAt(0) || ''}`
 const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.quantity
 const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
+const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
 
 const relativeDate = (iso) => {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
@@ -302,6 +406,7 @@ const relativeDate = (iso) => {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -371,23 +476,38 @@ onMounted(fetchData)
 .search-field { width: 260px; max-width: 100%; }
 .item-field { width: 210px; max-width: 100%; }
 
-/* Board */
+/* Board.
+   Grid with minmax(0, 1fr) rather than flex with a min-width: a flex item's
+   min-width is a floor the container cannot go below, so five 280px columns
+   forced a 1464px track and the board scrolled sideways out of view. Grid
+   tracks that bottom out at 0 shrink instead, which makes horizontal overflow
+   structurally impossible rather than merely unlikely at tested widths. */
 .kanban-board {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-  align-items: flex-start;
-  overflow-x: auto;
+  align-items: stretch;
   padding-bottom: 8px;
+  min-height: calc(100vh - 260px);
 }
 .kanban-column {
-  flex: 1 1 0;
-  min-width: 280px;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 180px);
+  min-width: 0;
+  max-height: calc(100vh - 260px);
 }
 .kanban-column--muted { opacity: 0.85; }
+
+/* Below Vuetify's md breakpoint the sidebar still takes its permanent 260px,
+   leaving under 500px for three tracks. Stack instead of squeezing. */
+@media (max-width: 959px) {
+  .kanban-board {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .kanban-column { max-height: none; }
+}
 
 .kanban-header {
   display: flex;
