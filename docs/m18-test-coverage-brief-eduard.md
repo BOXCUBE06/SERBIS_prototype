@@ -12,10 +12,26 @@
 M18 is the only open mobile item that is genuinely self-contained and needs no
 Android SDK, no emulator and no C++ toolchain. Flutter unit and widget tests run
 on the Dart VM — `flutter test` is the whole toolchain. That matters because the
-one commit currently on your branch (`260641e`, the app-identity rename) touches
-Gradle and CMake and **has never been compiled by anyone**, so it cannot be
-verified on the machine it was written on. This task can be verified completely
-on yours.
+other commit on your branch (`260641e`) renames the application identifier to
+**`ph.gov.echague.serbis`** — note the `ph.` prefix, it is part of the string —
+across Android, iOS, macOS, Linux and Windows. It touches Gradle and CMake and
+**has never been compiled by anyone**, so it cannot be verified on the machine it
+was written on. This task can be verified completely on yours.
+
+**If you have an Android SDK, please also run this once and report the result:**
+
+```
+flutter clean
+flutter build apk --debug
+```
+
+It was attempted on 2026-08-05 and got as far as
+`[!] No Android SDK found. Try setting the ANDROID_HOME environment variable.`
+— the build stopped before Gradle started, so it never read `build.gradle.kts`
+and proved nothing either way. One successful run on your machine closes the
+last unverified thing in the mobile tree. It is a separate job from the tests
+below; do it first, because it is two commands and it is currently blocking
+nobody but everybody.
 
 Push it yourself, from your own machine. Nothing has ever been pushed under your
 own credential — every push to this repo so far has gone out on BOXCUBE06's
