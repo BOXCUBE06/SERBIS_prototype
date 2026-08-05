@@ -149,6 +149,18 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // A closed account (audit #29). Named rather than folded into the line
+        // above on purpose: the caller has already proved the password, so this
+        // discloses nothing they did not know, and "wrong credentials" would
+        // send a former employee to reset a password that was never the
+        // problem. Deactivation is how a departing employee's access ends —
+        // the row cannot be deleted while the audit trail points at it.
+        if ($admin->isDeactivated()) {
+            return response()->json([
+                'message' => 'This account has been deactivated. Contact another MDRRMO admin.'
+            ], 403);
+        }
+
         return response()->json([
             'token' => $admin->createToken(
                 'admin-token',

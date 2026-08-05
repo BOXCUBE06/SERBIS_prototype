@@ -10,14 +10,43 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Traits\TracksHistory;
 
 
-#[Fillable(['first_name', 'last_name', 'role', 'email_address', 'password'])]
+#[Fillable(['first_name', 'last_name', 'role', 'status', 'email_address', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, TracksHistory;
+
+    /**
+     * Staff accounts are created and removed from the panel now (audit #29), so
+     * who did it is worth a row in the log — an account appearing or vanishing
+     * is the kind of change nobody remembers making.
+     *
+     * `password` and `remember_token` are in the trait's default ignore list;
+     * they are named again here because this list replaces that default rather
+     * than adding to it, and dropping either would write a password hash into
+     * a table the Logs page renders.
+     */
+    protected $ignoreLogging = ['created_at', 'updated_at', 'password', 'remember_token'];
+
+    /**
+     * Closed accounts are the ones that say so, rather than the ones that fail
+     * to say Active.
+     *
+     * This is deliberately not fail-closed. `status` arrived long after this
+     * table did, and the recovery path when an office locks itself out is still
+     * a hand-written INSERT — which names its columns and would leave this one
+     * null. Requiring the string 'Active' would turn every such row into an
+     * account that exists, holds the right password, and cannot sign in.
+     * Deactivation is an action someone took; absence of it is not.
+     */
+    public function isDeactivated(): bool
+    {
+        return strtolower((string) $this->status) === 'inactive';
+    }
 
     protected $table = 'tbl_user';
     protected $primaryKey = 'admin_id';

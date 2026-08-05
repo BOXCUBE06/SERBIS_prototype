@@ -5,6 +5,7 @@ const routes = [
   { path: '/login', component: () => import('../views/LoginView.vue') },
   { path: '/', component: () => import('../views/DashboardView.vue') },
   { path: '/users', component: () => import('../views/UsersView.vue') },
+  { path: '/staff', component: () => import('../views/StaffView.vue') },
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue') },
   { path: '/manage-requests', component: () => import('../views/ManageRequestView.vue') },
   { path: '/sms', component: () => import('../views/SmsView.vue') },

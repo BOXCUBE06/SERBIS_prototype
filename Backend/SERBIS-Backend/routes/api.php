@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\EquipmentController;
@@ -78,6 +79,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:3,60');
         Route::apiResource('vehicles', VehicleController::class);
         Route::apiResource('residents', ResidentController::class);
+        // MDRRMO staff accounts (audit #29). Every admin may manage every other
+        // — see the controller for why there is no super-admin tier, and for
+        // the two deletions it refuses.
+        Route::apiResource('admins', AdminController::class);
+        // Registered after the resource so `admins/{id}` never shadows it.
+        Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
 
         // Admin-only write access for shared resources
         Route::apiResource('barangays', BarangayController::class)->except(['index', 'show']);
