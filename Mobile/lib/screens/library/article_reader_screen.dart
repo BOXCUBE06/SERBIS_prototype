@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../data/library_articles.dart';
+import '../../data/safety_files.dart';
 import '../../theme/app_theme.dart';
 
-/// Full-screen reader for a [LibraryArticle]. Opened by tapping any item
-/// in the Safety Library. Renders content in English or Filipino depending
-/// on [filipino] (driven by the resident's language setting in Profile).
 class ArticleReaderScreen extends StatefulWidget {
   final LibraryArticle article;
   final bool filipino;
@@ -145,10 +142,6 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
     );
   }
 }
-
-/// Small English / Filipino segmented toggle shown in the reader header,
-/// so a resident can switch a single article's language without leaving
-/// the page (independent of their saved Profile preference).
 class _LanguageToggle extends StatelessWidget {
   final bool filipino;
   final ValueChanged<bool> onChanged;

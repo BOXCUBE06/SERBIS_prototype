@@ -28,6 +28,28 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Destinations
+    |--------------------------------------------------------------------------
+    |
+    | Which disk each kind of upload goes to. Both default to the local disks,
+    | so nothing changes in development.
+    |
+    | This exists because most hosts give a container an ephemeral filesystem:
+    | anything written under storage/ is gone at the next deploy or restart.
+    | Government ID scans are the ones that matter — a resident uploads one
+    | once, cannot re-upload it, and the request it belongs to outlives the
+    | deploy. Point these at 's3' (S3, R2, Spaces — same driver) or mount a
+    | persistent volume at storage/app and leave them alone.
+    |
+    */
+
+    'uploads' => [
+        'private' => env('UPLOADS_PRIVATE_DISK', 'local'),
+        'public' => env('UPLOADS_PUBLIC_DISK', 'public'),
+    ],
+
     'disks' => [
 
         'local' => [

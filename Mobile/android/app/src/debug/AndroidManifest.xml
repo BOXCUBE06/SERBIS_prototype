@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug-only exemption so the app can reach a local HTTP dev server.
+         Release keeps android:usesCleartextTraffic="false" from the main
+         manifest, because this file is not merged into it. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

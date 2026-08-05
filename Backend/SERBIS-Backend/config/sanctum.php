@@ -50,7 +50,29 @@ return [
     |
     */
 
+    // Deliberately null: this value OVERRIDES every token's own expires_at, which
+    // would flatten the two lifetimes below into one. The TTL is set per token at
+    // createToken() instead — see AuthController.
     'expiration' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Per-Audience Token Lifetimes (minutes)
+    |--------------------------------------------------------------------------
+    |
+    | Admin and resident tokens are not the same risk. The admin panel can read
+    | every resident's government ID scan, and it runs in a browser on a shared
+    | office desk, so it gets a working-day leash. The mobile app has no refresh
+    | flow, so a short resident TTL would mean a login screen in front of someone
+    | who opened the app during a flood — the failure mode we are least willing
+    | to accept. Thirty days still bounds a leaked token, which is the whole
+    | point of #30.
+    |
+    */
+
+    'admin_expiration' => (int) env('SANCTUM_ADMIN_EXPIRATION', 60 * 8),
+
+    'resident_expiration' => (int) env('SANCTUM_RESIDENT_EXPIRATION', 60 * 24 * 30),
 
     /*
     |--------------------------------------------------------------------------

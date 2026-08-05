@@ -15,18 +15,42 @@ use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\AnalyticsController;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/admin/login', [AuthController::class, 'adminLogin']);
-Route::post('/resident/login', [AuthController::class, 'residentLogin']);
+Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
+Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middleware('throttle:login');
+// Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
+// the submitted email address as well as the IP.
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
+// Public on purpose: the mobile register screen must show a barangay picker
+// before the resident has an account, and barangay_id is required to sign up.
+// The row is nothing but an id and a name, and the write routes stay admin-only.
+Route::get('barangays', [BarangayController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
+    // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
+    // see the controller for why each one is excluded.
+    Route::patch('/me', [AuthController::class, 'updateMe']);
+    // The resident's own profile photo. Kept off PATCH /me because it is a
+    // multipart upload, not a column the resident types into.
+    Route::post('/me/photo', [ResidentController::class, 'uploadMyPhoto']);
+    Route::delete('/me/photo', [ResidentController::class, 'deleteMyPhoto']);
+    // Read is wider than write: staff render one photo per row in the resident
+    // list, so this sits outside the is.admin group and does its own check.
+    // Registered before the admin apiResource so it is never shadowed by it.
+    Route::get('residents/{id}/photo', [ResidentController::class, 'photo']);
 
     // Endpoints requiring read/write access from the mobile application
-    Route::get('barangays', [BarangayController::class, 'index']);
     Route::get('equipments', [EquipmentController::class, 'index']);
     Route::get('services', [ServiceController::class, 'index']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
+    Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
+    Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto']);
+    // What the MDRRMO has texted to this resident's barangay. Scoped to blasts
+    // they were actually a recipient of, not to their barangay membership.
+    Route::get('advisories', [SmsController::class, 'advisories']);
+    // Owner-scoped cancel. The general update() stays admin-only below.
+    Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
     
     // Mobile endpoint to fetch published materials
@@ -34,7 +58,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('is.admin')->group(function () {
         // Administrative Operations
-        Route::get('/admin/analytics', [AnalyticsController::class, 'getAdvancedAnalytics']);
+        // GET /admin/analytics used to be registered here against
+        // AnalyticsController::getAdvancedAnalytics, a method that does not
+        // exist and never did — the route 500'd on any request. No client ever
+        // called it; /admin/dashboard below is the panel's analytics source.
         Route::get('/admin/service-requests', [ServiceRequestController::class, 'adminIndex']);
         Route::get('/admin/dashboard', [\App\Http\Controllers\AnalyticsController::class, 'index']);
 
@@ -44,8 +71,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/admin/info-materials/{id}', [InfoMaterialController::class, 'destroy']);
 
         Route::get('/logs/system', [SystemLogController::class, 'index']);
+        // The Logs page's second tab. It had been fetching this since the page
+        // was written; the route simply never existed.
+        Route::get('/logs/sms', [SmsController::class, 'history']);
         
-        Route::post('/sms/blast', [SmsController::class, 'sendBlast']);
+        Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:3,60');
         Route::apiResource('vehicles', VehicleController::class);
         Route::apiResource('residents', ResidentController::class);
 

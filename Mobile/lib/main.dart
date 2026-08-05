@@ -1,20 +1,83 @@
+
+library serbis.main;
+
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'models/models.dart';
+import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
-import 'state/app_state.dart';
-import 'state/user_store.dart';
+import 'state/api_service.dart';
+import 'state/app_log.dart';
+import 'state/request_store.dart';
+import 'state/account_store.dart';
 import 'theme/app_theme.dart';
-import 'widgets/common.dart';
-import 'widgets/sos_sheet.dart';
+import 'widgets/offline_banner.dart';
+import 'widgets/shared_widgets.dart';
+import 'widgets/sos_button.dart';
 
 void main() {
+  // A build with no `--dart-define=API_BASE_URL` has nowhere to send its calls.
+  // Stop here rather than letting every screen fail one request at a time with
+  // "Cannot connect to server", which looks like a dead network and sends the
+  // resident to reboot their phone. See `Mobile/README.md`.
+  if (!ApiService.isConfigured) {
+    runApp(const _MisconfiguredApp());
+    return;
+  }
+
   runApp(const SerbisApp());
+}
+
+/// Shown instead of the app when the build is missing its API base URL. Not
+/// styled with the app theme on purpose: this is a message to whoever produced
+/// the build, and it has to render even if everything else is broken.
+class _MisconfiguredApp extends StatelessWidget {
+  const _MisconfiguredApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Color(0xFF7F1D1D),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.build_circle_outlined, color: Colors.white, size: 56),
+                SizedBox(height: 16),
+                Text(
+                  'This build has no API address',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'It was compiled without API_BASE_URL, so it cannot reach the '
+                  'server. Rebuild with:\n\n'
+                  'flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class SerbisApp extends StatelessWidget {
@@ -31,14 +94,6 @@ class SerbisApp extends StatelessWidget {
   }
 }
 
-/// Top-level switcher between the auth flow (Login / Register) and the
-/// main app shell.
-///
-/// Accounts are real (created via Register and persisted on-device through
-/// [UserStore] — see `lib/state/user_store.dart`), but there is still no
-/// remote backend. After registering, residents are sent back to Login to
-/// verify their new credentials work, rather than being signed in
-/// automatically.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -49,9 +104,10 @@ class AuthGate extends StatefulWidget {
 enum _AuthView { login, register }
 
 class _AuthGateState extends State<AuthGate> {
-  final UserStore _userStore = UserStore();
-  bool _ready = false;
+  final ApiService _api = ApiService();
+  late final UserStore _userStore = UserStore(_api);
 
+  bool _ready = false;
   AppUser? _currentUser;
   _AuthView _view = _AuthView.login;
   String? _loginInfoMessage;
@@ -59,12 +115,77 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _userStore.load().then((_) {
-      if (mounted) setState(() => _ready = true);
+    _api.onUnauthorized = _onSessionExpired;
+    _restoreSession();
+  }
+
+  /// A stored token carries no profile with it, so it has to be exchanged for
+  /// one on every relaunch. Skipping this is what left the app authenticated
+  /// with a blank name, email and address until the resident logged out and
+  /// back in.
+  Future<void> _restoreSession() async {
+    await _api.loadToken();
+
+    if (_api.isLoggedIn) {
+      try {
+        final user = await _userStore.currentUser();
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _currentUser = user;
+          _ready = true;
+        });
+        return;
+      } on ApiException catch (e) {
+        // Before `mounted` is checked: a failure that happens as the widget is
+        // going away is still a failure, and returning early would drop it.
+        AppLog.warn('session', 'restore from stored token',
+            reason: e.isUnauthorized ? 'token rejected' : 'server unreachable');
+
+        if (!mounted) {
+          return;
+        }
+
+        // A rejected token has already been cleared by ApiService. If the server
+        // was merely unreachable the token is left alone, so logging in again
+        // once there is a connection will work.
+        _loginInfoMessage = e.isUnauthorized
+            ? 'Your session expired. Please log in again.'
+            : e.message;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _ready = true;
+      _currentUser = null;
     });
   }
 
-  void _login(AppUser user) => setState(() => _currentUser = user);
+  /// Fired by ApiService when a stored token is rejected mid-session.
+  void _onSessionExpired() {
+    if (!mounted || _currentUser == null) {
+      return;
+    }
+
+    setState(() {
+      _currentUser = null;
+      _view = _AuthView.login;
+      _loginInfoMessage = 'Your session expired. Please log in again.';
+    });
+  }
+
+  void _login(AppUser user) {
+    setState(() {
+      _currentUser = user;
+      _ready = true;
+    });
+  }
 
   void _afterRegister() {
     setState(() {
@@ -73,97 +194,204 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
-  void _logout() => setState(() {
-        _currentUser = null;
-        _view = _AuthView.login;
-        _loginInfoMessage = null;
-      });
+  void _logout() {
+    _userStore.logout();
+    setState(() {
+      _currentUser = null;
+      _view = _AuthView.login;
+      _loginInfoMessage = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
       return const Scaffold(
         backgroundColor: AppColors.paper,
-        body: Center(child: CircularProgressIndicator(color: AppColors.green700)),
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.green700),
+        ),
       );
     }
 
-    final user = _currentUser;
-    if (user != null) {
+    if (_currentUser != null) {
       return RootShell(
+        api: _api,
+        userStore: _userStore,
+        user: _currentUser!,
+        // The profile screen can now change the resident row (their photo), so
+        // the copy held here has to move with it or the next rebuild reinstates
+        // the old avatar.
+        onUserChanged: (user) => setState(() => _currentUser = user),
         onLogout: _logout,
-        initialName: user.name.isEmpty ? null : user.name,
-        initialPhone: user.phone.isEmpty ? null : user.phone,
-        initialAddress: user.address.isEmpty ? null : user.address,
       );
     }
 
-    return _view == _AuthView.login
-        ? LoginScreen(
-            userStore: _userStore,
-            onLoginSuccess: _login,
-            onGoToRegister: () => setState(() {
-              _view = _AuthView.register;
-              _loginInfoMessage = null;
-            }),
-            infoMessage: _loginInfoMessage,
-          )
-        : RegisterScreen(
-            userStore: _userStore,
-            onRegisterSuccess: _afterRegister,
-            onGoToLogin: () => setState(() => _view = _AuthView.login),
-          );
+    if (_view == _AuthView.login) {
+      return LoginScreen(
+        userStore: _userStore,
+        onLoginSuccess: _login,
+        onGoToRegister: () {
+          setState(() {
+            _view = _AuthView.register;
+            _loginInfoMessage = null;
+          });
+        },
+        infoMessage: _loginInfoMessage,
+      );
+    }
+
+    return RegisterScreen(
+      userStore: _userStore,
+      onRegisterSuccess: _afterRegister,
+      onGoToLogin: () {
+        setState(() {
+          _view = _AuthView.login;
+        });
+      },
+    );
   }
 }
 
-/// Holds the bottom navigation, the persistent SOS button, and switches
-/// between the five main screens.
 class RootShell extends StatefulWidget {
+  final ApiService api;
+  final UserStore userStore;
+  final AppUser user;
+  final ValueChanged<AppUser> onUserChanged;
   final VoidCallback onLogout;
-  final String? initialName;
-  final String? initialPhone;
-  final String? initialAddress;
 
   const RootShell({
     super.key,
+    required this.api,
+    required this.userStore,
+    required this.user,
+    required this.onUserChanged,
     required this.onLogout,
-    this.initialName,
-    this.initialPhone,
-    this.initialAddress,
   });
 
   @override
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
+  /// Tabs whose content goes stale on its own, because the dispatcher moves a
+  /// request through its statuses server-side. Home shows the active request
+  /// card; Track shows the list.
+  static const Set<int> _statusTabs = {0, 2};
+
+  /// Long enough not to hammer a rural connection, short enough that a resident
+  /// watching for the ambulance sees the change without doing anything. An
+  /// interim measure — this is what push notifications are for.
+  static const Duration _pollInterval = Duration(seconds: 45);
+
+  /// Arriving on a status tab refetches, but not if the list is this fresh.
+  /// Otherwise tapping between Home and Track is a request each way.
+  static const Duration _tabRefreshMaxAge = Duration(seconds: 15);
+
   int _index = 0;
   ServiceType _serviceType = ServiceType.ambulance;
-  final AppState _appState = AppState();
+  late final AppState _appState = AppState(widget.api);
+
+  Timer? _poll;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
-    // Rebuild whenever a request is added or cancelled so Home/Track/etc.
-    // reflect the latest data.
+    WidgetsBinding.instance.addObserver(this);
     _appState.addListener(_onAppStateChanged);
+    // The rows the server last sent, straight off the device. Instant, works
+    // with no signal, and gives the fetch below something to replace instead of
+    // an empty Track screen saying "No requests yet" during a flood.
+    _appState.hydrateRequests();
+    _appState.loadRequests();
+    _syncPolling();
+    // Service names are server-side, so Track and the Home card cannot label
+    // themselves in the resident's language until the catalogue is in hand.
+    // Waiting for a visit to the Services tab would show English until then.
+    _appState.loadServices();
+    // Loads the offline index too, so Profile can report what is on the device
+    // even if the Library tab is never opened this launch.
+    _appState.loadMaterials();
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _appState.removeListener(_onAppStateChanged);
     super.dispose();
   }
 
-  void _onAppStateChanged() => setState(() {});
+  /// A backgrounded app must not keep polling — it drains a battery a resident
+  /// may need for a phone call. Coming back refetches immediately rather than
+  /// waiting out the interval, because time spent away is exactly when the
+  /// status is most likely to have changed.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
 
-  void _goTo(int index) => setState(() => _index = index);
+    if (foreground && !_foreground) {
+      _appState.loadRequests(silent: true);
+    }
+
+    _foreground = foreground;
+    _syncPolling();
+  }
+
+  void _syncPolling() {
+    final wanted = _foreground && _statusTabs.contains(_index);
+
+    if (!wanted) {
+      _poll?.cancel();
+      _poll = null;
+      return;
+    }
+
+    _poll ??= Timer.periodic(
+      _pollInterval,
+      // Silent: a poll the resident did not ask for must not stack snackbars
+      // over the screen every interval while the signal is out.
+      (_) => _appState.loadRequests(silent: true),
+    );
+  }
+
+  void _onAppStateChanged() {
+    setState(() {});
+
+    // Single drain point for store failures, so every screen reports them the
+    // same way instead of each one swallowing its own.
+    final error = _appState.takeError();
+    if (error == null) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        showAppSnackBar(context, error, isError: true);
+      }
+    });
+  }
+
+  /// The screens live in an `IndexedStack`, so switching tabs never remounts
+  /// them and an `initState` fetch fires once per launch. Refetching here is
+  /// what makes a tab switch mean anything.
+  void _goTo(int index) {
+    setState(() => _index = index);
+
+    if (_statusTabs.contains(index)) {
+      _appState.loadRequests(silent: true, maxAge: _tabRefreshMaxAge);
+    }
+
+    _syncPolling();
+  }
 
   void _openService(ServiceType type) {
     setState(() {
       _serviceType = type;
       _index = 1;
     });
+    _syncPolling();
   }
 
   @override
@@ -171,6 +399,9 @@ class _RootShellState extends State<RootShell> {
     final onOpenNotifications = () => NotificationsSheet.show(
           context,
           filipino: _appState.language == AppLanguage.filipino,
+          // A copy: the sheet must not hold the store's mutable list, which a
+          // poll landing behind the sheet would mutate underneath it (M30).
+          requests: [..._appState.requests],
         );
     final onOpenProfile = () => _goTo(4);
 
@@ -204,12 +435,17 @@ class _RootShellState extends State<RootShell> {
       ),
       ProfileScreen(
         appState: _appState,
-        onLogout: widget.onLogout,
+        // The cached rows name this resident's own requests. The next person to
+        // use the phone must not open the app onto them.
+        onLogout: () {
+          _appState.clearRequestCache();
+          widget.onLogout();
+        },
         onOpenNotifications: onOpenNotifications,
         onOpenProfile: onOpenProfile,
-        initialName: widget.initialName,
-        initialPhone: widget.initialPhone,
-        initialAddress: widget.initialAddress,
+        userStore: widget.userStore,
+        user: widget.user,
+        onUserChanged: widget.onUserChanged,
       ),
     ];
 
@@ -218,7 +454,19 @@ class _RootShellState extends State<RootShell> {
       body: SafeArea(
         top: false,
         bottom: false,
-        child: IndexedStack(index: _index, children: screens),
+        child: Column(
+          children: [
+            // Above every screen, not inside one: being unable to reach MDRRMO
+            // is true of the whole app, and the resident must see it wherever
+            // they happen to be standing.
+            if (_appState.isOffline)
+              OfflineBanner(
+                filipino: _appState.language == AppLanguage.filipino,
+                lastUpdated: _appState.requestsFetchedAt,
+              ),
+            Expanded(child: IndexedStack(index: _index, children: screens)),
+          ],
+        ),
       ),
       floatingActionButton: const SosFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

@@ -9,76 +9,64 @@ use Carbon\Carbon;
 class EquipmentBorrowingSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * One row per status so the borrowing views and dashboard have every state
+     * to render. Offsets are in hours back from now; resident/equipment are
+     * offsets into the real id lists, never literal ids.
      */
+    private const SCENARIOS = [
+        ['resident' => 0, 'equipment' => 0, 'quantity' => 1, 'status' => 'Pending',  'created' => 2,   'updated' => 2,  'released' => null, 'returned' => null],
+        ['resident' => 1, 'equipment' => 2, 'quantity' => 2, 'status' => 'Approved', 'created' => 24,  'updated' => 5,  'released' => null, 'returned' => null],
+        ['resident' => 2, 'equipment' => 3, 'quantity' => 1, 'status' => 'Released', 'created' => 72,  'updated' => 48, 'released' => 48,   'returned' => null],
+        ['resident' => 3, 'equipment' => 1, 'quantity' => 1, 'status' => 'Returned', 'created' => 144, 'updated' => 24, 'released' => 120,  'returned' => 24],
+        ['resident' => 4, 'equipment' => 4, 'quantity' => 1, 'status' => 'Denied',   'created' => 48,  'updated' => 24, 'released' => null, 'returned' => null],
+        ['resident' => 5, 'equipment' => 6, 'quantity' => 3, 'status' => 'Pending',  'created' => 1,   'updated' => 1,  'released' => null, 'returned' => null],
+    ];
+
     public function run(): void
     {
-        $now = Carbon::now();
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn(
+                'EquipmentBorrowingSeeder skipped: refuses to seed outside local/testing (env: '
+                . app()->environment() . ').'
+            );
 
-        $borrowings = [
-            [
-                'resident_id' => 1, 
-                'equipment_id' => 1, // Wheelchair
-                'quantity' => 1,
-                'status' => 'Pending',
-                'released_at' => null,
-                'returned_at' => null,
-                'created_at' => clone $now->subHours(2),
-                'updated_at' => clone $now->subHours(2),
-            ],
-            [
-                'resident_id' => 2, 
-                'equipment_id' => 3, // First Aid Kit
-                'quantity' => 2,
-                'status' => 'Approved',
-                'released_at' => null,
-                'returned_at' => null,
-                'created_at' => clone $now->subDays(1),
-                'updated_at' => clone $now->subHours(5),
-            ],
-            [
-                'resident_id' => 3, 
-                'equipment_id' => 4, // Oxygen Tank
-                'quantity' => 1,
-                'status' => 'Released',
-                'released_at' => clone $now->subDays(2),
-                'returned_at' => null,
-                'created_at' => clone $now->subDays(3),
-                'updated_at' => clone $now->subDays(2),
-            ],
-            [
-                'resident_id' => 4, 
-                'equipment_id' => 2, // Stretcher
-                'quantity' => 1,
-                'status' => 'Returned',
-                'released_at' => clone $now->subDays(5),
-                'returned_at' => clone $now->subDays(1),
-                'created_at' => clone $now->subDays(6),
-                'updated_at' => clone $now->subDays(1),
-            ],
-            [
-                'resident_id' => 5, 
-                'equipment_id' => 5, // Generator
-                'quantity' => 1,
-                'status' => 'Denied',
-                'released_at' => null,
-                'returned_at' => null,
-                'created_at' => clone $now->subDays(2),
-                'updated_at' => clone $now->subDays(1),
-            ],
-            [
-                'resident_id' => 6, 
-                'equipment_id' => 7, // Rescue Tools
-                'quantity' => 3,
-                'status' => 'Pending',
-                'released_at' => null,
-                'returned_at' => null,
-                'created_at' => clone $now->subMinutes(30),
-                'updated_at' => clone $now->subMinutes(30),
-            ]
-        ];
+            return;
+        }
 
-        // Ensure you change the table name if it differs in your migration
-        DB::table('tbl_equipment_borrowing')->insert($borrowings);
+        // Draw from ids that actually exist. Literal ids were what orphaned
+        // rows in the resident seeder, and the FK will not catch a stale one.
+        $residentIds = DB::table('tbl_residents')->pluck('resident_id')->all();
+        $equipmentIds = DB::table('tbl_equipments')->pluck('equipment_id')->all();
+
+        if (empty($residentIds) || empty($equipmentIds)) {
+            $this->command?->warn(
+                'EquipmentBorrowingSeeder skipped: needs residents and equipment — run their seeders first.'
+            );
+
+            return;
+        }
+
+        $rows = [];
+
+        foreach (self::SCENARIOS as $s) {
+            // Carbon is mutable and subHours() mutates in place, so every
+            // offset is measured from its own copy of the base timestamp.
+            $at = fn (?int $hours) => $hours === null ? null : Carbon::now()->subHours($hours);
+
+            $rows[] = [
+                'resident_id'  => $residentIds[$s['resident'] % count($residentIds)],
+                'equipment_id' => $equipmentIds[$s['equipment'] % count($equipmentIds)],
+                'quantity'     => $s['quantity'],
+                'status'       => $s['status'],
+                'released_at'  => $at($s['released']),
+                'returned_at'  => $at($s['returned']),
+                'created_at'   => $at($s['created']),
+                'updated_at'   => $at($s['updated']),
+            ];
+        }
+
+        DB::table('tbl_equipment_borrowing')->insert($rows);
+
+        $this->command?->info('EquipmentBorrowingSeeder: created ' . count($rows) . ' borrowings.');
     }
 }

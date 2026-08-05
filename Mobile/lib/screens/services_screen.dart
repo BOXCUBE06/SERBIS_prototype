@@ -1,11 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import '../models/models.dart';
-import '../state/app_state.dart';
-import '../state/strings.dart';
-import '../theme/app_theme.dart';
-import '../widgets/common.dart';
 
+library serbis.screens.services;
+
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart' as fp;
+import '../models/request_models.dart';
+import '../models/service_forms.dart';
+import '../state/request_store.dart';
+import '../state/translations.dart';
+import '../theme/app_theme.dart';
+import '../widgets/service_form_fields.dart';
+import '../widgets/service_widgets.dart';
+import '../widgets/shared_widgets.dart';
+
+/// Picking a service and filing it. Everything this screen used to draw itself
+/// — the fields, the dropdowns, the tiles, the safety notice, the ID picker,
+/// the error card and the confirmation sheet — now lives in `widgets/`, and
+/// the four forms' data lives in `models/service_forms.dart`. What is left is
+/// the three jobs only this screen can do: fetch the catalogue, track the
+/// selection, and submit.
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
   final ServiceType initialType;
@@ -27,135 +39,239 @@ class ServicesScreen extends StatefulWidget {
 }
 
 class _ServicesScreenState extends State<ServicesScreen> {
-  late ServiceType _selected;
+  List<ServiceCatalogItem> _services = [];
+  bool _loadingServices = true;
+  ServiceCatalogItem? _selected;
 
-  // All text fields across every service type, keyed by a unique field id.
-  // Using one map (rather than per-type state) keeps user input around if
-  // they switch between request types and come back.
-  final Map<String, TextEditingController> _controllers = {};
+  /// One form per kind, kept for the life of the screen: switching services and
+  /// switching back must not silently empty what the resident already typed.
+  final Map<ServiceFormKind, ServiceFormData> _forms = {};
 
-  // Dropdown selections, keyed the same way as _controllers.
-  final Map<String, String> _dropdowns = {};
+  fp.PlatformFile? _validIdFile;
+
+  /// True after a submit that never reached the server. Drives a persistent
+  /// error card with Retry — a snackbar alone auto-dismisses, and the previous
+  /// code showed a success sheet instead.
+  bool _submitFailed = false;
+
+  /// True while the multipart POST is in flight, so the button can show a
+  /// spinner and refuse repeat taps.
+  bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.initialType;
+    _loadServices();
   }
+
+  Future<void> _loadServices() async {
+    await widget.appState.loadServices();
+    if (!mounted) return;
+    setState(() {
+      // A copy, not the store's list. `AppState.loadServices` mutates that list
+      // in place (`..clear()..addAll()`), so aliasing it let a later reload —
+      // or a failed one, which clears it — rewrite the grid with no `setState`
+      // while `_selected` still pointed at a row that had been removed.
+      _services = List.of(widget.appState.services);
+      _loadingServices = false;
+      _selected = _defaultSelection(_services, widget.initialType);
+    });
+  }
+
+  ServiceCatalogItem? _defaultSelection(
+    List<ServiceCatalogItem> items,
+    ServiceType hint,
+  ) {
+    if (items.isEmpty) return null;
+    final hintKind = _kindForType(hint);
+    for (final s in items) {
+      if (s.formKind == hintKind) return s;
+    }
+    return items.first;
+  }
+
+  // Maps a dashboard shortcut's ServiceType hint onto a real catalogue service,
+  // so navigating in from "Ambulance" still preselects a medical service.
+  ServiceFormKind _kindForType(ServiceType t) {
+    switch (t) {
+      case ServiceType.ambulance:
+      case ServiceType.transfer:
+        return ServiceFormKind.ambulance;
+      case ServiceType.road:
+        return ServiceFormKind.road;
+      case ServiceType.relief:
+        return ServiceFormKind.relief;
+      case ServiceType.inquiry:
+      case ServiceType.items:
+        return ServiceFormKind.generic;
+    }
+  }
+
+  ServiceType _typeForKind(ServiceFormKind kind) {
+    switch (kind) {
+      case ServiceFormKind.ambulance:
+        return ServiceType.ambulance;
+      case ServiceFormKind.road:
+        return ServiceType.road;
+      case ServiceFormKind.relief:
+        return ServiceType.relief;
+      case ServiceFormKind.generic:
+        return ServiceType.inquiry;
+    }
+  }
+
+  ServiceFormData _formFor(ServiceFormKind kind) =>
+      _forms.putIfAbsent(kind, () => switch (kind) {
+            ServiceFormKind.ambulance => AmbulanceFormData(),
+            ServiceFormKind.road => RoadFormData(),
+            ServiceFormKind.relief => ReliefFormData(),
+            ServiceFormKind.generic => GenericFormData(),
+          });
 
   @override
   void didUpdateWidget(covariant ServicesScreen old) {
     super.didUpdateWidget(old);
-    if (old.initialType != widget.initialType) {
-      setState(() => _selected = widget.initialType);
+    if (old.initialType != widget.initialType && _services.isNotEmpty) {
+      setState(() => _selected = _defaultSelection(_services, widget.initialType));
     }
   }
 
   @override
   void dispose() {
-    for (final c in _controllers.values) {
-      c.dispose();
+    for (final form in _forms.values) {
+      form.dispose();
     }
     super.dispose();
   }
 
-  TextEditingController _ctrl(String key) => _controllers.putIfAbsent(key, () => TextEditingController());
-
-  String _dropdownValue(String key, List<String> items) => _dropdowns[key] ?? items.first;
-
-  String _text(String key) => _ctrl(key).text.trim();
-
-  String _orFallback(String value, String fallback) => value.isEmpty ? fallback : value;
-
-  String _nowLabel() {
-    final now = DateTime.now();
-    final hour12 = now.hour % 12 == 0 ? 12 : now.hour % 12;
-    final minute = now.minute.toString().padLeft(2, '0');
-    final period = now.hour >= 12 ? 'PM' : 'AM';
-    return 'Today, $hour12:$minute $period';
+  /// [_selected] is captured when the tile is tapped, so it goes stale the
+  /// moment the catalogue is refetched in another language. Re-resolving by id
+  /// keeps the form header in step with the tile above it.
+  ServiceCatalogItem? get _currentSelection {
+    final selected = _selected;
+    if (selected == null) {
+      return null;
+    }
+    for (final service in _services) {
+      if (service.id == selected.id) {
+        return service;
+      }
+    }
+    return selected;
   }
 
-  void _submit() {
-    final refNo = widget.appState.nextRefNo();
-    final timeLabel = _nowLabel();
+  /// The submission time as it goes into the description. Always English and
+  /// always the device's local clock: this string is read by a dispatcher in
+  /// the admin panel, not by the resident.
+  String _nowLabel() => formatTimelineTime(DateTime.now(), false);
 
-    late List<String> metaLines;
-    switch (_selected) {
-      case ServiceType.ambulance:
-        final patient = _orFallback(_text('amb_patient'), 'Not specified');
-        final pickup = _orFallback(_text('amb_pickup'), 'Pick-up location not specified');
-        final destination = _orFallback(_text('amb_destination'), 'destination not specified');
-        metaLines = [
-          'Patient: $patient',
-          '$pickup → $destination',
-          'Submitted $timeLabel',
-        ];
-        break;
-      case ServiceType.transfer:
-        final patient = _orFallback(_text('trf_patient'), 'Not specified');
-        final from = _orFallback(_text('trf_from'), 'Current facility not specified');
-        final to = _orFallback(_text('trf_to'), 'destination not specified');
-        final type = _dropdownValue('trf_type', _transferTypes);
-        metaLines = [
-          'Patient: $patient',
-          '$from → $to',
-          'Transfer type: $type',
-          'Submitted $timeLabel',
-        ];
-        break;
-      case ServiceType.road:
-        final location = _orFallback(_text('road_location'), 'Location not specified');
-        final obstruction = _dropdownValue('road_obstruction', _obstructionTypes);
-        metaLines = [
-          location,
-          'Obstruction: $obstruction',
-          'Submitted $timeLabel',
-        ];
-        break;
-      case ServiceType.relief:
-        final head = _orFallback(_text('relief_head'), 'Not specified');
-        final address = _orFallback(_text('relief_address'), 'Address not specified');
-        final assistance = _dropdownValue('relief_type', _assistanceTypes);
-        metaLines = [
-          'Household head: $head',
-          address,
-          'Assistance: $assistance',
-          'Submitted $timeLabel',
-        ];
-        break;
-      case ServiceType.inquiry:
-        final subject = _orFallback(_text('inq_subject'), 'General inquiry');
-        final method = _dropdownValue('inq_method', _contactMethods);
-        metaLines = [
-          'Subject: $subject',
-          'Preferred contact: $method',
-          'Submitted $timeLabel',
-        ];
-        break;
+  Future<void> _pickValidId() async {
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      withData: true, // ensures .bytes is populated (needed on web)
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() => _validIdFile = result.files.first);
+    }
+  }
+
+  Future<void> _submit() async {
+    // The multipart upload carries a photo and has a 30-second timeout. Without
+    // this guard every extra tap in that window filed another live request in
+    // the dispatcher's queue.
+    if (_submitting) {
+      return;
     }
 
+    if (_validIdFile == null || _validIdFile!.bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
+      );
+      return;
+    }
+
+    final service = _selected;
+    if (service == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a service before submitting.')),
+      );
+      return;
+    }
+
+    final form = _formFor(service.formKind);
+
+    // A dispatcher who cannot call back cannot dispatch. Enforced here rather
+    // than in the field widget because these are plain TextFields, not a Form.
+    final contact = form.requiredContactNumber;
+    if (contact != null && contact.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a contact number so MDRRMO can reach you.')),
+      );
+      return;
+    }
+
+    final metaLines = form.metaLines(
+      serviceName: service.name,
+      submittedLabel: _nowLabel(),
+    );
+
     final request = ServiceRequest(
-      type: _selected,
-      refNo: refNo,
+      serviceId: service.id,
+      description: metaLines.join('\n'),
+      type: _typeForKind(service.formKind),
+      // Empty until the server answers: the reference number is the server's
+      // request_id, and inventing one locally gave the resident a number that
+      // matched no record in tbl_service_request.
+      refNo: '',
       status: ReqStatus.review,
       cancellable: true,
       metaLines: metaLines,
-      timeline: [
-        TimelineStep('Request submitted', timeLabel, RequestStepState.done),
-        const TimelineStep('Forwarded to MDRRMO for review', 'Pending', RequestStepState.pending),
-        const TimelineStep('Completed', 'Pending', RequestStepState.pending),
-      ],
+      // The server's created_at replaces this the moment the row comes back;
+      // until then the timeline still has a real submission time to show.
+      createdAt: DateTime.now(),
     );
 
-    widget.appState.addRequest(request);
+    setState(() => _submitting = true);
+
+    ServiceRequest? confirmed;
+    try {
+      confirmed = await widget.appState.addRequest(
+        request,
+        validIdFileBytes: _validIdFile!.bytes!,
+        validIdFileName: _validIdFile!.name,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      } else {
+        _submitting = false;
+      }
+    }
+
+    if (!mounted) return;
+
+    // The submit failed and the optimistic row has already been rolled back.
+    // Keep every entered value and the attached photo so Retry costs one tap,
+    // and show nothing that could be read as "help is on the way".
+    if (confirmed == null) {
+      setState(() => _submitFailed = true);
+      return;
+    }
+
+    setState(() => _submitFailed = false);
+
+    // A mutable local is not promoted inside a closure, and the sheet's builder
+    // is one.
+    final filed = confirmed;
 
     final f = widget.appState.language == AppLanguage.filipino;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _ConfirmationSheet(
-        refNo: refNo,
+      builder: (_) => ConfirmationSheet(
+        refNo: filed.refNo,
         filipino: f,
         onViewTrack: () {
           Navigator.pop(context);
@@ -165,14 +281,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  static const _transferTypes = ['One-time transfer', 'Dialysis — recurring schedule', 'Other medical procedure'];
-  static const _obstructionTypes = ['Fallen tree / branches', 'Flooding / silt', 'Landslide debris', 'Other'];
-  static const _assistanceTypes = ['Food packs', 'Hygiene kits', 'Drinking water', 'Temporary shelter materials', 'Other'];
-  static const _contactMethods = ['SMS', 'Phone call', 'In-app reply'];
-
   @override
   Widget build(BuildContext context) {
     final f = widget.appState.language == AppLanguage.filipino;
+    final selection = _currentSelection;
+
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -184,7 +297,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: _SafetyNotice(filipino: f),
+          child: SafetyNotice(filipino: f),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
@@ -192,498 +305,85 @@ class _ServicesScreenState extends State<ServicesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeader(title: tr(f, 'services.choose_type')),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.5,
-                children: [
-                  ServiceType.ambulance,
-                  ServiceType.transfer,
-                  ServiceType.road,
-                  ServiceType.relief,
-                ].map((t) => _TypeCard(type: t, selected: t == _selected, filipino: f, onTap: () => setState(() => _selected = t))).toList(),
-              ),
-              const SizedBox(height: 10),
-              _TypeCard(
-                type: ServiceType.inquiry,
-                selected: _selected == ServiceType.inquiry,
-                filipino: f,
-                onTap: () => setState(() => _selected = ServiceType.inquiry),
-                fullWidth: true,
-              ),
+              _buildServiceGrid(),
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: _formTitle(_selected, f)),
-              _buildForm(_selected),
-              const SizedBox(height: 6),
-              AppButton(label: tr(f, 'common.submit_request'), onPressed: _submit),
-            ],
+        if (selection != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SectionHeader(title: selection.nameLocalized),
+                ServiceFormFields(
+                  data: _formFor(selection.formKind),
+                  onChanged: () => setState(() {}),
+                ),
+                ValidIdUploadField(
+                  fileName: _validIdFile?.name,
+                  onTap: _pickValidId,
+                ),
+                if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
+                const SizedBox(height: 6),
+                AppButton(
+                  label: tr(f, 'common.submit_request'),
+                  onPressed: _submit,
+                  loading: _submitting,
+                ),
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 110),
       ],
     );
   }
 
-  String _formTitle(ServiceType t, bool f) => switch (t) {
-        ServiceType.ambulance => tr(f, 'services.form.ambulance'),
-        ServiceType.transfer => tr(f, 'services.form.transfer'),
-        ServiceType.road => tr(f, 'services.form.road'),
-        ServiceType.relief => tr(f, 'services.form.relief'),
-        ServiceType.inquiry => tr(f, 'services.form.inquiry'),
-      };
-
-  Widget _buildForm(ServiceType t) {
-    switch (t) {
-      case ServiceType.ambulance:
-        return Column(children: [
-          _Field(label: 'Patient name', hint: 'e.g. Maria Santos', controller: _ctrl('amb_patient')),
-          _Field(label: 'Pick-up location', hint: 'Purok / street, barangay', controller: _ctrl('amb_pickup')),
-          _Field(label: 'Destination', hint: 'e.g. Echague District Hospital', controller: _ctrl('amb_destination')),
-          _Field(
-            label: 'Condition / notes',
-            hint: "Briefly describe the patient's condition",
-            lines: 3,
-            controller: _ctrl('amb_notes'),
-          ),
-          _Field(
-            label: 'Contact number',
-            hint: '09XXXXXXXXX',
-            keyboard: TextInputType.phone,
-            maxLength: 11,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            controller: _ctrl('amb_contact'),
-          ),
-        ]);
-      case ServiceType.transfer:
-        return Column(children: [
-          _Field(label: 'Patient name', hint: 'Full name of patient', controller: _ctrl('trf_patient')),
-          Row(
-            children: [
-              Expanded(child: _Field(label: 'Current facility', hint: 'e.g. RHU Echague', controller: _ctrl('trf_from'))),
-              const SizedBox(width: 10),
-              Expanded(child: _Field(label: 'Destination facility', hint: 'e.g. CVMC', controller: _ctrl('trf_to'))),
-            ],
-          ),
-          _Dropdown(
-            label: 'Transfer type',
-            items: _transferTypes,
-            value: _dropdownValue('trf_type', _transferTypes),
-            onChanged: (v) => setState(() => _dropdowns['trf_type'] = v),
-          ),
-          _Field(
-            label: 'Preferred date & time',
-            hint: 'e.g. Jun 20, 7:00 AM',
-            icon: Icons.event_outlined,
-            controller: _ctrl('trf_datetime'),
-          ),
-          _Field(
-            label: 'Contact number',
-            hint: '09XXXXXXXXX',
-            keyboard: TextInputType.phone,
-            maxLength: 11,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            controller: _ctrl('trf_contact'),
-          ),
-        ]);
-      case ServiceType.road:
-        return Column(children: [
-          _Field(
-            label: 'Location / road name',
-            hint: 'e.g. Brgy. Malasin – Provincial Road',
-            controller: _ctrl('road_location'),
-          ),
-          _Dropdown(
-            label: 'Obstruction type',
-            items: _obstructionTypes,
-            value: _dropdownValue('road_obstruction', _obstructionTypes),
-            onChanged: (v) => setState(() => _dropdowns['road_obstruction'] = v),
-          ),
-          _Field(
-            label: 'Description',
-            hint: "Describe the obstruction and how it's affecting access",
-            lines: 3,
-            controller: _ctrl('road_description'),
-          ),
-          const _UploadField(label: 'Attach photo (optional)'),
-        ]);
-      case ServiceType.relief:
-        return Column(children: [
-          _Field(label: 'Household head name', hint: 'Full name', controller: _ctrl('relief_head')),
-          _Field(label: 'Address', hint: 'Purok / street, barangay', controller: _ctrl('relief_address')),
-          Row(
-            children: [
-              Expanded(
-                child: _Field(
-                  label: 'Household size',
-                  hint: 'e.g. 5',
-                  keyboard: TextInputType.number,
-                  controller: _ctrl('relief_size'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _Field(
-                  label: 'Contact number',
-                  hint: '09XXXXXXXXX',
-                  keyboard: TextInputType.phone,
-                  maxLength: 11,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  controller: _ctrl('relief_contact'),
-                ),
-              ),
-            ],
-          ),
-          _Dropdown(
-            label: 'Type of assistance needed',
-            items: _assistanceTypes,
-            value: _dropdownValue('relief_type', _assistanceTypes),
-            onChanged: (v) => setState(() => _dropdowns['relief_type'] = v),
-          ),
-        ]);
-      case ServiceType.inquiry:
-        return Column(children: [
-          _Field(label: 'Subject', hint: 'What is this about?', controller: _ctrl('inq_subject')),
-          _Field(
-            label: 'Your message',
-            hint: 'Type your question here',
-            lines: 4,
-            controller: _ctrl('inq_message'),
-          ),
-          _Dropdown(
-            label: 'Preferred contact method',
-            items: _contactMethods,
-            value: _dropdownValue('inq_method', _contactMethods),
-            onChanged: (v) => setState(() => _dropdowns['inq_method'] = v),
-          ),
-          _Field(
-            label: 'Contact number',
-            hint: '09XXXXXXXXX',
-            keyboard: TextInputType.phone,
-            maxLength: 11,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            controller: _ctrl('inq_contact'),
-          ),
-        ]);
-    }
-  }
-}
-
-class _SafetyNotice extends StatelessWidget {
-  final bool filipino;
-  const _SafetyNotice({required this.filipino});
-
-  @override
-  Widget build(BuildContext context) {
-    final f = filipino;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.red50,
-        border: Border.all(color: const Color(0xFFF4D9D2)),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconBadge(icon: Icons.warning_amber_rounded, bg: AppColors.surface, fg: AppColors.red600),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tr(f, 'services.notice_title'),
-                  style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.red600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tr(f, 'services.notice_body'),
-                  style: AppText.body(size: 12, color: const Color(0xFF7A3527), height: 1.6),
-                ),
-                const SizedBox(height: 8),
-                _hotlineLine('MDRRMO — 0917-123-4567'),
-                _hotlineLine(f ? 'Pulis (PNP) — 117' : 'Police (PNP) — 117'),
-                _hotlineLine(f ? 'Bumbero (BFP) — 116' : 'Fire (BFP) — 116'),
-                _hotlineLine(f ? 'Pambansang Emerhensiya — 911' : 'National Emergency — 911'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hotlineLine(String text) => Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(text, style: AppText.display(size: 12, weight: FontWeight.w700, color: AppColors.red600)),
+  Widget _buildServiceGrid() {
+    if (_loadingServices) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 30),
+        child: Center(child: CircularProgressIndicator()),
       );
-}
+    }
 
-class _TypeCard extends StatelessWidget {
-  final ServiceType type;
-  final bool selected;
-  final bool filipino;
-  final VoidCallback onTap;
-  final bool fullWidth;
-
-  const _TypeCard({
-    required this.type,
-    required this.selected,
-    required this.filipino,
-    required this.onTap,
-    this.fullWidth = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final card = InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.green50 : AppColors.surface,
-          border: Border.all(color: selected ? AppColors.green700 : AppColors.line, width: 1.5),
-          borderRadius: BorderRadius.circular(14),
+    if (_services.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Row(
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 18, color: AppColors.inkFaint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Couldn't load services. Check your connection and try again.",
+                style: AppText.body(size: 12, color: AppColors.inkMuted),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() => _loadingServices = true);
+                _loadServices();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
         ),
-        child: fullWidth
-            ? Row(
-                children: [
-                  IconBadge(icon: type.icon, bg: type.bg, fg: type.fg),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(type.titleFor(filipino), style: AppText.display(size: 12.5, weight: FontWeight.w600)),
-                        Text(type.subtitleFor(filipino), style: AppText.body(size: 11, color: AppColors.inkMuted)),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconBadge(icon: type.icon, bg: type.bg, fg: type.fg, size: 34, iconSize: 16, radius: 10),
-                  const SizedBox(height: 8),
-                  Text(
-                    type.titleFor(filipino),
-                    style: AppText.display(size: 12, weight: FontWeight.w600, height: 1.25),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    type.subtitleFor(filipino),
-                    style: AppText.body(size: 10.5, color: AppColors.inkMuted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-      ),
-    );
-    return fullWidth ? SizedBox(width: double.infinity, child: card) : card;
-  }
-}
+      );
+    }
 
-class _Field extends StatelessWidget {
-  final String label;
-  final String hint;
-  final int lines;
-  final TextInputType keyboard;
-  final IconData? icon;
-  final TextEditingController controller;
-  final int? maxLength;
-  final List<TextInputFormatter>? inputFormatters;
-
-  const _Field({
-    required this.label,
-    required this.hint,
-    required this.controller,
-    this.lines = 1,
-    this.keyboard = TextInputType.text,
-    this.icon,
-    this.maxLength,
-    this.inputFormatters,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: controller,
-            maxLines: lines,
-            keyboardType: keyboard,
-            maxLength: maxLength,
-            inputFormatters: inputFormatters,
-            style: AppText.body(size: 13),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
-              suffixIcon: icon != null ? Icon(icon, size: 18, color: AppColors.inkFaint) : null,
-              counterText: '',
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Dropdown extends StatelessWidget {
-  final String label;
-  final List<String> items;
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  const _Dropdown({
-    required this.label,
-    required this.items,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.line, width: 1.5),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                isExpanded: true,
-                icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
-                style: AppText.body(size: 13, color: AppColors.ink),
-                items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
-                onChanged: (v) {
-                  if (v != null) onChanged(v);
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UploadField extends StatelessWidget {
-  final String label;
-  const _UploadField({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 22),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.line, width: 1.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.cloud_upload_outlined, color: AppColors.inkFaint, size: 22),
-                const SizedBox(height: 6),
-                Text('Tap to upload a photo of the site', style: AppText.body(size: 12, color: AppColors.inkMuted)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConfirmationSheet extends StatelessWidget {
-  final String refNo;
-  final bool filipino;
-  final VoidCallback onViewTrack;
-  const _ConfirmationSheet({required this.refNo, required this.filipino, required this.onViewTrack});
-
-  @override
-  Widget build(BuildContext context) {
-    final f = filipino;
-    final body = tr(f, 'services.confirm.body').replaceAll('{ref}', refNo);
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 32, 22, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(color: AppColors.green50, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: const Icon(Icons.check_rounded, size: 26, color: AppColors.green700),
-          ),
-          const SizedBox(height: 14),
-          Text(tr(f, 'services.confirm.title'), style: AppText.display(size: 17)),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.6),
-          ),
-          const SizedBox(height: 18),
-          AppButton(label: tr(f, 'services.confirm.view_track'), onPressed: onViewTrack),
-        ],
-      ),
+    return ServiceGrid(
+      count: _services.length,
+      cardBuilder: (index) {
+        final service = _services[index];
+        return ServiceTypeCard(
+          title: service.nameLocalized,
+          subtitle: service.displayDescription,
+          icon: service.icon,
+          selected: service.id == _selected?.id,
+          onTap: () => setState(() => _selected = service),
+        );
+      },
     );
   }
 }

@@ -1,11 +1,11 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-8" style="background-color: #F4F7FC !important;">
+  <v-container fluid class="fill-height align-start pa-8 bg-background">
     <v-row>
       <v-col cols="12">
         <div class="d-flex justify-space-between align-center mb-6">
           <div>
-            <h2 class="text-h4 font-weight-black text-grey-darken-4">System Logs</h2>
-            <div class="text-subtitle-1 text-grey-darken-1">Monitor user activity and SMS broadcast history</div>
+            <h2 class="text-h4 font-weight-black text-high-emphasis">System Logs</h2>
+            <div class="text-subtitle-1 text-medium-emphasis">Monitor user activity and SMS broadcast history</div>
           </div>
           
           <v-text-field
@@ -21,7 +21,7 @@
           ></v-text-field>
         </div>
 
-        <v-card elevation="0" border rounded="xl" class="bg-white">
+        <v-card elevation="0" border rounded="xl" class="bg-surface">
           <v-tabs v-model="activeTab" color="primary" class="border-b px-4">
             <v-tab value="system" class="text-none font-weight-bold">
               <v-icon start>mdi-laptop</v-icon> System Activity
@@ -63,7 +63,12 @@
                   class="bg-transparent"
                 >
                   <template v-slot:item.status="{ item }">
-                    <v-chip :color="item.status === 'Completed' ? 'green' : 'orange'" size="small" variant="tonal" class="font-weight-bold">
+                    <!-- The column holds 'Sent' or 'Failed'. This used to test
+                         for 'Completed', a value nothing writes, so every row
+                         would have rendered orange — a failed blast and a
+                         delivered one looking alike is the one distinction this
+                         table exists to make. -->
+                    <v-chip :color="item.status === 'Sent' ? 'green' : 'red'" size="small" variant="tonal" class="font-weight-bold">
                       {{ item.status }}
                     </v-chip>
                   </template>
@@ -83,6 +88,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
 
 const activeTab = ref('system')
 const search = ref('')
@@ -100,17 +107,21 @@ const systemHeaders = [
   { title: 'Description', key: 'description', width: '30%' },
 ]
 
+// One row per barangay per blast, which is how the backend records them: the
+// vendor is called once, but "what went to my barangay" is the unit anyone asks
+// about afterwards.
 const smsHeaders = [
-  { title: 'Date & Time', key: 'created_at', width: '20%' },
-  { title: 'Sender', key: 'user.name', width: '20%' },
-  { title: 'Message Content', key: 'message', width: '40%' },
+  { title: 'Date & Time', key: 'created_at', width: '18%' },
+  { title: 'Sender', key: 'user.name', width: '16%' },
+  { title: 'Barangay', key: 'barangay', width: '14%' },
+  { title: 'Message Content', key: 'message', width: '32%' },
   { title: 'Recipients', key: 'recipient_count', align: 'center', width: '10%' },
   { title: 'Status', key: 'status', align: 'center', width: '10%' },
 ]
 
 // Data Fetching
 const getHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('serbis_token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Accept': 'application/json'
 })
 
@@ -118,8 +129,8 @@ const fetchLogs = async () => {
   loading.value = true
   try {
     const [systemRes, smsRes] = await Promise.all([
-      fetch('http://localhost:8000/api/logs/system', { headers: getHeaders() }),
-      fetch('http://localhost:8000/api/logs/sms', { headers: getHeaders() })
+      fetch(`${API_BASE}/logs/system`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/logs/sms`, { headers: getHeaders() })
     ])
 
     const systemData = await systemRes.json()

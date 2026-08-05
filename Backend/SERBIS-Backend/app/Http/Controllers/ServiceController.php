@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ServiceResource;
 use App\Models\Service;
 use Illuminate\Http\Request;
 
 class ServiceController extends Controller
 {
-    public function index()
+    /**
+     * Accepts `?locale=` (default `en`) and returns each service's
+     * `name_localized`. Translations are eager-loaded: resolving them per row
+     * would be one query per service on a list the app fetches at launch.
+     */
+    public function index(Request $request)
     {
-        $services = Service::all();
-        return response()->json($services);
+        $services = Service::with('translations')->get();
+
+        return ServiceResource::collection($services);
     }
 
     public function store(Request $request)
@@ -25,15 +32,15 @@ class ServiceController extends Controller
         return response()->json($service, 201);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $service = Service::find($id);
+        $service = Service::with('translations')->find($id);
 
         if (!$service) {
             return response()->json(['message' => 'Service not found'], 404);
         }
 
-        return response()->json($service);
+        return new ServiceResource($service);
     }
 
     public function update(Request $request, $id)

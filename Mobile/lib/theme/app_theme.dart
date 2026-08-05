@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-/// Centralized color palette for the SERBIS app.
-/// Mirrors the redesigned mockup: deep forest green primary,
-/// warm paper background, and clear status accent colors.
 class AppColors {
   AppColors._();
 
@@ -38,10 +34,29 @@ class AppColors {
   );
 }
 
-/// Text style helpers. Headings use Lexend (built for reading clarity),
-/// body copy uses Inter.
 class AppText {
   AppText._();
+
+  /// Headings and anything that carries emphasis.
+  ///
+  /// The family name has to match `pubspec.yaml` exactly — a typo does not fail
+  /// the build, it silently falls back to the platform default, which is the
+  /// same failure `google_fonts` produced offline and the reason both families
+  /// are asserted in `test/app_fonts_test.dart`.
+  static const String displayFamily = 'Lexend';
+
+  /// Body copy, and the family behind the whole Material text theme.
+  static const String bodyFamily = 'Inter';
+
+  /// Only these are bundled. A weight outside the set does not fail — Flutter
+  /// picks the nearest declared one — so a `w300` would render as `w400` and
+  /// look almost right, which is worse than an error.
+  static const List<FontWeight> bundledWeights = [
+    FontWeight.w400,
+    FontWeight.w500,
+    FontWeight.w600,
+    FontWeight.w700,
+  ];
 
   static TextStyle display({
     double size = 20,
@@ -50,7 +65,8 @@ class AppText {
     double? letterSpacing,
     double? height,
   }) =>
-      GoogleFonts.lexend(
+      TextStyle(
+        fontFamily: displayFamily,
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -64,7 +80,8 @@ class AppText {
     Color color = AppColors.ink,
     double? height,
   }) =>
-      GoogleFonts.inter(
+      TextStyle(
+        fontFamily: bodyFamily,
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -76,7 +93,9 @@ ThemeData buildAppTheme() {
   final base = ThemeData(useMaterial3: true);
   return base.copyWith(
     scaffoldBackgroundColor: AppColors.paper,
-    textTheme: GoogleFonts.interTextTheme(base.textTheme),
+    // Replaces GoogleFonts.interTextTheme, which did the same thing over the
+    // network. `apply` keeps Material's own sizes and only swaps the family.
+    textTheme: base.textTheme.apply(fontFamily: AppText.bodyFamily),
     colorScheme: base.colorScheme.copyWith(
       primary: AppColors.green700,
       secondary: AppColors.amber600,

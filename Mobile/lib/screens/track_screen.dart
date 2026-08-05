@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../state/strings.dart';
-import '../models/models.dart';
-import '../state/app_state.dart';
+import '../state/translations.dart';
+import '../models/request_models.dart';
+import '../state/request_store.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/shared_widgets.dart';
 
 class TrackScreen extends StatefulWidget {
   final AppState appState;
@@ -23,24 +24,77 @@ class TrackScreen extends StatefulWidget {
 
 class _TrackScreenState extends State<TrackScreen> {
   ReqStatus? _filter;
-  final Set<String> _expanded = {};
+  final Set<int> _expanded = {};
+
+  /// Keyed on the server's request id. `refNo` is empty for a row that has not
+  /// been confirmed yet, so every in-flight row shared one key and expanding
+  /// any of them expanded all of them.
+  int _keyFor(ServiceRequest request) => request.id ?? identityHashCode(request);
+
+  void _changeFilter(ReqStatus? status) {
+    setState(() {
+      _filter = status;
+    });
+  }
+
+  void _toggleExpanded(int key) {
+    setState(() {
+      if (_expanded.contains(key)) {
+        _expanded.remove(key);
+      } else {
+        _expanded.add(key);
+      }
+    });
+  }
+
+  List<ServiceRequest> _getFilteredRequests(List<ServiceRequest> allRequests) {
+    if (_filter == null) {
+      return allRequests;
+    }
+
+    final filtered = <ServiceRequest>[];
+    for (final request in allRequests) {
+      if (request.status == _filter) {
+        filtered.add(request);
+      }
+    }
+    return filtered;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final f = widget.appState.language == AppLanguage.filipino;
+    final isFilipino = widget.appState.language == AppLanguage.filipino;
     final requests = widget.appState.requests;
-    final filtered = _filter == null ? requests : requests.where((r) => r.status == _filter).toList();
+    final filtered = _getFilteredRequests(requests);
+    final hasRequests = requests.isNotEmpty;
 
-    return ListView(
+    final list = ListView(
       padding: EdgeInsets.zero,
+      // Stated rather than inherited. A `ListView` gets this for free only
+      // while it is `primary`, which it stops being the moment anyone gives it
+      // a controller — and the default physics refuse to overscroll a list that
+      // fits, which kills the pull on the empty state, the screen where a
+      // refresh is most useful.
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         AppHeader(onNotificationsTap: widget.onOpenNotifications, onProfileTap: widget.onOpenProfile),
         const SizedBox(height: 22),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: SectionHeader(title: tr(f, 'track.title')),
+          child: SectionHeader(title: tr(isFilipino, 'track.title')),
         ),
-        if (requests.isEmpty)
+        // These rows came off the device, not the server. The dispatcher may
+        // have moved any of them since; saying when they were last confirmed is
+        // the difference between stale information and wrong information.
+        if (hasRequests && widget.appState.requestsFromCache)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+            child: StaleDataNote(
+              filipino: isFilipino,
+              lastUpdated: widget.appState.requestsFetchedAt,
+            ),
+          ),
+        if (!hasRequests)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: AppCard(
@@ -60,10 +114,10 @@ class _TrackScreenState extends State<TrackScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tr(f, 'track.empty_title'), style: AppText.display(size: 14.5)),
+                            Text(tr(isFilipino, 'track.empty_title'), style: AppText.display(size: 14.5)),
                             const SizedBox(height: 2),
                             Text(
-                              tr(f, 'track.empty_desc'),
+                              tr(isFilipino, 'track.empty_desc'),
                               style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
                             ),
                           ],
@@ -82,35 +136,37 @@ class _TrackScreenState extends State<TrackScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 22),
               children: [
-                _filterChip('${tr(f, "track.filter.all")} (${requests.length})', null, f),
-                _filterChip(tr(f, 'status.review'), ReqStatus.review, f),
-                _filterChip(tr(f, 'status.scheduled'), ReqStatus.scheduled, f),
-                _filterChip(tr(f, 'status.completed'), ReqStatus.completed, f),
-                _filterChip(tr(f, 'status.cancelled'), ReqStatus.cancelled, f),
+                _filterChip('${tr(isFilipino, "track.filter.all")} (${requests.length})', null, isFilipino),
+                _filterChip(tr(isFilipino, 'status.review'), ReqStatus.review, isFilipino),
+                _filterChip(tr(isFilipino, 'status.scheduled'), ReqStatus.scheduled, isFilipino),
+                _filterChip(tr(isFilipino, 'status.completed'), ReqStatus.completed, isFilipino),
+                _filterChip(tr(isFilipino, 'status.cancelled'), ReqStatus.cancelled, isFilipino),
+                _filterChip(tr(isFilipino, 'status.disapproved'), ReqStatus.disapproved, isFilipino),
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: Column(
-              children: filtered.map((r) => _RequestCard(
-                request: r,
-                expanded: _expanded.contains(r.refNo),
-                filipino: f,
-                onToggle: () => setState(() {
-                  if (_expanded.contains(r.refNo)) {
-                    _expanded.remove(r.refNo);
-                  } else {
-                    _expanded.add(r.refNo);
-                  }
-                }),
-                onCancel: () => widget.appState.cancelRequest(r.refNo),
+              children: filtered.map((request) => _RequestCard(
+                request: request,
+                expanded: _expanded.contains(_keyFor(request)),
+                filipino: isFilipino,
+                onToggle: () => _toggleExpanded(_keyFor(request)),
+                onCancel: () => widget.appState.cancelRequest(request.id),
               )).toList(),
             ),
           ),
         ],
         const SizedBox(height: 110),
       ],
+    );
+
+    return RefreshIndicator(
+      color: AppColors.green700,
+      // Not silent: the resident pulled, so a failure owes them an answer.
+      onRefresh: () => widget.appState.loadRequests(),
+      child: list,
     );
   }
 
@@ -121,7 +177,7 @@ class _TrackScreenState extends State<TrackScreen> {
       child: ChoiceChip(
         label: Text(label),
         selected: active,
-        onSelected: (_) => setState(() => _filter = status),
+        onSelected: (_) => _changeFilter(status),
         labelStyle: AppText.display(
           size: 12,
           weight: FontWeight.w600,
@@ -145,7 +201,9 @@ class _RequestCard extends StatelessWidget {
   final bool expanded;
   final bool filipino;
   final VoidCallback onToggle;
-  final VoidCallback onCancel;
+  /// Resolves to `true` only when the server confirmed the cancellation, so the
+  /// dialog can hold its success message until then.
+  final Future<bool> Function() onCancel;
 
   const _RequestCard({
     required this.request,
@@ -155,15 +213,25 @@ class _RequestCard extends StatelessWidget {
     required this.onCancel,
   });
 
+  Color _getAccentColor() {
+    if (request.status == ReqStatus.completed) {
+      return AppColors.green700;
+    }
+    if (request.status == ReqStatus.cancelled) {
+      return AppColors.inkFaint;
+    }
+    if (request.status == ReqStatus.disapproved) {
+      return AppColors.red600;
+    }
+    if (request.status == ReqStatus.scheduled) {
+      return AppColors.amber600;
+    }
+    return AppColors.blue600;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final f = filipino;
-    final accent = switch (request.status) {
-      ReqStatus.completed => AppColors.green700,
-      ReqStatus.cancelled => AppColors.inkFaint,
-      ReqStatus.scheduled => AppColors.amber600,
-      ReqStatus.review => AppColors.blue600,
-    };
+    final accent = _getAccentColor();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -175,19 +243,24 @@ class _RequestCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconBadge(icon: request.type.icon, bg: request.type.bg, fg: request.type.fg),
+                IconBadge(icon: request.displayIcon, bg: request.displayBg, fg: request.displayFg),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(request.type.titleFor(f), style: AppText.display(size: 14.5)),
+                      Text(request.displayTitle(filipino), style: AppText.display(size: 14.5)),
                       const SizedBox(height: 2),
-                      Text('Ref #${request.refNo}', style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                      Text(
+                        request.refNo.isEmpty
+                            ? (filipino ? 'Naghihintay ng reference number' : 'Reference number pending')
+                            : 'Ref #${request.refNo}',
+                        style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                      ),
                     ],
                   ),
                 ),
-                StatusBadge(request.status, filipino: f),
+                StatusBadge(request.status, filipino: filipino),
               ],
             ),
             const SizedBox(height: 12),
@@ -209,30 +282,32 @@ class _RequestCard extends StatelessWidget {
                 decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                 child: Text(request.note!, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6)),
               ),
-            if (request.timeline.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              AppButton(
-                label: expanded ? tr(f, 'common.hide_timeline') : tr(f, 'common.view_timeline'),
-                icon: expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                style: AppButtonStyle.outline,
-                onPressed: onToggle,
+            // No isNotEmpty guard any more: the timeline is derived from the
+            // request's own status and timestamps, so every card has one --
+            // including the server-loaded rows that used to lose the button
+            // entirely after a relaunch.
+            const SizedBox(height: 12),
+            AppButton(
+              label: expanded ? tr(filipino, 'common.hide_timeline') : tr(filipino, 'common.view_timeline'),
+              icon: expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              style: AppButtonStyle.outline,
+              onPressed: onToggle,
+            ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 200),
+              crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+              firstChild: const SizedBox(width: double.infinity),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: _Timeline(steps: request.timelineFor(filipino)),
               ),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 200),
-                crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                firstChild: const SizedBox(width: double.infinity),
-                secondChild: Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: _Timeline(steps: request.timeline),
-                ),
-              ),
-            ],
+            ),
             if (request.cancellable) ...[
               const SizedBox(height: 10),
               AppButton(
-                label: tr(f, 'common.cancel_request'),
+                label: tr(filipino, 'common.cancel_request'),
                 style: AppButtonStyle.ghostRed,
-                onPressed: () => showCancelDialog(context, request.refNo, onCancel, filipino: f),
+                onPressed: () => showCancelDialog(context, request.refNo, onCancel, filipino: filipino),
               ),
             ],
           ],

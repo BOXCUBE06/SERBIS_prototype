@@ -1,5 +1,8 @@
 name: serbis
-description: "SERBIS - Echague MDRRMO mobile app"
+description: >
+  SERBIS — Echague MDRRMO mobile application. Lets residents submit and
+  track non-emergency service requests, and read offline disaster
+  preparedness materials in English or Filipino.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -10,8 +13,17 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  google_fonts: ^6.2.1
+  http: ^1.2.0
   shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.2.0
+  file_picker: ^8.0.0
+  path_provider: ^2.1.5
+  # A downloaded material is only useful if it can be opened: open_filex hands
+  # the cached file to the platform viewer (and to Android's FileProvider),
+  # url_launcher opens the server copy when there is no saved one.
+  open_filex: ^4.5.0
+  url_launcher: ^6.3.0
+
 
 dev_dependencies:
   flutter_test:
@@ -20,3 +32,38 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Bundled, not fetched. `google_fonts` downloaded Lexend and Inter from
+  # fonts.gstatic.com on first use, so a first launch with no signal fell back
+  # to the platform default — every size and metric the layout was tuned against
+  # would change, on exactly the launch this app exists for. It was also an
+  # unadvertised third-party request at startup.
+  #
+  # Latin subsets, four static weights each. They carry ñ, the accented vowels
+  # and the '·' this UI uses as a separator, which is the whole character set
+  # English and Filipino need here; a third language will need them re-cut.
+  # Static instances rather than the variable font: Flutter maps `fontWeight`
+  # onto a declared weight, and reaching a variable font's `wght` axis needs
+  # `fontVariations` on every TextStyle, which `ThemeData.textTheme` would not
+  # carry.
+  fonts:
+    - family: Lexend
+      fonts:
+        - asset: assets/fonts/Lexend-400.ttf
+          weight: 400
+        - asset: assets/fonts/Lexend-500.ttf
+          weight: 500
+        - asset: assets/fonts/Lexend-600.ttf
+          weight: 600
+        - asset: assets/fonts/Lexend-700.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-400.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-500.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-600.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-700.ttf
+          weight: 700

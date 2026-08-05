@@ -1,0 +1,851 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../models/request_models.dart';
+import '../state/translations.dart';
+import '../theme/app_theme.dart';
+
+class AppHeader extends StatelessWidget {
+  final VoidCallback? onNotificationsTap;
+  final VoidCallback? onProfileTap;
+
+  const AppHeader({super.key, this.onNotificationsTap, this.onProfileTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 48, 22, 24),
+      decoration: const BoxDecoration(
+        gradient: AppColors.headerGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: -60,
+            top: -90,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(.05)),
+            ),
+          ),
+          Positioned(
+            left: -60,
+            bottom: -110,
+            child: Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withOpacity(.08)),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(.14)),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.shield_outlined, color: Colors.white, size: 19),
+                  ),
+                  const SizedBox(width: 11),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('SERBIS', style: AppText.display(size: 17, color: Colors.white, letterSpacing: .5)),
+                      const SizedBox(height: 2),
+                      Text(
+                        'ECHAGUE MDRRMO',
+                        style: AppText.display(
+                          size: 10,
+                          weight: FontWeight.w500,
+                          color: Colors.white.withOpacity(.65),
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (onNotificationsTap != null || onProfileTap != null)
+                Row(
+                  children: [
+                    if (onNotificationsTap != null)
+                      // No unread dot: it was hardcoded on, so it announced
+                      // unread news on a launch where nothing had happened and
+                      // stayed on after the sheet was read. There is no feed to
+                      // count against yet, and a permanent indicator teaches
+                      // residents to ignore the one that will matter.
+                      GestureDetector(onTap: onNotificationsTap, child: _circleIcon(Icons.notifications_outlined)),
+                    if (onNotificationsTap != null && onProfileTap != null) const SizedBox(width: 8),
+                    if (onProfileTap != null)
+                      GestureDetector(onTap: onProfileTap, child: _circleIcon(Icons.person_outline_rounded)),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _circleIcon(IconData icon) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withOpacity(.06),
+        border: Border.all(color: Colors.white.withOpacity(.16)),
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 17, color: Colors.white),
+    );
+  }
+}
+
+
+class SectionHeader extends StatelessWidget {
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Flexible, not Expanded: a short title still sits next to its action
+          // instead of being pushed apart. Without it the Row demanded the
+          // title's natural width and "Subaybayan ang Iyong mga Kahilingan"
+          // overflowed by 22px at 360, striped banner and all.
+          Flexible(
+            child: Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
+          ),
+          if (actionLabel != null) ...[
+            const SizedBox(width: 12),
+            // The action is the smaller target and must stay tappable, so it
+            // keeps its width and the title wraps around it.
+            GestureDetector(
+              onTap: onAction,
+              child: Text(
+                actionLabel!,
+                style: AppText.display(size: 12, weight: FontWeight.w600, color: AppColors.green700),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+class AppCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color? leftAccent;
+
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.leftAccent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.line),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.green900.withOpacity(.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: leftAccent == null
+          ? Padding(padding: padding, child: child)
+          : Row(
+              children: [
+                Container(width: 4, decoration: BoxDecoration(
+                  color: leftAccent,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                )),
+                Expanded(child: Padding(padding: padding, child: child)),
+              ],
+            ),
+    );
+  }
+}
+
+class IconBadge extends StatelessWidget {
+  final IconData icon;
+  final Color bg;
+  final Color fg;
+  final double size;
+  final double iconSize;
+  final double radius;
+
+  const IconBadge({
+    super.key,
+    required this.icon,
+    required this.bg,
+    required this.fg,
+    this.size = 38,
+    this.iconSize = 18,
+    this.radius = 11,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(radius)),
+      alignment: Alignment.center,
+      child: Icon(icon, size: iconSize, color: fg),
+    );
+  }
+}
+
+class StatusBadge extends StatelessWidget {
+  final ReqStatus status;
+  final bool filipino;
+  const StatusBadge(this.status, {super.key, this.filipino = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: status.bg, borderRadius: BorderRadius.circular(30)),
+      child: Text(
+        status.labelFor(filipino).toUpperCase(),
+        style: AppText.display(size: 10.5, weight: FontWeight.w700, color: status.fg, letterSpacing: .5),
+      ),
+    );
+  }
+}
+
+/// Shows whether a material is available offline, and offers to download it
+/// when it is not.
+///
+/// Deliberately stateless: it used to own a `_saved` bool that a 700 ms
+/// `Future.delayed` flipped, so the pill reported "Saved" over an empty disk and
+/// forgot even that on the next rebuild. The truth now lives in the cache index
+/// (`AppState.savedMaterials`), and this widget only draws it. [onTap] null
+/// means there is nothing to download — either the content is already saved, or
+/// it ships inside the app.
+class OfflinePill extends StatelessWidget {
+  final bool saved;
+  final bool loading;
+  final bool filipino;
+  final VoidCallback? onTap;
+
+  const OfflinePill({
+    super.key,
+    required this.saved,
+    this.loading = false,
+    this.filipino = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String label;
+    if (loading) {
+      label = filipino ? 'Sine-save...' : 'Saving...';
+    } else if (saved) {
+      label = filipino ? 'Na-save' : 'Saved';
+    } else {
+      label = filipino ? 'I-download' : 'Download';
+    }
+
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            loading
+                ? const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
+                  )
+                : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 12, color: AppColors.green700),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AppButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final AppButtonStyle style;
+  final IconData? icon;
+  final bool loading;
+
+  const AppButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.style = AppButtonStyle.primary,
+    this.icon,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = switch (style) {
+      AppButtonStyle.primary => Colors.white,
+      AppButtonStyle.outline => AppColors.ink,
+      AppButtonStyle.ghostRed => AppColors.red600,
+    };
+
+    final child = loading
+        ? SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) Padding(padding: const EdgeInsets.only(right: 7), child: Icon(icon, size: 16, color: fg)),
+              // Flexible so a label wider than the button wraps rather than
+              // overflowing: two side-by-side buttons at 360 gave "Tingnan ang
+              // Detalye" less width than it wanted. Centred so a wrapped second
+              // line stays under the first rather than ragged left.
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppText.display(size: 13, weight: FontWeight.w600, color: fg),
+                ),
+              ),
+            ],
+          );
+
+    final effectiveOnPressed = loading ? null : onPressed;
+
+    switch (style) {
+      case AppButtonStyle.primary:
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: effectiveOnPressed,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.green700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: child,
+          ),
+        );
+      case AppButtonStyle.outline:
+        return SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: effectiveOnPressed,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.ink,
+              side: const BorderSide(color: AppColors.line),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: child,
+          ),
+        );
+      case AppButtonStyle.ghostRed:
+        return SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: effectiveOnPressed,
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.red50,
+              foregroundColor: AppColors.red600,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: child,
+          ),
+        );
+    }
+  }
+}
+
+enum AppButtonStyle { primary, outline, ghostRed }
+class AuthTextField extends StatefulWidget {
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  final TextInputType keyboard;
+  final bool obscure;
+  final String? Function(String?)? validator;
+  final IconData? prefixIcon;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
+
+  const AuthTextField({
+    super.key,
+    required this.label,
+    required this.hint,
+    required this.controller,
+    this.keyboard = TextInputType.text,
+    this.obscure = false,
+    this.validator,
+    this.prefixIcon,
+    this.maxLength,
+    this.inputFormatters,
+  });
+
+  @override
+  State<AuthTextField> createState() => _AuthTextFieldState();
+}
+
+class _AuthTextFieldState extends State<AuthTextField> {
+  late bool _hidden = widget.obscure;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: widget.controller,
+            keyboardType: widget.keyboard,
+            obscureText: _hidden,
+            validator: widget.validator,
+            maxLength: widget.maxLength,
+            inputFormatters: widget.inputFormatters,
+            style: AppText.body(size: 13),
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
+              counterText: '',
+              prefixIcon: widget.prefixIcon != null
+                  ? Icon(widget.prefixIcon, size: 18, color: AppColors.inkFaint)
+                  : null,
+              suffixIcon: widget.obscure
+                  ? IconButton(
+                      onPressed: () => setState(() => _hidden = !_hidden),
+                      icon: Icon(
+                        _hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        size: 18,
+                        color: AppColors.inkFaint,
+                      ),
+                    )
+                  : null,
+              filled: true,
+              fillColor: AppColors.surface,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              errorStyle: AppText.body(size: 11, color: AppColors.red600),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A request still in flight has no server reference number yet, so the copy
+/// has to read naturally without one rather than printing a bare `#`.
+String _refSuffix(String refNo) => refNo.isEmpty ? '' : ' #$refNo';
+
+/// [onConfirmed] must resolve to `true` only once the server has accepted the
+/// cancellation. The success message waits for it — the previous version fired
+/// the "has been cancelled" snackbar the instant the button was tapped, before
+/// any HTTP call had run and regardless of its outcome.
+void showCancelDialog(
+  BuildContext context,
+  String refNo,
+  Future<bool> Function() onConfirmed, {
+  bool filipino = false,
+}) {
+  showDialog(
+    context: context,
+    // The request is mid-flight once confirm is tapped; dismissing the dialog
+    // under it would leave the resident with no answer either way.
+    barrierDismissible: false,
+    builder: (ctx) => _CancelDialog(
+      refNo: refNo,
+      filipino: filipino,
+      onConfirmed: onConfirmed,
+    ),
+  );
+}
+
+class _CancelDialog extends StatefulWidget {
+  final String refNo;
+  final bool filipino;
+  final Future<bool> Function() onConfirmed;
+
+  const _CancelDialog({
+    required this.refNo,
+    required this.filipino,
+    required this.onConfirmed,
+  });
+
+  @override
+  State<_CancelDialog> createState() => _CancelDialogState();
+}
+
+class _CancelDialogState extends State<_CancelDialog> {
+  bool _busy = false;
+
+  Future<void> _confirm() async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+
+    // Resolved before the await: the messenger lives above this dialog's route
+    // and survives the pop, while this State's context does not.
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final cancelled = await widget.onConfirmed();
+
+    if (!mounted) {
+      return;
+    }
+    navigator.pop();
+
+    if (cancelled) {
+      final f = widget.filipino;
+      showAppSnackBarOn(
+        messenger,
+        f
+            ? 'Nakansela na ang kahilingan${_refSuffix(widget.refNo)}.'
+            : 'Request${_refSuffix(widget.refNo)} has been cancelled.',
+      );
+    }
+    // On failure the store has already rolled the row back and set lastError,
+    // which the shell drains into a red snackbar. Saying anything here would
+    // duplicate it.
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.filipino;
+    return PopScope(
+      canPop: !_busy,
+      child: AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
+          style: AppText.display(size: 16),
+        ),
+        content: Text(
+          f
+              ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
+              : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
+          style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.pop(context),
+            child: Text(
+              f ? 'Panatilihin' : 'Keep request',
+              style: AppText.display(
+                size: 13,
+                weight: FontWeight.w600,
+                color: _busy ? AppColors.inkFaint : AppColors.inkMuted,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _busy ? null : _confirm,
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.red50,
+              foregroundColor: AppColors.red600,
+            ),
+            child: _busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.red600),
+                  )
+                : Text(
+                    f ? 'Kanselahin' : 'Cancel request',
+                    style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.red600),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void showAppSnackBar(BuildContext context, String message, {bool isError = false}) {
+  showAppSnackBarOn(ScaffoldMessenger.of(context), message, isError: isError);
+}
+
+/// Same snackbar, addressed to a messenger captured before an await. A caller
+/// that pops its own route first has no usable BuildContext left.
+void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool isError = false}) {
+  messenger.clearSnackBars();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(message, style: AppText.display(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+      backgroundColor: isError ? AppColors.red600 : AppColors.green900,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.fromLTRB(22, 0, 22, 90),
+      // Failures need longer on screen than confirmations.
+      duration: Duration(seconds: isError ? 4 : 2),
+    ),
+  );
+}
+
+/// The bell sheet.
+///
+/// It used to hold one hardcoded welcome message and nothing else, so a
+/// resident who tapped the bell during a flood read "We're glad to have you
+/// with Echague MDRRMO". There is still no advisory feed on the backend, so
+/// this shows the only real updates the app has: the state of the resident's
+/// own requests, each with the timestamp the row actually carries.
+class NotificationsSheet extends StatelessWidget {
+  final bool filipino;
+  final List<ServiceRequest> requests;
+
+  const NotificationsSheet({
+    super.key,
+    this.filipino = false,
+    this.requests = const [],
+  });
+
+  static void show(
+    BuildContext context, {
+    bool filipino = false,
+    List<ServiceRequest> requests = const [],
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => NotificationsSheet(filipino: filipino, requests: requests),
+    );
+  }
+
+  /// Newest movement first — that is the order a notification list is read in.
+  /// A request with no timestamps sorts last rather than to the top.
+  List<ServiceRequest> get _ordered {
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    return [...requests]..sort((a, b) {
+        final left = a.updatedAt ?? a.createdAt ?? epoch;
+        final right = b.updatedAt ?? b.createdAt ?? epoch;
+        return right.compareTo(left);
+      });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(filipino ? 'Mga Abiso' : 'Notifications', style: AppText.display(size: 18)),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.green700),
+                style: IconButton.styleFrom(backgroundColor: AppColors.green50, padding: const EdgeInsets.all(6)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (requests.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.green50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.green50),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.green700),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    tr(filipino, 'notif.empty_title'),
+                    style: AppText.display(size: 15, color: AppColors.green900),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tr(filipino, 'notif.empty_body'),
+                    style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            // Bounded so a resident with a long history gets a scrollable sheet
+            // instead of one that runs off the screen.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * .5,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final request in _ordered)
+                    _RequestUpdateTile(request: request, filipino: filipino),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Says what this list is, so nobody reads the absence of a flood
+            // warning here as the absence of a flood.
+            Text(
+              tr(filipino, 'notif.scope_note'),
+              style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestUpdateTile extends StatelessWidget {
+  final ServiceRequest request;
+  final bool filipino;
+
+  const _RequestUpdateTile({required this.request, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final at = request.updatedAt ?? request.createdAt;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconBadge(
+            icon: request.displayIcon,
+            bg: request.status.bg,
+            fg: request.status.fg,
+            size: 36,
+            iconSize: 17,
+            radius: 10,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.displayTitle(filipino),
+                  style: AppText.display(size: 13, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  at == null
+                      ? tr(filipino, 'timeline.time_unknown')
+                      : formatTimelineTime(at, filipino),
+                  style: AppText.body(size: 11, color: AppColors.inkFaint),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  request.refNo.isEmpty
+                      ? request.status.labelFor(filipino)
+                      : '${request.status.labelFor(filipino)} · ${request.refNo}',
+                  style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

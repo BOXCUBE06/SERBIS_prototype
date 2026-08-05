@@ -1,0 +1,11 @@
+# Obsidian knowledge-base vault — lives inside the repo folder for the
+# Local REST API / MCP path, but is not part of the codebase.
+/obsidian-vault/
+
+# Transfer-bundle leftovers (carry secrets: APP_KEY, SkySMS key)
+/backend-env/
+/claude-global/
+/README-TRANSFER.md
+
+# Claude Code local machine state
+/.claude/settings.local.json

@@ -2,18 +2,28 @@
   <v-navigation-drawer
     theme="dark"
     permanent
-    width="280"
+    width="260"
     class="modern-drawer"
   >
-    <div class="pa-5 d-flex flex-column h-100">
+    <div class="pa-4 d-flex flex-column h-100">
       
-      <div class="d-flex align-center mb-8 mt-2 px-2">
-        <div class="logo-accent"></div>
-        <span class="text-h5 font-weight-black text-white tracking-widest">SERBIS</span>
+      <div class="d-flex align-center justify-space-between mb-8 mt-2 px-2">
+        <div class="d-flex align-center">
+          <div class="logo-accent"></div>
+          <span class="text-h6 font-weight-black text-white tracking-widest">SERBIS</span>
+        </div>
+        <v-btn
+          :icon="theme.global.name.value === 'dark' ? 'mdi-weather-sunny' : 'mdi-weather-night'"
+          size="small"
+          variant="text"
+          color="grey-lighten-1"
+          :aria-label="theme.global.name.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="toggle"
+        ></v-btn>
       </div>
 
-      <div class="text-overline font-weight-medium text-white-50 mb-2 px-2 tracking-widest">Main Menu</div>
-      <v-list bg-color="transparent" density="comfortable" nav class="px-0">
+      <div class="text-caption font-weight-medium text-white-50 mb-2 px-2 tracking-widest">Main Menu</div>
+      <v-list bg-color="transparent" density="compact" nav class="px-0">
         <v-list-item 
           v-for="item in mainMenu" 
           :key="item.to" 
@@ -24,8 +34,8 @@
           :ripple="false"
         >
           <template v-slot:prepend>
-            <v-avatar rounded="circle" size="36" class="nav-icon-avatar mr-4" color="transparent">
-              <v-icon size="20" color="grey-lighten-1">{{ item.icon }}</v-icon>
+            <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
+              <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
             </v-avatar>
           </template>
           <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
@@ -34,8 +44,8 @@
         </v-list-item>
       </v-list>
 
-      <div class="text-overline font-weight-medium text-white-50 mt-6 mb-2 px-2 tracking-widest">System</div>
-      <v-list bg-color="transparent" density="comfortable" nav class="px-0">
+      <div class="text-caption font-weight-medium text-white-50 mt-6 mb-2 px-2 tracking-widest">System</div>
+      <v-list bg-color="transparent" density="compact" nav class="px-0">
         <v-list-item 
           v-for="item in systemMenu" 
           :key="item.to" 
@@ -46,8 +56,8 @@
           :ripple="false"
         >
           <template v-slot:prepend>
-            <v-avatar rounded="circle" size="36" class="nav-icon-avatar mr-4" color="transparent">
-              <v-icon size="20" color="grey-lighten-1">{{ item.icon }}</v-icon>
+            <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
+              <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
             </v-avatar>
           </template>
           <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
@@ -61,19 +71,19 @@
       <v-card 
         color="rgba(255, 255, 255, 0.03)" 
         border="0" 
-        class="pa-3 d-flex align-center mt-auto profile-card"
+        class="pa-2 d-flex align-center mt-auto profile-card"
         style="cursor: pointer"
         @click="showLogoutDialog = true"
       >
-        <v-avatar size="38" color="rgba(255, 255, 255, 0.1)" class="mr-3 avatar-soft">
+        <v-avatar size="32" color="rgba(255, 255, 255, 0.1)" class="mr-2 avatar-soft">
           <v-icon color="white" size="small">mdi-account-outline</v-icon>
         </v-avatar>
-        <div>
-          <div class="text-body-2 font-weight-bold text-white">MDRRMO Admin</div>
-          <div class="text-caption text-white-50">Echague Panel</div>
+        <div style="min-width: 0;">
+          <div class="text-caption font-weight-bold text-white text-truncate">MDRRMO Admin</div>
+          <div class="text-white-50 text-truncate" style="font-size: 0.65rem !important;">Echague Panel</div>
         </div>
         <v-spacer></v-spacer>
-        <v-icon color="white-50" size="small" class="mr-1 logout-icon">mdi-logout</v-icon>
+        <v-icon color="white-50" size="small" class="logout-icon">mdi-logout</v-icon>
       </v-card>
     </div>
   </v-navigation-drawer>
@@ -98,8 +108,10 @@
 
 <script setup lang="ts">
 import { useAuth } from './index'
+import { useAppTheme } from '@/composables/useAppTheme'
 
 const { isLoggingOut, showLogoutDialog, handleLogout } = useAuth()
+const { theme, toggle } = useAppTheme()
 
 const mainMenu = [
   { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
@@ -123,7 +135,6 @@ const systemMenu = [
 
 .modern-drawer {
   font-family: 'Inter', sans-serif;
-  /* Soft gradient emerging from the left-middle */
   background: radial-gradient(circle at -10% 50%, #154c41 0%, #0A2620 80%) !important;
 }
 
@@ -131,17 +142,15 @@ const systemMenu = [
 .text-white-50 { color: rgba(255, 255, 255, 0.5) !important; }
 
 .logo-accent {
-  width: 4px; height: 24px;
+  width: 4px; height: 20px;
   background-color: #fff;
   margin-right: 12px; border-radius: 2px;
 }
 
-/* Consolidated Transitions */
 .nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* Nav Item Hover States */
 .nav-item:hover:not(.active-nav-item) {
   background-color: rgba(255, 255, 255, 0.04) !important;
   transform: translateX(4px);
@@ -150,18 +159,14 @@ const systemMenu = [
 .nav-item:hover:not(.active-nav-item) .nav-label,
 .nav-item:hover:not(.active-nav-item) .v-icon { color: #fff !important; }
 
-/* Nav Item Active State */
 .active-nav-item {
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%) !important;
 }
 .active-nav-item .nav-label, .active-nav-item .v-icon { color: #fff !important; font-weight: 700 !important; }
 .active-nav-item .nav-icon-avatar { border: 1px solid rgba(255, 255, 255, 0.15); }
 
-/* Profile Card Hover */
 .profile-card { border-radius: 12px !important; border: 1px solid rgba(255, 255, 255, 0.02) !important; }
 .profile-card:hover { background-color: rgba(255, 255, 255, 0.06) !important; border-color: rgba(255, 255, 255, 0.1) !important; transform: translateY(-2px); }
 .profile-card:hover .logout-icon { color: #ef4444 !important; transform: translateX(2px); }
 .profile-card:hover .avatar-soft { transform: scale(1.05); }
-
-
 </style>
