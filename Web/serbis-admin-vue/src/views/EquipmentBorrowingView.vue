@@ -2,34 +2,10 @@
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
 
     <!-- Header -->
-    <div class="d-flex flex-wrap align-center justify-space-between gap-4 mb-6">
-      <div>
-        <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
-        <div class="text-subtitle-2 text-medium-emphasis">
-          Move each request through the pipeline — approve, release, then confirm its return
-        </div>
-      </div>
-      <div class="d-flex align-center gap-3 flex-wrap">
-        <v-select
-          v-model="itemFilter"
-          :items="itemOptions"
-          prepend-inner-icon="mdi-package-variant-closed"
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="item-field"
-        ></v-select>
-        <v-text-field
-          v-model="search"
-          prepend-inner-icon="mdi-magnify"
-          placeholder="Search resident or item..."
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="search-field"
-        ></v-text-field>
+    <div class="mb-6">
+      <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
+      <div class="text-subtitle-2 text-medium-emphasis">
+        Move each request through the pipeline — approve, release, then confirm its return
       </div>
     </div>
 
@@ -49,6 +25,93 @@
         <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ historyItems.length }}</v-chip>
       </v-tab>
     </v-tabs>
+
+    <!-- The filters sit under the tabs, not in the header, because they apply to
+         whichever surface is showing and reading them second makes that order
+         explicit. Every control now carries a visible label: the old bar was
+         placeholder-only, so a chosen item filter became invisible the moment it
+         was applied and a board emptied by a stale filter read as an empty
+         database. -->
+    <div class="filter-bar mb-4">
+      <v-text-field
+        v-model="search"
+        label="Search"
+        placeholder="Resident or item"
+        prepend-inner-icon="mdi-magnify"
+        variant="outlined"
+        density="compact"
+        hide-details
+        clearable
+        rounded="lg"
+        class="filter-field"
+      ></v-text-field>
+      <v-select
+        v-model="itemFilter"
+        :items="itemOptions"
+        label="Equipment"
+        prepend-inner-icon="mdi-package-variant-closed"
+        variant="outlined"
+        density="compact"
+        hide-details
+        rounded="lg"
+        class="filter-field"
+      ></v-select>
+      <v-select
+        v-model="barangayFilter"
+        :items="barangayOptions"
+        label="Barangay"
+        prepend-inner-icon="mdi-map-marker-outline"
+        variant="outlined"
+        density="compact"
+        hide-details
+        rounded="lg"
+        class="filter-field"
+      ></v-select>
+
+      <!-- Board only, and hidden rather than disabled on History: a returned or
+           denied record can never be overdue, so there the switch would filter
+           every row away and read as a broken page. The count rides on the label
+           so the number is available without turning the filter on. -->
+      <v-switch
+        v-if="activeTab === 'board'"
+        v-model="overdueOnly"
+        :label="`Overdue only (${overdueCount})`"
+        color="error"
+        density="compact"
+        hide-details
+        inset
+        class="overdue-switch"
+      ></v-switch>
+    </div>
+
+    <!-- Active filters, each removable on its own, plus a clear-all. The count
+         line is a live region: filtering changes the whole page silently
+         otherwise, and it is the only feedback that says a filter — rather than
+         an empty queue — is why three columns are bare. -->
+    <div v-if="!initialLoad" class="d-flex align-center flex-wrap gap-2 mb-4">
+      <template v-if="activeFilters.length">
+        <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
+        <v-chip
+          v-for="f in activeFilters"
+          :key="f.key"
+          size="small"
+          variant="outlined"
+          closable
+          class="filter-chip font-weight-medium"
+          :close-label="`Remove filter: ${f.label}`"
+          @click:close="clearFilter(f.key)"
+        >{{ f.label }}</v-chip>
+        <v-btn
+          variant="text"
+          size="small"
+          class="text-none font-weight-bold"
+          @click="clearAllFilters"
+        >Clear all</v-btn>
+      </template>
+      <span class="text-caption text-medium-emphasis ml-auto" aria-live="polite">
+        {{ resultSummary }}
+      </span>
+    </div>
 
     <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
@@ -168,8 +231,11 @@
             </div>
           </article>
 
+          <!-- A column empty because the work is done and one empty because a
+               filter excluded everything are different facts and must not read
+               the same. -->
           <div v-if="!grouped[col.status].length" class="kanban-empty text-caption text-medium-emphasis">
-            Nothing here
+            {{ activeFilters.length ? 'No matches here' : 'Nothing here' }}
           </div>
         </div>
       </section>
@@ -229,11 +295,24 @@
 
         <template v-slot:no-data>
           <div class="text-center py-12">
-            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-archive-outline</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests yet</div>
-            <div class="text-caption text-medium-emphasis">
-              Returned and denied requests are kept here once they leave the board.
-            </div>
+            <v-icon size="40" class="text-medium-emphasis mb-2">
+              {{ activeFilters.length ? 'mdi-filter-remove-outline' : 'mdi-archive-outline' }}
+            </v-icon>
+            <template v-if="activeFilters.length">
+              <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests match</div>
+              <div class="text-caption text-medium-emphasis mb-3">
+                {{ totalHistory }} record{{ totalHistory === 1 ? '' : 's' }} are hidden by the filters above.
+              </div>
+              <v-btn variant="outlined" size="small" class="text-none font-weight-bold" @click="clearAllFilters">
+                Clear all filters
+              </v-btn>
+            </template>
+            <template v-else>
+              <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests yet</div>
+              <div class="text-caption text-medium-emphasis">
+                Returned and denied requests are kept here once they leave the board.
+              </div>
+            </template>
           </div>
         </template>
       </v-data-table>
@@ -428,10 +507,17 @@ const columns = [
   { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true, muted: true },
 ]
 
+// The "no filter" sentinel for each select. Named rather than repeated as a
+// string literal: it is compared in four places and rendered in one.
+const ALL_ITEMS = 'All items'
+const ALL_BARANGAYS = 'All barangays'
+
 const borrowings = ref([])
 const activeTab = ref('board')
 const search = ref('')
-const itemFilter = ref('All items')
+const itemFilter = ref(ALL_ITEMS)
+const barangayFilter = ref(ALL_BARANGAYS)
+const overdueOnly = ref(false)
 const initialLoad = ref(true)
 const loading = ref(false)
 const processingId = ref(null)
@@ -468,17 +554,28 @@ const historyHeaders = [
   { title: 'Outcome', key: 'status', align: 'center', width: '18%' },
 ]
 
-// Distinct equipment names present in the current requests, for the item filter.
-const itemOptions = computed(() => {
-  const names = new Set()
+// Option lists come from the records actually loaded, so a barangay with no
+// borrowings never appears as a filter that can only ever return nothing. They
+// are deliberately not narrowed by each other: an equipment list that shrinks
+// when a barangay is picked makes the two controls feel broken.
+const distinct = (pick) => {
+  const values = new Set()
   for (const b of borrowings.value) {
-    if (b.equipment?.item_name) names.add(b.equipment.item_name)
+    const v = pick(b)
+    if (v) values.add(v)
   }
-  return ['All items', ...[...names].sort((a, b) => a.localeCompare(b))]
-})
+  return [...values].sort((a, b) => a.localeCompare(b))
+}
 
+const itemOptions = computed(() => [ALL_ITEMS, ...distinct((b) => b.equipment?.item_name)])
+const barangayOptions = computed(() => [
+  ALL_BARANGAYS,
+  ...distinct((b) => b.resident?.barangay?.barangay_name),
+])
+
+// `clearable` writes null, not '', so the guard is not decorative.
 const matchesSearch = (b) => {
-  const q = search.value.trim().toLowerCase()
+  const q = (search.value || '').trim().toLowerCase()
   if (!q) return true
   const name = `${b.resident?.first_name || ''} ${b.resident?.last_name || ''}`.toLowerCase()
   const item = (b.equipment?.item_name || '').toLowerCase()
@@ -486,25 +583,88 @@ const matchesSearch = (b) => {
 }
 
 const matchesItem = (b) =>
-  itemFilter.value === 'All items' || b.equipment?.item_name === itemFilter.value
+  itemFilter.value === ALL_ITEMS || b.equipment?.item_name === itemFilter.value
 
-// Bucket records by status, newest first, filtered by item + search.
+const matchesBarangay = (b) =>
+  barangayFilter.value === ALL_BARANGAYS ||
+  b.resident?.barangay?.barangay_name === barangayFilter.value
+
+// The three filters that mean the same thing on both surfaces. Overdue is not
+// one of them — see `grouped`.
+const matchesFilters = (b) => matchesItem(b) && matchesBarangay(b) && matchesSearch(b)
+
+// Bucket records by status, newest first. Overdue is applied here and only here:
+// `isOverdue` is false for every terminal record by definition, so folding it
+// into `matchesFilters` would empty the History tab whenever the switch was left
+// on rather than filtering it.
 const grouped = computed(() => {
   const out = Object.fromEntries(columns.map((c) => [c.status, []]))
   for (const b of borrowings.value) {
-    if (out[b.status] && matchesItem(b) && matchesSearch(b)) out[b.status].push(b)
+    if (!out[b.status] || !matchesFilters(b)) continue
+    if (overdueOnly.value && !isOverdue(b)) continue
+    out[b.status].push(b)
   }
   for (const k in out) out[k].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   return out
 })
 
-// Terminal records, same item + search filters as the board so a search spans
-// both tabs rather than quietly applying to one of them.
+// Terminal records, same shared filters as the board so a search spans both tabs
+// rather than quietly applying to one of them.
 const historyItems = computed(() =>
   borrowings.value
-    .filter((b) => terminalStatuses.includes(b.status) && matchesItem(b) && matchesSearch(b))
+    .filter((b) => terminalStatuses.includes(b.status) && matchesFilters(b))
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
+
+// What the switch would leave if it were turned on — the other filters still
+// apply, or the number would not describe the button that carries it.
+const overdueCount = computed(
+  () => borrowings.value.filter((b) => matchesFilters(b) && isOverdue(b)).length,
+)
+
+const activeFilters = computed(() => {
+  const out = []
+  const q = (search.value || '').trim()
+  if (q) out.push({ key: 'search', label: `Search: "${q}"` })
+  if (itemFilter.value !== ALL_ITEMS) out.push({ key: 'item', label: `Equipment: ${itemFilter.value}` })
+  if (barangayFilter.value !== ALL_BARANGAYS) out.push({ key: 'barangay', label: `Barangay: ${barangayFilter.value}` })
+  // Only claimed on the board, because that is the only tab it acts on.
+  if (overdueOnly.value && activeTab.value === 'board') out.push({ key: 'overdue', label: 'Overdue only' })
+  return out
+})
+
+const clearFilter = (key) => {
+  if (key === 'search') search.value = ''
+  else if (key === 'item') itemFilter.value = ALL_ITEMS
+  else if (key === 'barangay') barangayFilter.value = ALL_BARANGAYS
+  else if (key === 'overdue') overdueOnly.value = false
+}
+
+const clearAllFilters = () => {
+  search.value = ''
+  itemFilter.value = ALL_ITEMS
+  barangayFilter.value = ALL_BARANGAYS
+  overdueOnly.value = false
+}
+
+const totalActive = computed(
+  () => borrowings.value.filter((b) => !terminalStatuses.includes(b.status)).length,
+)
+const totalHistory = computed(
+  () => borrowings.value.filter((b) => terminalStatuses.includes(b.status)).length,
+)
+
+// Counts the tab actually showing, against that tab's unfiltered total. Says
+// "of" only when something is being hidden, so the line is not a permanent
+// accusation that a filter is on.
+const resultSummary = computed(() => {
+  const history = activeTab.value === 'history'
+  const total = history ? totalHistory.value : totalActive.value
+  const shown = history ? historyItems.value.length : activeCount.value
+  const noun = history ? 'completed' : 'active'
+  if (shown === total) return `${total} ${noun} request${total === 1 ? '' : 's'}`
+  return `Showing ${shown} of ${total} ${noun} requests`
+})
 
 // Counts the tab badges show. The board count is what is left to act on, which
 // is the number the operator actually needs.
@@ -722,8 +882,32 @@ onMounted(fetchData)
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
-.search-field { width: 260px; max-width: 100%; }
-.item-field { width: 210px; max-width: 100%; }
+
+/* Filter bar. Fixed-width fields that wrap rather than a grid: the switch is
+   conditional, so a fixed column count would leave a hole on the History tab. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.filter-field { width: 220px; max-width: 100%; }
+.overdue-switch { flex: 0 0 auto; }
+
+/* Below 600px three 220px fields wrap to three ragged rows. Full width each. */
+@media (max-width: 599px) {
+  .filter-field { flex: 1 1 100%; width: 100%; }
+}
+
+/* primary-strong again, not primary. Vuetify's tonal chip draws the label on a
+   12% tint of the same colour, which measures 4.40:1 and is the exact pairing
+   that already failed AA three times on this page. Outlined puts the label on
+   the page surface instead — primary would pass there at 5.16:1, but the
+   stronger token is what the rest of this view uses, at 6.61:1. */
+.filter-chip {
+  color: rgb(var(--v-theme-primary-strong));
+  border-color: rgba(var(--v-theme-primary), 0.45);
+}
 
 /* Board.
    Grid with minmax(0, 1fr) rather than flex with a min-width: a flex item's
