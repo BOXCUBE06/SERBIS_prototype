@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class EquipmentBorrowingController extends Controller
 {
@@ -49,6 +50,29 @@ class EquipmentBorrowingController extends Controller
             'equipment_id' => 'required|exists:tbl_equipments,equipment_id',
             'quantity' => 'required|integer|min:1',
         ]);
+
+        // The rules above bound the shape and never the amount, so a resident
+        // could file for fifty of an item the office owns four of. Nothing
+        // rejected it until an admin tried to release it, by which point the
+        // request had already been approved.
+        //
+        // This is a satisfiability check, not a reservation: stock moves only on
+        // Released, so two Pending requests for the whole shelf are both filed
+        // and the second one fails at release time. Reserving on Pending would
+        // let anyone empty the inventory with requests nobody ever approves.
+        // For the same reason no lock is taken — there is no write to race with.
+        $equipment = Equipment::find($validated['equipment_id']);
+
+        if (! $equipment || $equipment->available_quantity < $validated['quantity']) {
+            $available = $equipment?->available_quantity ?? 0;
+
+            // Raised as a field error rather than a bare message so a client can
+            // put it on the quantity input. `update()` answers with a plain
+            // message because its 422 is about the record, not about one field.
+            throw ValidationException::withMessages([
+                'quantity' => "Only {$available} of this item are available to borrow.",
+            ]);
+        }
 
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
