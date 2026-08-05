@@ -5,13 +5,32 @@ import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import 'shared_widgets.dart';
 
-/// The valid-ID picker. The file itself is picked by the screen — this only
-/// reports what is attached.
-class ValidIdUploadField extends StatelessWidget {
+/// An upload slot on the request form. The file itself is picked by the screen
+/// — this only reports what is attached.
+///
+/// Was `ValidIdUploadField`, with the label and the hint written into it. A
+/// second, optional upload (the site photo) needs the same control with
+/// different words and a way to take the file back off again, and a
+/// hand-written copy of this is where the two would drift apart.
+class AttachmentUploadField extends StatelessWidget {
+  final String label;
+  final String hint;
   final String? fileName;
   final VoidCallback onTap;
 
-  const ValidIdUploadField({super.key, required this.fileName, required this.onTap});
+  /// Supplied only for an optional attachment. A resident who attaches the
+  /// wrong photo to a required field replaces it; on an optional one there is
+  /// no other way back to "none", short of abandoning the form.
+  final VoidCallback? onClear;
+
+  const AttachmentUploadField({
+    super.key,
+    required this.label,
+    required this.hint,
+    required this.fileName,
+    required this.onTap,
+    this.onClear,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +40,7 @@ class ValidIdUploadField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Valid ID (required)', style: AppText.display(size: 12, weight: FontWeight.w600)),
+          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
           const SizedBox(height: 6),
           InkWell(
             onTap: onTap,
@@ -44,11 +63,24 @@ class ValidIdUploadField extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      hasFile ? fileName! : 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
+                      hasFile ? fileName! : hint,
                       style: AppText.body(size: 12, color: hasFile ? AppColors.green900 : AppColors.inkMuted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (hasFile && onClear != null)
+                    // Its own tap target, outside the InkWell that reopens the
+                    // picker — nested inside it, clearing would also relaunch
+                    // the file browser.
+                    IconButton(
+                      onPressed: onClear,
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      color: AppColors.inkMuted,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      tooltip: 'Remove $label',
+                    ),
                 ],
               ),
             ),

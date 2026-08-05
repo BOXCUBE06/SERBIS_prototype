@@ -49,6 +49,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   fp.PlatformFile? _validIdFile;
 
+  /// Optional. The backend note calls this the road-clearing form's upload, but
+  /// it is offered on every service: a blocked driveway matters to an ambulance
+  /// dispatch as much as to a clearing crew, and a rule about which forms may
+  /// carry a photo is one the resident would have to discover by its absence.
+  fp.PlatformFile? _sitePhotoFile;
+
   /// True after a submit that never reached the server. Drives a persistent
   /// error card with Retry — a snackbar alone auto-dismisses, and the previous
   /// code showed a success sheet instead.
@@ -166,14 +172,29 @@ class _ServicesScreenState extends State<ServicesScreen> {
   String _nowLabel() => formatTimelineTime(DateTime.now(), false);
 
   Future<void> _pickValidId() async {
+    final picked = await _pickImage();
+    if (picked != null) {
+      setState(() => _validIdFile = picked);
+    }
+  }
+
+  Future<void> _pickSitePhoto() async {
+    final picked = await _pickImage();
+    if (picked != null) {
+      setState(() => _sitePhotoFile = picked);
+    }
+  }
+
+  Future<fp.PlatformFile?> _pickImage() async {
     final result = await fp.FilePicker.platform.pickFiles(
       type: fp.FileType.custom,
       allowedExtensions: ['jpg', 'jpeg', 'png'],
       withData: true, // ensures .bytes is populated (needed on web)
     );
-    if (result != null && result.files.isNotEmpty) {
-      setState(() => _validIdFile = result.files.first);
+    if (result == null || result.files.isEmpty) {
+      return null;
     }
+    return result.files.first;
   }
 
   Future<void> _submit() async {
@@ -240,6 +261,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
         request,
         validIdFileBytes: _validIdFile!.bytes!,
         validIdFileName: _validIdFile!.name,
+        // `bytes` is null when the picker returns a path-only file, which is
+        // what happens if `withData` ever stops holding. Sending the name
+        // without the bytes would be a 422 on an upload the resident is not
+        // required to make at all.
+        sitePhotoBytes: _sitePhotoFile?.bytes,
+        sitePhotoFileName: _sitePhotoFile?.bytes == null ? null : _sitePhotoFile?.name,
       );
     } finally {
       if (mounted) {
@@ -259,7 +286,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return;
     }
 
-    setState(() => _submitFailed = false);
+    // The ID is kept — it is the same ID next time, and re-picking it is pure
+    // friction. The site photo is not: it is a photo of one incident, and
+    // leaving it attached would silently file the last emergency's scene with
+    // the next request. On the failure path above it stays, because Retry has
+    // to cost one tap.
+    setState(() {
+      _submitFailed = false;
+      _sitePhotoFile = null;
+    });
 
     // A mutable local is not promoted inside a closure, and the sheet's builder
     // is one.
@@ -320,9 +355,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   data: _formFor(selection.formKind),
                   onChanged: () => setState(() {}),
                 ),
-                ValidIdUploadField(
+                AttachmentUploadField(
+                  label: 'Valid ID (required)',
+                  hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
                   fileName: _validIdFile?.name,
                   onTap: _pickValidId,
+                ),
+                AttachmentUploadField(
+                  label: 'Photo of the site (optional)',
+                  hint: 'Tap to add a photo of the scene (jpg/png, max 4MB)',
+                  fileName: _sitePhotoFile?.name,
+                  onTap: _pickSitePhoto,
+                  onClear: () => setState(() => _sitePhotoFile = null),
                 ),
                 if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
                 const SizedBox(height: 6),

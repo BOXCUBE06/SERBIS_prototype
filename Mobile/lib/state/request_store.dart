@@ -424,6 +424,8 @@ class AppState extends ChangeNotifier {
     required List<int> validIdFileBytes,
     required String validIdFileName,
     String? requiredVehicleType,
+    List<int>? sitePhotoBytes,
+    String? sitePhotoFileName,
   }) async {
     requests.insert(0, request);
     notifyListeners();
@@ -446,6 +448,8 @@ class AppState extends ChangeNotifier {
         validIdFileBytes: validIdFileBytes,
         validIdFileName: validIdFileName,
         requiredVehicleType: requiredVehicleType,
+        sitePhotoBytes: sitePhotoBytes,
+        sitePhotoFileName: sitePhotoFileName,
       );
 
       final confirmed = _resolveService(ServiceRequest.fromJson(result));
