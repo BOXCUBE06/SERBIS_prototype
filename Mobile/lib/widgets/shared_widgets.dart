@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/advisory.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -659,29 +660,46 @@ void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool i
 ///
 /// It used to hold one hardcoded welcome message and nothing else, so a
 /// resident who tapped the bell during a flood read "We're glad to have you
-/// with Echague MDRRMO". There is still no advisory feed on the backend, so
-/// this shows the only real updates the app has: the state of the resident's
-/// own requests, each with the timestamp the row actually carries.
+/// with Echague MDRRMO". It then showed the resident's own request updates and
+/// said plainly that MDRRMO advisories were not sent here.
+///
+/// They are now. The blasts the agency texted this resident come first, above
+/// the request updates: a warning outranks a status change, and burying one
+/// under "Request resolved" is the failure mode this sheet exists to avoid.
 class NotificationsSheet extends StatelessWidget {
   final bool filipino;
   final List<ServiceRequest> requests;
+  final List<Advisory> advisories;
+
+  /// Non-null when the advisory fetch failed. Rendered instead of "none sent" —
+  /// those two look identical on screen and mean opposite things.
+  final String? advisoriesError;
 
   const NotificationsSheet({
     super.key,
     this.filipino = false,
     this.requests = const [],
+    this.advisories = const [],
+    this.advisoriesError,
   });
 
   static void show(
     BuildContext context, {
     bool filipino = false,
     List<ServiceRequest> requests = const [],
+    List<Advisory> advisories = const [],
+    String? advisoriesError,
   }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => NotificationsSheet(filipino: filipino, requests: requests),
+      builder: (_) => NotificationsSheet(
+        filipino: filipino,
+        requests: requests,
+        advisories: advisories,
+        advisoriesError: advisoriesError,
+      ),
     );
   }
 
@@ -728,61 +746,205 @@ class NotificationsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          if (requests.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.green50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.green50),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          // Bounded so a resident with a long history gets a scrollable sheet
+          // instead of one that runs off the screen. Both sections share the
+          // one scroll view — two independently scrolling lists in a sheet is
+          // how the advisory section ends up a 40-pixel window.
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * .6,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                _SectionLabel(text: tr(filipino, 'notif.advisories')),
+                if (advisoriesError != null)
+                  // Never "no advisories" on a failed fetch. The wording says
+                  // outright that silence here is not an all-clear.
+                  _AdvisoryNotice(
+                    text: tr(filipino, 'notif.adv_failed'),
+                    icon: Icons.wifi_off_rounded,
+                    bg: AppColors.red50,
+                    fg: AppColors.red600,
+                  )
+                else if (advisories.isEmpty)
+                  _AdvisoryNotice(
+                    text: tr(filipino, 'notif.adv_none'),
+                    icon: Icons.campaign_outlined,
+                    bg: AppColors.green50,
+                    fg: AppColors.green700,
+                  )
+                else
+                  for (final advisory in advisories)
+                    _AdvisoryTile(advisory: advisory, filipino: filipino),
+                const SizedBox(height: 14),
+                _SectionLabel(text: tr(filipino, 'notif.your_requests')),
+                if (requests.isEmpty)
                   Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.green700),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    tr(filipino, 'notif.empty_title'),
-                    style: AppText.display(size: 15, color: AppColors.green900),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    tr(filipino, 'notif.empty_body'),
-                    style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
-                  ),
-                ],
-              ),
-            )
-          else ...[
-            // Bounded so a resident with a long history gets a scrollable sheet
-            // instead of one that runs off the screen.
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * .5,
-              ),
-              child: ListView(
-                shrinkWrap: true,
-                children: [
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.green50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.green50),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.green700),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          tr(filipino, 'notif.empty_title'),
+                          style: AppText.display(size: 15, color: AppColors.green900),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tr(filipino, 'notif.empty_body'),
+                          style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
+                        ),
+                      ],
+                    ),
+                  )
+                else
                   for (final request in _ordered)
                     _RequestUpdateTile(request: request, filipino: filipino),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Says what this list is and is not, so nobody reads it as more than
+          // it covers.
+          Text(
+            tr(filipino, 'notif.scope_note'),
+            style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+
+  const _SectionLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text.toUpperCase(),
+        style: AppText.display(size: 11, weight: FontWeight.w700, color: AppColors.inkMuted),
+      ),
+    );
+  }
+}
+
+/// The "none sent" and "could not load" states. Same shape, different colour
+/// and wording, so neither can be mistaken for the other at a glance.
+class _AdvisoryNotice extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final Color bg;
+  final Color fg;
+
+  const _AdvisoryNotice({
+    required this.text,
+    required this.icon,
+    required this.bg,
+    required this.fg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: fg),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.body(size: 12, color: AppColors.ink, height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdvisoryTile extends StatelessWidget {
+  final Advisory advisory;
+  final bool filipino;
+
+  const _AdvisoryTile({required this.advisory, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final at = advisory.sentAt;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.red50,
+        // Not colour alone: an advisory is marked by its own border and its
+        // megaphone as well as its tint.
+        border: Border.all(color: AppColors.red600, width: 1.2),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const IconBadge(
+            icon: Icons.campaign_rounded,
+            bg: AppColors.surface,
+            fg: AppColors.red600,
+            size: 36,
+            iconSize: 17,
+            radius: 10,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  at == null
+                      ? tr(filipino, 'notif.adv_date_unknown')
+                      : formatTimelineTime(at, filipino),
+                  style: AppText.body(size: 11, color: AppColors.inkFaint),
+                ),
+                const SizedBox(height: 4),
+                // The agency's own words, unmodified and never truncated: the
+                // instruction a resident has to act on is often the last line.
+                Text(
+                  advisory.message,
+                  style: AppText.body(size: 12.5, color: AppColors.ink, height: 1.5),
+                ),
+                if (advisory.barangay != null && advisory.barangay!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    advisory.barangay!,
+                    style: AppText.body(size: 11, color: AppColors.inkMuted),
+                  ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 8),
-            // Says what this list is, so nobody reads the absence of a flood
-            // warning here as the absence of a flood.
-            Text(
-              tr(filipino, 'notif.scope_note'),
-              style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
-            ),
-          ],
+          ),
         ],
       ),
     );

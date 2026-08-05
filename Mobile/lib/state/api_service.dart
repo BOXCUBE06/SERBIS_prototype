@@ -412,6 +412,14 @@ class ApiService {
     return listFrom(data);
   }
 
+  /// The SMS blasts this resident actually received. Admin accounts get a 403
+  /// here — the route is resident-only — which surfaces as an ApiException the
+  /// caller reports, not as an empty advisory list.
+  Future<List<Map<String, dynamic>>> getAdvisories() async {
+    final data = await _get('/advisories');
+    return listFrom(data);
+  }
+
   /// Fetches a published material's bytes from its absolute `full_url`, which
   /// points at the public storage disk rather than at `/api`. The auth header
   /// goes along anyway: it costs nothing on a public file and keeps working if

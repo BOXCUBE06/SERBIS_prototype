@@ -2,6 +2,7 @@
 library serbis.state.app_state;
 
 import 'package:flutter/foundation.dart';
+import '../models/advisory.dart';
 import '../models/info_material.dart';
 import '../models/request_models.dart';
 import 'api_service.dart';
@@ -68,6 +69,18 @@ class AppState extends ChangeNotifier {
   /// Library says so — a resident reading a week-old advisory during a flood
   /// needs to know it might be stale.
   bool materialsFromCache = false;
+
+  /// MDRRMO blasts this resident received, newest first. From
+  /// `GET /advisories`.
+  final List<Advisory> advisories = [];
+
+  bool advisoriesLoading = false;
+
+  /// Set when the fetch failed. **The notifications sheet must show this rather
+  /// than an empty advisory list.** An empty list and an unreachable server look
+  /// identical on screen, and the difference is whether the absence of a flood
+  /// warning means there is no flood.
+  String? advisoriesError;
 
   final FileOpener _fileOpener;
   final RequestCache _requestCache;
@@ -167,6 +180,52 @@ class AppState extends ChangeNotifier {
       services.clear();
       notifyListeners();
     }
+  }
+
+  /// The blasts MDRRMO sent this resident.
+  ///
+  /// Never routed to `lastError`: this runs on launch, on resume and on every
+  /// poll, and a snackbar per interval during an outage would cover the screen
+  /// with the one thing the resident cannot act on. The sheet reports it
+  /// inline instead, which is also the only place it means anything.
+  ///
+  /// A failure **keeps whatever was already loaded**. Clearing the list would
+  /// turn a lost signal into "no advisories", and this list is read to find out
+  /// whether a warning was issued.
+  Future<void> loadAdvisories() async {
+    advisoriesLoading = true;
+    notifyListeners();
+
+    try {
+      final list = await _api.getAdvisories();
+      final loaded = list
+          .map(Advisory.fromJson)
+          .where((advisory) => advisory.isReadable)
+          .toList()
+        // The server sends newest first; sorting here keeps that true whoever
+        // is answering, including a cached or proxied response.
+        ..sort((a, b) {
+          final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+          return (b.sentAt ?? epoch).compareTo(a.sentAt ?? epoch);
+        });
+
+      advisories
+        ..clear()
+        ..addAll(loaded);
+      advisoriesError = null;
+    } catch (error) {
+      advisoriesError = error is ApiException
+          ? error.message
+          : 'Something went wrong. Please try again.';
+
+      // The count, not the messages: how many the resident is still seeing is
+      // the diagnostic, and what the agency told them is their business.
+      AppLog.error(_logArea, 'load advisories', error: error,
+          reason: 'kept ${advisories.length} already loaded');
+    }
+
+    advisoriesLoading = false;
+    notifyListeners();
   }
 
   /// Loads the offline index first, then refreshes from the server. The index

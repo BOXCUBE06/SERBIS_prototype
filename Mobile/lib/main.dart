@@ -305,6 +305,10 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     // an empty Track screen saying "No requests yet" during a flood.
     _appState.hydrateRequests();
     _appState.loadRequests();
+    // Fetched on launch rather than when the bell is tapped: an advisory is
+    // worth having in hand before the resident goes looking for it, and the
+    // response is a handful of rows.
+    _appState.loadAdvisories();
     _syncPolling();
     // Service names are server-side, so Track and the Home card cannot label
     // themselves in the resident's language until the catalogue is in hand.
@@ -333,6 +337,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
 
     if (foreground && !_foreground) {
       _appState.loadRequests(silent: true);
+      // Time spent away is exactly when a blast is most likely to have gone
+      // out, and unlike the request poll this does not run on a timer.
+      _appState.loadAdvisories();
     }
 
     _foreground = foreground;
@@ -402,6 +409,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           // A copy: the sheet must not hold the store's mutable list, which a
           // poll landing behind the sheet would mutate underneath it (M30).
           requests: [..._appState.requests],
+          advisories: [..._appState.advisories],
+          advisoriesError: _appState.advisoriesError,
         );
     final onOpenProfile = () => _goTo(4);
 
