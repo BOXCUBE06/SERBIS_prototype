@@ -32,7 +32,7 @@
          placeholder-only, so a chosen item filter became invisible the moment it
          was applied and a board emptied by a stale filter read as an empty
          database. -->
-    <div class="filter-bar mb-4">
+    <div v-if="!loadError" class="filter-bar mb-4">
       <v-text-field
         v-model="search"
         label="Search"
@@ -88,7 +88,7 @@
          line is a live region: filtering changes the whole page silently
          otherwise, and it is the only feedback that says a filter — rather than
          an empty queue — is why three columns are bare. -->
-    <div v-if="!initialLoad" class="d-flex align-center flex-wrap gap-2 mb-4">
+    <div v-if="!initialLoad && !loadError" class="d-flex align-center flex-wrap gap-2 mb-4">
       <template v-if="activeFilters.length">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
         <v-chip
@@ -113,24 +113,73 @@
       </span>
     </div>
 
+    <!-- An action that failed from the board used to leave no trace once the
+         snackbar timed out, 3.5 seconds later. It is the same error the modal
+         has always shown in place; the board simply had nowhere to put it. -->
+    <v-alert
+      v-if="apiError && !modal.isOpen"
+      type="error"
+      variant="tonal"
+      density="compact"
+      closable
+      class="mb-4"
+      close-label="Dismiss error"
+      @click:close="apiError = ''"
+    >{{ apiError }}</v-alert>
+
     <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-    <div v-else-if="activeTab === 'board'" class="kanban-board">
+    <!-- A failed load used to render as three columns of "Nothing here", which
+         is indistinguishable from an empty database — the operator would read a
+         dead API as a quiet morning. -->
+    <v-card v-else-if="loadError" elevation="0" border rounded="xl" class="bg-surface">
+      <div class="text-center py-12 px-6">
+        <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
+        <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load borrowings</div>
+        <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
+        <v-btn
+          color="primary"
+          variant="flat"
+          class="text-none font-weight-bold px-6"
+          height="44"
+          :loading="reloading"
+          @click="fetchData"
+        >Try again</v-btn>
+      </div>
+    </v-card>
+
+    <!-- Column membership is the entire meaning of this board and was invisible
+         to a screen reader: an unlabelled div of unlabelled sections. Each
+         column now names itself and its count, and the cards are a real list, so
+         "Pending, 4 requests, list, 4 items" arrives before the first card. -->
+    <div
+      v-else-if="activeTab === 'board'"
+      class="kanban-board"
+      role="region"
+      aria-label="Active borrowing pipeline"
+    >
       <section
         v-for="col in boardColumns"
         :key="col.status"
         class="kanban-column subtle-surface"
         :class="{ 'kanban-column--muted': col.muted }"
+        :aria-label="`${col.label}, ${grouped[col.status].length} ${grouped[col.status].length === 1 ? 'request' : 'requests'}`"
       >
+        <!-- The icon and the count badge are both decorative here: the label
+             above already carries the status word and the number in text, and
+             announcing either twice is worse than not announcing it. The badge
+             was also the page's last piece of colour-only meaning — it is a
+             coloured pill holding a bare number, and the section label is what
+             now supplies its text alternative. -->
         <header class="kanban-header" :style="{ '--accent': col.accent }">
           <div class="d-flex align-center gap-2">
-            <v-icon size="18" :style="{ color: col.accent }">{{ col.icon }}</v-icon>
+            <v-icon size="18" aria-hidden="true" :style="{ color: col.accent }">{{ col.icon }}</v-icon>
             <span class="text-subtitle-2 font-weight-bold text-high-emphasis">{{ col.label }}</span>
           </div>
-          <span class="count-badge" :style="{ backgroundColor: col.accent }">{{ grouped[col.status].length }}</span>
+          <span class="count-badge" aria-hidden="true" :style="{ backgroundColor: col.accent }">{{ grouped[col.status].length }}</span>
         </header>
 
-        <div class="kanban-body">
+        <ul class="kanban-body">
           <!-- The card is no longer itself a button. It used to be a
                role="button" div wrapping action buttons neutralised with
                @click.stop, so four pixels of misclick between "Approve" and
@@ -138,7 +187,7 @@
                Identity and actions are siblings now, and the hover lift went
                with it: columns of liftable cards are the visual grammar of
                drag-and-drop, which this board has never implemented. -->
-          <article
+          <li
             v-for="item in grouped[col.status]"
             :key="item.borrow_id || item.id"
             class="kanban-card"
@@ -176,7 +225,7 @@
               v-if="!col.terminal && shortStock(item)"
               class="stock-warn"
             >
-              <v-icon size="14" class="mr-1">mdi-alert-outline</v-icon>
+              <v-icon size="14" aria-hidden="true" class="mr-1">mdi-alert-outline</v-icon>
               Only {{ item.equipment?.available_quantity ?? 0 }} in stock
             </div>
 
@@ -185,14 +234,14 @@
                  is a week late must read differently in greyscale. -->
             <div class="card-meta">
               <span class="meta-chip">
-                <v-icon size="13" class="mr-1">mdi-clock-outline</v-icon>{{ agingLabel(item) }}
+                <v-icon size="13" aria-hidden="true" class="mr-1">mdi-clock-outline</v-icon>{{ agingLabel(item) }}
               </span>
               <span
                 v-if="dueLabel(item)"
                 class="meta-chip"
                 :class="{ 'meta-chip--alert': isOverdue(item) }"
               >
-                <v-icon size="13" class="mr-1">
+                <v-icon size="13" aria-hidden="true" class="mr-1">
                   {{ isOverdue(item) ? 'mdi-alert-circle-outline' : 'mdi-calendar-arrow-right' }}
                 </v-icon>{{ dueLabel(item) }}
               </span>
@@ -203,16 +252,22 @@
                  pairing that already failed AA three times on this page. On the
                  card surface the red measures 4.98:1, and the border carries
                  the weight that makes it the equal of Approve. -->
+            <!-- Every action names its record. Read out of context — which is
+                 how a screen reader reaches them, one list item at a time —
+                 "Deny" alone does not say what is being denied, and there are
+                 four of them on screen. -->
             <div class="card-actions">
               <template v-if="item.status === 'Pending'">
                 <v-btn
                   size="small" variant="outlined" color="error" class="text-none font-weight-bold flex-grow-1"
                   :loading="processingId === (item.borrow_id || item.id)"
+                  :aria-label="`Deny ${cardLabel(item)}`"
                   @click="requestAction(item, 'Denied')"
                 >Deny</v-btn>
                 <v-btn
                   size="small" variant="flat" color="primary" class="text-none font-weight-bold flex-grow-1"
                   :loading="processingId === (item.borrow_id || item.id)"
+                  :aria-label="`Approve ${cardLabel(item)}`"
                   @click="requestAction(item, 'Approved')"
                 >Approve</v-btn>
               </template>
@@ -220,24 +275,33 @@
                 v-else-if="item.status === 'Approved'"
                 block size="small" variant="flat" color="primary" class="text-none font-weight-bold"
                 :loading="processingId === (item.borrow_id || item.id)"
+                :aria-label="`Release ${cardLabel(item)}`"
                 @click="requestAction(item, 'Released')"
               >Release to resident</v-btn>
               <v-btn
                 v-else-if="item.status === 'Released'"
                 block size="small" variant="flat" color="primary" class="text-none font-weight-bold"
                 :loading="processingId === (item.borrow_id || item.id)"
+                :aria-label="`Confirm return of ${cardLabel(item)}`"
                 @click="requestAction(item, 'Returned')"
               >Confirm return</v-btn>
             </div>
-          </article>
+          </li>
 
           <!-- A column empty because the work is done and one empty because a
                filter excluded everything are different facts and must not read
-               the same. -->
-          <div v-if="!grouped[col.status].length" class="kanban-empty text-caption text-medium-emphasis">
-            {{ activeFilters.length ? 'No matches here' : 'Nothing here' }}
-          </div>
-        </div>
+               the same. It is an <li> rather than a div because a <ul> may only
+               contain list items, and each column says what would put a card
+               here — "Nothing here" three times told the operator nothing. -->
+          <li v-if="!grouped[col.status].length" class="kanban-empty">
+            <v-icon size="20" aria-hidden="true" class="text-medium-emphasis mb-1">
+              {{ activeFilters.length ? 'mdi-filter-remove-outline' : col.emptyIcon }}
+            </v-icon>
+            <div class="text-caption text-medium-emphasis">
+              {{ activeFilters.length ? 'No matches here' : col.emptyText }}
+            </div>
+          </li>
+        </ul>
       </section>
     </div>
 
@@ -274,10 +338,19 @@
           </v-chip>
         </template>
 
+        <!-- The row click is mouse-only — a <tr> handler is unreachable by
+             keyboard — so the name is a real button, the same arrangement the
+             board card uses. Without it the denial reason is readable with a
+             mouse and by no other means. -->
         <template v-slot:item.resident="{ item }">
-          <span class="font-weight-bold text-high-emphasis">
+          <button
+            type="button"
+            class="row-identity font-weight-bold text-high-emphasis"
+            :aria-label="`Open details for ${cardLabel(item)}`"
+            @click.stop="openDetail(item)"
+          >
             {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-          </span>
+          </button>
         </template>
 
         <template v-slot:item.barangay="{ item }">
@@ -330,7 +403,7 @@
               class="text-uppercase font-weight-bold"
             >{{ selectedRecord?.status }}</v-chip>
           </div>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="closeModal"></v-btn>
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="closeModal"></v-btn>
         </v-card-title>
 
         <v-card-text class="pa-0">
@@ -488,6 +561,12 @@
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3500" location="bottom right" rounded="lg">
       {{ snackbar.text }}
     </v-snackbar>
+
+    <!-- The snackbar is not a live region — Vuetify mounts it on show, and a
+         region that appears at the same moment as its text is not reliably
+         announced. This span is always in the DOM, so a request moving from
+         Pending to Approved is spoken instead of happening in silence. -->
+    <span class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</span>
   </v-container>
 </template>
 
@@ -499,10 +578,16 @@ import { API_BASE } from '@/config/api'
 // Status colours: saturated 700-level ramp, each AA with white text as a badge,
 // legible on both light and dark surfaces. Semantic (data-viz), not brand tokens —
 // except Returned, which uses the system primary green (success tracks primary).
+// `emptyText` says what would put a card in this column, which is a different
+// sentence per column — an empty Pending queue is good news, an empty Released
+// column means nothing is out on loan.
 const columns = [
-  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline' },
-  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
-  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
+  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline',
+    emptyIcon: 'mdi-inbox-outline', emptyText: 'No new requests waiting' },
+  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline',
+    emptyIcon: 'mdi-check-decagram-outline', emptyText: 'Nothing approved and waiting for pickup' },
+  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline',
+    emptyIcon: 'mdi-hand-extended-outline', emptyText: 'Nothing is out on loan' },
   { status: 'Returned', label: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline', terminal: true },
   { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true, muted: true },
 ]
@@ -520,8 +605,11 @@ const barangayFilter = ref(ALL_BARANGAYS)
 const overdueOnly = ref(false)
 const initialLoad = ref(true)
 const loading = ref(false)
+const reloading = ref(false)
 const processingId = ref(null)
 const apiError = ref('')
+const loadError = ref('')
+const liveMessage = ref('')
 const modal = ref({ isOpen: false })
 const selectedRecord = ref(null)
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -537,7 +625,13 @@ const emptyAction = () => ({
 })
 const actionDialog = ref(emptyAction())
 
-const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
+const notify = (text, color = 'success') => {
+  snackbar.value = { show: true, text, color }
+  // Re-announce even when the same text repeats: an unchanged live region is
+  // not read again, and denying two requests in a row is two events.
+  liveMessage.value = ''
+  requestAnimationFrame(() => { liveMessage.value = text })
+}
 
 // The board carries only what still needs a decision. Three columns fit the
 // available width at 1366px; five never did — the fifth started at x=1184 in a
@@ -673,6 +767,10 @@ const activeCount = computed(() =>
 )
 
 const initials = (r) => `${r?.first_name?.charAt(0) || ''}${r?.last_name?.charAt(0) || ''}`
+// Names a record for an accessible label: who and what, which is what tells two
+// otherwise identical "Approve" buttons apart.
+const cardLabel = (item) =>
+  `${item.equipment?.item_name || 'equipment'} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
 const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.quantity
 const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
 const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
@@ -754,16 +852,30 @@ const getHeaders = () => ({
   Accept: 'application/json',
 })
 
+// A non-2xx used to fall straight through: `res.json()` on an error body assigns
+// whatever came back to `borrowings`, so a 401 or a 500 rendered as an empty
+// board rather than as a failure.
 const fetchData = async () => {
+  reloading.value = true
   try {
     const res = await fetch(`${API_BASE}/borrowings`, { headers: getHeaders() })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || `Request failed (${res.status})`)
+    }
     const data = await res.json()
-    borrowings.value = data.data || data
+    const rows = data.data || data
+    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
+    borrowings.value = rows
+    loadError.value = ''
   } catch (error) {
     console.error('Failed to fetch borrowings:', error)
+    // Kept on the page, not only in a snackbar that clears itself after 3.5s.
+    loadError.value = error.message || 'Could not reach the server'
     notify('Could not load borrowings', 'error')
   } finally {
     initialLoad.value = false
+    reloading.value = false
   }
 }
 
@@ -915,20 +1027,27 @@ onMounted(fetchData)
    forced a 1464px track and the board scrolled sideways out of view. Grid
    tracks that bottom out at 0 shrink instead, which makes horizontal overflow
    structurally impossible rather than merely unlikely at tested widths. */
+/* The offset is everything stacked above the board: app bar, page header, tabs,
+   filter bar, chip row and their margins. It was 260px when the filter controls
+   still lived beside the title; the filter bar and the chip row added ~98px
+   below the tabs, so a board sized to the old number now runs past the fold and
+   the column scrollbars never appear. Declared once and inherited by the
+   columns, so the two cannot drift apart again. */
 .kanban-board {
+  --board-offset: 360px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
   padding-bottom: 8px;
-  min-height: calc(100vh - 260px);
+  min-height: calc(100vh - var(--board-offset));
 }
 .kanban-column {
   border-radius: 16px;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: calc(100vh - 260px);
+  max-height: calc(100vh - var(--board-offset));
 }
 .kanban-column--muted { opacity: 0.85; }
 
@@ -963,8 +1082,12 @@ onMounted(fetchData)
   justify-content: center;
 }
 
+/* A <ul> now, for the list semantics. The reset is not cosmetic tidying: a
+   browser's default marker and padding would indent every card. */
 .kanban-body {
   padding: 0 12px 12px;
+  margin: 0;
+  list-style: none;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1081,11 +1204,44 @@ onMounted(fetchData)
 
 .history-table :deep(tbody tr) { cursor: pointer; }
 
+/* The keyboard path into a history record. Inherits the cell's type so it reads
+   as the name it replaced, not as a link. */
+.row-identity {
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row-identity:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 1px;
+}
+
 .kanban-empty {
   text-align: center;
   padding: 24px 8px;
   border: 1px dashed rgba(var(--v-theme-on-surface), 0.14);
   border-radius: 12px;
+}
+
+/* Visible to a screen reader, to nothing else. clip-path rather than
+   display:none or visibility:hidden, both of which remove the node from the
+   accessibility tree and would silence the live region entirely. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
