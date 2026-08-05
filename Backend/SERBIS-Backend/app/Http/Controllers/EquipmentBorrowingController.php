@@ -9,6 +9,26 @@ use Illuminate\Support\Facades\DB;
 
 class EquipmentBorrowingController extends Controller
 {
+    /**
+     * Which status each status may move to.
+     *
+     * The validation rule below constrains the status *word* and never the
+     * *move*, so any record could be pushed into any state — including
+     * backwards into Released, which re-ran the stock deduction for an item
+     * already back on the shelf and dropped the count for good.
+     *
+     * Returned and Denied are terminal: an item that came back has nothing left
+     * to decide, and a refusal is answered by filing a new request rather than
+     * by reviving the old one.
+     */
+    private const TRANSITIONS = [
+        'Pending' => ['Approved', 'Denied'],
+        'Approved' => ['Released', 'Denied'],
+        'Released' => ['Returned'],
+        'Returned' => [],
+        'Denied' => [],
+    ];
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -78,11 +98,26 @@ class EquipmentBorrowingController extends Controller
         $newStatus = $validated['status'];
         $oldStatus = $borrowing->status;
 
+        // Checked before the transaction opens, so an illegal move costs no
+        // lock and touches no stock. Resending the current status is a no-op
+        // rather than a transition: `status` is required, so a call that only
+        // edits `due_date` has to carry it, and no branch below fires when the
+        // two are equal. A row whose status is not one of the five falls
+        // through to an empty list and is rejected, which is the safe way to
+        // fail on data drift.
+        if ($newStatus !== $oldStatus && ! in_array($newStatus, self::TRANSITIONS[$oldStatus] ?? [], true)) {
+            return response()->json([
+                'message' => "A borrowing that is {$oldStatus} cannot be moved to {$newStatus}.",
+            ], 422);
+        }
+
         DB::beginTransaction();
 
         try {
-            // Handle stock deduction when releasing
-            if ($newStatus === 'Released' && $oldStatus !== 'Released') {
+            // Named for the only status Released can be reached from. The old
+            // condition was `$oldStatus !== 'Released'`, which was true of a
+            // Returned record too and is what deducted the stock twice.
+            if ($newStatus === 'Released' && $oldStatus === 'Approved') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
                 if ($equipment->available_quantity < $borrowing->quantity) {
                     DB::rollBack();
@@ -98,11 +133,6 @@ class EquipmentBorrowingController extends Controller
                 $equipment->increment('available_quantity', $borrowing->quantity);
                 $borrowing->returned_at = now();
             }
-
-            if ($newStatus === 'Denied' && $oldStatus === 'Released') {
-                $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
-                $equipment->increment('available_quantity', $borrowing->quantity);
-}
 
             // Assigned key by key rather than by splat: `status` is handled by
             // the transition logic above, and a splat would let a caller write
