@@ -28,6 +28,37 @@ reference number is fiction, and the "offline" library is a 700 ms animation.
 
 ---
 
+## ❓ OPEN QUESTIONS FOR MDRRMO — unresolved, needed before defense
+
+Not findings, and not for the developer to decide. Each needs an answer from
+the office. **Nothing below has been resolved.**
+
+- **`sms_opt_in` currently silences ALL SMS blasts including emergency
+  evacuation alerts, with no exemption. Needs MDRRMO confirmation before
+  defense: is full opt-out acceptable, or should emergency blasts be exempt
+  from this preference?**
+  Where it stands today: `tbl_residents.sms_opt_in` (default true) is filtered
+  in `SmsController::sendBlast()`'s recipient query, and the resident sets it
+  from the profile screen. There is exactly one kind of blast in the system —
+  the backend has no notion of an emergency tier versus a routine one — so the
+  switch is all-or-nothing by construction, not by choice. **The mobile copy
+  states that plainly and must not be softened while it is true.** An exemption
+  would mean a new field on `tbl_sms_logs` (or a second endpoint), a way for the
+  sender to mark a blast as exempt, and a decision about who is allowed to mark
+  one.
+
+- **The ten Tagalog service descriptions have never been reviewed by a
+  Filipino speaker at the office.** Names were approved 2026-07-26; the blurbs
+  were not. `ServiceTranslationSeeder::FILIPINO` upserts, so a correction is an
+  edit and a re-run. The same applies to the three strings added for the SMS
+  switch above.
+
+- **M1's hotline numbers are still unconfirmed** — see the M1 entry below. It is
+  the same class of question: the office has to answer it before the code can be
+  finished, and shipping a guess is worse than shipping nothing.
+
+---
+
 ## Fix First
 
 Highest severity × lowest effort, in the order they should be done.
