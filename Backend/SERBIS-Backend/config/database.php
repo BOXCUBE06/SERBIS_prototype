@@ -17,7 +17,11 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    // Falls back to mysql, not Laravel's stock sqlite. This project has no
+    // sqlite database and cannot build one — some migrations drop foreign keys
+    // by name, which sqlite does not support. A missing DB_CONNECTION should
+    // fail against the engine we actually run, not quietly open an empty file.
+    'default' => env('DB_CONNECTION', 'mysql'),
 
     /*
     |--------------------------------------------------------------------------
