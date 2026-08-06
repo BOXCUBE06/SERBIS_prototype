@@ -98,6 +98,10 @@ class AuthController extends Controller
                 'email',
                 Rule::unique('tbl_residents', 'email_address')->ignore($user->getKey(), 'resident_id'),
             ],
+            // The resident's own notification preference. Writable here — unlike
+            // the four columns below — because it decides only what this account
+            // receives, and there is nobody else who should be deciding it.
+            'sms_opt_in'    => 'sometimes|required|boolean',
         ]);
 
         // Assigned key by key, never a splat of $validated. Four columns are
@@ -116,6 +120,17 @@ class AuthController extends Controller
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }
+        }
+
+        // Handled apart from the loop because validate() returns what was sent,
+        // not a cast of it — the 'boolean' rule passes the strings "1" and "0"
+        // through unchanged. Assigning "0" happens to be safe today (PHP reads
+        // it as falsy and the column is a tinyint), so this line is defence in
+        // depth: no test distinguishes it from the raw assignment. It earns its
+        // place if the rule is ever loosened to accept "true"/"false", where the
+        // raw string would land in the column as 1 either way.
+        if (array_key_exists('sms_opt_in', $validated)) {
+            $user->sms_opt_in = $request->boolean('sms_opt_in');
         }
 
         $user->save();
