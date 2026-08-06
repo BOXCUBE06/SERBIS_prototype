@@ -674,20 +674,62 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 ---
 
 - [ ] **M18 — No tests of any kind**
-      **Partly addressed, still open.** `Mobile/test/` now exists with 39
-      passing tests, added alongside the fixes that needed them: M7 (token
-      storage), M10/M11 and M33 (cache, store, open routes), M14 (base URL), and
+      **Partly addressed, still open. Re-measured 2026-08-06 with
+      `flutter test --coverage`; the numbers below are that report, not an
+      estimate.** `Mobile/test/` holds **20 files and 184 passing tests** —
+      this entry said 39, which was true when the sentence was written and has
+      been wrong through every feature that landed after it. Line coverage over
+      `lib/` is
+      **63.7%, 1919 of 3012 instrumented lines**, across 30 of the 35 files.
+      Tests were added alongside the fixes that needed them: M7 (token
+      storage), M10/M11 and M33 (cache, store, open routes), M14 (base URL),
       M22/M31 (`api_response_parsing_test.dart` — the list unwrapper,
-      `ServiceRequest.fromJson`, `AppUser.fromJson`) and M21
+      `ServiceRequest.fromJson`, `AppUser.fromJson`), M21
       (`requests_refresh_test.dart` — the refresh guards, and the first widget
-      tests of a main screen). Still missing the rest of
-      what this task asks for: `ServiceCatalogItem.fromJson`,
-      `getStatusFromText`, the 401/422 body shapes, `AppState` submit/cancel
-      against a mocked `ApiService` (the M5 rollback), and any CI wiring —
-      `flutter test` is still run by hand.
+      tests of a main screen), and since then the `Disapproved` status,
+      advisories, `site_photo` and the profile edit.
+      **Read the coverage figures with one caveat:** `flutter test --coverage`
+      reports only files some test loaded. A file absent from `lcov.info` is at
+      zero, not unmeasured — it is the worse case, not a missing one.
+      **The four gaps this entry named, each checked against the report rather
+      than assumed:**
+      • `ServiceCatalogItem.fromJson` — **still uncovered**, 0 of 13 lines
+      (`models/request_models.dart:247-271`). The service catalogue is parsed on
+      every launch and nothing tests it.
+      • `getStatusFromText` — **now covered**, 7 of 7 lines
+      (`models/request_models.dart:713-733`), closed by
+      `disapproved_status_test.dart`. This entry listing it as a gap was stale.
+      • **401/422 body shapes — still uncovered**, 0 of 22 lines
+      (`state/api_service.dart:253-290`). That range is both the token-rejected
+      sign-out and all of `_errorMessage`, so nothing exercises the Laravel
+      `errors`-vs-`message` unwrapping that decides every sentence a resident
+      reads on a failure.
+      • `AppState` submit/cancel against a mocked `ApiService` — **mostly
+      covered; the M5 rollback specifically is closed.** The submit rollback
+      (`state/request_store.dart:534-537`) is hit. What is left uncovered is the
+      incomplete-request guard (`:493-499`, unreachable from the form by
+      design), the null-id cancel guard (`:548-549`), and **the cancel rollback
+      (`:584-585`), which is a real gap** — it is the path that puts a request
+      back when the server refuses the cancellation, and cancel's happy path is
+      tested while its failure path is not.
+      **CI is still nothing.** There is no `.github/workflows/` anywhere in the
+      repo; `flutter test` is run by hand on one machine.
+      **Largest untested surfaces, by file:**
+      `screens/library/article_reader_screen.dart` 0/93 · `state/api_service.dart`
+      35/204 (17.2%) · `widgets/service_widgets.dart` 22/111 (19.8%) ·
+      `screens/services_screen.dart` 46/160 (28.8%) · `state/account_store.dart`
+      22/57 (38.6%) · `widgets/sos_button.dart` 40/83 (48.2%) ·
+      `screens/profile_screen.dart` 333/547 (60.9%). **Absent from the report
+      entirely — no test loads them at all:** `main.dart`,
+      `screens/auth/login_screen.dart`, `screens/auth/register_screen.dart`. The
+      two other absent files, `state/file_opener_unsupported.dart` and
+      `state/material_cache_unsupported.dart`, are conditional-import fallbacks
+      for platforms this test run is not; their absence is correct.
       **Severity:** High
       **Category:** Code Structure
-      **Location:** `Mobile/` — no `test/` directory exists
+      **Location:** `Mobile/test/` — 20 files, 184 tests, 63.7% line coverage.
+      The original line here read "no `test/` directory exists", which was true
+      when this was filed and has not been since `fa778d2`, 2026-07-28.
       **Problem:** Zero unit, widget or integration tests. `flutter analyze` is
       the only automated check, and the project's own history shows exactly what
       that misses: a green analyze coexisted with a service-id map that filed
