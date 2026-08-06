@@ -61,6 +61,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Uint8List? _photo;
   bool _photoBusy = false;
 
+  /// In flight on `PATCH /me`. The switch's value is never held here — it is
+  /// read from [widget.user], which the shell owns — so a rejected change has
+  /// nothing local to roll back and the control simply stays where the server
+  /// left it.
+  bool _smsBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -135,6 +141,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _say(e.message);
     } finally {
       if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  /// Turns the MDRRMO's text blasts on or off for this resident.
+  ///
+  /// Same shape as the photo actions above: a busy flag, the store call, the
+  /// refreshed profile handed up to the shell, and an [ApiException] shown in a
+  /// snackbar. Nothing is written optimistically — the switch reads
+  /// `widget.user.smsOptIn`, so on a failure it is already showing what the
+  /// server still holds, which is the honest state. Telling a resident they
+  /// have opted out when the request never landed is the exact failure the two
+  /// deleted switches used to have.
+  Future<void> _setSmsOptIn(bool value) async {
+    if (_smsBusy) return;
+
+    setState(() => _smsBusy = true);
+    try {
+      final updated = await widget.userStore.updateProfile(smsOptIn: value);
+      if (!mounted) return;
+      widget.onUserChanged(updated);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _say(e.message);
+    } finally {
+      // In the finally rather than each branch: an exception the catch does not
+      // name would otherwise leave the row spinning with no way back.
+      if (mounted) setState(() => _smsBusy = false);
     }
   }
 
@@ -247,20 +280,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-        // No Notifications section. The two switches here were consent controls
-        // over nothing: both wrote to local bools that reset on rebuild, and
-        // SmsController blasts every Active resident in the selected barangays
-        // regardless — so a resident who turned SMS alerts off still got the
-        // paid SMS, having been told they had opted out. Push had even less
-        // behind it (no FCM, no firebase_messaging anywhere in the app). They
-        // come back when there is a resident-scoped preference the backend
-        // actually honours; see M25.
+        // One switch, not the two that used to be here. Both of those wrote to
+        // local bools that reset on rebuild while SmsController blasted every
+        // Active resident regardless, so a resident who turned SMS alerts off
+        // still got the paid SMS having been told they had opted out. The SMS
+        // half now has a column behind it and is below. Push is still absent —
+        // there is no FCM and no firebase_messaging anywhere in the app — so it
+        // stays deleted rather than coming back as a second fake control.
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeader(title: tr(filipino, 'profile.account_settings')),
+              _SettingsRow(
+                icon: Icons.sms_outlined,
+                title: tr(filipino, 'profile.sms_alerts'),
+                subtitle: tr(
+                  filipino,
+                  widget.user.smsOptIn
+                      ? 'profile.sms_alerts_on'
+                      : 'profile.sms_alerts_off',
+                ),
+                // The row is tappable as well as the switch: the switch is a
+                // small target and the row is already the app's tap surface for
+                // everything else in this list.
+                onTap: _smsBusy ? null : () => _setSmsOptIn(!widget.user.smsOptIn),
+                trailing: _smsBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Switch(
+                        value: widget.user.smsOptIn,
+                        onChanged: _setSmsOptIn,
+                      ),
+              ),
               _SettingsRow(
                 icon: Icons.language_outlined,
                 title: tr(filipino, 'profile.language'),

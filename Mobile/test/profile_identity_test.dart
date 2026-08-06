@@ -194,20 +194,27 @@ void main() {
 
   testWidgets('the profile offers no notification consent it cannot honour',
       (tester) async {
-    // M25. Both switches defaulted to on and wrote to local bools that reset on
-    // rebuild, while SmsController kept blasting every Active resident in the
-    // selected barangays — so switching SMS alerts off told a resident they had
-    // opted out of a paid message they went on receiving. There is no Switch
-    // anywhere else on this screen, so byType is the whole guard.
+    // M25. Two switches used to sit here, both defaulting to on and writing to
+    // local bools that reset on rebuild, while SmsController kept blasting
+    // every Active resident regardless — so switching SMS alerts off told a
+    // resident they had opted out of a paid message they went on receiving.
+    //
+    // The SMS half now has tbl_residents.sms_opt_in behind it and the blast
+    // query filters on it, so that switch is back and is exercised in
+    // sms_preference_test.dart. This test is now the guard on the *other*
+    // half: exactly one switch, and nothing offering push.
     await _pumpProfile(tester, name: 'Maria Santos');
 
-    expect(find.byType(Switch), findsNothing);
-    expect(find.text('SMS alerts'), findsNothing);
+    expect(find.byType(Switch), findsOneWidget);
+    expect(find.text('MDRRMO text alerts'), findsOneWidget);
+
+    // Still nothing behind push — no FCM, no firebase_messaging anywhere in
+    // the app — so a control for it would be the original bug again.
     expect(find.text('Push notifications'), findsNothing);
     expect(find.text('Notifications'), findsNothing);
 
-    // The section it lived in is gone, not emptied — Account settings is the
-    // first section under the card now.
+    // The section the pair lived in is still gone, not emptied — the surviving
+    // switch is a row inside Account settings, not a Notifications section.
     expect(find.text('Account settings'), findsOneWidget);
   });
 }

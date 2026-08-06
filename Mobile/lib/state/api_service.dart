@@ -348,10 +348,11 @@ class ApiService {
     return (data['user'] as Map<String, dynamic>?) ?? {};
   }
 
-  /// Resident-scoped profile edit. Only the five fields the backend accepts are
-  /// sent; `barangay_id`, `status`, `photo` and `password` are refused there and
-  /// have no business being offered here — the barangay in particular is what
-  /// every service request is dispatched on.
+  /// Resident-scoped profile edit. Only the six fields the backend accepts are
+  /// sent — the five contact fields plus `sms_opt_in`; `barangay_id`, `status`,
+  /// `photo` and `password` are refused there and have no business being
+  /// offered here — the barangay in particular is what every service request is
+  /// dispatched on.
   ///
   /// Fields are omitted when null rather than sent empty, because the endpoint
   /// is a PATCH: an absent key leaves the column alone, while an empty string
@@ -363,17 +364,50 @@ class ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    bool? smsOptIn,
   }) async {
-    final body = <String, dynamic>{
+    final data = await _patch(
+      '/me',
+      buildProfileUpdateBody(
+        firstName: firstName,
+        middleName: middleName,
+        lastName: lastName,
+        phoneNumber: phoneNumber,
+        email: email,
+        smsOptIn: smsOptIn,
+      ),
+    );
+    return (data['user'] as Map<String, dynamic>?) ?? {};
+  }
+
+  /// Assembles the `PATCH /me` body without sending it.
+  ///
+  /// Separate from [updateProfile] for the same reason as [buildSubmitRequest]:
+  /// `_patch` calls `http.patch` directly, so a test that faked the service
+  /// would override the very method that decides the key names — and a screen
+  /// test asserting "the store was called with smsOptIn: false" proves nothing
+  /// about whether `sms_opt_in` is what leaves the device.
+  @visibleForTesting
+  static Map<String, dynamic> buildProfileUpdateBody({
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? phoneNumber,
+    String? email,
+    bool? smsOptIn,
+  }) {
+    return <String, dynamic>{
       if (firstName != null) 'first_name': firstName,
       if (middleName != null) 'middle_name': middleName.isEmpty ? null : middleName,
       if (lastName != null) 'last_name': lastName,
       if (phoneNumber != null) 'phone_number': phoneNumber,
       if (email != null) 'email_address': email,
+      // Sent as a JSON boolean, not '1'/'0'. The backend's rule accepts both,
+      // but the column is boolean and the response is cast to one, so anything
+      // else here would make the value that goes out differ in type from the
+      // value that comes back.
+      if (smsOptIn != null) 'sms_opt_in': smsOptIn,
     };
-
-    final data = await _patch('/me', body);
-    return (data['user'] as Map<String, dynamic>?) ?? {};
   }
 
   /// Public on the backend so the register screen can populate its picker

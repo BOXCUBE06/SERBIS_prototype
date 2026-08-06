@@ -16,7 +16,7 @@ import 'package:serbis/theme/app_theme.dart';
 
 class _FakeApi extends ApiService {
   /// Every updateProfile call, in order, exactly as the screen sent it.
-  final List<Map<String, String?>> calls = [];
+  final List<Map<String, dynamic>> calls = [];
 
   /// When set, updateProfile throws it instead of succeeding.
   ApiException? failWith;
@@ -39,6 +39,7 @@ class _FakeApi extends ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    bool? smsOptIn,
   }) async {
     calls.add({
       'first_name': firstName,
@@ -46,6 +47,7 @@ class _FakeApi extends ApiService {
       'last_name': lastName,
       'phone_number': phoneNumber,
       'email_address': email,
+      'sms_opt_in': smsOptIn,
     });
 
     final failure = failWith;
@@ -58,6 +60,7 @@ class _FakeApi extends ApiService {
       'last_name': lastName ?? 'Santos',
       'phone_number': phoneNumber ?? '09171111111',
       'email_address': email ?? 'maria@example.com',
+      'sms_opt_in': smsOptIn ?? true,
       'barangay': {'barangay_name': 'San Fabian'},
     };
   }
@@ -135,6 +138,10 @@ void main() {
     expect(api.calls.single['email_address'], isNull);
     expect(api.calls.single['last_name'], isNull);
     expect(api.calls.single['phone_number'], isNull);
+    // The SMS preference shares this endpoint but not this sheet. Sending it
+    // from here would let a contact-details save overwrite a choice the
+    // resident made on the settings row.
+    expect(api.calls.single['sms_opt_in'], isNull);
   });
 
   testWidgets('a successful save hands the refreshed profile back to the shell',
