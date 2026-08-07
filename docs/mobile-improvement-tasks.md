@@ -707,11 +707,11 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 - [ ] **M18 — No tests of any kind**
       **Partly addressed, still open. Re-measured 2026-08-07 with
       `flutter test --coverage`; the numbers below are that report, not an
-      estimate.** `Mobile/test/` holds **23 files and 224 passing tests** —
+      estimate.** `Mobile/test/` holds **24 files and 238 passing tests** —
       this entry said 39, which was true when the sentence was written and has
       been wrong through every feature that landed after it. Line coverage over
       `lib/` is
-      **66.8%, 2029 of 3036 instrumented lines**, across 30 of the 35 files.
+      **67.7%, 2055 of 3036 instrumented lines**, across 30 of the 35 files.
       Tests were added alongside the fixes that needed them: M7 (token
       storage), M10/M11 and M33 (cache, store, open routes), M14 (base URL),
       M22/M31 (`api_response_parsing_test.dart` — the list unwrapper,
@@ -724,9 +724,16 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
       zero, not unmeasured — it is the worse case, not a missing one.
       **The four gaps this entry named, each checked against the report rather
       than assumed:**
-      • `ServiceCatalogItem.fromJson` — **still uncovered**, 0 of 13 lines
-      (`models/request_models.dart:247-271`). The service catalogue is parsed on
-      every launch and nothing tests it.
+      • ~~`ServiceCatalogItem.fromJson` — **still uncovered**, 0 of 13 lines~~ —
+      **CLOSED 2026-08-07.** `models/request_models.dart:247-271` is now fully
+      covered by `service_catalog_parsing_test.dart`, 14 tests, whose fixtures
+      are the real `GET /api/services` rows for service 1 at `?locale=en` and
+      `?locale=fil`, read off the running backend rather than invented. The
+      test worth having is the form/icon one: **both getters are keyed on the
+      English `name`, never on `nameLocalized`**, and nothing said so — keyed on
+      the localized name, "Serbisyong Ambulansya" matches none of the English
+      substrings and every service drops to the generic form, costing the
+      resident the guided fields in exactly the language they chose.
       • `getStatusFromText` — **now covered**, 7 of 7 lines
       (`models/request_models.dart:713-733`), closed by
       `disapproved_status_test.dart`. This entry listing it as a gap was stale.
@@ -772,7 +779,7 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
       for platforms this test run is not; their absence is correct.
       **Severity:** High
       **Category:** Code Structure
-      **Location:** `Mobile/test/` — 23 files, 224 tests, 66.8% line coverage.
+      **Location:** `Mobile/test/` — 24 files, 238 tests, 67.7% line coverage.
       The original line here read "no `test/` directory exists", which was true
       when this was filed and has not been since `fa778d2`, 2026-07-28.
       **Problem:** Zero unit, widget or integration tests. `flutter analyze` is
