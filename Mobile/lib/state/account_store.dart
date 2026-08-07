@@ -24,6 +24,11 @@ class AppUser {
   /// `GET /residents/{id}/photo`.
   final bool hasPhoto;
 
+  /// Whether this resident wants the MDRRMO's text blasts. Editable through
+  /// `PATCH /me`; `SmsController` filters its recipient query on the column, so
+  /// false here means no blast reaches this number at all.
+  final bool smsOptIn;
+
   const AppUser({
     required this.id,
     required this.firstName,
@@ -33,6 +38,7 @@ class AppUser {
     this.phone = '',
     required this.address,
     this.hasPhoto = false,
+    this.smsOptIn = true,
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -53,6 +59,7 @@ class AppUser {
     String? email,
     String? phone,
     bool? hasPhoto,
+    bool? smsOptIn,
   }) {
     return AppUser(
       id: id,
@@ -63,6 +70,7 @@ class AppUser {
       phone: phone ?? this.phone,
       address: address,
       hasPhoto: hasPhoto ?? this.hasPhoto,
+      smsOptIn: smsOptIn ?? this.smsOptIn,
     );
   }
 
@@ -81,6 +89,10 @@ class AppUser {
       phone: json['phone_number'] as String? ?? '',
       address: barangayName ?? '',
       hasPhoto: json['has_photo'] == true,
+      // Absent falls back to true, matching the column's own default. Reading a
+      // missing key as false would show a resident an "off" switch and tell
+      // them they are receiving nothing while the server still sends to them.
+      smsOptIn: json['sms_opt_in'] as bool? ?? true,
     );
   }
 }
@@ -155,6 +167,7 @@ class UserStore {
     String? lastName,
     String? phoneNumber,
     String? email,
+    bool? smsOptIn,
   }) async {
     final json = await _api.updateProfile(
       firstName: firstName,
@@ -162,6 +175,7 @@ class UserStore {
       lastName: lastName,
       phoneNumber: phoneNumber,
       email: email,
+      smsOptIn: smsOptIn,
     );
     return AppUser.fromJson(json);
   }

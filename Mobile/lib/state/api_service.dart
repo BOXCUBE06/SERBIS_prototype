@@ -348,10 +348,11 @@ class ApiService {
     return (data['user'] as Map<String, dynamic>?) ?? {};
   }
 
-  /// Resident-scoped profile edit. Only the five fields the backend accepts are
-  /// sent; `barangay_id`, `status`, `photo` and `password` are refused there and
-  /// have no business being offered here — the barangay in particular is what
-  /// every service request is dispatched on.
+  /// Resident-scoped profile edit. Only the six fields the backend accepts are
+  /// sent — the five contact fields plus `sms_opt_in`; `barangay_id`, `status`,
+  /// `photo` and `password` are refused there and have no business being
+  /// offered here — the barangay in particular is what every service request is
+  /// dispatched on.
   ///
   /// Fields are omitted when null rather than sent empty, because the endpoint
   /// is a PATCH: an absent key leaves the column alone, while an empty string
@@ -363,17 +364,50 @@ class ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    bool? smsOptIn,
   }) async {
-    final body = <String, dynamic>{
+    final data = await _patch(
+      '/me',
+      buildProfileUpdateBody(
+        firstName: firstName,
+        middleName: middleName,
+        lastName: lastName,
+        phoneNumber: phoneNumber,
+        email: email,
+        smsOptIn: smsOptIn,
+      ),
+    );
+    return (data['user'] as Map<String, dynamic>?) ?? {};
+  }
+
+  /// Assembles the `PATCH /me` body without sending it.
+  ///
+  /// Separate from [updateProfile] for the same reason as [buildSubmitRequest]:
+  /// `_patch` calls `http.patch` directly, so a test that faked the service
+  /// would override the very method that decides the key names — and a screen
+  /// test asserting "the store was called with smsOptIn: false" proves nothing
+  /// about whether `sms_opt_in` is what leaves the device.
+  @visibleForTesting
+  static Map<String, dynamic> buildProfileUpdateBody({
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? phoneNumber,
+    String? email,
+    bool? smsOptIn,
+  }) {
+    return <String, dynamic>{
       if (firstName != null) 'first_name': firstName,
       if (middleName != null) 'middle_name': middleName.isEmpty ? null : middleName,
       if (lastName != null) 'last_name': lastName,
       if (phoneNumber != null) 'phone_number': phoneNumber,
       if (email != null) 'email_address': email,
+      // Sent as a JSON boolean, not '1'/'0'. The backend's rule accepts both,
+      // but the column is boolean and the response is cast to one, so anything
+      // else here would make the value that goes out differ in type from the
+      // value that comes back.
+      if (smsOptIn != null) 'sms_opt_in': smsOptIn,
     };
-
-    final data = await _patch('/me', body);
-    return (data['user'] as Map<String, dynamic>?) ?? {};
   }
 
   /// Public on the backend so the register screen can populate its picker
@@ -409,6 +443,14 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> getInfoMaterials() async {
     final data = await _get('/info-materials');
+    return listFrom(data);
+  }
+
+  /// The SMS blasts this resident actually received. Admin accounts get a 403
+  /// here — the route is resident-only — which surfaces as an ApiException the
+  /// caller reports, not as an empty advisory list.
+  Future<List<Map<String, dynamic>>> getAdvisories() async {
+    final data = await _get('/advisories');
     return listFrom(data);
   }
 
@@ -471,13 +513,22 @@ class ApiService {
     return [];
   }
 
-  Future<Map<String, dynamic>> submitRequest({
+  /// Assembles the multipart POST without sending it.
+  ///
+  /// Separate from [submitRequest] so the body can be asserted on: a
+  /// `MultipartRequest` builds its own `http.Client` inside `send()`, so there
+  /// is no seam to fake, and the one thing worth testing here is which parts
+  /// end up attached.
+  @visibleForTesting
+  http.MultipartRequest buildSubmitRequest({
     required int serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
     String? requiredVehicleType,
-  }) async {
+    List<int>? sitePhotoBytes,
+    String? sitePhotoFileName,
+  }) {
     final uri = Uri.parse('$baseUrl/service-requests');
     final request = http.MultipartRequest('POST', uri);
 
@@ -500,19 +551,62 @@ class ApiService {
       ),
     );
 
+    // Optional, and the part must be absent rather than empty when there is no
+    // photo: `site_photo` is `nullable|file` server-side, so a zero-byte part
+    // is a 422 on a request that should have been accepted without one.
+    if (sitePhotoBytes != null &&
+        sitePhotoBytes.isNotEmpty &&
+        sitePhotoFileName != null &&
+        sitePhotoFileName.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'site_photo',
+          sitePhotoBytes,
+          filename: sitePhotoFileName,
+        ),
+      );
+    }
+
+    return request;
+  }
+
+  Future<Map<String, dynamic>> submitRequest({
+    required int serviceId,
+    required String description,
+    required List<int> validIdFileBytes,
+    required String validIdFileName,
+    String? requiredVehicleType,
+    List<int>? sitePhotoBytes,
+    String? sitePhotoFileName,
+  }) async {
+    final request = buildSubmitRequest(
+      serviceId: serviceId,
+      description: description,
+      validIdFileBytes: validIdFileBytes,
+      validIdFileName: validIdFileName,
+      requiredVehicleType: requiredVehicleType,
+      sitePhotoBytes: sitePhotoBytes,
+      sitePhotoFileName: sitePhotoFileName,
+    );
+
     http.Response response;
     try {
       final streamed =
           await request.send().timeout(const Duration(seconds: 30));
       response = await http.Response.fromStream(streamed);
     } catch (error) {
-      // Neither the description nor the ID image is logged — the description is
+      // Neither the description nor either image is logged — the description is
       // free text a resident typed under duress (a patient's condition, a
-      // callback number) and the image is a government ID. Only the size of the
-      // upload, which is what distinguishes a timeout on a large photo from a
-      // dead connection.
+      // callback number), one image is a government ID and the other can show a
+      // house and its surroundings. Only the size of the upload, which is what
+      // distinguishes a timeout on large photos from a dead connection. The
+      // total is what matters now that there can be two files: a submit that
+      // times out at 6MB and one that times out at 2MB are different problems.
+      final uploadBytes =
+          request.files.fold<int>(0, (sum, file) => sum + file.length);
       AppLog.error(_logArea, 'POST /service-requests', error: error,
-          reason: 'no response, ${validIdFileBytes.length} byte upload');
+          reason: 'no response, $uploadBytes byte upload'
+              '${request.files.length > 1 ? ' in ${request.files.length} files' : ''}');
       throw const ApiException(_networkMessage);
     }
 

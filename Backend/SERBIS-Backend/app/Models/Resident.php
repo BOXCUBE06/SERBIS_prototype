@@ -20,7 +20,7 @@ use App\Traits\TracksHistory; // 1. Import the trait
 // client can ask for — so clients get `has_photo` and the image itself comes
 // from GET /api/residents/{id}/photo.
 #[Table('tbl_residents', key: 'resident_id')]
-#[Fillable(['barangay_id', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'email_address', 'otp', 'otp_verified_at'])]
+#[Fillable(['barangay_id', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'sms_opt_in', 'email_address', 'otp', 'otp_verified_at'])]
 #[Hidden(['password', 'otp', 'remember_token', 'photo'])]
 #[Appends(['has_photo'])]
 class Resident extends Authenticatable
@@ -40,6 +40,15 @@ class Resident extends Authenticatable
         // updated_at does not, and logging it copies a path we keep off every
         // response into a second table.
         'photo',
+    ];
+
+    /**
+     * Without the cast, MySQL hands back 1 and 0 and every client has to guess
+     * whether the preference is a number or a boolean. The blast query compares
+     * against the column, not this value, so the cast is for the API only.
+     */
+    protected $casts = [
+        'sms_opt_in' => 'boolean',
     ];
 
     /**

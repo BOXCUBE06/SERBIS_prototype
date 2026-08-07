@@ -6,9 +6,30 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class EquipmentBorrowingController extends Controller
 {
+    /**
+     * Which status each status may move to.
+     *
+     * The validation rule below constrains the status *word* and never the
+     * *move*, so any record could be pushed into any state — including
+     * backwards into Released, which re-ran the stock deduction for an item
+     * already back on the shelf and dropped the count for good.
+     *
+     * Returned and Denied are terminal: an item that came back has nothing left
+     * to decide, and a refusal is answered by filing a new request rather than
+     * by reviving the old one.
+     */
+    private const TRANSITIONS = [
+        'Pending' => ['Approved', 'Denied'],
+        'Approved' => ['Released', 'Denied'],
+        'Released' => ['Returned'],
+        'Returned' => [],
+        'Denied' => [],
+    ];
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -29,6 +50,29 @@ class EquipmentBorrowingController extends Controller
             'equipment_id' => 'required|exists:tbl_equipments,equipment_id',
             'quantity' => 'required|integer|min:1',
         ]);
+
+        // The rules above bound the shape and never the amount, so a resident
+        // could file for fifty of an item the office owns four of. Nothing
+        // rejected it until an admin tried to release it, by which point the
+        // request had already been approved.
+        //
+        // This is a satisfiability check, not a reservation: stock moves only on
+        // Released, so two Pending requests for the whole shelf are both filed
+        // and the second one fails at release time. Reserving on Pending would
+        // let anyone empty the inventory with requests nobody ever approves.
+        // For the same reason no lock is taken — there is no write to race with.
+        $equipment = Equipment::find($validated['equipment_id']);
+
+        if (! $equipment || $equipment->available_quantity < $validated['quantity']) {
+            $available = $equipment?->available_quantity ?? 0;
+
+            // Raised as a field error rather than a bare message so a client can
+            // put it on the quantity input. `update()` answers with a plain
+            // message because its 422 is about the record, not about one field.
+            throw ValidationException::withMessages([
+                'quantity' => "Only {$available} of this item are available to borrow.",
+            ]);
+        }
 
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
@@ -78,11 +122,26 @@ class EquipmentBorrowingController extends Controller
         $newStatus = $validated['status'];
         $oldStatus = $borrowing->status;
 
+        // Checked before the transaction opens, so an illegal move costs no
+        // lock and touches no stock. Resending the current status is a no-op
+        // rather than a transition: `status` is required, so a call that only
+        // edits `due_date` has to carry it, and no branch below fires when the
+        // two are equal. A row whose status is not one of the five falls
+        // through to an empty list and is rejected, which is the safe way to
+        // fail on data drift.
+        if ($newStatus !== $oldStatus && ! in_array($newStatus, self::TRANSITIONS[$oldStatus] ?? [], true)) {
+            return response()->json([
+                'message' => "A borrowing that is {$oldStatus} cannot be moved to {$newStatus}.",
+            ], 422);
+        }
+
         DB::beginTransaction();
 
         try {
-            // Handle stock deduction when releasing
-            if ($newStatus === 'Released' && $oldStatus !== 'Released') {
+            // Named for the only status Released can be reached from. The old
+            // condition was `$oldStatus !== 'Released'`, which was true of a
+            // Returned record too and is what deducted the stock twice.
+            if ($newStatus === 'Released' && $oldStatus === 'Approved') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
                 if ($equipment->available_quantity < $borrowing->quantity) {
                     DB::rollBack();
@@ -98,11 +157,6 @@ class EquipmentBorrowingController extends Controller
                 $equipment->increment('available_quantity', $borrowing->quantity);
                 $borrowing->returned_at = now();
             }
-
-            if ($newStatus === 'Denied' && $oldStatus === 'Released') {
-                $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
-                $equipment->increment('available_quantity', $borrowing->quantity);
-}
 
             // Assigned key by key rather than by splat: `status` is handled by
             // the transition logic above, and a splat would let a caller write

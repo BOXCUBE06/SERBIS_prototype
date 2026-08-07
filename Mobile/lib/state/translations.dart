@@ -83,9 +83,20 @@ const Map<String, (String, String)> _strings = {
     'Lilitaw dito ang mga update tungkol sa iyong mga kahilingan sa serbisyo kapag nagsumite ka na.',
   ),
   'notif.scope_note': (
-    'Updates about your own requests only. MDRRMO advisories are not sent here yet.',
-    'Mga update lamang sa sarili mong kahilingan. Hindi pa dito ipinapadala ang mga abiso ng MDRRMO.',
+    'MDRRMO advisories sent to you, and updates about your own requests.',
+    'Mga abiso ng MDRRMO na ipinadala sa iyo, at mga update sa sarili mong kahilingan.',
   ),
+  'notif.advisories': ('MDRRMO advisories', 'Mga Abiso ng MDRRMO'),
+  'notif.your_requests': ('Your requests', 'Iyong mga kahilingan'),
+  'notif.adv_none': (
+    'No advisories have been sent to you.',
+    'Wala pang abisong ipinadala sa iyo.',
+  ),
+  'notif.adv_failed': (
+    "Couldn't load advisories. This does not mean none were sent — check with your barangay.",
+    'Hindi ma-load ang mga abiso. Hindi ito nangangahulugang wala — magtanong sa inyong barangay.',
+  ),
+  'notif.adv_date_unknown': ('Date not recorded', 'Walang naitalang petsa'),
   'home.status.review': (
     'Your request has been forwarded to MDRRMO for review. '
         "You'll be notified once it's processed.",
@@ -178,6 +189,18 @@ const Map<String, (String, String)> _strings = {
   'profile.value_missing': ('Not on file', 'Wala sa talaan'),
   'profile.account_settings': ('Account settings', 'Mga Setting ng Account'),
   'profile.language': ('Language', 'Wika'),
+  'profile.sms_alerts': ('MDRRMO text alerts', 'Mga text alert ng MDRRMO'),
+  // Blunt on purpose, in both directions. The switch controls one thing:
+  // whether SmsController's recipient query includes this number. There is no
+  // category of blast that ignores it, so the copy must not imply one.
+  'profile.sms_alerts_on': (
+    'On — MDRRMO text blasts are sent to your number.',
+    'Naka-on — ipinapadala sa numero mo ang mga text blast ng MDRRMO.',
+  ),
+  'profile.sms_alerts_off': (
+    'Off — you will not receive any MDRRMO text blast.',
+    'Naka-off — hindi ka makakatanggap ng kahit anong text blast ng MDRRMO.',
+  ),
   'profile.offline_materials': ('Offline materials', 'Mga Offline na Materyal'),
   'profile.offline_materials_desc': ('{n} saved · {size} used', '{n} naka-save · {size} ang nagamit'),
   'profile.logout': ('Log out', 'Mag-log Out'),

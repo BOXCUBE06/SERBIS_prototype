@@ -234,6 +234,13 @@ const handleLogin = async () => {
       router.push('/')
     } else if (response.status === 401) {
       errorMessage.value = 'Invalid email or password. Please try again.'
+    } else if (response.status === 403) {
+      // A deactivated account (audit #29). The server's own wording is shown
+      // rather than the generic fallback: the credentials were correct, so
+      // "something went wrong" sends a former employee to chase a fault that
+      // does not exist, and "invalid password" sends them to reset a password
+      // that was never the problem.
+      errorMessage.value = data.message || 'This account is no longer active. Contact an MDRRMO admin.'
     } else if (response.status === 429) {
       const retryAfter = parseInt(response.headers.get('Retry-After'), 10)
       const wait = Number.isNaN(retryAfter) ? 60 : retryAfter

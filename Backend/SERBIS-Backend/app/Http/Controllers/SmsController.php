@@ -26,6 +26,11 @@ class SmsController extends Controller
         // mean barangay membership is a different set.
         $residents = Resident::whereIn('barangay_id', $validated['barangays'])
             ->where('status', 'Active')
+            // The resident's own choice, set from the mobile app via PATCH /me.
+            // Compared against the column rather than the model's boolean cast
+            // because this runs as SQL; the column is NOT NULL with a default of
+            // 1, so there is no third state to account for.
+            ->where('sms_opt_in', true)
             ->whereNotNull('phone_number')
             ->where('phone_number', '!=', '')
             ->get(['resident_id', 'barangay_id', 'phone_number']);
@@ -33,7 +38,7 @@ class SmsController extends Controller
         // Never call a billed endpoint with nothing to send.
         if ($residents->isEmpty()) {
             return response()->json([
-                'message' => 'No active residents with a phone number in the selected barangays.',
+                'message' => 'No residents in the selected barangays are active, opted in to SMS and have a phone number.',
                 'sent'    => 0,
                 'failed'  => 0,
             ], 422);

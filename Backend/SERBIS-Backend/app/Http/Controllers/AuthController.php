@@ -98,6 +98,10 @@ class AuthController extends Controller
                 'email',
                 Rule::unique('tbl_residents', 'email_address')->ignore($user->getKey(), 'resident_id'),
             ],
+            // The resident's own notification preference. Writable here — unlike
+            // the four columns below — because it decides only what this account
+            // receives, and there is nobody else who should be deciding it.
+            'sms_opt_in'    => 'sometimes|required|boolean',
         ]);
 
         // Assigned key by key, never a splat of $validated. Four columns are
@@ -116,6 +120,17 @@ class AuthController extends Controller
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }
+        }
+
+        // Handled apart from the loop because validate() returns what was sent,
+        // not a cast of it — the 'boolean' rule passes the strings "1" and "0"
+        // through unchanged. Assigning "0" happens to be safe today (PHP reads
+        // it as falsy and the column is a tinyint), so this line is defence in
+        // depth: no test distinguishes it from the raw assignment. It earns its
+        // place if the rule is ever loosened to accept "true"/"false", where the
+        // raw string would land in the column as 1 either way.
+        if (array_key_exists('sms_opt_in', $validated)) {
+            $user->sms_opt_in = $request->boolean('sms_opt_in');
         }
 
         $user->save();
@@ -147,6 +162,18 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'Unauthorized. MDRRMO Admin access only.'
             ], 401);
+        }
+
+        // A closed account (audit #29). Named rather than folded into the line
+        // above on purpose: the caller has already proved the password, so this
+        // discloses nothing they did not know, and "wrong credentials" would
+        // send a former employee to reset a password that was never the
+        // problem. Deactivation is how a departing employee's access ends —
+        // the row cannot be deleted while the audit trail points at it.
+        if ($admin->isDeactivated()) {
+            return response()->json([
+                'message' => 'This account has been deactivated. Contact another MDRRMO admin.'
+            ], 403);
         }
 
         return response()->json([

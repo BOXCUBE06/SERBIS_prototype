@@ -137,11 +137,33 @@
                 </v-card>
               </div>
 
+              <!-- The site photo comes first: it is what the resident is
+                   reporting, and it is what decides whether a unit is sent.
+                   The ID answers a different question, and answers it after. -->
+              <div class="mb-4" v-if="selectedRequest.has_site_photo">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Photo of the Site</div>
+                <v-skeleton-loader v-if="sitePhoto.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
+                <v-alert v-else-if="sitePhoto.state.error" type="error" variant="tonal" density="compact">{{ sitePhoto.state.error }}</v-alert>
+                <v-img
+                  v-else-if="sitePhoto.state.url"
+                  :src="sitePhoto.state.url"
+                  max-height="240"
+                  class="subtle-surface rounded-lg border"
+                  alt="Photo of the site, attached by the resident"
+                ></v-img>
+              </div>
+
               <div class="mb-4" v-if="selectedRequest.has_valid_id">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attached Evidence / Valid ID</div>
-                <v-skeleton-loader v-if="validIdLoading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
-                <v-alert v-else-if="validIdError" type="error" variant="tonal" density="compact">{{ validIdError }}</v-alert>
-                <v-img v-else-if="validIdUrl" :src="validIdUrl" max-height="200" class="subtle-surface rounded-lg border"></v-img>
+                <v-skeleton-loader v-if="validId.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
+                <v-alert v-else-if="validId.state.error" type="error" variant="tonal" density="compact">{{ validId.state.error }}</v-alert>
+                <v-img
+                  v-else-if="validId.state.url"
+                  :src="validId.state.url"
+                  max-height="200"
+                  class="subtle-surface rounded-lg border"
+                  alt="Valid ID attached by the resident"
+                ></v-img>
               </div>
 
               <v-divider class="mb-4"></v-divider>
@@ -260,10 +282,49 @@ const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', vehicle_id: null })
 
-const validIdUrl = ref('')
-const validIdFor = ref(null)
-const validIdLoading = ref(false)
-const validIdError = ref('')
+// Two attachments hang off a request now: the resident's ID and, optionally, a
+// photo of the scene. Both live on the private disk and both are served only by
+// an authenticated route, so both need the same fetch-as-a-blob treatment. One
+// factory rather than a second hand-written copy — the copy is where the rule
+// that every early return must release the previous blob gets forgotten.
+const createAttachment = (segment, failureMessage) => {
+  const state = reactive({ url: '', loading: false, error: '', for: null })
+
+  const release = () => {
+    if (state.url) URL.revokeObjectURL(state.url)
+    state.url = ''
+  }
+
+  const load = async (item, present) => {
+    const id = item ? itemId(item) : null
+    if (id === state.for) return
+
+    release()
+    state.for = id
+    state.error = ''
+    if (!present) return
+
+    state.loading = true
+    try {
+      const res = await fetch(`${API_BASE}/service-requests/${id}/${segment}`, { headers: getHeaders() })
+      if (!res.ok) throw new Error(failureMessage)
+      const blob = await res.blob()
+      // The selection moved on while this was in flight; the blob belongs to a
+      // request that is no longer on screen.
+      if (state.for !== id) return
+      state.url = URL.createObjectURL(blob)
+    } catch (error) {
+      if (state.for === id) state.error = error.message
+    } finally {
+      if (state.for === id) state.loading = false
+    }
+  }
+
+  return { state, load, release }
+}
+
+const validId = createAttachment('valid-id', 'Could not load the attached ID.')
+const sitePhoto = createAttachment('site-photo', 'Could not load the site photo.')
 
 const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
@@ -339,35 +400,17 @@ const getHeaders = () => ({
   'Accept': 'application/json'
 })
 
-const releaseValidId = () => {
-  if (validIdUrl.value) URL.revokeObjectURL(validIdUrl.value)
-  validIdUrl.value = ''
+// Neither storage path is serialized by the API — the model hides both and
+// appends `has_valid_id` / `has_site_photo` instead, so these flags are the only
+// way to know whether there is anything to fetch.
+const loadAttachments = (item) => {
+  validId.load(item, !!item?.has_valid_id)
+  sitePhoto.load(item, !!item?.has_site_photo)
 }
 
-// The valid_id path is no longer serialized by the API; the image is fetched from
-// an authenticated endpoint and held as a blob URL for as long as the request is
-// selected. Every early return below must leave the previous blob released.
-const loadValidId = async (item) => {
-  const id = item ? itemId(item) : null
-  if (id === validIdFor.value) return
-
-  releaseValidId()
-  validIdFor.value = id
-  validIdError.value = ''
-  if (!item?.has_valid_id) return
-
-  validIdLoading.value = true
-  try {
-    const res = await fetch(`${API_BASE}/service-requests/${id}/valid-id`, { headers: getHeaders() })
-    if (!res.ok) throw new Error('Could not load the attached ID.')
-    const blob = await res.blob()
-    if (validIdFor.value !== id) return
-    validIdUrl.value = URL.createObjectURL(blob)
-  } catch (error) {
-    if (validIdFor.value === id) validIdError.value = error.message
-  } finally {
-    if (validIdFor.value === id) validIdLoading.value = false
-  }
+const releaseAttachments = () => {
+  validId.release()
+  sitePhoto.release()
 }
 
 const fetchData = async () => {
@@ -403,7 +446,7 @@ const selectRequest = (item, resetRemarks = true) => {
     remarks: resetRemarks ? (item.remarks || '') : formData.value.remarks,
     vehicle_id: item.vehicle_id || null
   }
-  loadValidId(item)
+  loadAttachments(item)
 }
 
 const selectVehicle = (id) => {
@@ -472,7 +515,7 @@ watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
 
 onMounted(fetchData)
-onUnmounted(releaseValidId)
+onUnmounted(releaseAttachments)
 </script>
 
 <style scoped>

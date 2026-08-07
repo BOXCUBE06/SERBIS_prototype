@@ -132,7 +132,16 @@ class EquipmentBorrowingDueDateTest extends TestCase
         $this->assertSame('Stock reserved for flood response', $borrowing->fresh()->denial_reason);
     }
 
-    public function test_moving_off_denied_clears_the_reason(): void
+    /**
+     * This used to assert that re-approving a denied request cleared its
+     * reason. Denied is terminal now — see EquipmentBorrowingTransitionTest —
+     * so that move is refused and the reason it explains stays put. A refusal
+     * is answered by filing a new request, not by reviving the old one.
+     *
+     * The clearing branch in the controller is still live for every other
+     * status; it is simply no longer reachable from Denied.
+     */
+    public function test_a_denied_request_cannot_be_re_approved_and_keeps_its_reason(): void
     {
         $borrowing = $this->pendingBorrowing();
 
@@ -147,9 +156,11 @@ class EquipmentBorrowingDueDateTest extends TestCase
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Approved'])
-            ->assertOk();
+            ->assertStatus(422);
 
-        $this->assertNull($borrowing->fresh()->denial_reason);
+        $borrowing->refresh();
+        $this->assertSame('Denied', $borrowing->status);
+        $this->assertSame('Stock reserved for flood response', $borrowing->denial_reason);
     }
 
     public function test_a_reason_is_not_stored_on_a_non_denial(): void

@@ -294,14 +294,15 @@ void main() {
       expect(newer.dy, lessThan(older.dy));
     });
 
-    testWidgets('says what it does not cover', (tester) async {
-      // Nobody may read the absence of a flood warning here as the absence of
-      // a flood: there is no advisory feed behind this sheet.
+    testWidgets('says what it covers', (tester) async {
+      // The note used to end "MDRRMO advisories are not sent here yet". They
+      // are now — see advisories_test.dart — so the note says so instead of
+      // disclaiming a feed that exists.
       await _pumpSheet(tester, [_request(status: 'Pending')]);
 
       expect(
         find.text(
-          'Updates about your own requests only. MDRRMO advisories are not sent here yet.',
+          'MDRRMO advisories sent to you, and updates about your own requests.',
         ),
         findsOneWidget,
       );

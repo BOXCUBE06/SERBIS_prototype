@@ -125,6 +125,7 @@ const mainMenu = [
 const systemMenu = [
   { to: '/services-config', icon: 'mdi-wrench-outline', title: 'Services' },
   { to: '/users', icon: 'mdi-account-group-outline', title: 'Users' },
+  { to: '/staff', icon: 'mdi-shield-account-outline', title: 'Staff Accounts' },
   { to: '/files', icon: 'mdi-folder-outline', title: 'Files' },
   { to: '/logs', icon: 'mdi-history', title: 'Logs' }
 ]
