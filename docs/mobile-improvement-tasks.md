@@ -705,13 +705,13 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
 ---
 
 - [ ] **M18 — No tests of any kind**
-      **Partly addressed, still open. Re-measured 2026-08-06 with
+      **Partly addressed, still open. Re-measured 2026-08-07 with
       `flutter test --coverage`; the numbers below are that report, not an
-      estimate.** `Mobile/test/` holds **20 files and 184 passing tests** —
+      estimate.** `Mobile/test/` holds **23 files and 224 passing tests** —
       this entry said 39, which was true when the sentence was written and has
       been wrong through every feature that landed after it. Line coverage over
       `lib/` is
-      **63.7%, 1919 of 3012 instrumented lines**, across 30 of the 35 files.
+      **66.8%, 2029 of 3036 instrumented lines**, across 30 of the 35 files.
       Tests were added alongside the fixes that needed them: M7 (token
       storage), M10/M11 and M33 (cache, store, open routes), M14 (base URL),
       M22/M31 (`api_response_parsing_test.dart` — the list unwrapper,
@@ -730,27 +730,41 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
       • `getStatusFromText` — **now covered**, 7 of 7 lines
       (`models/request_models.dart:713-733`), closed by
       `disapproved_status_test.dart`. This entry listing it as a gap was stale.
-      • **401/422 body shapes — still uncovered**, 0 of 22 lines
-      (`state/api_service.dart:253-290`). That range is both the token-rejected
-      sign-out and all of `_errorMessage`, so nothing exercises the Laravel
-      `errors`-vs-`message` unwrapping that decides every sentence a resident
-      reads on a failure.
-      • `AppState` submit/cancel against a mocked `ApiService` — **mostly
-      covered; the M5 rollback specifically is closed.** The submit rollback
-      (`state/request_store.dart:534-537`) is hit. What is left uncovered is the
-      incomplete-request guard (`:493-499`, unreachable from the form by
-      design), the null-id cancel guard (`:548-549`), and **the cancel rollback
-      (`:584-585`), which is a real gap** — it is the path that puts a request
-      back when the server refuses the cancellation, and cancel's happy path is
-      tested while its failure path is not.
+      • ~~**401/422 body shapes — still uncovered**~~ — **CLOSED 2026-08-07.**
+      `_decode` and `_errorMessage` (`state/api_service.dart:216-291`) are now
+      fully covered by `api_error_message_test.dart`, 19 tests: the Laravel
+      `errors`-vs-`message` unwrapping, the suppression of the framework's
+      `Unauthenticated.`, every status fallback, the non-JSON body, and the
+      transport failure. The branch that matters most is the sign-out asymmetry
+      — a 401 on a stored token clears it and fires `onUnauthorized`; a 401 on
+      `/register` or `/resident/login` must not, or a wrong password would
+      bounce the resident off the login screen. Both are asserted. Driven
+      through the real `ApiService` over an `http.runWithClient` + `MockClient`
+      transport rather than by exposing the private methods — **that seam is
+      new to this project and is the one to copy for any future HTTP test.**
+      • `AppState` submit/cancel against a mocked `ApiService` — **closed
+      except for one deliberately unreachable guard.** The submit rollback
+      (`state/request_store.dart:534-537`) was already hit. **The cancel
+      rollback (`:584-585`) is now covered** by `cancel_rollback_test.dart`,
+      9 tests, along with the null-id guard (`:548-549`) and the terminal-status
+      guard. Two of those tests exist for reasons the line numbers do not show:
+      the rollback re-runs `indexWhere` instead of reusing the index it captured
+      before the `await`, because a poll landing mid-flight would otherwise make
+      it overwrite whichever request moved into that slot; and a request that
+      vanished while the DELETE was out must not be resurrected. Still
+      uncovered: the incomplete-request guard (`:493-499`), unreachable from the
+      form by design.
       **CI is still nothing.** There is no `.github/workflows/` anywhere in the
       repo; `flutter test` is run by hand on one machine.
-      **Largest untested surfaces, by file:**
-      `screens/library/article_reader_screen.dart` 0/93 · `state/api_service.dart`
-      35/204 (17.2%) · `widgets/service_widgets.dart` 22/111 (19.8%) ·
+      **Largest untested surfaces, by file** (2026-08-07):
+      `screens/library/article_reader_screen.dart` 0/93 ·
+      `widgets/service_widgets.dart` 22/111 (19.8%) ·
       `screens/services_screen.dart` 46/160 (28.8%) · `state/account_store.dart`
-      22/57 (38.6%) · `widgets/sos_button.dart` 40/83 (48.2%) ·
-      `screens/profile_screen.dart` 333/547 (60.9%). **Absent from the report
+      23/59 (39.0%) · `widgets/sos_button.dart` 40/83 (48.2%) ·
+      `state/api_service.dart` 114/207 (55.1%, was 17.2% before the error-path
+      tests — what is left there is the upload and download half, not the
+      failure half) · `screens/profile_screen.dart` 356/566 (62.9%).
+      `state/request_store.dart` is now **164/184 (89.1%)**. **Absent from the report
       entirely — no test loads them at all:** `main.dart`,
       `screens/auth/login_screen.dart`, `screens/auth/register_screen.dart`. The
       two other absent files, `state/file_opener_unsupported.dart` and
@@ -758,7 +772,7 @@ Anything that can cause a wrong, lost, or falsely-confirmed emergency request.
       for platforms this test run is not; their absence is correct.
       **Severity:** High
       **Category:** Code Structure
-      **Location:** `Mobile/test/` — 20 files, 184 tests, 63.7% line coverage.
+      **Location:** `Mobile/test/` — 23 files, 224 tests, 66.8% line coverage.
       The original line here read "no `test/` directory exists", which was true
       when this was filed and has not been since `fa778d2`, 2026-07-28.
       **Problem:** Zero unit, widget or integration tests. `flutter analyze` is
