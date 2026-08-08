@@ -34,13 +34,21 @@
           <v-card-text class="pa-0">
             <v-window v-model="activeTab">
               <v-window-item value="system">
-                <v-data-table
+                <!-- v-data-table-server, not v-data-table: the plain component
+                     filters and pages the array it is handed, which is exactly
+                     what must NOT happen now that the server sends one page.
+                     Client-side filtering over a single page is a search box
+                     that cannot find a row on page 2 and gives no sign of it. -->
+                <v-data-table-server
                   :headers="systemHeaders"
                   :items="systemLogs"
-                  :search="search"
+                  :items-length="systemTotal"
+                  :items-per-page="itemsPerPage"
+                  :page="systemPage"
                   :loading="loading"
                   hover
                   class="bg-transparent"
+                  @update:options="onSystemOptions"
                 >
                   <template v-slot:item.action="{ item }">
                     <v-chip :color="getActionColor(item.action)" size="small" variant="tonal" class="font-weight-bold">
@@ -50,17 +58,20 @@
                   <template v-slot:item.created_at="{ item }">
                     {{ formatDate(item.created_at) }}
                   </template>
-                </v-data-table>
+                </v-data-table-server>
               </v-window-item>
 
               <v-window-item value="sms">
-                <v-data-table
+                <v-data-table-server
                   :headers="smsHeaders"
                   :items="smsLogs"
-                  :search="search"
+                  :items-length="smsTotal"
+                  :items-per-page="itemsPerPage"
+                  :page="smsPage"
                   :loading="loading"
                   hover
                   class="bg-transparent"
+                  @update:options="onSmsOptions"
                 >
                   <template v-slot:item.status="{ item }">
                     <!-- The column holds 'Sent' or 'Failed'. This used to test
@@ -75,7 +86,7 @@
                   <template v-slot:item.created_at="{ item }">
                     {{ formatDate(item.created_at) }}
                   </template>
-                </v-data-table>
+                </v-data-table-server>
               </v-window-item>
             </v-window>
           </v-card-text>
@@ -87,7 +98,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 
@@ -97,6 +108,30 @@ const loading = ref(false)
 
 const systemLogs = ref([])
 const smsLogs = ref([])
+
+// Both log endpoints paginate as of backend audit #10. These mirror the
+// server's answer rather than deriving anything: `*Total` is meta.total, which
+// is the count of rows matching the CURRENT SEARCH, not the size of the table.
+// v-data-table-server needs it to know how many page buttons to draw.
+const itemsPerPage = 25
+const systemPage = ref(1)
+const smsPage = ref(1)
+const systemTotal = ref(0)
+const smsTotal = ref(0)
+
+// Debounced, because the search box now costs a round trip per keystroke
+// instead of filtering an array already in memory.
+let searchTimer
+watch(search, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    // Back to page 1: staying on page 4 while the result set shrinks to one
+    // page shows an empty table and reads as "no matches".
+    systemPage.value = 1
+    smsPage.value = 1
+    fetchLogs()
+  }, 300)
+})
 
 // Table Definitions
 const systemHeaders = [
@@ -125,24 +160,60 @@ const getHeaders = () => ({
   'Accept': 'application/json'
 })
 
+const listUrl = (path, page) => {
+  const params = new URLSearchParams({
+    page: String(page),
+    per_page: String(itemsPerPage),
+  })
+
+  // URLSearchParams encodes the term, so a '%' or '&' typed into the box
+  // reaches the server intact rather than truncating the query string. The
+  // server matches wildcards literally.
+  const term = (search.value || '').trim()
+  if (term) params.set('search', term)
+
+  return `${API_BASE}${path}?${params.toString()}`
+}
+
 const fetchLogs = async () => {
   loading.value = true
   try {
     const [systemRes, smsRes] = await Promise.all([
-      fetch(`${API_BASE}/logs/system`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/logs/sms`, { headers: getHeaders() })
+      fetch(listUrl('/logs/system', systemPage.value), { headers: getHeaders() }),
+      fetch(listUrl('/logs/sms', smsPage.value), { headers: getHeaders() })
     ])
 
     const systemData = await systemRes.json()
     const smsData = await smsRes.json()
 
-    systemLogs.value = systemData.data || systemData
-    smsLogs.value = smsData.data || smsData
+    systemLogs.value = systemData.data || []
+    smsLogs.value = smsData.data || []
+
+    // Fall back to the row count when meta is absent, so a server that has
+    // not been updated yet still renders its rows instead of an empty table
+    // with a zero-page pager.
+    systemTotal.value = systemData.meta?.total ?? systemLogs.value.length
+    smsTotal.value = smsData.meta?.total ?? smsLogs.value.length
   } catch (error) {
     console.error('Failed to fetch logs:', error)
   } finally {
     loading.value = false
   }
+}
+
+// v-data-table-server emits this on mount and on every page change. Guarded so
+// the mount emission does not fire a second identical request alongside
+// onMounted's, and so a page change fetches only the tab that moved.
+const onSystemOptions = ({ page }) => {
+  if (page === systemPage.value) return
+  systemPage.value = page
+  fetchLogs()
+}
+
+const onSmsOptions = ({ page }) => {
+  if (page === smsPage.value) return
+  smsPage.value = page
+  fetchLogs()
 }
 
 // Helpers

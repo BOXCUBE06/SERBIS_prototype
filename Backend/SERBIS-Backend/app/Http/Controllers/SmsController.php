@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Recipient;
 use App\Models\Resident;
 use App\Models\SmsLog;
+use App\Traits\PaginatesLists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class SmsController extends Controller
 {
+    use PaginatesLists;
+
     public function sendBlast(Request $request)
     {
         $validated = $request->validate([
@@ -132,18 +135,29 @@ class SmsController extends Controller
      * relation: a blast to a whole municipality is thousands of rows and the
      * table shows a number.
      */
-    public function history()
+    public function history(Request $request)
     {
-        $logs = SmsLog::query()
+        $query = SmsLog::query()
             ->with([
                 'sender:admin_id,first_name,last_name',
                 'barangay:barangay_id,barangay_name',
             ])
             ->withCount('recipients')
             ->latest()
-            ->get();
+            // Tiebreaker, and this table needs it more than most: a blast
+            // writes one row per barangay inside the same second, so ties are
+            // the normal case here, not an edge one. Ordering by created_at
+            // alone lets a paginated read repeat or skip a row.
+            ->orderBy('sms_log_id', 'desc');
 
-        $mapped = $logs->map(fn (SmsLog $log) => [
+        $this->applyHistorySearch($query, (string) $request->query('search', ''));
+
+        // One row per barangay per blast, so this grows faster than the number
+        // of messages actually sent. See App\Traits\PaginatesLists for why the
+        // other list endpoints were left returning bare arrays.
+        $logs = $query->paginate($this->resolvePerPage($request));
+
+        $mapped = collect($logs->items())->map(fn (SmsLog $log) => [
             'sms_log_id'      => $log->sms_log_id,
             'created_at'      => $log->created_at,
             'user'            => [
@@ -163,7 +177,52 @@ class SmsController extends Controller
             'status'          => $log->status,
         ]);
 
-        return response()->json(['success' => true, 'data' => $mapped]);
+        return response()->json([
+            'success' => true,
+            'data'    => $mapped,
+            'meta'    => $this->paginationMeta($logs),
+        ]);
+    }
+
+    /**
+     * Server-side search for the SMS History tab. The Logs page's single
+     * search box filters both tabs, and it used to be Vuetify's client-side
+     * filter over the whole table; once the endpoint pages, a box that only
+     * searched the loaded page would hide blasts rather than find them.
+     *
+     * Every column this searches is stored, unlike the system-log tab where
+     * two of them are built in PHP.
+     */
+    private function applyHistorySearch($query, string $search): void
+    {
+        // Laravel's global TrimStrings and ConvertEmptyStringsToNull middleware
+        // have already run by this point, so a whitespace-only box arrives here
+        // as null and `(string) null` is ''. The trim is kept as belt-and-braces
+        // for any caller that reaches this method without passing through that
+        // middleware stack.
+        $search = trim($search);
+
+        // Not behaviour on today's schema — message_body is NOT NULL, so the
+        // '%%' this would otherwise build matches every row and the result set
+        // is identical. It is here for cost: without it, every unfiltered load
+        // of the Logs page runs the two orWhereHas EXISTS subqueries below for
+        // nothing.
+        if ($search === '') {
+            return;
+        }
+
+        $term = '%'.addcslashes($search, '%_\\').'%';
+
+        $query->where(function ($q) use ($term) {
+            $q->where('message_body', 'like', $term)
+              ->orWhere('status', 'like', $term)
+              ->orWhereHas('barangay', fn ($b) => $b->where('barangay_name', 'like', $term))
+              ->orWhereHas('sender', function ($sender) use ($term) {
+                  $sender->where('first_name', 'like', $term)
+                         ->orWhere('last_name', 'like', $term)
+                         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$term]);
+              });
+        });
     }
 
     /**
