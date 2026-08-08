@@ -203,6 +203,35 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // There is deliberately NO `status` check here, unlike adminLogin above.
+        // This is quality-check finding 5 (2026-08-05), and it was decided on
+        // 2026-08-08 to leave it open rather than fixed. Recorded here because
+        // the asymmetry with adminLogin reads like an oversight and has now
+        // been re-raised more than once.
+        //
+        // An `Inactive` resident can log in and file service requests. The only
+        // thing activation gates is who receives an SMS blast. That is the
+        // intended behaviour for now:
+        //
+        //  - There is no self-serve activation or reactivation flow anywhere.
+        //    Blocking the login makes the MDRRMO office the only way back in,
+        //    for an app whose whole purpose is the hour when nobody can reach
+        //    the office.
+        //  - `tbl_residents.status` is a plain varchar, NOT NULL but with no
+        //    default and nothing constraining its values. Every insert has to
+        //    name a status, and nothing stops one naming 'pending' or 'active'
+        //    in the wrong case. A fail-closed `=== 'Active'` test would lock
+        //    out every such row. (This differs from tbl_user.status, which
+        //    defaults to 'Active' — do not carry the reasoning across.)
+        //  - Filing a request is not the risk. A request is triaged by a human
+        //    before a unit moves, so an unactivated account costs the office a
+        //    dispatch decision it was already making, not an automatic response.
+        //
+        // If this is ever closed, mirror isDeactivated() rather than testing
+        // for 'Active', and give the mobile login screen a 403 branch first —
+        // without one the resident sees a generic failure and retries forever.
+        // The onboarding copy implying a gate should change at the same time.
+
         return response()->json([
             'token' => $resident->createToken(
                 'resident-token',
