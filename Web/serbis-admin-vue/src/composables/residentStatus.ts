@@ -60,3 +60,44 @@ export function residentStatusDotClass(status?: string | null): string {
   if (status === RESIDENT_STATUS.pending) return 'dot-pending'
   return 'dot-inactive'
 }
+
+/**
+ * `tbl_residents.sms_opt_in` — the resident's own decision about receiving
+ * MDRRMO text blasts, which is not the same fact as `status`.
+ *
+ * `SmsController::sendBlast()` needs all three: an Active account, a phone
+ * number, and this switch on. So the two columns answer different halves of
+ * "why did that blast reach fewer numbers than I expected", and they are
+ * deliberately not merged into one "will receive" column — an opted-in
+ * resident whose account is deactivated is a different problem with a
+ * different fix from one who opted out, and the office can only act on the
+ * first.
+ */
+export function residentSmsOptIn(resident?: { sms_opt_in?: unknown } | null): boolean {
+  const value = resident?.sms_opt_in
+
+  // Absent reads as opted in, matching the column default and the mobile
+  // client's AppUser.fromJson. Absent-as-false would print "Opted out" against
+  // a resident the blast still reaches, and send an operator looking for a
+  // choice nobody made. 0/'0' are handled because the boolean cast lives on
+  // the model, not in the column.
+  if (value === undefined || value === null) return true
+  return value !== false && value !== 0 && value !== '0'
+}
+
+/**
+ * Only the pill's own vocabulary. "Opted out" is stated in words, not carried
+ * by the grey alone — the same rule the borrowing board's status chips follow.
+ */
+export function residentSmsLabel(optedIn: boolean): string {
+  return optedIn ? 'Receiving' : 'Opted out'
+}
+
+/** Reuses the status pill classes; opting out is neutral, not an error. */
+export function residentSmsPillClass(optedIn: boolean): string {
+  return optedIn ? 'pill-active' : 'pill-inactive'
+}
+
+export function residentSmsDotClass(optedIn: boolean): string {
+  return optedIn ? 'dot-active' : 'dot-inactive'
+}

@@ -183,6 +183,17 @@
                 {{ residentStatusLabel(item.status) }}
               </span>
             </template>
+
+            <template v-slot:item.sms_opt_in="{ item }">
+              <!-- Same pill as Status, on purpose: it is the second half of the
+                   same question. A blast needs an Active account, a phone
+                   number and this switch, so an operator counting a short
+                   delivery report reads both columns, not one. -->
+              <span class="status-pill" :class="residentSmsPillClass(residentSmsOptIn(item))">
+                <span class="status-dot" :class="residentSmsDotClass(residentSmsOptIn(item))"></span>
+                {{ residentSmsLabel(residentSmsOptIn(item)) }}
+              </span>
+            </template>
           </v-data-table>
         </v-card>
       </v-col>
@@ -390,6 +401,10 @@ import {
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_FILTER_ITEMS,
+  residentSmsDotClass,
+  residentSmsLabel,
+  residentSmsOptIn,
+  residentSmsPillClass,
   residentStatusDotClass,
   residentStatusLabel,
   residentStatusPillClass,
@@ -399,13 +414,21 @@ import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
 const { mdAndUp } = useDisplay()
 
+// The percentages add to 92, not 100, because the avatar column is a fixed
+// 76px and the table is `table-layout: fixed` — percentages are taken from the
+// full table width, so 100% + 76px was already running 28px past the card
+// before a seventh column existed. The two pill columns are sized from what
+// their longest pill actually measures ("DEACTIVATED" 128px, "RECEIVING"
+// 110px) plus the cell padding; the four text columns truncate with a tooltip
+// and can absorb what is left.
 const headers = [
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Full Name', key: 'fullName', width: '26%' },
-  { title: 'Barangay', key: 'barangay_name', width: '15%' },
-  { title: 'Phone Number', key: 'phone_number', width: '18%' },
-  { title: 'Email', key: 'email_address', width: '25%' },
+  { title: 'Full Name', key: 'fullName', width: '21%' },
+  { title: 'Barangay', key: 'barangay_name', width: '12%' },
+  { title: 'Phone Number', key: 'phone_number', width: '14%' },
+  { title: 'Email', key: 'email_address', width: '15%' },
   { title: 'Status', key: 'status', align: 'center', width: '16%' },
+  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '14%' },
 ]
 
 const residents = ref([])
@@ -702,8 +725,10 @@ onUnmounted(releaseResidentPhotos)
 
 /* Table */
 .elegant-table :deep(table) { table-layout: fixed !important; width: 100% !important; }
+/* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
+   two pill columns need their width for the pill rather than for gutters. */
 .elegant-table :deep(td) {
-  padding: 18px 24px !important;
+  padding: 18px 16px !important;
   height: 76px !important;
   font-size: 0.95rem;
   border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
@@ -713,7 +738,7 @@ onUnmounted(releaseResidentPhotos)
   font-size: 0.85rem !important;
   font-weight: 700 !important;
   color: #ffffff !important;
-  padding: 0 24px !important;
+  padding: 0 16px !important;
   height: 56px !important;
   border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
   /* Fixed brand green, not the primary token: this header carries white text,

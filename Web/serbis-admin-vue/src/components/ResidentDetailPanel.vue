@@ -38,6 +38,21 @@
         </a>
       </div>
 
+      <div class="mb-4">
+        <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">SMS blasts</div>
+        <span class="status-pill" :class="smsPillClass">
+          <span class="status-dot" :class="smsDotClass"></span>
+          {{ smsLabel }}
+        </span>
+        <!-- Said in words because the pill alone does not explain that this is
+             the resident's own choice and not something the office switched
+             off. There is no admin control for it: it is written from the
+             mobile app through PATCH /me. -->
+        <div v-if="!smsOptIn" class="text-body-2 text-medium-emphasis mt-2">
+          This resident turned MDRRMO text blasts off in the app. Only they can turn them back on.
+        </div>
+      </div>
+
       <h4 class="text-subtitle-2 font-weight-bold text-medium-emphasis text-uppercase mb-4 mt-6">Registration</h4>
 
       <div class="mb-4">
@@ -103,6 +118,10 @@ import { computed, ref, watch } from 'vue'
 import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   RESIDENT_STATUS,
+  residentSmsDotClass,
+  residentSmsLabel,
+  residentSmsOptIn,
+  residentSmsPillClass,
   residentStatusDotClass,
   residentStatusLabel,
   residentStatusPillClass,
@@ -119,6 +138,14 @@ defineEmits(['close', 'edit', 'toggle-status', 'delete'])
 const isActive = computed(() => props.resident.status === RESIDENT_STATUS.active)
 
 const residentId = computed(() => props.resident.resident_id ?? props.resident.id)
+
+// Read-only here. The switch belongs to the resident and is written from the
+// mobile app; the panel reports it so a short delivery report has an
+// explanation on the same screen as the account.
+const smsOptIn = computed(() => residentSmsOptIn(props.resident))
+const smsLabel = computed(() => residentSmsLabel(smsOptIn.value))
+const smsPillClass = computed(() => residentSmsPillClass(smsOptIn.value))
+const smsDotClass = computed(() => residentSmsDotClass(smsOptIn.value))
 
 // The panel is reused as the selection moves down the list, so the photo is
 // keyed off the id and cleared first — otherwise the previous resident's face
