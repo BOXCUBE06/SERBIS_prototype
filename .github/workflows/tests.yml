@@ -79,11 +79,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 8.4, not the `^8.3` in composer.json. composer.lock resolved the
-      # Symfony 8.1 components, which require php >=8.4.1, so the declared
-      # floor is lower than the lockfile can actually install on — a fresh
-      # `composer install` on 8.3 fails outright. The development machine runs
-      # 8.4.14. Widening composer.json to match reality is a separate change.
+      # 8.4, matching the `^8.4` composer.json now declares. The floor used to
+      # say ^8.3 while composer.lock held the Symfony 8.1 components, which
+      # require php >=8.4.1 — a fresh `composer install` on 8.3 failed outright.
+      # Keep this pin and the composer.json floor in step; if they drift again,
+      # CI is the only thing that installs on a machine nobody has hand-tuned.
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
