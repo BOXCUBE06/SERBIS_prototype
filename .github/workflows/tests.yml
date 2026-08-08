@@ -79,9 +79,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 8.4, not the `^8.3` in composer.json. composer.lock resolved the
+      # Symfony 8.1 components, which require php >=8.4.1, so the declared
+      # floor is lower than the lockfile can actually install on — a fresh
+      # `composer install` on 8.3 fails outright. The development machine runs
+      # 8.4.14. Widening composer.json to match reality is a separate change.
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: mbstring, pdo_mysql, zip, bcmath
           coverage: none
 
