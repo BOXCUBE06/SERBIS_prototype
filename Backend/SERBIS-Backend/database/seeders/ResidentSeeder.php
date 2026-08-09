@@ -51,8 +51,6 @@ class ResidentSeeder extends Seeder
                 'photo'           => null,
                 'status'          => fake()->randomElement(['Active', 'Inactive']),
                 'email_address'   => $email,
-                'otp'             => null,
-                'otp_verified_at' => now(),
                 'created_at'      => now(),
                 'updated_at'      => now(),
             ]);
