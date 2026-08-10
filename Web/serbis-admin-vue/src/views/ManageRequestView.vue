@@ -141,7 +141,7 @@
                    reporting, and it is what decides whether a unit is sent.
                    The ID answers a different question, and answers it after. -->
               <div class="mb-4" v-if="selectedRequest.has_site_photo">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Photo of the Site</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Landmark</div>
                 <v-skeleton-loader v-if="sitePhoto.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
                 <v-alert v-else-if="sitePhoto.state.error" type="error" variant="tonal" density="compact">{{ sitePhoto.state.error }}</v-alert>
                 <v-img
@@ -149,7 +149,7 @@
                   :src="sitePhoto.state.url"
                   max-height="240"
                   class="subtle-surface rounded-lg border"
-                  alt="Photo of the site, attached by the resident"
+                  alt="Landmark photo attached by the resident"
                 ></v-img>
               </div>
 
@@ -454,7 +454,9 @@ const createAttachment = (segment, failureMessage) => {
 }
 
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
-const sitePhoto = createAttachment('site-photo', 'Could not load the site photo.')
+// The route segment and the `site_photo` column keep their names -- this is a
+// label change, not an API one.
+const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
 
 const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
