@@ -274,6 +274,39 @@ Future<void> _agree(WidgetTester tester) async {
 // ---------------------------------------------------------------------------
 
 void main() {
+  group('what the system is for', () {
+    testWidgets('the login screen says what SERBIS is before asking to sign in',
+        (tester) async {
+      // Somebody handed this app at a barangay hall meets a login form for a
+      // system nobody has described to them.
+      await _pumpLogin(tester);
+
+      expect(find.byType(ServicePurposeNote), findsOneWidget);
+      expect(
+        find.textContaining('disaster and emergency service line'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Echague MDRRMO'), findsOneWidget);
+    });
+
+    testWidgets('the register screen says the same thing', (tester) async {
+      await _pumpRegister(tester);
+
+      expect(find.byType(ServicePurposeNote), findsOneWidget);
+    });
+
+    testWidgets('registering no longer promises a verification step that does not exist',
+        (tester) async {
+      // The old copy said "you will log in afterwards to verify your account".
+      // There is no verify route, no code is ever sent, and the OTP columns it
+      // referred to were dropped as dead schema. A resident reading it waits
+      // for a screen that never comes.
+      await _pumpRegister(tester);
+
+      expect(find.textContaining('verify your account'), findsNothing);
+    });
+  });
+
   group('login validation', () {
     testWidgets('refuses an empty form without calling the server',
         (tester) async {

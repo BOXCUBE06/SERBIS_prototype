@@ -174,13 +174,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Text('Create your account',
                         style: AppText.display(size: 20)),
                     const SizedBox(height: 4),
+                    // The old copy promised "you will log in afterwards to
+                    // verify your account". No verification step exists, and
+                    // none is being built -- the OTP columns it referred to
+                    // were dead schema and have been dropped. Telling a
+                    // resident to expect one leaves them waiting for a screen
+                    // that never comes.
                     Text(
-                      'Register to submit service requests and receive '
-                      'updates from MDRRMO. You will log in afterwards '
-                      'to verify your account.',
+                      'One account per household, for the head of the family. '
+                      'You can log in as soon as you have registered.',
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
                     ),
+                    const SizedBox(height: 16),
+                    const ServicePurposeNote(),
                     const SizedBox(height: 22),
 
                     AuthTextField(

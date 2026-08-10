@@ -94,12 +94,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Log in to submit and track your service requests '
-                      'with Echague MDRRMO.',
+                      'Log in to submit and track your service requests.',
                       textAlign: TextAlign.center,
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
                     ),
+                    const SizedBox(height: 16),
+                    const ServicePurposeNote(),
                     if (widget.infoMessage != null) ...[
                       const SizedBox(height: 14),
                       Container(
