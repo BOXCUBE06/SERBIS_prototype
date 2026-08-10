@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex flex-column h-100">
     <div class="pa-6 pb-0 d-flex justify-space-between align-start">
-      <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Resident profile</span>
+      <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Head of the family profile</span>
       <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close profile panel" @click="$emit('close')"></v-btn>
     </div>
 

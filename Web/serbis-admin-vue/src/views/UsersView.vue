@@ -95,12 +95,12 @@
           <div v-else-if="!filteredAndSortedResidents.length" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length ? 'No residents match your filters' : 'No residents registered yet' }}
+              {{ residents.length ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
               {{ residents.length
                 ? 'Try a different keyword, status, or barangay.'
-                : 'Add the first resident account to get started.' }}
+                : 'Add the first head of the family account to get started.' }}
             </div>
             <v-btn
               v-if="residents.length"
@@ -226,7 +226,7 @@
             class="bg-surface h-100 d-flex flex-column align-center justify-center pa-6 text-center"
           >
             <v-icon size="64" class="mb-4 text-medium-emphasis">mdi-account-search</v-icon>
-            <h3 class="text-h6 font-weight-bold text-high-emphasis">No resident selected</h3>
+            <h3 class="text-h6 font-weight-bold text-high-emphasis">No head of the family selected</h3>
             <p class="text-body-1 text-medium-emphasis mt-2">
               Select a row in the table to see the full profile here.
             </p>
@@ -358,7 +358,7 @@
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="470">
       <v-card rounded="xl" class="pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Delete resident account?</v-card-title>
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Delete this account?</v-card-title>
         <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
           <strong class="text-high-emphasis">{{ deleteDialog.item ? fullName(deleteDialog.item) : '' }}</strong>
           will be permanently removed, along with their ability to sign in and file requests.
