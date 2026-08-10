@@ -9,6 +9,7 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/service_form_fields.dart';
+import '../widgets/form_inputs.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -336,13 +337,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: tr(f, 'services.choose_type')),
-              _buildServiceGrid(),
-            ],
-          ),
+          child: _buildServicePicker(f),
         ),
         if (selection != null)
           Padding(
@@ -383,7 +378,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  Widget _buildServiceGrid() {
+  /// The catalogue used to be a grid of tappable cards, two across. Ten
+  /// services made it a wall the resident had to read before filing anything,
+  /// and the form for the selected one sat below the fold. One dropdown, with
+  /// the selected service's description under it.
+  Widget _buildServicePicker(bool f) {
     if (_loadingServices) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 30),
@@ -416,18 +415,35 @@ class _ServicesScreenState extends State<ServicesScreen> {
       );
     }
 
-    return ServiceGrid(
-      count: _services.length,
-      cardBuilder: (index) {
-        final service = _services[index];
-        return ServiceTypeCard(
-          title: service.nameLocalized,
-          subtitle: service.displayDescription,
-          icon: service.icon,
-          selected: service.id == _selected?.id,
-          onTap: () => setState(() => _selected = service),
-        );
-      },
+    // The dropdown's value must be an element of `items` or Flutter asserts.
+    // `_currentSelection` re-resolves by id but falls back to the stale object
+    // when the catalogue no longer holds it, which is exactly the case that
+    // would assert -- so resolve against `_services` and take the first row
+    // when nothing matches.
+    final selected = _services.firstWhere(
+      (s) => s.id == _selected?.id,
+      orElse: () => _services.first,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppDropdown<ServiceCatalogItem>(
+          label: tr(f, 'services.choose_type'),
+          items: _services,
+          value: selected,
+          itemLabel: (s) => s.nameLocalized,
+          onChanged: (s) => setState(() => _selected = s),
+        ),
+        if (selected.displayDescription.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              selected.displayDescription,
+              style: AppText.body(size: 12, color: AppColors.inkMuted),
+            ),
+          ),
+      ],
     );
   }
 }

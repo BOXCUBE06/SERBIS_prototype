@@ -219,6 +219,28 @@ Future<void> _attachSitePhoto(WidgetTester tester, {String name = 'scene.jpg'}) 
   await _tapUpload(tester, 'Photo of the site (optional)');
 }
 
+/// Opens the service dropdown and returns once the menu is on screen.
+///
+/// A closed `DropdownButton` builds only the selected item, so every other
+/// service is absent from the tree entirely — `find.text` on an unselected
+/// service finds nothing until the menu is open. That is the difference from
+/// the old grid, where all ten cards were always built.
+Future<void> _openServiceDropdown(WidgetTester tester) async {
+  final dropdown = find.byType(DropdownButton<ServiceCatalogItem>);
+  await tester.ensureVisible(dropdown);
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+}
+
+/// Picks [name] out of the open menu. The menu renders a second copy of the
+/// selected item, so tapping `.last` avoids the copy still sitting in the
+/// closed button underneath.
+Future<void> _chooseService(WidgetTester tester, String name) async {
+  await _openServiceDropdown(tester);
+  await tester.tap(find.text(name).last);
+  await tester.pumpAndSettle();
+}
+
 /// Types a callback number into the ambulance/relief/generic contact field.
 /// The road form has no such field, which is why the submit-path tests below
 /// use Road Clearing: they are about what happens after Submit, not about
@@ -267,8 +289,14 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
-    testWidgets('renders one card per service', (tester) async {
+    testWidgets('offers every service as an option in the dropdown', (tester) async {
       await _pump(tester, AppState(FakeApi()));
+
+      // Closed, the button holds only the selection. This is the assertion that
+      // would pass on a broken picker if it were made before opening the menu.
+      expect(find.text('Flood Evacuation'), findsNothing);
+
+      await _openServiceDropdown(tester);
 
       expect(find.text('Flood Evacuation'), findsWidgets);
       expect(find.text('Ambulance Service'), findsWidgets);
@@ -322,16 +350,18 @@ void main() {
       expect(find.text('Flood Evacuation'), findsNWidgets(2));
     });
 
-    testWidgets('tapping a card changes the form header', (tester) async {
+    testWidgets('choosing another service from the dropdown changes the form header',
+        (tester) async {
       await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
 
       expect(find.text('Ambulance Service'), findsNWidgets(2));
 
-      await tester.tap(find.text('Road Clearing').first);
-      await tester.pumpAndSettle();
+      await _chooseService(tester, 'Road Clearing');
 
+      // Twice: once in the closed button, once as the form header. The old
+      // selection is gone from both.
       expect(find.text('Road Clearing'), findsNWidgets(2));
-      expect(find.text('Ambulance Service'), findsOneWidget);
+      expect(find.text('Ambulance Service'), findsNothing);
     });
 
     testWidgets('an empty catalogue renders no form section at all',
