@@ -39,7 +39,7 @@
           <div v-if="selectedIds.size > 0" class="d-flex align-center justify-space-between px-4 py-2 subtle-surface" style="flex-shrink: 0;">
             <span class="text-caption font-weight-bold">{{ selectedIds.size }} selected</span>
             <div class="d-flex gap-2">
-              <v-btn size="small" variant="text" color="error" class="text-none font-weight-bold" :loading="bulkLoading" @click="bulkDisapprove">Disapprove</v-btn>
+              <v-btn size="small" variant="text" color="error" class="text-none font-weight-bold" :loading="bulkLoading" @click="openReason('bulk')">Disapprove</v-btn>
               <v-btn size="small" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
             </div>
           </div>
@@ -196,17 +196,19 @@
 
               <v-textarea
                 v-if="selectedRequest.status === 'Pending' || selectedRequest.status === 'Responding' || !selectedRequest.status"
-                v-model="formData.remarks" label="Admin Remarks (Optional)" variant="outlined" density="comfortable" rounded="lg" rows="2" hide-details class="mt-4"
+                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2" class="mt-4"
+                hint="Carried into the approve and decline dialogs. Declining asks for one if this is empty."
+                persistent-hint
               ></v-textarea>
             </div>
 
             <v-divider v-if="showActions"></v-divider>
             <div v-if="showActions" class="d-flex justify-end pa-4 gap-3" style="flex-shrink: 0;">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="updateStatus('Disapproved')">
+                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
-                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" :loading="loading" :disabled="!formData.vehicle_id" @click="updateStatus('Responding')">
+                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" :loading="loading" :disabled="!formData.vehicle_id" @click="openReason('approve')">
                   Approve & Dispatch
                 </v-btn>
               </template>
@@ -257,6 +259,49 @@
         </v-card-text>
       </v-card>
     </v-dialog>
+
+    <!-- Every approve and decline now stops here first. The remarks field on the
+         detail panel was optional and skipped, so a disapproved request reached
+         the resident's phone as a red status with nothing under it. Declining
+         requires a reason; approving only asks for one, since a dispatched unit
+         is its own explanation. Bulk decline gets one reason for the whole
+         selection, which is the only thing it could ever have written -- it used
+         to resend each row's existing remarks, so it captured nothing at all. -->
+    <v-dialog v-model="reasonDialog.open" max-width="440" @after-leave="clearReason">
+      <v-card rounded="lg">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          {{ reasonCopy.title }}
+        </v-card-title>
+        <v-card-text class="px-5 pt-2">
+          <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
+          <v-textarea
+            v-model="reasonDialog.reason"
+            :label="reasonCopy.label"
+            hint="This is shown with the request in the mobile app."
+            persistent-hint
+            variant="outlined"
+            rows="3"
+            counter="255"
+            maxlength="255"
+            autofocus
+            :error-messages="reasonDialog.error"
+            @update:model-value="reasonDialog.error = ''"
+          ></v-textarea>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
+          <v-btn
+            :color="reasonDialog.kind === 'approve' ? 'secondary' : 'error'"
+            variant="flat"
+            class="px-6 text-none font-weight-bold"
+            :class="reasonDialog.kind === 'approve' ? 'text-white' : ''"
+            height="44"
+            :loading="loading || bulkLoading"
+            @click="confirmReason"
+          >{{ reasonCopy.confirm }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -281,6 +326,67 @@ const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', vehicle_id: null })
+
+// `kind` is the whole state machine: 'approve' and 'disapprove' act on the
+// selected request, 'bulk' on every ticked row. Only 'approve' may fire with an
+// empty reason.
+const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
+const reasonDialog = ref(emptyReason())
+
+const reasonCopy = computed(() => {
+  const who = `${selectedRequest.value?.resident?.first_name || ''} ${selectedRequest.value?.resident?.last_name || ''}`.trim()
+  const what = selectedRequest.value?.service?.service_name || 'this service'
+  switch (reasonDialog.value.kind) {
+    case 'approve':
+      return {
+        title: 'Approve and dispatch',
+        body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
+        label: 'Note for the resident (optional)',
+        confirm: 'Approve & dispatch',
+      }
+    case 'bulk':
+      return {
+        title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
+        body: 'Every selected request is declined with this same reason.',
+        label: 'Reason for declining',
+        confirm: 'Disapprove all',
+      }
+    default:
+      return {
+        title: 'Disapprove this request',
+        body: who ? `${who} asked for ${what}.` : `A request for ${what}.`,
+        label: 'Reason for declining',
+        confirm: 'Disapprove request',
+      }
+  }
+})
+
+const openReason = (kind) => {
+  reasonDialog.value = {
+    ...emptyReason(),
+    open: true,
+    kind,
+    // A remark already typed on the panel is the operator's own words; making
+    // them retype it in the dialog is how a required field turns into a "."
+    reason: kind === 'bulk' ? '' : (formData.value.remarks || ''),
+  }
+}
+
+const clearReason = () => { reasonDialog.value = emptyReason() }
+
+const confirmReason = () => {
+  const { kind, reason } = reasonDialog.value
+  const trimmed = reason.trim()
+  if (kind !== 'approve' && !trimmed) {
+    reasonDialog.value.error = 'Give a reason — the resident is shown this'
+    return
+  }
+  if (kind === 'bulk') return bulkDisapprove(trimmed)
+  // The panel's own field is the source of truth for `updateStatus`, so it moves
+  // with the dialog rather than the two drifting apart.
+  formData.value.remarks = trimmed
+  return updateStatus(kind === 'approve' ? 'Responding' : 'Disapproved')
+}
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
 // photo of the scene. Both live on the private disk and both are served only by
@@ -486,26 +592,40 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     // Doing it from here could only ever handle the dispatch half — nothing was
     // releasing the unit afterwards, so the fleet drained one vehicle at a time.
     await fetchData()
+    reasonDialog.value.open = false
   } catch (error) {
+    // The dialog stays open on failure. Closing it would drop a typed reason on
+    // the floor, and the operator would have to write it again from memory.
     apiError.value = error.message
+    reasonDialog.value.error = error.message
   } finally {
     loading.value = false
   }
 }
 
-const bulkDisapprove = async () => {
+const bulkDisapprove = async (reason) => {
   bulkLoading.value = true
+  apiError.value = ''
   const targets = requests.value.filter(r => selectedIds.has(itemId(r)))
   try {
-    await Promise.all(targets.map(r => fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({ status: 'Disapproved', remarks: r.remarks || '', vehicle_id: r.vehicle_id })
-    })))
+    // `vehicle_id` is passed through untouched: the server releases the unit on
+    // a terminal status, and sending null here would look like an unassignment.
+    await Promise.all(targets.map(async (r) => {
+      const res = await fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: 'Disapproved', remarks: reason, vehicle_id: r.vehicle_id })
+      })
+      // `fetch` only rejects on a network failure, so without this a 422 on one
+      // row resolved like a success and the whole batch reported as done.
+      if (!res.ok) throw new Error('Failed to update one or more requests')
+    }))
     selectedIds.clear()
     await fetchData()
+    reasonDialog.value.open = false
   } catch (error) {
     apiError.value = 'Failed to update one or more requests'
+    reasonDialog.value.error = 'Failed to update one or more requests'
   } finally {
     bulkLoading.value = false
   }
