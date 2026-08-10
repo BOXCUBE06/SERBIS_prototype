@@ -138,12 +138,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// back in the field on return.
   ServiceFormData _formFor(ServiceFormKind kind) =>
       _forms.putIfAbsent(kind, () => switch (kind) {
-            ServiceFormKind.ambulance =>
-              AmbulanceFormData(patientName: widget.user.fullName),
+            ServiceFormKind.ambulance => AmbulanceFormData(
+                patientName: widget.user.fullName,
+                contactNumber: widget.user.phone,
+              ),
             ServiceFormKind.road => RoadFormData(),
-            ServiceFormKind.relief =>
-              ReliefFormData(headName: widget.user.fullName),
-            ServiceFormKind.generic => GenericFormData(),
+            ServiceFormKind.relief => ReliefFormData(
+                headName: widget.user.fullName,
+                contactNumber: widget.user.phone,
+              ),
+            ServiceFormKind.generic =>
+              GenericFormData(contactNumber: widget.user.phone),
           });
 
   @override
@@ -234,15 +239,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     final form = _formFor(service.formKind);
 
-    // A dispatcher who cannot call back cannot dispatch. Enforced here rather
-    // than in the field widget because these are plain TextFields, not a Form.
-    final contact = form.requiredContactNumber;
-    if (contact != null && contact.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a contact number so MDRRMO can reach you.')),
-      );
-      return;
-    }
+    // The callback-number guard is gone with the field it guarded. It refused a
+    // submit when the resident left the number blank; the number now comes off
+    // the account, where `phone_number` is required at registration and NOT
+    // NULL, so there is nothing left to be blank.
 
     final metaLines = form.metaLines(
       serviceName: service.name,

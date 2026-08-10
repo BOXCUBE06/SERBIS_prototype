@@ -124,6 +124,20 @@ void main() {
     expect(find.widgetWithText(TextField, 'maria@example.com'), findsOneWidget);
   });
 
+  testWidgets('the phone field is digits-only and capped at 11', (tester) async {
+    // `AppTextField.phone` carries the formatters. This sheet is the only place
+    // left that renders one -- the request forms stopped asking for a callback
+    // number once it came off the account -- so the rule is covered here or
+    // nowhere.
+    final api = await _openSheet(tester);
+
+    await tester.enterText(_field(3), '0917-123-4567abc');
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(api.calls.single['phone_number'], '09171234567');
+  });
+
   testWidgets('only the changed fields are sent', (tester) async {
     final api = await _openSheet(tester);
 

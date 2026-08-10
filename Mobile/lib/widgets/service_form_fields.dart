@@ -42,7 +42,6 @@ class ServiceFormFields extends StatelessWidget {
             lines: 3,
             controller: form.condition,
           ),
-          AppTextField.phone(controller: form.contact),
         ]),
       RoadFormData form => Column(children: [
           AppTextField(
@@ -77,19 +76,11 @@ class ServiceFormFields extends StatelessWidget {
             hint: 'Purok / street, barangay',
             controller: form.address,
           ),
-          Row(
-            children: [
-              Expanded(
-                child: AppTextField(
-                  label: 'Household size',
-                  hint: 'e.g. 5',
-                  keyboard: TextInputType.number,
-                  controller: form.householdSize,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: AppTextField.phone(controller: form.contact)),
-            ],
+          AppTextField(
+            label: 'Household size',
+            hint: 'e.g. 5',
+            keyboard: TextInputType.number,
+            controller: form.householdSize,
           ),
           AppDropdown(
             label: 'Type of assistance needed',
@@ -108,7 +99,6 @@ class ServiceFormFields extends StatelessWidget {
             lines: 4,
             controller: form.details,
           ),
-          AppTextField.phone(controller: form.contact),
         ]),
     };
   }

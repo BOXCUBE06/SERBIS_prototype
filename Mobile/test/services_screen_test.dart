@@ -95,6 +95,11 @@ class FakeApi extends ApiService {
   List<int>? lastSitePhotoBytes;
   String? lastSitePhotoName;
 
+  /// The description as it reaches the server, which is the only place the
+  /// dispatcher reads the resident's callback number now that no form asks for
+  /// one. Asserting on the widget tree would prove nothing about what was sent.
+  String? lastDescription;
+
   /// Set to a completer-backed future to hold a submit open mid-flight.
   Future<void>? submitGate;
 
@@ -138,6 +143,7 @@ class FakeApi extends ApiService {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
     lastSitePhotoName = sitePhotoFileName;
+    lastDescription = description;
 
     if (submitGate != null) {
       await submitGate;
@@ -252,17 +258,6 @@ Future<void> _openServiceDropdown(WidgetTester tester) async {
 Future<void> _chooseService(WidgetTester tester, String name) async {
   await _openServiceDropdown(tester);
   await tester.tap(find.text(name).last);
-  await tester.pumpAndSettle();
-}
-
-/// Types a callback number into the ambulance/relief/generic contact field.
-/// The road form has no such field, which is why the submit-path tests below
-/// use Road Clearing: they are about what happens after Submit, not about
-/// which fields a given form requires.
-Future<void> _fillContact(WidgetTester tester, [String number = '09171234567']) async {
-  final field = find.widgetWithText(TextField, '09XXXXXXXXX');
-  await tester.ensureVisible(field.first);
-  await tester.enterText(field.first, number);
   await tester.pumpAndSettle();
 }
 
@@ -452,43 +447,37 @@ void main() {
       expect(api.submitCount, 0);
     });
 
-    testWidgets('an ambulance request with a blank contact number is refused',
+    testWidgets('an ambulance request goes through without asking for a number',
         (tester) async {
-      // A dispatcher who cannot call back cannot dispatch. Checked in the
-      // screen rather than in the field widget because these are plain
-      // TextFields, not a Form, so nothing else would catch it.
+      // This used to be refused until the resident typed a callback number.
+      // The number is on the account from registration, so the field and the
+      // guard are both gone and the attachment is the only thing left to
+      // supply.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
 
       await _attachValidId(tester);
-      await _submit(tester);
-
-      expect(
-        find.text('Please enter a contact number so MDRRMO can reach you.'),
-        findsOneWidget,
-      );
-      expect(api.submitCount, 0);
-    });
-
-    testWidgets('the same request goes through once a number is entered',
-        (tester) async {
-      // The control for the test above: same form, same attachment, one field
-      // different. Without it, a screen that refused every ambulance request
-      // for an unrelated reason would look correct.
-      final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
-
-      await _attachValidId(tester);
-      await _fillContact(tester);
       await _submit(tester);
 
       expect(api.submitCount, 1);
       expect(find.byType(ConfirmationSheet), findsOneWidget);
     });
 
-    testWidgets('a road request needs no contact number', (tester) async {
-      // The road form asks about a place, not about the reporter, so the same
-      // guard must not fire here.
+    testWidgets("the account's number reaches the dispatcher in the description",
+        (tester) async {
+      // Removing the field must not remove the number. The resident never
+      // typed 09171234567 anywhere in this test -- it is on `_testUser`.
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(api.lastDescription, contains('Contact: 09171234567'));
+    });
+
+    testWidgets('a road request carries no contact line at all', (tester) async {
+      // The road form asks about a place, not about the reporter.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.road);
 
@@ -496,6 +485,7 @@ void main() {
       await _submit(tester);
 
       expect(api.submitCount, 1);
+      expect(api.lastDescription, isNot(contains('Contact:')));
     });
 
     testWidgets('a cancelled picker leaves the previous attachment alone',
