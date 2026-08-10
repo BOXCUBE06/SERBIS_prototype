@@ -78,12 +78,7 @@
         <!-- Loading -->
         <template v-if="loading">
           <v-card elevation="0" rounded="xl" class="mb-8 pa-8 group-card">
-            <v-skeleton-loader type="heading" width="200" class="mb-6 bg-transparent"></v-skeleton-loader>
-            <v-row>
-              <v-col v-for="n in 4" :key="n" cols="12" sm="6" md="4" lg="3">
-                <v-skeleton-loader type="list-item-avatar, text, text" class="rounded-xl border"></v-skeleton-loader>
-              </v-col>
-            </v-row>
+            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
           </v-card>
         </template>
 
@@ -98,69 +93,78 @@
           </div>
         </div>
 
-        <!-- Grouped fleet -->
-        <template v-else>
-          <v-card v-for="(units, type) in groupedVehicles" :key="type" elevation="0" rounded="xl" class="mb-8 pa-6 pa-md-8 group-card">
-            <div class="d-flex align-center flex-wrap gap-3 mb-6">
-              <div class="type-badge"><v-icon size="22" color="primary">{{ getVehicleIcon(type) }}</v-icon></div>
-              <h3 class="text-h5 font-weight-black text-high-emphasis text-capitalize tracking-tight">{{ type }}s</h3>
-              <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold" rounded="lg">
-                {{ units.length }} unit{{ units.length !== 1 ? 's' : '' }}
-              </v-chip>
-              <span class="text-caption text-medium-emphasis">{{ availableIn(units) }} ready</span>
-            </div>
+        <!-- Fleet list. A card per unit looked handsome and answered none of the
+             questions the desk actually asks -- which unit is free, what type it
+             is, in one scan down a column. The type is a column and a filter now
+             rather than a heading, so a four-type fleet is one list instead of
+             four stacked grids. -->
+        <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
+          <v-data-table
+            :headers="fleetHeaders"
+            :items="filteredVehicles"
+            :items-per-page="10"
+            item-value="vehicle_id"
+            density="comfortable"
+            class="fleet-table"
+          >
+            <template v-slot:item.unit_identifier="{ item }">
+              <div class="d-flex align-center gap-3 py-2">
+                <div class="icon-wrapper" :class="`iconbg-${item.status.toLowerCase()}`">
+                  <v-icon :color="statusMeta[item.status].color" size="22">{{ getVehicleIcon(item.type) }}</v-icon>
+                </div>
+                <div class="min-w-0">
+                  <div class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.unit_identifier }}</div>
+                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.specification || 'Standard Unit' }}</div>
+                </div>
+              </div>
+            </template>
 
-            <v-row>
-              <v-col v-for="vehicle in units" :key="vehicle.vehicle_id || vehicle.id" cols="12" sm="6" md="4" lg="3">
-                <v-card elevation="0" rounded="xl" class="vehicle-card" :class="`accent-${vehicle.status.toLowerCase()}`">
-                  <v-card-text class="pa-5">
-                    <div class="d-flex justify-space-between align-start mb-4">
-                      <div class="d-flex align-center gap-3 min-w-0">
-                        <div class="icon-wrapper" :class="`iconbg-${vehicle.status.toLowerCase()}`">
-                          <v-icon :color="statusMeta[vehicle.status].color" size="24">{{ getVehicleIcon(type) }}</v-icon>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-h6 font-weight-bold text-high-emphasis text-truncate">{{ vehicle.unit_identifier }}</div>
-                          <div class="text-body-2 text-medium-emphasis font-weight-medium text-truncate">{{ vehicle.specification || 'Standard Unit' }}</div>
-                        </div>
-                      </div>
+            <template v-slot:item.type="{ item }">
+              <span class="text-body-2 font-weight-medium text-high-emphasis">{{ item.type }}</span>
+            </template>
 
-                      <v-menu location="bottom end">
-                        <template v-slot:activator="{ props }">
-                          <v-btn icon="mdi-dots-vertical" variant="text" size="small" v-bind="props" :aria-label="`Actions for ${vehicle.unit_identifier}`"></v-btn>
-                        </template>
-                        <v-list density="compact" rounded="lg">
-                          <v-list-item prepend-icon="mdi-pencil-outline" title="Edit" @click="openEdit(vehicle)"></v-list-item>
-                          <v-list-item prepend-icon="mdi-delete-outline" title="Delete" class="text-error" @click="askDelete(vehicle)"></v-list-item>
-                        </v-list>
-                      </v-menu>
-                    </div>
+            <template v-slot:item.status="{ item }">
+              <v-menu location="bottom">
+                <template v-slot:activator="{ props }">
+                  <button
+                    type="button"
+                    class="status-pill"
+                    :class="`pill-${item.status.toLowerCase()}`"
+                    v-bind="props"
+                    :aria-label="`${item.unit_identifier} is ${item.status}. Change status`"
+                  >
+                    <span class="dot" :class="`dot-${item.status.toLowerCase()}`" :data-live="item.status === 'Available'"></span>
+                    <span class="font-weight-bold text-uppercase">{{ item.status }}</span>
+                    <v-icon size="16" class="ml-auto">mdi-chevron-down</v-icon>
+                  </button>
+                </template>
+                <v-list density="compact" rounded="lg">
+                  <v-list-item
+                    v-for="s in STATUSES" :key="s"
+                    :disabled="s === item.status"
+                    @click="promptStatusChange(item, s)"
+                  >
+                    <template v-slot:prepend><span class="dot mr-3" :class="`dot-${s.toLowerCase()}`"></span></template>
+                    <v-list-item-title>{{ s }}</v-list-item-title>
+                  </v-list-item>
+                </v-list>
+              </v-menu>
+            </template>
 
-                    <v-menu location="bottom">
-                      <template v-slot:activator="{ props }">
-                        <button type="button" class="status-pill" :class="`pill-${vehicle.status.toLowerCase()}`" v-bind="props">
-                          <span class="dot" :class="`dot-${vehicle.status.toLowerCase()}`" :data-live="vehicle.status === 'Available'"></span>
-                          <span class="font-weight-bold text-uppercase">{{ vehicle.status }}</span>
-                          <v-icon size="16" class="ml-auto">mdi-chevron-down</v-icon>
-                        </button>
-                      </template>
-                      <v-list density="compact" rounded="lg">
-                        <v-list-item
-                          v-for="s in STATUSES" :key="s"
-                          :disabled="s === vehicle.status"
-                          @click="promptStatusChange(vehicle, s)"
-                        >
-                          <template v-slot:prepend><span class="dot mr-3" :class="`dot-${s.toLowerCase()}`"></span></template>
-                          <v-list-item-title>{{ s }}</v-list-item-title>
-                        </v-list-item>
-                      </v-list>
-                    </v-menu>
-                  </v-card-text>
-                </v-card>
-              </v-col>
-            </v-row>
-          </v-card>
-        </template>
+            <template v-slot:item.actions="{ item }">
+              <div class="d-flex justify-end gap-1">
+                <v-btn
+                  icon="mdi-pencil-outline" variant="text" size="small"
+                  :aria-label="`Edit ${item.unit_identifier}`" @click="openEdit(item)"
+                ></v-btn>
+                <v-btn
+                  icon="mdi-delete-outline" variant="text" size="small" color="error"
+                  :aria-label="`Delete ${item.unit_identifier}`" @click="askDelete(item)"
+                ></v-btn>
+              </div>
+            </template>
+          </v-data-table>
+        </v-card>
 
       </v-col>
     </v-row>
@@ -281,15 +285,12 @@ const filteredVehicles = computed(() => {
   })
 })
 
-const groupedVehicles = computed(() =>
-  filteredVehicles.value.reduce((acc, v) => {
-    const type = v.type || 'Other'
-    ;(acc[type] ||= []).push(v)
-    return acc
-  }, {})
-)
-
-const availableIn = (units) => units.filter((u) => u.status === 'Available').length
+const fleetHeaders = [
+  { title: 'Unit', key: 'unit_identifier', width: '34%' },
+  { title: 'Type', key: 'type', width: '22%' },
+  { title: 'Status', key: 'status', width: '24%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '20%' },
+]
 
 const getVehicleIcon = (type) => ({
   ambulance: 'mdi-ambulance',
@@ -478,26 +479,13 @@ onMounted(fetchVehicles)
   100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0); }
 }
 
-/* Type badge in group headers */
-.type-badge {
-  width: 40px; height: 40px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(var(--v-theme-primary), 0.12);
+/* Fleet list */
+.fleet-table :deep(thead th) {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-
-/* Vehicle cards */
-.vehicle-card {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
-  border-left-width: 4px !important;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease !important;
-}
-.vehicle-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px -8px rgba(var(--v-theme-on-surface), 0.1) !important;
-}
-.accent-available { border-left-color: rgb(var(--v-theme-primary)) !important; }
-.accent-dispatched { border-left-color: rgb(var(--v-theme-warning)) !important; background-color: rgba(var(--v-theme-warning), 0.04) !important; }
-.accent-maintenance { border-left-color: rgb(var(--v-theme-error)) !important; background-color: rgba(var(--v-theme-error), 0.04) !important; }
 
 .icon-wrapper { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
 .iconbg-available { background: rgba(var(--v-theme-primary), 0.12); }
@@ -509,8 +497,10 @@ onMounted(fetchVehicles)
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
+  /* Sized to its own label in a table cell. A full-width pill was right in a
+     card and reads as a stray button across a column. */
+  min-width: 148px;
+  padding: 6px 12px;
   border-radius: 10px;
   font-size: 0.82rem;
   letter-spacing: 0.04em;
@@ -529,8 +519,8 @@ onMounted(fetchVehicles)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vehicle-card, .stat-tile, .composition-bar .seg { transition: none; }
-  .vehicle-card:hover, .stat-tile:hover { transform: none; }
+  .stat-tile, .composition-bar .seg { transition: none; }
+  .stat-tile:hover { transform: none; }
   .dot[data-live="true"] { animation: none; }
 }
 </style>
