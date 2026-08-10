@@ -171,11 +171,15 @@
               <div v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Dispatch Assignment</div>
                 <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="formData.vehicle_id ? 'bg-success' + '-tint' : ''" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <div v-if="formData.vehicle_id" class="d-flex align-center gap-3">
-                    <v-avatar color="success" variant="tonal" size="40"><v-icon color="success">mdi-car</v-icon></v-avatar>
-                    <div>
-                      <div class="font-weight-bold">{{ getSelectedVehicleName() }}</div>
-                      <div class="text-caption text-medium-emphasis">Selected for dispatch</div>
+                  <div v-if="formData.vehicle_id" class="d-flex align-center gap-3 min-width-0">
+                    <v-avatar color="success" variant="tonal" size="40">
+                      <v-icon color="success">{{ vehicleIcon(selectedVehicle?.type) }}</v-icon>
+                    </v-avatar>
+                    <div class="min-width-0">
+                      <div class="font-weight-bold text-truncate">{{ getSelectedVehicleName() }}</div>
+                      <div class="text-caption text-medium-emphasis">
+                        Selected for dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
+                      </div>
                     </div>
                   </div>
                   <div v-else class="text-body-2 text-medium-emphasis">No vehicle assigned yet.</div>
@@ -190,7 +194,13 @@
                 <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
                   <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
                   <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
-                  <div class="text-body-2">Vehicle {{ selectedRequest.vehicle?.plate_number || 'Unknown' }} ({{ selectedRequest.vehicle?.type || 'Unit' }})</div>
+                  <!-- Requests dispatched before the server owned the fleet
+                       carry no `vehicle_id` at all. Naming the absence beats
+                       "Vehicle Unknown", which read as a lookup that failed. -->
+                  <div v-if="selectedRequest.vehicle" class="text-body-2">
+                    {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
+                  </div>
+                  <div v-else class="text-body-2">No unit is recorded against this request.</div>
                 </v-alert>
               </div>
 
@@ -231,26 +241,40 @@
           <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
 
-        <v-card-text class="pa-4 subtle-surface" style="max-height: 400px; overflow-y: auto;">
-          <v-row v-if="availableVehicles.length > 0">
-            <v-col v-for="v in availableVehicles" :key="v.vehicle_id" cols="12" sm="6">
-              <v-card
-                hover rounded="lg" class="pa-4 cursor-pointer soft-card"
-                :class="formData.vehicle_id === v.vehicle_id ? 'bg-success-tint' : ''"
-                @click="selectVehicle(v.vehicle_id)"
-              >
-                <div class="d-flex align-center gap-3">
-                  <v-avatar :color="formData.vehicle_id === v.vehicle_id ? 'success' : undefined" :variant="formData.vehicle_id === v.vehicle_id ? 'flat' : 'tonal'" size="48">
-                    <v-icon :color="formData.vehicle_id === v.vehicle_id ? 'white' : undefined">mdi-car</v-icon>
-                  </v-avatar>
-                  <div>
-                    <div class="font-weight-bold text-h6" style="line-height: 1.2;">{{ v.plate_number }}</div>
-                    <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">{{ v.type }}</div>
-                  </div>
-                </div>
-              </v-card>
-            </v-col>
-          </v-row>
+        <!-- A two-across grid of cards for a list of identical units. Each tile
+             carried three words and the eye had to travel in two directions to
+             compare fourteen of them. One column, one unit per row, matching the
+             fleet list this picker is a view of. -->
+        <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
+          <v-list v-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
+            <v-list-item
+              v-for="v in availableVehicles"
+              :key="v.vehicle_id"
+              class="vehicle-option px-4 py-3"
+              :active="formData.vehicle_id === v.vehicle_id"
+              @click="selectVehicle(v.vehicle_id)"
+            >
+              <template v-slot:prepend>
+                <v-avatar
+                  :color="formData.vehicle_id === v.vehicle_id ? 'success' : undefined"
+                  :variant="formData.vehicle_id === v.vehicle_id ? 'flat' : 'tonal'"
+                  size="42"
+                  class="mr-3"
+                >
+                  <v-icon :color="formData.vehicle_id === v.vehicle_id ? 'white' : undefined">{{ vehicleIcon(v.type) }}</v-icon>
+                </v-avatar>
+              </template>
+
+              <v-list-item-title class="font-weight-bold text-body-1">{{ vehicleName(v) }}</v-list-item-title>
+              <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
+                {{ v.type }}<template v-if="v.specification"> &bull; {{ v.specification }}</template>
+              </v-list-item-subtitle>
+
+              <template v-slot:append>
+                <v-icon v-if="formData.vehicle_id === v.vehicle_id" color="success">mdi-check-circle</v-icon>
+              </template>
+            </v-list-item>
+          </v-list>
           <div v-else class="pa-6 text-center text-medium-emphasis">
             <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
             <div class="text-h6 font-weight-bold">No Vehicles Available</div>
@@ -447,6 +471,10 @@ const requestCounts = computed(() => {
 
 const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
 
+const selectedVehicle = computed(() =>
+  vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
+)
+
 const filteredAndSortedRequests = computed(() => {
   const searchLower = search.value.toLowerCase()
   const currentStatus = filters.status
@@ -560,9 +588,24 @@ const selectVehicle = (id) => {
   vehicleModal.value.isOpen = false
 }
 
+// `tbl_vehicles` has no `plate_number` column and never has -- the unit is
+// named by `unit_identifier` (AMB-01, BOT-02). Reading the missing field
+// rendered "undefined (Ambulance)" on the assignment card, "Vehicle Unknown"
+// on every dispatched request, and a blank heading on each picker tile, none
+// of which looked like a bug worth filing. This is a rename in the panel; no
+// column is added and no response shape changes.
+const vehicleName = (v) => v?.unit_identifier || 'Unassigned unit'
+
+const vehicleIcon = (type) => ({
+  ambulance: 'mdi-ambulance',
+  'fire truck': 'mdi-fire-truck',
+  'rescue vehicle': 'mdi-car-emergency',
+  boat: 'mdi-ferry',
+}[(type || '').toLowerCase()] || 'mdi-car')
+
 const getSelectedVehicleName = () => {
   const v = vehicles.value.find(veh => veh.vehicle_id === formData.value.vehicle_id)
-  return v ? `${v.plate_number} (${v.type})` : ''
+  return v ? `${vehicleName(v)} (${v.type})` : ''
 }
 
 const updateStatus = async (newStatus, targetRequest = selectedRequest.value) => {
@@ -654,6 +697,13 @@ onUnmounted(releaseAttachments)
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
 }
+
+/* One unit per row in the picker, separated rather than floated. */
+.vehicle-option {
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+.vehicle-option:last-child { border-bottom: none; }
+.vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
 
 .bg-success-tint {
   background-color: rgba(var(--v-theme-success), 0.10) !important;
