@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/data/hotlines.dart';
 import 'package:serbis/screens/library_screen.dart';
 import 'package:serbis/screens/services_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
@@ -96,6 +97,15 @@ void main() {
       tester,
       ServicesScreen(
         appState: AppState(_FakeApi()),
+        // This test is about the hotline notice, not the forms; the resident
+        // only has to exist.
+        user: const AppUser(
+          id: '1',
+          firstName: 'Test',
+          lastName: 'Resident',
+          email: 'test@example.com',
+          address: '',
+        ),
         onSubmitted: () {},
         onOpenNotifications: () {},
         onOpenProfile: () {},

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart' as fp;
 import '../models/request_models.dart';
 import '../models/service_forms.dart';
+import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -21,6 +22,10 @@ import '../widgets/shared_widgets.dart';
 /// selection, and submit.
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
+
+  /// The signed-in resident. The forms used to ask for a name and a number the
+  /// account already holds; both now come from here.
+  final AppUser user;
   final ServiceType initialType;
   final VoidCallback onSubmitted;
   final VoidCallback onOpenNotifications;
@@ -29,6 +34,7 @@ class ServicesScreen extends StatefulWidget {
   const ServicesScreen({
     super.key,
     required this.appState,
+    required this.user,
     this.initialType = ServiceType.ambulance,
     required this.onSubmitted,
     required this.onOpenNotifications,
@@ -127,11 +133,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
   }
 
+  /// `putIfAbsent`, so the prefill happens once per kind. A resident who
+  /// overwrites the name and switches services must not find their own name
+  /// back in the field on return.
   ServiceFormData _formFor(ServiceFormKind kind) =>
       _forms.putIfAbsent(kind, () => switch (kind) {
-            ServiceFormKind.ambulance => AmbulanceFormData(),
+            ServiceFormKind.ambulance =>
+              AmbulanceFormData(patientName: widget.user.fullName),
             ServiceFormKind.road => RoadFormData(),
-            ServiceFormKind.relief => ReliefFormData(),
+            ServiceFormKind.relief =>
+              ReliefFormData(headName: widget.user.fullName),
             ServiceFormKind.generic => GenericFormData(),
           });
 

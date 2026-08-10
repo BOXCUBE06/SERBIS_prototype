@@ -427,6 +427,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       ServicesScreen(
         key: ValueKey(_serviceType),
         appState: _appState,
+        user: widget.user,
         initialType: _serviceType,
         onSubmitted: () => _goTo(2),
         onOpenNotifications: onOpenNotifications,

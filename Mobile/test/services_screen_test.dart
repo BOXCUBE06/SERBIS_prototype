@@ -31,6 +31,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
 import 'package:serbis/screens/services_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
@@ -161,11 +162,23 @@ class FakeApi extends ApiService {
 
 late FakeFilePicker picker;
 
+/// The signed-in resident the screen prefills names from. A distinctive name,
+/// so an assertion about the prefill cannot pass on a coincidence.
+const _testUser = AppUser(
+  id: '31',
+  firstName: 'Maria',
+  lastName: 'Dela Cruz',
+  email: 'maria@example.com',
+  phone: '09171234567',
+  address: 'Purok 3, San Fabian',
+);
+
 Future<void> _pump(
   WidgetTester tester,
   AppState state, {
   ServiceType initialType = ServiceType.ambulance,
   VoidCallback? onSubmitted,
+  AppUser? user,
 }) async {
   // A tall phone. The default 800x600 surface clips this screen badly enough
   // that the submit button never builds, which would make it unfindable for a
@@ -179,6 +192,7 @@ Future<void> _pump(
     home: Scaffold(
       body: ServicesScreen(
         appState: state,
+        user: user ?? _testUser,
         initialType: initialType,
         onSubmitted: onSubmitted ?? () {},
         onOpenNotifications: () {},
@@ -273,6 +287,7 @@ void main() {
         home: Scaffold(
           body: ServicesScreen(
             appState: state,
+            user: _testUser,
             onSubmitted: () {},
             onOpenNotifications: () {},
             onOpenProfile: () {},
@@ -362,6 +377,33 @@ void main() {
       // selection is gone from both.
       expect(find.text('Road Clearing'), findsNWidgets(2));
       expect(find.text('Ambulance Service'), findsNothing);
+    });
+
+    testWidgets('the patient name starts as the signed-in resident', (tester) async {
+      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
+
+      expect(
+        find.widgetWithText(TextField, 'Maria Dela Cruz'),
+        findsOneWidget,
+        reason: 'the account already holds the name; asking again is friction',
+      );
+    });
+
+    testWidgets('an overwritten name survives switching services and back',
+        (tester) async {
+      // The prefill runs once per form, not on every build. Re-running it would
+      // overwrite a resident who filed for somebody else in their household.
+      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
+
+      final field = find.widgetWithText(TextField, 'Maria Dela Cruz');
+      await tester.enterText(field, 'Juan Dela Cruz');
+      await tester.pumpAndSettle();
+
+      await _chooseService(tester, 'Road Clearing');
+      await _chooseService(tester, 'Ambulance Service');
+
+      expect(find.widgetWithText(TextField, 'Juan Dela Cruz'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Maria Dela Cruz'), findsNothing);
     });
 
     testWidgets('an empty catalogue renders no form section at all',

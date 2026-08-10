@@ -40,6 +40,14 @@ String _or(TextEditingController controller, String fallback) {
 }
 
 class AmbulanceFormData extends ServiceFormData {
+  /// [patientName] prefills the field rather than replacing it. The account
+  /// holder is the likeliest patient, not the certain one — a head of the
+  /// family files for the household — so the field stays editable and the
+  /// description still reads whatever ends up in it.
+  AmbulanceFormData({String patientName = ''}) {
+    patient.text = patientName;
+  }
+
   final TextEditingController patient = TextEditingController();
   final TextEditingController pickup = TextEditingController();
   final TextEditingController destination = TextEditingController();
@@ -119,6 +127,13 @@ class ReliefFormData extends ServiceFormData {
     'Temporary shelter materials',
     'Other',
   ];
+
+  /// The household head is the account holder by definition — the app is
+  /// distributed one account per household — so this one is prefilled for the
+  /// same reason the patient name is, with more confidence.
+  ReliefFormData({String headName = ''}) {
+    head.text = headName;
+  }
 
   final TextEditingController head = TextEditingController();
   final TextEditingController address = TextEditingController();
