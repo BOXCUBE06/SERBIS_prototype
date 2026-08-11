@@ -141,6 +141,21 @@ class UserStore {
     );
   }
 
+  /// Finishes registration with the emailed code. Returns the signed-in
+  /// resident: the server issues a token here, so there is no second trip
+  /// through the login screen.
+  Future<AppUser> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    final json = await _api.verifyEmail(email: email, code: code);
+    return AppUser.fromJson(json);
+  }
+
+  Future<void> resendVerificationCode({required String email}) {
+    return _api.resendVerificationCode(email: email);
+  }
+
   Future<List<BarangayOption>> barangays() async {
     final rows = await _api.getBarangays();
     return rows.map(BarangayOption.fromJson).toList();

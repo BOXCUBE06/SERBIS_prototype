@@ -10,7 +10,9 @@ import '../../widgets/shared_widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
   final UserStore userStore;
-  final VoidCallback onRegisterSuccess;
+  /// Carries the address the account was created with — registration is not
+  /// finished until the code mailed to it comes back.
+  final void Function(String email) onRegisterSuccess;
   final VoidCallback onGoToLogin;
 
   const RegisterScreen({
@@ -139,7 +141,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _formError = error);
         return;
       }
-      widget.onRegisterSuccess();
+      // The account exists but is not usable yet — the emailed code finishes
+      // it. The address goes with the callback so the verify screen never asks
+      // the resident to retype what they just entered.
+      widget.onRegisterSuccess(_emailCtrl.text.trim());
     } catch (error) {
       // `UserStore.register` converts an ApiException into a returned message
       // rather than throwing, so anything arriving here escaped the HTTP layer

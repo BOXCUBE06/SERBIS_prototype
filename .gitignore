@@ -16,3 +16,6 @@
 /.github/agents/
 /.github/hooks/
 /.github/skills/
+
+# Screenshots and snapshots left behind by browser-driven checks.
+/.playwright-mcp/

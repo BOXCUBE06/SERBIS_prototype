@@ -11,7 +11,17 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// The server's machine-readable reason, when it sent one — `email_unverified`,
+  /// `invalid_code`, `resend_too_soon`. Screens route on this instead of matching
+  /// the message text, which is written for a person and changes freely.
+  final String? code;
+
+  const ApiException(this.message, {this.statusCode, this.code});
+
+  /// The account exists and the password was right, but the address was never
+  /// verified. The register flow left it half-finished; the resident resumes at
+  /// the code screen rather than being told their password is wrong.
+  bool get isEmailUnverified => code == 'email_unverified';
 
   /// The token was rejected. Distinct from a failed login, which the auth
   /// endpoints report as a plain message instead.

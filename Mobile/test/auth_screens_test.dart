@@ -180,6 +180,7 @@ Future<_FakeAuthApi> _pumpLogin(
   String? infoMessage,
   void Function(AppUser)? onLoginSuccess,
   VoidCallback? onGoToRegister,
+  void Function(String email)? onEmailUnverified,
 }) async {
   // A phone-shaped viewport, but WIDER than a real phone on purpose. The
   // default 800x600 clips these forms and the offscreen rows never build; 360
@@ -200,6 +201,7 @@ Future<_FakeAuthApi> _pumpLogin(
       userStore: UserStore(fake),
       onLoginSuccess: onLoginSuccess ?? (_) {},
       onGoToRegister: onGoToRegister ?? () {},
+      onEmailUnverified: onEmailUnverified ?? (_) {},
       infoMessage: infoMessage,
     ),
   ));
@@ -211,7 +213,7 @@ Future<_FakeAuthApi> _pumpLogin(
 Future<_FakeAuthApi> _pumpRegister(
   WidgetTester tester, {
   _FakeAuthApi? api,
-  VoidCallback? onRegisterSuccess,
+  void Function(String email)? onRegisterSuccess,
   VoidCallback? onGoToLogin,
 }) async {
   // Taller than the login screen: seven fields, a picker and a consent row.
@@ -226,7 +228,7 @@ Future<_FakeAuthApi> _pumpRegister(
     theme: buildAppTheme(),
     home: RegisterScreen(
       userStore: UserStore(fake),
-      onRegisterSuccess: onRegisterSuccess ?? () {},
+      onRegisterSuccess: onRegisterSuccess ?? (_) {},
       onGoToLogin: onGoToLogin ?? () {},
     ),
   ));
@@ -394,6 +396,43 @@ void main() {
       // Still usable: a screen stuck in its loading state after a bad password
       // is a resident who cannot try again.
       expect(find.text('Log in'), findsOneWidget);
+    });
+
+    testWidgets('an unverified account is routed to the code screen, not an error',
+        (tester) async {
+      // An abandoned registration: the password was right, the address was
+      // never verified. Showing the message on this form would leave the
+      // resident with nothing they can do about it, so the screen hands the
+      // address up instead and the caller opens the verify screen.
+      String? routedTo;
+      var succeeded = false;
+      final api = _FakeAuthApi()
+        ..loginError = const ApiException(
+          'Please verify your email address to finish creating your account.',
+          statusCode: 403,
+          code: 'email_unverified',
+        );
+
+      await _pumpLogin(
+        tester,
+        api: api,
+        onLoginSuccess: (_) => succeeded = true,
+        onEmailUnverified: (email) => routedTo = email,
+      );
+
+      await tester.enterText(_field('Email address'), '  maria@example.com  ');
+      await tester.enterText(_field('Password'), 'Password123');
+      await tester.tap(find.text('Log in'));
+      await tester.pumpAndSettle();
+
+      // Trimmed, because it is about to be posted back as the account key.
+      expect(routedTo, 'maria@example.com');
+      expect(succeeded, isFalse);
+      expect(
+        find.textContaining('verify your email address'),
+        findsNothing,
+        reason: 'the refusal is routing, not an error to read',
+      );
     });
 
     testWidgets('falls back to a connection message on a non-API failure',
@@ -625,7 +664,7 @@ void main() {
       var succeeded = false;
       final api = await _pumpRegister(
         tester,
-        onRegisterSuccess: () => succeeded = true,
+        onRegisterSuccess: (_) => succeeded = true,
       );
 
       await _fillValidRegistration(tester);
@@ -668,7 +707,7 @@ void main() {
       await _pumpRegister(
         tester,
         api: api,
-        onRegisterSuccess: () => succeeded = true,
+        onRegisterSuccess: (_) => succeeded = true,
       );
 
       await _fillValidRegistration(tester);
@@ -692,7 +731,7 @@ void main() {
       await _pumpRegister(
         tester,
         api: api,
-        onRegisterSuccess: () => succeeded = true,
+        onRegisterSuccess: (_) => succeeded = true,
       );
 
       await _fillValidRegistration(tester);

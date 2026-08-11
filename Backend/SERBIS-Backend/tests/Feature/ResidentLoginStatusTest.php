@@ -38,7 +38,7 @@ class ResidentLoginStatusTest extends TestCase
 
     private function resident(string $status): Resident
     {
-        return Resident::create([
+        $resident = Resident::create([
             'barangay_id' => $this->barangay->barangay_id,
             'first_name' => 'Test',
             'last_name' => 'Resident',
@@ -46,7 +46,15 @@ class ResidentLoginStatusTest extends TestCase
             'email_address' => uniqid('r', true).'@test.local',
             'password' => Hash::make('password123'),
             'status' => $status,
-        ])->fresh();
+        ]);
+
+        // Verified on purpose. Email verification (2026-08-11) added a second
+        // reason login can refuse, and these tests are about `status` alone —
+        // an unverified fixture would make them pass or fail for the wrong
+        // reason. ResidentEmailVerificationTest owns the verification gate.
+        $resident->markEmailAsVerified();
+
+        return $resident->fresh();
     }
 
     private function login(Resident $resident): \Illuminate\Testing\TestResponse
