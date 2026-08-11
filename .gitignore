@@ -9,3 +9,10 @@
 
 # Claude Code local machine state
 /.claude/settings.local.json
+
+# Agent tooling installed per-machine — not SERBIS code, and not the same
+# from one checkout to the next.
+/.claude/skills/
+/.github/agents/
+/.github/hooks/
+/.github/skills/

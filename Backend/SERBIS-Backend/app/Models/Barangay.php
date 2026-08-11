@@ -13,7 +13,9 @@ use App\Traits\TracksHistory;
 #[Fillable(['barangay_name'])]
 class Barangay extends Model
 {
-    use HasFactory;
+    use HasFactory, TracksHistory;
+
+    protected $ignoreLogging = ['created_at', 'updated_at'];
 
     public function residents(): HasMany
     {
