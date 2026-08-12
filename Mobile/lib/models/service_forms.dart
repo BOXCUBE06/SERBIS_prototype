@@ -24,11 +24,6 @@ sealed class ServiceFormData {
     required String submittedLabel,
   });
 
-  /// The callback number this form must carry, or null where a number is not
-  /// part of the response. Empty means the resident left a required field
-  /// blank — a dispatcher who cannot call back cannot dispatch.
-  String? get requiredContactNumber;
-
   void dispose();
 }
 
@@ -39,15 +34,32 @@ String _or(TextEditingController controller, String fallback) {
   return value.isEmpty ? fallback : value;
 }
 
+/// The callback number now comes off the account rather than a field the
+/// resident retypes on every request. `phone_number` is required at
+/// registration and NOT NULL on `tbl_residents`, so the empty branch is
+/// defensive: it can only be reached before the profile has loaded, and the
+/// admin panel shows the resident's number beside the request either way.
+String _contactLine(String accountNumber) =>
+    accountNumber.trim().isEmpty ? 'See resident profile' : accountNumber.trim();
+
 class AmbulanceFormData extends ServiceFormData {
+  /// [patientName] prefills the field rather than replacing it. The account
+  /// holder is the likeliest patient, not the certain one — a head of the
+  /// family files for the household — so the field stays editable and the
+  /// description still reads whatever ends up in it.
+  AmbulanceFormData({String patientName = '', this.contactNumber = ''}) {
+    patient.text = patientName;
+  }
+
+  /// Straight off the account. `tbl_residents.phone_number` is `required` at
+  /// registration and NOT NULL, so this is only ever empty if the profile has
+  /// not loaded.
+  final String contactNumber;
+
   final TextEditingController patient = TextEditingController();
   final TextEditingController pickup = TextEditingController();
   final TextEditingController destination = TextEditingController();
   final TextEditingController condition = TextEditingController();
-  final TextEditingController contact = TextEditingController();
-
-  @override
-  String? get requiredContactNumber => _text(contact);
 
   @override
   List<String> metaLines({
@@ -60,7 +72,7 @@ class AmbulanceFormData extends ServiceFormData {
         '${_or(pickup, 'Pick-up location not specified')} → '
             '${_or(destination, 'destination not specified')}',
         'Condition: ${_or(condition, 'Not described')}',
-        'Contact: ${_text(contact)}',
+        'Contact: ${_contactLine(contactNumber)}',
         'Submitted $submittedLabel',
       ];
 
@@ -70,7 +82,6 @@ class AmbulanceFormData extends ServiceFormData {
     pickup.dispose();
     destination.dispose();
     condition.dispose();
-    contact.dispose();
   }
 }
 
@@ -86,11 +97,8 @@ class RoadFormData extends ServiceFormData {
   final TextEditingController description = TextEditingController();
   String obstruction = obstructionTypes.first;
 
-  /// A road obstruction is reported about a place, not about the reporter, and
-  /// the form has never asked for a number.
-  @override
-  String? get requiredContactNumber => null;
-
+  /// A road obstruction is reported about a place, not about the reporter, so
+  /// this form has never carried a number and still does not.
   @override
   List<String> metaLines({
     required String serviceName,
@@ -120,14 +128,19 @@ class ReliefFormData extends ServiceFormData {
     'Other',
   ];
 
+  /// The household head is the account holder by definition — the app is
+  /// distributed one account per household — so this one is prefilled for the
+  /// same reason the patient name is, with more confidence.
+  ReliefFormData({String headName = '', this.contactNumber = ''}) {
+    head.text = headName;
+  }
+
+  final String contactNumber;
+
   final TextEditingController head = TextEditingController();
   final TextEditingController address = TextEditingController();
   final TextEditingController householdSize = TextEditingController();
-  final TextEditingController contact = TextEditingController();
   String assistance = assistanceTypes.first;
-
-  @override
-  String? get requiredContactNumber => _text(contact);
 
   @override
   List<String> metaLines({
@@ -140,7 +153,7 @@ class ReliefFormData extends ServiceFormData {
         _or(address, 'Address not specified'),
         'Household size: ${_or(householdSize, 'Not specified')}',
         'Assistance: $assistance',
-        'Contact: ${_text(contact)}',
+        'Contact: ${_contactLine(contactNumber)}',
         'Submitted $submittedLabel',
       ];
 
@@ -149,18 +162,15 @@ class ReliefFormData extends ServiceFormData {
     head.dispose();
     address.dispose();
     householdSize.dispose();
-    contact.dispose();
   }
 }
 
 class GenericFormData extends ServiceFormData {
-  final TextEditingController details = TextEditingController();
-  final TextEditingController contact = TextEditingController();
+  GenericFormData({this.contactNumber = ''});
 
-  /// Collected but not required: this form covers inquiries and item requests,
-  /// which a dispatcher can act on without calling anyone back.
-  @override
-  String? get requiredContactNumber => null;
+  final String contactNumber;
+
+  final TextEditingController details = TextEditingController();
 
   @override
   List<String> metaLines({
@@ -170,13 +180,12 @@ class GenericFormData extends ServiceFormData {
       [
         serviceName,
         _or(details, 'No details provided'),
-        'Contact: ${_or(contact, 'Not specified')}',
+        'Contact: ${_contactLine(contactNumber)}',
         'Submitted $submittedLabel',
       ];
 
   @override
   void dispose() {
     details.dispose();
-    contact.dispose();
   }
 }

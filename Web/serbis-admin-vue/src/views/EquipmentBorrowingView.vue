@@ -416,7 +416,7 @@
                 <div class="text-h6 font-weight-bold text-center text-high-emphasis">
                   {{ selectedRecord?.resident?.first_name }} {{ selectedRecord?.resident?.last_name }}
                 </div>
-                <div class="text-caption text-medium-emphasis text-uppercase font-weight-bold mt-1">Resident Profile</div>
+                <div class="text-caption text-medium-emphasis text-uppercase font-weight-bold mt-1">Head of the Family Profile</div>
               </div>
               <v-divider class="mb-4"></v-divider>
               <div class="mb-3">
@@ -641,7 +641,7 @@ const boardColumns = computed(() => columns.filter((c) => !c.terminal))
 const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
 
 const historyHeaders = [
-  { title: 'Resident', key: 'resident', width: '22%' },
+  { title: 'Head of the Family', key: 'resident', width: '22%' },
   { title: 'Barangay', key: 'barangay', width: '16%' },
   { title: 'Equipment', key: 'equipment', width: '26%' },
   { title: 'Requested', key: 'created_at', width: '18%' },

@@ -141,7 +141,8 @@
             v-else
             :headers="headers"
             :items="filteredServices"
-            :items-per-page="itemsPerPage"
+            v-model:page="page"
+            v-model:items-per-page="itemsPerPage"
             :sort-by="sortBy"
             item-value="service_id"
             hover
@@ -149,6 +150,10 @@
             :items-per-page-options="[10, 25, 50, -1]"
             items-per-page-text="Rows per page"
           >
+            <template v-slot:item.rowNumber="{ index }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            </template>
+
             <template v-slot:item.service_name="{ item }">
               <div class="d-flex align-center gap-3 py-2">
                 <div class="icon-wrapper" :class="`iconbg-${category(item).key}`">
@@ -324,6 +329,10 @@ const categories = {
 }
 
 const headers = [
+  // Position in the list as it is currently sorted and filtered, not an id.
+  // `service_id` is a database key with gaps in it, and showing that as "the
+  // number of the service" would have people reading a deleted row into a gap.
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Service', key: 'service_name', minWidth: '260px' },
   { title: 'Description', key: 'description', sortable: false, minWidth: '280px' },
   { title: 'Category', key: 'category', value: (item) => categoryOf(item).label, width: '170px' },
@@ -336,6 +345,12 @@ const search = ref('')
 const categoryFilter = ref('All')
 const sortBy = ref([{ key: 'service_name', order: 'asc' }])
 const itemsPerPage = ref(10)
+const page = ref(1)
+
+// The slot's `index` counts within the visible page, so page 2 would otherwise
+// restart at 1. "All" is -1, and there is only ever one page of it.
+const rowNumber = (index) =>
+  (itemsPerPage.value === -1 ? 0 : (page.value - 1) * itemsPerPage.value) + index + 1
 const initialLoad = ref(true)
 const apiError = ref('')
 
@@ -533,6 +548,12 @@ onMounted(fetchServices)
 }
 .services-table :deep(tbody tr:hover) {
   background: rgba(var(--v-theme-primary), 0.05) !important;
+}
+/* Tabular figures so the column stays a straight edge from 9 to 10. */
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .services-table :deep(tbody tr:focus-within) {
   outline: 2px solid rgb(var(--v-theme-primary));

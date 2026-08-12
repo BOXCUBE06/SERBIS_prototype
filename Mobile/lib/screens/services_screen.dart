@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart' as fp;
 import '../models/request_models.dart';
 import '../models/service_forms.dart';
+import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/service_form_fields.dart';
+import '../widgets/form_inputs.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -20,6 +22,10 @@ import '../widgets/shared_widgets.dart';
 /// selection, and submit.
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
+
+  /// The signed-in resident. The forms used to ask for a name and a number the
+  /// account already holds; both now come from here.
+  final AppUser user;
   final ServiceType initialType;
   final VoidCallback onSubmitted;
   final VoidCallback onOpenNotifications;
@@ -28,6 +34,7 @@ class ServicesScreen extends StatefulWidget {
   const ServicesScreen({
     super.key,
     required this.appState,
+    required this.user,
     this.initialType = ServiceType.ambulance,
     required this.onSubmitted,
     required this.onOpenNotifications,
@@ -126,12 +133,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
   }
 
+  /// `putIfAbsent`, so the prefill happens once per kind. A resident who
+  /// overwrites the name and switches services must not find their own name
+  /// back in the field on return.
   ServiceFormData _formFor(ServiceFormKind kind) =>
       _forms.putIfAbsent(kind, () => switch (kind) {
-            ServiceFormKind.ambulance => AmbulanceFormData(),
+            ServiceFormKind.ambulance => AmbulanceFormData(
+                patientName: widget.user.fullName,
+                contactNumber: widget.user.phone,
+              ),
             ServiceFormKind.road => RoadFormData(),
-            ServiceFormKind.relief => ReliefFormData(),
-            ServiceFormKind.generic => GenericFormData(),
+            ServiceFormKind.relief => ReliefFormData(
+                headName: widget.user.fullName,
+                contactNumber: widget.user.phone,
+              ),
+            ServiceFormKind.generic =>
+              GenericFormData(contactNumber: widget.user.phone),
           });
 
   @override
@@ -222,15 +239,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     final form = _formFor(service.formKind);
 
-    // A dispatcher who cannot call back cannot dispatch. Enforced here rather
-    // than in the field widget because these are plain TextFields, not a Form.
-    final contact = form.requiredContactNumber;
-    if (contact != null && contact.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a contact number so MDRRMO can reach you.')),
-      );
-      return;
-    }
+    // The callback-number guard is gone with the field it guarded. It refused a
+    // submit when the resident left the number blank; the number now comes off
+    // the account, where `phone_number` is required at registration and NOT
+    // NULL, so there is nothing left to be blank.
 
     final metaLines = form.metaLines(
       serviceName: service.name,
@@ -336,13 +348,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: tr(f, 'services.choose_type')),
-              _buildServiceGrid(),
-            ],
-          ),
+          child: _buildServicePicker(f),
         ),
         if (selection != null)
           Padding(
@@ -362,8 +368,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   onTap: _pickValidId,
                 ),
                 AttachmentUploadField(
-                  label: 'Photo of the site (optional)',
-                  hint: 'Tap to add a photo of the scene (jpg/png, max 4MB)',
+                  label: 'Landmark (optional)',
+                  hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
                   fileName: _sitePhotoFile?.name,
                   onTap: _pickSitePhoto,
                   onClear: () => setState(() => _sitePhotoFile = null),
@@ -383,7 +389,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  Widget _buildServiceGrid() {
+  /// The catalogue used to be a grid of tappable cards, two across. Ten
+  /// services made it a wall the resident had to read before filing anything,
+  /// and the form for the selected one sat below the fold. One dropdown, with
+  /// the selected service's description under it.
+  Widget _buildServicePicker(bool f) {
     if (_loadingServices) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 30),
@@ -416,18 +426,35 @@ class _ServicesScreenState extends State<ServicesScreen> {
       );
     }
 
-    return ServiceGrid(
-      count: _services.length,
-      cardBuilder: (index) {
-        final service = _services[index];
-        return ServiceTypeCard(
-          title: service.nameLocalized,
-          subtitle: service.displayDescription,
-          icon: service.icon,
-          selected: service.id == _selected?.id,
-          onTap: () => setState(() => _selected = service),
-        );
-      },
+    // The dropdown's value must be an element of `items` or Flutter asserts.
+    // `_currentSelection` re-resolves by id but falls back to the stale object
+    // when the catalogue no longer holds it, which is exactly the case that
+    // would assert -- so resolve against `_services` and take the first row
+    // when nothing matches.
+    final selected = _services.firstWhere(
+      (s) => s.id == _selected?.id,
+      orElse: () => _services.first,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppDropdown<ServiceCatalogItem>(
+          label: tr(f, 'services.choose_type'),
+          items: _services,
+          value: selected,
+          itemLabel: (s) => s.nameLocalized,
+          onChanged: (s) => setState(() => _selected = s),
+        ),
+        if (selected.displayDescription.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              selected.displayDescription,
+              style: AppText.body(size: 12, color: AppColors.inkMuted),
+            ),
+          ),
+      ],
     );
   }
 }

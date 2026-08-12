@@ -8,22 +8,66 @@
           <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Dispatch & Requests</h2>
           <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} requests across all barangays</div>
         </div>
-        <v-btn color="secondary" size="large" variant="flat" class="text-none font-weight-bold text-white px-8" height="40">
-          <v-icon start size="small">mdi-download</v-icon> Export
+        <!-- This used to be a button with no handler and no export function
+             behind it, styled larger than either real action on the page. It
+             now writes what the operator is actually looking at: the current
+             filter and search, in the order shown, not all 30 rows. -->
+        <v-btn
+          color="secondary"
+          variant="flat"
+          class="text-none font-weight-bold text-white px-6"
+          height="40"
+          :disabled="!filteredAndSortedRequests.length"
+          @click="exportCsv"
+        >
+          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+          Export {{ filteredAndSortedRequests.length }}
+          <span class="d-sr-only">requests as CSV</span>
         </v-btn>
       </div>
 
-      <!-- Split view: list + detail panel -->
-      <div class="d-flex flex-grow-1 gap-4 overflow-hidden" style="min-height: 0;">
+      <!-- Split view: list + detail panel.
+           Side by side on a desk, which is where this screen is used. Below the
+           md breakpoint the two stop competing for one narrow column and become
+           one surface at a time: the list until a request is picked, the detail
+           with a way back after. -->
+      <div class="d-flex flex-grow-1 gap-4 overflow-hidden" :class="twoUp ? 'flex-row' : 'flex-column'" style="min-height: 0;">
 
         <!-- LEFT: request list -->
-        <v-card elevation="0" rounded="xl" class="soft-card d-flex flex-column overflow-hidden" style="width: 400px; flex-shrink: 0;">
+        <v-card
+          v-if="twoUp || !selectedRequest"
+          elevation="0"
+          rounded="xl"
+          class="soft-card d-flex flex-column overflow-hidden request-list"
+          :class="twoUp ? 'request-list--rail' : 'flex-grow-1'"
+        >
           <div class="pa-4 pb-2" style="flex-shrink: 0;">
-            <v-text-field v-model="search" prepend-inner-icon="mdi-magnify" placeholder="Search resident, service..." variant="outlined" density="compact" hide-details class="mb-3"></v-text-field>
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              placeholder="Search resident, service, barangay..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              class="mb-3"
+            ></v-text-field>
 
+            <!-- Typing narrows the list but leaves the status counts alone, so
+                 without this the operator cannot tell an empty result from a
+                 filter that is hiding it. -->
+            <div v-if="search" class="text-caption text-medium-emphasis mb-2" aria-live="polite">
+              {{ filteredAndSortedRequests.length }}
+              {{ filteredAndSortedRequests.length === 1 ? 'request matches' : 'requests match' }} "{{ search }}"
+            </div>
+
+            <!-- Only statuses that exist in the data. Six chips, two of them
+                 permanently reading zero, is four decisions of noise around the
+                 two the operator actually switches between. The active filter
+                 always stays visible so it can be switched back off. -->
             <v-chip-group v-if="!initialLoad" column>
               <v-chip
-                v-for="status in statusTabs" :key="status"
+                v-for="status in visibleStatusTabs" :key="status"
                 size="small" class="font-weight-bold"
                 :color="status === filters.status ? 'primary' : undefined"
                 :variant="status === filters.status ? 'flat' : 'tonal'"
@@ -39,7 +83,7 @@
           <div v-if="selectedIds.size > 0" class="d-flex align-center justify-space-between px-4 py-2 subtle-surface" style="flex-shrink: 0;">
             <span class="text-caption font-weight-bold">{{ selectedIds.size }} selected</span>
             <div class="d-flex gap-2">
-              <v-btn size="small" variant="text" color="error" class="text-none font-weight-bold" :loading="bulkLoading" @click="bulkDisapprove">Disapprove</v-btn>
+              <v-btn size="small" variant="text" color="error" class="text-none font-weight-bold" :loading="bulkLoading" @click="openReason('bulk')">Disapprove</v-btn>
               <v-btn size="small" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
             </div>
           </div>
@@ -54,16 +98,32 @@
             </div>
 
             <div v-else>
+              <!-- Selecting a request is the entry point to every other action
+                   on this page, and it was a bare div with a click handler: not
+                   in the tab order, not announced as interactive, unreachable
+                   without a mouse. Space is prevented explicitly or it scrolls
+                   the list instead of opening the row. -->
               <div
                 v-for="item in pagedRequests" :key="item.request_id || item.id"
                 class="d-flex align-center px-4 py-3 request-row"
                 :class="[`row-${(item.status || 'Pending').toLowerCase()}`, { 'row-selected': isSelected(item) }]"
+                role="button"
+                tabindex="0"
+                :aria-current="isSelected(item) ? 'true' : undefined"
+                :aria-label="`${residentName(item.resident)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
                 @click="selectRequest(item)"
+                @keydown.enter.prevent="selectRequest(item)"
+                @keydown.space.prevent="selectRequest(item)"
               >
+                <!-- flex-shrink-0 alone let this GROW into whatever space the
+                     row had left, which is why the avatars beside it sat at a
+                     different x on every row. It is a fixed-size control. -->
                 <v-checkbox-btn
                   :model-value="selectedIds.has(itemId(item))"
-                  class="mr-1 flex-shrink-0"
+                  class="mr-1"
+                  style="flex: 0 0 auto;"
                   density="compact"
+                  :aria-label="`Select ${residentName(item.resident)}'s request`"
                   @click.stop="toggleSelect(item)"
                 ></v-checkbox-btn>
                 <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
@@ -71,9 +131,16 @@
                     {{ item.resident?.first_name?.charAt(0) }}{{ item.resident?.last_name?.charAt(0) }}
                   </span>
                 </v-avatar>
+                <!-- The date is the half of this line that survives truncation
+                     worst, and it is the half that decides what is urgent, so
+                     it gets its own column instead of trailing the service
+                     name off the end of the row. -->
                 <div class="flex-grow-1 min-width-0">
-                  <div class="text-body-2 font-weight-bold text-truncate">{{ item.resident?.last_name }}, {{ item.resident?.first_name }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.service?.service_name || 'N/A' }} &bull; {{ formatDate(item.created_at) }}</div>
+                  <div class="text-body-2 font-weight-bold text-truncate">{{ residentName(item.resident) }}</div>
+                  <div class="d-flex align-center text-caption text-medium-emphasis">
+                    <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
+                    <span class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
+                  </div>
                 </div>
                 <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold ml-2 flex-shrink-0">{{ item.status || 'Pending' }}</v-chip>
               </div>
@@ -86,22 +153,38 @@
         </v-card>
 
         <!-- RIGHT: detail panel -->
-        <v-card elevation="0" rounded="xl" class="soft-card d-flex flex-column overflow-hidden flex-grow-1">
-          <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis">
+        <v-card
+          v-if="twoUp || selectedRequest"
+          elevation="0"
+          rounded="xl"
+          class="soft-card d-flex flex-column overflow-hidden flex-grow-1"
+        >
+          <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
             <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
             <div class="text-body-1">Select a request to view details</div>
+            <div class="text-caption mt-1">Its description, attachments and dispatch options open here.</div>
           </div>
 
           <template v-else>
             <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
               <div class="d-flex align-center gap-3">
+                <!-- Stacked, the list is gone from the screen; without this the
+                     only way back to it is the browser's own back button. -->
+                <v-btn
+                  v-if="!twoUp"
+                  icon="mdi-arrow-left"
+                  variant="text"
+                  density="comfortable"
+                  aria-label="Back to the request list"
+                  @click="selectedRequest = null"
+                ></v-btn>
                 <v-avatar color="primary" variant="tonal" size="52">
                   <span class="text-h6 font-weight-black">
                     {{ selectedRequest.resident?.first_name?.charAt(0) }}{{ selectedRequest.resident?.last_name?.charAt(0) }}
                   </span>
                 </v-avatar>
                 <div>
-                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ selectedRequest.resident?.first_name }} {{ selectedRequest.resident?.last_name }}</div>
+                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ residentName(selectedRequest.resident) }}</div>
                   <div class="text-caption text-medium-emphasis">{{ selectedRequest.resident?.barangay?.barangay_name || 'Unknown Barangay' }}</div>
                 </div>
               </div>
@@ -141,7 +224,7 @@
                    reporting, and it is what decides whether a unit is sent.
                    The ID answers a different question, and answers it after. -->
               <div class="mb-4" v-if="selectedRequest.has_site_photo">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Photo of the Site</div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Landmark</div>
                 <v-skeleton-loader v-if="sitePhoto.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
                 <v-alert v-else-if="sitePhoto.state.error" type="error" variant="tonal" density="compact">{{ sitePhoto.state.error }}</v-alert>
                 <v-img
@@ -149,7 +232,7 @@
                   :src="sitePhoto.state.url"
                   max-height="240"
                   class="subtle-surface rounded-lg border"
-                  alt="Photo of the site, attached by the resident"
+                  alt="Landmark photo attached by the resident"
                 ></v-img>
               </div>
 
@@ -170,12 +253,16 @@
 
               <div v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Dispatch Assignment</div>
-                <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="formData.vehicle_id ? 'bg-success' + '-tint' : ''" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <div v-if="formData.vehicle_id" class="d-flex align-center gap-3">
-                    <v-avatar color="success" variant="tonal" size="40"><v-icon color="success">mdi-car</v-icon></v-avatar>
-                    <div>
-                      <div class="font-weight-bold">{{ getSelectedVehicleName() }}</div>
-                      <div class="text-caption text-medium-emphasis">Selected for dispatch</div>
+                <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="{ 'bg-success-tint': formData.vehicle_id }" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
+                  <div v-if="formData.vehicle_id" class="d-flex align-center gap-3 min-width-0">
+                    <v-avatar color="success" variant="tonal" size="40">
+                      <v-icon color="success">{{ vehicleIcon(selectedVehicle?.type) }}</v-icon>
+                    </v-avatar>
+                    <div class="min-width-0">
+                      <div class="font-weight-bold text-truncate">{{ getSelectedVehicleName() }}</div>
+                      <div class="text-caption text-medium-emphasis">
+                        Selected for dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
+                      </div>
                     </div>
                   </div>
                   <div v-else class="text-body-2 text-medium-emphasis">No vehicle assigned yet.</div>
@@ -190,25 +277,52 @@
                 <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
                   <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
                   <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
-                  <div class="text-body-2">Vehicle {{ selectedRequest.vehicle?.plate_number || 'Unknown' }} ({{ selectedRequest.vehicle?.type || 'Unit' }})</div>
+                  <!-- Requests dispatched before the server owned the fleet
+                       carry no `vehicle_id` at all. Naming the absence beats
+                       "Vehicle Unknown", which read as a lookup that failed. -->
+                  <div v-if="selectedRequest.vehicle" class="text-body-2">
+                    {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
+                  </div>
+                  <div v-else class="text-body-2">No unit is recorded against this request.</div>
                 </v-alert>
               </div>
 
               <v-textarea
                 v-if="selectedRequest.status === 'Pending' || selectedRequest.status === 'Responding' || !selectedRequest.status"
-                v-model="formData.remarks" label="Admin Remarks (Optional)" variant="outlined" density="comfortable" rounded="lg" rows="2" hide-details class="mt-4"
+                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2" class="mt-4"
+                hint="Carried into the approve and decline dialogs. Declining asks for one if this is empty."
+                persistent-hint
               ></v-textarea>
             </div>
 
             <v-divider v-if="showActions"></v-divider>
-            <div v-if="showActions" class="d-flex justify-end pa-4 gap-3" style="flex-shrink: 0;">
+            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3" style="flex-shrink: 0;">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="updateStatus('Disapproved')">
+                <!-- The gate is right: nothing dispatches without a unit. But a
+                     greyed primary button on a dispatch screen reads as broken
+                     unless something names what is missing, and a disabled
+                     control announces no reason to a screen reader at all. -->
+                <span v-if="!formData.vehicle_id" class="text-caption text-medium-emphasis mr-auto">
+                  Select a vehicle to enable dispatch.
+                </span>
+                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
-                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" :loading="loading" :disabled="!formData.vehicle_id" @click="updateStatus('Responding')">
-                  Approve & Dispatch
+                <v-btn
+                  color="secondary"
+                  variant="flat"
+                  class="text-none font-weight-bold text-white"
+                  height="40"
+                  :loading="loading"
+                  :disabled="!formData.vehicle_id"
+                  :aria-describedby="!formData.vehicle_id ? 'dispatch-gate' : undefined"
+                  @click="openReason('approve')"
+                >
+                  Approve &amp; Dispatch
                 </v-btn>
+                <span id="dispatch-gate" class="d-sr-only">
+                  Disabled until a vehicle is selected in the dispatch assignment card above.
+                </span>
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
                 <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="updateStatus('Resolved')">
@@ -229,26 +343,40 @@
           <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
 
-        <v-card-text class="pa-4 subtle-surface" style="max-height: 400px; overflow-y: auto;">
-          <v-row v-if="availableVehicles.length > 0">
-            <v-col v-for="v in availableVehicles" :key="v.vehicle_id" cols="12" sm="6">
-              <v-card
-                hover rounded="lg" class="pa-4 cursor-pointer soft-card"
-                :class="formData.vehicle_id === v.vehicle_id ? 'bg-success-tint' : ''"
-                @click="selectVehicle(v.vehicle_id)"
-              >
-                <div class="d-flex align-center gap-3">
-                  <v-avatar :color="formData.vehicle_id === v.vehicle_id ? 'success' : undefined" :variant="formData.vehicle_id === v.vehicle_id ? 'flat' : 'tonal'" size="48">
-                    <v-icon :color="formData.vehicle_id === v.vehicle_id ? 'white' : undefined">mdi-car</v-icon>
-                  </v-avatar>
-                  <div>
-                    <div class="font-weight-bold text-h6" style="line-height: 1.2;">{{ v.plate_number }}</div>
-                    <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">{{ v.type }}</div>
-                  </div>
-                </div>
-              </v-card>
-            </v-col>
-          </v-row>
+        <!-- A two-across grid of cards for a list of identical units. Each tile
+             carried three words and the eye had to travel in two directions to
+             compare fourteen of them. One column, one unit per row, matching the
+             fleet list this picker is a view of. -->
+        <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
+          <v-list v-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
+            <v-list-item
+              v-for="v in availableVehicles"
+              :key="v.vehicle_id"
+              class="vehicle-option px-4 py-3"
+              :active="formData.vehicle_id === v.vehicle_id"
+              @click="selectVehicle(v.vehicle_id)"
+            >
+              <template v-slot:prepend>
+                <v-avatar
+                  :color="formData.vehicle_id === v.vehicle_id ? 'success' : undefined"
+                  :variant="formData.vehicle_id === v.vehicle_id ? 'flat' : 'tonal'"
+                  size="42"
+                  class="mr-3"
+                >
+                  <v-icon :color="formData.vehicle_id === v.vehicle_id ? 'white' : undefined">{{ vehicleIcon(v.type) }}</v-icon>
+                </v-avatar>
+              </template>
+
+              <v-list-item-title class="font-weight-bold text-body-1">{{ vehicleName(v) }}</v-list-item-title>
+              <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
+                {{ v.type }}<template v-if="v.specification"> &bull; {{ v.specification }}</template>
+              </v-list-item-subtitle>
+
+              <template v-slot:append>
+                <v-icon v-if="formData.vehicle_id === v.vehicle_id" color="success">mdi-check-circle</v-icon>
+              </template>
+            </v-list-item>
+          </v-list>
           <div v-else class="pa-6 text-center text-medium-emphasis">
             <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
             <div class="text-h6 font-weight-bold">No Vehicles Available</div>
@@ -257,13 +385,63 @@
         </v-card-text>
       </v-card>
     </v-dialog>
+
+    <!-- Every approve and decline now stops here first. The remarks field on the
+         detail panel was optional and skipped, so a disapproved request reached
+         the resident's phone as a red status with nothing under it. Declining
+         requires a reason; approving only asks for one, since a dispatched unit
+         is its own explanation. Bulk decline gets one reason for the whole
+         selection, which is the only thing it could ever have written -- it used
+         to resend each row's existing remarks, so it captured nothing at all. -->
+    <v-dialog v-model="reasonDialog.open" max-width="440" @after-leave="clearReason">
+      <v-card rounded="lg">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          {{ reasonCopy.title }}
+        </v-card-title>
+        <v-card-text class="px-5 pt-2">
+          <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
+          <v-textarea
+            v-model="reasonDialog.reason"
+            :label="reasonCopy.label"
+            hint="This is shown with the request in the mobile app."
+            persistent-hint
+            variant="outlined"
+            rows="3"
+            counter="255"
+            maxlength="255"
+            autofocus
+            :error-messages="reasonDialog.error"
+            @update:model-value="reasonDialog.error = ''"
+          ></v-textarea>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
+          <v-btn
+            :color="reasonDialog.kind === 'approve' ? 'secondary' : 'error'"
+            variant="flat"
+            class="px-6 text-none font-weight-bold"
+            :class="reasonDialog.kind === 'approve' ? 'text-white' : ''"
+            height="44"
+            :loading="loading || bulkLoading"
+            @click="confirmReason"
+          >{{ reasonCopy.confirm }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+
+// The split view needs a real breakpoint, not a media query in CSS: below it
+// the two panes are rendered one at a time rather than merely restyled, so the
+// list is not sitting offscreen holding focusable rows.
+const { mdAndUp, height: windowHeight } = useDisplay()
+const twoUp = mdAndUp
 
 const requests = ref([])
 const vehicles = ref([])
@@ -273,7 +451,14 @@ const loading = ref(false)
 const bulkLoading = ref(false)
 const apiError = ref('')
 const page = ref(1)
-const itemsPerPage = 10
+// Ten was a fixed number against a variable amount of room, so a 1080px screen
+// showed ten rows and a band of empty card below them, with pagination under
+// that. Fill the space that exists: a row is 58px, and the search field, chips
+// and pager account for the rest.
+const itemsPerPage = computed(() => {
+  const rowsFit = Math.floor((windowHeight.value - 360) / 58)
+  return Math.min(20, Math.max(8, rowsFit))
+})
 
 const filters = reactive({ status: 'All' })
 const vehicleModal = ref({ isOpen: false })
@@ -281,6 +466,67 @@ const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', vehicle_id: null })
+
+// `kind` is the whole state machine: 'approve' and 'disapprove' act on the
+// selected request, 'bulk' on every ticked row. Only 'approve' may fire with an
+// empty reason.
+const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
+const reasonDialog = ref(emptyReason())
+
+const reasonCopy = computed(() => {
+  const who = `${selectedRequest.value?.resident?.first_name || ''} ${selectedRequest.value?.resident?.last_name || ''}`.trim()
+  const what = selectedRequest.value?.service?.service_name || 'this service'
+  switch (reasonDialog.value.kind) {
+    case 'approve':
+      return {
+        title: 'Approve and dispatch',
+        body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
+        label: 'Note for the resident (optional)',
+        confirm: 'Approve & dispatch',
+      }
+    case 'bulk':
+      return {
+        title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
+        body: 'Every selected request is declined with this same reason.',
+        label: 'Reason for declining',
+        confirm: 'Disapprove all',
+      }
+    default:
+      return {
+        title: 'Disapprove this request',
+        body: who ? `${who} asked for ${what}.` : `A request for ${what}.`,
+        label: 'Reason for declining',
+        confirm: 'Disapprove request',
+      }
+  }
+})
+
+const openReason = (kind) => {
+  reasonDialog.value = {
+    ...emptyReason(),
+    open: true,
+    kind,
+    // A remark already typed on the panel is the operator's own words; making
+    // them retype it in the dialog is how a required field turns into a "."
+    reason: kind === 'bulk' ? '' : (formData.value.remarks || ''),
+  }
+}
+
+const clearReason = () => { reasonDialog.value = emptyReason() }
+
+const confirmReason = () => {
+  const { kind, reason } = reasonDialog.value
+  const trimmed = reason.trim()
+  if (kind !== 'approve' && !trimmed) {
+    reasonDialog.value.error = 'Give a reason — the resident is shown this'
+    return
+  }
+  if (kind === 'bulk') return bulkDisapprove(trimmed)
+  // The panel's own field is the source of truth for `updateStatus`, so it moves
+  // with the dialog rather than the two drifting apart.
+  formData.value.remarks = trimmed
+  return updateStatus(kind === 'approve' ? 'Responding' : 'Disapproved')
+}
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
 // photo of the scene. Both live on the private disk and both are served only by
@@ -324,11 +570,19 @@ const createAttachment = (segment, failureMessage) => {
 }
 
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
-const sitePhoto = createAttachment('site-photo', 'Could not load the site photo.')
+// The route segment and the `site_photo` column keep their names -- this is a
+// label change, not an API one.
+const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
 
 const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
 const itemId = (item) => item.request_id || item.id
+
+// One order for a person's name across both panes. The list used to invert it
+// to "Last, First" while the detail beside it read "First Last" -- the same
+// resident, written two ways, six inches apart.
+const residentName = (resident) =>
+  `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown resident'
 
 const requestCounts = computed(() => {
   const counts = { All: requests.value.length, Pending: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
@@ -339,7 +593,18 @@ const requestCounts = computed(() => {
   return counts
 })
 
+// A status nobody has ever used is not a filter, it is a chip that always reads
+// zero. 'All' and whatever is currently selected always survive, so the active
+// filter can always be switched back off.
+const visibleStatusTabs = computed(() =>
+  statusTabs.filter(s => s === 'All' || s === filters.status || requestCounts.value[s] > 0)
+)
+
 const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
+
+const selectedVehicle = computed(() =>
+  vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
+)
 
 const filteredAndSortedRequests = computed(() => {
   const searchLower = search.value.toLowerCase()
@@ -361,16 +626,59 @@ const filteredAndSortedRequests = computed(() => {
   })
 })
 
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage)))
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage.value)))
 
 const pagedRequests = computed(() => {
-  const start = (page.value - 1) * itemsPerPage
-  return filteredAndSortedRequests.value.slice(start, start + itemsPerPage)
+  const start = (page.value - 1) * itemsPerPage.value
+  return filteredAndSortedRequests.value.slice(start, start + itemsPerPage.value)
 })
 
 const showActions = computed(() =>
   selectedRequest.value && (selectedRequest.value.status === 'Pending' || !selectedRequest.value.status || selectedRequest.value.status === 'Responding')
 )
+
+// Writes what is on screen: the current status filter and search, in the order
+// shown. Exporting all 30 rows regardless of the filter would be a different
+// feature wearing the same button.
+//
+// Everything is quoted and every embedded quote is doubled -- descriptions are
+// free text typed by residents, and one comma in one of them silently shifts
+// every later column. The BOM is what makes Excel read it as UTF-8 rather than
+// mangling the barangay names.
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+
+const exportCsv = () => {
+  const rows = filteredAndSortedRequests.value
+  if (!rows.length) return
+
+  const header = ['Request ID', 'Resident', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
+  const body = rows.map(r => [
+    itemId(r),
+    residentName(r.resident),
+    r.resident?.barangay?.barangay_name || '',
+    r.resident?.phone_number || '',
+    r.service?.service_name || '',
+    r.status || 'Pending',
+    r.vehicle ? vehicleName(r.vehicle) : '',
+    formatDateTime(r.created_at),
+    r.remarks || '',
+    r.description || '',
+  ])
+
+  // The BOM is written as an escape, never as a literal character: a bare
+  // BOM in the source is invisible, and the next formatter to touch this file
+  // eats it silently, taking Excel's UTF-8 detection with it.
+  const csv = '\uFEFF' + [header, ...body].map(row => row.map(csvCell).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const stamp = new Date().toISOString().slice(0, 10)
+  const scope = filters.status === 'All' ? 'all' : filters.status.toLowerCase()
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `serbis-requests-${scope}-${stamp}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 const isSelected = (item) => selectedRequest.value && itemId(selectedRequest.value) === itemId(item)
 
@@ -454,9 +762,24 @@ const selectVehicle = (id) => {
   vehicleModal.value.isOpen = false
 }
 
+// `tbl_vehicles` has no `plate_number` column and never has -- the unit is
+// named by `unit_identifier` (AMB-01, BOT-02). Reading the missing field
+// rendered "undefined (Ambulance)" on the assignment card, "Vehicle Unknown"
+// on every dispatched request, and a blank heading on each picker tile, none
+// of which looked like a bug worth filing. This is a rename in the panel; no
+// column is added and no response shape changes.
+const vehicleName = (v) => v?.unit_identifier || 'Unassigned unit'
+
+const vehicleIcon = (type) => ({
+  ambulance: 'mdi-ambulance',
+  'fire truck': 'mdi-fire-truck',
+  'rescue vehicle': 'mdi-car-emergency',
+  boat: 'mdi-ferry',
+}[(type || '').toLowerCase()] || 'mdi-car')
+
 const getSelectedVehicleName = () => {
   const v = vehicles.value.find(veh => veh.vehicle_id === formData.value.vehicle_id)
-  return v ? `${v.plate_number} (${v.type})` : ''
+  return v ? `${vehicleName(v)} (${v.type})` : ''
 }
 
 const updateStatus = async (newStatus, targetRequest = selectedRequest.value) => {
@@ -486,26 +809,40 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     // Doing it from here could only ever handle the dispatch half — nothing was
     // releasing the unit afterwards, so the fleet drained one vehicle at a time.
     await fetchData()
+    reasonDialog.value.open = false
   } catch (error) {
+    // The dialog stays open on failure. Closing it would drop a typed reason on
+    // the floor, and the operator would have to write it again from memory.
     apiError.value = error.message
+    reasonDialog.value.error = error.message
   } finally {
     loading.value = false
   }
 }
 
-const bulkDisapprove = async () => {
+const bulkDisapprove = async (reason) => {
   bulkLoading.value = true
+  apiError.value = ''
   const targets = requests.value.filter(r => selectedIds.has(itemId(r)))
   try {
-    await Promise.all(targets.map(r => fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({ status: 'Disapproved', remarks: r.remarks || '', vehicle_id: r.vehicle_id })
-    })))
+    // `vehicle_id` is passed through untouched: the server releases the unit on
+    // a terminal status, and sending null here would look like an unassignment.
+    await Promise.all(targets.map(async (r) => {
+      const res = await fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: 'Disapproved', remarks: reason, vehicle_id: r.vehicle_id })
+      })
+      // `fetch` only rejects on a network failure, so without this a 422 on one
+      // row resolved like a success and the whole batch reported as done.
+      if (!res.ok) throw new Error('Failed to update one or more requests')
+    }))
     selectedIds.clear()
     await fetchData()
+    reasonDialog.value.open = false
   } catch (error) {
     apiError.value = 'Failed to update one or more requests'
+    reasonDialog.value.error = 'Failed to update one or more requests'
   } finally {
     bulkLoading.value = false
   }
@@ -535,6 +872,13 @@ onUnmounted(releaseAttachments)
   background-color: rgba(var(--v-theme-on-surface), 0.05);
 }
 
+/* One unit per row in the picker, separated rather than floated. */
+.vehicle-option {
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+.vehicle-option:last-child { border-bottom: none; }
+.vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
+
 .bg-success-tint {
   background-color: rgba(var(--v-theme-success), 0.10) !important;
   border-color: rgba(var(--v-theme-success), 0.4) !important;
@@ -561,4 +905,29 @@ onUnmounted(releaseAttachments)
 .request-row.row-resolved { border-left-color: rgb(var(--v-theme-success)); }
 .request-row.row-disapproved,
 .request-row.row-cancelled { border-left-color: rgb(var(--v-theme-error)); }
+
+/* The rows are now in the tab order, so they need a focus ring that is visible
+   against both the hover tint and the selected tint. Inset, because an outline
+   drawn outside the row is clipped by the scroll container. */
+.request-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
+  background-color: rgba(var(--v-theme-primary), 0.06);
+}
+
+/* The date earns a fixed column so truncation eats the service name and never
+   the timestamp; without this the secondary line means different things on
+   different rows. */
+.row-date {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* A rail, not a fixed 400px. The old width truncated service names mid-word on
+   every screen while the pane beside it ran mostly empty. */
+.request-list--rail {
+  flex: 0 1 clamp(360px, 26vw, 560px);
+  min-width: 0;
+}
 </style>

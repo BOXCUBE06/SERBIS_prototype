@@ -117,6 +117,71 @@ class AppHeader extends StatelessWidget {
 }
 
 
+/// What SERBIS is, on the two screens where the reader does not know yet.
+///
+/// Both auth screens explained what the button in front of them would do —
+/// "log in to submit and track your service requests" — and neither said what
+/// the service is. Somebody handed this app at a barangay hall arrives at a
+/// login form for a system nobody has described to them.
+///
+/// One sentence and three capabilities, deliberately: the adviser asked for a
+/// short line, not a page. It names the office, because the trust question a
+/// resident has about an app asking for their address and a photo of their ID
+/// is "who is this".
+class ServicePurposeNote extends StatelessWidget {
+  const ServicePurposeNote({super.key});
+
+  static const _capabilities = [
+    (Icons.local_hospital_rounded, 'Emergency and public service requests'),
+    (Icons.sms_rounded, 'Text alerts for your barangay'),
+    (Icons.menu_book_rounded, 'Disaster preparedness guides'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.green50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'SERBIS is the disaster and emergency service line of the '
+            'Echague MDRRMO.',
+            style: AppText.body(
+                size: 12.5, color: AppColors.green900, height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          for (final (icon, label) in _capabilities)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 15, color: AppColors.green700),
+                  const SizedBox(width: 8),
+                  // Expanded, not a bare Text: "Emergency and public service
+                  // requests" wraps at 360 and an unbounded Row overflows.
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: AppText.body(
+                          size: 12, color: AppColors.inkMuted, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResidentVerificationCode;
 use App\Models\User; // Represents Admins/Staff
 use App\Models\Resident;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -45,11 +47,130 @@ class AuthController extends Controller
             'status'        => 'Inactive',
         ]);
 
-        // No token and no 'message' key, both deliberate. The mobile client reads any
-        // `message` on this response as an error to show the resident, and a token
-        // issued here would never be stored by that client — it would just be a
-        // non-expiring credential nobody holds. The resident logs in straight after.
-        return response()->json($resident, 201);
+        $this->sendVerificationCode($resident);
+
+        // Still no token and still no 'message' key — the mobile client reads any
+        // `message` on this response as an error to show the resident. A token is
+        // withheld for a second reason now: the account is not usable until the
+        // emailed code comes back, so there is nothing for a token to authorise.
+        // `verification_required` is what sends the client to the code screen.
+        return response()->json([
+            'resident' => $resident,
+            'verification_required' => true,
+            'email_address' => $resident->email_address,
+        ], 201);
+    }
+
+    /**
+     * Second half of registration: the code from the email comes back here and
+     * the account becomes usable. A token is issued on success so the resident
+     * lands signed in rather than being handed straight to a login form.
+     */
+    public function verifyEmail(Request $request)
+    {
+        $request->validate([
+            'email_address' => 'required|email',
+            'code' => 'required|string',
+        ]);
+
+        $resident = Resident::where('email_address', $request->email_address)->first();
+
+        if (!$resident) {
+            return response()->json([
+                'message' => 'We could not find an account for that email address.',
+                'code' => 'not_found',
+            ], 404);
+        }
+
+        if ($resident->hasVerifiedEmail()) {
+            // Deliberately not a success. Returning a token here would mean any
+            // string verifies an already-verified account.
+            return response()->json([
+                'message' => 'This email address is already verified. Please log in.',
+                'code' => 'already_verified',
+            ], 422);
+        }
+
+        if (!$resident->verificationCodeMatches($request->code)) {
+            // One message for a wrong code and for an expired one. Separating
+            // them tells someone guessing which half they got right.
+            return response()->json([
+                'message' => 'That code is not right, or it has expired. Ask for a new one.',
+                'code' => 'invalid_code',
+            ], 422);
+        }
+
+        $resident->markEmailAsVerified();
+
+        return response()->json([
+            'token' => $resident->createToken(
+                'resident-token',
+                ['*'],
+                now()->addMinutes(config('sanctum.resident_expiration')),
+            )->plainTextToken,
+            'role' => 'resident',
+            'user' => $resident->load('barangay'),
+        ]);
+    }
+
+    /**
+     * Issues a replacement code. Two limits apply: the route's rate limiter, and
+     * a per-account cooldown so one account cannot be used to send mail on a
+     * timer from many addresses.
+     */
+    public function resendVerificationCode(Request $request)
+    {
+        $request->validate([
+            'email_address' => 'required|email',
+        ]);
+
+        $resident = Resident::where('email_address', $request->email_address)->first();
+
+        // A 404 here reveals only what registration already reveals: the address
+        // is unique-validated at signup, so existence is discoverable there too.
+        // Staying silent instead would leave a resident who mistyped their own
+        // address waiting for mail that is never coming.
+        if (!$resident) {
+            return response()->json([
+                'message' => 'We could not find an account for that email address.',
+                'code' => 'not_found',
+            ], 404);
+        }
+
+        if ($resident->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'This email address is already verified. Please log in.',
+                'code' => 'already_verified',
+            ], 422);
+        }
+
+        if (($wait = $resident->secondsUntilResendAllowed()) > 0) {
+            return response()->json([
+                'message' => "Please wait {$wait} seconds before asking for another code.",
+                'code' => 'resend_too_soon',
+                'retry_after' => $wait,
+            ], 429);
+        }
+
+        $this->sendVerificationCode($resident);
+
+        return response()->json([
+            'message' => 'A new code is on its way.',
+            'code' => 'code_sent',
+        ]);
+    }
+
+    /**
+     * The plain code exists only between these two lines. Everything stored is
+     * hashed, so this is the single point where it can be sent.
+     */
+    private function sendVerificationCode(Resident $resident): void
+    {
+        $code = $resident->issueVerificationCode();
+
+        Mail::to($resident->email_address)->send(
+            new ResidentVerificationCode($resident, $code)
+        );
     }
 
     // Lets a client rebuild the signed-in user from a stored token. Without this,
@@ -202,6 +323,50 @@ class AuthController extends Controller
                 'message' => 'Invalid resident credentials.'
             ], 401);
         }
+
+        // Only an abandoned registration reaches this. Verification happens as
+        // the last step of signing up, so a resident who finished it never sees
+        // this refusal — and one who closed the app halfway can resume from the
+        // code screen instead of being told their password is wrong.
+        //
+        // Checked after the password on purpose: answering before it would turn
+        // this route into an oracle for which addresses have accounts.
+        if (!$resident->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Please verify your email address to finish creating your account.',
+                'code' => 'email_unverified',
+                'email_address' => $resident->email_address,
+            ], 403);
+        }
+
+        // There is deliberately NO `status` check here, unlike adminLogin above.
+        // This is quality-check finding 5 (2026-08-05), and it was decided on
+        // 2026-08-08 to leave it open rather than fixed. Recorded here because
+        // the asymmetry with adminLogin reads like an oversight and has now
+        // been re-raised more than once.
+        //
+        // An `Inactive` resident can log in and file service requests. The only
+        // thing activation gates is who receives an SMS blast. That is the
+        // intended behaviour for now:
+        //
+        //  - There is no self-serve activation or reactivation flow anywhere.
+        //    Blocking the login makes the MDRRMO office the only way back in,
+        //    for an app whose whole purpose is the hour when nobody can reach
+        //    the office.
+        //  - `tbl_residents.status` is a plain varchar, NOT NULL but with no
+        //    default and nothing constraining its values. Every insert has to
+        //    name a status, and nothing stops one naming 'pending' or 'active'
+        //    in the wrong case. A fail-closed `=== 'Active'` test would lock
+        //    out every such row. (This differs from tbl_user.status, which
+        //    defaults to 'Active' — do not carry the reasoning across.)
+        //  - Filing a request is not the risk. A request is triaged by a human
+        //    before a unit moves, so an unactivated account costs the office a
+        //    dispatch decision it was already making, not an automatic response.
+        //
+        // If this is ever closed, mirror isDeactivated() rather than testing
+        // for 'Active', and give the mobile login screen a 403 branch first —
+        // without one the resident sees a generic failure and retries forever.
+        // The onboarding copy implying a gate should change at the same time.
 
         return response()->json([
             'token' => $resident->createToken(

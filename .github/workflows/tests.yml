@@ -1,0 +1,131 @@
+# The two test suites, run on every push and pull request.
+#
+# M18 listed "no `.github/workflows/` anywhere" as an open gap: both suites
+# have only ever been run by hand, on one machine, by the person who wrote the
+# change. A suite nobody runs is a suite that is already broken.
+#
+# The jobs are independent — a mobile change does not wait on PHP, and a
+# backend change does not wait on the Flutter SDK download.
+
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+# A second push to the same branch makes the first run's answer worthless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mobile:
+    name: Flutter (Mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: Mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned rather than "latest stable": a Flutter upgrade should break
+          # the build in a commit that says so, not in whichever unrelated
+          # change happens to run first that morning.
+          flutter-version: 3.35.1
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter test
+
+  backend:
+    name: PHPUnit (Backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: Backend/SERBIS-Backend
+
+    # The suite runs against MySQL, not sqlite: several migrations are
+    # MySQL-only (dropping a foreign key by name, for one), so the schema
+    # cannot be built on sqlite at all. The credentials here are not secrets
+    # and must not be changed independently — they are fixed by phpunit.xml,
+    # which hardcodes 127.0.0.1:3306, root, an empty password and the database
+    # name below.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: serbis_phpunit
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 8.4, matching the `^8.4` composer.json now declares. The floor used to
+      # say ^8.3 while composer.lock held the Symfony 8.1 components, which
+      # require php >=8.4.1 — a fresh `composer install` on 8.3 failed outright.
+      # Keep this pin and the composer.json floor in step; if they drift again,
+      # CI is the only thing that installs on a machine nobody has hand-tuned.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, bcmath
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: Backend/SERBIS-Backend/vendor
+          key: composer-${{ hashFiles('Backend/SERBIS-Backend/composer.lock') }}
+          restore-keys: composer-
+
+      - run: composer install --prefer-dist --no-interaction --no-progress
+
+      # A runtime .env for this runner only. The committed template is not
+      # touched, and it carries no credentials — APP_KEY and DB_PASSWORD are
+      # both empty in it, which is why the key is generated here.
+      - name: Prepare the application environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # `php artisan test` HANGS rather than erroring when MySQL is not
+      # answering, so a database that never came up would burn the whole job
+      # timeout and report nothing useful. Fail here instead, with a message.
+      # Asked over PDO rather than with mysqladmin: the runner image is
+      # guaranteed to have the PHP the job just set up, not a MySQL client.
+      - name: Wait for MySQL
+        run: |
+          php -r '
+            for ($i = 0; $i < 30; $i++) {
+              try {
+                new PDO("mysql:host=127.0.0.1;port=3306;dbname=serbis_phpunit", "root", "");
+                echo "MySQL is up.\n";
+                exit(0);
+              } catch (PDOException $e) {
+                sleep(2);
+              }
+            }
+            fwrite(STDERR, "MySQL never became reachable on 127.0.0.1:3306 - the suite would hang, not fail.\n");
+            exit(1);
+          '
+
+      - run: php artisan test

@@ -21,6 +21,12 @@ Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middle
 // Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
 // the submitted email address as well as the IP.
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
+// Second half of registration. Both share the 'login' limiter: verify is a
+// guessing target (a million codes, six digits) and resend sends real mail.
+// The per-account cooldown in resendVerificationCode is the other half of that
+// — the limiter bounds one caller, the cooldown bounds one account.
+Route::post('/resident/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:login');
+Route::post('/resident/verify-email/resend', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:login');
 // Public on purpose: the mobile register screen must show a barangay picker
 // before the resident has an account, and barangay_id is required to sign up.
 // The row is nothing but an id and a name, and the write routes stay admin-only.

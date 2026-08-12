@@ -13,6 +13,10 @@ class LoginScreen extends StatefulWidget {
   final UserStore userStore;
   final void Function(AppUser user) onLoginSuccess;
   final VoidCallback onGoToRegister;
+
+  /// The credentials were right but the address is unverified. Carries it so
+  /// the verify screen can resume a registration that was left half-finished.
+  final void Function(String email) onEmailUnverified;
   final String? infoMessage;
 
   const LoginScreen({
@@ -20,6 +24,7 @@ class LoginScreen extends StatefulWidget {
     required this.userStore,
     required this.onLoginSuccess,
     required this.onGoToRegister,
+    required this.onEmailUnverified,
     this.infoMessage,
   });
 
@@ -55,6 +60,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       widget.onLoginSuccess(user);
     } on ApiException catch (e) {
+      // An abandoned registration: the password was right, the address was
+      // never verified. Sending them to the code screen is the only useful
+      // answer — an error on this form leaves them with nothing to do.
+      if (e.isEmailUnverified) {
+        widget.onEmailUnverified(_emailCtrl.text.trim());
+        return;
+      }
       // Already resident-readable: "Invalid resident credentials." on a bad
       // password, the connection message when the server is unreachable.
       // Already logged by ApiService with its status; the email is deliberately
@@ -94,12 +106,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Log in to submit and track your service requests '
-                      'with Echague MDRRMO.',
+                      'Log in to submit and track your service requests.',
                       textAlign: TextAlign.center,
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
                     ),
+                    const SizedBox(height: 16),
+                    const ServicePurposeNote(),
                     if (widget.infoMessage != null) ...[
                       const SizedBox(height: 14),
                       Container(

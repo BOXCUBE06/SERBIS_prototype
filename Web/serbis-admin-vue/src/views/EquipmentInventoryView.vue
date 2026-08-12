@@ -50,11 +50,9 @@
         </div>
 
         <!-- Loading -->
-        <v-row v-if="initialLoad">
-          <v-col v-for="n in 4" :key="n" cols="12" sm="6" md="4" lg="3">
-            <v-skeleton-loader type="image, list-item-two-line" rounded="xl"></v-skeleton-loader>
-          </v-col>
-        </v-row>
+        <v-card v-if="initialLoad" elevation="0" rounded="xl" class="group-card pa-6">
+          <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
+        </v-card>
 
         <!-- Empty -->
         <div v-else-if="!filteredEquipments.length" class="empty-state group-card">
@@ -67,55 +65,66 @@
           </div>
         </div>
 
-        <!-- Card grid -->
-        <v-row v-else>
-          <v-col v-for="item in filteredEquipments" :key="item.equipment_id || item.id" cols="12" sm="6" md="4" lg="3">
-            <v-card elevation="0" rounded="xl" class="stock-card group-card h-100 d-flex flex-column" :class="`accent-${stockState(item)}`">
-              <div class="pa-5 flex-grow-1 d-flex flex-column">
-                <div class="d-flex justify-space-between align-start mb-3">
-                  <div class="d-flex align-center gap-3 min-w-0">
-                    <div class="icon-wrapper" :class="`iconbg-${stockState(item)}`">
-                      <v-icon :color="stateMeta[stockState(item)].color" size="24">{{ itemIcon(item.item_name) }}</v-icon>
-                    </div>
-                    <div class="text-subtitle-1 font-weight-bold text-high-emphasis text-truncate">{{ item.item_name }}</div>
-                  </div>
-                  <v-menu location="bottom end">
-                    <template v-slot:activator="{ props }">
-                      <v-btn icon="mdi-dots-vertical" variant="text" size="small" v-bind="props" :aria-label="`Actions for ${item.item_name}`"></v-btn>
-                    </template>
-                    <v-list density="compact" rounded="lg">
-                      <v-list-item prepend-icon="mdi-pencil-outline" title="Edit" @click="openEdit(item)"></v-list-item>
-                      <v-list-item prepend-icon="mdi-delete-outline" title="Delete" class="text-error" @click="askDelete(item)"></v-list-item>
-                    </v-list>
-                  </v-menu>
+        <!-- Inventory list. The card grid gave every category the same visual
+             weight and pushed the one number the desk needs -- how many are on
+             the shelf right now -- into a different corner of each tile. As a
+             list the availability column reads straight down, and sorting on it
+             puts whatever is running out at the top. -->
+        <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
+          <v-data-table
+            :headers="inventoryHeaders"
+            :items="filteredEquipments"
+            :items-per-page="10"
+            item-value="equipment_id"
+            density="comfortable"
+            class="inventory-table"
+          >
+            <template v-slot:item.item_name="{ item }">
+              <div class="d-flex align-center gap-3 py-2 min-w-0">
+                <div class="icon-wrapper" :class="`iconbg-${stockState(item)}`">
+                  <v-icon :color="stateMeta[stockState(item)].color" size="22">{{ itemIcon(item.item_name) }}</v-icon>
                 </div>
+                <span class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.item_name }}</span>
+              </div>
+            </template>
 
-                <!-- Status pill -->
-                <span class="state-pill mb-3" :class="`pill-${stockState(item)}`">
-                  <span class="dot" :class="`dot-${stockState(item)}`"></span>
-                  {{ stateLabel(item) }}
-                </span>
-
-                <!-- Quantities -->
-                <div class="d-flex align-baseline gap-1 mb-2">
+            <template v-slot:item.available_quantity="{ item }">
+              <div class="py-2">
+                <div class="d-flex align-baseline gap-1">
                   <span class="qty-available" :class="`text-${stateMeta[stockState(item)].color}`">{{ item.available_quantity }}</span>
-                  <span class="text-h6 text-medium-emphasis">/ {{ item.total_quantity }}</span>
-                  <span class="text-caption text-medium-emphasis ml-1">available</span>
+                  <span class="text-body-2 text-medium-emphasis">/ {{ item.total_quantity }}</span>
                 </div>
-
-                <!-- Gauge -->
-                <div class="gauge mb-2">
+                <div class="gauge mt-1">
                   <span class="gauge-fill" :class="`fill-${stockState(item)}`" :style="{ width: gaugePct(item) }"></span>
                 </div>
-
-                <div class="d-flex justify-space-between text-caption text-medium-emphasis mt-auto pt-2">
-                  <span>{{ inUse(item) }} in use</span>
-                  <span>{{ Math.round(item.total_quantity ? (item.available_quantity / item.total_quantity) * 100 : 0) }}% ready</span>
-                </div>
               </div>
-            </v-card>
-          </v-col>
-        </v-row>
+            </template>
+
+            <template v-slot:item.state="{ item }">
+              <span class="state-pill" :class="`pill-${stockState(item)}`">
+                <span class="dot" :class="`dot-${stockState(item)}`"></span>
+                {{ stateLabel(item) }}
+              </span>
+            </template>
+
+            <template v-slot:item.in_use="{ item }">
+              <span class="text-body-2 text-medium-emphasis">{{ inUse(item) }} in use</span>
+            </template>
+
+            <template v-slot:item.actions="{ item }">
+              <div class="d-flex justify-end gap-1">
+                <v-btn
+                  icon="mdi-pencil-outline" variant="text" size="small"
+                  :aria-label="`Edit ${item.item_name}`" @click="openEdit(item)"
+                ></v-btn>
+                <v-btn
+                  icon="mdi-delete-outline" variant="text" size="small" color="error"
+                  :aria-label="`Delete ${item.item_name}`" @click="askDelete(item)"
+                ></v-btn>
+              </div>
+            </template>
+          </v-data-table>
+        </v-card>
 
       </v-col>
     </v-row>
@@ -232,6 +241,17 @@ const metricTiles = computed(() => [
 ])
 
 const statusOptions = ['All', 'Available', 'Low stock', 'Depleted', 'Needs attention']
+
+// `state` and `in_use` are derived, not columns on the row, so neither can be
+// sorted by the table's own comparator -- the status filter above covers that
+// question. `available_quantity` sorts, and it is the one worth sorting.
+const inventoryHeaders = [
+  { title: 'Item', key: 'item_name', width: '32%' },
+  { title: 'Available', key: 'available_quantity', width: '20%' },
+  { title: 'Status', key: 'state', sortable: false, width: '18%' },
+  { title: 'In use', key: 'in_use', sortable: false, width: '15%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '15%' },
+]
 
 const filteredEquipments = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -378,20 +398,15 @@ onMounted(fetchEquipments)
 .metric-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
 .metric-number { font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
 
-/* Stock cards */
-.stock-card {
-  border-left-width: 4px !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+/* Inventory list */
+.inventory-table :deep(thead th) {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.stock-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 30px -10px rgba(var(--v-theme-on-surface), 0.14) !important;
-}
-.accent-available { border-left-color: rgb(var(--v-theme-primary)) !important; }
-.accent-low { border-left-color: rgb(var(--v-theme-warning)) !important; }
-.accent-depleted { border-left-color: rgb(var(--v-theme-error)) !important; }
 
-.icon-wrapper { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
+.icon-wrapper { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
 .iconbg-available { background: rgba(var(--v-theme-primary), 0.12); }
 .iconbg-low { background: rgba(var(--v-theme-warning), 0.14); }
 .iconbg-depleted { background: rgba(var(--v-theme-error), 0.14); }
@@ -417,10 +432,11 @@ onMounted(fetchEquipments)
 .dot-low { background: rgb(var(--v-theme-warning)); }
 .dot-depleted { background: rgb(var(--v-theme-error)); }
 
-.qty-available { font-size: 2rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+.qty-available { font-size: 1.35rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
 
 .gauge {
-  height: 8px;
+  height: 6px;
+  max-width: 140px;
   border-radius: 5px;
   background: rgba(var(--v-theme-on-surface), 0.08);
   overflow: hidden;
@@ -447,7 +463,7 @@ onMounted(fetchEquipments)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stock-card, .metric-tile, .gauge-fill { transition: none; }
-  .stock-card:hover, .metric-tile:hover { transform: none; }
+  .metric-tile, .gauge-fill { transition: none; }
+  .metric-tile:hover { transform: none; }
 }
 </style>

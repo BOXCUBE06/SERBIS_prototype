@@ -49,7 +49,10 @@ void main() {
       await _pump(tester, form);
 
       final typed = await _fillEveryField(tester);
-      expect(typed.length, 5);
+      // Four, not five: the callback number came off this form and now comes
+      // off the account. This count is the guard that catches a field rendered
+      // but never read, so it moves deliberately.
+      expect(typed.length, 4);
 
       final description = form
           .metaLines(serviceName: 'Ambulance', submittedLabel: 'Today, 9:00 AM')
@@ -86,7 +89,7 @@ void main() {
       await _pump(tester, form);
 
       final typed = await _fillEveryField(tester);
-      expect(typed.length, 4);
+      expect(typed.length, 3);
 
       final description = form
           .metaLines(serviceName: 'Relief goods', submittedLabel: 'Today, 9:00 AM')
@@ -104,7 +107,7 @@ void main() {
       await _pump(tester, form);
 
       final typed = await _fillEveryField(tester);
-      expect(typed.length, 2);
+      expect(typed.length, 1);
 
       final description = form
           .metaLines(serviceName: 'Information inquiry', submittedLabel: 'Today, 9:00 AM')
@@ -118,10 +121,9 @@ void main() {
 
   group('the description keeps the shape the dispatcher reads', () {
     test('the service name leads and the submission time closes', () {
-      final form = AmbulanceFormData();
+      final form = AmbulanceFormData(contactNumber: '09171234567');
       addTearDown(form.dispose);
       form.patient.text = 'Maria Santos';
-      form.contact.text = '09171234567';
 
       final lines = form.metaLines(
         serviceName: 'Ambulance',
@@ -161,27 +163,49 @@ void main() {
   });
 
   group('the contact number a dispatcher needs', () {
-    test('ambulance and relief require one; road and generic do not', () {
-      final ambulance = AmbulanceFormData();
-      final relief = ReliefFormData();
-      final road = RoadFormData();
-      final generic = GenericFormData();
+    test('comes off the account, on every form that carries one', () {
+      final ambulance = AmbulanceFormData(contactNumber: '09171234567');
+      final relief = ReliefFormData(contactNumber: '09171234567');
+      final generic = GenericFormData(contactNumber: '09171234567');
       addTearDown(() {
         ambulance.dispose();
         relief.dispose();
-        road.dispose();
         generic.dispose();
       });
 
-      // Empty, not null: the screen rejects the submit on this.
-      expect(ambulance.requiredContactNumber, '');
-      expect(relief.requiredContactNumber, '');
-      // Null means the form does not collect a callback number at all.
-      expect(road.requiredContactNumber, isNull);
-      expect(generic.requiredContactNumber, isNull);
+      for (final form in [ambulance, relief, generic]) {
+        expect(
+          form.metaLines(serviceName: 'x', submittedLabel: 'y'),
+          contains('Contact: 09171234567'),
+          reason: '${form.runtimeType} dropped the account number',
+        );
+      }
+    });
 
-      ambulance.contact.text = '09171234567';
-      expect(ambulance.requiredContactNumber, '09171234567');
+    test('a road report still carries no number at all', () {
+      // Reported about a place, not about the reporter. Adding one here would
+      // be a change of meaning, not a fix.
+      final road = RoadFormData();
+      addTearDown(road.dispose);
+
+      expect(
+        road.metaLines(serviceName: 'Road clearing', submittedLabel: 'x')
+            .any((line) => line.startsWith('Contact:')),
+        isFalse,
+      );
+    });
+
+    test('an account with no number on file says where to look', () {
+      // `phone_number` is required at registration and NOT NULL, so this is
+      // only reachable before the profile has loaded. It must not read as a
+      // number the dispatcher can dial.
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+
+      expect(
+        form.metaLines(serviceName: 'Ambulance', submittedLabel: 'x'),
+        contains('Contact: See resident profile'),
+      );
     });
   });
 
@@ -213,15 +237,28 @@ void main() {
       );
     });
 
-    testWidgets('the phone fields are numbers-only and capped at 11',
-        (tester) async {
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      await _pump(tester, form);
+    // One test per form, not a loop inside one: `pumpWidget` twice in a single
+    // test updates the existing element rather than building a new one, so the
+    // previous form's subtree is what the second assertion would be reading.
+    //
+    // The number is on the account from registration. A form that still
+    // rendered the field would be asking a resident to retype what MDRRMO
+    // already holds, in an emergency.
+    final forms = <String, ServiceFormData Function()>{
+      'the ambulance form': AmbulanceFormData.new,
+      'the road form': RoadFormData.new,
+      'the relief form': ReliefFormData.new,
+      'the generic form': GenericFormData.new,
+    };
 
-      await tester.enterText(find.byType(TextField).last, '0917-123-4567abc');
+    for (final entry in forms.entries) {
+      testWidgets('${entry.key} asks for no callback number', (tester) async {
+        final form = entry.value();
+        addTearDown(form.dispose);
+        await _pump(tester, form);
 
-      expect(form.contact.text, '09171234567');
-    });
+        expect(find.widgetWithText(TextField, '09XXXXXXXXX'), findsNothing);
+      });
+    }
   });
 }

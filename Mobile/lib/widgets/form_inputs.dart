@@ -116,11 +116,20 @@ class AppTextField extends StatelessWidget {
 }
 
 /// The app's labelled dropdown. Was `_Dropdown` in the services screen.
-class AppDropdown extends StatelessWidget {
+/// Generic over the value so a dropdown can carry the object it selects rather
+/// than its label. The service picker needs that: two services could be given
+/// the same name in the admin panel, and a `List<String>` would make them the
+/// same option. Existing `List<String>` call sites infer `T = String` and are
+/// unchanged.
+class AppDropdown<T> extends StatelessWidget {
   final String label;
-  final List<String> items;
-  final String value;
-  final ValueChanged<String> onChanged;
+  final List<T> items;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  /// How to print an item. Defaults to `toString()`, which is what the
+  /// `List<String>` callers were already relying on.
+  final String Function(T)? itemLabel;
 
   const AppDropdown({
     super.key,
@@ -128,7 +137,10 @@ class AppDropdown extends StatelessWidget {
     required this.items,
     required this.value,
     required this.onChanged,
+    this.itemLabel,
   });
+
+  String _label(T item) => itemLabel?.call(item) ?? '$item';
 
   @override
   Widget build(BuildContext context) {
@@ -147,12 +159,14 @@ class AppDropdown extends StatelessWidget {
               border: Border.all(color: AppColors.line, width: 1.5),
             ),
             child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
+              child: DropdownButton<T>(
                 value: value,
                 isExpanded: true,
                 icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
                 style: AppText.body(size: 13, color: AppColors.ink),
-                items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+                items: items
+                    .map((i) => DropdownMenuItem<T>(value: i, child: Text(_label(i))))
+                    .toList(),
                 onChanged: (v) {
                   if (v != null) onChanged(v);
                 },

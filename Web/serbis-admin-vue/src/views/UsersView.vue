@@ -95,12 +95,12 @@
           <div v-else-if="!filteredAndSortedResidents.length" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length ? 'No residents match your filters' : 'No residents registered yet' }}
+              {{ residents.length ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
               {{ residents.length
                 ? 'Try a different keyword, status, or barangay.'
-                : 'Add the first resident account to get started.' }}
+                : 'Add the first head of the family account to get started.' }}
             </div>
             <v-btn
               v-if="residents.length"
@@ -183,6 +183,17 @@
                 {{ residentStatusLabel(item.status) }}
               </span>
             </template>
+
+            <template v-slot:item.sms_opt_in="{ item }">
+              <!-- Same pill as Status, on purpose: it is the second half of the
+                   same question. A blast needs an Active account, a phone
+                   number and this switch, so an operator counting a short
+                   delivery report reads both columns, not one. -->
+              <span class="status-pill" :class="residentSmsPillClass(residentSmsOptIn(item))">
+                <span class="status-dot" :class="residentSmsDotClass(residentSmsOptIn(item))"></span>
+                {{ residentSmsLabel(residentSmsOptIn(item)) }}
+              </span>
+            </template>
           </v-data-table>
         </v-card>
       </v-col>
@@ -215,7 +226,7 @@
             class="bg-surface h-100 d-flex flex-column align-center justify-center pa-6 text-center"
           >
             <v-icon size="64" class="mb-4 text-medium-emphasis">mdi-account-search</v-icon>
-            <h3 class="text-h6 font-weight-bold text-high-emphasis">No resident selected</h3>
+            <h3 class="text-h6 font-weight-bold text-high-emphasis">No head of the family selected</h3>
             <p class="text-body-1 text-medium-emphasis mt-2">
               Select a row in the table to see the full profile here.
             </p>
@@ -265,11 +276,17 @@
                     {{ (formData.first_name?.charAt(0) || '?') }}{{ (formData.last_name?.charAt(0) || '') }}
                   </span>
                 </v-avatar>
+                <!-- "Change Photo" lived here with no handler behind it, and it
+                     could never have had one: POST /api/residents ignores a
+                     submitted photo on purpose, because the photo is the
+                     resident's own face and theirs to set. The avatar draws
+                     initials from the name being typed, so it is a preview, not
+                     a picture that was ever uploadable from this form. -->
                 <div>
-                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Profile Picture</div>
-                  <v-btn variant="outlined" color="#0f4c3a" size="small" rounded="lg" class="text-none font-weight-bold">
-                    Change Photo
-                  </v-btn>
+                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Initials</div>
+                  <div class="text-caption text-medium-emphasis" style="max-width: 34ch;">
+                    Residents add their own photo from the mobile app. It appears here once they do.
+                  </div>
                 </div>
               </v-col>
 
@@ -347,7 +364,7 @@
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="470">
       <v-card rounded="xl" class="pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Delete resident account?</v-card-title>
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Delete this account?</v-card-title>
         <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
           <strong class="text-high-emphasis">{{ deleteDialog.item ? fullName(deleteDialog.item) : '' }}</strong>
           will be permanently removed, along with their ability to sign in and file requests.
@@ -390,6 +407,10 @@ import {
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_FILTER_ITEMS,
+  residentSmsDotClass,
+  residentSmsLabel,
+  residentSmsOptIn,
+  residentSmsPillClass,
   residentStatusDotClass,
   residentStatusLabel,
   residentStatusPillClass,
@@ -399,13 +420,21 @@ import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
 const { mdAndUp } = useDisplay()
 
+// The percentages add to 92, not 100, because the avatar column is a fixed
+// 76px and the table is `table-layout: fixed` — percentages are taken from the
+// full table width, so 100% + 76px was already running 28px past the card
+// before a seventh column existed. The two pill columns are sized from what
+// their longest pill actually measures ("DEACTIVATED" 128px, "RECEIVING"
+// 110px) plus the cell padding; the four text columns truncate with a tooltip
+// and can absorb what is left.
 const headers = [
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Full Name', key: 'fullName', width: '26%' },
-  { title: 'Barangay', key: 'barangay_name', width: '15%' },
-  { title: 'Phone Number', key: 'phone_number', width: '18%' },
-  { title: 'Email', key: 'email_address', width: '25%' },
+  { title: 'Full Name', key: 'fullName', width: '21%' },
+  { title: 'Barangay', key: 'barangay_name', width: '12%' },
+  { title: 'Phone Number', key: 'phone_number', width: '14%' },
+  { title: 'Email', key: 'email_address', width: '15%' },
   { title: 'Status', key: 'status', align: 'center', width: '16%' },
+  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '14%' },
 ]
 
 const residents = ref([])
@@ -702,8 +731,10 @@ onUnmounted(releaseResidentPhotos)
 
 /* Table */
 .elegant-table :deep(table) { table-layout: fixed !important; width: 100% !important; }
+/* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
+   two pill columns need their width for the pill rather than for gutters. */
 .elegant-table :deep(td) {
-  padding: 18px 24px !important;
+  padding: 18px 16px !important;
   height: 76px !important;
   font-size: 0.95rem;
   border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
@@ -713,7 +744,7 @@ onUnmounted(releaseResidentPhotos)
   font-size: 0.85rem !important;
   font-weight: 700 !important;
   color: #ffffff !important;
-  padding: 0 24px !important;
+  padding: 0 16px !important;
   height: 56px !important;
   border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
   /* Fixed brand green, not the primary token: this header carries white text,

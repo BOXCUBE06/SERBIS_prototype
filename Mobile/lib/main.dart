@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/verify_email_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
@@ -101,7 +102,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-enum _AuthView { login, register }
+enum _AuthView { login, register, verifyEmail }
 
 class _AuthGateState extends State<AuthGate> {
   final ApiService _api = ApiService();
@@ -111,6 +112,10 @@ class _AuthGateState extends State<AuthGate> {
   AppUser? _currentUser;
   _AuthView _view = _AuthView.login;
   String? _loginInfoMessage;
+
+  /// The address whose registration is waiting on a code. Set by registering,
+  /// and by a login the server refused as unverified.
+  String? _pendingVerificationEmail;
 
   @override
   void initState() {
@@ -187,10 +192,15 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
-  void _afterRegister() {
+  /// Registration now ends at the code screen rather than at the login form:
+  /// the account is not usable until the emailed code comes back, and verifying
+  /// issues a token, so a resident who finishes never sees a login screen at
+  /// all on their first run.
+  void _afterRegister(String email) {
     setState(() {
-      _view = _AuthView.login;
-      _loginInfoMessage = 'Account created! Please log in to verify your details.';
+      _view = _AuthView.verifyEmail;
+      _pendingVerificationEmail = email;
+      _loginInfoMessage = null;
     });
   }
 
@@ -237,7 +247,30 @@ class _AuthGateState extends State<AuthGate> {
             _loginInfoMessage = null;
           });
         },
+        onEmailUnverified: (email) {
+          setState(() {
+            _view = _AuthView.verifyEmail;
+            _pendingVerificationEmail = email;
+            _loginInfoMessage = null;
+          });
+        },
         infoMessage: _loginInfoMessage,
+      );
+    }
+
+    if (_view == _AuthView.verifyEmail && _pendingVerificationEmail != null) {
+      return VerifyEmailScreen(
+        userStore: _userStore,
+        email: _pendingVerificationEmail!,
+        // Verifying issues a token, so this is a real sign-in, not a hand-off
+        // back to the login form.
+        onVerified: _login,
+        onGoToLogin: () {
+          setState(() {
+            _view = _AuthView.login;
+            _pendingVerificationEmail = null;
+          });
+        },
       );
     }
 
@@ -427,6 +460,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       ServicesScreen(
         key: ValueKey(_serviceType),
         appState: _appState,
+        user: widget.user,
         initialType: _serviceType,
         onSubmitted: () => _goTo(2),
         onOpenNotifications: onOpenNotifications,

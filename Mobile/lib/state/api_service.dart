@@ -258,7 +258,16 @@ class ApiService {
 
     final message = _errorMessage(body, status);
     AppLog.error(_logArea, endpoint, status: status, reason: message);
-    throw ApiException(message, statusCode: status);
+    // `code` is the server's own reason, carried through so a screen can act on
+    // it rather than string-matching the message a resident reads.
+    // `body` is null when the reply was not JSON at all, so this cannot be
+    // an unconditional lookup.
+    final code = body?['code'];
+    throw ApiException(
+      message,
+      statusCode: status,
+      code: code is String ? code : null,
+    );
   }
 
   /// Laravel reports validation failures under `errors` and everything else
@@ -340,6 +349,38 @@ class ApiService {
     }
 
     throw const ApiException('Invalid credentials.');
+  }
+
+  /// Finishes registration. On success the server issues a token, so the
+  /// resident lands signed in rather than being handed to a login form — this
+  /// mirrors [residentLogin] deliberately, including saving the token.
+  Future<Map<String, dynamic>> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    final data = await _post(
+      '/resident/verify-email',
+      {'email_address': email, 'code': code},
+      isAuthEndpoint: true,
+    );
+
+    if (data['token'] != null) {
+      await _saveToken(data['token'] as String);
+      return (data['user'] as Map<String, dynamic>?) ?? {};
+    }
+
+    throw const ApiException('That code was not accepted.');
+  }
+
+  /// Asks for a replacement code. The server refuses inside its cooldown with
+  /// 429 and a `retry_after`, which surfaces as an [ApiException] carrying
+  /// `code == 'resend_too_soon'`.
+  Future<void> resendVerificationCode({required String email}) async {
+    await _post(
+      '/resident/verify-email/resend',
+      {'email_address': email},
+      isAuthEndpoint: true,
+    );
   }
 
   /// Rebuilds the signed-in resident from a stored token on relaunch.
