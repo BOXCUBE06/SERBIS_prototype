@@ -276,11 +276,17 @@
                     {{ (formData.first_name?.charAt(0) || '?') }}{{ (formData.last_name?.charAt(0) || '') }}
                   </span>
                 </v-avatar>
+                <!-- "Change Photo" lived here with no handler behind it, and it
+                     could never have had one: POST /api/residents ignores a
+                     submitted photo on purpose, because the photo is the
+                     resident's own face and theirs to set. The avatar draws
+                     initials from the name being typed, so it is a preview, not
+                     a picture that was ever uploadable from this form. -->
                 <div>
-                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Profile Picture</div>
-                  <v-btn variant="outlined" color="#0f4c3a" size="small" rounded="lg" class="text-none font-weight-bold">
-                    Change Photo
-                  </v-btn>
+                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Initials</div>
+                  <div class="text-caption text-medium-emphasis" style="max-width: 34ch;">
+                    Residents add their own photo from the mobile app. It appears here once they do.
+                  </div>
                 </div>
               </v-col>
 

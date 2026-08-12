@@ -8,22 +8,66 @@
           <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Dispatch & Requests</h2>
           <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} requests across all barangays</div>
         </div>
-        <v-btn color="secondary" size="large" variant="flat" class="text-none font-weight-bold text-white px-8" height="40">
-          <v-icon start size="small">mdi-download</v-icon> Export
+        <!-- This used to be a button with no handler and no export function
+             behind it, styled larger than either real action on the page. It
+             now writes what the operator is actually looking at: the current
+             filter and search, in the order shown, not all 30 rows. -->
+        <v-btn
+          color="secondary"
+          variant="flat"
+          class="text-none font-weight-bold text-white px-6"
+          height="40"
+          :disabled="!filteredAndSortedRequests.length"
+          @click="exportCsv"
+        >
+          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+          Export {{ filteredAndSortedRequests.length }}
+          <span class="d-sr-only">requests as CSV</span>
         </v-btn>
       </div>
 
-      <!-- Split view: list + detail panel -->
-      <div class="d-flex flex-grow-1 gap-4 overflow-hidden" style="min-height: 0;">
+      <!-- Split view: list + detail panel.
+           Side by side on a desk, which is where this screen is used. Below the
+           md breakpoint the two stop competing for one narrow column and become
+           one surface at a time: the list until a request is picked, the detail
+           with a way back after. -->
+      <div class="d-flex flex-grow-1 gap-4 overflow-hidden" :class="twoUp ? 'flex-row' : 'flex-column'" style="min-height: 0;">
 
         <!-- LEFT: request list -->
-        <v-card elevation="0" rounded="xl" class="soft-card d-flex flex-column overflow-hidden" style="width: 400px; flex-shrink: 0;">
+        <v-card
+          v-if="twoUp || !selectedRequest"
+          elevation="0"
+          rounded="xl"
+          class="soft-card d-flex flex-column overflow-hidden request-list"
+          :class="twoUp ? 'request-list--rail' : 'flex-grow-1'"
+        >
           <div class="pa-4 pb-2" style="flex-shrink: 0;">
-            <v-text-field v-model="search" prepend-inner-icon="mdi-magnify" placeholder="Search resident, service..." variant="outlined" density="compact" hide-details class="mb-3"></v-text-field>
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              placeholder="Search resident, service, barangay..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              class="mb-3"
+            ></v-text-field>
 
+            <!-- Typing narrows the list but leaves the status counts alone, so
+                 without this the operator cannot tell an empty result from a
+                 filter that is hiding it. -->
+            <div v-if="search" class="text-caption text-medium-emphasis mb-2" aria-live="polite">
+              {{ filteredAndSortedRequests.length }}
+              {{ filteredAndSortedRequests.length === 1 ? 'request matches' : 'requests match' }} "{{ search }}"
+            </div>
+
+            <!-- Only statuses that exist in the data. Six chips, two of them
+                 permanently reading zero, is four decisions of noise around the
+                 two the operator actually switches between. The active filter
+                 always stays visible so it can be switched back off. -->
             <v-chip-group v-if="!initialLoad" column>
               <v-chip
-                v-for="status in statusTabs" :key="status"
+                v-for="status in visibleStatusTabs" :key="status"
                 size="small" class="font-weight-bold"
                 :color="status === filters.status ? 'primary' : undefined"
                 :variant="status === filters.status ? 'flat' : 'tonal'"
@@ -54,16 +98,32 @@
             </div>
 
             <div v-else>
+              <!-- Selecting a request is the entry point to every other action
+                   on this page, and it was a bare div with a click handler: not
+                   in the tab order, not announced as interactive, unreachable
+                   without a mouse. Space is prevented explicitly or it scrolls
+                   the list instead of opening the row. -->
               <div
                 v-for="item in pagedRequests" :key="item.request_id || item.id"
                 class="d-flex align-center px-4 py-3 request-row"
                 :class="[`row-${(item.status || 'Pending').toLowerCase()}`, { 'row-selected': isSelected(item) }]"
+                role="button"
+                tabindex="0"
+                :aria-current="isSelected(item) ? 'true' : undefined"
+                :aria-label="`${residentName(item.resident)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
                 @click="selectRequest(item)"
+                @keydown.enter.prevent="selectRequest(item)"
+                @keydown.space.prevent="selectRequest(item)"
               >
+                <!-- flex-shrink-0 alone let this GROW into whatever space the
+                     row had left, which is why the avatars beside it sat at a
+                     different x on every row. It is a fixed-size control. -->
                 <v-checkbox-btn
                   :model-value="selectedIds.has(itemId(item))"
-                  class="mr-1 flex-shrink-0"
+                  class="mr-1"
+                  style="flex: 0 0 auto;"
                   density="compact"
+                  :aria-label="`Select ${residentName(item.resident)}'s request`"
                   @click.stop="toggleSelect(item)"
                 ></v-checkbox-btn>
                 <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
@@ -71,9 +131,16 @@
                     {{ item.resident?.first_name?.charAt(0) }}{{ item.resident?.last_name?.charAt(0) }}
                   </span>
                 </v-avatar>
+                <!-- The date is the half of this line that survives truncation
+                     worst, and it is the half that decides what is urgent, so
+                     it gets its own column instead of trailing the service
+                     name off the end of the row. -->
                 <div class="flex-grow-1 min-width-0">
-                  <div class="text-body-2 font-weight-bold text-truncate">{{ item.resident?.last_name }}, {{ item.resident?.first_name }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.service?.service_name || 'N/A' }} &bull; {{ formatDate(item.created_at) }}</div>
+                  <div class="text-body-2 font-weight-bold text-truncate">{{ residentName(item.resident) }}</div>
+                  <div class="d-flex align-center text-caption text-medium-emphasis">
+                    <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
+                    <span class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
+                  </div>
                 </div>
                 <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold ml-2 flex-shrink-0">{{ item.status || 'Pending' }}</v-chip>
               </div>
@@ -86,22 +153,38 @@
         </v-card>
 
         <!-- RIGHT: detail panel -->
-        <v-card elevation="0" rounded="xl" class="soft-card d-flex flex-column overflow-hidden flex-grow-1">
-          <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis">
+        <v-card
+          v-if="twoUp || selectedRequest"
+          elevation="0"
+          rounded="xl"
+          class="soft-card d-flex flex-column overflow-hidden flex-grow-1"
+        >
+          <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
             <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
             <div class="text-body-1">Select a request to view details</div>
+            <div class="text-caption mt-1">Its description, attachments and dispatch options open here.</div>
           </div>
 
           <template v-else>
             <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
               <div class="d-flex align-center gap-3">
+                <!-- Stacked, the list is gone from the screen; without this the
+                     only way back to it is the browser's own back button. -->
+                <v-btn
+                  v-if="!twoUp"
+                  icon="mdi-arrow-left"
+                  variant="text"
+                  density="comfortable"
+                  aria-label="Back to the request list"
+                  @click="selectedRequest = null"
+                ></v-btn>
                 <v-avatar color="primary" variant="tonal" size="52">
                   <span class="text-h6 font-weight-black">
                     {{ selectedRequest.resident?.first_name?.charAt(0) }}{{ selectedRequest.resident?.last_name?.charAt(0) }}
                   </span>
                 </v-avatar>
                 <div>
-                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ selectedRequest.resident?.first_name }} {{ selectedRequest.resident?.last_name }}</div>
+                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ residentName(selectedRequest.resident) }}</div>
                   <div class="text-caption text-medium-emphasis">{{ selectedRequest.resident?.barangay?.barangay_name || 'Unknown Barangay' }}</div>
                 </div>
               </div>
@@ -170,7 +253,7 @@
 
               <div v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Dispatch Assignment</div>
-                <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="formData.vehicle_id ? 'bg-success' + '-tint' : ''" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
+                <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="{ 'bg-success-tint': formData.vehicle_id }" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
                   <div v-if="formData.vehicle_id" class="d-flex align-center gap-3 min-width-0">
                     <v-avatar color="success" variant="tonal" size="40">
                       <v-icon color="success">{{ vehicleIcon(selectedVehicle?.type) }}</v-icon>
@@ -213,14 +296,33 @@
             </div>
 
             <v-divider v-if="showActions"></v-divider>
-            <div v-if="showActions" class="d-flex justify-end pa-4 gap-3" style="flex-shrink: 0;">
+            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3" style="flex-shrink: 0;">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
+                <!-- The gate is right: nothing dispatches without a unit. But a
+                     greyed primary button on a dispatch screen reads as broken
+                     unless something names what is missing, and a disabled
+                     control announces no reason to a screen reader at all. -->
+                <span v-if="!formData.vehicle_id" class="text-caption text-medium-emphasis mr-auto">
+                  Select a vehicle to enable dispatch.
+                </span>
                 <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
-                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" :loading="loading" :disabled="!formData.vehicle_id" @click="openReason('approve')">
-                  Approve & Dispatch
+                <v-btn
+                  color="secondary"
+                  variant="flat"
+                  class="text-none font-weight-bold text-white"
+                  height="40"
+                  :loading="loading"
+                  :disabled="!formData.vehicle_id"
+                  :aria-describedby="!formData.vehicle_id ? 'dispatch-gate' : undefined"
+                  @click="openReason('approve')"
+                >
+                  Approve &amp; Dispatch
                 </v-btn>
+                <span id="dispatch-gate" class="d-sr-only">
+                  Disabled until a vehicle is selected in the dispatch assignment card above.
+                </span>
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
                 <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="updateStatus('Resolved')">
@@ -331,8 +433,15 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+
+// The split view needs a real breakpoint, not a media query in CSS: below it
+// the two panes are rendered one at a time rather than merely restyled, so the
+// list is not sitting offscreen holding focusable rows.
+const { mdAndUp, height: windowHeight } = useDisplay()
+const twoUp = mdAndUp
 
 const requests = ref([])
 const vehicles = ref([])
@@ -342,7 +451,14 @@ const loading = ref(false)
 const bulkLoading = ref(false)
 const apiError = ref('')
 const page = ref(1)
-const itemsPerPage = 10
+// Ten was a fixed number against a variable amount of room, so a 1080px screen
+// showed ten rows and a band of empty card below them, with pagination under
+// that. Fill the space that exists: a row is 58px, and the search field, chips
+// and pager account for the rest.
+const itemsPerPage = computed(() => {
+  const rowsFit = Math.floor((windowHeight.value - 360) / 58)
+  return Math.min(20, Math.max(8, rowsFit))
+})
 
 const filters = reactive({ status: 'All' })
 const vehicleModal = ref({ isOpen: false })
@@ -462,6 +578,12 @@ const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', '
 
 const itemId = (item) => item.request_id || item.id
 
+// One order for a person's name across both panes. The list used to invert it
+// to "Last, First" while the detail beside it read "First Last" -- the same
+// resident, written two ways, six inches apart.
+const residentName = (resident) =>
+  `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown resident'
+
 const requestCounts = computed(() => {
   const counts = { All: requests.value.length, Pending: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
   requests.value.forEach(req => {
@@ -470,6 +592,13 @@ const requestCounts = computed(() => {
   })
   return counts
 })
+
+// A status nobody has ever used is not a filter, it is a chip that always reads
+// zero. 'All' and whatever is currently selected always survive, so the active
+// filter can always be switched back off.
+const visibleStatusTabs = computed(() =>
+  statusTabs.filter(s => s === 'All' || s === filters.status || requestCounts.value[s] > 0)
+)
 
 const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
 
@@ -497,16 +626,59 @@ const filteredAndSortedRequests = computed(() => {
   })
 })
 
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage)))
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage.value)))
 
 const pagedRequests = computed(() => {
-  const start = (page.value - 1) * itemsPerPage
-  return filteredAndSortedRequests.value.slice(start, start + itemsPerPage)
+  const start = (page.value - 1) * itemsPerPage.value
+  return filteredAndSortedRequests.value.slice(start, start + itemsPerPage.value)
 })
 
 const showActions = computed(() =>
   selectedRequest.value && (selectedRequest.value.status === 'Pending' || !selectedRequest.value.status || selectedRequest.value.status === 'Responding')
 )
+
+// Writes what is on screen: the current status filter and search, in the order
+// shown. Exporting all 30 rows regardless of the filter would be a different
+// feature wearing the same button.
+//
+// Everything is quoted and every embedded quote is doubled -- descriptions are
+// free text typed by residents, and one comma in one of them silently shifts
+// every later column. The BOM is what makes Excel read it as UTF-8 rather than
+// mangling the barangay names.
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+
+const exportCsv = () => {
+  const rows = filteredAndSortedRequests.value
+  if (!rows.length) return
+
+  const header = ['Request ID', 'Resident', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
+  const body = rows.map(r => [
+    itemId(r),
+    residentName(r.resident),
+    r.resident?.barangay?.barangay_name || '',
+    r.resident?.phone_number || '',
+    r.service?.service_name || '',
+    r.status || 'Pending',
+    r.vehicle ? vehicleName(r.vehicle) : '',
+    formatDateTime(r.created_at),
+    r.remarks || '',
+    r.description || '',
+  ])
+
+  // The BOM is written as an escape, never as a literal character: a bare
+  // BOM in the source is invisible, and the next formatter to touch this file
+  // eats it silently, taking Excel's UTF-8 detection with it.
+  const csv = '\uFEFF' + [header, ...body].map(row => row.map(csvCell).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const stamp = new Date().toISOString().slice(0, 10)
+  const scope = filters.status === 'All' ? 'all' : filters.status.toLowerCase()
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `serbis-requests-${scope}-${stamp}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 const isSelected = (item) => selectedRequest.value && itemId(selectedRequest.value) === itemId(item)
 
@@ -733,4 +905,29 @@ onUnmounted(releaseAttachments)
 .request-row.row-resolved { border-left-color: rgb(var(--v-theme-success)); }
 .request-row.row-disapproved,
 .request-row.row-cancelled { border-left-color: rgb(var(--v-theme-error)); }
+
+/* The rows are now in the tab order, so they need a focus ring that is visible
+   against both the hover tint and the selected tint. Inset, because an outline
+   drawn outside the row is clipped by the scroll container. */
+.request-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
+  background-color: rgba(var(--v-theme-primary), 0.06);
+}
+
+/* The date earns a fixed column so truncation eats the service name and never
+   the timestamp; without this the secondary line means different things on
+   different rows. */
+.row-date {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* A rail, not a fixed 400px. The old width truncated service names mid-word on
+   every screen while the pane beside it ran mostly empty. */
+.request-list--rail {
+  flex: 0 1 clamp(360px, 26vw, 560px);
+  min-width: 0;
+}
 </style>
