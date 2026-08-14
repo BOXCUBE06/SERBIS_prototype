@@ -1,0 +1,216 @@
+// Covers the store half of equipment borrowing: submit-with-rollback,
+// refetch guards, and cache hydration. Mirrors requests_refresh_test.dart's
+// shape for ServiceRequest — see there for the reasoning behind each guard.
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:serbis/models/borrow_models.dart';
+import 'package:serbis/state/api_service.dart';
+import 'package:serbis/state/request_store.dart';
+
+class _FakeApi extends ApiService {
+  _FakeApi({this.equipmentRows, this.borrowRows, this.submitResult, this.submitError, this.loadError});
+
+  List<Map<String, dynamic>>? equipmentRows;
+  List<Map<String, dynamic>>? borrowRows;
+  Map<String, dynamic>? submitResult;
+  Object? submitError;
+  Object? loadError;
+  int getBorrowingsCalls = 0;
+  int submitCalls = 0;
+
+  @override
+  Future<List<Map<String, dynamic>>> getEquipments() async {
+    return equipmentRows ?? <Map<String, dynamic>>[];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getBorrowings() async {
+    getBorrowingsCalls++;
+    if (loadError != null) throw loadError!;
+    return borrowRows ?? <Map<String, dynamic>>[];
+  }
+
+  @override
+  Future<Map<String, dynamic>> submitBorrowRequest({
+    required int equipmentId,
+    required int quantity,
+  }) async {
+    submitCalls++;
+    if (submitError != null) throw submitError!;
+    return submitResult ??
+        <String, dynamic>{
+          'borrow_id': 99,
+          'equipment_id': equipmentId,
+          'quantity': quantity,
+          'status': 'Pending',
+        };
+  }
+}
+
+Map<String, dynamic> _equipmentRow(int id, String name, int qty) => <String, dynamic>{
+      'equipment_id': id,
+      'item_name': name,
+      'available_quantity': qty,
+    };
+
+const _wheelchair = Equipment(id: 3, name: 'Wheelchair', availableQuantity: 2);
+
+void main() {
+  group('submitBorrowRequest', () {
+    test('inserts optimistically, then replaces with the confirmed row', () async {
+      final api = _FakeApi(submitResult: {
+        'borrow_id': 42,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Pending',
+      });
+      final state = AppState(api);
+
+      final result = state.submitBorrowRequest(item: _wheelchair, quantity: 1);
+
+      // Synchronously inserted, before the fake's Future even resolves.
+      expect(state.borrowRequests, hasLength(1));
+      expect(state.borrowRequests.single.id, isNull);
+
+      final confirmed = await result;
+
+      expect(confirmed, isNotNull);
+      expect(confirmed!.id, 42);
+      expect(state.borrowRequests, hasLength(1));
+      expect(state.borrowRequests.single.id, 42);
+    });
+
+    test('a rejected request is rolled back, not left on screen', () async {
+      // The exact bug class the comment in AppState.submitBorrowRequest names:
+      // a stock-check 422 must not look like a filed request MDRRMO will
+      // never see.
+      final api = _FakeApi(submitError: const ApiException(
+        'Only 1 of this item are available to borrow.',
+      ));
+      final state = AppState(api);
+
+      final confirmed = await state.submitBorrowRequest(item: _wheelchair, quantity: 5);
+
+      expect(confirmed, isNull);
+      expect(state.borrowRequests, isEmpty);
+      expect(state.takeError(), 'Only 1 of this item are available to borrow.');
+    });
+
+    test('the optimistic row names itself from the tapped catalogue item', () {
+      // POST's 201 has no equipment relation loaded (see borrow_models_test),
+      // so until the server answers the only source of the name is the item
+      // the resident actually tapped.
+      final api = _FakeApi();
+      final state = AppState(api);
+
+      state.submitBorrowRequest(item: _wheelchair, quantity: 1);
+
+      expect(state.borrowRequests.single.equipmentName, 'Wheelchair');
+    });
+  });
+
+  group('loadEquipment', () {
+    test('populates the catalogue and resolves names on rows already on screen', () async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(3, 'Wheelchair', 2)]);
+      final state = AppState(api);
+
+      // A row with no name, as if filed before the catalogue ever loaded.
+      state.borrowRequests.add(const BorrowRequest(
+        id: 7,
+        equipmentId: 3,
+        quantity: 1,
+        status: BorrowStatus.pending,
+      ));
+
+      await state.loadEquipment();
+
+      expect(state.equipment, hasLength(1));
+      expect(state.equipment.single.name, 'Wheelchair');
+      expect(state.borrowRequests.single.equipmentName, 'Wheelchair');
+    });
+
+    test('a failed fetch empties the catalogue and records the error', () async {
+      final erroring = _FakeApiError();
+      final state = AppState(erroring);
+
+      await state.loadEquipment();
+
+      expect(state.equipment, isEmpty);
+      expect(state.equipmentError, isNotNull);
+    });
+  });
+
+  group('loadBorrowRequests', () {
+    test('overlapping fetches collapse into one', () async {
+      final api = _FakeApi(borrowRows: [
+        {'borrow_id': 1, 'equipment_id': 3, 'quantity': 1, 'status': 'Pending'},
+      ]);
+      final state = AppState(api);
+
+      await Future.wait<void>([
+        state.loadBorrowRequests(),
+        state.loadBorrowRequests(),
+        state.loadBorrowRequests(),
+      ]);
+
+      expect(api.getBorrowingsCalls, 1);
+      expect(state.borrowRequests, hasLength(1));
+    });
+
+    test('a refetch does not wipe a request with no server id yet', () async {
+      final api = _FakeApi(borrowRows: [
+        {'borrow_id': 1, 'equipment_id': 3, 'quantity': 1, 'status': 'Pending'},
+      ]);
+      final state = AppState(api);
+      final inFlight = const BorrowRequest(
+        equipmentId: 3,
+        quantity: 1,
+        status: BorrowStatus.pending,
+      );
+      state.borrowRequests.add(inFlight);
+
+      await state.loadBorrowRequests();
+
+      expect(state.borrowRequests, hasLength(2));
+      expect(identical(state.borrowRequests.first, inFlight), isTrue);
+    });
+
+    test('a silent poll failure raises no error but still flags offline', () async {
+      final erroring = _FakeApiError();
+      final state = AppState(erroring);
+
+      await state.loadBorrowRequests(silent: true);
+
+      expect(state.takeError(), isNull);
+      expect(state.borrowIsOffline, isTrue);
+    });
+
+    test('borrowIsOffline is independent of the service-request flag', () async {
+      // Fetched from a different screen at a different time — sharing one
+      // flag would let a stale service-request poll clear this screen's
+      // own banner.
+      final erroring = _FakeApiError();
+      final state = AppState(erroring);
+
+      await state.loadBorrowRequests(silent: true);
+
+      expect(state.borrowIsOffline, isTrue);
+      expect(state.isOffline, isFalse);
+    });
+  });
+}
+
+/// A transport failure specifically — throws on every borrowing/equipment
+/// call, the way a dead network does, so `borrowIsOffline` has something real
+/// to derive from.
+class _FakeApiError extends ApiService {
+  @override
+  Future<List<Map<String, dynamic>>> getEquipments() async {
+    throw const ApiException('Cannot connect to server.');
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getBorrowings() async {
+    throw const ApiException('Cannot connect to server.');
+  }
+}

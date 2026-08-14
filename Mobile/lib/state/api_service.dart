@@ -743,4 +743,33 @@ class ApiService {
     // rejects anything but the owner's own Pending request. No body needed.
     await _patch('/service-requests/$requestId/cancel');
   }
+
+  /// The equipment catalogue a resident can borrow from. Plain `auth:sanctum`,
+  /// not `is.admin` — see `routes/api.php` — so this is reachable with a
+  /// resident token.
+  Future<List<Map<String, dynamic>>> getEquipments() async {
+    final data = await _get('/equipments');
+    return listFrom(data);
+  }
+
+  /// The resident's own borrow requests. `EquipmentBorrowingController::index`
+  /// scopes this to `resident_id` itself when the caller is a Resident, so
+  /// there is no client-side filtering to get wrong.
+  Future<List<Map<String, dynamic>>> getBorrowings() async {
+    final data = await _get('/borrowings');
+    return listFrom(data);
+  }
+
+  /// Files a new equipment loan. The server assigns `resident_id` from the
+  /// token and `status: 'Pending'` itself — nothing here can put a request in
+  /// any other state or on any other resident's account.
+  Future<Map<String, dynamic>> submitBorrowRequest({
+    required int equipmentId,
+    required int quantity,
+  }) async {
+    return _post('/borrowings', {
+      'equipment_id': equipmentId,
+      'quantity': quantity,
+    });
+  }
 }

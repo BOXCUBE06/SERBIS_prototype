@@ -1,6 +1,5 @@
 <template>
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
-
     <!-- Header -->
     <div class="mb-6">
       <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
@@ -9,15 +8,11 @@
       </div>
     </div>
 
-    <!-- Returned and Denied are finished work. They were taking 40% of the
-         board's width from the three states that still need a decision, and
-         they are the two that grow without bound as the office keeps operating,
-         so they are the two that cannot stay on a fixed-width board. -->
     <v-tabs v-model="activeTab" color="primary" class="mb-4 border-b">
       <v-tab value="board" class="text-none font-weight-bold">
-        <v-icon start>mdi-view-column-outline</v-icon>
+        <v-icon start>mdi-view-list-outline</v-icon>
         Active pipeline
-        <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ activeCount }}</v-chip>
+        <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ activeItems.length }}</v-chip>
       </v-tab>
       <v-tab value="history" class="text-none font-weight-bold">
         <v-icon start>mdi-archive-outline</v-icon>
@@ -26,12 +21,9 @@
       </v-tab>
     </v-tabs>
 
-    <!-- The filters sit under the tabs, not in the header, because they apply to
+    <!-- Filters sit under the tabs, not in the header, because they apply to
          whichever surface is showing and reading them second makes that order
-         explicit. Every control now carries a visible label: the old bar was
-         placeholder-only, so a chosen item filter became invisible the moment it
-         was applied and a board emptied by a stale filter read as an empty
-         database. -->
+         explicit. -->
     <div v-if="!loadError" class="filter-bar mb-4">
       <v-text-field
         v-model="search"
@@ -67,27 +59,24 @@
         rounded="lg"
         class="filter-field"
       ></v-select>
-
-      <!-- Board only, and hidden rather than disabled on History: a returned or
-           denied record can never be overdue, so there the switch would filter
-           every row away and read as a broken page. The count rides on the label
-           so the number is available without turning the filter on. -->
-      <v-switch
-        v-if="activeTab === 'board'"
-        v-model="overdueOnly"
-        :label="`Overdue only (${overdueCount})`"
-        color="error"
+      <!-- History only: Returned and Denied were only ever visible per-row, in
+           the Outcome column's chip — there was no way to filter to just one
+           of them. -->
+      <v-select
+        v-if="activeTab === 'history'"
+        v-model="outcomeFilter"
+        :items="outcomeOptions"
+        label="Outcome"
+        prepend-inner-icon="mdi-check-decagram-outline"
+        variant="outlined"
         density="compact"
         hide-details
-        inset
-        class="overdue-switch"
-      ></v-switch>
+        rounded="lg"
+        class="filter-field"
+      ></v-select>
     </div>
 
-    <!-- Active filters, each removable on its own, plus a clear-all. The count
-         line is a live region: filtering changes the whole page silently
-         otherwise, and it is the only feedback that says a filter — rather than
-         an empty queue — is why three columns are bare. -->
+    <!-- Active filters, each removable on its own, plus a clear-all. -->
     <div v-if="!initialLoad && !loadError" class="d-flex align-center flex-wrap gap-2 mb-4">
       <template v-if="activeFilters.length">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
@@ -113,9 +102,9 @@
       </span>
     </div>
 
-    <!-- An action that failed from the board used to leave no trace once the
-         snackbar timed out, 3.5 seconds later. It is the same error the modal
-         has always shown in place; the board simply had nowhere to put it. -->
+    <!-- An action that failed used to leave no trace once the snackbar timed
+         out, 3.5 seconds later. It is the same error the modal has always
+         shown in place; the page simply had nowhere to put it. -->
     <v-alert
       v-if="apiError && !modal.isOpen"
       type="error"
@@ -129,10 +118,10 @@
 
     <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-    <!-- A failed load used to render as three columns of "Nothing here", which
-         is indistinguishable from an empty database — the operator would read a
-         dead API as a quiet morning. -->
-    <v-card v-else-if="loadError" elevation="0" border rounded="xl" class="bg-surface">
+    <!-- A failed load used to render as an empty table, indistinguishable
+         from an empty database — the operator would read a dead API as a
+         quiet morning. -->
+    <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
       <div class="text-center py-12 px-6">
         <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
         <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load borrowings</div>
@@ -148,124 +137,134 @@
       </div>
     </v-card>
 
-    <!-- Column membership is the entire meaning of this board and was invisible
-         to a screen reader: an unlabelled div of unlabelled sections. Each
-         column now names itself and its count, and the cards are a real list, so
-         "Pending, 4 requests, list, 4 items" arrives before the first card. -->
-    <div
-      v-else-if="activeTab === 'board'"
-      class="kanban-board"
-      role="region"
-      aria-label="Active borrowing pipeline"
-    >
-      <section
-        v-for="col in boardColumns"
-        :key="col.status"
-        class="kanban-column subtle-surface"
-        :class="{ 'kanban-column--muted': col.muted }"
-        :aria-label="`${col.label}, ${grouped[col.status].length} ${grouped[col.status].length === 1 ? 'request' : 'requests'}`"
-      >
-        <!-- The icon and the count badge are both decorative here: the label
-             above already carries the status word and the number in text, and
-             announcing either twice is worse than not announcing it. The badge
-             was also the page's last piece of colour-only meaning — it is a
-             coloured pill holding a bare number, and the section label is what
-             now supplies its text alternative. -->
-        <header class="kanban-header" :style="{ '--accent': col.accent }">
-          <div class="d-flex align-center gap-2">
-            <v-icon size="18" aria-hidden="true" :style="{ color: col.accent }">{{ col.icon }}</v-icon>
-            <span class="text-subtitle-2 font-weight-bold text-high-emphasis">{{ col.label }}</span>
-          </div>
-          <span class="count-badge" aria-hidden="true" :style="{ backgroundColor: col.accent }">{{ grouped[col.status].length }}</span>
-        </header>
+    <template v-else-if="activeTab === 'board'">
+      <!-- Status strip. Replaces the kanban columns' at-a-glance counts:
+           click a tile to filter the table to that stage, same mechanic as
+           Fleet Management's readiness tiles. Overdue is a fourth tile, not
+           a status, since a record can be Approved-and-overdue. -->
+      <div class="d-flex flex-wrap gap-3 mb-5">
+        <button
+          v-for="tile in statusTiles"
+          :key="tile.status"
+          type="button"
+          class="stat-tile"
+          :class="{ 'stat-tile--active': statusFilter === tile.status }"
+          :style="{ '--tile-accent': tile.accent }"
+          @click="toggleStatusFilter(tile.status)"
+        >
+          <span class="dot" :style="{ backgroundColor: tile.accent }"></span>
+          <span class="stat-value text-high-emphasis">{{ tile.count }}</span>
+          <span class="stat-label text-medium-emphasis">{{ tile.label }}</span>
+        </button>
+        <button
+          type="button"
+          class="stat-tile"
+          :class="{ 'stat-tile--active': overdueOnly }"
+          style="--tile-accent: rgb(var(--v-theme-error));"
+          @click="overdueOnly = !overdueOnly"
+        >
+          <span class="dot" style="background-color: rgb(var(--v-theme-error));"></span>
+          <span class="stat-value text-high-emphasis">{{ overdueCount }}</span>
+          <span class="stat-label text-medium-emphasis">Overdue</span>
+        </button>
+        <!-- Returned/Denied never appear in this table — they're terminal, so
+             they only ever live in History. Same "hide when zero" rule
+             Service Requests uses for its own status tabs: shown only when
+             there's something behind it, and a click jumps straight to the
+             filtered History view rather than pretending to filter this table. -->
+        <button
+          v-for="tile in terminalTiles"
+          :key="tile.status"
+          type="button"
+          class="stat-tile"
+          :style="{ '--tile-accent': tile.accent }"
+          @click="goToOutcome(tile.status)"
+        >
+          <span class="dot" :style="{ backgroundColor: tile.accent }"></span>
+          <span class="stat-value text-high-emphasis">{{ tile.count }}</span>
+          <span class="stat-label text-medium-emphasis">{{ tile.label }}</span>
+        </button>
+      </div>
 
-        <ul class="kanban-body">
-          <!-- The card is no longer itself a button. It used to be a
-               role="button" div wrapping action buttons neutralised with
-               @click.stop, so four pixels of misclick between "Approve" and
-               card background produced a modal instead of a state change.
-               Identity and actions are siblings now, and the hover lift went
-               with it: columns of liftable cards are the visual grammar of
-               drag-and-drop, which this board has never implemented. -->
-          <li
-            v-for="item in grouped[col.status]"
-            :key="item.borrow_id || item.id"
-            class="kanban-card"
-            :class="{ 'kanban-card--overdue': isOverdue(item) }"
-          >
-            <button
-              type="button"
-              class="card-identity"
-              :aria-label="`Open details for ${item.resident?.last_name}, ${item.resident?.first_name}`"
-              @click="openDetail(item)"
-            >
-              <v-avatar size="34" color="rgba(var(--v-theme-primary), 0.14)">
-                <span class="avatar-initials">{{ initials(item.resident) }}</span>
-              </v-avatar>
-              <span class="min-w-0 flex-grow-1">
-                <span class="d-block resident-name text-truncate">
+      <v-card elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
+        <v-data-table
+          :headers="activeHeaders"
+          :items="activeItems"
+          :items-per-page="-1"
+          density="comfortable"
+          hover
+          class="bg-transparent borrow-table"
+          item-value="borrow_id"
+          :row-props="rowProps"
+          @click:row="(_event, { item }) => openDetail(item)"
+        >
+          <template v-slot:item.avatar="{ item }">
+            <v-avatar size="40" class="avatar-tint">
+              <span class="avatar-initials">{{ initials(item.resident) }}</span>
+            </v-avatar>
+          </template>
+
+          <template v-slot:item.resident="{ item }">
+            <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
+              <template v-slot:activator="{ props }">
+                <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
                   {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-                </span>
-                <span class="d-block text-caption text-medium-emphasis text-truncate">
-                  {{ item.resident?.barangay?.barangay_name || 'N/A' }}
-                </span>
-              </span>
-            </button>
+                </div>
+              </template>
+            </v-tooltip>
+          </template>
 
-            <div class="equip-line">
-              <v-icon size="16" class="text-medium-emphasis mr-1">mdi-package-variant-closed</v-icon>
-              <span class="text-body-2 font-weight-medium text-high-emphasis text-truncate">
-                {{ item.equipment?.item_name || 'Unknown' }}
-              </span>
-              <span class="qty-pill">{{ item.quantity }}×</span>
+          <template v-slot:item.barangay="{ item }">
+            <span class="text-body-2 text-medium-emphasis cell-truncate">
+              {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+            </span>
+          </template>
+
+          <template v-slot:item.equipment="{ item }">
+            <div class="min-w-0">
+              <v-tooltip :text="item.equipment?.item_name || 'Unknown'" location="top">
+                <template v-slot:activator="{ props }">
+                  <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
+                    {{ item.equipment?.item_name || 'Unknown' }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+                  </div>
+                </template>
+              </v-tooltip>
+              <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
+                Only {{ item.equipment?.available_quantity ?? 0 }} in stock
+              </div>
             </div>
+          </template>
 
-            <!-- Stock warning for still-actionable stages -->
-            <div
-              v-if="!col.terminal && shortStock(item)"
-              class="stock-warn"
+          <template v-slot:item.status="{ item }">
+            <v-chip
+              size="small"
+              variant="flat"
+              class="font-weight-bold"
+              :style="{ backgroundColor: statusAccent(item.status), color: '#FFFFFF' }"
             >
-              <v-icon size="14" aria-hidden="true" class="mr-1">mdi-alert-outline</v-icon>
-              Only {{ item.equipment?.available_quantity ?? 0 }} in stock
-            </div>
+              <v-icon start size="14">{{ statusIcon(item.status) }}</v-icon>
+              {{ item.status }}
+            </v-chip>
+          </template>
 
-            <!-- Both chips carry their own words. Overdue is never the red
-                 alone: a card that has simply been waiting a while and one that
-                 is a week late must read differently in greyscale. -->
-            <div class="card-meta">
-              <span class="meta-chip">
-                <v-icon size="13" aria-hidden="true" class="mr-1">mdi-clock-outline</v-icon>{{ agingLabel(item) }}
-              </span>
-              <span
-                v-if="dueLabel(item)"
-                class="meta-chip"
-                :class="{ 'meta-chip--alert': isOverdue(item) }"
-              >
-                <v-icon size="13" aria-hidden="true" class="mr-1">
-                  {{ isOverdue(item) ? 'mdi-alert-circle-outline' : 'mdi-calendar-arrow-right' }}
-                </v-icon>{{ dueLabel(item) }}
-              </span>
+          <template v-slot:item.timeline="{ item }">
+            <div class="text-body-2 font-weight-medium" :class="isOverdue(item) ? 'text-error' : 'text-high-emphasis'">
+              {{ dueLabel(item) || agingLabel(item) }}
             </div>
+            <div v-if="dueLabel(item)" class="text-caption text-medium-emphasis">{{ agingLabel(item) }}</div>
+          </template>
 
-            <!-- Deny is outlined rather than tonal: Vuetify's tonal variant
-                 draws the label on a 12% tint of the same colour, which is the
-                 pairing that already failed AA three times on this page. On the
-                 card surface the red measures 4.98:1, and the border carries
-                 the weight that makes it the equal of Approve. -->
-            <!-- Every action names its record. Read out of context — which is
-                 how a screen reader reaches them, one list item at a time —
-                 "Deny" alone does not say what is being denied, and there are
-                 four of them on screen. -->
-            <div class="card-actions">
+          <template v-slot:item.actions="{ item }">
+            <div class="d-flex justify-end gap-2" @click.stop>
               <template v-if="item.status === 'Pending'">
                 <v-btn
-                  size="small" variant="outlined" color="error" class="text-none font-weight-bold flex-grow-1"
+                  size="small" variant="outlined" color="error" class="text-none font-weight-bold"
                   :loading="processingId === (item.borrow_id || item.id)"
                   :aria-label="`Deny ${cardLabel(item)}`"
                   @click="requestAction(item, 'Denied')"
                 >Deny</v-btn>
                 <v-btn
-                  size="small" variant="flat" color="primary" class="text-none font-weight-bold flex-grow-1"
+                  size="small" variant="flat" color="primary" class="text-none font-weight-bold"
                   :loading="processingId === (item.borrow_id || item.id)"
                   :aria-label="`Approve ${cardLabel(item)}`"
                   @click="requestAction(item, 'Approved')"
@@ -273,60 +272,54 @@
               </template>
               <v-btn
                 v-else-if="item.status === 'Approved'"
-                block size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+                size="small" variant="flat" color="primary" class="text-none font-weight-bold"
                 :loading="processingId === (item.borrow_id || item.id)"
                 :aria-label="`Release ${cardLabel(item)}`"
                 @click="requestAction(item, 'Released')"
-              >Release to resident</v-btn>
+              >Release</v-btn>
               <v-btn
                 v-else-if="item.status === 'Released'"
-                block size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+                size="small" variant="flat" color="primary" class="text-none font-weight-bold"
                 :loading="processingId === (item.borrow_id || item.id)"
                 :aria-label="`Confirm return of ${cardLabel(item)}`"
                 @click="requestAction(item, 'Returned')"
               >Confirm return</v-btn>
             </div>
-          </li>
+          </template>
 
-          <!-- A column empty because the work is done and one empty because a
-               filter excluded everything are different facts and must not read
-               the same. It is an <li> rather than a div because a <ul> may only
-               contain list items, and each column says what would put a card
-               here — "Nothing here" three times told the operator nothing. -->
-          <li v-if="!grouped[col.status].length" class="kanban-empty">
-            <v-icon size="20" aria-hidden="true" class="text-medium-emphasis mb-1">
-              {{ activeFilters.length ? 'mdi-filter-remove-outline' : col.emptyIcon }}
-            </v-icon>
-            <div class="text-caption text-medium-emphasis">
-              {{ activeFilters.length ? 'No matches here' : col.emptyText }}
+          <template v-slot:no-data>
+            <div class="text-center py-12">
+              <v-icon size="40" class="text-medium-emphasis mb-2">
+                {{ activeFilters.length ? 'mdi-filter-remove-outline' : 'mdi-inbox-outline' }}
+              </v-icon>
+              <template v-if="activeFilters.length">
+                <div class="text-body-2 font-weight-bold text-high-emphasis">No requests match</div>
+                <v-btn variant="outlined" size="small" class="text-none font-weight-bold mt-3" @click="clearAllFilters">
+                  Clear all filters
+                </v-btn>
+              </template>
+              <div v-else class="text-body-2 font-weight-bold text-high-emphasis">Nothing needs action right now</div>
             </div>
-          </li>
-        </ul>
-      </section>
-    </div>
+          </template>
+        </v-data-table>
+      </v-card>
+    </template>
 
-    <!-- History. A table rather than columns: this list only ever grows, and
-         the questions asked of it are lookups ("did the Cruz family return the
-         generator?") rather than the glance the board exists to serve. -->
-    <v-card v-else elevation="0" border rounded="xl" class="bg-surface">
-      <!-- No :search prop. `historyItems` has already applied the same search
-           the board uses; the table's own filter would run a second pass over
-           `resident` and `equipment`, whose values are objects rather than
-           text, and drop rows that in fact matched. -->
-      <!-- Rows open the same detail modal the board does. Denied records live
-           only here, and the denial reason is only rendered in that modal, so
-           without this the reason would be written and never read. -->
+    <!-- History. This list only ever grows, and the questions asked of it are
+         lookups ("did the Cruz family return the generator?") rather than a
+         pipeline glance. -->
+    <v-card v-else elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
       <v-data-table
         :headers="historyHeaders"
         :items="historyItems"
         density="comfortable"
-        class="bg-transparent history-table"
+        class="bg-transparent borrow-table"
         hover
+        item-value="borrow_id"
+        :row-props="rowProps"
         @click:row="(_event, { item }) => openDetail(item)"
       >
         <template v-slot:item.status="{ item }">
-          <!-- Icon + text, never colour alone: Returned and Denied are the one
-               pair on this page a red/green-blind user must still tell apart. -->
           <v-chip
             size="small"
             variant="flat"
@@ -338,19 +331,14 @@
           </v-chip>
         </template>
 
-        <!-- The row click is mouse-only — a <tr> handler is unreachable by
-             keyboard — so the name is a real button, the same arrangement the
-             board card uses. Without it the denial reason is readable with a
-             mouse and by no other means. -->
         <template v-slot:item.resident="{ item }">
-          <button
-            type="button"
-            class="row-identity font-weight-bold text-high-emphasis"
-            :aria-label="`Open details for ${cardLabel(item)}`"
-            @click.stop="openDetail(item)"
-          >
-            {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-          </button>
+          <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
+            <template v-slot:activator="{ props }">
+              <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
+                {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
+              </div>
+            </template>
+          </v-tooltip>
         </template>
 
         <template v-slot:item.barangay="{ item }">
@@ -383,7 +371,7 @@
             <template v-else>
               <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests yet</div>
               <div class="text-caption text-medium-emphasis">
-                Returned and denied requests are kept here once they leave the board.
+                Returned and denied requests are kept here once they leave the pipeline.
               </div>
             </template>
           </div>
@@ -410,8 +398,8 @@
           <v-row class="ma-0 h-100">
             <v-col cols="12" md="5" class="subtle-surface pa-6 border-e">
               <div class="d-flex flex-column align-center mb-6">
-                <v-avatar color="rgba(var(--v-theme-primary), 0.14)" size="80" class="mb-3">
-                  <span class="text-h4 font-weight-black text-primary">{{ initials(selectedRecord?.resident) }}</span>
+                <v-avatar size="80" class="avatar-tint mb-3">
+                  <span class="text-h4 font-weight-black avatar-initials">{{ initials(selectedRecord?.resident) }}</span>
                 </v-avatar>
                 <div class="text-h6 font-weight-bold text-center text-high-emphasis">
                   {{ selectedRecord?.resident?.first_name }} {{ selectedRecord?.resident?.last_name }}
@@ -498,12 +486,7 @@
     </v-dialog>
 
     <!-- One dialog for the three transitions that need something from the
-         operator before they fire. Approve and Release need a due date, or
-         "overdue" has no definition and the column stays empty forever. Deny
-         needs a reason, which is the only thing the resident is ever told.
-         Confirm-return needs neither, but it increments stock with no undo, so
-         it asks before it moves. Release is the one that can skip: a request
-         approved through this panel already carries its date. -->
+         operator before they fire. -->
     <v-dialog v-model="actionDialog.open" max-width="440" @after-leave="clearActionDialog">
       <v-card rounded="lg">
         <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
@@ -512,7 +495,6 @@
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ actionCopy.body }}</div>
 
-          <!-- The other two modes render the failure under their own field. -->
           <v-alert
             v-if="actionDialog.mode === 'confirm' && actionDialog.error"
             type="error" variant="tonal" density="compact" class="mb-4"
@@ -575,33 +557,32 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 
-// Status colours: saturated 700-level ramp, each AA with white text as a badge,
-// legible on both light and dark surfaces. Semantic (data-viz), not brand tokens —
-// except Returned, which uses the system primary green (success tracks primary).
-// `emptyText` says what would put a card in this column, which is a different
-// sentence per column — an empty Pending queue is good news, an empty Released
-// column means nothing is out on loan.
+// Status colours: saturated 700-level ramp, each AA with white text as a
+// badge (measured, see EquipmentBorrowingView audit history). Semantic
+// (data-viz), not brand tokens — except Returned, which uses the system
+// primary green (success tracks primary).
 const columns = [
-  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline',
-    emptyIcon: 'mdi-inbox-outline', emptyText: 'No new requests waiting' },
-  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline',
-    emptyIcon: 'mdi-check-decagram-outline', emptyText: 'Nothing approved and waiting for pickup' },
-  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline',
-    emptyIcon: 'mdi-hand-extended-outline', emptyText: 'Nothing is out on loan' },
+  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline' },
+  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
+  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
   { status: 'Returned', label: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline', terminal: true },
-  { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true, muted: true },
+  { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true },
 ]
 
 // The "no filter" sentinel for each select. Named rather than repeated as a
 // string literal: it is compared in four places and rendered in one.
 const ALL_ITEMS = 'All items'
 const ALL_BARANGAYS = 'All barangays'
+const ALL_STATUS = 'All'
+const ALL_OUTCOMES = 'All'
 
 const borrowings = ref([])
 const activeTab = ref('board')
 const search = ref('')
 const itemFilter = ref(ALL_ITEMS)
 const barangayFilter = ref(ALL_BARANGAYS)
+const statusFilter = ref(ALL_STATUS)
+const outcomeFilter = ref(ALL_OUTCOMES)
 const overdueOnly = ref(false)
 const initialLoad = ref(true)
 const loading = ref(false)
@@ -633,12 +614,17 @@ const notify = (text, color = 'success') => {
   requestAnimationFrame(() => { liveMessage.value = text })
 }
 
-// The board carries only what still needs a decision. Three columns fit the
-// available width at 1366px; five never did — the fifth started at x=1184 in a
-// 1058px space, so Denied was off-screen on every laptop and only the 1920px
-// development machine ever showed the whole pipeline.
-const boardColumns = computed(() => columns.filter((c) => !c.terminal))
 const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
+
+const activeHeaders = [
+  { title: '', key: 'avatar', sortable: false, align: 'center', width: '60px' },
+  { title: 'Head of the Family', key: 'resident', width: '22%' },
+  { title: 'Barangay', key: 'barangay', width: '13%' },
+  { title: 'Equipment', key: 'equipment', width: '25%' },
+  { title: 'Status', key: 'status', align: 'center', width: '14%' },
+  { title: 'Timeline', key: 'timeline', width: '14%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '12%' },
+]
 
 const historyHeaders = [
   { title: 'Head of the Family', key: 'resident', width: '22%' },
@@ -649,9 +635,7 @@ const historyHeaders = [
 ]
 
 // Option lists come from the records actually loaded, so a barangay with no
-// borrowings never appears as a filter that can only ever return nothing. They
-// are deliberately not narrowed by each other: an equipment list that shrinks
-// when a barangay is picked makes the two controls feel broken.
+// borrowings never appears as a filter that can only ever return nothing.
 const distinct = (pick) => {
   const values = new Set()
   for (const b of borrowings.value) {
@@ -683,35 +667,76 @@ const matchesBarangay = (b) =>
   barangayFilter.value === ALL_BARANGAYS ||
   b.resident?.barangay?.barangay_name === barangayFilter.value
 
-// The three filters that mean the same thing on both surfaces. Overdue is not
-// one of them — see `grouped`.
+// The three filters shared by both tabs and the status strip's tile counts.
+// Status and overdue are not among them — each tile needs the count as if
+// it, specifically, were the only one applied.
 const matchesFilters = (b) => matchesItem(b) && matchesBarangay(b) && matchesSearch(b)
 
-// Bucket records by status, newest first. Overdue is applied here and only here:
-// `isOverdue` is false for every terminal record by definition, so folding it
-// into `matchesFilters` would empty the History tab whenever the switch was left
-// on rather than filtering it.
-const grouped = computed(() => {
-  const out = Object.fromEntries(columns.map((c) => [c.status, []]))
-  for (const b of borrowings.value) {
-    if (!out[b.status] || !matchesFilters(b)) continue
-    if (overdueOnly.value && !isOverdue(b)) continue
-    out[b.status].push(b)
-  }
-  for (const k in out) out[k].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  return out
+const countByStatus = (status) =>
+  borrowings.value.filter((b) => b.status === status && matchesFilters(b)).length
+
+// Tile row above the table — the pipeline glance the kanban columns used to
+// carry, without a fixed-width board.
+const statusTiles = computed(() =>
+  columns.filter((c) => !c.terminal).map((c) => ({ ...c, count: countByStatus(c.status) })),
+)
+
+const toggleStatusFilter = (status) => {
+  statusFilter.value = statusFilter.value === status ? ALL_STATUS : status
+}
+
+// Hidden at zero, shown once there's something behind it — same rule
+// Service Requests applies to its own status tabs via visibleStatusTabs.
+const terminalTiles = computed(() =>
+  columns
+    .filter((c) => c.terminal)
+    .map((c) => ({ ...c, count: countByStatus(c.status) }))
+    .filter((c) => c.count > 0),
+)
+
+// Returned/Denied rows never appear in this table — they're terminal, so the
+// tile jumps to History pre-filtered to that outcome rather than pretending
+// to filter a table that structurally excludes them.
+const goToOutcome = (status) => {
+  activeTab.value = 'history'
+  outcomeFilter.value = status
+}
+
+// Overdue-first, then pipeline stage, then oldest-waiting first: the request
+// that has sat longest is the one due for a decision, not the newest one to
+// arrive.
+const STAGE_RANK = { Pending: 0, Approved: 1, Released: 2 }
+
+const activeItems = computed(() => {
+  const rows = borrowings.value.filter(
+    (b) => STAGE_RANK[b.status] !== undefined && matchesFilters(b),
+  )
+  return rows
+    .filter((b) => statusFilter.value === ALL_STATUS || b.status === statusFilter.value)
+    .filter((b) => !overdueOnly.value || isOverdue(b))
+    .sort((a, b) => {
+      const byOverdue = Number(isOverdue(b)) - Number(isOverdue(a))
+      if (byOverdue) return byOverdue
+      const byStage = STAGE_RANK[a.status] - STAGE_RANK[b.status]
+      if (byStage) return byStage
+      return new Date(a.created_at) - new Date(b.created_at)
+    })
 })
 
-// Terminal records, same shared filters as the board so a search spans both tabs
-// rather than quietly applying to one of them.
+// Terminal records, same shared filters as the board so a search spans both
+// tabs rather than quietly applying to one of them.
+const outcomeOptions = [ALL_OUTCOMES, ...terminalStatuses]
+
 const historyItems = computed(() =>
   borrowings.value
     .filter((b) => terminalStatuses.includes(b.status) && matchesFilters(b))
+    .filter((b) => outcomeFilter.value === ALL_OUTCOMES || b.status === outcomeFilter.value)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
 
-// What the switch would leave if it were turned on — the other filters still
-// apply, or the number would not describe the button that carries it.
+// What the "Overdue" tile would leave if it were the only thing active — the
+// other filters still apply, or the number would not describe the tile that
+// carries it.
 const overdueCount = computed(
   () => borrowings.value.filter((b) => matchesFilters(b) && isOverdue(b)).length,
 )
@@ -722,8 +747,14 @@ const activeFilters = computed(() => {
   if (q) out.push({ key: 'search', label: `Search: "${q}"` })
   if (itemFilter.value !== ALL_ITEMS) out.push({ key: 'item', label: `Equipment: ${itemFilter.value}` })
   if (barangayFilter.value !== ALL_BARANGAYS) out.push({ key: 'barangay', label: `Barangay: ${barangayFilter.value}` })
-  // Only claimed on the board, because that is the only tab it acts on.
-  if (overdueOnly.value && activeTab.value === 'board') out.push({ key: 'overdue', label: 'Overdue only' })
+  // Status and overdue only act on the board, outcome only on History — each
+  // chip only appears on the tab it actually filters.
+  if (activeTab.value === 'board') {
+    if (statusFilter.value !== ALL_STATUS) out.push({ key: 'status', label: `Status: ${statusFilter.value}` })
+    if (overdueOnly.value) out.push({ key: 'overdue', label: 'Overdue only' })
+  } else if (outcomeFilter.value !== ALL_OUTCOMES) {
+    out.push({ key: 'outcome', label: `Outcome: ${outcomeFilter.value}` })
+  }
   return out
 })
 
@@ -731,13 +762,17 @@ const clearFilter = (key) => {
   if (key === 'search') search.value = ''
   else if (key === 'item') itemFilter.value = ALL_ITEMS
   else if (key === 'barangay') barangayFilter.value = ALL_BARANGAYS
+  else if (key === 'status') statusFilter.value = ALL_STATUS
   else if (key === 'overdue') overdueOnly.value = false
+  else if (key === 'outcome') outcomeFilter.value = ALL_OUTCOMES
 }
 
 const clearAllFilters = () => {
   search.value = ''
   itemFilter.value = ALL_ITEMS
   barangayFilter.value = ALL_BARANGAYS
+  statusFilter.value = ALL_STATUS
+  outcomeFilter.value = ALL_OUTCOMES
   overdueOnly.value = false
 }
 
@@ -754,21 +789,15 @@ const totalHistory = computed(
 const resultSummary = computed(() => {
   const history = activeTab.value === 'history'
   const total = history ? totalHistory.value : totalActive.value
-  const shown = history ? historyItems.value.length : activeCount.value
+  const shown = history ? historyItems.value.length : activeItems.value.length
   const noun = history ? 'completed' : 'active'
   if (shown === total) return `${total} ${noun} request${total === 1 ? '' : 's'}`
   return `Showing ${shown} of ${total} ${noun} requests`
 })
 
-// Counts the tab badges show. The board count is what is left to act on, which
-// is the number the operator actually needs.
-const activeCount = computed(() =>
-  boardColumns.value.reduce((n, col) => n + grouped.value[col.status].length, 0),
-)
-
 const initials = (r) => `${r?.first_name?.charAt(0) || ''}${r?.last_name?.charAt(0) || ''}`
-// Names a record for an accessible label: who and what, which is what tells two
-// otherwise identical "Approve" buttons apart.
+// Names a record for an accessible label: who and what, which is what tells
+// two otherwise identical "Approve" buttons apart.
 const cardLabel = (item) =>
   `${item.equipment?.item_name || 'equipment'} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
 const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.quantity
@@ -884,6 +913,30 @@ const openDetail = (item) => {
   selectedRecord.value = item
   modal.value.isOpen = true
 }
+
+// `@click:row` alone is mouse-only — a `<tr>` handler is unreachable by
+// keyboard. Rows are focusable and open on Enter/Space, and arrows walk the
+// list the way a native listbox would, matching User Management's table.
+const onRowKeydown = (event, item) => {
+  const row = event.currentTarget
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    openDetail(item)
+    return
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    const next = event.key === 'ArrowDown' ? row.nextElementSibling : row.previousElementSibling
+    if (next && next.tagName === 'TR') next.focus()
+  }
+}
+
+const rowProps = ({ item }) => ({
+  tabindex: 0,
+  'aria-label': `Open details for ${item.resident?.last_name}, ${item.resident?.first_name}`,
+  onKeydown: (e) => onRowKeydown(e, item),
+})
+
 const closeModal = () => {
   modal.value.isOpen = false
   selectedRecord.value = null
@@ -995,8 +1048,8 @@ onMounted(fetchData)
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
 
-/* Filter bar. Fixed-width fields that wrap rather than a grid: the switch is
-   conditional, so a fixed column count would leave a hole on the History tab. */
+/* Filter bar. Fixed-width fields that wrap rather than a grid: field count
+   can vary and a fixed column count would leave gaps on narrow screens. */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -1004,229 +1057,79 @@ onMounted(fetchData)
   gap: 12px;
 }
 .filter-field { width: 220px; max-width: 100%; }
-.overdue-switch { flex: 0 0 auto; }
 
-/* Below 600px three 220px fields wrap to three ragged rows. Full width each. */
 @media (max-width: 599px) {
   .filter-field { flex: 1 1 100%; width: 100%; }
 }
 
 /* primary-strong again, not primary. Vuetify's tonal chip draws the label on a
-   12% tint of the same colour, which measures 4.40:1 and is the exact pairing
-   that already failed AA three times on this page. Outlined puts the label on
-   the page surface instead — primary would pass there at 5.16:1, but the
-   stronger token is what the rest of this view uses, at 6.61:1. */
+   12% tint of the same colour, which measures 4.40:1 and fails AA at this
+   weight. Outlined puts the label on the page surface instead. */
 .filter-chip {
   color: rgb(var(--v-theme-primary-strong));
   border-color: rgba(var(--v-theme-primary), 0.45);
 }
 
-/* Board.
-   Grid with minmax(0, 1fr) rather than flex with a min-width: a flex item's
-   min-width is a floor the container cannot go below, so five 280px columns
-   forced a 1464px track and the board scrolled sideways out of view. Grid
-   tracks that bottom out at 0 shrink instead, which makes horizontal overflow
-   structurally impossible rather than merely unlikely at tested widths. */
-/* The offset is everything stacked above the board: app bar, page header, tabs,
-   filter bar, chip row and their margins. It was 260px when the filter controls
-   still lived beside the title; the filter bar and the chip row added ~98px
-   below the tabs, so a board sized to the old number now runs past the fold and
-   the column scrollbars never appear. Declared once and inherited by the
-   columns, so the two cannot drift apart again. */
-.kanban-board {
-  --board-offset: 360px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  align-items: stretch;
-  padding-bottom: 8px;
-  min-height: calc(100vh - var(--board-offset));
-}
-.kanban-column {
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  max-height: calc(100vh - var(--board-offset));
-}
-.kanban-column--muted { opacity: 0.85; }
-
-/* Below Vuetify's md breakpoint the sidebar still takes its permanent 260px,
-   leaving under 500px for three tracks. Stack instead of squeezing. */
-@media (max-width: 959px) {
-  .kanban-board {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-  .kanban-column { max-height: none; }
-}
-
-.kanban-header {
+/* Status strip. Same mechanic as Fleet Management's readiness tiles: a dot,
+   a count, a label, click to filter the table to that stage. */
+.stat-tile {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 12px;
-  border-top: 3px solid var(--accent);
-  border-radius: 16px 16px 0 0;
-}
-.count-badge {
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 11px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* A <ul> now, for the list semantics. The reset is not cosmetic tidying: a
-   browser's default marker and padding would indent every card. */
-.kanban-body {
-  padding: 0 12px 12px;
-  margin: 0;
-  list-style: none;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
-}
-
-.kanban-card {
-  background-color: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  padding: 10px 16px;
   border-radius: 12px;
-  padding: 12px;
-  transition: border-color 0.15s ease;
-}
-
-/* An overdue card is marked three ways — a red left edge, a red border, and a
-   chip that says how many days — because the edge alone is colour carrying
-   meaning, which is the finding this page already had three of. */
-.kanban-card--overdue {
-  border-color: rgba(var(--v-theme-error), 0.55);
-  box-shadow: inset 3px 0 0 0 rgb(var(--v-theme-error));
-}
-
-/* Only the identity block opens the record. It is a real <button>, so Enter and
-   Space both work and the accessible name comes from aria-label rather than
-   from whatever the concatenated card text happened to say. */
-.card-identity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 2px;
-  border-radius: 8px;
-  text-align: left;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  background: rgba(var(--v-theme-on-surface), 0.02);
   cursor: pointer;
-  background: none;
-  border: 0;
-  font: inherit;
-  color: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
-.card-identity:focus-visible {
+.stat-tile--active {
+  border-color: var(--tile-accent);
+  background: color-mix(in srgb, var(--tile-accent) 10%, transparent);
+}
+.stat-tile .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.stat-tile .stat-value { font-size: 1.15rem; font-weight: 800; line-height: 1; }
+.stat-tile .stat-label { font-size: 0.8rem; font-weight: 600; }
+
+/* Table. Fixed layout keeps the truncating cells stable; matches the
+   elegant-table pattern used across User Management and Fleet Management.
+   The 720px min-width is load-bearing: without it, `width: 100%` on a fixed
+   table lets a narrow wrapper crush every column instead of scrolling —
+   "waiting" wraps to one letter per line rather than the table scrolling
+   sideways. The wrapper's own overflow-x (Vuetify's default) does the rest. */
+.borrow-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 720px; }
+.borrow-table :deep(thead th) {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.borrow-table :deep(tbody tr) { cursor: pointer; }
+.borrow-table :deep(td) { white-space: nowrap; }
+.borrow-table :deep(tbody tr:focus-visible) {
   outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
-.resident-name {
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.3;
-  color: rgba(var(--v-theme-on-surface), 0.92);
+.cell-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* primary-strong, not primary: the initials sit on a 14% tint of primary, where
-   primary itself measures 4.25:1 and fails AA at this size. 6.61:1 here. */
+/* Avatar — the old blue-on-light-blue pairing measured 3.28:1 elsewhere in
+   this app; tinting the primary token keeps the same soft look and passes AA
+   in both themes. Shared naming with User Management's identical fix. */
+.avatar-tint {
+  background: rgba(var(--v-theme-primary), 0.14) !important;
+}
 .avatar-initials {
-  font-size: 0.75rem;
-  font-weight: 700;
+  /* Not primary: primary itself on a 14% tint is 4.25:1 and fails AA at this
+     size. See the token comment in plugins/vuetify.ts. */
   color: rgb(var(--v-theme-primary-strong));
-}
-
-.equip-line { display: flex; align-items: center; min-width: 0; }
-/* Same tint problem as the initials, measured on 12%: 4.40:1 before, 6.78:1 now. */
-.qty-pill {
-  margin-left: auto;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: rgb(var(--v-theme-primary-strong));
-  background-color: rgba(var(--v-theme-primary), 0.12);
-  padding: 1px 8px;
-  border-radius: 8px;
-  white-space: nowrap;
-}
-
-/* Was 0.72rem — 11.5px, under the 12px floor — in error on an error tint, which
-   measured 4.28:1. error-strong on the same tint is 5.62:1. */
-.stock-warn {
-  display: flex;
-  align-items: center;
-  margin-top: 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgb(var(--v-theme-error-strong));
-  background-color: rgba(var(--v-theme-error), 0.1);
-  padding: 3px 8px;
-  border-radius: 8px;
-}
-
-.card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.meta-chip {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  background-color: rgba(var(--v-theme-on-surface), 0.06);
-  padding: 2px 8px;
-  border-radius: 8px;
-  white-space: nowrap;
-}
-.meta-chip--alert {
-  color: rgb(var(--v-theme-error-strong));
-  background-color: rgba(var(--v-theme-error), 0.1);
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.history-table :deep(tbody tr) { cursor: pointer; }
-
-/* The keyboard path into a history record. Inherits the cell's type so it reads
-   as the name it replaced, not as a link. */
-.row-identity {
-  background: none;
-  border: 0;
-  padding: 2px 4px;
-  margin: -2px -4px;
-  border-radius: 6px;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.row-identity:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 1px;
-}
-
-.kanban-empty {
-  text-align: center;
-  padding: 24px 8px;
-  border: 1px dashed rgba(var(--v-theme-on-surface), 0.14);
-  border-radius: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 /* Visible to a screen reader, to nothing else. clip-path rather than
@@ -1245,6 +1148,6 @@ onMounted(fetchData)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kanban-card { transition: none; }
+  .stat-tile { transition: none; }
 }
 </style>

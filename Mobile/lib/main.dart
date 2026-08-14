@@ -482,6 +482,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         // use the phone must not open the app onto them.
         onLogout: () {
           _appState.clearRequestCache();
+          _appState.clearBorrowCache();
           widget.onLogout();
         },
         onOpenNotifications: onOpenNotifications,
