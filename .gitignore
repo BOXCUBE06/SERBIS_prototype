@@ -19,3 +19,7 @@
 
 # Screenshots and snapshots left behind by browser-driven checks.
 /.playwright-mcp/
+
+# Working cache the design-review tooling keeps between runs. PRODUCT.md, the
+# one durable thing it writes, is tracked; this is not.
+/.impeccable/
