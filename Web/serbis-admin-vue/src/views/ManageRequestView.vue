@@ -61,13 +61,14 @@
               {{ filteredAndSortedRequests.length === 1 ? 'request matches' : 'requests match' }} "{{ search }}"
             </div>
 
-            <!-- Only statuses that exist in the data. Six chips, two of them
-                 permanently reading zero, is four decisions of noise around the
-                 two the operator actually switches between. The active filter
-                 always stays visible so it can be switched back off. -->
+            <!-- Every status, always — including a Disapproved or Cancelled
+                 reading zero. Hiding an empty status read as "this queue has
+                 nothing named Disapproved" rather than "nothing is disapproved
+                 right now"; the chip staying put and the list explaining the
+                 zero is the honest version. -->
             <v-chip-group v-if="!initialLoad" column>
               <v-chip
-                v-for="status in visibleStatusTabs" :key="status"
+                v-for="status in statusTabs" :key="status"
                 size="small" class="font-weight-bold"
                 :color="status === filters.status ? 'primary' : undefined"
                 :variant="status === filters.status ? 'flat' : 'tonal'"
@@ -94,7 +95,7 @@
             <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
 
             <div v-else-if="!pagedRequests.length" class="text-center text-caption text-medium-emphasis py-10">
-              No requests match this filter
+              {{ emptyListMessage }}
             </div>
 
             <div v-else>
@@ -593,13 +594,6 @@ const requestCounts = computed(() => {
   return counts
 })
 
-// A status nobody has ever used is not a filter, it is a chip that always reads
-// zero. 'All' and whatever is currently selected always survive, so the active
-// filter can always be switched back off.
-const visibleStatusTabs = computed(() =>
-  statusTabs.filter(s => s === 'All' || s === filters.status || requestCounts.value[s] > 0)
-)
-
 const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
 
 const selectedVehicle = computed(() =>
@@ -631,6 +625,15 @@ const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests
 const pagedRequests = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value
   return filteredAndSortedRequests.value.slice(start, start + itemsPerPage.value)
+})
+
+// Names which of the two reasons the list is empty. A status chip reading
+// zero and a search with no hits are different facts: one says nothing of
+// that kind exists yet, the other says try a different search.
+const emptyListMessage = computed(() => {
+  if (search.value) return `No requests match "${search.value}"`
+  if (filters.status !== 'All') return `No ${filters.status.toLowerCase()} requests`
+  return 'No requests yet'
 })
 
 const showActions = computed(() =>

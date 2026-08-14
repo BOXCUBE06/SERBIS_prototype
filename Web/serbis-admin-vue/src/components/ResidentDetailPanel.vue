@@ -5,6 +5,23 @@
       <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close profile panel" @click="$emit('close')"></v-btn>
     </div>
 
+    <!-- The open profile is not in the list behind this panel. Stated rather
+         than silently closed: the actions below are live, and Delete pointed
+         at a record the current view says is not there is the one mistake
+         this screen can make that cannot be undone. -->
+    <div v-if="hiddenByFilter" class="mx-6 mb-1 hidden-note" role="status">
+      <v-icon size="16" class="mr-2" aria-hidden="true">mdi-filter-off-outline</v-icon>
+      <span class="flex-grow-1">
+        Not in the current view — {{ barangayName }}
+      </span>
+      <v-btn
+        variant="text"
+        size="small"
+        class="text-none font-weight-bold"
+        @click="$emit('clear-filters')"
+      >Show</v-btn>
+    </div>
+
     <div class="px-6 pt-2 d-flex flex-column align-center text-center">
       <v-avatar size="96" class="avatar-tint mb-4">
         <v-img v-if="photoUrl" :src="photoUrl" :alt="`Photo of ${resident.first_name} ${resident.last_name}`"></v-img>
@@ -130,9 +147,11 @@ import {
 const props = defineProps({
   resident: { type: Object, required: true },
   statusLoading: { type: Boolean, default: false },
+  // True when this profile is not in the filtered list behind the panel.
+  hiddenByFilter: { type: Boolean, default: false },
 })
 
-defineEmits(['close', 'edit', 'toggle-status', 'delete'])
+defineEmits(['close', 'edit', 'toggle-status', 'delete', 'clear-filters'])
 
 // Pending and Deactivated share the action: both offer "Activate account".
 const isActive = computed(() => props.resident.status === RESIDENT_STATUS.active)
@@ -198,7 +217,9 @@ const registeredOn = computed(() => {
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
-.pill-active { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary)); }
+/* primary-strong — primary on its own 14% tint measures 4.28:1 in light and
+   fails AA at this size. See the matching comment in UsersView. */
+.pill-active { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
 .pill-inactive { background: rgba(var(--v-theme-on-surface), 0.1); color: rgba(var(--v-theme-on-surface), 0.82); }
 /* Pending — see UsersView for why the light-theme text colour is hardcoded. */
 .pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: #8A4B00; }
@@ -210,6 +231,21 @@ const registeredOn = computed(() => {
 .dot-active { background: rgb(var(--v-theme-primary)); }
 .dot-inactive { background: rgba(var(--v-theme-on-surface), 0.5); }
 .dot-pending { background: rgb(var(--v-theme-warning)); }
+
+/* Warning-tinted, not error-tinted: nothing has gone wrong, the view simply
+   disagrees with the panel. warning-strong text keeps it AA on the tint —
+   the raw warning token is #F57C00, 3.0:1 on white. */
+.hidden-note {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px 6px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: #8A4B00;
+}
+.v-theme--dark .hidden-note { color: rgb(var(--v-theme-warning)); }
 
 .detail-scroll { overflow-y: auto; }
 .detail-actions { border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08); }

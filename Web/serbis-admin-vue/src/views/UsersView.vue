@@ -8,9 +8,19 @@
           <div class="px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
             <div>
               <h2 class="text-h5 font-weight-bold text-high-emphasis">User Management</h2>
+              <!-- Says "of" only when something is being hidden. The permanent
+                   "N of N" read as a standing accusation that a filter was on.
+                   ("residents" here is deliberate and ruled on; the heading
+                   above it is the page/nav title.) -->
               <div class="text-body-2 text-medium-emphasis">
-                <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
-                of {{ residents.length }} residents
+                <template v-if="filteredAndSortedResidents.length === residents.length">
+                  <strong class="text-high-emphasis">{{ residents.length }}</strong>
+                  {{ residents.length === 1 ? 'resident' : 'residents' }}
+                </template>
+                <template v-else>
+                  <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
+                  of {{ residents.length }} residents
+                </template>
               </div>
             </div>
 
@@ -47,14 +57,23 @@
                 class="px-5 text-none font-weight-bold text-white transition-btn"
                 @click="openAddModal"
               >
-                <v-icon start>mdi-plus</v-icon> Add User
+                <v-icon start>mdi-plus</v-icon> Add Head of the Family
               </v-btn>
             </div>
           </div>
 
-          <div class="px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0">
+          <!-- `aria-pressed` is what makes the active filter perceivable at
+               all without sight: the selected barangay was carried by colour
+               and a 3px underline alone, and the group had no accessible name
+               saying what these buttons even filter. -->
+          <div
+            class="px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
+            role="group"
+            aria-label="Filter by barangay"
+          >
             <v-btn
               variant="text"
+              :aria-pressed="filters.barangay === 'All'"
               :class="['tab-btn text-none px-4 rounded-0', filters.barangay === 'All' ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
               @click="filters.barangay = 'All'"
             >
@@ -64,6 +83,7 @@
               v-for="b in barangays"
               :key="b.barangay_id"
               variant="text"
+              :aria-pressed="filters.barangay === b.barangay_name"
               :class="['tab-btn text-none px-4 rounded-0', filters.barangay === b.barangay_name ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
               @click="filters.barangay = b.barangay_name"
             >
@@ -88,7 +108,10 @@
 
           <!-- Loading -->
           <div v-if="initialLoad" class="pa-6 flex-grow-1">
-            <v-skeleton-loader v-for="n in 8" :key="n" type="list-item-avatar-two-line" class="mb-1"></v-skeleton-loader>
+            <!-- `table`, not list rows: an avatar-two-line skeleton promises
+                 the shape of a list and then a seven-column table arrives,
+                 which is a guaranteed layout shift on every load. -->
+            <v-skeleton-loader type="table" class="mb-1"></v-skeleton-loader>
           </div>
 
           <!-- Empty -->
@@ -211,10 +234,12 @@
             <ResidentDetailPanel
               :resident="selectedResident"
               :status-loading="statusToggleLoading"
+              :hidden-by-filter="selectionHidden"
               @close="selectedResident = null"
               @edit="openExistingEditModal"
               @toggle-status="toggleStatus"
               @delete="askDelete"
+              @clear-filters="clearFilters"
             />
           </v-card>
 
@@ -258,7 +283,7 @@
       <v-card rounded="lg" elevation="10">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <span class="text-h6 font-weight-bold text-high-emphasis">
-            {{ modal.isEditing ? 'Modify User Profile' : 'Add New User Account' }}
+            {{ modal.isEditing ? 'Edit Head of the Family' : 'New Head of the Family' }}
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
@@ -285,26 +310,26 @@
                 <div>
                   <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Initials</div>
                   <div class="text-caption text-medium-emphasis" style="max-width: 34ch;">
-                    Residents add their own photo from the mobile app. It appears here once they do.
+                    Heads of the family add their own photo from the mobile app. It appears here once they do.
                   </div>
                 </div>
               </v-col>
 
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.first_name" label="First Name *" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
+                <v-text-field v-model="formData.first_name" label="First Name *" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.middle_name" label="Middle Name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
+                <v-text-field v-model="formData.middle_name" label="Middle Name" :error-messages="fieldErrors.middle_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.last_name" label="Last Name *" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
+                <v-text-field v-model="formData.last_name" label="Last Name *" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6">
-                <v-text-field v-model="formData.phone_number" label="Phone Number *" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
+                <v-text-field v-model="formData.phone_number" label="Phone Number *" :rules="[requiredRule('Phone number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
-                <v-text-field v-model="formData.email_address" label="Email Address *" type="email" variant="outlined" density="comfortable" rounded="lg" autocomplete="email"></v-text-field>
+                <v-text-field v-model="formData.email_address" label="Email Address *" :rules="[requiredRule('Email address'), emailRule]" :error-messages="fieldErrors.email_address" type="email" variant="outlined" density="comfortable" rounded="lg" autocomplete="email"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6" v-if="!modal.isEditing">
@@ -315,6 +340,8 @@
                   :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
                   hint="At least 8 characters, with upper and lower case and a number"
                   persistent-hint
+                  :rules="[requiredRule('Password'), passwordRule]"
+                  :error-messages="fieldErrors.password"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
@@ -324,7 +351,7 @@
               </v-col>
 
               <v-col cols="12" :md="modal.isEditing ? 12 : 6">
-                <v-select v-model="formData.barangay_id" :items="barangays" item-title="barangay_name" item-value="barangay_id" label="Barangay *" variant="outlined" density="comfortable" rounded="lg"></v-select>
+                <v-select v-model="formData.barangay_id" :items="barangays" item-title="barangay_name" item-value="barangay_id" label="Barangay *" :rules="[requiredRule('Barangay')]" :error-messages="fieldErrors.barangay_id" variant="outlined" density="comfortable" rounded="lg"></v-select>
               </v-col>
 
               <v-col cols="12">
@@ -392,6 +419,15 @@
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
     </v-snackbar>
+
+    <!-- Always in the DOM, so an account being activated or deleted is spoken
+         rather than happening in silence. See notify() for why the snackbar
+         cannot do this job itself. -->
+    <span class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</span>
+    <!-- Separate region: how many rows the filters left is a different fact
+         from the outcome of an action, and the two must not overwrite each
+         other mid-announcement. -->
+    <span class="sr-only" aria-live="polite">{{ resultAnnouncement }}</span>
   </v-container>
 </template>
 
@@ -423,18 +459,24 @@ const { mdAndUp } = useDisplay()
 // The percentages add to 92, not 100, because the avatar column is a fixed
 // 76px and the table is `table-layout: fixed` — percentages are taken from the
 // full table width, so 100% + 76px was already running 28px past the card
-// before a seventh column existed. The two pill columns are sized from what
-// their longest pill actually measures ("DEACTIVATED" 128px, "RECEIVING"
-// 110px) plus the cell padding; the four text columns truncate with a tooltip
-// and can absorb what is left.
+// before a seventh column existed.
+//
+// Rebalanced from measurement, not from guessing: at 1920 the old split left
+// Email truncating on 23 rows out of 23 and Barangay on 10, while SMS Blasts
+// held 190px to print the identical word "RECEIVING" in every row. Width now
+// follows variance — the columns that differ per row get the space, and the
+// two pill columns keep only what their longest pill actually measures
+// ("DEACTIVATED" 128px, "RECEIVING" 110px) plus cell padding.
 const headers = [
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Full Name', key: 'fullName', width: '21%' },
-  { title: 'Barangay', key: 'barangay_name', width: '12%' },
-  { title: 'Phone Number', key: 'phone_number', width: '14%' },
-  { title: 'Email', key: 'email_address', width: '15%' },
-  { title: 'Status', key: 'status', align: 'center', width: '16%' },
-  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '14%' },
+  { title: 'Full Name', key: 'fullName', width: '20%' },
+  // 18%, measured against the longest real barangay name in the data ("San
+  // Antonio Ugad"), which was still clipping at 15%.
+  { title: 'Barangay', key: 'barangay_name', width: '18%' },
+  { title: 'Phone Number', key: 'phone_number', width: '15%' },
+  { title: 'Email', key: 'email_address', width: '21%' },
+  { title: 'Status', key: 'status', align: 'center', width: '10%' },
+  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '8%' },
 ]
 
 const residents = ref([])
@@ -448,6 +490,10 @@ const loading = ref(false)
 const apiError = ref('')
 const modalError = ref('')
 const showPassword = ref(false)
+// Template ref for <v-form>. The markup carried `ref="form"` all along, but
+// nothing declared it in <script setup>, so it silently resolved to nothing —
+// which is consistent with the form's rules never having been run.
+const form = ref(null)
 
 const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All' })
@@ -474,20 +520,40 @@ const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boole
 const initials = (r) => `${(r.first_name || '').charAt(0)}${(r.last_name || '').charAt(0)}`.toUpperCase()
 const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
 
-const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
+const liveMessage = ref('')
+
+const notify = (text, color = 'success') => {
+  snackbar.value = { show: true, text, color }
+  // The snackbar is not a live region — Vuetify mounts it on show, and a
+  // region that appears at the same moment as its text is not reliably
+  // announced. Re-cleared first so deleting two accounts in a row is two
+  // events, not one unchanged string.
+  liveMessage.value = ''
+  requestAnimationFrame(() => { liveMessage.value = text })
+}
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
 const filteredAndSortedResidents = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
   if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
-  if (search.value) {
-    const q = search.value.toLowerCase()
-    result = result.filter((r) =>
-      `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) ||
-      (r.email_address || '').toLowerCase().includes(q) ||
-      (r.phone_number || '').toLowerCase().includes(q),
-    )
+  // Trimmed: a leading space is trivially common when pasting from a list, and
+  // it used to return zero rows with no explanation.
+  const q = (search.value || '').trim().toLowerCase()
+  if (q) {
+    result = result.filter((r) => {
+      // Both orders. The table renders "Ferrer, Jilmar", so matching only
+      // "first last" meant typing back the name being read off the screen
+      // found nothing — the operator had to mentally invert it first.
+      const first = (r.first_name || '').toLowerCase()
+      const last = (r.last_name || '').toLowerCase()
+      return `${first} ${last}`.includes(q) ||
+        `${last}, ${first}`.includes(q) ||
+        `${last} ${first}`.includes(q) ||
+        (r.middle_name || '').toLowerCase().includes(q) ||
+        (r.email_address || '').toLowerCase().includes(q) ||
+        (r.phone_number || '').toLowerCase().includes(q)
+    })
   }
   return [...result].sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
 })
@@ -496,6 +562,29 @@ const clearFilters = () => {
   search.value = ''
   filters.value = { status: 'All', barangay: 'All' }
 }
+
+// True when the open profile is not in the list behind it — filter to one
+// barangay while a resident from another is selected and the panel keeps
+// showing them, with Edit/Activate/Delete live. The record stays open on
+// purpose (clearing it would lose the operator's place mid-task), but the
+// panel has to say so: a destructive action must never sit unlabelled against
+// a row the current view denies exists.
+// Spoken when filtering changes the row count. Silent on the first load —
+// announcing "23 of 23" before anyone has filtered anything is noise.
+const resultAnnouncement = computed(() => {
+  if (initialLoad.value) return ''
+  const shown = filteredAndSortedResidents.value.length
+  const total = residents.value.length
+  if (shown === total) return ''
+  return `${shown} of ${total} heads of the family shown`
+})
+
+const selectionHidden = computed(() => {
+  const selected = selectedResident.value
+  if (!selected) return false
+  const id = idOf(selected)
+  return !filteredAndSortedResidents.value.some((r) => idOf(r) === id)
+})
 
 const selectRow = (event, { item }) => { selectedResident.value = item }
 
@@ -521,6 +610,9 @@ const rowProps = ({ item }) => {
     class: isSelected ? 'selected-row' : '',
     tabindex: 0,
     'aria-selected': isSelected ? 'true' : 'false',
+    // Without this a focused row reads as a run of cell text with no statement
+    // of what Enter does. Same label the borrowing table's rows carry.
+    'aria-label': `Open profile for ${fullName(item)}`,
     onKeydown: (e) => onRowKeydown(e, item),
   }
 }
@@ -572,6 +664,10 @@ const loadAll = async () => {
 
 const openAddModal = () => {
   modalError.value = ''
+  clearFieldErrors()
+  // Rules fire on a pristine form otherwise: reopening after a failed save
+  // would show the previous attempt's red before anything was typed.
+  form.value?.resetValidation()
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
@@ -582,6 +678,8 @@ const openAddModal = () => {
 
 const openExistingEditModal = (item) => {
   modalError.value = ''
+  clearFieldErrors()
+  form.value?.resetValidation()
   formData.value = {
     first_name: item.first_name,
     middle_name: item.middle_name,
@@ -597,15 +695,68 @@ const openExistingEditModal = (item) => {
 
 const closeModal = () => { modal.value.isOpen = false }
 
-const errorFrom = async (res) => {
+// Client-side rules. The asterisks in the labels used to be decoration: no
+// field carried a rule and `saveUser` never called `form.validate()`, so an
+// empty form cost a network round trip and came back as six server sentences
+// in one paragraph, naming columns ("barangay id") rather than fields.
+const requiredRule = (label) => (v) =>
+  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+
+const emailRule = (v) =>
+  !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
+
+// Deliberately loose: 09xx, +639xx and landlines all reach residents here, and
+// a strict pattern would refuse numbers the office actually holds.
+const phoneRule = (v) =>
+  !v || v.replace(/\D/g, '').length >= 7 || 'Enter a full phone number.'
+
+// Mirrors the hint already printed under the field, and the backend's own rule.
+const passwordRule = (v) =>
+  !v || (v.length >= 8 && /[a-z]/.test(v) && /[A-Z]/.test(v) && /\d/.test(v)) ||
+  'At least 8 characters, with upper and lower case and a number.'
+
+// Server-side errors, keyed by field, so a 422 lands on the input it belongs
+// to instead of being concatenated into a blob above the form.
+const fieldErrors = ref({})
+
+const clearFieldErrors = () => { fieldErrors.value = {} }
+
+// Laravel answers `{errors: {field: [msg]}}`. Split it: known fields go to
+// their input, anything unrecognised stays in the summary alert so nothing is
+// silently swallowed.
+const applyServerErrors = async (res) => {
   const data = await res.json().catch(() => ({}))
-  if (data.errors) return Object.values(data.errors).flat().join(' ')
+  if (data.errors && typeof data.errors === 'object') {
+    const mapped = {}
+    const leftovers = []
+    for (const [key, messages] of Object.entries(data.errors)) {
+      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      if (key in formData.value) mapped[key] = text
+      else leftovers.push(text)
+    }
+    fieldErrors.value = mapped
+    const count = Object.keys(mapped).length
+    if (leftovers.length) return leftovers.join(' ')
+    return count === 1
+      ? 'One field needs attention — see below.'
+      : `${count} fields need attention — see below.`
+  }
   return data.message || 'Request failed'
 }
 
 const saveUser = async () => {
-  loading.value = true
   modalError.value = ''
+  clearFieldErrors()
+
+  // Validate before spending a round trip. Vuetify focuses the first invalid
+  // field itself once the rules are attached.
+  const { valid } = await form.value.validate()
+  if (!valid) {
+    modalError.value = 'Some details are missing or need fixing — see the fields marked below.'
+    return
+  }
+
+  loading.value = true
   const editing = modal.value.isEditing
   const payload = { ...formData.value }
   if (editing && !payload.password) delete payload.password
@@ -614,7 +765,7 @@ const saveUser = async () => {
       editing ? `${API_BASE}/residents/${modal.value.targetId}` : `${API_BASE}/residents`,
       { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) },
     )
-    if (!res.ok) throw new Error(await errorFrom(res))
+    if (!res.ok) throw new Error(await applyServerErrors(res))
     await fetchResidents()
     closeModal()
     notify(editing ? 'Profile updated' : 'Account created')
@@ -729,8 +880,17 @@ onUnmounted(releaseResidentPhotos)
   letter-spacing: 0.02em;
 }
 
-/* Table */
-.elegant-table :deep(table) { table-layout: fixed !important; width: 100% !important; }
+/* Table.
+   The 860px min-width is load-bearing. `table-layout: fixed` with percentage
+   columns and no floor lets a narrow wrapper crush every column proportionally
+   instead of scrolling: measured at 430px the six data columns collapsed to
+   1px each and only the avatars rendered. Same bug class, same fix, as the
+   borrowing table (see EquipmentBorrowingView's own min-width comment). */
+.elegant-table :deep(table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+  min-width: 860px;
+}
 /* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
    two pill columns need their width for the pill rather than for gutters. */
 .elegant-table :deep(td) {
@@ -770,9 +930,18 @@ onUnmounted(releaseResidentPhotos)
   outline: 3px solid rgb(var(--v-theme-primary));
   outline-offset: -3px;
 }
+/* The scrollbar was hidden outright. With a min-width on the table the wrapper
+   is now the only thing that scrolls sideways, so hiding it would leave the
+   clipped columns with no cue that they exist at all — thin and tinted, not
+   absent. */
 .elegant-table :deep(.v-table__wrapper) {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--v-theme-on-surface), 0.25) transparent;
+}
+.elegant-table :deep(.v-table__wrapper)::-webkit-scrollbar { height: 8px; }
+.elegant-table :deep(.v-table__wrapper)::-webkit-scrollbar-thumb {
+  background: rgba(var(--v-theme-on-surface), 0.25);
+  border-radius: 4px;
 }
 
 /* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
@@ -788,7 +957,12 @@ onUnmounted(releaseResidentPhotos)
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
-.pill-active { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary)); }
+/* primary-strong, not primary. Measured in the browser: primary on its own
+   14% tint is 4.28:1 in the light theme, and at 12px/700 this is not WCAG
+   large text, so 4.5:1 applies — it was 0.22 short. The strong token is the
+   same fix the avatar initials already carry, and in dark the two tokens are
+   the same value, so nothing changes there. */
+.pill-active { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
 .pill-inactive {
   background: rgba(var(--v-theme-on-surface), 0.1);
   color: rgba(var(--v-theme-on-surface), 0.82);
@@ -821,6 +995,21 @@ onUnmounted(releaseResidentPhotos)
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 64px 24px;
+}
+
+/* Visible to a screen reader, to nothing else. clip rather than display:none,
+   which would remove the node from the accessibility tree and silence the
+   live regions entirely. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .slide-fade-enter-active, .slide-fade-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
