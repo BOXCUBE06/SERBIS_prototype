@@ -3,10 +3,12 @@ library serbis.state.app_state;
 
 import 'package:flutter/foundation.dart';
 import '../models/advisory.dart';
+import '../models/borrow_models.dart';
 import '../models/info_material.dart';
 import '../models/request_models.dart';
 import 'api_service.dart';
 import 'app_log.dart';
+import 'borrow_cache.dart';
 import 'file_opener.dart';
 import 'material_cache.dart';
 import 'request_cache.dart';
@@ -51,6 +53,26 @@ class AppState extends ChangeNotifier {
   final List<ServiceRequest> requests = [];
   final List<ServiceCatalogItem> services = [];
 
+  static const String _borrowLogArea = 'borrowing';
+
+  /// `GET /equipments` — the borrowing catalogue.
+  final List<Equipment> equipment = [];
+  bool equipmentLoading = false;
+  String? equipmentError;
+
+  /// The resident's own borrow requests, newest first once fetched.
+  final List<BorrowRequest> borrowRequests = [];
+  final BorrowCache _borrowCache;
+  bool _borrowRequestsInFlight = false;
+  DateTime? _borrowRequestsFetchedAt;
+  DateTime? get borrowRequestsFetchedAt => _borrowRequestsFetchedAt;
+  bool borrowRequestsFromCache = false;
+
+  /// Separate from [isOffline]: the two lists are fetched from different
+  /// screens at different times, and sharing one flag would let a stale
+  /// service-request poll clear the borrowing screen's own banner.
+  bool borrowIsOffline = false;
+
   /// Materials published by MDRRMO. Comes from `GET /info-materials`, or from
   /// the offline index when the server cannot be reached.
   final List<InfoMaterial> materials = [];
@@ -90,10 +112,12 @@ class AppState extends ChangeNotifier {
     MaterialCache? materialCache,
     FileOpener? fileOpener,
     RequestCache? requestCache,
+    BorrowCache? borrowCache,
   })  : _materialCache =
             materialCache ?? MaterialCache(download: _api.downloadFile),
         _fileOpener = fileOpener ?? const FileOpener(),
-        _requestCache = requestCache ?? RequestCache();
+        _requestCache = requestCache ?? RequestCache(),
+        _borrowCache = borrowCache ?? BorrowCache();
 
   /// False on web, where there is nowhere to write. The download affordance is
   /// hidden entirely rather than offered and failing.
@@ -179,6 +203,178 @@ class AppState extends ChangeNotifier {
           reason: 'catalogue emptied');
       services.clear();
       notifyListeners();
+    }
+  }
+
+  /// Names a freshly filed borrow request against the catalogue, mirroring
+  /// [_resolveService]: `POST /borrowings`' 201 returns the row with no
+  /// `equipment` relation loaded, so without this an optimistic row would show
+  /// no item name until the next `GET /borrowings`.
+  BorrowRequest _resolveBorrow(BorrowRequest request) {
+    if (request.equipmentName != null && request.equipmentName!.isNotEmpty) {
+      return request;
+    }
+    for (final item in equipment) {
+      if (item.id == request.equipmentId) {
+        return request.copyWith(equipmentName: item.name);
+      }
+    }
+    return request;
+  }
+
+  /// The equipment catalogue a resident can borrow from.
+  Future<void> loadEquipment() async {
+    // No synchronous notifyListeners() here, unlike loadMaterials/loadAdvisories:
+    // this is called from BorrowEquipmentScreen.initState, and a listener
+    // rebuilding an ancestor (RootShell) synchronously, before the first
+    // `await`, fires mid-build — "setState() or markNeedsBuild() called during
+    // build." loadServices()/loadRequests() avoid the same trap the same way.
+    equipmentLoading = true;
+
+    try {
+      final list = await _api.getEquipments();
+      equipment
+        ..clear()
+        ..addAll(list.map(Equipment.fromJson));
+      equipmentError = null;
+
+      // A row submitted before the catalogue loaded has no name yet.
+      for (var i = 0; i < borrowRequests.length; i++) {
+        borrowRequests[i] = _resolveBorrow(borrowRequests[i]);
+      }
+    } catch (error) {
+      equipment.clear();
+      equipmentError = error is ApiException
+          ? error.message
+          : 'Something went wrong. Please try again.';
+      AppLog.error(_borrowLogArea, 'load equipment catalogue', error: error,
+          reason: 'catalogue emptied');
+    }
+
+    equipmentLoading = false;
+    notifyListeners();
+  }
+
+  /// Loads the last borrow-requests list the server sent, so an offline launch
+  /// has something to show before the first fetch. Mirrors [hydrateRequests].
+  Future<void> hydrateBorrowRequests() async {
+    final cached = await _borrowCache.load();
+    if (cached == null ||
+        borrowRequests.isNotEmpty ||
+        _borrowRequestsFetchedAt != null) {
+      return;
+    }
+
+    borrowRequests.addAll(cached.requests.map(_resolveBorrow));
+    _borrowRequestsFetchedAt = cached.fetchedAt;
+    borrowRequestsFromCache = true;
+    notifyListeners();
+  }
+
+  /// Drops the cached borrow requests. Called on logout alongside
+  /// [clearRequestCache].
+  Future<void> clearBorrowCache() async {
+    borrowRequests.clear();
+    _borrowRequestsFetchedAt = null;
+    borrowRequestsFromCache = false;
+    borrowIsOffline = false;
+    await _borrowCache.clear();
+    notifyListeners();
+  }
+
+  /// Refetches the resident's borrow requests. Same shape as [loadRequests] —
+  /// see there for why each guard exists.
+  Future<void> loadBorrowRequests({bool silent = false, Duration? maxAge}) async {
+    if (_borrowRequestsInFlight) {
+      return;
+    }
+
+    if (maxAge != null &&
+        _borrowRequestsFetchedAt != null &&
+        DateTime.now().difference(_borrowRequestsFetchedAt!) < maxAge) {
+      return;
+    }
+
+    _borrowRequestsInFlight = true;
+
+    try {
+      final list = await _api.getBorrowings();
+
+      // A request submitted seconds ago has no server id yet; carry it across
+      // the same way loadRequests carries an in-flight ServiceRequest.
+      final pending = borrowRequests.where((item) => item.id == null).toList();
+
+      borrowRequests
+        ..clear()
+        ..addAll(pending)
+        ..addAll(list.map((item) => _resolveBorrow(BorrowRequest.fromJson(item))));
+
+      _borrowRequestsFetchedAt = DateTime.now();
+      borrowRequestsFromCache = false;
+      borrowIsOffline = false;
+      notifyListeners();
+
+      _borrowCache.save(borrowRequests, _borrowRequestsFetchedAt!);
+    } catch (e) {
+      borrowIsOffline = e is! ApiException || e.isNetwork;
+
+      AppLog.error(_borrowLogArea, 'load borrow requests', error: e,
+          reason: silent ? 'background poll' : 'resident-initiated');
+
+      if (!silent) {
+        _fail(e);
+      } else {
+        notifyListeners();
+      }
+    } finally {
+      _borrowRequestsInFlight = false;
+    }
+  }
+
+  /// Files a new equipment loan. Returns the server-confirmed row, or `null`
+  /// if it never reached MDRRMO — callers must not announce success on a
+  /// `null`. Mirrors [addRequest]'s optimistic-insert-then-reconcile shape.
+  Future<BorrowRequest?> submitBorrowRequest({
+    required Equipment item,
+    required int quantity,
+  }) async {
+    final optimistic = _resolveBorrow(BorrowRequest(
+      equipmentId: item.id,
+      quantity: quantity,
+      status: BorrowStatus.pending,
+      createdAt: DateTime.now(),
+      equipmentName: item.name,
+    ));
+
+    borrowRequests.insert(0, optimistic);
+    notifyListeners();
+
+    try {
+      final result = await _api.submitBorrowRequest(
+        equipmentId: item.id,
+        quantity: quantity,
+      );
+
+      final confirmed = _resolveBorrow(BorrowRequest.fromJson(result));
+
+      AppLog.info(_borrowLogArea, 'submit borrow request',
+          reason: 'accepted as borrowing ${confirmed.id}');
+
+      final index = borrowRequests.indexOf(optimistic);
+      if (index != -1) {
+        borrowRequests[index] = confirmed;
+        notifyListeners();
+      }
+      return confirmed;
+    } catch (e) {
+      // The optimistic row never reached the server, so drop it — leaving it
+      // in place is what would make a stock-check 422 look like a filed
+      // request MDRRMO will never see.
+      borrowRequests.remove(optimistic);
+      AppLog.error(_borrowLogArea, 'submit borrow request', error: e,
+          reason: 'rolled back, not filed');
+      _fail(e);
+      return null;
     }
   }
 

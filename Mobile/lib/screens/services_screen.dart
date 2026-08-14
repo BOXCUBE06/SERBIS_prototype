@@ -13,6 +13,7 @@ import '../widgets/service_form_fields.dart';
 import '../widgets/form_inputs.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
+import 'borrow_equipment_screen.dart';
 
 /// Picking a service and filing it. Everything this screen used to draw itself
 /// — the fields, the dropdowns, the tiles, the safety notice, the ID picker,
@@ -347,6 +348,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
           child: SafetyNotice(filipino: f),
         ),
         Padding(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+          child: _BorrowEquipmentEntry(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BorrowEquipmentScreen(appState: widget.appState),
+              ),
+            ),
+          ),
+        ),
+        Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
           child: _buildServicePicker(f),
         ),
@@ -455,6 +467,47 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Entry point into the borrowing catalogue. Separate from the dropdown
+/// above on purpose: "Equipment / Item Request" in that list files a generic
+/// text description against `service_id` 6, with no picker and no stock
+/// check. This leads to the real catalogue instead — browse what MDRRMO
+/// actually has, see quantity on hand, and file against `POST /borrowings`.
+class _BorrowEquipmentEntry extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _BorrowEquipmentEntry({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AppCard(
+        child: Row(
+          children: [
+            const IconBadge(icon: Icons.inventory_2_outlined, bg: AppColors.green50, fg: AppColors.green700),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Borrow Equipment', style: AppText.display(size: 14.5)),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Wheelchairs, stretchers & more — see what\'s in stock',
+                    style: AppText.body(size: 12, color: AppColors.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+          ],
+        ),
+      ),
     );
   }
 }
