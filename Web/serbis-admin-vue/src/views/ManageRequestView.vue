@@ -12,10 +12,16 @@
              behind it, styled larger than either real action on the page. It
              now writes what the operator is actually looking at: the current
              filter and search, in the order shown, not all 30 rows. -->
+        <!-- Outlined, not filled. Squinting at this screen, the heaviest mark
+             on it was this button: a near-black secondary fill on a pale page,
+             out-weighing "Approve & Dispatch" from the other end of the layout.
+             Exporting a CSV is a side errand. Same outlined-primary treatment
+             the vehicle picker uses, so the panel has one language for a
+             supporting action and keeps the fill for the decision. -->
         <v-btn
-          color="secondary"
-          variant="flat"
-          class="text-none font-weight-bold text-white px-6"
+          color="primary"
+          variant="outlined"
+          class="text-none font-weight-bold px-6"
           height="40"
           :disabled="!filteredAndSortedRequests.length"
           @click="exportCsv"
@@ -216,7 +222,7 @@
             <div class="flex-grow-1 overflow-y-auto pa-6">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
-              <v-row class="mb-2">
+              <v-row class="detail-group">
                 <v-col cols="12" sm="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
                   <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'N/A' }}</div>
@@ -231,7 +237,7 @@
                 </v-col>
               </v-row>
 
-              <div class="mb-4">
+              <div class="detail-group">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
                 <!-- One element per line. The description arrives newline-
                      separated and was rendered as a single interpolation, so
@@ -248,7 +254,7 @@
               <!-- The site photo comes first: it is what the resident is
                    reporting, and it is what decides whether a unit is sent.
                    The ID answers a different question, and answers it after. -->
-              <div class="mb-4" v-if="selectedRequest.has_site_photo">
+              <div class="detail-group" v-if="selectedRequest.has_site_photo">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Landmark</div>
                 <v-skeleton-loader v-if="sitePhoto.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
                 <v-alert v-else-if="sitePhoto.state.error" type="error" variant="tonal" density="compact">{{ sitePhoto.state.error }}</v-alert>
@@ -261,7 +267,7 @@
                 ></v-img>
               </div>
 
-              <div class="mb-4" v-if="selectedRequest.has_valid_id">
+              <div class="detail-group" v-if="selectedRequest.has_valid_id">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attached Evidence / Valid ID</div>
                 <v-skeleton-loader v-if="validId.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
                 <v-alert v-else-if="validId.state.error" type="error" variant="tonal" density="compact">{{ validId.state.error }}</v-alert>
@@ -274,7 +280,7 @@
                 ></v-img>
               </div>
 
-              <v-divider class="mb-4"></v-divider>
+              <v-divider class="detail-rule"></v-divider>
 
               <!-- The Dispatch Assignment card used to live here, and its only
                    control was the button that enables the action pinned to the
@@ -282,7 +288,7 @@
                    be a heading over a sentence. Its unit display went with the
                    button rather than being left behind. -->
 
-              <div v-if="selectedRequest.status === 'Responding'" class="mb-4">
+              <div v-if="selectedRequest.status === 'Responding'" class="detail-group">
                 <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
                   <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
                   <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
@@ -298,7 +304,7 @@
 
               <v-textarea
                 v-if="selectedRequest.status === 'Pending' || selectedRequest.status === 'Responding' || !selectedRequest.status"
-                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2" class="mt-4"
+                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2"
                 hint="Carried into the approve and decline dialogs. Declining asks for one if this is empty."
                 persistent-hint
               ></v-textarea>
@@ -492,11 +498,25 @@ const apiError = ref('')
 const page = ref(1)
 // Ten was a fixed number against a variable amount of room, so a 1080px screen
 // showed ten rows and a band of empty card below them, with pagination under
-// that. Fill the space that exists: a row is 58px, and the search field, chips
-// and pager account for the rest.
+// that. Fill the space that exists.
+//
+// Both constants are measured off the rendered panel, not guessed: a row is
+// 73px (two lines of text plus 12px of vertical padding and a hairline), and
+// the search field, the wrapped status chips and the pager take 348px between
+// them. The old 58/360 pair overshot by two rows, which put a scrollbar inside
+// a list that also paginates -- the one arrangement this computed exists to
+// prevent. At 1080 this now yields exactly the 10 rows that fit.
+// The floor is 5, not 8. Eight rows need 584px and a 860px-tall window leaves
+// 512px, so the old floor put the scrollbar straight back on any laptop screen
+// -- it was defending against a uselessly short list and instead guaranteed the
+// thing the whole computed exists to avoid. Five still reads as a list, and
+// below roughly a 713px window the list scrolls, which is the honest trade.
+const ROW_HEIGHT = 73
+const LIST_CHROME = 348
+
 const itemsPerPage = computed(() => {
-  const rowsFit = Math.floor((windowHeight.value - 360) / 58)
-  return Math.min(20, Math.max(8, rowsFit))
+  const rowsFit = Math.floor((windowHeight.value - LIST_CHROME) / ROW_HEIGHT)
+  return Math.min(20, Math.max(5, rowsFit))
 })
 
 const filters = reactive({ status: 'All' })
@@ -954,6 +974,24 @@ onUnmounted(releaseAttachments)
 }
 .vehicle-option:last-child { border-bottom: none; }
 .vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
+
+/* Rhythm for the detail column. A label sits 8px from the thing it labels; a
+   group sits 28px from the next one. The old spacing used 8 and 16, and a
+   group break only twice the size of a label break does not read as a break at
+   all -- the whole panel came across as one column of text with some words in
+   capitals. The rule before the action area gets the widest interval on the
+   panel, because it is the only one separating what you read from what you
+   decide. */
+.detail-group { margin-bottom: 28px; }
+.detail-group:last-child { margin-bottom: 0; }
+
+/* 40, and it has to exceed 28 rather than merely differ from it: adjacent
+   margins collapse to the larger of the two, so anything under the group
+   spacing above it renders as that group spacing and the break disappears. */
+.detail-rule {
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
 
 /* The unit summary holds the left end of the action row. It needs a floor so
    a long unit name truncates instead of squeezing the buttons, and a width it
