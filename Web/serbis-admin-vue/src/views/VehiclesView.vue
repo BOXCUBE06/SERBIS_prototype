@@ -6,7 +6,7 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Fleet Management</h2>
+            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Vehicles</h2>
             <div class="text-subtitle-2 text-medium-emphasis">Live readiness across every emergency unit</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">

@@ -6,7 +6,7 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Service Management</h2>
+            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Manage Services</h2>
             <div class="text-subtitle-1 text-medium-emphasis">
               Every emergency and public service residents can request from the MDRRMO
             </div>

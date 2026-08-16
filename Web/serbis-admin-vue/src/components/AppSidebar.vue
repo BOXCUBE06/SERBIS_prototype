@@ -115,19 +115,19 @@ const { theme, toggle } = useAppTheme()
 
 const mainMenu = [
   { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
-  { to: '/manage-requests', icon: 'mdi-clipboard-text-outline', title: 'Service Requests' },
-  { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Borrow Requests' },
-  { to: '/vehicles', icon: 'mdi-ambulance', title: 'Fleet Management' },
+  { to: '/manage-requests', icon: 'mdi-clipboard-text-outline', title: 'Resident Requests' },
+  { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
+  { to: '/vehicles', icon: 'mdi-ambulance', title: 'Vehicles' },
   { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Equipment Inventory' },
   { to: '/sms', icon: 'mdi-message-text-fast-outline', title: 'Text Blast (SMS)' }
 ]
 
 const systemMenu = [
-  { to: '/services-config', icon: 'mdi-wrench-outline', title: 'Services' },
-  { to: '/users', icon: 'mdi-account-group-outline', title: 'Users' },
+  { to: '/services-config', icon: 'mdi-wrench-outline', title: 'Manage Services' },
+  { to: '/users', icon: 'mdi-account-group-outline', title: 'Residents' },
   { to: '/staff', icon: 'mdi-shield-account-outline', title: 'Staff Accounts' },
-  { to: '/files', icon: 'mdi-folder-outline', title: 'Files' },
-  { to: '/logs', icon: 'mdi-history', title: 'Logs' }
+  { to: '/files', icon: 'mdi-folder-outline', title: 'Documents' },
+  { to: '/logs', icon: 'mdi-history', title: 'Activity Logs' }
 ]
 </script>
 

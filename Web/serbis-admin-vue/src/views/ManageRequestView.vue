@@ -5,7 +5,7 @@
       <!-- Toolbar -->
       <div class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
         <div>
-          <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Dispatch & Requests</h2>
+          <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Resident Requests</h2>
           <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} requests across all barangays</div>
         </div>
         <!-- This used to be a button with no handler and no export function

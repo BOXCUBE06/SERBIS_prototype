@@ -4,7 +4,7 @@
       <v-col cols="12">
         <div class="d-flex justify-space-between align-center mb-6">
           <div>
-            <h2 class="text-h4 font-weight-black text-high-emphasis">System Logs</h2>
+            <h2 class="text-h4 font-weight-black text-high-emphasis">Activity Logs</h2>
             <div class="text-subtitle-1 text-medium-emphasis">Monitor user activity and SMS broadcast history</div>
           </div>
           
