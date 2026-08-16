@@ -80,12 +80,29 @@
             <v-skeleton-loader v-else type="chip" width="100%" height="32"></v-skeleton-loader>
           </div>
 
-          <!-- Bulk action bar -->
+          <!-- Bulk action bar. This was already wired to bulkDisapprove(), but
+               both controls were text buttons at the same weight, so the one
+               action the checkboxes exist for read as a caption sitting beside
+               "3 selected" rather than as the thing to press. The count moves
+               into the label — the button now names what it does and to how
+               many — and the destructive action takes the rightmost slot, the
+               same order the confirm dialog below uses. -->
           <div v-if="selectedIds.size > 0" class="d-flex align-center justify-space-between px-4 py-2 subtle-surface" style="flex-shrink: 0;">
-            <span class="text-caption font-weight-bold">{{ selectedIds.size }} selected</span>
-            <div class="d-flex gap-2">
-              <v-btn size="small" variant="text" color="error" class="text-none font-weight-bold" :loading="bulkLoading" @click="openReason('bulk')">Disapprove</v-btn>
-              <v-btn size="small" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+            <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
+            <div class="d-flex align-center gap-2">
+              <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+              <v-btn
+                color="error"
+                variant="flat"
+                size="small"
+                height="36"
+                class="text-none font-weight-bold"
+                :loading="bulkLoading"
+                @click="openReason('bulk')"
+              >
+                Disapprove {{ selectedIds.size }}
+                <span class="d-sr-only">selected requests</span>
+              </v-btn>
             </div>
           </div>
 
