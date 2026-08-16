@@ -233,8 +233,15 @@
 
               <div class="mb-4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
+                <!-- One element per line. The description arrives newline-
+                     separated and was rendered as a single interpolation, so
+                     every break collapsed to a space and the whole thing read
+                     as one run-on sentence. -->
                 <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  {{ selectedRequest.description || 'No description provided by resident.' }}
+                  <template v-if="descriptionLines.length">
+                    <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
+                  </template>
+                  <template v-else>No description provided by resident.</template>
                 </v-card>
               </div>
 
@@ -617,6 +624,41 @@ const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
 )
 
+// The description is not free prose. The mobile app builds it as
+// `metaLines.join('\n')` (Mobile/lib/models/service_forms.dart), and all four
+// forms open with the service name and close with `Contact:` and `Submitted`.
+// Every one of those three is already a header field a few inches above this
+// card, so the panel was printing each of them twice and burying the resident's
+// actual words between the copies.
+//
+// Stripped here rather than in the Flutter form on purpose. A mobile-side fix
+// would only ever reach requests filed after it shipped, leaving every existing
+// row duplicated; and the same `metaLines` are rendered back to the resident on
+// their own tracking screen, where the contact and timestamp are not duplicates
+// of anything on screen.
+const META_TAIL = /^(contact:|submitted\b)/i
+
+const descriptionLines = computed(() => {
+  const raw = selectedRequest.value?.description
+  if (!raw) return []
+
+  const lines = raw.split('\n').map(line => line.trim()).filter(Boolean)
+  const service = (selectedRequest.value?.service?.service_name || '').trim().toLowerCase()
+
+  const kept = [...lines]
+  if (service && kept[0]?.toLowerCase() === service) kept.shift()
+
+  // Only from the end. The resident's own words sit in the middle of the block
+  // and can legitimately begin with either word -- matching anywhere would eat
+  // a sentence that happens to start "Contact the barangay hall first".
+  while (kept.length && META_TAIL.test(kept[kept.length - 1])) kept.pop()
+
+  // A form submitted with nothing typed into it reduces to exactly the meta
+  // lines, and stripping all of them would leave a blank card where there was
+  // text a moment ago. Show what there is rather than nothing.
+  return kept.length ? kept : lines
+})
+
 const filteredAndSortedRequests = computed(() => {
   const searchLower = search.value.toLowerCase()
   const currentStatus = filters.status
@@ -906,6 +948,12 @@ onUnmounted(releaseAttachments)
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* The description is a short list of facts, not a paragraph — a little air
+   between the lines so they read as separate ones. */
+.description-line + .description-line {
+  margin-top: 3px;
 }
 
 .request-row {
