@@ -251,33 +251,58 @@
                 </v-card>
               </div>
 
-              <!-- The site photo comes first: it is what the resident is
-                   reporting, and it is what decides whether a unit is sent.
-                   The ID answers a different question, and answers it after. -->
-              <div class="detail-group" v-if="selectedRequest.has_site_photo">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Landmark</div>
-                <v-skeleton-loader v-if="sitePhoto.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
-                <v-alert v-else-if="sitePhoto.state.error" type="error" variant="tonal" density="compact">{{ sitePhoto.state.error }}</v-alert>
-                <v-img
-                  v-else-if="sitePhoto.state.url"
-                  :src="sitePhoto.state.url"
-                  max-height="240"
-                  class="subtle-surface rounded-lg border"
-                  alt="Landmark photo attached by the resident"
-                ></v-img>
-              </div>
+              <!-- One group, two tiles, site photo first: it is what the
+                   resident is reporting and what decides whether a unit is
+                   sent, and the ID answers a different question after it.
+                   `attachments` keeps that order.
 
-              <div class="detail-group" v-if="selectedRequest.has_valid_id">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attached Evidence / Valid ID</div>
-                <v-skeleton-loader v-if="validId.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
-                <v-alert v-else-if="validId.state.error" type="error" variant="tonal" density="compact">{{ validId.state.error }}</v-alert>
-                <v-img
-                  v-else-if="validId.state.url"
-                  :src="validId.state.url"
-                  max-height="200"
-                  class="subtle-surface rounded-lg border"
-                  alt="Valid ID attached by the resident"
-                ></v-img>
+                   These were full-width boxes holding a contained image. A
+                   square 240px source in a 1005px-wide frame painted at
+                   198x198 with roughly 400px of flat tint either side, which
+                   reads as a broken image rather than a small one. Fixed
+                   180x140 tiles, filled with `cover`, and the full picture is
+                   a click away. -->
+              <div class="detail-group" v-if="attachments.length">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
+
+                <div class="d-flex flex-wrap gap-3">
+                  <div v-for="a in attachments" :key="a.key">
+                    <v-skeleton-loader
+                      v-if="a.state.loading"
+                      type="image"
+                      height="140"
+                      width="180"
+                      class="rounded-lg"
+                    ></v-skeleton-loader>
+                    <v-alert
+                      v-else-if="a.state.error"
+                      type="error"
+                      variant="tonal"
+                      density="compact"
+                      class="attachment-error"
+                    >{{ a.state.error }}</v-alert>
+                    <button
+                      v-else-if="a.state.url"
+                      type="button"
+                      class="attachment-tile rounded-lg"
+                      :aria-label="`View the ${a.label.toLowerCase()} full size`"
+                      @click="openLightbox(a)"
+                    >
+                      <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
+                      <!-- Always drawn, not only on hover: a hover-only
+                           affordance tells a touch user nothing, and this is
+                           the only cue that the tile opens anything. -->
+                      <span class="attachment-badge" aria-hidden="true">
+                        <v-icon size="16">mdi-magnify-plus-outline</v-icon>
+                      </span>
+                      <span class="attachment-scrim" aria-hidden="true">
+                        <v-icon size="18">mdi-magnify-plus-outline</v-icon>
+                        View
+                      </span>
+                    </button>
+                    <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
+                  </div>
+                </div>
               </div>
 
               <v-divider class="detail-rule"></v-divider>
@@ -379,6 +404,30 @@
         </v-card>
       </div>
     </div>
+
+    <!-- Attachment lightbox. Same shape as the vehicle picker below: v-dialog,
+         rounded card, title row with a close button.
+
+         It reads the blob URL the panel already holds rather than building one.
+         The image sits behind an authenticated route and its storage path is
+         hidden on the model, so there is no address a plain image tag could
+         load. -->
+    <v-dialog v-model="lightbox.open" max-width="900">
+      <v-card rounded="lg" elevation="6">
+        <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
+          <span class="text-h6 font-weight-bold">{{ lightboxAttachment?.label }}</span>
+          <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="lightbox.open = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="pa-0 subtle-surface">
+          <v-img
+            v-if="lightboxAttachment?.state.url"
+            :src="lightboxAttachment.state.url"
+            :alt="lightboxAttachment.alt"
+            max-height="70vh"
+          ></v-img>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
 
     <!-- Vehicle picker -->
     <v-dialog v-model="vehicleModal.isOpen" max-width="600">
@@ -628,6 +677,8 @@ const createAttachment = (segment, failureMessage) => {
   return { state, load, release }
 }
 
+const lightbox = ref({ open: false, key: null })
+
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
 // The route segment and the `site_photo` column keep their names -- this is a
 // label change, not an API one.
@@ -657,6 +708,39 @@ const availableVehicles = computed(() => vehicles.value.filter(v => v.status ===
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
 )
+
+// The two attachment slots a request can carry, in reading order. There are
+// exactly these two and never more: `tbl_service_request` holds `valid_id` and
+// `site_photo` as scalar columns, both hidden on the model, each surfaced only
+// as a `has_*` boolean. This is not a collection that might grow at runtime.
+const attachments = computed(() => {
+  const req = selectedRequest.value
+  if (!req) return []
+  return [
+    {
+      key: 'site-photo',
+      label: 'Landmark',
+      present: !!req.has_site_photo,
+      state: sitePhoto.state,
+      alt: 'Landmark photo attached by the resident',
+    },
+    {
+      key: 'valid-id',
+      label: 'Valid ID',
+      present: !!req.has_valid_id,
+      state: validId.state,
+      alt: 'Valid ID attached by the resident',
+    },
+  ].filter(a => a.present)
+})
+
+// Resolved from the live list rather than copied into the dialog, so the open
+// lightbox cannot outlive the blob it is showing.
+const lightboxAttachment = computed(() =>
+  attachments.value.find(a => a.key === lightbox.value.key) || null
+)
+
+const openLightbox = (a) => { lightbox.value = { open: true, key: a.key } }
 
 // The description is not free prose. The mobile app builds it as
 // `metaLines.join('\n')` (Mobile/lib/models/service_forms.dart), and all four
@@ -944,6 +1028,12 @@ const bulkDisapprove = async (reason) => {
   }
 }
 
+// `load()` revokes the previous blob the moment the selection moves on, so an
+// open lightbox would be left holding a dead blob: URL -- and if the next
+// request carried the same kind of attachment it would quietly swap in a
+// different resident's document under the same heading.
+watch(selectedRequest, () => { lightbox.value = { open: false, key: null } })
+
 watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
 
@@ -1008,6 +1098,77 @@ onUnmounted(releaseAttachments)
    between the lines so they read as separate ones. */
 .description-line + .description-line {
   margin-top: 3px;
+}
+
+/* A real button, so it is in the tab order and announces itself, styled back
+   down to a plain frame. The image fills it via v-img's `cover`. */
+.attachment-tile {
+  position: relative;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+.attachment-tile:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+/* Drawn at rest. The scrim below only appears on hover or focus, which says
+   nothing to a touch user, and this badge is then the only standing cue that
+   the tile opens something. */
+.attachment-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.6);
+  transition: opacity 150ms ease;
+}
+
+/* The scrim says the same thing louder, so the badge steps out from under it
+   rather than sitting on top of its own replacement. */
+.attachment-tile:hover .attachment-badge,
+.attachment-tile:focus-visible .attachment-badge {
+  opacity: 0;
+}
+
+.attachment-scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.attachment-tile:hover .attachment-scrim,
+.attachment-tile:focus-visible .attachment-scrim {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attachment-scrim,
+  .attachment-badge { transition: none; }
+}
+
+.attachment-error {
+  max-width: 320px;
 }
 
 .request-row {
