@@ -276,29 +276,13 @@
 
               <v-divider class="mb-4"></v-divider>
 
-              <div v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Dispatch Assignment</div>
-                <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="{ 'bg-success-tint': formData.vehicle_id }" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <div v-if="formData.vehicle_id" class="d-flex align-center gap-3 min-width-0">
-                    <v-avatar color="success" variant="tonal" size="40">
-                      <v-icon color="success">{{ vehicleIcon(selectedVehicle?.type) }}</v-icon>
-                    </v-avatar>
-                    <div class="min-width-0">
-                      <div class="font-weight-bold text-truncate">{{ getSelectedVehicleName() }}</div>
-                      <div class="text-caption text-medium-emphasis">
-                        Selected for dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="text-body-2 text-medium-emphasis">No vehicle assigned yet.</div>
+              <!-- The Dispatch Assignment card used to live here, and its only
+                   control was the button that enables the action pinned to the
+                   footer. The two now share the footer row, so the card would
+                   be a heading over a sentence. Its unit display went with the
+                   button rather than being left behind. -->
 
-                  <v-btn color="secondary" variant="flat" size="small" class="text-none font-weight-bold text-white" @click="vehicleModal.isOpen = true">
-                    {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
-                  </v-btn>
-                </v-card>
-              </div>
-
-              <div v-else-if="selectedRequest.status === 'Responding'" class="mb-4">
+              <div v-if="selectedRequest.status === 'Responding'" class="mb-4">
                 <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
                   <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
                   <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
@@ -321,15 +305,45 @@
             </div>
 
             <v-divider v-if="showActions"></v-divider>
-            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3" style="flex-shrink: 0;">
+            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3 flex-wrap" style="flex-shrink: 0;">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <!-- The gate is right: nothing dispatches without a unit. But a
-                     greyed primary button on a dispatch screen reads as broken
-                     unless something names what is missing, and a disabled
-                     control announces no reason to a screen reader at all. -->
-                <span v-if="!formData.vehicle_id" class="text-caption text-medium-emphasis mr-auto">
-                  Select a vehicle to enable dispatch.
-                </span>
+                <!-- The unit and the button it unlocks now sit in one row. They
+                     used to be a scroll apart — the picker was a card up in the
+                     body, the action it gated was pinned down here — so an
+                     operator reading a greyed-out "Approve & Dispatch" had to go
+                     hunting for the reason. The gate itself has always been
+                     real; only the distance was the problem. -->
+                <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
+                  <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
+                    <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
+                      {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
+                    </v-icon>
+                  </v-avatar>
+                  <div class="min-width-0">
+                    <div class="text-body-2 font-weight-bold text-truncate">
+                      {{ formData.vehicle_id ? getSelectedVehicleName() : 'No vehicle selected' }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis text-truncate">
+                      <template v-if="formData.vehicle_id">
+                        Ready to dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
+                      </template>
+                      <template v-else>Select one to enable dispatch.</template>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- primary, not secondary. Secondary is #0A2620, a near-black
+                     green that works as a fill under a white label and vanishes
+                     as an outline on the dark theme's own dark surface. -->
+                <v-btn
+                  color="primary"
+                  variant="outlined"
+                  class="text-none font-weight-bold"
+                  height="40"
+                  @click="vehicleModal.isOpen = true"
+                >
+                  {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
+                </v-btn>
                 <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
@@ -346,7 +360,7 @@
                   Approve &amp; Dispatch
                 </v-btn>
                 <span id="dispatch-gate" class="d-sr-only">
-                  Disabled until a vehicle is selected in the dispatch assignment card above.
+                  Disabled until a vehicle is chosen with the Select Vehicle button beside it.
                 </span>
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
@@ -941,9 +955,11 @@ onUnmounted(releaseAttachments)
 .vehicle-option:last-child { border-bottom: none; }
 .vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
 
-.bg-success-tint {
-  background-color: rgba(var(--v-theme-success), 0.10) !important;
-  border-color: rgba(var(--v-theme-success), 0.4) !important;
+/* The unit summary holds the left end of the action row. It needs a floor so
+   a long unit name truncates instead of squeezing the buttons, and a width it
+   can claim once the row wraps on a narrow panel. */
+.dispatch-state {
+  flex: 1 1 200px;
 }
 
 .cursor-pointer {
