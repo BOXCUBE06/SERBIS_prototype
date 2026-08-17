@@ -528,8 +528,11 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
+import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+
+const route = useRoute()
 
 // The split view needs a real breakpoint, not a media query in CSS: below it
 // the two panes are rendered one at a time rather than merely restyled, so the
@@ -685,6 +688,10 @@ const validId = createAttachment('valid-id', 'Could not load the attached ID.')
 const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
 
 const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
+
+// Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
+// arrival so the operator lands on the filtered view, not "All".
+if (statusTabs.includes(route.query.status)) filters.status = route.query.status
 
 const itemId = (item) => item.request_id || item.id
 

@@ -52,7 +52,39 @@
       </div>
     </div>
 
-    <!-- Hero row -->
+    <!-- KPI strip: every headline number in one scannable row, independent of
+         the trend card's height. Cramming these into a sidebar next to the
+         hero card (the old layout) meant the two fought over vertical space —
+         6 stats now need their own row instead of being squeezed into 5/12
+         of one. -->
+    <v-row v-if="loading" class="mb-2">
+      <v-col cols="12"><v-skeleton-loader type="card" height="88"></v-skeleton-loader></v-col>
+    </v-row>
+    <v-row v-else dense class="mb-2">
+      <v-col cols="6" sm="4" md="2" v-for="(stat, i) in kpiStats" :key="stat.title">
+        <v-card
+          elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
+          :class="{ 'cursor-pointer': stat.route }"
+          :style="{ '--stagger-i': i }"
+          :role="stat.route ? 'button' : undefined"
+          :tabindex="stat.route ? 0 : undefined"
+          @click="stat.route && goTo(stat.route)"
+          @keydown.enter="stat.route && goTo(stat.route)"
+        >
+          <v-avatar :color="stat.color || 'primary'" variant="tonal" size="40" rounded="lg" class="mr-3 flex-shrink-0">
+            <v-icon :color="stat.color || 'primary'" size="20">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
+          </v-avatar>
+          <div class="min-width-0">
+            <div class="text-h6 font-weight-black lh-1">{{ displayValues[stat.title] ?? stat.value }}</div>
+            <div class="text-caption font-weight-bold text-medium-emphasis text-truncate">{{ stat.title }}</div>
+          </div>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Trend row: headline total + the period-scoped bar chart, grouped
+         together because both answer "what's happening in the selected
+         period", unlike the KPI strip above (always all-time / right-now). -->
     <v-row v-if="loading" class="mb-2">
       <v-col cols="12" lg="7">
         <v-card elevation="0" rounded="xl" class="pa-6" style="min-height: 220px;">
@@ -60,14 +92,13 @@
         </v-card>
       </v-col>
       <v-col cols="12" lg="5">
-        <v-skeleton-loader type="card@2"></v-skeleton-loader>
+        <v-skeleton-loader type="card" height="286"></v-skeleton-loader>
       </v-col>
     </v-row>
 
     <v-row v-else class="mb-2">
-      <!-- Headline metric -->
       <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 0 }">
+        <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 6 }">
           <div class="d-flex justify-space-between align-start mb-2">
             <div>
               <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Total Requests</div>
@@ -84,28 +115,30 @@
         </v-card>
       </v-col>
 
-      <!-- Secondary stat grid -->
       <v-col cols="12" lg="5">
-        <v-row dense class="h-100">
-          <v-col cols="6" v-for="(stat, i) in kpiStats" :key="stat.title">
-            <v-card elevation="0" rounded="xl" class="soft-card stagger-item pa-4 h-100" :style="{ '--stagger-i': i + 1 }">
-              <v-avatar :color="stat.color || 'primary'" variant="tonal" size="36" rounded="lg" class="mb-3">
-                <v-icon :color="stat.color || 'primary'" size="18">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
-              </v-avatar>
-              <div class="text-h5 font-weight-black mb-1">{{ displayValues[stat.title] ?? stat.value }}</div>
-              <div class="text-caption font-weight-bold text-medium-emphasis">{{ stat.title }}</div>
-            </v-card>
-          </v-col>
-        </v-row>
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 7 }">
+          <v-card-item class="pb-0">
+            <v-card-title class="text-body-1 font-weight-bold">Requests Overview</v-card-title>
+            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
+          </v-card-item>
+          <v-card-text class="pt-2">
+            <v-sheet height="220" color="transparent">
+              <Line v-if="chartDataRaw" :data="barChartData" :options="chartOptions" />
+              <div class="d-flex align-center justify-center h-100" v-else>
+                <v-progress-circular indeterminate color="primary"></v-progress-circular>
+              </div>
+            </v-sheet>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
 
-    <!-- Heatmap & Zones -->
+    <!-- Geographic row: map + its data-table fallback, all-time scope -->
     <v-row class="mb-2">
       <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 2 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 8 }">
           <v-card-item>
-            <v-card-title class="text-body-1 font-weight-bold">Incident Heatmap</v-card-title>
+            <v-card-title class="text-body-1 font-weight-bold">Request Density Map</v-card-title>
             <v-card-subtitle>All-time distribution</v-card-subtitle>
             <template v-slot:append>
               <v-icon>mdi-map-marker-radius</v-icon>
@@ -113,12 +146,21 @@
           </v-card-item>
           <v-card-text class="pt-0">
             <div ref="mapEl" style="height: 320px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
+            <!-- Color meaning otherwise lives only in the hover tooltip —
+                 a visible legend is what makes the choropleth readable
+                 without hovering every polygon. -->
+            <div class="d-flex align-center flex-wrap gap-4 mt-3 px-1">
+              <div class="d-flex align-center gap-2" v-for="tier in mapLegend" :key="tier.label">
+                <span class="legend-dot" :style="{ backgroundColor: tier.color }"></span>
+                <span class="text-caption text-medium-emphasis">{{ tier.label }}</span>
+              </div>
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
 
       <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 3 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 9 }">
           <v-card-item>
             <v-card-title class="text-body-1 font-weight-bold">High Request Zones</v-card-title>
             <v-card-subtitle>All-time</v-card-subtitle>
@@ -149,10 +191,11 @@
       </v-col>
     </v-row>
 
-    <!-- Activity feed & charts -->
+    <!-- Operational row: the feed staff act on, paired with the all-time
+         category breakdown that explains what it's mostly made of -->
     <v-row>
       <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 4 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 10 }">
           <v-card-item class="pb-0">
             <v-card-title class="text-body-1 font-weight-bold">Activity Feed</v-card-title>
             <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
@@ -190,22 +233,7 @@
       </v-col>
 
       <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item mb-6" :style="{ '--stagger-i': 5 }">
-          <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Requests Overview</v-card-title>
-            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
-          </v-card-item>
-          <v-card-text class="pt-2">
-            <v-sheet height="200" color="transparent">
-              <Bar v-if="chartDataRaw" :data="barChartData" :options="chartOptions" />
-              <div class="d-flex align-center justify-center h-100" v-else>
-                <v-progress-circular indeterminate color="primary"></v-progress-circular>
-              </div>
-            </v-sheet>
-          </v-card-text>
-        </v-card>
-
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 6 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 11 }">
           <v-card-item class="pb-0">
             <v-card-title class="text-body-1 font-weight-bold">Request Volume</v-card-title>
             <v-card-subtitle>All-time by category</v-card-subtitle>
@@ -217,8 +245,8 @@
             </v-btn-toggle>
           </div>
           <v-card-text class="pt-0">
-            <v-sheet height="220" color="transparent">
-              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" />
+            <v-sheet height="320" color="transparent">
+              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
               <div v-else-if="chartDataRaw" class="text-caption text-medium-emphasis text-center py-8">No data yet</div>
               <div class="d-flex align-center justify-center h-100" v-else>
                 <v-progress-circular indeterminate color="primary"></v-progress-circular>
@@ -234,6 +262,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
@@ -249,6 +278,9 @@ import barangayBoundaries from '@/assets/echague-barangays.json'
 import { API_BASE } from '@/config/api'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
+
+const router = useRouter()
+const goTo = (route) => router.push(route)
 
 const kpiStats = ref([])
 const serviceRequests = ref([])
@@ -340,6 +372,15 @@ const getStatusColor = (status) => {
     default: return 'grey'
   }
 }
+
+// Mirrors getMapColor's tiers below — kept as a visible legend so the
+// choropleth's color meaning isn't locked behind a hover tooltip.
+const mapLegend = [
+  { label: 'High (30+)', color: '#d32f2f' },
+  { label: 'Medium (16–30)', color: '#f57c00' },
+  { label: 'Low (1–15)', color: '#2E8B75' },
+  { label: 'None', color: '#e0e0e0' },
+]
 
 const getHeatColor = (percentage) => {
   if (percentage > 70) return 'error'
@@ -443,17 +484,45 @@ const volumeChartData = computed(() => {
   }
 })
 
+// Compare-Categories charts should show every value as text, not hover-only —
+// a vue-chartjs `:plugins` prop scopes this to the Request Volume chart alone,
+// so the trend/sparkline Line charts elsewhere on the page stay uncluttered.
+const volumeValueLabelsPlugin = {
+  id: 'volumeValueLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart
+    const onSurface = getComputedStyle(document.documentElement).getPropertyValue('--v-theme-on-surface').trim() || '0,0,0'
+    ctx.save()
+    ctx.fillStyle = `rgba(${onSurface}, 0.85)`
+    ctx.font = '700 11px sans-serif'
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'left'
+    chart.data.datasets.forEach((dataset, dsIndex) => {
+      chart.getDatasetMeta(dsIndex).data.forEach((bar, i) => {
+        const value = dataset.data[i]
+        if (value === undefined || value === null) return
+        ctx.fillText(String(value), bar.x + 6, bar.y)
+      })
+    })
+    ctx.restore()
+  }
+}
+
 const volumeChartOptions = {
   indexAxis: 'y',
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
   scales: {
-    x: { beginAtZero: true, ticks: { precision: 0 } },
+    x: { beginAtZero: true, ticks: { precision: 0 }, grace: '15%' },
     y: { ticks: { font: { size: 11 } } }
   }
 }
 
+// Daily counts over a rolling window — a time axis, so a Line/area chart
+// reads the trend correctly. A bar-per-day implies discrete unrelated
+// categories, which is the wrong shape for this data (see chart-type rules:
+// time-series belongs on Line, Bar is for unordered category comparison).
 const barChartData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
   const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
@@ -462,9 +531,17 @@ const barChartData = computed(() => {
     labels: source.labels,
     datasets: [{
       label: 'Requests',
-      backgroundColor: '#297A67',
-      borderRadius: 4,
-      data: source.data
+      data: source.data,
+      borderColor: '#297A67',
+      backgroundColor: 'rgba(41, 122, 103, 0.15)',
+      fill: true,
+      borderWidth: 2,
+      tension: 0.35,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#297A67',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 1,
     }]
   }
 })
@@ -473,7 +550,11 @@ const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
-  scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+  interaction: { mode: 'index', intersect: false },
+  scales: {
+    x: { grid: { display: false } },
+    y: { beginAtZero: true, ticks: { precision: 0 } }
+  }
 }
 
 // Define colors based on request density
@@ -580,6 +661,21 @@ onUnmounted(() => {
    overlay pane above it and keeps its true colours. */
 .v-theme--dark .map-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.8);
+}
+
+.lh-1 {
+  line-height: 1;
+}
+
+.kpi-tile {
+  min-height: 72px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .rank-badge {

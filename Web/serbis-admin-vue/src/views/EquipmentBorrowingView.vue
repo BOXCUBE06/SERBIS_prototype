@@ -556,8 +556,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+
+const route = useRoute()
 
 // Status colours: saturated 700-level ramp, each AA with white text as a
 // badge (measured, see EquipmentBorrowingView audit history). Semantic
@@ -587,6 +590,11 @@ const statusFilter = ref(ALL_STATUS)
 const outcomeFilter = ref(ALL_OUTCOMES)
 const overdueOnly = ref(false)
 const initialLoad = ref(true)
+
+// Dashboard KPI cards deep-link here with ?status=... / ?overdue=1 — honor
+// them once on arrival so the operator lands on the filtered view.
+if (columns.some((c) => c.status === route.query.status)) statusFilter.value = route.query.status
+if (route.query.overdue === '1') overdueOnly.value = true
 const loading = ref(false)
 const reloading = ref(false)
 const processingId = ref(null)

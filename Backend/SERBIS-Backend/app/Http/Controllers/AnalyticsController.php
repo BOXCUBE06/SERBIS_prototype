@@ -20,7 +20,13 @@ class AnalyticsController extends Controller
         $totalResidents = Resident::count();
         $pendingService = ServiceRequest::where('status', 'Pending')->count();
         $pendingBorrow = EquipmentBorrowing::where('status', 'Pending')->count();
+        $totalEquipment = Equipment::sum('total_quantity');
         $availableEquipment = Equipment::sum('available_quantity'); // Based on tbl_equipments column
+        $borrowedEquipment = $totalEquipment - $availableEquipment; // Currently out on loan
+        $overdueBorrowings = EquipmentBorrowing::where('status', 'Released')
+            ->whereNotNull('due_date')
+            ->whereDate('due_date', '<', Carbon::today())
+            ->count();
 
         $kpiStats = [
             [
@@ -35,21 +41,40 @@ class AnalyticsController extends Controller
                 'value' => number_format($pendingService),
                 'icon' => 'mdi-clipboard-text-clock',
                 'color' => 'orange',
-                'subtitle' => 'Awaiting admin response'
+                'subtitle' => 'Awaiting admin response',
+                'route' => ['path' => '/manage-requests', 'query' => ['status' => 'Pending']],
             ],
             [
                 'title' => 'Pending Borrow',
                 'value' => number_format($pendingBorrow),
                 'icon' => 'mdi-hand-extended',
                 'color' => 'orange',
-                'subtitle' => 'Equipment requests'
+                'subtitle' => 'Equipment requests',
+                'route' => ['path' => '/borrowings', 'query' => ['status' => 'Pending']],
             ],
             [
                 'title' => 'Available Equipment',
                 'value' => number_format($availableEquipment),
                 'icon' => 'mdi-toolbox',
                 'color' => 'green',
-                'subtitle' => 'Items ready for dispatch'
+                'subtitle' => 'Items ready for dispatch',
+                'route' => ['path' => '/inventory'],
+            ],
+            [
+                'title' => 'Borrowed Equipment',
+                'value' => number_format($borrowedEquipment),
+                'icon' => 'mdi-toolbox-outline',
+                'color' => 'primary',
+                'subtitle' => 'Currently out on loan',
+                'route' => ['path' => '/borrowings', 'query' => ['status' => 'Released']],
+            ],
+            [
+                'title' => 'Overdue Returns',
+                'value' => number_format($overdueBorrowings),
+                'icon' => 'mdi-alert-circle-outline',
+                'color' => $overdueBorrowings > 0 ? 'error' : 'green',
+                'subtitle' => 'Past the agreed due date',
+                'route' => ['path' => '/borrowings', 'query' => ['overdue' => '1']],
             ],
         ];
 
