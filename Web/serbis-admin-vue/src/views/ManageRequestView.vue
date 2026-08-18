@@ -8,6 +8,22 @@
           <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Resident Requests</h2>
           <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} requests across all barangays</div>
         </div>
+        <div class="d-flex align-center gap-3">
+        <!-- The adviser's ask: someone who shows up at the office in person
+             rather than through the app, with or without an account. A
+             separate button rather than folding this into the export/filter
+             row, since filing a request is a different kind of action from
+             everything else up here. -->
+        <v-btn
+          color="secondary"
+          variant="flat"
+          class="text-none font-weight-bold px-6 text-white"
+          height="40"
+          @click="openCreateDialog"
+        >
+          <v-icon start size="small">mdi-account-plus-outline</v-icon>
+          Log Walk-in Request
+        </v-btn>
         <!-- This used to be a button with no handler and no export function
              behind it, styled larger than either real action on the page. It
              now writes what the operator is actually looking at: the current
@@ -30,6 +46,7 @@
           Export {{ filteredAndSortedRequests.length }}
           <span class="d-sr-only">requests as CSV</span>
         </v-btn>
+        </div>
       </div>
 
       <!-- Split view: list + detail panel.
@@ -134,7 +151,7 @@
                 role="button"
                 tabindex="0"
                 :aria-current="isSelected(item) ? 'true' : undefined"
-                :aria-label="`${residentName(item.resident)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
+                :aria-label="`${requesterName(item)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
                 @click="selectRequest(item)"
                 @keydown.enter.prevent="selectRequest(item)"
                 @keydown.space.prevent="selectRequest(item)"
@@ -147,12 +164,12 @@
                   class="mr-1"
                   style="flex: 0 0 auto;"
                   density="compact"
-                  :aria-label="`Select ${residentName(item.resident)}'s request`"
+                  :aria-label="`Select ${requesterName(item)}'s request`"
                   @click.stop="toggleSelect(item)"
                 ></v-checkbox-btn>
                 <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
                   <span class="font-weight-bold text-caption">
-                    {{ item.resident?.first_name?.charAt(0) }}{{ item.resident?.last_name?.charAt(0) }}
+                    {{ requesterInitials(item) }}
                   </span>
                 </v-avatar>
                 <!-- The date is the half of this line that survives truncation
@@ -160,7 +177,7 @@
                      it gets its own column instead of trailing the service
                      name off the end of the row. -->
                 <div class="flex-grow-1 min-width-0">
-                  <div class="text-body-2 font-weight-bold text-truncate">{{ residentName(item.resident) }}</div>
+                  <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
                   <div class="d-flex align-center text-caption text-medium-emphasis">
                     <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
                     <span class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
@@ -204,12 +221,12 @@
                 ></v-btn>
                 <v-avatar color="primary" variant="tonal" size="52">
                   <span class="text-h6 font-weight-black">
-                    {{ selectedRequest.resident?.first_name?.charAt(0) }}{{ selectedRequest.resident?.last_name?.charAt(0) }}
+                    {{ requesterInitials(selectedRequest) }}
                   </span>
                 </v-avatar>
                 <div>
-                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ residentName(selectedRequest.resident) }}</div>
-                  <div class="text-caption text-medium-emphasis">{{ selectedRequest.resident?.barangay?.barangay_name || 'Unknown Barangay' }}</div>
+                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
                 </div>
               </div>
               <v-chip :color="getStatusColor(selectedRequest.status)" size="small" label class="text-uppercase font-weight-bold text-white">
@@ -233,7 +250,7 @@
                 </v-col>
                 <v-col cols="12" sm="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.resident?.phone_number || 'N/A' }}</div>
+                  <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
                 </v-col>
               </v-row>
 
@@ -522,6 +539,127 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Walk-in request. Two shapes of walk-in: an existing resident who came
+         to the office instead of using the app, and someone with no account
+         at all -- the toggle decides which half of the form is live, and
+         only one half is ever sent. -->
+    <v-dialog v-model="createDialog.open" max-width="640" scrollable persistent>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
+          <span class="text-h6 font-weight-bold">Log Walk-in Request</span>
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="pa-6" style="max-height: 70vh;">
+          <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ createDialog.error }}</v-alert>
+
+          <v-btn-toggle
+            v-model="createDialog.requesterType"
+            color="primary"
+            variant="outlined"
+            mandatory
+            divided
+            class="mb-4 d-flex"
+          >
+            <v-btn value="resident" class="text-none flex-grow-1">Registered resident</v-btn>
+            <v-btn value="walkin" class="text-none flex-grow-1">No account</v-btn>
+          </v-btn-toggle>
+
+          <v-autocomplete
+            v-if="createDialog.requesterType === 'resident'"
+            v-model="createDialog.form.resident_id"
+            :items="residentOptions"
+            label="Resident"
+            placeholder="Search by name"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+            :rules="[required]"
+          ></v-autocomplete>
+
+          <template v-else>
+            <v-text-field
+              v-model="createDialog.form.walk_in_name"
+              label="Full name"
+              variant="outlined"
+              density="comfortable"
+              class="mb-2"
+              :rules="[required]"
+            ></v-text-field>
+            <v-text-field
+              v-model="createDialog.form.walk_in_contact_number"
+              label="Contact number"
+              variant="outlined"
+              density="comfortable"
+              class="mb-2"
+              :rules="[required]"
+            ></v-text-field>
+          </template>
+
+          <v-select
+            v-model="createDialog.form.service_id"
+            :items="serviceOptions"
+            label="Service"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+            :rules="[required]"
+          ></v-select>
+
+          <v-textarea
+            v-model="createDialog.form.description"
+            label="Description"
+            variant="outlined"
+            density="comfortable"
+            rows="3"
+            class="mb-2"
+            :rules="[required]"
+          ></v-textarea>
+
+          <v-select
+            v-model="createDialog.form.required_vehicle_type"
+            :items="vehicleTypeOptions"
+            label="Required vehicle type (optional)"
+            variant="outlined"
+            density="comfortable"
+            clearable
+            class="mb-2"
+          ></v-select>
+
+          <v-file-input
+            v-model="createDialog.form.valid_id"
+            label="Valid ID (optional — already checked in person)"
+            variant="outlined"
+            density="comfortable"
+            accept="image/jpeg,image/png"
+            prepend-icon=""
+            prepend-inner-icon="mdi-card-account-details-outline"
+            class="mb-2"
+          ></v-file-input>
+
+          <v-file-input
+            v-model="createDialog.form.site_photo"
+            label="Site photo (optional)"
+            variant="outlined"
+            density="comfortable"
+            accept="image/jpeg,image/png"
+            prepend-icon=""
+            prepend-inner-icon="mdi-camera-outline"
+          ></v-file-input>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="px-6 text-none font-weight-bold text-white"
+            height="44"
+            :loading="createDialog.loading"
+            @click="submitWalkIn"
+          >File request</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -542,6 +680,8 @@ const twoUp = mdAndUp
 
 const requests = ref([])
 const vehicles = ref([])
+const residents = ref([])
+const services = ref([])
 const search = ref('')
 const initialLoad = ref(true)
 const loading = ref(false)
@@ -578,6 +718,24 @@ const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', vehicle_id: null })
 
+const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+
+const emptyCreateForm = () => ({
+  resident_id: null,
+  walk_in_name: '',
+  walk_in_contact_number: '',
+  service_id: null,
+  description: '',
+  required_vehicle_type: null,
+  valid_id: null,
+  site_photo: null,
+})
+const createDialog = ref({ open: false, loading: false, error: '', requesterType: 'resident', form: emptyCreateForm() })
+
+const openCreateDialog = () => {
+  createDialog.value = { open: true, loading: false, error: '', requesterType: 'resident', form: emptyCreateForm() }
+}
+
 // `kind` is the whole state machine: 'approve' and 'disapprove' act on the
 // selected request, 'bulk' on every ticked row. Only 'approve' may fire with an
 // empty reason.
@@ -585,7 +743,8 @@ const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error:
 const reasonDialog = ref(emptyReason())
 
 const reasonCopy = computed(() => {
-  const who = `${selectedRequest.value?.resident?.first_name || ''} ${selectedRequest.value?.resident?.last_name || ''}`.trim()
+  const req = selectedRequest.value
+  const who = req && requesterName(req) !== 'Unknown resident' && requesterName(req) !== 'Unknown requester' ? requesterName(req) : ''
   const what = selectedRequest.value?.service?.service_name || 'this service'
   switch (reasonDialog.value.kind) {
     case 'approve':
@@ -701,6 +860,24 @@ const itemId = (item) => item.request_id || item.id
 const residentName = (resident) =>
   `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown resident'
 
+// A walk-in with no account carries no `resident` object at all — these read
+// walk_in_name/walk_in_contact_number instead, so the list row, the detail
+// panel, search and the CSV export all show the same person the same way
+// regardless of which kind of request it is.
+const isWalkIn = (item) => !item?.resident && !item?.resident_id
+const requesterName = (item) =>
+  item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
+const requesterInitials = (item) => {
+  if (item?.resident) return `${item.resident.first_name?.charAt(0) || ''}${item.resident.last_name?.charAt(0) || ''}`
+  const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
+  return parts.length ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
+}
+const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_contact_number || 'N/A'
+const requesterBarangay = (item) => {
+  if (item?.resident) return item.resident.barangay?.barangay_name || 'Unknown Barangay'
+  return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
+}
+
 const requestCounts = computed(() => {
   const counts = { All: requests.value.length, Pending: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
   requests.value.forEach(req => {
@@ -711,6 +888,19 @@ const requestCounts = computed(() => {
 })
 
 const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
+
+const residentOptions = computed(() => residents.value
+  .map(r => ({
+    title: `${r.last_name}, ${r.first_name}${r.barangay?.barangay_name ? ' — ' + r.barangay.barangay_name : ''}`,
+    value: r.resident_id,
+  }))
+  .sort((a, b) => a.title.localeCompare(b.title)))
+
+const serviceOptions = computed(() => services.value.map(s => ({ title: s.service_name, value: s.service_id })))
+
+// Pulled from the fleet already on screen rather than hardcoded, so a vehicle
+// type added in Fleet Management shows up here without a second edit.
+const vehicleTypeOptions = computed(() => [...new Set(vehicles.value.map(v => v.type).filter(Boolean))])
 
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
@@ -792,10 +982,9 @@ const filteredAndSortedRequests = computed(() => {
     if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) return false
 
     if (!searchLower) return true
-    const res = r.resident || {}
-    return `${res.first_name} ${res.last_name}`.toLowerCase().includes(searchLower) ||
+    return requesterName(r).toLowerCase().includes(searchLower) ||
            (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
-           (res.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
+           (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
   }).sort((a, b) => {
     const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
     if (statusA === 'Pending' && statusB !== 'Pending') return -1
@@ -841,9 +1030,9 @@ const exportCsv = () => {
   const header = ['Request ID', 'Resident', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
   const body = rows.map(r => [
     itemId(r),
-    residentName(r.resident),
-    r.resident?.barangay?.barangay_name || '',
-    r.resident?.phone_number || '',
+    requesterName(r),
+    r.resident?.barangay?.barangay_name || (isWalkIn(r) ? 'Walk-in' : ''),
+    requesterPhone(r),
     r.service?.service_name || '',
     r.status || 'Pending',
     r.vehicle ? vehicleName(r.vehicle) : '',
@@ -910,14 +1099,20 @@ const releaseAttachments = () => {
 
 const fetchData = async () => {
   try {
-    const [reqRes, vehRes] = await Promise.all([
+    const [reqRes, vehRes, resRes, svcRes] = await Promise.all([
       fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
+      fetch(`${API_BASE}/vehicles`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/residents`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/services`, { headers: getHeaders() })
     ])
     const reqData = await reqRes.json()
     const vehData = await vehRes.json()
+    const resData = await resRes.json()
+    const svcData = await svcRes.json()
     requests.value = reqData.data || reqData
     vehicles.value = vehData.data || vehData
+    residents.value = resData.data || resData
+    services.value = svcData.data || svcData
 
     if (!selectedRequest.value && requests.value.length) {
       selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
@@ -1004,6 +1199,71 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     reasonDialog.value.error = error.message
   } finally {
     loading.value = false
+  }
+}
+
+// v-file-input's v-model is always an array in this Vuetify version, single
+// file or not.
+const singleFile = (v) => (Array.isArray(v) ? v[0] : v) || null
+
+const submitWalkIn = async () => {
+  const form = createDialog.value.form
+  const isResident = createDialog.value.requesterType === 'resident'
+
+  if (isResident && !form.resident_id) {
+    createDialog.value.error = 'Pick a resident'
+    return
+  }
+  if (!isResident && (!form.walk_in_name.trim() || !form.walk_in_contact_number.trim())) {
+    createDialog.value.error = 'Name and contact number are required for someone with no account'
+    return
+  }
+  if (!form.service_id) {
+    createDialog.value.error = 'Pick a service'
+    return
+  }
+  if (!form.description.trim()) {
+    createDialog.value.error = 'Description is required'
+    return
+  }
+
+  createDialog.value.loading = true
+  createDialog.value.error = ''
+  try {
+    const body = new FormData()
+    if (isResident) {
+      body.append('resident_id', form.resident_id)
+    } else {
+      body.append('walk_in_name', form.walk_in_name.trim())
+      body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
+    }
+    body.append('service_id', form.service_id)
+    body.append('description', form.description.trim())
+    if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
+    const validIdFile = singleFile(form.valid_id)
+    if (validIdFile) body.append('valid_id', validIdFile)
+    const sitePhotoFile = singleFile(form.site_photo)
+    if (sitePhotoFile) body.append('site_photo', sitePhotoFile)
+
+    // No 'Content-Type' — the browser sets the multipart boundary itself, and
+    // overriding it with the JSON header used elsewhere in this file would
+    // send a body no multipart parser can read.
+    const res = await fetch(`${API_BASE}/admin/service-requests`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body,
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to file the request')
+    }
+    createDialog.value.open = false
+    await fetchData()
+  } catch (error) {
+    createDialog.value.error = error.message
+  } finally {
+    createDialog.value.loading = false
   }
 }
 

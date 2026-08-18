@@ -1,0 +1,598 @@
+<template>
+  <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
+    <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3">
+      <div>
+        <h2 class="text-h5 font-weight-bold text-high-emphasis">Conduction Requests</h2>
+        <div class="text-subtitle-2 text-medium-emphasis">
+          MDRRMO Conduction Request Form — Echague Rescue EMS
+        </div>
+      </div>
+      <v-btn
+        color="primary"
+        variant="flat"
+        class="text-none font-weight-bold px-6"
+        height="44"
+        prepend-icon="mdi-plus"
+        @click="openCreate"
+      >New Conduction Request</v-btn>
+    </div>
+
+    <div v-if="!loadError" class="filter-bar">
+      <v-text-field
+        v-model="search"
+        label="Search"
+        placeholder="Patient, origin or destination"
+        prepend-inner-icon="mdi-magnify"
+        variant="outlined"
+        density="compact"
+        hide-details
+        clearable
+        rounded="lg"
+        class="filter-field"
+      ></v-text-field>
+      <v-select
+        v-model="statusFilter"
+        :items="statusOptions"
+        label="Trip status"
+        prepend-inner-icon="mdi-map-marker-path"
+        variant="outlined"
+        density="compact"
+        hide-details
+        rounded="lg"
+        class="filter-field"
+      ></v-select>
+    </div>
+
+    <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
+      {{ apiError }}
+    </v-alert>
+
+    <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
+
+    <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
+      <div class="text-center py-12 px-6">
+        <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
+        <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load conduction requests</div>
+        <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold px-6" height="44" :loading="reloading" @click="fetchData">
+          Try again
+        </v-btn>
+      </div>
+    </v-card>
+
+    <v-card v-else elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
+      <v-data-table
+        :headers="headers"
+        :items="filteredItems"
+        :items-per-page="-1"
+        density="comfortable"
+        hover
+        class="bg-transparent conduction-table"
+        item-value="conduction_request_id"
+        :row-props="rowProps"
+        @click:row="(_e, { item }) => openDetail(item)"
+      >
+        <template v-slot:item.patient="{ item }">
+          <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
+          <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
+        </template>
+
+        <template v-slot:item.trip="{ item }">
+          <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
+        </template>
+
+        <template v-slot:item.trip_status="{ item }">
+          <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
+            {{ item.trip_status }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.created_at="{ item }">
+          {{ fmtDateTime(item.created_at) }}
+        </template>
+
+        <template v-slot:no-data>
+          <div class="text-center py-12">
+            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
+            <div class="text-body-2 font-weight-bold text-high-emphasis">No conduction requests yet</div>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
+
+    <!-- Create -->
+    <v-dialog v-model="createDialog.open" max-width="720" scrollable persistent>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
+          <span class="text-h6 font-weight-bold text-high-emphasis">New Conduction Request</span>
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="pa-6" style="max-height: 70vh;">
+          <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
+
+          <v-form ref="createForm">
+            <h3 class="section-title">Patient</h3>
+            <v-row dense>
+              <v-col cols="12" sm="8">
+                <v-text-field v-model="createDialog.form.patient_name" label="Patient name" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              </v-col>
+              <v-col cols="6" sm="2">
+                <v-text-field v-model="createDialog.form.patient_age" label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+              </v-col>
+              <v-col cols="6" sm="2">
+                <v-select v-model="createDialog.form.patient_sex" :items="sexOptions" label="Sex" variant="outlined" density="comfortable" clearable></v-select>
+              </v-col>
+              <v-col cols="12" sm="8">
+                <v-text-field v-model="createDialog.form.patient_address" label="Patient address" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              </v-col>
+              <v-col cols="12">
+                <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+              </v-col>
+            </v-row>
+
+            <h3 class="section-title">Trip</h3>
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field v-model="createDialog.form.origin" label="From:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field v-model="createDialog.form.destination" label="To:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field v-model="createDialog.form.vehicle" label="Vehicle" variant="outlined" density="comfortable"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field v-model="createDialog.form.plate_no" label="Plate no." variant="outlined" density="comfortable"></v-text-field>
+              </v-col>
+            </v-row>
+
+            <h3 class="section-title">Personnel</h3>
+            <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
+              <div class="d-flex align-center justify-space-between mb-1">
+                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
+                <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addPerson(group.field)">
+                  Add {{ group.singular }}
+                </v-btn>
+              </div>
+              <div
+                v-for="(_n, idx) in createDialog.form[group.field]"
+                :key="idx"
+                class="d-flex align-center gap-2 mb-2"
+              >
+                <v-text-field
+                  v-model="createDialog.form[group.field][idx]"
+                  :label="`${group.singular} ${idx + 1}`"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                ></v-text-field>
+                <v-btn
+                  icon="mdi-close"
+                  variant="text"
+                  size="small"
+                  :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                  @click="removePerson(group.field, idx)"
+                ></v-btn>
+              </div>
+            </div>
+          </v-form>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitCreate">
+            File request
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Detail -->
+    <v-dialog v-model="detail.open" max-width="800" scrollable>
+      <v-card rounded="lg" v-if="selected">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
+          <div class="d-flex align-center gap-3">
+            <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
+            <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(selected.trip_status), color: '#FFFFFF' }">
+              {{ selected.trip_status }}
+            </v-chip>
+          </div>
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="pa-6" style="max-height: 65vh;">
+          <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
+
+          <v-row class="mb-2">
+            <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>
+            <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Contact number</div><div class="field-value">{{ selected.patient_contact_number }}</div></v-col>
+            <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis }}</div></v-col>
+            <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin }}</div></v-col>
+            <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selected.vehicle || 'N/A' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
+          </v-row>
+
+          <v-divider class="my-4"></v-divider>
+
+          <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
+            <div class="field-label">{{ group.label }}</div>
+            <div v-if="peopleByRole(group.role).length" class="field-value">
+              {{ peopleByRole(group.role).map(p => p.name).join(', ') }}
+            </div>
+            <div v-else class="text-caption text-medium-emphasis">None recorded</div>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <h3 class="section-title">Trip log</h3>
+          <v-row>
+            <v-col cols="6"><div class="field-label">Departed office</div><div class="field-value">{{ fmtDateTime(selected.departed_office_at) || '—' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Arrived at destination</div><div class="field-value">{{ fmtDateTime(selected.arrived_destination_at) || '—' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Departed destination</div><div class="field-value">{{ fmtDateTime(selected.departed_destination_at) || '—' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Returned to office</div><div class="field-value">{{ fmtDateTime(selected.returned_office_at) || '—' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Odometer start</div><div class="field-value">{{ selected.odometer_start ?? '—' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Odometer end</div><div class="field-value">{{ selected.odometer_end ?? '—' }}</div></v-col>
+            <v-col cols="12" v-if="selected.others"><div class="field-label">Others</div><div class="field-value">{{ selected.others }}</div></v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-0 d-flex justify-end border-t">
+          <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" @click="openTripLog(selected)">
+            {{ selected.departed_office_at ? 'Update trip log' : 'Complete Trip Log' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Trip log -->
+    <v-dialog v-model="tripLog.open" max-width="600" persistent>
+      <v-card rounded="lg">
+        <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
+          Complete Trip Log
+        </v-card-title>
+        <v-card-text class="pa-6">
+          <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="tripLog.form.departed_destination_at" type="datetime-local" label="Departed destination" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-textarea v-model="tripLog.form.others" label="Others" variant="outlined" density="comfortable" rows="2"></v-textarea>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitTripLog">Save trip log</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3500" location="bottom right" rounded="lg">
+      {{ snackbar.text }}
+    </v-snackbar>
+  </v-container>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { getToken } from '@/composables/authToken'
+import { API_BASE } from '@/config/api'
+
+const STATUS_ACCENT = {
+  'Not dispatched': '#B45309',
+  'In transit': '#0E7490',
+  'Completed': '#297A67',
+}
+const ALL_STATUS = 'All'
+const statusOptions = [ALL_STATUS, 'Not dispatched', 'In transit', 'Completed']
+
+const personnelGroups = [
+  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver' },
+  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger' },
+  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative' },
+]
+
+const sexOptions = [
+  { title: 'Male', value: 'male' },
+  { title: 'Female', value: 'female' },
+]
+
+const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+
+const items = ref([])
+const search = ref('')
+const statusFilter = ref(ALL_STATUS)
+const initialLoad = ref(true)
+const reloading = ref(false)
+const loading = ref(false)
+const apiError = ref('')
+const loadError = ref('')
+const snackbar = ref({ show: false, text: '', color: 'success' })
+
+const headers = [
+  { title: 'Patient', key: 'patient', width: '26%' },
+  { title: 'From → To', key: 'trip', width: '30%' },
+  { title: 'Status', key: 'trip_status', align: 'center', width: '18%' },
+  { title: 'Filed', key: 'created_at', width: '18%' },
+]
+
+const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
+const statusAccent = (status) => STATUS_ACCENT[status] || '#64748B'
+const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
+
+const matchesSearch = (r) => {
+  const q = (search.value || '').trim().toLowerCase()
+  if (!q) return true
+  return [r.patient_name, r.origin, r.destination].some((v) => (v || '').toLowerCase().includes(q))
+}
+const matchesStatus = (r) => statusFilter.value === ALL_STATUS || r.trip_status === statusFilter.value
+const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r)))
+
+const getHeaders = () => ({
+  Authorization: `Bearer ${getToken()}`,
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+})
+
+const fetchData = async () => {
+  reloading.value = true
+  try {
+    const res = await fetch(`${API_BASE}/conduction-requests`, { headers: getHeaders() })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || `Request failed (${res.status})`)
+    }
+    const data = await res.json()
+    const rows = data.data || data
+    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
+    items.value = rows
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = error.message || 'Could not reach the server'
+    notify('Could not load conduction requests', 'error')
+  } finally {
+    initialLoad.value = false
+    reloading.value = false
+  }
+}
+
+const rowProps = ({ item }) => ({
+  tabindex: 0,
+  'aria-label': `Open details for ${item.patient_name}`,
+  onKeydown: (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(item) }
+  },
+})
+
+// Create dialog
+const emptyCreateForm = () => ({
+  patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
+  patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
+  origin: '', destination: '',
+  drivers: ['', ''], authorized_passengers: ['', ''], patient_relatives: ['', ''],
+})
+const createDialog = ref({ open: false, form: emptyCreateForm() })
+const createForm = ref(null)
+
+const openCreate = () => {
+  apiError.value = ''
+  createDialog.value = { open: true, form: emptyCreateForm() }
+}
+
+const addPerson = (field) => { createDialog.value.form[field].push('') }
+const removePerson = (field, idx) => { createDialog.value.form[field].splice(idx, 1) }
+
+const submitCreate = async () => {
+  const { valid } = await createForm.value.validate()
+  if (!valid) return
+
+  loading.value = true
+  apiError.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/conduction-requests`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(createDialog.value.form),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to file the request')
+    }
+    await fetchData()
+    createDialog.value.open = false
+    notify('Conduction request filed')
+  } catch (error) {
+    apiError.value = error.message
+  } finally {
+    loading.value = false
+  }
+}
+
+// Detail dialog
+const detail = ref({ open: false })
+const selected = ref(null)
+
+const openDetail = (item) => {
+  apiError.value = ''
+  selected.value = item
+  detail.value.open = true
+}
+
+const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.role === role)
+
+// Trip log dialog
+const emptyTripLogForm = () => ({
+  departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
+  odometer_start: null, odometer_end: null, others: '',
+})
+const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null })
+
+// API sends 'YYYY-MM-DD HH:mm:ss' (UTC-cast datetime column); the input wants
+// 'YYYY-MM-DDTHH:mm' in local time.
+const toInputValue = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const openTripLog = (record) => {
+  tripLog.value = {
+    open: true,
+    error: '',
+    target: record,
+    form: {
+      departed_office_at: toInputValue(record.departed_office_at),
+      arrived_destination_at: toInputValue(record.arrived_destination_at),
+      departed_destination_at: toInputValue(record.departed_destination_at),
+      returned_office_at: toInputValue(record.returned_office_at),
+      odometer_start: record.odometer_start,
+      odometer_end: record.odometer_end,
+      others: record.others || '',
+    },
+  }
+}
+
+const CHECKPOINTS = [
+  ['departed_office_at', 'Departed office'],
+  ['arrived_destination_at', 'Arrived at destination'],
+  ['departed_destination_at', 'Departed destination'],
+  ['returned_office_at', 'Returned to office'],
+]
+
+// Same two rules the server enforces, checked client-side first so a mistake
+// shows next to the field instead of round-tripping to the API to find out.
+const validateTripLog = (form) => {
+  const start = form.odometer_start
+  const end = form.odometer_end
+  if (start !== null && start !== '' && end !== null && end !== '' && Number(end) < Number(start)) {
+    return 'Odometer reading on return must be at or after the reading at departure.'
+  }
+  const filled = CHECKPOINTS
+    .map(([field, label]) => ({ field, label, at: form[field] ? new Date(form[field]) : null }))
+    .filter((c) => c.at)
+  for (let i = 1; i < filled.length; i++) {
+    if (filled[i].at < filled[i - 1].at) {
+      return `${filled[i].label} cannot be earlier than ${filled[i - 1].label}.`
+    }
+  }
+  return ''
+}
+
+const submitTripLog = async () => {
+  const error = validateTripLog(tripLog.value.form)
+  if (error) { tripLog.value.error = error; return }
+
+  loading.value = true
+  tripLog.value.error = ''
+  try {
+    const form = tripLog.value.form
+    const body = {
+      departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
+      arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,
+      departed_destination_at: form.departed_destination_at ? form.departed_destination_at.replace('T', ' ') + ':00' : null,
+      returned_office_at: form.returned_office_at ? form.returned_office_at.replace('T', ' ') + ':00' : null,
+      odometer_start: form.odometer_start === '' ? null : form.odometer_start,
+      odometer_end: form.odometer_end === '' ? null : form.odometer_end,
+      others: form.others || null,
+    }
+    const id = tripLog.value.target.conduction_request_id
+    const res = await fetch(`${API_BASE}/conduction-requests/${id}/trip-log`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to save the trip log')
+    }
+    const updated = await res.json()
+    await fetchData()
+    selected.value = updated
+    tripLog.value.open = false
+    notify('Trip log saved')
+  } catch (error) {
+    tripLog.value.error = error.message
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchData)
+</script>
+
+<style scoped>
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.page-header { margin-bottom: 28px; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
+.filter-field { width: 240px; max-width: 100%; }
+@media (max-width: 599px) {
+  .filter-field { flex: 1 1 100%; width: 100%; }
+}
+
+.section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary-strong));
+  margin: 20px 0 10px;
+}
+.section-title:first-child { margin-top: 0; }
+
+.field-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+.field-value {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgb(var(--v-theme-on-surface));
+  margin-bottom: 8px;
+}
+
+.conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
+.conduction-table :deep(thead th) {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.conduction-table :deep(tbody tr) { cursor: pointer; }
+.conduction-table :deep(tbody tr:focus-visible) {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
+}
+.cell-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

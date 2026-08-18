@@ -8,6 +8,7 @@ const routes = [
   { path: '/staff', component: () => import('../views/StaffView.vue') },
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue') },
   { path: '/manage-requests', component: () => import('../views/ManageRequestView.vue') },
+  { path: '/conduction-requests', component: () => import('../views/ConductionRequestView.vue') },
   { path: '/sms', component: () => import('../views/SmsView.vue') },
   { path: '/files', component: () => import('../views/FilesView.vue') },
   { path: '/logs', component: () => import('../views/LogsView.vue') },

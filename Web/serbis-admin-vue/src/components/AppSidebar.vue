@@ -116,6 +116,7 @@ const { theme, toggle } = useAppTheme()
 const mainMenu = [
   { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
   { to: '/manage-requests', icon: 'mdi-clipboard-text-outline', title: 'Resident Requests' },
+  { to: '/conduction-requests', icon: 'mdi-ambulance', title: 'Conduction Requests' },
   { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
   { to: '/vehicles', icon: 'mdi-ambulance', title: 'Vehicles' },
   { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Equipment Inventory' },
