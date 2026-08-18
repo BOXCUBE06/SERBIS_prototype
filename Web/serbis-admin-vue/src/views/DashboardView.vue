@@ -9,13 +9,6 @@
       </div>
 
       <div class="d-flex align-center gap-4 flex-wrap">
-        <!-- Global period filter — drives hero metric, overview chart & activity feed -->
-        <v-btn-toggle v-model="periodFilter" mandatory variant="outlined" color="primary" density="comfortable" divided rounded="lg">
-          <v-btn value="today" size="small" class="text-none font-weight-bold px-4">Today</v-btn>
-          <v-btn value="week" size="small" class="text-none font-weight-bold px-4">Week</v-btn>
-          <v-btn value="month" size="small" class="text-none font-weight-bold px-4">Month</v-btn>
-        </v-btn-toggle>
-
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
@@ -99,14 +92,21 @@
     <v-row v-else class="mb-2">
       <v-col cols="12" lg="7">
         <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 6 }">
-          <div class="d-flex justify-space-between align-start mb-2">
+          <div class="d-flex justify-space-between align-start mb-2 flex-wrap gap-2">
             <div>
-              <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Total Requests</div>
-              <div class="text-caption text-medium-emphasis">{{ periodLabel }}</div>
+              <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Requests Filed</div>
+              <div class="text-caption text-medium-emphasis">{{ periodLabelFor(heroPeriod) }}</div>
             </div>
-            <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
-              <v-icon color="primary" size="20">mdi-chart-line</v-icon>
-            </v-avatar>
+            <div class="d-flex align-center gap-3">
+              <v-btn-toggle v-model="heroPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+              </v-btn-toggle>
+              <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
+                <v-icon color="primary" size="20">mdi-chart-line</v-icon>
+              </v-avatar>
+            </div>
           </div>
           <div class="text-h1 font-weight-black mb-4">{{ displayValues.hero ?? heroTotal }}</div>
           <div style="height: 70px;">
@@ -118,8 +118,17 @@
       <v-col cols="12" lg="5">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 7 }">
           <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Requests Overview</v-card-title>
-            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Request Trend</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(trendPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="trendPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-card-text class="pt-2">
             <v-sheet height="220" color="transparent">
@@ -138,23 +147,21 @@
       <v-col cols="12" lg="7">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 8 }">
           <v-card-item>
-            <v-card-title class="text-body-1 font-weight-bold">Request Density Map</v-card-title>
-            <v-card-subtitle>All-time distribution</v-card-subtitle>
-            <template v-slot:append>
-              <v-icon>mdi-map-marker-radius</v-icon>
-            </template>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Requests by Barangay</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(mapPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="mapPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-card-text class="pt-0">
             <div ref="mapEl" style="height: 320px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
-            <!-- Color meaning otherwise lives only in the hover tooltip —
-                 a visible legend is what makes the choropleth readable
-                 without hovering every polygon. -->
-            <div class="d-flex align-center flex-wrap gap-4 mt-3 px-1">
-              <div class="d-flex align-center gap-2" v-for="tier in mapLegend" :key="tier.label">
-                <span class="legend-dot" :style="{ backgroundColor: tier.color }"></span>
-                <span class="text-caption text-medium-emphasis">{{ tier.label }}</span>
-              </div>
-            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -162,11 +169,18 @@
       <v-col cols="12" lg="5">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 9 }">
           <v-card-item>
-            <v-card-title class="text-body-1 font-weight-bold">High Request Zones</v-card-title>
-            <v-card-subtitle>All-time</v-card-subtitle>
-            <template v-slot:append>
-              <v-icon>mdi-fire</v-icon>
-            </template>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Top Barangays</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(zonesPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="zonesPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-card-text class="pt-2">
             <div v-if="!topZones.length" class="text-center text-caption text-medium-emphasis py-8">
@@ -197,8 +211,17 @@
       <v-col cols="12" lg="7">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 10 }">
           <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Activity Feed</v-card-title>
-            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Activity Feed</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(feedPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="feedPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-tabs v-model="feedTab" color="primary" density="compact" class="px-4">
             <v-tab value="all" class="text-none font-weight-bold">All</v-tab>
@@ -211,7 +234,7 @@
             <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
 
             <div v-else-if="!filteredFeed.length" class="text-center text-caption text-medium-emphasis py-8">
-              No activity {{ periodLabel.toLowerCase() }}
+              No activity {{ periodLabelFor(feedPeriod).toLowerCase() }}
             </div>
 
             <v-list v-else density="comfortable" class="pa-0">
@@ -235,8 +258,18 @@
       <v-col cols="12" lg="5">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 11 }">
           <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Request Volume</v-card-title>
-            <v-card-subtitle>All-time by category</v-card-subtitle>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Most Requested</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(volumePeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="volumePeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <div class="px-4 pb-2">
             <v-btn-toggle v-model="volumeToggle" color="primary" density="compact" variant="outlined" divided rounded="lg">
@@ -290,12 +323,25 @@ const loading = ref(true)
 
 const chartDataRaw = ref(null)
 const volumeToggle = ref('services')
-const periodFilter = ref('week')
 const feedTab = ref('all')
 
-const topBarangays = ref([]) // Raw data, feeds the Leaflet map
+// Each stat-bearing card owns its period independently now — a single
+// shared toggle used to drive the hero card and the trend chart while the
+// map, the barangay ranking and the category breakdown were silently
+// always all-time, which is what the map/zones/volume cards default to
+// here so their look doesn't change until someone touches the toggle.
+const heroPeriod = ref('week')
+const trendPeriod = ref('week')
+const feedPeriod = ref('week')
+const mapPeriod = ref('all')
+const zonesPeriod = ref('all')
+const volumePeriod = ref('all')
 
-const periodLabel = computed(() => ({ today: 'Today', week: 'Last 7 days', month: 'Last 30 days' }[periodFilter.value]))
+const mapDataByPeriod = ref({}) // { today|week|month|all: [{name, requests}] } — feeds the Leaflet map + Top Barangays
+const pieDataByPeriod = ref({}) // { today|week|month|all: { services: {...}, items: {...} } }
+
+const PERIOD_LABELS = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All-time' }
+const periodLabelFor = (period) => PERIOD_LABELS[period] || ''
 
 // Count-up animation for headline numbers on load / filter change
 const displayValues = reactive({})
@@ -340,8 +386,9 @@ const fetchDashboardData = async () => {
     serviceRequests.value = data.serviceRequests || []
     borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
-    topBarangays.value = data.mapData || []
+    mapDataByPeriod.value = data.mapDataByPeriod || {}
     chartDataRaw.value = data.charts || null
+    pieDataByPeriod.value = data.charts?.pieByPeriod || {}
 
   } catch (error) {
     console.error("Failed to load dashboard:", error)
@@ -373,15 +420,6 @@ const getStatusColor = (status) => {
   }
 }
 
-// Mirrors getMapColor's tiers below — kept as a visible legend so the
-// choropleth's color meaning isn't locked behind a hover tooltip.
-const mapLegend = [
-  { label: 'High (30+)', color: '#d32f2f' },
-  { label: 'Medium (16–30)', color: '#f57c00' },
-  { label: 'Low (1–15)', color: '#2E8B75' },
-  { label: 'None', color: '#e0e0e0' },
-]
-
 const getHeatColor = (percentage) => {
   if (percentage > 70) return 'error'
   if (percentage > 40) return 'warning'
@@ -390,7 +428,7 @@ const getHeatColor = (percentage) => {
 
 // Top 5 zones ranked by request volume, percentage relative to the busiest zone
 const topZones = computed(() => {
-  const list = topBarangays.value
+  const list = mapDataByPeriod.value[zonesPeriod.value] || []
   if (!list.length) return []
   const max = Math.max(...list.map(b => b.requests))
   return [...list]
@@ -402,11 +440,11 @@ const topZones = computed(() => {
 // Headline metric: real aggregate from the backend's day-by-day series (not the 5-item sample lists)
 const heroTotal = computed(() => {
   if (!chartDataRaw.value) return 0
-  if (periodFilter.value === 'today') {
+  if (heroPeriod.value === 'today') {
     const series = chartDataRaw.value.bar.week
     return series.data[series.data.length - 1] || 0
   }
-  const series = chartDataRaw.value.bar[periodFilter.value]
+  const series = chartDataRaw.value.bar[heroPeriod.value]
   return series.data.reduce((a, b) => a + b, 0)
 })
 
@@ -414,7 +452,7 @@ watch(heroTotal, (val) => animateValue('hero', val))
 
 const heroSparklineData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
+  const key = heroPeriod.value === 'today' ? 'week' : heroPeriod.value
   const source = chartDataRaw.value.bar[key]
   return {
     labels: source.labels,
@@ -461,13 +499,13 @@ const isWithinPeriod = (dateStr, period) => {
 const filteredFeed = computed(() => {
   return unifiedFeed.value.filter(item => {
     if (feedTab.value !== 'all' && item.kind !== feedTab.value) return false
-    return isWithinPeriod(item.date, periodFilter.value)
+    return isWithinPeriod(item.date, feedPeriod.value)
   })
 })
 
 const volumeChartData = computed(() => {
-  if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const source = chartDataRaw.value.pie[volumeToggle.value]
+  const source = pieDataByPeriod.value[volumePeriod.value]?.[volumeToggle.value]
+  if (!source) return { labels: [], datasets: [] }
   const paired = source.labels
     .map((label, i) => ({ label, value: source.data[i] }))
     .sort((a, b) => b.value - a.value)
@@ -525,7 +563,7 @@ const volumeChartOptions = {
 // time-series belongs on Line, Bar is for unordered category comparison).
 const barChartData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
+  const key = trendPeriod.value === 'today' ? 'week' : trendPeriod.value
   const source = chartDataRaw.value.bar[key]
   return {
     labels: source.labels,
@@ -572,7 +610,7 @@ let geoLayer = null
 // Keyed on the exact backend name — no case folding, so a rename on either
 // side fails loudly as an unmatched grey polygon rather than silently.
 const requestCountByName = computed(() =>
-  Object.fromEntries(topBarangays.value.map(b => [b.name, b.requests]))
+  Object.fromEntries((mapDataByPeriod.value[mapPeriod.value] || []).map(b => [b.name, b.requests]))
 )
 
 const styleFor = (feature) => ({
