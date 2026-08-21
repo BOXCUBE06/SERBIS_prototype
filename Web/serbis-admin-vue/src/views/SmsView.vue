@@ -49,7 +49,29 @@
                   bg-color="grey-lighten-5"
                   class="font-weight-medium"
                   :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
-                ></v-select>
+                >
+                  <!-- The old duplicate panel had a Select All and the rewrite
+                       that swapped a hardcoded list for real GET /barangays rows
+                       dropped it. Deliberately NOT the old implementation: that
+                       one sent a literal 'all' sentinel, and sendBlast validates
+                       barangays.* as integer|exists:tbl_barangay,barangay_id, so
+                       'all' is a 422 now. This selects every real barangay_id. -->
+                  <template #prepend-item>
+                    <v-list-item :title="allBarangaysSelected ? 'Clear all' : 'Select all barangays'" @click="toggleAllBarangays">
+                      <template #prepend>
+                        <v-checkbox-btn
+                          :model-value="allBarangaysSelected"
+                          :indeterminate="someBarangaysSelected"
+                          color="error"
+                        ></v-checkbox-btn>
+                      </template>
+                      <template #subtitle>
+                        <span class="text-caption">{{ barangays.length }} barangays — every active resident in the municipality</span>
+                      </template>
+                    </v-list-item>
+                    <v-divider class="mt-2"></v-divider>
+                  </template>
+                </v-select>
               </div>
 
               <div class="mb-2">
@@ -127,6 +149,19 @@ const isValid = computed(() => {
     && selectedBarangays.value.length > 0
 })
 
+// Guarded on barangays.length > 0 so an empty list (still loading, or the
+// request failed) does not report "all selected" when nothing is.
+const allBarangaysSelected = computed(() =>
+  barangays.value.length > 0 && selectedBarangays.value.length === barangays.value.length)
+const someBarangaysSelected = computed(() =>
+  selectedBarangays.value.length > 0 && !allBarangaysSelected.value)
+
+const toggleAllBarangays = () => {
+  selectedBarangays.value = allBarangaysSelected.value
+    ? []
+    : barangays.value.map(b => b.barangay_id)
+}
+
 const fetchBarangays = async () => {
   barangaysLoading.value = true
   try {
@@ -151,12 +186,18 @@ const sendSmsBlast = async () => {
   const { valid } = await form.value.validate()
   if (!valid) return
 
-  const targetNames = barangays.value
-    .filter(b => selectedBarangays.value.includes(b.barangay_id))
-    .map(b => b.barangay_name)
-    .join(', ')
+  // Selecting every barangay is one tap now, and the blast is billed per real
+  // send — so the confirmation names the scale instead of listing every
+  // barangay, which is the case where a wall of names reads as detail rather
+  // than as a warning.
+  const confirmMessage = allBarangaysSelected.value
+    ? `Dispatch this alert to EVERY barangay in the municipality — all ${barangays.value.length} of them, and every active resident in each?`
+    : `Dispatch this alert to all active residents in: ${barangays.value
+        .filter(b => selectedBarangays.value.includes(b.barangay_id))
+        .map(b => b.barangay_name)
+        .join(', ')}?`
 
-  if (!confirm(`Dispatch this alert to all active residents in: ${targetNames}?`)) return
+  if (!confirm(confirmMessage)) return
 
   loading.value = true
   alert.value.show = false
