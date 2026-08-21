@@ -2,7 +2,7 @@
   <v-container fluid class="fill-height align-start pa-6 bg-background">
     <v-row class="ma-0 w-100 align-stretch" :style="rowStyle">
 
-      <v-col cols="12" :md="7" :lg="8" class="pa-0 h-100">
+      <v-col cols="12" class="pa-0 h-100">
         <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
 
           <div class="px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
@@ -21,6 +21,15 @@
                   <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
                   of {{ residents.length }} residents
                 </template>
+              </div>
+
+              <!-- This used to live on the placeholder card in the old permanent
+                   side column, which is gone. It is the only place the panel
+                   states that the rows are keyboard-navigable, so it moves here
+                   rather than being lost with the card. -->
+              <div v-if="!initialLoad && filteredAndSortedResidents.length" class="text-caption text-medium-emphasis mt-1">
+                Tip: <kbd class="kbd">↑</kbd> <kbd class="kbd">↓</kbd> to move between rows,
+                <kbd class="kbd">Enter</kbd> to open a profile.
               </div>
             </div>
 
@@ -226,62 +235,34 @@
         </v-card>
       </v-col>
 
-      <!-- Detail panel — desktop -->
-      <v-col v-if="showSidePanel" cols="12" md="5" lg="4" class="pa-0 pl-md-4 h-100">
-        <transition name="slide-fade" mode="out-in">
-          <v-card
-            v-if="selectedResident"
-            key="profile"
-            elevation="3"
-            rounded="lg"
-            class="bg-surface h-100 d-flex flex-column position-relative"
-          >
-            <ResidentDetailPanel
-              :resident="selectedResident"
-              :status-loading="statusToggleLoading"
-              :hidden-by-filter="selectionHidden"
-              @close="selectedResident = null"
-              @edit="openExistingEditModal"
-              @toggle-status="toggleStatus"
-              @delete="askDelete"
-              @clear-filters="clearFilters"
-            />
-          </v-card>
-
-          <v-card
-            v-else
-            key="placeholder"
-            elevation="3"
-            rounded="lg"
-            class="bg-surface h-100 d-flex flex-column align-center justify-center pa-6 text-center"
-          >
-            <v-icon size="64" class="mb-4 text-medium-emphasis">mdi-account-search</v-icon>
-            <h3 class="text-h6 font-weight-bold text-high-emphasis">No head of the family selected</h3>
-            <p class="text-body-1 text-medium-emphasis mt-2">
-              Select a row in the table to see the full profile here.
-            </p>
-            <p class="text-body-2 text-medium-emphasis mt-4">
-              Tip: use <kbd class="kbd">↑</kbd> <kbd class="kbd">↓</kbd> to move between rows and
-              <kbd class="kbd">Enter</kbd> to open one.
-            </p>
-          </v-card>
-        </transition>
-      </v-col>
     </v-row>
 
-    <!-- Detail panel — small screens, as a full-height sheet -->
-    <v-dialog v-model="mobileSheet" fullscreen transition="dialog-bottom-transition">
-      <v-card v-if="selectedResident" class="bg-surface d-flex flex-column">
-        <ResidentDetailPanel
-          :resident="selectedResident"
-          :status-loading="statusToggleLoading"
-          @close="selectedResident = null"
-          @edit="openExistingEditModal"
-          @toggle-status="toggleStatus"
-          @delete="askDelete"
-        />
-      </v-card>
-    </v-dialog>
+    <!-- The profile used to be a permanent grid column, which meant the table
+         gave up a third of the page whether or not anyone had opened a
+         resident — and when nobody had, that third held a placeholder card
+         saying so. One temporary drawer at every breakpoint instead: hidden
+         until a row is clicked, closing on the X, on Esc, or on the scrim, and
+         handing the width straight back to the table. -->
+    <v-navigation-drawer
+      v-model="detailOpen"
+      location="right"
+      temporary
+      :width="drawerWidth"
+      class="bg-surface"
+      aria-label="Head of the family profile"
+    >
+      <ResidentDetailPanel
+        v-if="selectedResident"
+        :resident="selectedResident"
+        :status-loading="statusToggleLoading"
+        :hidden-by-filter="selectionHidden"
+        @close="closeDetail"
+        @edit="openExistingEditModal"
+        @toggle-status="toggleStatus"
+        @delete="askDelete"
+        @clear-filters="clearFilters"
+      />
+    </v-navigation-drawer>
 
     <!-- Add / Edit -->
     <v-dialog v-model="modal.isOpen" max-width="680" persistent>
@@ -460,7 +441,7 @@ import {
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
-const { mdAndUp } = useDisplay()
+const { mdAndUp, width: viewportWidth } = useDisplay()
 
 // Four columns are fixed px and four are percentages, and the percentages add
 // to 51 rather than to what is left of 100. The table is `table-layout: fixed`,
@@ -526,13 +507,40 @@ const formData = ref({
   email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
 })
 
-const showSidePanel = computed(() => mdAndUp.value)
-const mobileSheet = computed({
-  get: () => !mdAndUp.value && Boolean(selectedResident.value),
-  set: (v) => { if (!v) selectedResident.value = null },
+// The drawer is open exactly when a resident is selected. Writing false — the
+// scrim, Esc, the X — clears the selection, which is what closes it; there is
+// no second piece of state that can disagree with the first.
+const detailOpen = computed({
+  get: () => Boolean(selectedResident.value),
+  set: (open) => { if (!open) selectedResident.value = null },
 })
+const closeDetail = () => { selectedResident.value = null }
+
+// Full width on a phone, a readable column on anything larger. The panel is a
+// single column of label/value pairs, so past ~460px it is just a long line.
+// Off useDisplay's reactive width, not window.innerWidth, which would be read
+// once and never again on resize.
+const drawerWidth = computed(() => Math.min(viewportWidth.value, 460))
+
+// Esc closes it. v-navigation-drawer, unlike v-dialog, has no Esc handling of
+// its own, and the drawer can hold focus with nothing else listening.
+//
+// Not while a dialog is up, though. Edit and Delete both open over the drawer,
+// and a window-level listener cannot see that something nearer the user owns
+// the key: pressing Esc in the edit form closed the profile *behind* the form —
+// and that form is `persistent`, so it stayed open over a panel that was no
+// longer there.
+const onEscape = (event) => {
+  if (event.key !== 'Escape') return
+  if (modal.value.isOpen || deleteDialog.value.show) return
+  if (selectedResident.value) closeDetail()
+}
+
+// One column now, so the table gets the full width in both directions: the row
+// is the page height less the container's own padding, and the table body is
+// that less the card's header, the barangay tabs and the table's own header.
 const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 96px);' : ''))
-const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 268px)' : '60vh'))
+const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 292px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -849,10 +857,16 @@ const confirmDelete = async () => {
   }
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  loadAll()
+  window.addEventListener('keydown', onEscape)
+})
 // One blob per resident would otherwise survive every visit to this view for
 // the life of the tab.
-onUnmounted(releaseResidentPhotos)
+onUnmounted(() => {
+  releaseResidentPhotos()
+  window.removeEventListener('keydown', onEscape)
+})
 </script>
 
 <style scoped>
@@ -1039,11 +1053,9 @@ onUnmounted(releaseResidentPhotos)
   border: 0;
 }
 
-.slide-fade-enter-active, .slide-fade-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateX(12px); }
 
 @media (prefers-reduced-motion: reduce) {
-  .tab-btn, .transition-btn, .slide-fade-enter-active, .slide-fade-leave-active { transition: none; }
+  .tab-btn, .transition-btn { transition: none; }
   .transition-btn:hover { transform: none; }
 }
 </style>
