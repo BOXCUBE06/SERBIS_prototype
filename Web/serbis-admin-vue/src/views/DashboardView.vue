@@ -5,7 +5,7 @@
     <div class="d-flex justify-space-between align-center flex-wrap gap-4 mb-6">
       <div>
         <h1 class="text-h4 font-weight-black mb-1">Dashboard</h1>
-        <div class="text-subtitle-1 text-medium-emphasis">Welcome back! Here's what's happening today.</div>
+        <div class="text-subtitle-1 text-medium-emphasis">Request volume, barangay spread and fleet status. Each card sets its own period.</div>
       </div>
 
       <div class="d-flex align-center gap-4 flex-wrap">

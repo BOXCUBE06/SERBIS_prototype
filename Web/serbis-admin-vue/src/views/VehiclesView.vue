@@ -7,7 +7,7 @@
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
             <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Vehicles</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Live readiness across every emergency unit</div>
+            <div class="text-subtitle-2 text-medium-emphasis">Which units are available and which are currently dispatched</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Unit
@@ -89,7 +89,7 @@
             {{ vehicles.length ? 'No units match your filters' : 'No units in the fleet yet' }}
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first emergency unit to get started.' }}
+            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
           </div>
         </div>
 

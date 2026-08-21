@@ -9,8 +9,11 @@
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
             <div>
-              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Targeted Text Blast</h2>
-              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">Dispatch critical SMS alerts to specific barangays</div>
+              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Text Blast (SMS)</h2>
+              <!-- "active, opted-in" is exact: SmsController::sendBlast filters
+                   status = Active AND sms_opt_in AND a non-null phone number, so
+                   "every resident" would overstate who actually receives this. -->
+              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">One message to the active, opted-in residents of the barangays you pick</div>
             </div>
           </div>
 
@@ -66,7 +69,7 @@
                         ></v-checkbox-btn>
                       </template>
                       <template #subtitle>
-                        <span class="text-caption">{{ barangays.length }} barangays — every active resident in the municipality</span>
+                        <span class="text-caption">{{ barangays.length }} barangays — everyone reachable in the municipality</span>
                       </template>
                     </v-list-item>
                     <v-divider class="mt-2"></v-divider>
@@ -88,7 +91,7 @@
                   counter="160"
                   class="font-weight-medium text-body-1"
                   :rules="[
-                    v => !!v || 'An emergency message is required.',
+                    v => !!v || 'A message is required.',
                     v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
                   ]"
                 ></v-textarea>
@@ -108,7 +111,11 @@
                   elevation="2"
                 >
                   <v-icon start size="24" class="mr-2">mdi-send</v-icon>
-                  <span class="text-h6 font-weight-bold">Dispatch Blast</span>
+                  <!-- "Send", not "Dispatch". Dispatch means sending a vehicle
+                       everywhere else in this panel (Ambulance Dispatch
+                       Requests, Approve & Dispatch); reusing it for SMS blurs
+                       the one word the desk uses for a physical response. -->
+                  <span class="text-h6 font-weight-bold">Send Blast</span>
                 </v-btn>
               </div>
             </v-form>
@@ -191,8 +198,8 @@ const sendSmsBlast = async () => {
   // barangay, which is the case where a wall of names reads as detail rather
   // than as a warning.
   const confirmMessage = allBarangaysSelected.value
-    ? `Dispatch this alert to EVERY barangay in the municipality — all ${barangays.value.length} of them, and every active resident in each?`
-    : `Dispatch this alert to all active residents in: ${barangays.value
+    ? `Send this message to EVERY barangay in the municipality — all ${barangays.value.length} of them, and every active, opted-in resident in each?`
+    : `Send this message to the active, opted-in residents of: ${barangays.value
         .filter(b => selectedBarangays.value.includes(b.barangay_id))
         .map(b => b.barangay_name)
         .join(', ')}?`

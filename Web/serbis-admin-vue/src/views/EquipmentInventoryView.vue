@@ -7,7 +7,7 @@
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
             <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Equipment Inventory</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Stock levels across every resource category</div>
+            <div class="text-subtitle-2 text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Equipment

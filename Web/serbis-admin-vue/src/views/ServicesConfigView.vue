@@ -8,7 +8,7 @@
           <div>
             <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Manage Services</h2>
             <div class="text-subtitle-1 text-medium-emphasis">
-              Every emergency and public service residents can request from the MDRRMO
+              What residents can request from the MDRRMO, and how each one appears in the app
             </div>
           </div>
           <v-btn
