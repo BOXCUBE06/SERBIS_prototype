@@ -48,32 +48,38 @@
     <!-- KPI strip: every headline number in one scannable row, independent of
          the trend card's height. Cramming these into a sidebar next to the
          hero card (the old layout) meant the two fought over vertical space —
-         6 stats now need their own row instead of being squeezed into 5/12
-         of one. -->
+         the stats need their own row instead of being squeezed into 5/12
+         of one.
+
+         A CSS grid rather than v-col, because the number of cards is not fixed:
+         the ambulance card is only sent when something is pending, so the strip
+         is four wide or five wide depending on the day. v-col takes a twelfth,
+         and five cards do not divide twelve — md="2" left a third of the row
+         empty at four cards, and no integer column width fills it at five.
+         `repeat(N, 1fr)` fills the row at any N. -->
     <v-row v-if="loading" class="mb-2">
       <v-col cols="12"><v-skeleton-loader type="card" height="88"></v-skeleton-loader></v-col>
     </v-row>
-    <v-row v-else dense class="mb-2">
-      <v-col cols="6" sm="4" md="2" v-for="(stat, i) in kpiStats" :key="stat.title">
-        <v-card
-          elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
-          :class="{ 'cursor-pointer': stat.route }"
-          :style="{ '--stagger-i': i }"
-          :role="stat.route ? 'button' : undefined"
-          :tabindex="stat.route ? 0 : undefined"
-          @click="stat.route && goTo(stat.route)"
-          @keydown.enter="stat.route && goTo(stat.route)"
-        >
-          <v-avatar :color="stat.color || 'primary'" variant="tonal" size="40" rounded="lg" class="mr-3 flex-shrink-0">
-            <v-icon :color="stat.color || 'primary'" size="20">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
-          </v-avatar>
-          <div class="min-width-0">
-            <div class="text-h6 font-weight-black lh-1">{{ displayValues[stat.title] ?? stat.value }}</div>
-            <div class="text-caption font-weight-bold text-medium-emphasis text-truncate">{{ stat.title }}</div>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <div v-else class="kpi-grid mb-2" :style="{ '--kpi-count': kpiStats.length }">
+      <v-card
+        v-for="(stat, i) in kpiStats" :key="stat.title"
+        elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
+        :class="{ 'cursor-pointer': stat.route }"
+        :style="{ '--stagger-i': i }"
+        :role="stat.route ? 'button' : undefined"
+        :tabindex="stat.route ? 0 : undefined"
+        @click="stat.route && goTo(stat.route)"
+        @keydown.enter="stat.route && goTo(stat.route)"
+      >
+        <v-avatar :color="stat.color || 'primary'" variant="tonal" size="40" rounded="lg" class="mr-3 flex-shrink-0">
+          <v-icon :color="stat.color || 'primary'" size="20">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
+        </v-avatar>
+        <div class="min-width-0">
+          <div class="text-h6 font-weight-black lh-1">{{ displayValues[stat.title] ?? stat.value }}</div>
+          <div class="text-caption font-weight-bold text-medium-emphasis kpi-label" :title="stat.title">{{ stat.title }}</div>
+        </div>
+      </v-card>
+    </div>
 
     <!-- Trend row: headline total + the period-scoped bar chart, grouped
          together because both answer "what's happening in the selected
@@ -712,6 +718,40 @@ onUnmounted(() => {
 
 .kpi-tile {
   min-height: 72px;
+}
+
+/* Wraps rather than truncating. A tile is ~306px at 1920 with five cards and
+   ~175px at the tablet tier, and "Pending Ambulance Requests" fits one line of
+   neither — ellipsing the one card that only appears when it needs acting on is
+   the wrong trade. Three lines is what the longest title needs at the narrowest
+   tier; the clamp only bites past that, so wider tiles still settle at one or
+   two and the grid keeps every tile the same height. */
+.kpi-label {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+/* Two up on a phone, three on a tablet, then one row of whatever arrived —
+   the same 600/960 breakpoints the old cols="6" sm="4" md="2" used, and the
+   8px gap a dense v-row produced (two 4px gutters). */
+.kpi-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 600px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .kpi-grid {
+    grid-template-columns: repeat(var(--kpi-count, 4), minmax(0, 1fr));
+  }
 }
 
 .legend-dot {

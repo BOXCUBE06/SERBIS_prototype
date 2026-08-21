@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Models\EquipmentBorrowing;
-use App\Models\Equipment;
+use App\Models\ConductionRequest;
+use App\Models\Vehicle;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -20,13 +21,14 @@ class AnalyticsController extends Controller
         $totalResidents = Resident::count();
         $pendingService = ServiceRequest::where('status', 'Pending')->count();
         $pendingBorrow = EquipmentBorrowing::where('status', 'Pending')->count();
-        $totalEquipment = Equipment::sum('total_quantity');
-        $availableEquipment = Equipment::sum('available_quantity'); // Based on tbl_equipments column
-        $borrowedEquipment = $totalEquipment - $availableEquipment; // Currently out on loan
-        $overdueBorrowings = EquipmentBorrowing::where('status', 'Released')
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<', Carbon::today())
-            ->count();
+        $availableVehicles = Vehicle::where('status', 'Available')->count();
+
+        // tbl_conduction_requests has no status column — the form is filed by
+        // MDRRMO staff and its only lifecycle is the trip log, so "pending"
+        // here means the trip was never dispatched. Known limitation, recorded
+        // in docs/dashboard-kpis.md: nothing ever closes a request that was
+        // filed and then handled off-system, so those keep counting.
+        $pendingAmbulance = ConductionRequest::whereNull('departed_office_at')->count();
 
         $kpiStats = [
             [
@@ -34,10 +36,10 @@ class AnalyticsController extends Controller
                 'value' => number_format($totalResidents),
                 'icon' => 'mdi-account-group',
                 'color' => 'blue',
-                'subtitle' => 'Registered users in system'
+                'subtitle' => 'Registered users in system',
             ],
             [
-                'title' => 'Pending Service',
+                'title' => 'Pending Service Requests',
                 'value' => number_format($pendingService),
                 'icon' => 'mdi-clipboard-text-clock',
                 'color' => 'orange',
@@ -45,7 +47,7 @@ class AnalyticsController extends Controller
                 'route' => ['path' => '/manage-requests', 'query' => ['status' => 'Pending']],
             ],
             [
-                'title' => 'Pending Borrow',
+                'title' => 'Pending Borrow Requests',
                 'value' => number_format($pendingBorrow),
                 'icon' => 'mdi-hand-extended',
                 'color' => 'orange',
@@ -53,30 +55,28 @@ class AnalyticsController extends Controller
                 'route' => ['path' => '/borrowings', 'query' => ['status' => 'Pending']],
             ],
             [
-                'title' => 'Available Equipment',
-                'value' => number_format($availableEquipment),
-                'icon' => 'mdi-toolbox',
+                'title' => 'Available Vehicles',
+                'value' => number_format($availableVehicles),
+                'icon' => 'mdi-ambulance',
                 'color' => 'green',
-                'subtitle' => 'Items ready for dispatch',
-                'route' => ['path' => '/inventory'],
-            ],
-            [
-                'title' => 'Borrowed Equipment',
-                'value' => number_format($borrowedEquipment),
-                'icon' => 'mdi-toolbox-outline',
-                'color' => 'primary',
-                'subtitle' => 'Currently out on loan',
-                'route' => ['path' => '/borrowings', 'query' => ['status' => 'Released']],
-            ],
-            [
-                'title' => 'Overdue Returns',
-                'value' => number_format($overdueBorrowings),
-                'icon' => 'mdi-alert-circle-outline',
-                'color' => $overdueBorrowings > 0 ? 'error' : 'green',
-                'subtitle' => 'Past the agreed due date',
-                'route' => ['path' => '/borrowings', 'query' => ['overdue' => '1']],
+                'subtitle' => 'Units ready for dispatch',
+                'route' => ['path' => '/vehicles'],
             ],
         ];
+
+        // Fifth card only when there is something to act on. A standing zero is
+        // not information, and the panel lays the strip out from the number of
+        // cards it receives, so four fill the row on their own.
+        if ($pendingAmbulance > 0) {
+            $kpiStats[] = [
+                'title' => 'Pending Ambulance Requests',
+                'value' => number_format($pendingAmbulance),
+                'icon' => 'mdi-clock-alert-outline',
+                'color' => 'error',
+                'subtitle' => 'Filed, not yet dispatched',
+                'route' => ['path' => '/conduction-requests'],
+            ];
+        }
 
         // 2. Fetch Recent Service Requests
         $serviceRequests = ServiceRequest::with(['resident.barangay', 'service'])
