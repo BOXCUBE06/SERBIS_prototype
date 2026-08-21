@@ -22,15 +22,6 @@
                   of {{ residents.length }} residents
                 </template>
               </div>
-
-              <!-- This used to live on the placeholder card in the old permanent
-                   side column, which is gone. It is the only place the panel
-                   states that the rows are keyboard-navigable, so it moves here
-                   rather than being lost with the card. -->
-              <div v-if="!initialLoad && filteredAndSortedResidents.length" class="text-caption text-medium-emphasis mt-1">
-                Tip: <kbd class="kbd">↑</kbd> <kbd class="kbd">↓</kbd> to move between rows,
-                <kbd class="kbd">Enter</kbd> to open a profile.
-              </div>
             </div>
 
             <div class="d-flex flex-wrap gap-3 align-center">
@@ -1098,16 +1089,6 @@ onUnmounted(() => {
 .dot-active { background: rgb(var(--v-theme-primary)); }
 .dot-inactive { background: rgba(var(--v-theme-on-surface), 0.5); }
 .dot-pending { background: rgb(var(--v-theme-warning)); }
-
-.kbd {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
