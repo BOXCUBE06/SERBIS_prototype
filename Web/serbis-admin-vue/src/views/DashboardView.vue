@@ -171,7 +171,7 @@
           <v-card-item>
             <div class="d-flex justify-space-between align-start flex-wrap gap-2">
               <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Top Barangays</v-card-title>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Barangays with Most Requests</v-card-title>
                 <v-card-subtitle class="pa-0">{{ periodLabelFor(zonesPeriod) }}</v-card-subtitle>
               </div>
               <v-btn-toggle v-model="zonesPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
@@ -337,7 +337,7 @@ const mapPeriod = ref('all')
 const zonesPeriod = ref('all')
 const volumePeriod = ref('all')
 
-const mapDataByPeriod = ref({}) // { today|week|month|all: [{name, requests}] } — feeds the Leaflet map + Top Barangays
+const mapDataByPeriod = ref({}) // { today|week|month|all: [{name, requests}] } — feeds the Leaflet map + the barangay ranking
 const pieDataByPeriod = ref({}) // { today|week|month|all: { services: {...}, items: {...} } }
 
 const PERIOD_LABELS = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All-time' }
