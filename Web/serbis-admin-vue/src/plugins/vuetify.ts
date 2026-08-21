@@ -31,13 +31,25 @@ export default createVuetify({
           background: '#F8FAFC',
           surface: '#FFFFFF',
           success: '#297A67',
+          // Success is the same green as primary, so it borrows the same fix.
+          // #297A67 on rgba(success, 0.14) over white is 4.27:1; this is 6.57:1.
+          'success-strong': '#1B5B4B',
           warning: '#F57C00',
+          // The worst of the ramp: #F57C00 on its own 14% tint is 2.36:1 — the
+          // token is a fill colour, never a text colour, in the light theme.
+          // 5.94:1. Already proved on UsersView's pending pill, which hardcoded
+          // this same value before the token existed.
+          'warning-strong': '#8A4B00',
           error: '#D32F2F',
           // The same problem as primary-strong, on the error ramp. Error text on
           // rgba(error, 0.1) over white is 4.28:1 and fails AA; this is 5.62:1.
           // On the plain surface #D32F2F is 4.98:1 and stays as it is.
           'error-strong': '#B3261E',
           info: '#1976D2',
+          // #1976D2 on rgba(info, 0.14) over white is 3.84:1. This is 5.41:1 —
+          // the shallowest darkening on the ramp that clears AA, kept close to
+          // the token so Responding still reads as the same blue.
+          'info-strong': '#155FA8',
         },
       },
       dark: {
@@ -54,11 +66,16 @@ export default createVuetify({
           success: '#34C39A',
           warning: '#F5A524',
           error: '#F16565',
-          // Already 4.93:1 on the same tint over the dark surface, so the dark
-          // theme keeps its own error and the key exists only to let the CSS be
-          // written once — the same arrangement primary-strong uses.
-          'error-strong': '#F16565',
           info: '#4F9EF8',
+          // Every dark token already clears AA on its own 10% tint over #131B2E
+          // — success 6.48:1, warning 7.08:1, info 5.32:1, error 4.95:1 — so the
+          // strong keys are aliases here. They exist only so the pill CSS can be
+          // written once and work in both themes, the same arrangement
+          // primary-strong already uses.
+          'success-strong': '#34C39A',
+          'warning-strong': '#F5A524',
+          'error-strong': '#F16565',
+          'info-strong': '#4F9EF8',
         },
       },
     },

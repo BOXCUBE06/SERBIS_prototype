@@ -89,13 +89,22 @@
                  nothing named Disapproved" rather than "nothing is disapproved
                  right now"; the chip staying put and the list explaining the
                  zero is the honest version. -->
-            <v-chip-group v-if="!initialLoad" column>
+            <!-- The group owns the selection, via v-model + :value on each chip.
+                 It used to have neither: the chips drove `filters.status` from
+                 their own @click while VChipGroup ran a second, independent
+                 useGroup selection that nothing ever set. VChip only applies its
+                 `color` when the GROUP considers it selected, so the active chip
+                 got `variant="flat"` from the ternary and then no `bg-primary`
+                 to go with it — it rendered plain grey, telling active from
+                 inactive by lightness alone. `mandatory` keeps one always on, so
+                 clicking the selected chip cannot clear the filter to nothing. -->
+            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory column>
               <v-chip
                 v-for="status in statusTabs" :key="status"
+                :value="status"
                 size="small" class="font-weight-bold"
-                :color="status === filters.status ? 'primary' : undefined"
+                color="primary"
                 :variant="status === filters.status ? 'flat' : 'tonal'"
-                @click="filters.status = status"
               >
                 {{ status }} <span class="ml-1 font-weight-black">{{ requestCounts[status] }}</span>
               </v-chip>
@@ -183,13 +192,15 @@
                     <span class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
                 </div>
-                <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold ml-2 flex-shrink-0">{{ item.status || 'Pending' }}</v-chip>
+                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(item.status)">{{ item.status || 'Pending' }}</span>
               </div>
             </div>
           </div>
 
           <div class="d-flex justify-center pa-2" style="flex-shrink: 0;">
-            <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="secondary"></v-pagination>
+            <!-- active-color was `secondary` (#0A2620), which is 1.07:1 on the
+                 dark surface — the current page number simply was not there. -->
+            <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="primary"></v-pagination>
           </div>
         </v-card>
 
@@ -229,9 +240,9 @@
                   <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
                 </div>
               </div>
-              <v-chip :color="getStatusColor(selectedRequest.status)" size="small" label class="text-uppercase font-weight-bold text-white">
+              <span class="status-pill" :class="statusPillClass(selectedRequest.status)">
                 {{ selectedRequest.status || 'Pending' }}
-              </v-chip>
+              </span>
             </div>
 
             <v-divider></v-divider>
@@ -675,8 +686,16 @@ const route = useRoute()
 // The split view needs a real breakpoint, not a media query in CSS: below it
 // the two panes are rendered one at a time rather than merely restyled, so the
 // list is not sitting offscreen holding focusable rows.
-const { mdAndUp, height: windowHeight } = useDisplay()
-const twoUp = mdAndUp
+//
+// `lg`, not `md`. Vuetify 4 moved the breakpoints (display.js: sm 600, md 840,
+// lg 1145 — v3 was 960/1280), so mdAndUp turned the split on at an 840px
+// viewport. The drawer is `permanent` at 260px and the shell adds 24px of
+// padding, so that left ~556px for two columns: the list rail's clamp(360px…)
+// floor lost to `flex-shrink` and the rail rendered 175px wide against a
+// scrollWidth of 218. lgAndUp leaves ~861px, which fits the 360px rail and a
+// detail pane that can still show a full field row.
+const { lgAndUp, height: windowHeight } = useDisplay()
+const twoUp = lgAndUp
 
 const requests = ref([])
 const vehicles = ref([])
@@ -1067,16 +1086,11 @@ const toggleSelect = (item) => {
 const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'Pending': return 'warning'
-    case 'Responding': return 'info'
-    case 'Resolved': return 'success'
-    case 'Disapproved':
-    case 'Cancelled': return 'error'
-    default: return 'warning'
-  }
-}
+// Mirrors the `row-${status}` pattern the list rows already use, so the pill and
+// the row's left border are driven by the same string and cannot disagree.
+// Replaces getStatusColor: a Vuetify colour name only ever fed v-chip, whose
+// tonal variant is what made these unreadable in the first place.
+const statusPillClass = (status) => `pill-${(status || 'Pending').toLowerCase()}`
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${getToken()}`,
@@ -1480,4 +1494,58 @@ onUnmounted(releaseAttachments)
   flex: 0 1 clamp(360px, 26vw, 560px);
   min-width: 0;
 }
+
+/* Status pills — replacing two v-chips that could not be read.
+   v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
+   `background: currentColor`. The detail-panel chip also carried `.text-white`,
+   and the utilities layer beats the components layer, so it repainted the label
+   AND the underlay white: white on white, ~1.0:1. The list chips were legible
+   but failed AA on every status (warning 2.36:1, info 3.84:1, success 4.27:1,
+   error 4.03:1, all measured on their own tint over white).
+   Same shape as UsersView's .status-pill so the two pages agree. Text uses the
+   -strong tokens; the tint keeps the plain token. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+/* The list row is a denser context than the detail header — one step smaller,
+   nothing else changes. */
+.status-pill--sm {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.pill-pending {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
+.pill-responding {
+  background: rgba(var(--v-theme-info), 0.14);
+  color: rgb(var(--v-theme-info-strong));
+}
+.pill-resolved {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success-strong));
+}
+.pill-disapproved,
+.pill-cancelled {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error-strong));
+}
+/* The dark tokens are already bright enough to use as text, but they need the
+   lighter 10% tint the measurements were taken against — 14% of a bright token
+   over #131B2E lifts the background far enough to eat the margin. Keep each
+   status on its own hue; only the alpha changes. */
+.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
+.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
+.v-theme--dark .pill-disapproved,
+.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
 </style>

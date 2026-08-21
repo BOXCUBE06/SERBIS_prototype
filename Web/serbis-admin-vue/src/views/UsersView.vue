@@ -969,10 +969,11 @@ onUnmounted(releaseResidentPhotos)
 }
 /* Pending. The warning token itself is #F57C00 in light, which is 3.0:1 on
    white — the pill text is 12px bold, so it needs 4.5:1, not the large-text
-   3:1. Hardcode a darker amber for the text (6.2:1 over the tint) and keep
-   the token for the tint and the dot. In dark the token is light enough to
-   use directly. */
-.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: #8A4B00; }
+   3:1. The darker amber (5.94:1 over the tint) is now the `warning-strong`
+   theme token rather than a hex hardcoded here; same value, one source, and
+   ManageRequestView's pills use it too. In dark the token is light enough to
+   use directly, which is what warning-strong aliases to there. */
+.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: rgb(var(--v-theme-warning-strong)); }
 .v-theme--dark .pill-pending {
   background: rgba(var(--v-theme-warning), 0.1);
   color: rgb(var(--v-theme-warning));
