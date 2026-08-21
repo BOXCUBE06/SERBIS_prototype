@@ -151,8 +151,7 @@
             v-else
             :headers="headers"
             :items="filteredAndSortedResidents"
-            v-model:page="page"
-            v-model:items-per-page="itemsPerPage"
+            :items-per-page="-1"
             fixed-header
             :height="tableHeight"
             hover
@@ -163,8 +162,8 @@
           >
             <template v-slot:bottom></template>
 
-            <template v-slot:item.rowNumber="{ index }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.photo="{ item }">
@@ -433,7 +432,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
-import { useRowNumber } from '@/composables/rowNumber'
+import { useRowNumbers } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
   releaseResidentPhotos,
@@ -482,14 +481,6 @@ const headers = [
   { title: 'Status', key: 'status', align: 'center', width: '160px' },
   { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
 ]
-
-// The footer is hidden and every resident is on one page, so these exist to
-// give the row numbers something honest to read rather than to page anything.
-// Bound with v-model regardless: if this table ever grows a footer, the
-// numbering keeps up without anyone remembering to come back here.
-const page = ref(1)
-const itemsPerPage = ref(-1)
-const rowNumber = useRowNumber(page, itemsPerPage)
 
 const residents = ref([])
 // resident_id -> object URL. Only rows the server says have a photo are ever
@@ -605,6 +596,8 @@ const filteredAndSortedResidents = computed(() => {
   }
   return [...result].sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
 })
+
+const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
 
 const clearFilters = () => {
   search.value = ''

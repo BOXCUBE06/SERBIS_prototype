@@ -102,14 +102,13 @@
           <v-data-table
             :headers="fleetHeaders"
             :items="filteredVehicles"
-            v-model:page="page"
-            v-model:items-per-page="itemsPerPage"
+            :items-per-page="10"
             item-value="vehicle_id"
             density="comfortable"
             class="fleet-table"
           >
-            <template v-slot:item.rowNumber="{ index }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.unit_identifier="{ item }">
@@ -233,7 +232,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumber } from '@/composables/rowNumber'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/vehicles`
@@ -291,6 +290,8 @@ const filteredVehicles = computed(() => {
   })
 })
 
+const rowNumber = useRowNumbers(filteredVehicles, 'vehicle_id')
+
 const fleetHeaders = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Unit', key: 'unit_identifier', width: '32%' },
@@ -298,10 +299,6 @@ const fleetHeaders = [
   { title: 'Status', key: 'status', width: '23%' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '19%' },
 ]
-
-const page = ref(1)
-const itemsPerPage = ref(10)
-const rowNumber = useRowNumber(page, itemsPerPage)
 
 const getVehicleIcon = (type) => ({
   ambulance: 'mdi-ambulance',

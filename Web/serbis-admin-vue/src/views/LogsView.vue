@@ -108,7 +108,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumber } from '@/composables/rowNumber'
+import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const activeTab = ref('system')
@@ -131,8 +131,8 @@ const smsTotal = ref(0)
 // These two tables only ever hold one page of rows, so the row number has to
 // come from the page the server was asked for — there is no full list here to
 // count a position in.
-const systemRowNumber = useRowNumber(systemPage, itemsPerPage)
-const smsRowNumber = useRowNumber(smsPage, itemsPerPage)
+const systemRowNumber = useServerRowNumber(systemPage, itemsPerPage)
+const smsRowNumber = useServerRowNumber(smsPage, itemsPerPage)
 
 // Debounced, because the search box now costs a round trip per keystroke
 // instead of filtering an array already in memory.

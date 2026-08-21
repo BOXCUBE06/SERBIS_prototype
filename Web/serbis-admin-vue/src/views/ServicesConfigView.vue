@@ -150,8 +150,8 @@
             :items-per-page-options="[10, 25, 50, -1]"
             items-per-page-text="Rows per page"
           >
-            <template v-slot:item.rowNumber="{ index }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.service_name="{ item }">
@@ -314,7 +314,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumber } from '@/composables/rowNumber'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/services`
@@ -348,7 +348,6 @@ const sortBy = ref([{ key: 'service_name', order: 'asc' }])
 const itemsPerPage = ref(10)
 const page = ref(1)
 
-const rowNumber = useRowNumber(page, itemsPerPage)
 const initialLoad = ref(true)
 const apiError = ref('')
 
@@ -410,6 +409,8 @@ const filteredServices = computed(() => {
     return matchesSearch && matchesCategory
   })
 })
+
+const rowNumber = useRowNumbers(filteredServices, 'service_id')
 
 const nameError = computed(() =>
   touched.value.name && !form.value.service_name.trim() ? 'Service name is required.' : '',

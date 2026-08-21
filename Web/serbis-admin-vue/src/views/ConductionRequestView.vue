@@ -64,8 +64,7 @@
       <v-data-table
         :headers="headers"
         :items="filteredItems"
-        v-model:page="page"
-        v-model:items-per-page="itemsPerPage"
+        :items-per-page="-1"
         density="comfortable"
         hover
         class="bg-transparent conduction-table"
@@ -73,8 +72,8 @@
         :row-props="rowProps"
         @click:row="(_e, { item }) => openDetail(item)"
       >
-        <template v-slot:item.rowNumber="{ index }">
-          <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+        <template v-slot:item.rowNumber="{ item }">
+          <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
         </template>
 
         <template v-slot:item.patient="{ item }">
@@ -300,6 +299,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const STATUS_ACCENT = {
@@ -352,6 +352,7 @@ const matchesSearch = (r) => {
 }
 const matchesStatus = (r) => statusFilter.value === ALL_STATUS || r.trip_status === statusFilter.value
 const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r)))
+const rowNumber = useRowNumbers(filteredItems, 'conduction_request_id')
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,

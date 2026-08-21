@@ -74,14 +74,13 @@
           <v-data-table
             :headers="inventoryHeaders"
             :items="filteredEquipments"
-            v-model:page="page"
-            v-model:items-per-page="itemsPerPage"
+            :items-per-page="10"
             item-value="equipment_id"
             density="comfortable"
             class="inventory-table"
           >
-            <template v-slot:item.rowNumber="{ index }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.item_name="{ item }">
@@ -194,7 +193,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumber } from '@/composables/rowNumber'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/equipments`
@@ -260,10 +259,6 @@ const inventoryHeaders = [
   { title: '', key: 'actions', sortable: false, align: 'end', width: '14%' },
 ]
 
-const page = ref(1)
-const itemsPerPage = ref(10)
-const rowNumber = useRowNumber(page, itemsPerPage)
-
 const filteredEquipments = computed(() => {
   const q = search.value.trim().toLowerCase()
   return equipments.value.filter((e) => {
@@ -277,6 +272,8 @@ const filteredEquipments = computed(() => {
     return matchesSearch && matchesStatus
   })
 })
+
+const rowNumber = useRowNumbers(filteredEquipments, 'equipment_id')
 
 const itemIcon = (name) => {
   const n = (name || '').toLowerCase()

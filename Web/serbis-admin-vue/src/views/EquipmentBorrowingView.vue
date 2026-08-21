@@ -192,8 +192,7 @@
         <v-data-table
           :headers="activeHeaders"
           :items="activeItems"
-          v-model:page="activePage"
-          v-model:items-per-page="activePerPage"
+          :items-per-page="-1"
           density="comfortable"
           hover
           class="bg-transparent borrow-table"
@@ -201,8 +200,8 @@
           :row-props="rowProps"
           @click:row="(_event, { item }) => openDetail(item)"
         >
-          <template v-slot:item.rowNumber="{ index }">
-            <span class="row-number text-medium-emphasis">{{ activeRowNumber(index) }}</span>
+          <template v-slot:item.rowNumber="{ item }">
+            <span class="row-number text-medium-emphasis">{{ activeRowNumber(item) }}</span>
           </template>
 
           <template v-slot:item.avatar="{ item }">
@@ -319,8 +318,6 @@
       <v-data-table
         :headers="historyHeaders"
         :items="historyItems"
-        v-model:page="historyPage"
-        v-model:items-per-page="historyPerPage"
         density="comfortable"
         class="bg-transparent borrow-table"
         hover
@@ -328,8 +325,8 @@
         :row-props="rowProps"
         @click:row="(_event, { item }) => openDetail(item)"
       >
-        <template v-slot:item.rowNumber="{ index }">
-          <span class="row-number text-medium-emphasis">{{ historyRowNumber(index) }}</span>
+        <template v-slot:item.rowNumber="{ item }">
+          <span class="row-number text-medium-emphasis">{{ historyRowNumber(item) }}</span>
         </template>
 
         <template v-slot:item.status="{ item }">
@@ -569,7 +566,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { useRowNumber } from '@/composables/rowNumber'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const route = useRoute()
@@ -637,16 +634,6 @@ const notify = (text, color = 'success') => {
 }
 
 const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
-
-// Two tables, two independent counters: the active list is one page of
-// everything outstanding, the history below it pages in tens.
-const activePage = ref(1)
-const activePerPage = ref(-1)
-const activeRowNumber = useRowNumber(activePage, activePerPage)
-
-const historyPage = ref(1)
-const historyPerPage = ref(10)
-const historyRowNumber = useRowNumber(historyPage, historyPerPage)
 
 const activeHeaders = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
@@ -767,6 +754,11 @@ const historyItems = computed(() =>
     .filter((b) => outcomeFilter.value === ALL_OUTCOMES || b.status === outcomeFilter.value)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
+
+// Two tables, two independent counts — a borrowing is numbered within the
+// list it actually appears in, and the same record never shows in both.
+const activeRowNumber = useRowNumbers(activeItems, 'borrow_id')
+const historyRowNumber = useRowNumbers(historyItems, 'borrow_id')
 
 // What the "Overdue" tile would leave if it were the only thing active — the
 // other filters still apply, or the number would not describe the tile that
