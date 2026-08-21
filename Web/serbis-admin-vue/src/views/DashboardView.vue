@@ -161,7 +161,12 @@
             </div>
           </v-card-item>
           <v-card-text class="pt-0">
-            <div ref="mapEl" style="height: 320px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
+            <!-- 460, not the 320 this started at. Leaflet frames the view on
+                 the barangay polygons (fitBounds, below), and that cluster is
+                 close to square, so a 320px box in a 7/12 column drew a 3.3:1
+                 letterbox: boundaries in the middle third, the rest tiles with
+                 nothing plotted on them. -->
+            <div ref="mapEl" style="height: 460px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
           </v-card-text>
         </v-card>
       </v-col>
