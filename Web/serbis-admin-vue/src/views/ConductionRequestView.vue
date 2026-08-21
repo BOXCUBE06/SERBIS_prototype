@@ -2,7 +2,7 @@
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
     <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3">
       <div>
-        <h2 class="text-h5 font-weight-bold text-high-emphasis">Conduction Requests</h2>
+        <h2 class="text-h5 font-weight-bold text-high-emphasis">Ambulance Dispatch Requests</h2>
         <div class="text-subtitle-2 text-medium-emphasis">
           MDRRMO Conduction Request Form — Echague Rescue EMS
         </div>
@@ -14,7 +14,7 @@
         height="44"
         prepend-icon="mdi-plus"
         @click="openCreate"
-      >New Conduction Request</v-btn>
+      >New Ambulance Dispatch Request</v-btn>
     </div>
 
     <div v-if="!loadError" class="filter-bar">
@@ -52,7 +52,7 @@
     <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
       <div class="text-center py-12 px-6">
         <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
-        <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load conduction requests</div>
+        <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance dispatch requests</div>
         <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
         <v-btn color="primary" variant="flat" class="text-none font-weight-bold px-6" height="44" :loading="reloading" @click="fetchData">
           Try again
@@ -94,7 +94,7 @@
         <template v-slot:no-data>
           <div class="text-center py-12">
             <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No conduction requests yet</div>
+            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
           </div>
         </template>
       </v-data-table>
@@ -104,7 +104,7 @@
     <v-dialog v-model="createDialog.open" max-width="720" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <span class="text-h6 font-weight-bold text-high-emphasis">New Conduction Request</span>
+          <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
@@ -368,7 +368,7 @@ const fetchData = async () => {
     loadError.value = ''
   } catch (error) {
     loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load conduction requests', 'error')
+    notify('Could not load ambulance dispatch requests', 'error')
   } finally {
     initialLoad.value = false
     reloading.value = false
@@ -420,7 +420,7 @@ const submitCreate = async () => {
     }
     await fetchData()
     createDialog.value.open = false
-    notify('Conduction request filed')
+    notify('Ambulance dispatch request filed')
   } catch (error) {
     apiError.value = error.message
   } finally {
