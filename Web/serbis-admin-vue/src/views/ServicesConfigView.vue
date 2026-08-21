@@ -314,6 +314,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/services`
@@ -329,9 +330,9 @@ const categories = {
 }
 
 const headers = [
-  // Position in the list as it is currently sorted and filtered, not an id.
-  // `service_id` is a database key with gaps in it, and showing that as "the
-  // number of the service" would have people reading a deleted row into a gap.
+  // Position, not `service_id` — see useRowNumber. The key has gaps in it, and
+  // printing one as "the number of the service" would have people reading a
+  // deleted row into a missing number.
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Service', key: 'service_name', minWidth: '260px' },
   { title: 'Description', key: 'description', sortable: false, minWidth: '280px' },
@@ -347,10 +348,7 @@ const sortBy = ref([{ key: 'service_name', order: 'asc' }])
 const itemsPerPage = ref(10)
 const page = ref(1)
 
-// The slot's `index` counts within the visible page, so page 2 would otherwise
-// restart at 1. "All" is -1, and there is only ever one page of it.
-const rowNumber = (index) =>
-  (itemsPerPage.value === -1 ? 0 : (page.value - 1) * itemsPerPage.value) + index + 1
+const rowNumber = useRowNumber(page, itemsPerPage)
 const initialLoad = ref(true)
 const apiError = ref('')
 

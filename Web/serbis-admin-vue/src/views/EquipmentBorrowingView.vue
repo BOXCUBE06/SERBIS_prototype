@@ -192,7 +192,8 @@
         <v-data-table
           :headers="activeHeaders"
           :items="activeItems"
-          :items-per-page="-1"
+          v-model:page="activePage"
+          v-model:items-per-page="activePerPage"
           density="comfortable"
           hover
           class="bg-transparent borrow-table"
@@ -200,6 +201,10 @@
           :row-props="rowProps"
           @click:row="(_event, { item }) => openDetail(item)"
         >
+          <template v-slot:item.rowNumber="{ index }">
+            <span class="row-number text-medium-emphasis">{{ activeRowNumber(index) }}</span>
+          </template>
+
           <template v-slot:item.avatar="{ item }">
             <v-avatar size="40" class="avatar-tint">
               <span class="avatar-initials">{{ initials(item.resident) }}</span>
@@ -314,6 +319,8 @@
       <v-data-table
         :headers="historyHeaders"
         :items="historyItems"
+        v-model:page="historyPage"
+        v-model:items-per-page="historyPerPage"
         density="comfortable"
         class="bg-transparent borrow-table"
         hover
@@ -321,6 +328,10 @@
         :row-props="rowProps"
         @click:row="(_event, { item }) => openDetail(item)"
       >
+        <template v-slot:item.rowNumber="{ index }">
+          <span class="row-number text-medium-emphasis">{{ historyRowNumber(index) }}</span>
+        </template>
+
         <template v-slot:item.status="{ item }">
           <v-chip
             size="small"
@@ -558,6 +569,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import { useRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const route = useRoute()
@@ -626,22 +638,34 @@ const notify = (text, color = 'success') => {
 
 const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
 
+// Two tables, two independent counters: the active list is one page of
+// everything outstanding, the history below it pages in tens.
+const activePage = ref(1)
+const activePerPage = ref(-1)
+const activeRowNumber = useRowNumber(activePage, activePerPage)
+
+const historyPage = ref(1)
+const historyPerPage = ref(10)
+const historyRowNumber = useRowNumber(historyPage, historyPerPage)
+
 const activeHeaders = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'avatar', sortable: false, align: 'center', width: '60px' },
-  { title: 'Head of the Family', key: 'resident', width: '22%' },
-  { title: 'Barangay', key: 'barangay', width: '13%' },
-  { title: 'Equipment', key: 'equipment', width: '25%' },
-  { title: 'Status', key: 'status', align: 'center', width: '14%' },
-  { title: 'Timeline', key: 'timeline', width: '14%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '12%' },
+  { title: 'Head of the Family', key: 'resident', width: '20%' },
+  { title: 'Barangay', key: 'barangay', width: '12%' },
+  { title: 'Equipment', key: 'equipment', width: '22%' },
+  { title: 'Status', key: 'status', align: 'center', width: '13%' },
+  { title: 'Timeline', key: 'timeline', width: '13%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '11%' },
 ]
 
 const historyHeaders = [
-  { title: 'Head of the Family', key: 'resident', width: '22%' },
-  { title: 'Barangay', key: 'barangay', width: '16%' },
-  { title: 'Equipment', key: 'equipment', width: '26%' },
-  { title: 'Requested', key: 'created_at', width: '18%' },
-  { title: 'Outcome', key: 'status', align: 'center', width: '18%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Head of the Family', key: 'resident', width: '21%' },
+  { title: 'Barangay', key: 'barangay', width: '15%' },
+  { title: 'Equipment', key: 'equipment', width: '24%' },
+  { title: 'Requested', key: 'created_at', width: '17%' },
+  { title: 'Outcome', key: 'status', align: 'center', width: '16%' },
 ]
 
 // Option lists come from the records actually loaded, so a barangay with no
@@ -1136,7 +1160,12 @@ onMounted(fetchData)
    table lets a narrow wrapper crush every column instead of scrolling —
    "waiting" wraps to one letter per line rather than the table scrolling
    sideways. The wrapper's own overflow-x (Vuetify's default) does the rest. */
-.borrow-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 720px; }
+.borrow-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 784px; }
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .borrow-table :deep(thead th) {
   font-size: 0.72rem !important;
   font-weight: 700 !important;

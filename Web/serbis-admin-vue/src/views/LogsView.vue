@@ -50,6 +50,10 @@
                   class="bg-transparent"
                   @update:options="onSystemOptions"
                 >
+                  <template v-slot:item.rowNumber="{ index }">
+                    <span class="row-number text-medium-emphasis">{{ systemRowNumber(index) }}</span>
+                  </template>
+
                   <template v-slot:item.action="{ item }">
                     <v-chip :color="getActionColor(item.action)" size="small" variant="tonal" class="font-weight-bold">
                       {{ item.action }}
@@ -73,6 +77,10 @@
                   class="bg-transparent"
                   @update:options="onSmsOptions"
                 >
+                  <template v-slot:item.rowNumber="{ index }">
+                    <span class="row-number text-medium-emphasis">{{ smsRowNumber(index) }}</span>
+                  </template>
+
                   <template v-slot:item.status="{ item }">
                     <!-- The column holds 'Sent' or 'Failed'. This used to test
                          for 'Completed', a value nothing writes, so every row
@@ -100,6 +108,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const activeTab = ref('system')
@@ -119,6 +128,12 @@ const smsPage = ref(1)
 const systemTotal = ref(0)
 const smsTotal = ref(0)
 
+// These two tables only ever hold one page of rows, so the row number has to
+// come from the page the server was asked for — there is no full list here to
+// count a position in.
+const systemRowNumber = useRowNumber(systemPage, itemsPerPage)
+const smsRowNumber = useRowNumber(smsPage, itemsPerPage)
+
 // Debounced, because the search box now costs a round trip per keystroke
 // instead of filtering an array already in memory.
 let searchTimer
@@ -135,23 +150,25 @@ watch(search, () => {
 
 // Table Definitions
 const systemHeaders = [
-  { title: 'Date & Time', key: 'created_at', width: '20%' },
-  { title: 'User', key: 'user.name', width: '20%' },
-  { title: 'Module', key: 'module', width: '15%' },
-  { title: 'Action', key: 'action', width: '15%' },
-  { title: 'Description', key: 'description', width: '30%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Date & Time', key: 'created_at', width: '19%' },
+  { title: 'User', key: 'user.name', width: '19%' },
+  { title: 'Module', key: 'module', width: '14%' },
+  { title: 'Action', key: 'action', width: '14%' },
+  { title: 'Description', key: 'description', width: '28%' },
 ]
 
 // One row per barangay per blast, which is how the backend records them: the
 // vendor is called once, but "what went to my barangay" is the unit anyone asks
 // about afterwards.
 const smsHeaders = [
-  { title: 'Date & Time', key: 'created_at', width: '18%' },
-  { title: 'Sender', key: 'user.name', width: '16%' },
-  { title: 'Barangay', key: 'barangay', width: '14%' },
-  { title: 'Message Content', key: 'message', width: '32%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Date & Time', key: 'created_at', width: '17%' },
+  { title: 'Sender', key: 'user.name', width: '15%' },
+  { title: 'Barangay', key: 'barangay', width: '13%' },
+  { title: 'Message Content', key: 'message', width: '31%' },
   { title: 'Recipients', key: 'recipient_count', align: 'center', width: '10%' },
-  { title: 'Status', key: 'status', align: 'center', width: '10%' },
+  { title: 'Status', key: 'status', align: 'center', width: '9%' },
 ]
 
 // Data Fetching
@@ -240,3 +257,10 @@ onMounted(() => {
   fetchLogs()
 })
 </script>
+<style scoped>
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+</style>

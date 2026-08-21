@@ -142,7 +142,8 @@
             v-else
             :headers="headers"
             :items="filteredAndSortedResidents"
-            :items-per-page="-1"
+            v-model:page="page"
+            v-model:items-per-page="itemsPerPage"
             fixed-header
             :height="tableHeight"
             hover
@@ -152,6 +153,10 @@
             :row-props="rowProps"
           >
             <template v-slot:bottom></template>
+
+            <template v-slot:item.rowNumber="{ index }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            </template>
 
             <template v-slot:item.photo="{ item }">
               <v-avatar :color="undefined" size="42" class="my-2 avatar-tint">
@@ -435,6 +440,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
+import { useRowNumber } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
   releaseResidentPhotos,
@@ -456,28 +462,41 @@ import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
 const { mdAndUp } = useDisplay()
 
-// The percentages add to 92, not 100, because the avatar column is a fixed
-// 76px and the table is `table-layout: fixed` — percentages are taken from the
-// full table width, so 100% + 76px was already running 28px past the card
-// before a seventh column existed.
+// Four columns are fixed px and four are percentages, and the percentages add
+// to 51 rather than to what is left of 100. The table is `table-layout: fixed`,
+// so a percentage is taken from the full table width, not from the space the
+// px columns leave — the two have to be budgeted together or they overlap.
 //
-// Rebalanced from measurement, not from guessing: at 1920 the old split left
-// Email truncating on 23 rows out of 23 and Barangay on 10, while SMS Blasts
-// held 190px to print the identical word "RECEIVING" in every row. Width now
-// follows variance — the columns that differ per row get the space, and the
-// two pill columns keep only what their longest pill actually measures
-// ("DEACTIVATED" 128px, "RECEIVING" 110px) plus cell padding.
+// The pill columns are px because their content does not vary: they were 10%
+// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
+// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
+// spilled out of the cell and scrolled the whole card sideways. Both are now
+// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
+// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
+//
+// Width otherwise follows variance: the columns that differ per row get the
+// percentages. 55% + 442px still fits the 1000px min-width with room to spare,
+// and `table-layout: fixed` hands the slack back to every column in proportion.
 const headers = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Full Name', key: 'fullName', width: '20%' },
-  // 18%, measured against the longest real barangay name in the data ("San
-  // Antonio Ugad"), which was still clipping at 15%.
-  { title: 'Barangay', key: 'barangay_name', width: '18%' },
-  { title: 'Phone Number', key: 'phone_number', width: '15%' },
-  { title: 'Email', key: 'email_address', width: '21%' },
-  { title: 'Status', key: 'status', align: 'center', width: '10%' },
-  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '8%' },
+  { title: 'Full Name', key: 'fullName', width: '17%' },
+  // The longest real barangay name in the data is "San Antonio Ugad", which
+  // was still clipping when this column was 15% of a narrower table.
+  { title: 'Barangay', key: 'barangay_name', width: '14%' },
+  { title: 'Phone Number', key: 'phone_number', width: '10%' },
+  { title: 'Email', key: 'email_address', width: '14%' },
+  { title: 'Status', key: 'status', align: 'center', width: '160px' },
+  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
 ]
+
+// The footer is hidden and every resident is on one page, so these exist to
+// give the row numbers something honest to read rather than to page anything.
+// Bound with v-model regardless: if this table ever grows a footer, the
+// numbering keeps up without anyone remembering to come back here.
+const page = ref(1)
+const itemsPerPage = ref(-1)
+const rowNumber = useRowNumber(page, itemsPerPage)
 
 const residents = ref([])
 // resident_id -> object URL. Only rows the server says have a photo are ever
@@ -881,7 +900,9 @@ onUnmounted(releaseResidentPhotos)
 }
 
 /* Table.
-   The 860px min-width is load-bearing. `table-layout: fixed` with percentage
+   The 1000px min-width is load-bearing (860 before the row-number column and
+   the two fixed pill columns were budgeted). Below it the percentage columns
+   squeeze the pill columns under the width of the pill they print. `table-layout: fixed` with percentage
    columns and no floor lets a narrow wrapper crush every column proportionally
    instead of scrolling: measured at 430px the six data columns collapsed to
    1px each and only the avatars rendered. Same bug class, same fix, as the
@@ -889,7 +910,12 @@ onUnmounted(releaseResidentPhotos)
 .elegant-table :deep(table) {
   table-layout: fixed !important;
   width: 100% !important;
-  min-width: 860px;
+  min-width: 1000px;
+}
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 /* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
    two pill columns need their width for the pill rather than for gutters. */

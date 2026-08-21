@@ -64,7 +64,8 @@
       <v-data-table
         :headers="headers"
         :items="filteredItems"
-        :items-per-page="-1"
+        v-model:page="page"
+        v-model:items-per-page="itemsPerPage"
         density="comfortable"
         hover
         class="bg-transparent conduction-table"
@@ -72,6 +73,10 @@
         :row-props="rowProps"
         @click:row="(_e, { item }) => openDetail(item)"
       >
+        <template v-slot:item.rowNumber="{ index }">
+          <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+        </template>
+
         <template v-slot:item.patient="{ item }">
           <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
           <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
@@ -329,10 +334,11 @@ const loadError = ref('')
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const headers = [
-  { title: 'Patient', key: 'patient', width: '26%' },
-  { title: 'From → To', key: 'trip', width: '30%' },
-  { title: 'Status', key: 'trip_status', align: 'center', width: '18%' },
-  { title: 'Filed', key: 'created_at', width: '18%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Patient', key: 'patient', width: '24%' },
+  { title: 'From → To', key: 'trip', width: '28%' },
+  { title: 'Status', key: 'trip_status', align: 'center', width: '17%' },
+  { title: 'Filed', key: 'created_at', width: '17%' },
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
@@ -576,7 +582,12 @@ onMounted(fetchData)
   margin-bottom: 8px;
 }
 
-.conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
+.conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .conduction-table :deep(thead th) {
   font-size: 0.72rem !important;
   font-weight: 700 !important;

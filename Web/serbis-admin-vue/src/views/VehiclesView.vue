@@ -102,11 +102,16 @@
           <v-data-table
             :headers="fleetHeaders"
             :items="filteredVehicles"
-            :items-per-page="10"
+            v-model:page="page"
+            v-model:items-per-page="itemsPerPage"
             item-value="vehicle_id"
             density="comfortable"
             class="fleet-table"
           >
+            <template v-slot:item.rowNumber="{ index }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            </template>
+
             <template v-slot:item.unit_identifier="{ item }">
               <div class="d-flex align-center gap-3 py-2">
                 <div class="icon-wrapper" :class="`iconbg-${item.status.toLowerCase()}`">
@@ -228,6 +233,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/vehicles`
@@ -286,11 +292,16 @@ const filteredVehicles = computed(() => {
 })
 
 const fleetHeaders = [
-  { title: 'Unit', key: 'unit_identifier', width: '34%' },
-  { title: 'Type', key: 'type', width: '22%' },
-  { title: 'Status', key: 'status', width: '24%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '20%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Unit', key: 'unit_identifier', width: '32%' },
+  { title: 'Type', key: 'type', width: '21%' },
+  { title: 'Status', key: 'status', width: '23%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '19%' },
 ]
+
+const page = ref(1)
+const itemsPerPage = ref(10)
+const rowNumber = useRowNumber(page, itemsPerPage)
 
 const getVehicleIcon = (type) => ({
   ambulance: 'mdi-ambulance',
@@ -522,5 +533,10 @@ onMounted(fetchVehicles)
   .stat-tile, .composition-bar .seg { transition: none; }
   .stat-tile:hover { transform: none; }
   .dot[data-live="true"] { animation: none; }
+}
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 </style>

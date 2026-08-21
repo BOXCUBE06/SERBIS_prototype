@@ -47,10 +47,15 @@
           <v-data-table
             :headers="headers"
             :items="admins"
-            :items-per-page="10"
+            v-model:page="page"
+            v-model:items-per-page="itemsPerPage"
             item-value="admin_id"
             class="elegant-table"
           >
+            <template v-slot:item.rowNumber="{ index }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            </template>
+
             <template #item.name="{ item }">
               <div class="d-flex align-center gap-3 py-2">
                 <v-avatar color="primary" variant="tonal" size="36">
@@ -251,6 +256,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/admins`
@@ -269,10 +275,15 @@ const closeDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const headers = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Name', key: 'name', sortable: false },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '220px' },
 ]
+
+const page = ref(1)
+const itemsPerPage = ref(10)
+const rowNumber = useRowNumber(page, itemsPerPage)
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -501,5 +512,10 @@ onMounted(() => {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 </style>
