@@ -14,12 +14,21 @@ use Illuminate\Http\Request;
  *
  * `paginate()` changes a response from a bare array to an envelope, which
  * breaks every consumer of that route at once. The admin panel is not the only
- * consumer — the Flutter app parses `/services`, `/service-requests`,
- * `/info-materials`, `/advisories` and `/barangays` as bare arrays, so
- * paginating a shared route silently empties a screen in a shipped mobile
- * build. `/logs/system` and `/logs/sms` have exactly one consumer each
- * (LogsView) and are the two tables that grow without bound, which is what
- * audit #10 is actually about.
+ * consumer — the Flutter app reads `/services`, `/service-requests`,
+ * `/info-materials`, `/advisories` and `/barangays` as lists.
+ *
+ * How it breaks there is worth stating exactly, because the obvious guess is
+ * wrong (checked against the client on 2026-08-21). ApiService::_decode wraps a
+ * bare array as `{'data': [...]}` and listFrom() then reads `data['data']` — and
+ * that is the same key `paginate()` puts its rows under. So paginating one of
+ * these does NOT empty the screen. It silently truncates it to the first 25
+ * rows, with no envelope the client knows how to page through and nothing on
+ * screen saying anything is missing. A resident would simply stop seeing their
+ * older requests. That is harder to notice than a blank screen, not easier.
+ *
+ * `/logs/system` and `/logs/sms` have exactly one consumer each (LogsView) and
+ * are the two tables that grow without bound, which is what audit #10 is
+ * actually about.
  *
  * The remaining list endpoints were left alone on purpose. `/residents`,
  * `/admin/service-requests` and `/borrowings` all have views that filter,
@@ -29,6 +38,13 @@ use Illuminate\Http\Request;
  * `/vehicles`, `/equipments`, `/admins` and `/admin/info-materials` are
  * bounded sets (a fleet, an inventory, the office staff), so the payload was
  * never the problem there.
+ *
+ * All fourteen GET index routes were walked on 2026-08-21 to settle how much of
+ * audit #10 was left: two paginate (both log endpoints, through this trait) and
+ * twelve do not, each for one of the three reasons above. Nothing is
+ * outstanding that can be fixed by adding `paginate()` alone — the remaining
+ * work is moving client-side filtering to the server, which is a feature, not
+ * an audit item.
  *
  * When one of those is picked up, reuse this trait so every paginated
  * endpoint answers with the same meta keys.
