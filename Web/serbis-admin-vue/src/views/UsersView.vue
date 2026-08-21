@@ -1,11 +1,11 @@
 <template>
   <v-container fluid class="fill-height align-start pa-6 bg-background">
-    <v-row class="ma-0 w-100 align-stretch" :style="rowStyle">
+    <div class="residents-layout" :style="rowStyle">
 
-      <v-col cols="12" class="pa-0 h-100">
+      <div class="residents-main">
         <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
 
-          <div class="px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
+          <div class="residents-toolbar px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
             <div>
               <h2 class="text-h5 font-weight-bold text-high-emphasis">Residents</h2>
               <!-- Says "of" only when something is being hidden. The permanent
@@ -76,7 +76,7 @@
                and a 3px underline alone, and the group had no accessible name
                saying what these buttons even filter. -->
           <div
-            class="px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
+            class="residents-toolbar px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
             role="group"
             aria-label="Filter by barangay"
           >
@@ -233,36 +233,48 @@
             </template>
           </v-data-table>
         </v-card>
-      </v-col>
+      </div>
 
-    </v-row>
+      <!-- The profile is a rail beside the table, not an overlay on top of it.
+           It has no width until a resident is opened; opening one animates it
+           out to 460 and the table narrows into what is left, which is the
+           split the page used to hold permanently — the difference being that
+           it is now only there while it is being read. Closing gives the width
+           back the same way.
 
-    <!-- The profile used to be a permanent grid column, which meant the table
-         gave up a third of the page whether or not anyone had opened a
-         resident — and when nobody had, that third held a placeholder card
-         saying so. One temporary drawer at every breakpoint instead: hidden
-         until a row is clicked, closing on the X, on Esc, or on the scrim, and
-         handing the width straight back to the table. -->
-    <v-navigation-drawer
-      v-model="detailOpen"
-      location="right"
-      temporary
-      :width="drawerWidth"
-      class="bg-surface"
-      aria-label="Head of the family profile"
-    >
-      <ResidentDetailPanel
-        v-if="selectedResident"
-        :resident="selectedResident"
-        :status-loading="statusToggleLoading"
-        :hidden-by-filter="selectionHidden"
-        @close="closeDetail"
-        @edit="openExistingEditModal"
-        @toggle-status="toggleStatus"
-        @delete="askDelete"
-        @clear-filters="clearFilters"
-      />
-    </v-navigation-drawer>
+           `overflow: hidden` on the rail plus a fixed-width child is what makes
+           that a slide rather than a reflow: the panel is drawn at its full
+           460 the whole time and the rail uncovers it, so no text re-wraps on
+           any frame of the animation. -->
+      <aside
+        class="detail-rail"
+        :class="{ 'detail-rail--open': detailOpen }"
+        :aria-hidden="detailOpen ? undefined : 'true'"
+        :inert="detailOpen ? undefined : true"
+        aria-label="Head of the family profile"
+      >
+        <div class="detail-rail__inner">
+          <v-card
+            v-if="selectedResident"
+            elevation="3"
+            rounded="lg"
+            class="bg-surface h-100 d-flex flex-column"
+          >
+            <ResidentDetailPanel
+              :resident="selectedResident"
+              :status-loading="statusToggleLoading"
+              :hidden-by-filter="selectionHidden"
+              @close="closeDetail"
+              @edit="openExistingEditModal"
+              @toggle-status="toggleStatus"
+              @delete="askDelete"
+              @clear-filters="clearFilters"
+            />
+          </v-card>
+        </div>
+      </aside>
+
+    </div>
 
     <!-- Add / Edit -->
     <v-dialog v-model="modal.isOpen" max-width="680" persistent>
@@ -441,7 +453,7 @@ import {
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
-const { mdAndUp, width: viewportWidth } = useDisplay()
+const { mdAndUp } = useDisplay()
 
 // Four columns are fixed px and four are percentages, and the percentages add
 // to 51 rather than to what is left of 100. The table is `table-layout: fixed`,
@@ -507,25 +519,15 @@ const formData = ref({
   email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
 })
 
-// The drawer is open exactly when a resident is selected. Writing false — the
-// scrim, Esc, the X — clears the selection, which is what closes it; there is
-// no second piece of state that can disagree with the first.
-const detailOpen = computed({
-  get: () => Boolean(selectedResident.value),
-  set: (open) => { if (!open) selectedResident.value = null },
-})
+// The rail is open exactly when a resident is selected. There is no second
+// piece of state that can disagree with the first.
+const detailOpen = computed(() => Boolean(selectedResident.value))
 const closeDetail = () => { selectedResident.value = null }
 
-// Full width on a phone, a readable column on anything larger. The panel is a
-// single column of label/value pairs, so past ~460px it is just a long line.
-// Off useDisplay's reactive width, not window.innerWidth, which would be read
-// once and never again on resize.
-const drawerWidth = computed(() => Math.min(viewportWidth.value, 460))
-
-// Esc closes it. v-navigation-drawer, unlike v-dialog, has no Esc handling of
-// its own, and the drawer can hold focus with nothing else listening.
+// Esc closes it. Nothing else is listening — the rail is ordinary layout, not
+// an overlay, so it has none of the dismissal a v-dialog gets for free.
 //
-// Not while a dialog is up, though. Edit and Delete both open over the drawer,
+// Not while a dialog is up, though. Edit and Delete both open over the page,
 // and a window-level listener cannot see that something nearer the user owns
 // the key: pressing Esc in the edit form closed the profile *behind* the form —
 // and that form is `persistent`, so it stayed open over a panel that was no
@@ -536,9 +538,28 @@ const onEscape = (event) => {
   if (selectedResident.value) closeDetail()
 }
 
-// One column now, so the table gets the full width in both directions: the row
-// is the page height less the container's own padding, and the table body is
-// that less the card's header, the barangay tabs and the table's own header.
+// Clicking away closes it. Without a scrim there is nothing that "outside" is
+// automatically, so it has to be said, and three things are explicitly not
+// outside: the panel itself; a table row, which switches the profile rather
+// than dismissing it; and the card's own toolbar, because searching or
+// filtering while reading a profile is not a request to close it. Anything
+// Vuetify teleports to the body — dialogs, menus, the status select's list —
+// is excluded too, or picking a status would shut the panel behind it.
+const onDocumentClick = (event) => {
+  if (!selectedResident.value) return
+  if (modal.value.isOpen || deleteDialog.value.show) return
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (target.closest('.detail-rail')) return
+  if (target.closest('.v-overlay')) return
+  if (target.closest('tbody tr')) return
+  if (target.closest('.residents-toolbar')) return
+  closeDetail()
+}
+
+// The table shares the row with the rail, so its height is the page less the
+// container's padding, and the table body is that less the card's header, the
+// barangay tabs and the table's own header.
 const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 96px);' : ''))
 const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 292px)' : '60vh'))
 
@@ -860,16 +881,78 @@ const confirmDelete = async () => {
 onMounted(() => {
   loadAll()
   window.addEventListener('keydown', onEscape)
+  document.addEventListener('click', onDocumentClick)
 })
 // One blob per resident would otherwise survive every visit to this view for
 // the life of the tab.
 onUnmounted(() => {
   releaseResidentPhotos()
   window.removeEventListener('keydown', onEscape)
+  document.removeEventListener('click', onDocumentClick)
 })
 </script>
 
 <style scoped>
+/* Table and profile rail side by side. The table is the flexible half and
+   carries `min-width: 0`, without which a flex child refuses to shrink below
+   its content and the rail would push it off the page instead of compressing
+   it. */
+.residents-layout {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+.residents-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Width is the animated property, and it animates from zero — the rail is in
+   the layout at all times, just with nothing to show. Transitioning width is
+   normally the wrong instinct, but the thing being resized here is an empty
+   clipping box: the panel inside it is a fixed 460 and never reflows, so no
+   frame of this costs a text layout. */
+.detail-rail {
+  flex: 0 0 auto;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  /* An even curve, not the expo `cubic-bezier(0.16, 1, 0.3, 1)` this file uses
+     for hovers and fades. Over 476px that one puts ~93% of the travel into the
+     first 30ms and reads as a snap with a long tail — fine for a 4px lift, not
+     for the table changing width under the reader. */
+  transition: width 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.detail-rail--open {
+  width: 476px; /* 460 panel + the 16px gutter that appears with it */
+}
+.detail-rail__inner {
+  width: 460px;
+  margin-left: 16px;
+  height: 100%;
+}
+
+/* Under 960 there is no room to split anything — the table is already at its
+   min-width and the sidebar has taken 260px — so the rail takes the row and
+   the table yields it entirely rather than the two sharing a width neither can
+   use. */
+@media (max-width: 959px) {
+  .detail-rail--open {
+    width: 100%;
+  }
+  .detail-rail--open + .residents-main,
+  .residents-layout:has(.detail-rail--open) .residents-main {
+    flex: 0 0 0;
+    width: 0;
+    overflow: hidden;
+  }
+  .detail-rail__inner {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
@@ -1055,7 +1138,7 @@ onUnmounted(() => {
 
 
 @media (prefers-reduced-motion: reduce) {
-  .tab-btn, .transition-btn { transition: none; }
+  .tab-btn, .transition-btn, .detail-rail { transition: none; }
   .transition-btn:hover { transform: none; }
 }
 </style>
