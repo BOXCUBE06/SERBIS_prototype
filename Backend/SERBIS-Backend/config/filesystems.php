@@ -82,6 +82,36 @@ return [
             'report' => false,
         ],
 
+        // A SECOND bucket, and the reason it exists is worth stating plainly:
+        // the two kinds of upload have opposite access rules. Government ID
+        // scans are read only through an ownership-checked endpoint; info
+        // materials are read by residents with no token at all. Pointing both
+        // UPLOADS_*_DISK vars at 's3' would put them in one bucket under one
+        // visibility, so either the ID scans become world-readable — the exact
+        // exposure the private-read endpoint was built to end — or the info
+        // materials stop resolving. Separate buckets make that mistake
+        // impossible rather than merely discouraged.
+        //
+        // Credentials, region and endpoint are shared with 's3': one R2 API
+        // token covers both buckets on the same account.
+        's3_public' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_PUBLIC_BUCKET'),
+            // Required, not optional. Without it Storage::url() falls back to
+            // building a URL from the API endpoint, which on R2 is the S3 API
+            // host and answers 401 to a browser. Set it to the bucket's public
+            // domain (r2.dev or a custom one).
+            'url' => env('AWS_PUBLIC_URL'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*
