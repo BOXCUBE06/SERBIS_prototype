@@ -39,7 +39,7 @@ class ResidentSmsPreferenceTest extends TestCase
             'last_name' => 'Admin',
             'email_address' => 'admin@test.local',
             'password' => Hash::make('password123'),
-            'role' => 'admin',
+            'role' => 'Admin',
         ]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);

@@ -33,7 +33,7 @@ class WalkInServiceRequestTest extends TestCase
         $this->admin = User::create([
             'first_name' => 'Ana',
             'last_name' => 'Reyes',
-            'role' => 'admin',
+            'role' => 'Admin',
             'email_address' => 'ana@test.local',
             'password' => Hash::make('password123'),
         ]);
