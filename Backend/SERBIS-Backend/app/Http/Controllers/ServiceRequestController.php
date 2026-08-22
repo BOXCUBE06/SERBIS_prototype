@@ -41,7 +41,7 @@ class ServiceRequestController extends Controller
     {
         $user = $request->user();
 
-        if ($user instanceof \App\Models\User && $user->role === 'admin') {
+        if ($user instanceof \App\Models\User && $user->isAdmin()) {
             // Added 'resident.barangay'
             $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->get();
         } else {

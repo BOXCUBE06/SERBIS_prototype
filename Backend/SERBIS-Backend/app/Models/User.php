@@ -48,6 +48,21 @@ class User extends Authenticatable
         return strtolower((string) $this->status) === 'inactive';
     }
 
+    /**
+     * The one definition of what an admin is. `role` is a bare varchar with no
+     * constraint, and the two writers disagree on case — AdminController and
+     * AdminSeeder both store 'Admin', while every test fixture creates 'admin'.
+     * A case-sensitive comparison is therefore true under test and false in
+     * production, which is how ServiceRequestController::index() came to send
+     * an admin down the resident branch and query tbl_service_request by
+     * admin_id. Comparing case-insensitively in one place is what stops the
+     * next caller reintroducing that.
+     */
+    public function isAdmin(): bool
+    {
+        return strtolower($this->role ?? '') === 'admin';
+    }
+
     protected $table = 'tbl_user';
     protected $primaryKey = 'admin_id';
 
