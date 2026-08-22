@@ -37,6 +37,10 @@
         <env name="DB_PASSWORD" value=""/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- A token so the OTP takes its real SMS path. Every test that can reach
+             a send fakes the host; PhilSMS has no sandbox. -->
+        <env name="PHILSMS_TOKEN" value="testing-token"/>
+        <env name="PHILSMS_SENDER_ID" value="PhilSMS"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

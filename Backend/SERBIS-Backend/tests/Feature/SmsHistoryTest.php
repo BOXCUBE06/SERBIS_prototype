@@ -19,7 +19,7 @@ use Tests\TestCase;
  * and look identical to having no history.
  *
  * Http::preventStrayRequests() is inherited discipline from SmsBlastLoggingTest
- * — SkySMS has no sandbox, so an escaped request is a billed real send.
+ * — PhilSMS has no sandbox, so an escaped request is a billed real send.
  */
 class SmsHistoryTest extends TestCase
 {
@@ -60,7 +60,7 @@ class SmsHistoryTest extends TestCase
 
     private function blast(string $message, int $status = 200): void
     {
-        Http::fake(['skysms.skyio.site/*' => Http::response(['job_id' => 'job-1'], $status)]);
+        Http::fake(['app.philsms.com/*' => Http::response(['job_id' => 'job-1'], $status)]);
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => $message,

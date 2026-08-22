@@ -28,8 +28,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'skysms' => [
-        'key' => env('SKYSMS_API_KEY'),
+    'philsms' => [
+        'token' => env('PHILSMS_TOKEN'),
+        // The shared sender PhilSMS gives every account. A dedicated sender id
+        // needs telco approval and is refused for academic projects, so this
+        // stays until the agency itself applies for one.
+        'sender_id' => env('PHILSMS_SENDER_ID', 'PhilSMS'),
     ],
 
     'slack' => [

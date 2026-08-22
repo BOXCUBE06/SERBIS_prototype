@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * SkySMS has no sandbox: every call is a real send to a real handset, billed.
+ * PhilSMS has no sandbox: every call is a real send to a real handset, billed.
  * preventStrayRequests() is what makes these tests safe to run — a request that
  * escapes the fake fails the test instead of costing money.
  */
@@ -58,7 +58,7 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_a_successful_blast_is_recorded_per_barangay_with_its_recipients(): void
     {
-        Http::fake(['skysms.skyio.site/*' => Http::response(['job_id' => 'job-123'], 200)]);
+        Http::fake(['app.philsms.com/*' => Http::response(['job_id' => 'job-123'], 200)]);
 
         $a1 = $this->resident($this->barangayA, 'Active', '09171111111');
         $a2 = $this->resident($this->barangayA, 'Active', '09172222222');
@@ -92,7 +92,7 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_residents_who_were_not_sent_to_are_not_recorded_as_recipients(): void
     {
-        Http::fake(['skysms.skyio.site/*' => Http::response([], 200)]);
+        Http::fake(['app.philsms.com/*' => Http::response([], 200)]);
 
         $active = $this->resident($this->barangayA, 'Active', '09171111111');
         $this->resident($this->barangayA, 'Inactive', '09174444444');
@@ -111,7 +111,7 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_a_failed_blast_is_recorded_but_never_reaches_the_advisory_feed(): void
     {
-        Http::fake(['skysms.skyio.site/*' => Http::response(['error' => 'upstream down'], 500)]);
+        Http::fake(['app.philsms.com/*' => Http::response(['error' => 'upstream down'], 500)]);
 
         $resident = $this->resident($this->barangayA, 'Active', '09171111111');
 
@@ -129,7 +129,7 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_advisories_are_scoped_to_the_resident_who_received_them(): void
     {
-        Http::fake(['skysms.skyio.site/*' => Http::response([], 200)]);
+        Http::fake(['app.philsms.com/*' => Http::response([], 200)]);
 
         $inA = $this->resident($this->barangayA, 'Active', '09171111111');
         $inB = $this->resident($this->barangayB, 'Active', '09172222222');

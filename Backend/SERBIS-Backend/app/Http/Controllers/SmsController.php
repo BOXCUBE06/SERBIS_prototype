@@ -5,17 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Recipient;
 use App\Models\Resident;
 use App\Models\SmsLog;
+use App\Services\PhilSms;
 use App\Traits\PaginatesLists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SmsController extends Controller
 {
     use PaginatesLists;
 
-    public function sendBlast(Request $request)
+    public function sendBlast(Request $request, PhilSms $philSms)
     {
         $validated = $request->validate([
             'message'     => 'required|string|max:160',
@@ -38,29 +38,31 @@ class SmsController extends Controller
             ->where('phone_number', '!=', '')
             ->get(['resident_id', 'barangay_id', 'phone_number']);
 
+        // A number the vendor will reject is not a recipient. Dropping those here
+        // rather than inside the send keeps tbl_recipients honest: it records who
+        // the message actually went to, and a resident whose number cannot be
+        // dialled did not receive it.
+        $residents = $residents->filter(
+            fn ($resident) => PhilSms::normalize($resident->phone_number) !== ''
+        )->values();
+
         // Never call a billed endpoint with nothing to send.
         if ($residents->isEmpty()) {
             return response()->json([
-                'message' => 'No residents in the selected barangays are active, opted in to SMS and have a phone number.',
+                'message' => 'No residents in the selected barangays are active, opted in to SMS and have a reachable phone number.',
                 'sent'    => 0,
                 'failed'  => 0,
             ], 422);
         }
 
         $recipients = $residents
-            ->map(fn ($resident) => ['phone_number' => $resident->phone_number])
+            ->pluck('phone_number')
             ->values()
             ->all();
 
-        $response = Http::withHeaders([
-            'X-API-Key'    => config('services.skysms.key'),
-            'Content-Type' => 'application/json',
-        ])->post('https://skysms.skyio.site/api/v1/sms/send-bulk', [
-            'recipients' => $recipients,
-            'message'    => $validated['message'],
-        ]);
+        $response = $philSms->send($recipients, $validated['message']);
 
-        $succeeded = $response->successful();
+        $succeeded = PhilSms::accepted($response);
 
         // Recorded either way. A failed blast is the more important of the two to
         // have written down — it is the one somebody will ask about afterwards —
@@ -71,7 +73,7 @@ class SmsController extends Controller
             $residents,
             $validated['message'],
             $succeeded,
-            $response->json('job_id') ?? $response->json('id'),
+            $response->json('data.uid') ?? $response->json('job_id') ?? $response->json('id'),
         );
 
         if ($succeeded) {
@@ -82,7 +84,7 @@ class SmsController extends Controller
             ]);
         }
 
-        Log::error('SkySMS bulk failed', [
+        Log::error('PhilSMS send failed', [
             'status'   => $response->status(),
             'response' => $response->body(),
         ]);

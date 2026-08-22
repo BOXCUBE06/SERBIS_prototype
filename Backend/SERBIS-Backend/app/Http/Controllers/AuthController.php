@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Mail\ResidentVerificationCode;
 use App\Models\User; // Represents Admins/Staff
 use App\Models\Resident;
+use App\Services\PhilSms;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -41,7 +43,7 @@ class AuthController extends Controller
             'email_address' => $validated['email_address'],
             'password'      => Hash::make($validated['password']),
             // Starts Inactive on purpose. SmsController only blasts residents with
-            // status 'Active', and SkySMS bills per real send with no sandbox, so a
+            // status 'Active', and PhilSMS bills per real send with no sandbox, so a
             // self-registered account must not opt an unverified phone number into
             // paid SMS until an admin activates it from the Users view.
             'status'        => 'Inactive',
@@ -167,6 +169,28 @@ class AuthController extends Controller
     private function sendVerificationCode(Resident $resident): void
     {
         $code = $resident->issueVerificationCode();
+
+        // SMS is the primary channel: a resident registering on a phone reads the
+        // code without leaving the handset, and the deployment has an SMS vendor
+        // configured before it has a mail one. Email stays as the fallback for a
+        // number the vendor cannot dial — the column is still email_verified_at
+        // either way, because what is being proven is ownership of the account,
+        // not of a particular channel.
+        if (PhilSms::configured() && PhilSms::normalize((string) $resident->phone_number) !== '') {
+            $response = app(PhilSms::class)->send(
+                [$resident->phone_number],
+                "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
+            );
+
+            if (PhilSms::accepted($response)) {
+                return;
+            }
+
+            Log::warning('OTP SMS failed, falling back to email', [
+                'resident_id' => $resident->resident_id,
+                'status'      => $response->status(),
+            ]);
+        }
 
         Mail::to($resident->email_address)->send(
             new ResidentVerificationCode($resident, $code)
