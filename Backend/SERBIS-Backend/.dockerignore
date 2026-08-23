@@ -1,0 +1,16 @@
+# Keeps the build context small, and keeps two things out of the image that
+# must never be in it: a developer's .env, whose DB credentials and API tokens
+# would ship inside the layer, and a host-built vendor/, which would overwrite
+# the one composer builds against PHP 8.4 in the vendor stage.
+.git
+.github
+node_modules
+vendor
+tests
+storage/logs/*.log
+public/build
+.phpunit.result.cache
+
+.env
+.env.*
+!.env.example
