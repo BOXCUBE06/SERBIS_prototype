@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Service;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -11,6 +12,12 @@ class ServiceSeeder extends Seeder
     /**
      * The ten services the MDRRMO offers. Runs on production; this is their
      * data, not test data.
+     *
+     * Written through the model, not DB::table()->insert(). `tbl_services.code`
+     * is NOT NULL and is filled by a `creating` hook on App\Models\Service,
+     * and a query-builder insert fires no Eloquent events — so the bulk insert
+     * this used to do now fails outright with "Field 'code' doesn't have a
+     * default value", on a fresh database, at deploy time.
      */
     public function run(): void
     {
@@ -38,11 +45,9 @@ class ServiceSeeder extends Seeder
         ];
 
         foreach ($services as $service) {
-            DB::table('tbl_services')->insert([
+            Service::create([
                 'service_name' => $service['service_name'],
                 'description' => $service['description'],
-                'created_at' => now(),
-                'updated_at' => now(),
             ]);
         }
 
