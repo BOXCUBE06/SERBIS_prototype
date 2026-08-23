@@ -1,6 +1,9 @@
-# Process definitions for Procfile-reading platforms. Railway (Nixpacks) reads
-# the `release:` line but not the others; see docs/deploy-railway.md for where
-# each of these goes in that dashboard.
+# Process definitions for Procfile-reading platforms.
+#
+# NOTE: the deployment target is Render's Docker service, which reads none of
+# this. The release line below is reproduced — and extended with the seed step
+# it never had — in docker-entrypoint.sh. See docs/deploy-render.md. This file
+# is kept only so a Procfile-reading platform is not left with nothing.
 #
 # There is deliberately NO `web:` line. The one that used to be here called
 # vendor/bin/heroku-php-apache2, a binary supplied by Heroku's PHP buildpack —
