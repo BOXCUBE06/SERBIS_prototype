@@ -12,7 +12,7 @@ Target shape:
 | Laravel API | Render **Docker** web service, Singapore | free plan |
 | MySQL 8 | **Aiven** managed service | free / trial tier |
 | Uploads | Supabase Storage, two buckets | free tier |
-| Scheduler | Render cron job, once daily | per-run |
+| Scheduler | **none** — see below | — |
 | Admin panel | run locally against the deployed API | free |
 | API domain | `*.onrender.com`, TLS automatic | free |
 
@@ -20,9 +20,8 @@ Three providers, one job each. **Supabase supplies storage only** — its Postgr
 is not used and it cannot host the API, because it runs no PHP. **Aiven supplies
 MySQL only.** **Render runs the application.**
 
-`render.yaml` at the repository root declares all of it: the web service, the
-cron job, and one shared environment group. Applying that blueprint is the whole
-setup.
+`render.yaml` at the repository root declares all of it: the web service and
+one shared environment group. Applying that blueprint is the whole setup.
 
 For the alpha demo the admin panel is not hosted: it runs on the presenter's
 machine at `http://localhost:3000` and talks to the deployed API, which is why
@@ -91,9 +90,9 @@ connection starts failing verification years from now, that is where to look.
 
 ## 3. Environment variables
 
-`render.yaml` declares these in an env group shared by the web service and the
-cron job — the cron runs the same image, and the entrypoint refuses to start
-without the full set. Values marked `sync: false` there are prompted for on
+`render.yaml` declares these in an env group. Only the web service consumes it
+today, but it stays a group because the disabled cron service needs exactly the
+same set — the entrypoint refuses to start without the full set. Values marked `sync: false` there are prompted for on
 first apply and are never stored in the repository.
 
 ```
@@ -208,14 +207,20 @@ answers `/` with JSON and the only Blade file left is the verification e-mail.
 - **Health check path:** `/up` — Laravel's own endpoint from
   `bootstrap/app.php`. It touches no view and no database, so it still answers
   while something else is broken.
-- **Cron, not a worker.** `routes/console.php` schedules one command,
-  `sanctum:prune-expired --hours=24`, and `app/` dispatches no queued jobs at
-  all, so a full-time worker service would be paid idle time. The cron service
-  in `render.yaml` runs `schedule:run` daily at 18:00 UTC (02:00 Manila).
-  Note that `dockerCommand` overrides `CMD` but **not** `ENTRYPOINT`: each
-  nightly run walks the boot sequence above before reaching `schedule:run`. Every
-  step is a no-op on a provisioned database, but the job will fail loudly if the
-  database is unreachable at that hour.
+- **Nothing scheduled runs.** Render refused the blueprint with
+  `services[1].plan — "free not a valid plan for service type cron"`: the free
+  plan does not exist for cron jobs. The service is commented out in
+  `render.yaml` rather than holding the whole deployment behind a billing
+  decision, and a worker was never the alternative — `app/` dispatches no queued
+  jobs at all, so one would be paid idle time.
+
+  **What that defers is `sanctum:prune-expired --hours=24`**, the only thing
+  `routes/console.php` schedules. It deletes rows for tokens that stopped being
+  accepted a day earlier, so no session lives longer and nothing is granted
+  access because it is off — dead rows simply accumulate in
+  `personal_access_tokens`. Run it by hand if it ever matters. Restoring the
+  cron means uncommenting the block and choosing a paid instance type; the env
+  group already carries what it needs.
 
 **The free web service spins down when idle** and the next request pays a cold
 start. Wake it before a demo rather than discovering this in front of the panel.
