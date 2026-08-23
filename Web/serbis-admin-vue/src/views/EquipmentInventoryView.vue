@@ -7,7 +7,7 @@
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
             <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Equipment Inventory</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Stock levels across every resource category</div>
+            <div class="text-subtitle-2 text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Equipment
@@ -79,6 +79,10 @@
             density="comfortable"
             class="inventory-table"
           >
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+            </template>
+
             <template v-slot:item.item_name="{ item }">
               <div class="d-flex align-center gap-3 py-2 min-w-0">
                 <div class="icon-wrapper" :class="`iconbg-${stockState(item)}`">
@@ -189,6 +193,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/equipments`
@@ -246,11 +251,12 @@ const statusOptions = ['All', 'Available', 'Low stock', 'Depleted', 'Needs atten
 // sorted by the table's own comparator -- the status filter above covers that
 // question. `available_quantity` sorts, and it is the one worth sorting.
 const inventoryHeaders = [
-  { title: 'Item', key: 'item_name', width: '32%' },
-  { title: 'Available', key: 'available_quantity', width: '20%' },
-  { title: 'Status', key: 'state', sortable: false, width: '18%' },
-  { title: 'In use', key: 'in_use', sortable: false, width: '15%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '15%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Item', key: 'item_name', width: '30%' },
+  { title: 'Available', key: 'available_quantity', width: '19%' },
+  { title: 'Status', key: 'state', sortable: false, width: '17%' },
+  { title: 'In use', key: 'in_use', sortable: false, width: '14%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '14%' },
 ]
 
 const filteredEquipments = computed(() => {
@@ -266,6 +272,8 @@ const filteredEquipments = computed(() => {
     return matchesSearch && matchesStatus
   })
 })
+
+const rowNumber = useRowNumbers(filteredEquipments, 'equipment_id')
 
 const itemIcon = (name) => {
   const n = (name || '').toLowerCase()
@@ -465,5 +473,10 @@ onMounted(fetchEquipments)
 @media (prefers-reduced-motion: reduce) {
   .metric-tile, .gauge-fill { transition: none; }
   .metric-tile:hover { transform: none; }
+}
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 </style>

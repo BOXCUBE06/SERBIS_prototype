@@ -136,7 +136,7 @@ class ResidentLoginStatusTest extends TestCase
             'last_name' => 'Staffer',
             'email_address' => 'former@test.local',
             'password' => Hash::make('password123'),
-            'role' => 'admin',
+            'role' => 'Admin',
             'status' => 'Inactive',
         ]);
 

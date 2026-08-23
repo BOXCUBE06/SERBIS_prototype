@@ -148,16 +148,16 @@ class AppState extends ChangeNotifier {
 
   /// Names a parsed row from the catalogue, which always wins over the name the
   /// row carries: `GET /service-requests` embeds the untranslated
-  /// `service.service_name`, while the catalogue was fetched in the resident's
-  /// own language. `POST`'s 201 embeds no service at all, so without this a
-  /// request would sit unlabelled from the moment it was filed.
+  /// `service.service_name`, while the catalogue resolves its name through the
+  /// app's own translation table. `POST`'s 201 embeds no service at all, so
+  /// without this a request would sit unlabelled from the moment it was filed.
   ServiceRequest _resolveService(ServiceRequest request) {
     for (final service in services) {
       if (service.id == request.serviceId) {
         return request.copyWith(
-          serviceName: service.nameLocalized,
-          // English too: the icon and colour are keyed on it.
-          serviceNameEn: service.name,
+          serviceName: service.displayName(language == AppLanguage.filipino),
+          // The code too: the icon, colour and type are keyed on it.
+          serviceCode: service.code,
         );
       }
     }

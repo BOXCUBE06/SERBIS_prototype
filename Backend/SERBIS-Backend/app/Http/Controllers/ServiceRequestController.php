@@ -41,7 +41,7 @@ class ServiceRequestController extends Controller
     {
         $user = $request->user();
 
-        if ($user instanceof \App\Models\User && $user->role === 'admin') {
+        if ($user instanceof \App\Models\User && $user->isAdmin()) {
             // Added 'resident.barangay'
             $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->get();
         } else {
@@ -170,6 +170,111 @@ class ServiceRequestController extends Controller
     private static function privateDisk(): string
     {
         return config('filesystems.uploads.private');
+    }
+
+    /**
+     * Staff-filed requests for a walk-in — someone at the office counter
+     * rather than the mobile app. Kept separate from store() rather than
+     * branching that method on caller type: store() stays exactly what a
+     * resident's own submission looks like, and this is exactly what a
+     * staffer's looks like. The two differ in more than who resident_id
+     * belongs to — valid_id is optional here because the staffer already
+     * checked the ID in person, which store() must never assume.
+     */
+    public function adminStore(Request $request)
+    {
+        $validated = $request->validate([
+            'resident_id' => 'nullable|integer|exists:tbl_residents,resident_id',
+            // Required only when there is no account to pull them from.
+            'walk_in_name' => 'required_without:resident_id|nullable|string|max:255',
+            'walk_in_contact_number' => 'required_without:resident_id|nullable|string|max:32',
+            'service_id' => 'required|exists:tbl_services,service_id',
+            'description' => 'required|string',
+            'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
+            'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
+            'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
+        ]);
+
+        $residentId = $validated['resident_id'] ?? null;
+        // Walk-in fields are dropped rather than merely left unvalidated when a
+        // resident is picked — a mistyped name left over from switching the
+        // form's mode must not sit next to a linked account pretending to be
+        // a fact about it.
+        $walkInName = $residentId ? null : ($validated['walk_in_name'] ?? null);
+        $walkInContact = $residentId ? null : ($validated['walk_in_contact_number'] ?? null);
+        $ownerSegment = $residentId ?: 'walk-in';
+
+        $filePath = null;
+        if ($request->hasFile('valid_id')) {
+            $file = $request->file('valid_id');
+            $filePath = $file->storeAs(
+                'valid-ids/'.$ownerSegment,
+                (string) Str::uuid().'.'.$file->extension(),
+                self::privateDisk()
+            );
+        }
+
+        $sitePhotoPath = null;
+        if ($request->hasFile('site_photo')) {
+            $photo = $request->file('site_photo');
+            $sitePhotoPath = $photo->storeAs(
+                'site-photos/'.$ownerSegment,
+                (string) Str::uuid().'.'.$photo->extension(),
+                self::privateDisk()
+            );
+        }
+
+        try {
+            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath) {
+                $vehicle = null;
+                $vehicleId = null;
+
+                if (!empty($validated['required_vehicle_type'])) {
+                    $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
+                                      ->where('status', 'Available')
+                                      ->lockForUpdate()
+                                      ->first();
+
+                    if (!$vehicle) {
+                        return false;
+                    }
+                    $vehicleId = $vehicle->vehicle_id;
+                }
+
+                $newServiceRequest = ServiceRequest::create([
+                    'resident_id' => $residentId,
+                    'walk_in_name' => $walkInName,
+                    'walk_in_contact_number' => $walkInContact,
+                    'service_id' => $validated['service_id'],
+                    'description' => $validated['description'],
+                    'valid_id' => $filePath,
+                    'site_photo' => $sitePhotoPath,
+                    'status' => 'Pending',
+                    'processed_by' => null,
+                    'vehicle_id' => $vehicleId,
+                ]);
+
+                if ($vehicle) {
+                    $vehicle->update(['status' => 'Dispatched']);
+                }
+
+                return $newServiceRequest;
+            });
+        } catch (\Throwable $e) {
+            $this->discardUpload($filePath);
+            $this->discardUpload($sitePhotoPath);
+
+            throw $e;
+        }
+
+        if ($serviceRequest === false) {
+            $this->discardUpload($filePath);
+            $this->discardUpload($sitePhotoPath);
+
+            return response()->json(['message' => 'No available vehicles at this time.'], 422);
+        }
+
+        return response()->json($serviceRequest->load(['resident.barangay', 'service']), 201);
     }
 
     public function show(Request $request, $id)

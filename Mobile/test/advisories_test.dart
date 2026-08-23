@@ -48,7 +48,6 @@ Map<String, dynamic> _row(
     <String, dynamic>{
       'sms_log_id': id,
       'target_area_id': 1,
-      'disaster_id': null,
       'message_body': body,
       'status': 'Sent',
       'created_at': createdAt,

@@ -5,17 +5,39 @@
       <!-- Toolbar -->
       <div class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
         <div>
-          <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Dispatch & Requests</h2>
+          <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">Resident Requests</h2>
           <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} requests across all barangays</div>
         </div>
+        <div class="d-flex align-center gap-3">
+        <!-- The adviser's ask: someone who shows up at the office in person
+             rather than through the app, with or without an account. A
+             separate button rather than folding this into the export/filter
+             row, since filing a request is a different kind of action from
+             everything else up here. -->
+        <v-btn
+          color="secondary"
+          variant="flat"
+          class="text-none font-weight-bold px-6 text-white"
+          height="40"
+          @click="openCreateDialog"
+        >
+          <v-icon start size="small">mdi-account-plus-outline</v-icon>
+          Log Walk-in Request
+        </v-btn>
         <!-- This used to be a button with no handler and no export function
              behind it, styled larger than either real action on the page. It
              now writes what the operator is actually looking at: the current
              filter and search, in the order shown, not all 30 rows. -->
+        <!-- Outlined, not filled. Squinting at this screen, the heaviest mark
+             on it was this button: a near-black secondary fill on a pale page,
+             out-weighing "Approve & Dispatch" from the other end of the layout.
+             Exporting a CSV is a side errand. Same outlined-primary treatment
+             the vehicle picker uses, so the panel has one language for a
+             supporting action and keeps the fill for the decision. -->
         <v-btn
-          color="secondary"
-          variant="flat"
-          class="text-none font-weight-bold text-white px-6"
+          color="primary"
+          variant="outlined"
+          class="text-none font-weight-bold px-6"
           height="40"
           :disabled="!filteredAndSortedRequests.length"
           @click="exportCsv"
@@ -24,6 +46,7 @@
           Export {{ filteredAndSortedRequests.length }}
           <span class="d-sr-only">requests as CSV</span>
         </v-btn>
+        </div>
       </div>
 
       <!-- Split view: list + detail panel.
@@ -66,13 +89,22 @@
                  nothing named Disapproved" rather than "nothing is disapproved
                  right now"; the chip staying put and the list explaining the
                  zero is the honest version. -->
-            <v-chip-group v-if="!initialLoad" column>
+            <!-- The group owns the selection, via v-model + :value on each chip.
+                 It used to have neither: the chips drove `filters.status` from
+                 their own @click while VChipGroup ran a second, independent
+                 useGroup selection that nothing ever set. VChip only applies its
+                 `color` when the GROUP considers it selected, so the active chip
+                 got `variant="flat"` from the ternary and then no `bg-primary`
+                 to go with it — it rendered plain grey, telling active from
+                 inactive by lightness alone. `mandatory` keeps one always on, so
+                 clicking the selected chip cannot clear the filter to nothing. -->
+            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory column>
               <v-chip
                 v-for="status in statusTabs" :key="status"
+                :value="status"
                 size="small" class="font-weight-bold"
-                :color="status === filters.status ? 'primary' : undefined"
+                color="primary"
                 :variant="status === filters.status ? 'flat' : 'tonal'"
-                @click="filters.status = status"
               >
                 {{ status }} <span class="ml-1 font-weight-black">{{ requestCounts[status] }}</span>
               </v-chip>
@@ -80,12 +112,29 @@
             <v-skeleton-loader v-else type="chip" width="100%" height="32"></v-skeleton-loader>
           </div>
 
-          <!-- Bulk action bar -->
+          <!-- Bulk action bar. This was already wired to bulkDisapprove(), but
+               both controls were text buttons at the same weight, so the one
+               action the checkboxes exist for read as a caption sitting beside
+               "3 selected" rather than as the thing to press. The count moves
+               into the label — the button now names what it does and to how
+               many — and the destructive action takes the rightmost slot, the
+               same order the confirm dialog below uses. -->
           <div v-if="selectedIds.size > 0" class="d-flex align-center justify-space-between px-4 py-2 subtle-surface" style="flex-shrink: 0;">
-            <span class="text-caption font-weight-bold">{{ selectedIds.size }} selected</span>
-            <div class="d-flex gap-2">
-              <v-btn size="small" variant="text" color="error" class="text-none font-weight-bold" :loading="bulkLoading" @click="openReason('bulk')">Disapprove</v-btn>
-              <v-btn size="small" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+            <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
+            <div class="d-flex align-center gap-2">
+              <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+              <v-btn
+                color="error"
+                variant="flat"
+                size="small"
+                height="36"
+                class="text-none font-weight-bold"
+                :loading="bulkLoading"
+                @click="openReason('bulk')"
+              >
+                Disapprove {{ selectedIds.size }}
+                <span class="d-sr-only">selected requests</span>
+              </v-btn>
             </div>
           </div>
 
@@ -111,7 +160,7 @@
                 role="button"
                 tabindex="0"
                 :aria-current="isSelected(item) ? 'true' : undefined"
-                :aria-label="`${residentName(item.resident)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
+                :aria-label="`${requesterName(item)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
                 @click="selectRequest(item)"
                 @keydown.enter.prevent="selectRequest(item)"
                 @keydown.space.prevent="selectRequest(item)"
@@ -124,12 +173,12 @@
                   class="mr-1"
                   style="flex: 0 0 auto;"
                   density="compact"
-                  :aria-label="`Select ${residentName(item.resident)}'s request`"
+                  :aria-label="`Select ${requesterName(item)}'s request`"
                   @click.stop="toggleSelect(item)"
                 ></v-checkbox-btn>
                 <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
                   <span class="font-weight-bold text-caption">
-                    {{ item.resident?.first_name?.charAt(0) }}{{ item.resident?.last_name?.charAt(0) }}
+                    {{ requesterInitials(item) }}
                   </span>
                 </v-avatar>
                 <!-- The date is the half of this line that survives truncation
@@ -137,19 +186,21 @@
                      it gets its own column instead of trailing the service
                      name off the end of the row. -->
                 <div class="flex-grow-1 min-width-0">
-                  <div class="text-body-2 font-weight-bold text-truncate">{{ residentName(item.resident) }}</div>
+                  <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
                   <div class="d-flex align-center text-caption text-medium-emphasis">
                     <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
                     <span class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
                 </div>
-                <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold ml-2 flex-shrink-0">{{ item.status || 'Pending' }}</v-chip>
+                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(item.status)">{{ item.status || 'Pending' }}</span>
               </div>
             </div>
           </div>
 
           <div class="d-flex justify-center pa-2" style="flex-shrink: 0;">
-            <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="secondary"></v-pagination>
+            <!-- active-color was `secondary` (#0A2620), which is 1.07:1 on the
+                 dark surface — the current page number simply was not there. -->
+            <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="primary"></v-pagination>
           </div>
         </v-card>
 
@@ -181,17 +232,17 @@
                 ></v-btn>
                 <v-avatar color="primary" variant="tonal" size="52">
                   <span class="text-h6 font-weight-black">
-                    {{ selectedRequest.resident?.first_name?.charAt(0) }}{{ selectedRequest.resident?.last_name?.charAt(0) }}
+                    {{ requesterInitials(selectedRequest) }}
                   </span>
                 </v-avatar>
                 <div>
-                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ residentName(selectedRequest.resident) }}</div>
-                  <div class="text-caption text-medium-emphasis">{{ selectedRequest.resident?.barangay?.barangay_name || 'Unknown Barangay' }}</div>
+                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
                 </div>
               </div>
-              <v-chip :color="getStatusColor(selectedRequest.status)" size="small" label class="text-uppercase font-weight-bold text-white">
+              <span class="status-pill" :class="statusPillClass(selectedRequest.status)">
                 {{ selectedRequest.status || 'Pending' }}
-              </v-chip>
+              </span>
             </div>
 
             <v-divider></v-divider>
@@ -199,7 +250,7 @@
             <div class="flex-grow-1 overflow-y-auto pa-6">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
-              <v-row class="mb-2">
+              <v-row class="detail-group">
                 <v-col cols="12" sm="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
                   <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'N/A' }}</div>
@@ -210,71 +261,87 @@
                 </v-col>
                 <v-col cols="12" sm="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.resident?.phone_number || 'N/A' }}</div>
+                  <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
                 </v-col>
               </v-row>
 
-              <div class="mb-4">
+              <div class="detail-group">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
+                <!-- One element per line. The description arrives newline-
+                     separated and was rendered as a single interpolation, so
+                     every break collapsed to a space and the whole thing read
+                     as one run-on sentence. -->
                 <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  {{ selectedRequest.description || 'No description provided by resident.' }}
+                  <template v-if="descriptionLines.length">
+                    <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
+                  </template>
+                  <template v-else>No description provided by resident.</template>
                 </v-card>
               </div>
 
-              <!-- The site photo comes first: it is what the resident is
-                   reporting, and it is what decides whether a unit is sent.
-                   The ID answers a different question, and answers it after. -->
-              <div class="mb-4" v-if="selectedRequest.has_site_photo">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Landmark</div>
-                <v-skeleton-loader v-if="sitePhoto.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
-                <v-alert v-else-if="sitePhoto.state.error" type="error" variant="tonal" density="compact">{{ sitePhoto.state.error }}</v-alert>
-                <v-img
-                  v-else-if="sitePhoto.state.url"
-                  :src="sitePhoto.state.url"
-                  max-height="240"
-                  class="subtle-surface rounded-lg border"
-                  alt="Landmark photo attached by the resident"
-                ></v-img>
-              </div>
+              <!-- One group, two tiles, site photo first: it is what the
+                   resident is reporting and what decides whether a unit is
+                   sent, and the ID answers a different question after it.
+                   `attachments` keeps that order.
 
-              <div class="mb-4" v-if="selectedRequest.has_valid_id">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attached Evidence / Valid ID</div>
-                <v-skeleton-loader v-if="validId.state.loading" type="image" height="200" class="rounded-lg"></v-skeleton-loader>
-                <v-alert v-else-if="validId.state.error" type="error" variant="tonal" density="compact">{{ validId.state.error }}</v-alert>
-                <v-img
-                  v-else-if="validId.state.url"
-                  :src="validId.state.url"
-                  max-height="200"
-                  class="subtle-surface rounded-lg border"
-                  alt="Valid ID attached by the resident"
-                ></v-img>
-              </div>
+                   These were full-width boxes holding a contained image. A
+                   square 240px source in a 1005px-wide frame painted at
+                   198x198 with roughly 400px of flat tint either side, which
+                   reads as a broken image rather than a small one. Fixed
+                   180x140 tiles, filled with `cover`, and the full picture is
+                   a click away. -->
+              <div class="detail-group" v-if="attachments.length">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
 
-              <v-divider class="mb-4"></v-divider>
-
-              <div v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Dispatch Assignment</div>
-                <v-card variant="outlined" class="pa-4 rounded-lg d-flex justify-space-between align-center" :class="{ 'bg-success-tint': formData.vehicle_id }" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <div v-if="formData.vehicle_id" class="d-flex align-center gap-3 min-width-0">
-                    <v-avatar color="success" variant="tonal" size="40">
-                      <v-icon color="success">{{ vehicleIcon(selectedVehicle?.type) }}</v-icon>
-                    </v-avatar>
-                    <div class="min-width-0">
-                      <div class="font-weight-bold text-truncate">{{ getSelectedVehicleName() }}</div>
-                      <div class="text-caption text-medium-emphasis">
-                        Selected for dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
-                      </div>
-                    </div>
+                <div class="d-flex flex-wrap gap-3">
+                  <div v-for="a in attachments" :key="a.key">
+                    <v-skeleton-loader
+                      v-if="a.state.loading"
+                      type="image"
+                      height="140"
+                      width="180"
+                      class="rounded-lg"
+                    ></v-skeleton-loader>
+                    <v-alert
+                      v-else-if="a.state.error"
+                      type="error"
+                      variant="tonal"
+                      density="compact"
+                      class="attachment-error"
+                    >{{ a.state.error }}</v-alert>
+                    <button
+                      v-else-if="a.state.url"
+                      type="button"
+                      class="attachment-tile rounded-lg"
+                      :aria-label="`View the ${a.label.toLowerCase()} full size`"
+                      @click="openLightbox(a)"
+                    >
+                      <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
+                      <!-- Always drawn, not only on hover: a hover-only
+                           affordance tells a touch user nothing, and this is
+                           the only cue that the tile opens anything. -->
+                      <span class="attachment-badge" aria-hidden="true">
+                        <v-icon size="16">mdi-magnify-plus-outline</v-icon>
+                      </span>
+                      <span class="attachment-scrim" aria-hidden="true">
+                        <v-icon size="18">mdi-magnify-plus-outline</v-icon>
+                        View
+                      </span>
+                    </button>
+                    <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
                   </div>
-                  <div v-else class="text-body-2 text-medium-emphasis">No vehicle assigned yet.</div>
-
-                  <v-btn color="secondary" variant="flat" size="small" class="text-none font-weight-bold text-white" @click="vehicleModal.isOpen = true">
-                    {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
-                  </v-btn>
-                </v-card>
+                </div>
               </div>
 
-              <div v-else-if="selectedRequest.status === 'Responding'" class="mb-4">
+              <v-divider class="detail-rule"></v-divider>
+
+              <!-- The Dispatch Assignment card used to live here, and its only
+                   control was the button that enables the action pinned to the
+                   footer. The two now share the footer row, so the card would
+                   be a heading over a sentence. Its unit display went with the
+                   button rather than being left behind. -->
+
+              <div v-if="selectedRequest.status === 'Responding'" class="detail-group">
                 <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
                   <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
                   <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
@@ -290,22 +357,52 @@
 
               <v-textarea
                 v-if="selectedRequest.status === 'Pending' || selectedRequest.status === 'Responding' || !selectedRequest.status"
-                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2" class="mt-4"
+                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2"
                 hint="Carried into the approve and decline dialogs. Declining asks for one if this is empty."
                 persistent-hint
               ></v-textarea>
             </div>
 
             <v-divider v-if="showActions"></v-divider>
-            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3" style="flex-shrink: 0;">
+            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3 flex-wrap" style="flex-shrink: 0;">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <!-- The gate is right: nothing dispatches without a unit. But a
-                     greyed primary button on a dispatch screen reads as broken
-                     unless something names what is missing, and a disabled
-                     control announces no reason to a screen reader at all. -->
-                <span v-if="!formData.vehicle_id" class="text-caption text-medium-emphasis mr-auto">
-                  Select a vehicle to enable dispatch.
-                </span>
+                <!-- The unit and the button it unlocks now sit in one row. They
+                     used to be a scroll apart — the picker was a card up in the
+                     body, the action it gated was pinned down here — so an
+                     operator reading a greyed-out "Approve & Dispatch" had to go
+                     hunting for the reason. The gate itself has always been
+                     real; only the distance was the problem. -->
+                <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
+                  <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
+                    <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
+                      {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
+                    </v-icon>
+                  </v-avatar>
+                  <div class="min-width-0">
+                    <div class="text-body-2 font-weight-bold text-truncate">
+                      {{ formData.vehicle_id ? getSelectedVehicleName() : 'No vehicle selected' }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis text-truncate">
+                      <template v-if="formData.vehicle_id">
+                        Ready to dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
+                      </template>
+                      <template v-else>Select one to enable dispatch.</template>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- primary, not secondary. Secondary is #0A2620, a near-black
+                     green that works as a fill under a white label and vanishes
+                     as an outline on the dark theme's own dark surface. -->
+                <v-btn
+                  color="primary"
+                  variant="outlined"
+                  class="text-none font-weight-bold"
+                  height="40"
+                  @click="vehicleModal.isOpen = true"
+                >
+                  {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
+                </v-btn>
                 <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
@@ -322,7 +419,7 @@
                   Approve &amp; Dispatch
                 </v-btn>
                 <span id="dispatch-gate" class="d-sr-only">
-                  Disabled until a vehicle is selected in the dispatch assignment card above.
+                  Disabled until a vehicle is chosen with the Select Vehicle button beside it.
                 </span>
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
@@ -335,6 +432,30 @@
         </v-card>
       </div>
     </div>
+
+    <!-- Attachment lightbox. Same shape as the vehicle picker below: v-dialog,
+         rounded card, title row with a close button.
+
+         It reads the blob URL the panel already holds rather than building one.
+         The image sits behind an authenticated route and its storage path is
+         hidden on the model, so there is no address a plain image tag could
+         load. -->
+    <v-dialog v-model="lightbox.open" max-width="900">
+      <v-card rounded="lg" elevation="6">
+        <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
+          <span class="text-h6 font-weight-bold">{{ lightboxAttachment?.label }}</span>
+          <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="lightbox.open = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="pa-0 subtle-surface">
+          <v-img
+            v-if="lightboxAttachment?.state.url"
+            :src="lightboxAttachment.state.url"
+            :alt="lightboxAttachment.alt"
+            max-height="70vh"
+          ></v-img>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
 
     <!-- Vehicle picker -->
     <v-dialog v-model="vehicleModal.isOpen" max-width="600">
@@ -429,23 +550,157 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Walk-in request. Two shapes of walk-in: an existing resident who came
+         to the office instead of using the app, and someone with no account
+         at all -- the toggle decides which half of the form is live, and
+         only one half is ever sent. -->
+    <v-dialog v-model="createDialog.open" max-width="640" scrollable persistent>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
+          <span class="text-h6 font-weight-bold">Log Walk-in Request</span>
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="pa-6" style="max-height: 70vh;">
+          <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ createDialog.error }}</v-alert>
+
+          <v-btn-toggle
+            v-model="createDialog.requesterType"
+            color="primary"
+            variant="outlined"
+            mandatory
+            divided
+            class="mb-4 d-flex"
+          >
+            <v-btn value="resident" class="text-none flex-grow-1">Registered resident</v-btn>
+            <v-btn value="walkin" class="text-none flex-grow-1">No account</v-btn>
+          </v-btn-toggle>
+
+          <v-autocomplete
+            v-if="createDialog.requesterType === 'resident'"
+            v-model="createDialog.form.resident_id"
+            :items="residentOptions"
+            label="Resident"
+            placeholder="Search by name"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+            :rules="[required]"
+          ></v-autocomplete>
+
+          <template v-else>
+            <v-text-field
+              v-model="createDialog.form.walk_in_name"
+              label="Full name"
+              variant="outlined"
+              density="comfortable"
+              class="mb-2"
+              :rules="[required]"
+            ></v-text-field>
+            <v-text-field
+              v-model="createDialog.form.walk_in_contact_number"
+              label="Contact number"
+              variant="outlined"
+              density="comfortable"
+              class="mb-2"
+              :rules="[required]"
+            ></v-text-field>
+          </template>
+
+          <v-select
+            v-model="createDialog.form.service_id"
+            :items="serviceOptions"
+            label="Service"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+            :rules="[required]"
+          ></v-select>
+
+          <v-textarea
+            v-model="createDialog.form.description"
+            label="Description"
+            variant="outlined"
+            density="comfortable"
+            rows="3"
+            class="mb-2"
+            :rules="[required]"
+          ></v-textarea>
+
+          <v-select
+            v-model="createDialog.form.required_vehicle_type"
+            :items="vehicleTypeOptions"
+            label="Required vehicle type (optional)"
+            variant="outlined"
+            density="comfortable"
+            clearable
+            class="mb-2"
+          ></v-select>
+
+          <v-file-input
+            v-model="createDialog.form.valid_id"
+            label="Valid ID (optional — already checked in person)"
+            variant="outlined"
+            density="comfortable"
+            accept="image/jpeg,image/png"
+            prepend-icon=""
+            prepend-inner-icon="mdi-card-account-details-outline"
+            class="mb-2"
+          ></v-file-input>
+
+          <v-file-input
+            v-model="createDialog.form.site_photo"
+            label="Site photo (optional)"
+            variant="outlined"
+            density="comfortable"
+            accept="image/jpeg,image/png"
+            prepend-icon=""
+            prepend-inner-icon="mdi-camera-outline"
+          ></v-file-input>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="px-6 text-none font-weight-bold text-white"
+            height="44"
+            :loading="createDialog.loading"
+            @click="submitWalkIn"
+          >File request</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
+import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+
+const route = useRoute()
 
 // The split view needs a real breakpoint, not a media query in CSS: below it
 // the two panes are rendered one at a time rather than merely restyled, so the
 // list is not sitting offscreen holding focusable rows.
-const { mdAndUp, height: windowHeight } = useDisplay()
-const twoUp = mdAndUp
+//
+// `lg`, not `md`. Vuetify 4 moved the breakpoints (display.js: sm 600, md 840,
+// lg 1145 — v3 was 960/1280), so mdAndUp turned the split on at an 840px
+// viewport. The drawer is `permanent` at 260px and the shell adds 24px of
+// padding, so that left ~556px for two columns: the list rail's clamp(360px…)
+// floor lost to `flex-shrink` and the rail rendered 175px wide against a
+// scrollWidth of 218. lgAndUp leaves ~861px, which fits the 360px rail and a
+// detail pane that can still show a full field row.
+const { lgAndUp, height: windowHeight } = useDisplay()
+const twoUp = lgAndUp
 
 const requests = ref([])
 const vehicles = ref([])
+const residents = ref([])
+const services = ref([])
 const search = ref('')
 const initialLoad = ref(true)
 const loading = ref(false)
@@ -454,11 +709,25 @@ const apiError = ref('')
 const page = ref(1)
 // Ten was a fixed number against a variable amount of room, so a 1080px screen
 // showed ten rows and a band of empty card below them, with pagination under
-// that. Fill the space that exists: a row is 58px, and the search field, chips
-// and pager account for the rest.
+// that. Fill the space that exists.
+//
+// Both constants are measured off the rendered panel, not guessed: a row is
+// 73px (two lines of text plus 12px of vertical padding and a hairline), and
+// the search field, the wrapped status chips and the pager take 348px between
+// them. The old 58/360 pair overshot by two rows, which put a scrollbar inside
+// a list that also paginates -- the one arrangement this computed exists to
+// prevent. At 1080 this now yields exactly the 10 rows that fit.
+// The floor is 5, not 8. Eight rows need 584px and a 860px-tall window leaves
+// 512px, so the old floor put the scrollbar straight back on any laptop screen
+// -- it was defending against a uselessly short list and instead guaranteed the
+// thing the whole computed exists to avoid. Five still reads as a list, and
+// below roughly a 713px window the list scrolls, which is the honest trade.
+const ROW_HEIGHT = 73
+const LIST_CHROME = 348
+
 const itemsPerPage = computed(() => {
-  const rowsFit = Math.floor((windowHeight.value - 360) / 58)
-  return Math.min(20, Math.max(8, rowsFit))
+  const rowsFit = Math.floor((windowHeight.value - LIST_CHROME) / ROW_HEIGHT)
+  return Math.min(20, Math.max(5, rowsFit))
 })
 
 const filters = reactive({ status: 'All' })
@@ -468,6 +737,24 @@ const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', vehicle_id: null })
 
+const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+
+const emptyCreateForm = () => ({
+  resident_id: null,
+  walk_in_name: '',
+  walk_in_contact_number: '',
+  service_id: null,
+  description: '',
+  required_vehicle_type: null,
+  valid_id: null,
+  site_photo: null,
+})
+const createDialog = ref({ open: false, loading: false, error: '', requesterType: 'resident', form: emptyCreateForm() })
+
+const openCreateDialog = () => {
+  createDialog.value = { open: true, loading: false, error: '', requesterType: 'resident', form: emptyCreateForm() }
+}
+
 // `kind` is the whole state machine: 'approve' and 'disapprove' act on the
 // selected request, 'bulk' on every ticked row. Only 'approve' may fire with an
 // empty reason.
@@ -475,7 +762,8 @@ const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error:
 const reasonDialog = ref(emptyReason())
 
 const reasonCopy = computed(() => {
-  const who = `${selectedRequest.value?.resident?.first_name || ''} ${selectedRequest.value?.resident?.last_name || ''}`.trim()
+  const req = selectedRequest.value
+  const who = req && requesterName(req) !== 'Unknown resident' && requesterName(req) !== 'Unknown requester' ? requesterName(req) : ''
   const what = selectedRequest.value?.service?.service_name || 'this service'
   switch (reasonDialog.value.kind) {
     case 'approve':
@@ -570,12 +858,18 @@ const createAttachment = (segment, failureMessage) => {
   return { state, load, release }
 }
 
+const lightbox = ref({ open: false, key: null })
+
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
 // The route segment and the `site_photo` column keep their names -- this is a
 // label change, not an API one.
 const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
 
 const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
+
+// Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
+// arrival so the operator lands on the filtered view, not "All".
+if (statusTabs.includes(route.query.status)) filters.status = route.query.status
 
 const itemId = (item) => item.request_id || item.id
 
@@ -584,6 +878,24 @@ const itemId = (item) => item.request_id || item.id
 // resident, written two ways, six inches apart.
 const residentName = (resident) =>
   `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown resident'
+
+// A walk-in with no account carries no `resident` object at all — these read
+// walk_in_name/walk_in_contact_number instead, so the list row, the detail
+// panel, search and the CSV export all show the same person the same way
+// regardless of which kind of request it is.
+const isWalkIn = (item) => !item?.resident && !item?.resident_id
+const requesterName = (item) =>
+  item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
+const requesterInitials = (item) => {
+  if (item?.resident) return `${item.resident.first_name?.charAt(0) || ''}${item.resident.last_name?.charAt(0) || ''}`
+  const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
+  return parts.length ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
+}
+const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_contact_number || 'N/A'
+const requesterBarangay = (item) => {
+  if (item?.resident) return item.resident.barangay?.barangay_name || 'Unknown Barangay'
+  return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
+}
 
 const requestCounts = computed(() => {
   const counts = { All: requests.value.length, Pending: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
@@ -596,9 +908,90 @@ const requestCounts = computed(() => {
 
 const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
 
+const residentOptions = computed(() => residents.value
+  .map(r => ({
+    title: `${r.last_name}, ${r.first_name}${r.barangay?.barangay_name ? ' — ' + r.barangay.barangay_name : ''}`,
+    value: r.resident_id,
+  }))
+  .sort((a, b) => a.title.localeCompare(b.title)))
+
+const serviceOptions = computed(() => services.value.map(s => ({ title: s.service_name, value: s.service_id })))
+
+// Pulled from the fleet already on screen rather than hardcoded, so a vehicle
+// type added in Fleet Management shows up here without a second edit.
+const vehicleTypeOptions = computed(() => [...new Set(vehicles.value.map(v => v.type).filter(Boolean))])
+
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
 )
+
+// The two attachment slots a request can carry, in reading order. There are
+// exactly these two and never more: `tbl_service_request` holds `valid_id` and
+// `site_photo` as scalar columns, both hidden on the model, each surfaced only
+// as a `has_*` boolean. This is not a collection that might grow at runtime.
+const attachments = computed(() => {
+  const req = selectedRequest.value
+  if (!req) return []
+  return [
+    {
+      key: 'site-photo',
+      label: 'Landmark',
+      present: !!req.has_site_photo,
+      state: sitePhoto.state,
+      alt: 'Landmark photo attached by the resident',
+    },
+    {
+      key: 'valid-id',
+      label: 'Valid ID',
+      present: !!req.has_valid_id,
+      state: validId.state,
+      alt: 'Valid ID attached by the resident',
+    },
+  ].filter(a => a.present)
+})
+
+// Resolved from the live list rather than copied into the dialog, so the open
+// lightbox cannot outlive the blob it is showing.
+const lightboxAttachment = computed(() =>
+  attachments.value.find(a => a.key === lightbox.value.key) || null
+)
+
+const openLightbox = (a) => { lightbox.value = { open: true, key: a.key } }
+
+// The description is not free prose. The mobile app builds it as
+// `metaLines.join('\n')` (Mobile/lib/models/service_forms.dart), and all four
+// forms open with the service name and close with `Contact:` and `Submitted`.
+// Every one of those three is already a header field a few inches above this
+// card, so the panel was printing each of them twice and burying the resident's
+// actual words between the copies.
+//
+// Stripped here rather than in the Flutter form on purpose. A mobile-side fix
+// would only ever reach requests filed after it shipped, leaving every existing
+// row duplicated; and the same `metaLines` are rendered back to the resident on
+// their own tracking screen, where the contact and timestamp are not duplicates
+// of anything on screen.
+const META_TAIL = /^(contact:|submitted\b)/i
+
+const descriptionLines = computed(() => {
+  const raw = selectedRequest.value?.description
+  if (!raw) return []
+
+  const lines = raw.split('\n').map(line => line.trim()).filter(Boolean)
+  const service = (selectedRequest.value?.service?.service_name || '').trim().toLowerCase()
+
+  const kept = [...lines]
+  if (service && kept[0]?.toLowerCase() === service) kept.shift()
+
+  // Only from the end. The resident's own words sit in the middle of the block
+  // and can legitimately begin with either word -- matching anywhere would eat
+  // a sentence that happens to start "Contact the barangay hall first".
+  while (kept.length && META_TAIL.test(kept[kept.length - 1])) kept.pop()
+
+  // A form submitted with nothing typed into it reduces to exactly the meta
+  // lines, and stripping all of them would leave a blank card where there was
+  // text a moment ago. Show what there is rather than nothing.
+  return kept.length ? kept : lines
+})
 
 const filteredAndSortedRequests = computed(() => {
   const searchLower = search.value.toLowerCase()
@@ -608,10 +1001,9 @@ const filteredAndSortedRequests = computed(() => {
     if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) return false
 
     if (!searchLower) return true
-    const res = r.resident || {}
-    return `${res.first_name} ${res.last_name}`.toLowerCase().includes(searchLower) ||
+    return requesterName(r).toLowerCase().includes(searchLower) ||
            (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
-           (res.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
+           (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
   }).sort((a, b) => {
     const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
     if (statusA === 'Pending' && statusB !== 'Pending') return -1
@@ -657,9 +1049,9 @@ const exportCsv = () => {
   const header = ['Request ID', 'Resident', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
   const body = rows.map(r => [
     itemId(r),
-    residentName(r.resident),
-    r.resident?.barangay?.barangay_name || '',
-    r.resident?.phone_number || '',
+    requesterName(r),
+    r.resident?.barangay?.barangay_name || (isWalkIn(r) ? 'Walk-in' : ''),
+    requesterPhone(r),
     r.service?.service_name || '',
     r.status || 'Pending',
     r.vehicle ? vehicleName(r.vehicle) : '',
@@ -694,16 +1086,11 @@ const toggleSelect = (item) => {
 const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'Pending': return 'warning'
-    case 'Responding': return 'info'
-    case 'Resolved': return 'success'
-    case 'Disapproved':
-    case 'Cancelled': return 'error'
-    default: return 'warning'
-  }
-}
+// Mirrors the `row-${status}` pattern the list rows already use, so the pill and
+// the row's left border are driven by the same string and cannot disagree.
+// Replaces getStatusColor: a Vuetify colour name only ever fed v-chip, whose
+// tonal variant is what made these unreadable in the first place.
+const statusPillClass = (status) => `pill-${(status || 'Pending').toLowerCase()}`
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${getToken()}`,
@@ -726,14 +1113,20 @@ const releaseAttachments = () => {
 
 const fetchData = async () => {
   try {
-    const [reqRes, vehRes] = await Promise.all([
+    const [reqRes, vehRes, resRes, svcRes] = await Promise.all([
       fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
+      fetch(`${API_BASE}/vehicles`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/residents`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/services`, { headers: getHeaders() })
     ])
     const reqData = await reqRes.json()
     const vehData = await vehRes.json()
+    const resData = await resRes.json()
+    const svcData = await svcRes.json()
     requests.value = reqData.data || reqData
     vehicles.value = vehData.data || vehData
+    residents.value = resData.data || resData
+    services.value = svcData.data || svcData
 
     if (!selectedRequest.value && requests.value.length) {
       selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
@@ -823,6 +1216,71 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
   }
 }
 
+// v-file-input's v-model is always an array in this Vuetify version, single
+// file or not.
+const singleFile = (v) => (Array.isArray(v) ? v[0] : v) || null
+
+const submitWalkIn = async () => {
+  const form = createDialog.value.form
+  const isResident = createDialog.value.requesterType === 'resident'
+
+  if (isResident && !form.resident_id) {
+    createDialog.value.error = 'Pick a resident'
+    return
+  }
+  if (!isResident && (!form.walk_in_name.trim() || !form.walk_in_contact_number.trim())) {
+    createDialog.value.error = 'Name and contact number are required for someone with no account'
+    return
+  }
+  if (!form.service_id) {
+    createDialog.value.error = 'Pick a service'
+    return
+  }
+  if (!form.description.trim()) {
+    createDialog.value.error = 'Description is required'
+    return
+  }
+
+  createDialog.value.loading = true
+  createDialog.value.error = ''
+  try {
+    const body = new FormData()
+    if (isResident) {
+      body.append('resident_id', form.resident_id)
+    } else {
+      body.append('walk_in_name', form.walk_in_name.trim())
+      body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
+    }
+    body.append('service_id', form.service_id)
+    body.append('description', form.description.trim())
+    if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
+    const validIdFile = singleFile(form.valid_id)
+    if (validIdFile) body.append('valid_id', validIdFile)
+    const sitePhotoFile = singleFile(form.site_photo)
+    if (sitePhotoFile) body.append('site_photo', sitePhotoFile)
+
+    // No 'Content-Type' — the browser sets the multipart boundary itself, and
+    // overriding it with the JSON header used elsewhere in this file would
+    // send a body no multipart parser can read.
+    const res = await fetch(`${API_BASE}/admin/service-requests`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body,
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to file the request')
+    }
+    createDialog.value.open = false
+    await fetchData()
+  } catch (error) {
+    createDialog.value.error = error.message
+  } finally {
+    createDialog.value.loading = false
+  }
+}
+
 const bulkDisapprove = async (reason) => {
   bulkLoading.value = true
   apiError.value = ''
@@ -850,6 +1308,12 @@ const bulkDisapprove = async (reason) => {
     bulkLoading.value = false
   }
 }
+
+// `load()` revokes the previous blob the moment the selection moves on, so an
+// open lightbox would be left holding a dead blob: URL -- and if the next
+// request carried the same kind of attachment it would quietly swap in a
+// different resident's document under the same heading.
+watch(selectedRequest, () => { lightbox.value = { open: false, key: null } })
 
 watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
@@ -882,13 +1346,110 @@ onUnmounted(releaseAttachments)
 .vehicle-option:last-child { border-bottom: none; }
 .vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
 
-.bg-success-tint {
-  background-color: rgba(var(--v-theme-success), 0.10) !important;
-  border-color: rgba(var(--v-theme-success), 0.4) !important;
+/* Rhythm for the detail column. A label sits 8px from the thing it labels; a
+   group sits 28px from the next one. The old spacing used 8 and 16, and a
+   group break only twice the size of a label break does not read as a break at
+   all -- the whole panel came across as one column of text with some words in
+   capitals. The rule before the action area gets the widest interval on the
+   panel, because it is the only one separating what you read from what you
+   decide. */
+.detail-group { margin-bottom: 28px; }
+.detail-group:last-child { margin-bottom: 0; }
+
+/* 40, and it has to exceed 28 rather than merely differ from it: adjacent
+   margins collapse to the larger of the two, so anything under the group
+   spacing above it renders as that group spacing and the break disappears. */
+.detail-rule {
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
+
+/* The unit summary holds the left end of the action row. It needs a floor so
+   a long unit name truncates instead of squeezing the buttons, and a width it
+   can claim once the row wraps on a narrow panel. */
+.dispatch-state {
+  flex: 1 1 200px;
 }
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* The description is a short list of facts, not a paragraph — a little air
+   between the lines so they read as separate ones. */
+.description-line + .description-line {
+  margin-top: 3px;
+}
+
+/* A real button, so it is in the tab order and announces itself, styled back
+   down to a plain frame. The image fills it via v-img's `cover`. */
+.attachment-tile {
+  position: relative;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+.attachment-tile:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+/* Drawn at rest. The scrim below only appears on hover or focus, which says
+   nothing to a touch user, and this badge is then the only standing cue that
+   the tile opens something. */
+.attachment-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.6);
+  transition: opacity 150ms ease;
+}
+
+/* The scrim says the same thing louder, so the badge steps out from under it
+   rather than sitting on top of its own replacement. */
+.attachment-tile:hover .attachment-badge,
+.attachment-tile:focus-visible .attachment-badge {
+  opacity: 0;
+}
+
+.attachment-scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.attachment-tile:hover .attachment-scrim,
+.attachment-tile:focus-visible .attachment-scrim {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attachment-scrim,
+  .attachment-badge { transition: none; }
+}
+
+.attachment-error {
+  max-width: 320px;
 }
 
 .request-row {
@@ -933,4 +1494,58 @@ onUnmounted(releaseAttachments)
   flex: 0 1 clamp(360px, 26vw, 560px);
   min-width: 0;
 }
+
+/* Status pills — replacing two v-chips that could not be read.
+   v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
+   `background: currentColor`. The detail-panel chip also carried `.text-white`,
+   and the utilities layer beats the components layer, so it repainted the label
+   AND the underlay white: white on white, ~1.0:1. The list chips were legible
+   but failed AA on every status (warning 2.36:1, info 3.84:1, success 4.27:1,
+   error 4.03:1, all measured on their own tint over white).
+   Same shape as UsersView's .status-pill so the two pages agree. Text uses the
+   -strong tokens; the tint keeps the plain token. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+/* The list row is a denser context than the detail header — one step smaller,
+   nothing else changes. */
+.status-pill--sm {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.pill-pending {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
+.pill-responding {
+  background: rgba(var(--v-theme-info), 0.14);
+  color: rgb(var(--v-theme-info-strong));
+}
+.pill-resolved {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success-strong));
+}
+.pill-disapproved,
+.pill-cancelled {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error-strong));
+}
+/* The dark tokens are already bright enough to use as text, but they need the
+   lighter 10% tint the measurements were taken against — 14% of a bright token
+   over #131B2E lifts the background far enough to eat the margin. Keep each
+   status on its own hue; only the alpha changes. */
+.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
+.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
+.v-theme--dark .pill-disapproved,
+.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
 </style>

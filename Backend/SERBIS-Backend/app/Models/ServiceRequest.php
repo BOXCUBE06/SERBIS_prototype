@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id'])]
+#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id'])]
 #[Hidden(['valid_id', 'site_photo'])]
 #[Appends(['has_valid_id', 'has_site_photo'])]
 class ServiceRequest extends Model

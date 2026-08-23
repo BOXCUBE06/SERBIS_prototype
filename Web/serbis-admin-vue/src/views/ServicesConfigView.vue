@@ -6,9 +6,9 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Service Management</h2>
+            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Manage Services</h2>
             <div class="text-subtitle-1 text-medium-emphasis">
-              Every emergency and public service residents can request from the MDRRMO
+              What residents can request from the MDRRMO, and how each one appears in the app
             </div>
           </div>
           <v-btn
@@ -150,8 +150,8 @@
             :items-per-page-options="[10, 25, 50, -1]"
             items-per-page-text="Rows per page"
           >
-            <template v-slot:item.rowNumber="{ index }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.service_name="{ item }">
@@ -314,6 +314,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/services`
@@ -329,9 +330,9 @@ const categories = {
 }
 
 const headers = [
-  // Position in the list as it is currently sorted and filtered, not an id.
-  // `service_id` is a database key with gaps in it, and showing that as "the
-  // number of the service" would have people reading a deleted row into a gap.
+  // Position, not `service_id` — see useRowNumber. The key has gaps in it, and
+  // printing one as "the number of the service" would have people reading a
+  // deleted row into a missing number.
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Service', key: 'service_name', minWidth: '260px' },
   { title: 'Description', key: 'description', sortable: false, minWidth: '280px' },
@@ -347,10 +348,6 @@ const sortBy = ref([{ key: 'service_name', order: 'asc' }])
 const itemsPerPage = ref(10)
 const page = ref(1)
 
-// The slot's `index` counts within the visible page, so page 2 would otherwise
-// restart at 1. "All" is -1, and there is only ever one page of it.
-const rowNumber = (index) =>
-  (itemsPerPage.value === -1 ? 0 : (page.value - 1) * itemsPerPage.value) + index + 1
 const initialLoad = ref(true)
 const apiError = ref('')
 
@@ -412,6 +409,8 @@ const filteredServices = computed(() => {
     return matchesSearch && matchesCategory
   })
 })
+
+const rowNumber = useRowNumbers(filteredServices, 'service_id')
 
 const nameError = computed(() =>
   touched.value.name && !form.value.service_name.trim() ? 'Service name is required.' : '',

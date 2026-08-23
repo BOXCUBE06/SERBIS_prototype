@@ -3,7 +3,7 @@
     <AppSidebar v-if="!isAuthPage" />
     <v-main>
       <div v-if="!isAuthPage" class="outer-wrapper">
-        <div class="inner-wrapper">
+        <div class="inner-wrapper" :class="{ 'inner-wrapper--fixed': isFixedHeight }">
           <RouterView />
         </div>
       </div>
@@ -21,6 +21,9 @@ import { useAppTheme } from '@/composables/useAppTheme'
 const route = useRoute()
 
 const isAuthPage = computed(() => route?.path === '/login')
+
+// Set by the route, not sniffed from the path — see the note in router/index.ts.
+const isFixedHeight = computed(() => route?.meta?.fixedHeight === true)
 
 useAppTheme().init()
 </script>
@@ -65,12 +68,32 @@ useAppTheme().init()
   overflow-y: auto;
   height: 100%;
 
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  /* The scrollbar used to be hidden outright (`scrollbar-width: none` plus a
+     `::-webkit-scrollbar { display: none }`). Content still scrolled — there
+     was simply nothing on screen saying so, which is how a page that overflowed
+     read as a page that was cut off. A slim theme-aware bar instead: it says
+     "there is more" without the chrome of a default scrollbar. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--v-theme-on-surface), 0.25) transparent;
 }
 
 .inner-wrapper::-webkit-scrollbar {
-  display: none;
+  width: 8px;
+}
+.inner-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+.inner-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(var(--v-theme-on-surface), 0.25);
+  border-radius: 4px;
+}
+
+/* Route-scoped, opt-in. A fixed-height view manages scrolling inside its own
+   panes, so the shell must not add a second scroll axis around it — that is
+   what made the whole dashboard slide behind the (then invisible) bar when the
+   request list grew. */
+.inner-wrapper--fixed {
+  overflow: hidden;
 }
 
 .v-main .v-container {

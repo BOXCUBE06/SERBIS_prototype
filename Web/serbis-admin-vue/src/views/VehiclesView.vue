@@ -6,8 +6,8 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Fleet Management</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Live readiness across every emergency unit</div>
+            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Vehicles</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">Which units are available and which are currently dispatched</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Unit
@@ -89,7 +89,7 @@
             {{ vehicles.length ? 'No units match your filters' : 'No units in the fleet yet' }}
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first emergency unit to get started.' }}
+            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
           </div>
         </div>
 
@@ -107,6 +107,10 @@
             density="comfortable"
             class="fleet-table"
           >
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+            </template>
+
             <template v-slot:item.unit_identifier="{ item }">
               <div class="d-flex align-center gap-3 py-2">
                 <div class="icon-wrapper" :class="`iconbg-${item.status.toLowerCase()}`">
@@ -228,6 +232,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/vehicles`
@@ -285,11 +290,14 @@ const filteredVehicles = computed(() => {
   })
 })
 
+const rowNumber = useRowNumbers(filteredVehicles, 'vehicle_id')
+
 const fleetHeaders = [
-  { title: 'Unit', key: 'unit_identifier', width: '34%' },
-  { title: 'Type', key: 'type', width: '22%' },
-  { title: 'Status', key: 'status', width: '24%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '20%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Unit', key: 'unit_identifier', width: '32%' },
+  { title: 'Type', key: 'type', width: '21%' },
+  { title: 'Status', key: 'status', width: '23%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '19%' },
 ]
 
 const getVehicleIcon = (type) => ({
@@ -522,5 +530,10 @@ onMounted(fetchVehicles)
   .stat-tile, .composition-bar .seg { transition: none; }
   .stat-tile:hover { transform: none; }
   .dot[data-live="true"] { animation: none; }
+}
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 </style>

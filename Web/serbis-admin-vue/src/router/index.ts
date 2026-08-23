@@ -7,7 +7,13 @@ const routes = [
   { path: '/users', component: () => import('../views/UsersView.vue') },
   { path: '/staff', component: () => import('../views/StaffView.vue') },
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue') },
-  { path: '/manage-requests', component: () => import('../views/ManageRequestView.vue') },
+  // `fixedHeight` opts a route out of the shell's page scrolling. Only this one
+  // needs it: it is the sole view built as a fixed-height split pane that
+  // scrolls inside its own columns. Every other view is a scrolling page
+  // (`align-start` + `min-height: 100vh`, or no `fill-height` at all), so making
+  // the shell `overflow: hidden` globally would clip 11 of them.
+  { path: '/manage-requests', component: () => import('../views/ManageRequestView.vue'), meta: { fixedHeight: true } },
+  { path: '/conduction-requests', component: () => import('../views/ConductionRequestView.vue') },
   { path: '/sms', component: () => import('../views/SmsView.vue') },
   { path: '/files', component: () => import('../views/FilesView.vue') },
   { path: '/logs', component: () => import('../views/LogsView.vue') },

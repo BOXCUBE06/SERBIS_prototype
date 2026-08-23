@@ -230,10 +230,99 @@ const Map<String, (String, String)> _strings = {
   ),
   'profile.report_copy': ('Copy report', 'Kopyahin ang Ulat'),
   'profile.report_copied': ('Report copied.', 'Nakopya ang ulat.'),
+
+  // The service catalogue, keyed on `tbl_services.code`. These used to come
+  // from the API's `name_localized` / `description_localized`, resolved out of
+  // a translations table in the database. They live here now: a label the
+  // resident reads is a property of this app, not a row someone can edit into
+  // a different language halfway through an emergency.
+  //
+  // The Tagalog below is the wording reviewed and confirmed by the project
+  // owner on 2026-07-26, carried over unchanged.
+  'service.flood-evacuation.name': ('Flood Evacuation', 'Paglikas sa Baha'),
+  'service.flood-evacuation.desc': (
+    'Assistance and evacuation services during floods.',
+    'Tulong at paglikas tuwing may baha.',
+  ),
+  'service.fire-rescue.name': ('Fire Rescue', 'Pagsagip sa Sunog'),
+  'service.fire-rescue.desc': (
+    'Emergency fire rescue operations.',
+    'Pang-emerhensiyang pagsagip sa sunog.',
+  ),
+  'service.ambulance-medical-response.name': (
+    'Ambulance/Medical Response',
+    'Ambulansya / Tugong Medikal',
+  ),
+  'service.ambulance-medical-response.desc': (
+    'Emergency medical response and ambulance services.',
+    'Pang-emerhensiyang tugong medikal at serbisyong ambulansya.',
+  ),
+  'service.relief-goods-distribution.name': (
+    'Relief Goods Distribution',
+    'Pamamahagi ng Relief Goods',
+  ),
+  'service.relief-goods-distribution.desc': (
+    'Distribution of essential relief goods during disasters.',
+    'Pamamahagi ng mahahalagang relief goods tuwing may sakuna.',
+  ),
+  // Same wording as `type.road.title` above, deliberately: the label must not
+  // change spelling depending on which screen shows it.
+  'service.road-clearing.name': ('Road Clearing', 'Paglinis ng Daan'),
+  'service.road-clearing.desc': (
+    'Clearing roads of debris and obstacles after natural calamities.',
+    'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.',
+  ),
+  'service.search-and-rescue.name': ('Search and Rescue', 'Paghahanap at Pagsagip'),
+  'service.search-and-rescue.desc': (
+    'Search and rescue operations for missing persons.',
+    'Paghahanap at pagsagip sa mga nawawalang tao.',
+  ),
+  'service.power-line-repair.name': (
+    'Power Line Repair',
+    'Pagkumpuni ng Linya ng Kuryente',
+  ),
+  'service.power-line-repair.desc': (
+    'Emergency repair of downed power lines.',
+    'Pang-emerhensiyang pagkumpuni ng mga bumagsak na linya ng kuryente.',
+  ),
+  'service.debris-removal.name': ('Debris Removal', 'Pag-aalis ng Debris'),
+  'service.debris-removal.desc': (
+    'Removal of hazardous debris from public areas.',
+    'Pag-aalis ng mapanganib na debris sa mga pampublikong lugar.',
+  ),
+  'service.animal-rescue.name': ('Animal Rescue', 'Pagsagip sa Hayop'),
+  'service.animal-rescue.desc': (
+    'Rescue operations for stranded or injured animals.',
+    'Pagsagip sa mga naipit o nasugatang hayop.',
+  ),
+  'service.sandbagging.name': ('Sandbagging', 'Paglalagay ng Sandbags'),
+  'service.sandbagging.desc': (
+    'Provision and placement of sandbags for flood prevention.',
+    'Paglalaan at paglalagay ng sandbags upang maiwasan ang baha.',
+  ),
 };
 
 String tr(bool filipino, String key) {
   final pair = _strings[key];
   if (pair == null) return key;
+  return filipino ? pair.$2 : pair.$1;
+}
+
+/// A catalogue service's name in the resident's language.
+///
+/// Unlike [tr] this never returns the key on a miss. A service the MDRRMO adds
+/// in the admin panel has no entry here, and showing "service.x.name" on the
+/// tile a resident taps would be worse than showing its English name — so
+/// [fallback], the API's `service_name`, is what an unknown code resolves to.
+String serviceNameFor(bool filipino, String code, String fallback) {
+  final pair = _strings['service.$code.name'];
+  if (pair == null) return fallback;
+  return filipino ? pair.$2 : pair.$1;
+}
+
+/// The blurb under a service, same rules as [serviceNameFor].
+String serviceDescriptionFor(bool filipino, String code, String fallback) {
+  final pair = _strings['service.$code.desc'];
+  if (pair == null) return fallback;
   return filipino ? pair.$2 : pair.$1;
 }

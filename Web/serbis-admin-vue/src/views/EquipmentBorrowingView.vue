@@ -1,14 +1,14 @@
 <template>
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
     <!-- Header -->
-    <div class="mb-6">
+    <div class="page-header">
       <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
       <div class="text-subtitle-2 text-medium-emphasis">
         Move each request through the pipeline — approve, release, then confirm its return
       </div>
     </div>
 
-    <v-tabs v-model="activeTab" color="primary" class="mb-4 border-b">
+    <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">
       <v-tab value="board" class="text-none font-weight-bold">
         <v-icon start>mdi-view-list-outline</v-icon>
         Active pipeline
@@ -24,7 +24,7 @@
     <!-- Filters sit under the tabs, not in the header, because they apply to
          whichever surface is showing and reading them second makes that order
          explicit. -->
-    <div v-if="!loadError" class="filter-bar mb-4">
+    <div v-if="!loadError" class="filter-bar">
       <v-text-field
         v-model="search"
         label="Search"
@@ -77,7 +77,7 @@
     </div>
 
     <!-- Active filters, each removable on its own, plus a clear-all. -->
-    <div v-if="!initialLoad && !loadError" class="d-flex align-center flex-wrap gap-2 mb-4">
+    <div v-if="!initialLoad && !loadError" class="filter-active d-flex align-center flex-wrap gap-2">
       <template v-if="activeFilters.length">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
         <v-chip
@@ -142,7 +142,7 @@
            click a tile to filter the table to that stage, same mechanic as
            Fleet Management's readiness tiles. Overdue is a fourth tile, not
            a status, since a record can be Approved-and-overdue. -->
-      <div class="d-flex flex-wrap gap-3 mb-5">
+      <div class="status-strip d-flex flex-wrap gap-3">
         <button
           v-for="tile in statusTiles"
           :key="tile.status"
@@ -176,13 +176,15 @@
           v-for="tile in terminalTiles"
           :key="tile.status"
           type="button"
-          class="stat-tile"
+          class="stat-tile stat-tile--link"
           :style="{ '--tile-accent': tile.accent }"
+          :aria-label="`${tile.count} ${tile.label} — open in History`"
           @click="goToOutcome(tile.status)"
         >
           <span class="dot" :style="{ backgroundColor: tile.accent }"></span>
           <span class="stat-value text-high-emphasis">{{ tile.count }}</span>
           <span class="stat-label text-medium-emphasis">{{ tile.label }}</span>
+          <v-icon size="13" class="stat-tile__go" aria-hidden="true">mdi-arrow-top-right</v-icon>
         </button>
       </div>
 
@@ -198,6 +200,10 @@
           :row-props="rowProps"
           @click:row="(_event, { item }) => openDetail(item)"
         >
+          <template v-slot:item.rowNumber="{ item }">
+            <span class="row-number text-medium-emphasis">{{ activeRowNumber(item) }}</span>
+          </template>
+
           <template v-slot:item.avatar="{ item }">
             <v-avatar size="40" class="avatar-tint">
               <span class="avatar-initials">{{ initials(item.resident) }}</span>
@@ -319,6 +325,10 @@
         :row-props="rowProps"
         @click:row="(_event, { item }) => openDetail(item)"
       >
+        <template v-slot:item.rowNumber="{ item }">
+          <span class="row-number text-medium-emphasis">{{ historyRowNumber(item) }}</span>
+        </template>
+
         <template v-slot:item.status="{ item }">
           <v-chip
             size="small"
@@ -554,8 +564,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+
+const route = useRoute()
 
 // Status colours: saturated 700-level ramp, each AA with white text as a
 // badge (measured, see EquipmentBorrowingView audit history). Semantic
@@ -585,6 +599,11 @@ const statusFilter = ref(ALL_STATUS)
 const outcomeFilter = ref(ALL_OUTCOMES)
 const overdueOnly = ref(false)
 const initialLoad = ref(true)
+
+// Dashboard KPI cards deep-link here with ?status=... / ?overdue=1 — honor
+// them once on arrival so the operator lands on the filtered view.
+if (columns.some((c) => c.status === route.query.status)) statusFilter.value = route.query.status
+if (route.query.overdue === '1') overdueOnly.value = true
 const loading = ref(false)
 const reloading = ref(false)
 const processingId = ref(null)
@@ -617,21 +636,23 @@ const notify = (text, color = 'success') => {
 const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
 
 const activeHeaders = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'avatar', sortable: false, align: 'center', width: '60px' },
-  { title: 'Head of the Family', key: 'resident', width: '22%' },
-  { title: 'Barangay', key: 'barangay', width: '13%' },
-  { title: 'Equipment', key: 'equipment', width: '25%' },
-  { title: 'Status', key: 'status', align: 'center', width: '14%' },
-  { title: 'Timeline', key: 'timeline', width: '14%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '12%' },
+  { title: 'Head of the Family', key: 'resident', width: '20%' },
+  { title: 'Barangay', key: 'barangay', width: '12%' },
+  { title: 'Equipment', key: 'equipment', width: '22%' },
+  { title: 'Status', key: 'status', align: 'center', width: '13%' },
+  { title: 'Timeline', key: 'timeline', width: '13%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '11%' },
 ]
 
 const historyHeaders = [
-  { title: 'Head of the Family', key: 'resident', width: '22%' },
-  { title: 'Barangay', key: 'barangay', width: '16%' },
-  { title: 'Equipment', key: 'equipment', width: '26%' },
-  { title: 'Requested', key: 'created_at', width: '18%' },
-  { title: 'Outcome', key: 'status', align: 'center', width: '18%' },
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'Head of the Family', key: 'resident', width: '21%' },
+  { title: 'Barangay', key: 'barangay', width: '15%' },
+  { title: 'Equipment', key: 'equipment', width: '24%' },
+  { title: 'Requested', key: 'created_at', width: '17%' },
+  { title: 'Outcome', key: 'status', align: 'center', width: '16%' },
 ]
 
 // Option lists come from the records actually loaded, so a barangay with no
@@ -733,6 +754,11 @@ const historyItems = computed(() =>
     .filter((b) => outcomeFilter.value === ALL_OUTCOMES || b.status === outcomeFilter.value)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
+
+// Two tables, two independent counts — a borrowing is numbered within the
+// list it actually appears in, and the same record never shows in both.
+const activeRowNumber = useRowNumbers(activeItems, 'borrow_id')
+const historyRowNumber = useRowNumbers(historyItems, 'borrow_id')
 
 // What the "Overdue" tile would leave if it were the only thing active — the
 // other filters still apply, or the number would not describe the tile that
@@ -1048,6 +1074,22 @@ onMounted(fetchData)
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
 
+/* Vertical rhythm for the page's bands. They used to run mb-6, mb-4, mb-4,
+   mb-4, mb-4, mb-5 from the heading down -- one value repeated four times,
+   with a 20px that is not tellable from a 16px. Everything therefore read as
+   an equal sibling of everything else, and nothing marked where the controls
+   stopped and the data began.
+
+   Two intervals now. 8px holds the two halves of the filter block together --
+   the selects and the chips showing what those selects did are one thought
+   split across two rows. 28px is the region break. The status strip sits 16px
+   above the table because it counts the rows in it; it is a caption for that
+   table, not a band of its own. */
+.page-header { margin-bottom: 28px; }
+.page-tabs { margin-bottom: 24px; }
+.filter-active { margin-bottom: 28px; }
+.status-strip { margin-bottom: 16px; }
+
 /* Filter bar. Fixed-width fields that wrap rather than a grid: field count
    can vary and a fixed column count would leave gaps on narrow screens. */
 .filter-bar {
@@ -1055,6 +1097,7 @@ onMounted(fetchData)
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  margin-bottom: 8px;
 }
 .filter-field { width: 220px; max-width: 100%; }
 
@@ -1087,6 +1130,18 @@ onMounted(fetchData)
   border-color: var(--tile-accent);
   background: color-mix(in srgb, var(--tile-accent) 10%, transparent);
 }
+/* Returned and Denied do not filter the table underneath them -- they switch
+   to the History tab. Three tiles that look identical while one group leaves
+   the surface is the whole confusion, so these carry a departure arrow and a
+   dashed edge: still a tile, visibly not the same kind of tile. */
+.stat-tile--link {
+  border-style: dashed;
+}
+.stat-tile__go {
+  margin-left: 2px;
+  opacity: 0.5;
+}
+
 .stat-tile .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .stat-tile .stat-value { font-size: 1.15rem; font-weight: 800; line-height: 1; }
 .stat-tile .stat-label { font-size: 0.8rem; font-weight: 600; }
@@ -1097,7 +1152,12 @@ onMounted(fetchData)
    table lets a narrow wrapper crush every column instead of scrolling —
    "waiting" wraps to one letter per line rather than the table scrolling
    sideways. The wrapper's own overflow-x (Vuetify's default) does the rest. */
-.borrow-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 720px; }
+.borrow-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 784px; }
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .borrow-table :deep(thead th) {
   font-size: 0.72rem !important;
   font-weight: 700 !important;

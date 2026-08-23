@@ -1,13 +1,13 @@
 <template>
   <v-container fluid class="fill-height align-start pa-6 bg-background">
-    <v-row class="ma-0 w-100 align-stretch" :style="rowStyle">
+    <div class="residents-layout" :style="rowStyle">
 
-      <v-col cols="12" :md="7" :lg="8" class="pa-0 h-100">
+      <div class="residents-main">
         <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
 
-          <div class="px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
+          <div class="residents-toolbar px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
             <div>
-              <h2 class="text-h5 font-weight-bold text-high-emphasis">User Management</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">Residents</h2>
               <!-- Says "of" only when something is being hidden. The permanent
                    "N of N" read as a standing accusation that a filter was on.
                    ("residents" here is deliberate and ruled on; the heading
@@ -67,7 +67,7 @@
                and a 3px underline alone, and the group had no accessible name
                saying what these buttons even filter. -->
           <div
-            class="px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
+            class="residents-toolbar px-6 py-2 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
             role="group"
             aria-label="Filter by barangay"
           >
@@ -153,6 +153,10 @@
           >
             <template v-slot:bottom></template>
 
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+            </template>
+
             <template v-slot:item.photo="{ item }">
               <v-avatar :color="undefined" size="42" class="my-2 avatar-tint">
                 <v-img
@@ -219,64 +223,48 @@
             </template>
           </v-data-table>
         </v-card>
-      </v-col>
+      </div>
 
-      <!-- Detail panel — desktop -->
-      <v-col v-if="showSidePanel" cols="12" md="5" lg="4" class="pa-0 pl-md-4 h-100">
-        <transition name="slide-fade" mode="out-in">
+      <!-- The profile is a rail beside the table, not an overlay on top of it.
+           It has no width until a resident is opened; opening one animates it
+           out to 460 and the table narrows into what is left, which is the
+           split the page used to hold permanently — the difference being that
+           it is now only there while it is being read. Closing gives the width
+           back the same way.
+
+           `overflow: hidden` on the rail plus a fixed-width child is what makes
+           that a slide rather than a reflow: the panel is drawn at its full
+           460 the whole time and the rail uncovers it, so no text re-wraps on
+           any frame of the animation. -->
+      <aside
+        class="detail-rail"
+        :class="{ 'detail-rail--open': detailOpen }"
+        :aria-hidden="detailOpen ? undefined : 'true'"
+        :inert="detailOpen ? undefined : true"
+        aria-label="Head of the family profile"
+      >
+        <div class="detail-rail__inner">
           <v-card
             v-if="selectedResident"
-            key="profile"
             elevation="3"
             rounded="lg"
-            class="bg-surface h-100 d-flex flex-column position-relative"
+            class="bg-surface h-100 d-flex flex-column"
           >
             <ResidentDetailPanel
               :resident="selectedResident"
               :status-loading="statusToggleLoading"
               :hidden-by-filter="selectionHidden"
-              @close="selectedResident = null"
+              @close="closeDetail"
               @edit="openExistingEditModal"
               @toggle-status="toggleStatus"
               @delete="askDelete"
               @clear-filters="clearFilters"
             />
           </v-card>
+        </div>
+      </aside>
 
-          <v-card
-            v-else
-            key="placeholder"
-            elevation="3"
-            rounded="lg"
-            class="bg-surface h-100 d-flex flex-column align-center justify-center pa-6 text-center"
-          >
-            <v-icon size="64" class="mb-4 text-medium-emphasis">mdi-account-search</v-icon>
-            <h3 class="text-h6 font-weight-bold text-high-emphasis">No head of the family selected</h3>
-            <p class="text-body-1 text-medium-emphasis mt-2">
-              Select a row in the table to see the full profile here.
-            </p>
-            <p class="text-body-2 text-medium-emphasis mt-4">
-              Tip: use <kbd class="kbd">↑</kbd> <kbd class="kbd">↓</kbd> to move between rows and
-              <kbd class="kbd">Enter</kbd> to open one.
-            </p>
-          </v-card>
-        </transition>
-      </v-col>
-    </v-row>
-
-    <!-- Detail panel — small screens, as a full-height sheet -->
-    <v-dialog v-model="mobileSheet" fullscreen transition="dialog-bottom-transition">
-      <v-card v-if="selectedResident" class="bg-surface d-flex flex-column">
-        <ResidentDetailPanel
-          :resident="selectedResident"
-          :status-loading="statusToggleLoading"
-          @close="selectedResident = null"
-          @edit="openExistingEditModal"
-          @toggle-status="toggleStatus"
-          @delete="askDelete"
-        />
-      </v-card>
-    </v-dialog>
+    </div>
 
     <!-- Add / Edit -->
     <v-dialog v-model="modal.isOpen" max-width="680" persistent>
@@ -435,6 +423,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
   releaseResidentPhotos,
@@ -456,27 +445,32 @@ import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 
 const { mdAndUp } = useDisplay()
 
-// The percentages add to 92, not 100, because the avatar column is a fixed
-// 76px and the table is `table-layout: fixed` — percentages are taken from the
-// full table width, so 100% + 76px was already running 28px past the card
-// before a seventh column existed.
+// Four columns are fixed px and four are percentages, and the percentages add
+// to 51 rather than to what is left of 100. The table is `table-layout: fixed`,
+// so a percentage is taken from the full table width, not from the space the
+// px columns leave — the two have to be budgeted together or they overlap.
 //
-// Rebalanced from measurement, not from guessing: at 1920 the old split left
-// Email truncating on 23 rows out of 23 and Barangay on 10, while SMS Blasts
-// held 190px to print the identical word "RECEIVING" in every row. Width now
-// follows variance — the columns that differ per row get the space, and the
-// two pill columns keep only what their longest pill actually measures
-// ("DEACTIVATED" 128px, "RECEIVING" 110px) plus cell padding.
+// The pill columns are px because their content does not vary: they were 10%
+// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
+// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
+// spilled out of the cell and scrolled the whole card sideways. Both are now
+// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
+// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
+//
+// Width otherwise follows variance: the columns that differ per row get the
+// percentages. 55% + 442px still fits the 1000px min-width with room to spare,
+// and `table-layout: fixed` hands the slack back to every column in proportion.
 const headers = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Full Name', key: 'fullName', width: '20%' },
-  // 18%, measured against the longest real barangay name in the data ("San
-  // Antonio Ugad"), which was still clipping at 15%.
-  { title: 'Barangay', key: 'barangay_name', width: '18%' },
-  { title: 'Phone Number', key: 'phone_number', width: '15%' },
-  { title: 'Email', key: 'email_address', width: '21%' },
-  { title: 'Status', key: 'status', align: 'center', width: '10%' },
-  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '8%' },
+  { title: 'Full Name', key: 'fullName', width: '17%' },
+  // The longest real barangay name in the data is "San Antonio Ugad", which
+  // was still clipping when this column was 15% of a narrower table.
+  { title: 'Barangay', key: 'barangay_name', width: '14%' },
+  { title: 'Phone Number', key: 'phone_number', width: '10%' },
+  { title: 'Email', key: 'email_address', width: '14%' },
+  { title: 'Status', key: 'status', align: 'center', width: '160px' },
+  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
 ]
 
 const residents = ref([])
@@ -507,13 +501,49 @@ const formData = ref({
   email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
 })
 
-const showSidePanel = computed(() => mdAndUp.value)
-const mobileSheet = computed({
-  get: () => !mdAndUp.value && Boolean(selectedResident.value),
-  set: (v) => { if (!v) selectedResident.value = null },
-})
+// The rail is open exactly when a resident is selected. There is no second
+// piece of state that can disagree with the first.
+const detailOpen = computed(() => Boolean(selectedResident.value))
+const closeDetail = () => { selectedResident.value = null }
+
+// Esc closes it. Nothing else is listening — the rail is ordinary layout, not
+// an overlay, so it has none of the dismissal a v-dialog gets for free.
+//
+// Not while a dialog is up, though. Edit and Delete both open over the page,
+// and a window-level listener cannot see that something nearer the user owns
+// the key: pressing Esc in the edit form closed the profile *behind* the form —
+// and that form is `persistent`, so it stayed open over a panel that was no
+// longer there.
+const onEscape = (event) => {
+  if (event.key !== 'Escape') return
+  if (modal.value.isOpen || deleteDialog.value.show) return
+  if (selectedResident.value) closeDetail()
+}
+
+// Clicking away closes it. Without a scrim there is nothing that "outside" is
+// automatically, so it has to be said, and three things are explicitly not
+// outside: the panel itself; a table row, which switches the profile rather
+// than dismissing it; and the card's own toolbar, because searching or
+// filtering while reading a profile is not a request to close it. Anything
+// Vuetify teleports to the body — dialogs, menus, the status select's list —
+// is excluded too, or picking a status would shut the panel behind it.
+const onDocumentClick = (event) => {
+  if (!selectedResident.value) return
+  if (modal.value.isOpen || deleteDialog.value.show) return
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (target.closest('.detail-rail')) return
+  if (target.closest('.v-overlay')) return
+  if (target.closest('tbody tr')) return
+  if (target.closest('.residents-toolbar')) return
+  closeDetail()
+}
+
+// The table shares the row with the rail, so its height is the page less the
+// container's padding, and the table body is that less the card's header, the
+// barangay tabs and the table's own header.
 const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 96px);' : ''))
-const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 268px)' : '60vh'))
+const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 292px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -557,6 +587,8 @@ const filteredAndSortedResidents = computed(() => {
   }
   return [...result].sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
 })
+
+const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
 
 const clearFilters = () => {
   search.value = ''
@@ -830,13 +862,81 @@ const confirmDelete = async () => {
   }
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  loadAll()
+  window.addEventListener('keydown', onEscape)
+  document.addEventListener('click', onDocumentClick)
+})
 // One blob per resident would otherwise survive every visit to this view for
 // the life of the tab.
-onUnmounted(releaseResidentPhotos)
+onUnmounted(() => {
+  releaseResidentPhotos()
+  window.removeEventListener('keydown', onEscape)
+  document.removeEventListener('click', onDocumentClick)
+})
 </script>
 
 <style scoped>
+/* Table and profile rail side by side. The table is the flexible half and
+   carries `min-width: 0`, without which a flex child refuses to shrink below
+   its content and the rail would push it off the page instead of compressing
+   it. */
+.residents-layout {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+.residents-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Width is the animated property, and it animates from zero — the rail is in
+   the layout at all times, just with nothing to show. Transitioning width is
+   normally the wrong instinct, but the thing being resized here is an empty
+   clipping box: the panel inside it is a fixed 460 and never reflows, so no
+   frame of this costs a text layout. */
+.detail-rail {
+  flex: 0 0 auto;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  /* An even curve, not the expo `cubic-bezier(0.16, 1, 0.3, 1)` this file uses
+     for hovers and fades. Over 476px that one puts ~93% of the travel into the
+     first 30ms and reads as a snap with a long tail — fine for a 4px lift, not
+     for the table changing width under the reader. */
+  transition: width 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.detail-rail--open {
+  width: 476px; /* 460 panel + the 16px gutter that appears with it */
+}
+.detail-rail__inner {
+  width: 460px;
+  margin-left: 16px;
+  height: 100%;
+}
+
+/* Under 960 there is no room to split anything — the table is already at its
+   min-width and the sidebar has taken 260px — so the rail takes the row and
+   the table yields it entirely rather than the two sharing a width neither can
+   use. */
+@media (max-width: 959px) {
+  .detail-rail--open {
+    width: 100%;
+  }
+  .detail-rail--open + .residents-main,
+  .residents-layout:has(.detail-rail--open) .residents-main {
+    flex: 0 0 0;
+    width: 0;
+    overflow: hidden;
+  }
+  .detail-rail__inner {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
@@ -881,7 +981,9 @@ onUnmounted(releaseResidentPhotos)
 }
 
 /* Table.
-   The 860px min-width is load-bearing. `table-layout: fixed` with percentage
+   The 1000px min-width is load-bearing (860 before the row-number column and
+   the two fixed pill columns were budgeted). Below it the percentage columns
+   squeeze the pill columns under the width of the pill they print. `table-layout: fixed` with percentage
    columns and no floor lets a narrow wrapper crush every column proportionally
    instead of scrolling: measured at 430px the six data columns collapsed to
    1px each and only the avatars rendered. Same bug class, same fix, as the
@@ -889,7 +991,12 @@ onUnmounted(releaseResidentPhotos)
 .elegant-table :deep(table) {
   table-layout: fixed !important;
   width: 100% !important;
-  min-width: 860px;
+  min-width: 1000px;
+}
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 /* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
    two pill columns need their width for the pill rather than for gutters. */
@@ -969,10 +1076,11 @@ onUnmounted(releaseResidentPhotos)
 }
 /* Pending. The warning token itself is #F57C00 in light, which is 3.0:1 on
    white — the pill text is 12px bold, so it needs 4.5:1, not the large-text
-   3:1. Hardcode a darker amber for the text (6.2:1 over the tint) and keep
-   the token for the tint and the dot. In dark the token is light enough to
-   use directly. */
-.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: #8A4B00; }
+   3:1. The darker amber (5.94:1 over the tint) is now the `warning-strong`
+   theme token rather than a hex hardcoded here; same value, one source, and
+   ManageRequestView's pills use it too. In dark the token is light enough to
+   use directly, which is what warning-strong aliases to there. */
+.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: rgb(var(--v-theme-warning-strong)); }
 .v-theme--dark .pill-pending {
   background: rgba(var(--v-theme-warning), 0.1);
   color: rgb(var(--v-theme-warning));
@@ -981,16 +1089,6 @@ onUnmounted(releaseResidentPhotos)
 .dot-active { background: rgb(var(--v-theme-primary)); }
 .dot-inactive { background: rgba(var(--v-theme-on-surface), 0.5); }
 .dot-pending { background: rgb(var(--v-theme-warning)); }
-
-.kbd {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1012,11 +1110,9 @@ onUnmounted(releaseResidentPhotos)
   border: 0;
 }
 
-.slide-fade-enter-active, .slide-fade-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateX(12px); }
 
 @media (prefers-reduced-motion: reduce) {
-  .tab-btn, .transition-btn, .slide-fade-enter-active, .slide-fade-leave-active { transition: none; }
+  .tab-btn, .transition-btn, .detail-rail { transition: none; }
   .transition-btn:hover { transform: none; }
 }
 </style>

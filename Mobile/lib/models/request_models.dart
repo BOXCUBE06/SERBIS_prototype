@@ -220,29 +220,44 @@ extension ServiceTypeX on ServiceType {
 /// so the misfiling was silent).
 class ServiceCatalogItem {
   final int id;
+
+  /// The English name from `tbl_services.service_name`. Shown only when this
+  /// build has no entry for [code] — a service the MDRRMO added after it
+  /// shipped. Everything else is named from the app's own translation table.
   final String name;
+
+  /// The English blurb, used on the same terms as [name].
   final String? description;
+
+  /// The server's stable identifier — `tbl_services.code`, a slug like
+  /// `road-clearing`. Unlike [id] it does not depend on insertion order, and
+  /// unlike [name] an admin cannot rewrite it from the panel. Everything this
+  /// app decides about a service is keyed on it.
+  ///
+  /// Empty for a row from an API too old to send one, which resolves to the
+  /// generic form and the generic badge.
+  final String code;
 
   const ServiceCatalogItem({
     required this.id,
     required this.name,
-    required this.nameLocalized,
+    this.code = '',
     this.description,
-    this.descriptionLocalized,
   });
 
-  /// What the UI shows: the localized blurb where there is one, the English
-  /// column otherwise.
-  String get displayDescription => descriptionLocalized ?? description ?? '';
+  /// The name to show, resolved from the app's own translation table by [code].
+  ///
+  /// The API's `name_localized` is no longer read. It came from a translations
+  /// table in the database, which meant the label on an emergency form could be
+  /// edited between two launches of the app; and it forced every screen to
+  /// re-fetch the whole catalogue on a language switch, because the language
+  /// lived in the query string.
+  String displayName(bool filipino) => serviceNameFor(filipino, code, name);
 
-  /// The service's name in the language the catalogue was fetched in. The
-  /// server resolves this from tbl_service_translations and falls back to
-  /// English, so it is never blank.
-  final String nameLocalized;
-
-  /// The blurb in the same language. Falls back independently of the name: a
-  /// locale can have a translated name and no translated description.
-  final String? descriptionLocalized;
+  /// The blurb under the name, resolved the same way. Empty rather than null:
+  /// it is rendered straight into a Text widget.
+  String displayDescription(bool filipino) =>
+      serviceDescriptionFor(filipino, code, description ?? '');
 
   factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) {
     final idValue = json['service_id'] ?? json['id'];
@@ -250,102 +265,91 @@ class ServiceCatalogItem {
         ? idValue
         : int.tryParse(idValue?.toString() ?? '') ?? 0;
     final name = (json['service_name'] ?? json['name'] ?? '') as String;
-    final localized = json['name_localized'] as String?;
-    final localizedDescription = json['description_localized'] as String?;
+    // `name_localized` and `description_localized` are deliberately not read.
+    // The server still sends them; nothing here depends on them any more.
     return ServiceCatalogItem(
       id: id,
       name: name,
-      // Older builds of the API send neither localized field.
-      nameLocalized: localized == null || localized.isEmpty ? name : localized,
+      code: (json['code'] as String?) ?? '',
       description: json['description'] as String?,
-      descriptionLocalized:
-          localizedDescription == null || localizedDescription.isEmpty
-              ? null
-              : localizedDescription,
     );
   }
 
-  // Keyed on the English name so a Tagalog label cannot change which form or
-  // icon a service gets.
-  ServiceFormKind get formKind => formKindForServiceName(name);
-  IconData get icon => iconForServiceName(name);
+  // Keyed on the code, not on either name. The display name is admin-editable:
+  // renaming "Road Clearing" to "Street Clearing" in the panel used to drop the
+  // service to the generic form and a grey badge, with nothing reporting it.
+  ServiceFormKind get formKind => formKindForServiceCode(code);
+  IconData get icon => iconForServiceCode(code);
 }
 
-/// Which guided form to show for a catalogue service. Named services reuse the
-/// existing rich forms; anything unrecognised gets the generic description form,
-/// so a service the admin adds later still works without a code change.
+/// Which guided form to show for a catalogue service. The four kinds map onto
+/// the service codes below; anything else — a service the MDRRMO adds in the
+/// panel, or a payload from an API too old to send a code — gets the generic
+/// description form, so the app files it correctly without a code change.
 enum ServiceFormKind { ambulance, road, relief, generic }
 
-ServiceFormKind formKindForServiceName(String name) {
-  final n = name.toLowerCase();
-  if (n.contains('ambulance') ||
-      n.contains('medical') ||
-      n.contains('health') ||
-      n.contains('transfer')) {
-    return ServiceFormKind.ambulance;
+/// Exact match on `tbl_services.code`. Deliberately not substring matching, and
+/// deliberately with no fall-through to the display name: the name is
+/// admin-editable, so keying on it meant a rename in the panel silently changed
+/// which form a resident was given.
+ServiceFormKind formKindForServiceCode(String code) {
+  switch (code) {
+    case 'ambulance-medical-response':
+      return ServiceFormKind.ambulance;
+    case 'road-clearing':
+    case 'debris-removal':
+      return ServiceFormKind.road;
+    case 'relief-goods-distribution':
+    case 'sandbagging':
+      return ServiceFormKind.relief;
+    // flood-evacuation, fire-rescue, search-and-rescue, power-line-repair and
+    // animal-rescue have no guided form of their own and take the generic one,
+    // which is what the keyword matching resolved them to as well.
+    default:
+      return ServiceFormKind.generic;
   }
-  if (n.contains('road') ||
-      n.contains('clearing') ||
-      n.contains('debris') ||
-      n.contains('tree')) {
-    return ServiceFormKind.road;
-  }
-  if (n.contains('relief') ||
-      n.contains('goods') ||
-      n.contains('food') ||
-      n.contains('sandbag')) {
-    return ServiceFormKind.relief;
-  }
-  return ServiceFormKind.generic;
 }
 
-IconData iconForServiceName(String name) => badgeForServiceName(name).icon;
+IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
 
-/// Icon and badge colours for a catalogue service, chosen together from one set
-/// of keywords so a card can never pair one service's icon with another's
-/// palette. Keyed on `service_name` because the catalogue has ten services and
-/// [ServiceType] only enumerates six — four of them, including Fire Rescue and
-/// Search and Rescue, have no enum member at all.
-({IconData icon, Color bg, Color fg}) badgeForServiceName(String name) {
-  final n = name.toLowerCase();
-  if (n.contains('ambulance') || n.contains('medical') || n.contains('health')) {
-    return (icon: Icons.local_hospital_rounded, bg: AppColors.red50, fg: AppColors.red600);
+/// Icon and badge colours, chosen together from one switch so a card can never
+/// pair one service's icon with another's palette.
+///
+/// Keyed on the code for the same reason as [formKindForServiceCode], plus one
+/// the name could never solve: matching on the *translated* name dropped every
+/// service to the grey default, because "Ambulansya / Tugong Medikal" contains
+/// no English keyword. A code is the same string in every language.
+({IconData icon, Color bg, Color fg}) badgeForServiceCode(String code) {
+  switch (code) {
+    case 'ambulance-medical-response':
+      return (icon: Icons.local_hospital_rounded, bg: AppColors.red50, fg: AppColors.red600);
+    case 'fire-rescue':
+      return (icon: Icons.local_fire_department_rounded, bg: AppColors.red50, fg: AppColors.red600);
+    case 'flood-evacuation':
+      return (icon: Icons.water_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
+    case 'road-clearing':
+    case 'debris-removal':
+      return (icon: Icons.construction_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
+    case 'relief-goods-distribution':
+      return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
+    case 'animal-rescue':
+      return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
+    case 'search-and-rescue':
+      return (icon: Icons.travel_explore_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
+    case 'power-line-repair':
+      return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
+    case 'sandbagging':
+      return (icon: Icons.shield_rounded, bg: AppColors.green50, fg: AppColors.green700);
+    default:
+      return (icon: Icons.emergency_rounded, bg: AppColors.grey50, fg: AppColors.inkMuted);
   }
-  if (n.contains('fire')) {
-    return (icon: Icons.local_fire_department_rounded, bg: AppColors.red50, fg: AppColors.red600);
-  }
-  if (n.contains('flood') || n.contains('evac')) {
-    return (icon: Icons.water_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
-  }
-  if (n.contains('road') || n.contains('debris') || n.contains('clearing')) {
-    return (icon: Icons.construction_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
-  }
-  if (n.contains('relief') || n.contains('goods') || n.contains('food')) {
-    return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
-  }
-  // Before the 'rescue' test on purpose: "Animal Rescue" contains "rescue", so
-  // the general branch used to swallow it and render the Search-and-Rescue
-  // icon. Specific names have to be matched ahead of the family keyword.
-  if (n.contains('animal')) {
-    return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
-  }
-  if (n.contains('search') || n.contains('rescue')) {
-    return (icon: Icons.travel_explore_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
-  }
-  if (n.contains('power') || n.contains('line') || n.contains('electric')) {
-    return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
-  }
-  if (n.contains('sandbag')) {
-    return (icon: Icons.shield_rounded, bg: AppColors.green50, fg: AppColors.green700);
-  }
-  return (icon: Icons.emergency_rounded, bg: AppColors.grey50, fg: AppColors.inkMuted);
 }
 
 /// Best-effort [ServiceType] for a catalogue service. Only for the code paths
-/// that still take an enum; display goes through `service_name` instead, which
-/// is why nothing here has to invent a value for Fire Rescue.
-ServiceType serviceTypeForServiceName(String name) {
-  switch (formKindForServiceName(name)) {
+/// that still take an enum; display goes through the service name instead,
+/// which is why nothing here has to invent a value for Fire Rescue.
+ServiceType serviceTypeForServiceCode(String code) {
+  switch (formKindForServiceCode(code)) {
     case ServiceFormKind.ambulance:
       return ServiceType.ambulance;
     case ServiceFormKind.road:
@@ -422,11 +426,12 @@ class ServiceRequest {
   /// catalogue's ten, so it cannot name a Fire Rescue or a Sandbagging request.
   final String? serviceName;
 
-  /// The untranslated name, kept alongside because the icon and colour are
-  /// chosen by English keyword. Matching on the translated name silently drops
-  /// every service to the default grey badge -- "Ambulansya / Tugong Medikal"
-  /// does not contain "ambulance".
-  final String? serviceNameEn;
+  /// The service's stable code, kept alongside the name because the icon,
+  /// colour and [type] are chosen from it. Null for a row whose service the app
+  /// has not resolved yet — a locally filed request before its first refresh,
+  /// or a cached row written by a build that stored the English name here
+  /// instead. Such a row shows the neutral badge until the next fetch.
+  final String? serviceCode;
 
   const ServiceRequest({
     this.id,
@@ -441,19 +446,17 @@ class ServiceRequest {
     this.createdAt,
     this.updatedAt,
     this.serviceName,
-    this.serviceNameEn,
+    this.serviceCode,
   });
 
   bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
 
-  /// The name the badge is chosen from: always English, falling back to the
-  /// localized name only if the English one was never resolved.
-  String? get _badgeKey {
-    if (serviceNameEn != null && serviceNameEn!.isNotEmpty) {
-      return serviceNameEn;
-    }
-    return _hasServiceName ? serviceName : null;
-  }
+  /// The code the badge is chosen from. There is deliberately no fallback to
+  /// either name: a name-keyed badge is what made a rename in the admin panel
+  /// change a request's icon, and reinstating it here would bring that back for
+  /// the request list alone.
+  String? get _badgeKey =>
+      serviceCode != null && serviceCode!.isNotEmpty ? serviceCode : null;
 
   /// Title for a request card. Falls back to the enum only for a row with no
   /// resolved service, which now means a local row awaiting its first response.
@@ -462,17 +465,17 @@ class ServiceRequest {
 
   IconData get displayIcon {
     final key = _badgeKey;
-    return key == null ? type.icon : badgeForServiceName(key).icon;
+    return key == null ? type.icon : badgeForServiceCode(key).icon;
   }
 
   Color get displayBg {
     final key = _badgeKey;
-    return key == null ? type.bg : badgeForServiceName(key).bg;
+    return key == null ? type.bg : badgeForServiceCode(key).bg;
   }
 
   Color get displayFg {
     final key = _badgeKey;
-    return key == null ? type.fg : badgeForServiceName(key).fg;
+    return key == null ? type.fg : badgeForServiceCode(key).fg;
   }
 
   /// The progress timeline, derived rather than stored.
@@ -573,18 +576,18 @@ class ServiceRequest {
     bool? cancellable,
     DateTime? updatedAt,
     String? serviceName,
-    String? serviceNameEn,
+    String? serviceCode,
   }) {
     return ServiceRequest(
       id: id ?? this.id,
       serviceId: serviceId,
       description: description,
-      // Derived from the English name: the enum's keywords are English.
-      type: serviceNameEn != null
-          ? serviceTypeForServiceName(serviceNameEn)
+      // Derived from the code once the catalogue has named the row.
+      type: serviceCode != null
+          ? serviceTypeForServiceCode(serviceCode)
           : type,
       serviceName: serviceName ?? this.serviceName,
-      serviceNameEn: serviceNameEn ?? this.serviceNameEn,
+      serviceCode: serviceCode ?? this.serviceCode,
       refNo: refNo,
       status: status ?? this.status,
       metaLines: metaLines ?? this.metaLines,
@@ -614,6 +617,11 @@ class ServiceRequest {
     final serviceName = service is Map<String, dynamic>
         ? service['service_name'] as String?
         : null;
+    // GET /api/service-requests serialises the whole related row, so the code
+    // rides along with the name.
+    final serviceCode = service is Map<String, dynamic>
+        ? service['code'] as String?
+        : null;
 
     final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
     final status = getStatusFromText(statusText);
@@ -626,13 +634,11 @@ class ServiceRequest {
       description: description,
       // Was hardcoded to ServiceType.inquiry, which labelled every server-loaded
       // row -- ambulance requests included -- "Information Inquiry".
-      type: serviceName == null
+      type: serviceCode == null
           ? ServiceType.inquiry
-          : serviceTypeForServiceName(serviceName),
+          : serviceTypeForServiceCode(serviceCode),
       serviceName: serviceName,
-      // The embedded relation is the untranslated column, so it doubles as the
-      // badge key until the catalogue supplies a localized name.
-      serviceNameEn: serviceName,
+      serviceCode: serviceCode,
       refNo: id != null ? 'SR-$id' : '',
       status: status,
       metaLines: description == null ? [] : [description],
@@ -662,7 +668,7 @@ extension ServiceRequestCache on ServiceRequest {
         'created_at': createdAt?.toIso8601String(),
         'updated_at': updatedAt?.toIso8601String(),
         'service_name': serviceName,
-        'service_name_en': serviceNameEn,
+        'service_code': serviceCode,
       };
 
   /// Rebuilds a cached row, or returns null for an entry this version of the
@@ -696,7 +702,10 @@ extension ServiceRequestCache on ServiceRequest {
       createdAt: _parseTimestamp(json['created_at']),
       updatedAt: _parseTimestamp(json['updated_at']),
       serviceName: json['service_name'] as String?,
-      serviceNameEn: json['service_name_en'] as String?,
+      // A cache written before requests carried a code has no such key. The
+      // row reads back with a neutral badge and the next fetch relabels it,
+      // which is preferable to reviving the name-keyed lookup for one release.
+      serviceCode: json['service_code'] as String?,
     );
   }
 }

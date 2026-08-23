@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Models\EquipmentBorrowing;
-use App\Models\Equipment;
+use App\Models\ConductionRequest;
+use App\Models\Vehicle;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +21,14 @@ class AnalyticsController extends Controller
         $totalResidents = Resident::count();
         $pendingService = ServiceRequest::where('status', 'Pending')->count();
         $pendingBorrow = EquipmentBorrowing::where('status', 'Pending')->count();
-        $availableEquipment = Equipment::sum('available_quantity'); // Based on tbl_equipments column
+        $availableVehicles = Vehicle::where('status', 'Available')->count();
+
+        // tbl_conduction_requests has no status column — the form is filed by
+        // MDRRMO staff and its only lifecycle is the trip log, so "pending"
+        // here means the trip was never dispatched. Known limitation, recorded
+        // in docs/dashboard-kpis.md: nothing ever closes a request that was
+        // filed and then handled off-system, so those keep counting.
+        $pendingAmbulance = ConductionRequest::whereNull('departed_office_at')->count();
 
         $kpiStats = [
             [
@@ -28,30 +36,47 @@ class AnalyticsController extends Controller
                 'value' => number_format($totalResidents),
                 'icon' => 'mdi-account-group',
                 'color' => 'blue',
-                'subtitle' => 'Registered users in system'
+                'subtitle' => 'Registered users in system',
             ],
             [
-                'title' => 'Pending Service',
+                'title' => 'Pending Service Requests',
                 'value' => number_format($pendingService),
                 'icon' => 'mdi-clipboard-text-clock',
                 'color' => 'orange',
-                'subtitle' => 'Awaiting admin response'
+                'subtitle' => 'Awaiting admin response',
+                'route' => ['path' => '/manage-requests', 'query' => ['status' => 'Pending']],
             ],
             [
-                'title' => 'Pending Borrow',
+                'title' => 'Pending Borrow Requests',
                 'value' => number_format($pendingBorrow),
                 'icon' => 'mdi-hand-extended',
                 'color' => 'orange',
-                'subtitle' => 'Equipment requests'
+                'subtitle' => 'Equipment requests',
+                'route' => ['path' => '/borrowings', 'query' => ['status' => 'Pending']],
             ],
             [
-                'title' => 'Available Equipment',
-                'value' => number_format($availableEquipment),
-                'icon' => 'mdi-toolbox',
+                'title' => 'Available Vehicles',
+                'value' => number_format($availableVehicles),
+                'icon' => 'mdi-ambulance',
                 'color' => 'green',
-                'subtitle' => 'Items ready for dispatch'
+                'subtitle' => 'Units ready for dispatch',
+                'route' => ['path' => '/vehicles'],
             ],
         ];
+
+        // Fifth card only when there is something to act on. A standing zero is
+        // not information, and the panel lays the strip out from the number of
+        // cards it receives, so four fill the row on their own.
+        if ($pendingAmbulance > 0) {
+            $kpiStats[] = [
+                'title' => 'Pending Ambulance Requests',
+                'value' => number_format($pendingAmbulance),
+                'icon' => 'mdi-clock-alert-outline',
+                'color' => 'error',
+                'subtitle' => 'Filed, not yet dispatched',
+                'route' => ['path' => '/conduction-requests'],
+            ];
+        }
 
         // 2. Fetch Recent Service Requests
         $serviceRequests = ServiceRequest::with(['resident.barangay', 'service'])
@@ -107,44 +132,73 @@ class AnalyticsController extends Controller
         // filled series is at most 30 rows, so there is nothing to win by
         // pushing it down.
 
+        // The map, the barangay ranking and the category breakdown each got
+        // their own Today/Week/Month/All-time filter (previously one shared
+        // toggle drove the hero card, the trend chart and nothing else — these
+        // three were silently always all-time). Four periods, computed once
+        // here so the panel has every filter position in the one response
+        // instead of a request per toggle click.
+        $periods = [
+            'today' => Carbon::today(),
+            'week' => Carbon::today()->subDays(6),
+            'month' => Carbon::today()->subDays(29),
+            'all' => null,
+        ];
+
         // 5. Heatmap (Choropleth): request counts per barangay.
         // The join is inner, which drops rows with no resident or no barangay —
         // matching the old behaviour, which bucketed them as 'Unknown Barangay'
         // and then rejected them.
-        $countByBarangay = fn (string $table, string $model) => $model::query()
+        $countByBarangay = fn (string $table, string $model, ?Carbon $since) => $model::query()
             ->join('tbl_residents', "{$table}.resident_id", '=', 'tbl_residents.resident_id')
             ->join('tbl_barangay', 'tbl_residents.barangay_id', '=', 'tbl_barangay.barangay_id')
+            ->when($since, fn ($q) => $q->where("{$table}.created_at", '>=', $since))
             ->groupBy('tbl_barangay.barangay_name')
             ->selectRaw('tbl_barangay.barangay_name as name, COUNT(*) as total')
             ->pluck('total', 'name');
 
-        $serviceByBarangay = $countByBarangay('tbl_service_request', ServiceRequest::class);
-        $borrowByBarangay = $countByBarangay('tbl_equipment_borrowing', EquipmentBorrowing::class);
+        $mapDataByPeriod = [];
+        foreach ($periods as $periodKey => $since) {
+            $serviceByBarangay = $countByBarangay('tbl_service_request', ServiceRequest::class, $since);
+            $borrowByBarangay = $countByBarangay('tbl_equipment_borrowing', EquipmentBorrowing::class, $since);
 
-        $mapData = $serviceByBarangay->keys()
-            ->merge($borrowByBarangay->keys())
-            ->unique()
-            ->map(fn ($name) => [
-                'name' => $name,
-                'requests' => (int) $serviceByBarangay->get($name, 0) + (int) $borrowByBarangay->get($name, 0),
-            ])
-            ->sortByDesc('requests')
-            ->values();
+            $mapDataByPeriod[$periodKey] = $serviceByBarangay->keys()
+                ->merge($borrowByBarangay->keys())
+                ->unique()
+                ->map(fn ($name) => [
+                    'name' => $name,
+                    'requests' => (int) $serviceByBarangay->get($name, 0) + (int) $borrowByBarangay->get($name, 0),
+                ])
+                ->sortByDesc('requests')
+                ->values();
+        }
 
-        // 6. Pie Chart Data (Services vs Items)
-        $pieServices = ServiceRequest::query()
+        // 6. Pie Chart Data (Services vs Items), same per-period treatment.
+        $pieServicesSince = fn (?Carbon $since) => ServiceRequest::query()
             ->join('tbl_services', 'tbl_service_request.service_id', '=', 'tbl_services.service_id')
+            ->when($since, fn ($q) => $q->where('tbl_service_request.created_at', '>=', $since))
             ->groupBy('tbl_services.service_name')
             ->orderByDesc('total')
             ->selectRaw('tbl_services.service_name as label, COUNT(*) as total')
             ->pluck('total', 'label');
 
-        $pieItems = EquipmentBorrowing::query()
+        $pieItemsSince = fn (?Carbon $since) => EquipmentBorrowing::query()
             ->join('tbl_equipments', 'tbl_equipment_borrowing.equipment_id', '=', 'tbl_equipments.equipment_id')
+            ->when($since, fn ($q) => $q->where('tbl_equipment_borrowing.created_at', '>=', $since))
             ->groupBy('tbl_equipments.item_name')
             ->orderByDesc('total')
             ->selectRaw('tbl_equipments.item_name as label, COUNT(*) as total')
             ->pluck('total', 'label');
+
+        $pieByPeriod = [];
+        foreach ($periods as $periodKey => $since) {
+            $pieServices = $pieServicesSince($since);
+            $pieItems = $pieItemsSince($since);
+            $pieByPeriod[$periodKey] = [
+                'services' => ['labels' => $pieServices->keys(), 'data' => $pieServices->values()],
+                'items' => ['labels' => $pieItems->keys(), 'data' => $pieItems->values()],
+            ];
+        }
 
         // 7. Bar Chart Data (Weekly vs Monthly).
         // The week is a subset of the month, so each table is read once over the
@@ -184,12 +238,9 @@ class AnalyticsController extends Controller
             'serviceRequests' => $serviceRequests,
             'borrowRequests' => $borrowRequests,
             'systemLogs' => $systemLogs,
-            'mapData' => $mapData,
+            'mapDataByPeriod' => $mapDataByPeriod,
             'charts' => [
-                'pie' => [
-                    'services' => ['labels' => $pieServices->keys(), 'data' => $pieServices->values()],
-                    'items' => ['labels' => $pieItems->keys(), 'data' => $pieItems->values()],
-                ],
+                'pieByPeriod' => $pieByPeriod,
                 'bar' => [
                     'week' => ['labels' => array_keys($weekSeries), 'data' => array_values($weekSeries)],
                     'month' => ['labels' => array_keys($monthSeries), 'data' => array_values($monthSeries)],

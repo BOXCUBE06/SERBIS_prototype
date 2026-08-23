@@ -5,17 +5,10 @@
     <div class="d-flex justify-space-between align-center flex-wrap gap-4 mb-6">
       <div>
         <h1 class="text-h4 font-weight-black mb-1">Dashboard</h1>
-        <div class="text-subtitle-1 text-medium-emphasis">Welcome back! Here's what's happening today.</div>
+        <div class="text-subtitle-1 text-medium-emphasis">Request volume, barangay spread and fleet status. Each card sets its own period.</div>
       </div>
 
       <div class="d-flex align-center gap-4 flex-wrap">
-        <!-- Global period filter — drives hero metric, overview chart & activity feed -->
-        <v-btn-toggle v-model="periodFilter" mandatory variant="outlined" color="primary" density="comfortable" divided rounded="lg">
-          <v-btn value="today" size="small" class="text-none font-weight-bold px-4">Today</v-btn>
-          <v-btn value="week" size="small" class="text-none font-weight-bold px-4">Week</v-btn>
-          <v-btn value="month" size="small" class="text-none font-weight-bold px-4">Month</v-btn>
-        </v-btn-toggle>
-
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
@@ -52,7 +45,45 @@
       </div>
     </div>
 
-    <!-- Hero row -->
+    <!-- KPI strip: every headline number in one scannable row, independent of
+         the trend card's height. Cramming these into a sidebar next to the
+         hero card (the old layout) meant the two fought over vertical space —
+         the stats need their own row instead of being squeezed into 5/12
+         of one.
+
+         A CSS grid rather than v-col, because the number of cards is not fixed:
+         the ambulance card is only sent when something is pending, so the strip
+         is four wide or five wide depending on the day. v-col takes a twelfth,
+         and five cards do not divide twelve — md="2" left a third of the row
+         empty at four cards, and no integer column width fills it at five.
+         `repeat(N, 1fr)` fills the row at any N. -->
+    <v-row v-if="loading" class="mb-2">
+      <v-col cols="12"><v-skeleton-loader type="card" height="88"></v-skeleton-loader></v-col>
+    </v-row>
+    <div v-else class="kpi-grid mb-2" :style="{ '--kpi-count': kpiStats.length }">
+      <v-card
+        v-for="(stat, i) in kpiStats" :key="stat.title"
+        elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
+        :class="{ 'cursor-pointer': stat.route }"
+        :style="{ '--stagger-i': i }"
+        :role="stat.route ? 'button' : undefined"
+        :tabindex="stat.route ? 0 : undefined"
+        @click="stat.route && goTo(stat.route)"
+        @keydown.enter="stat.route && goTo(stat.route)"
+      >
+        <v-avatar :color="stat.color || 'primary'" variant="tonal" size="40" rounded="lg" class="mr-3 flex-shrink-0">
+          <v-icon :color="stat.color || 'primary'" size="20">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
+        </v-avatar>
+        <div class="min-width-0">
+          <div class="text-h6 font-weight-black lh-1">{{ displayValues[stat.title] ?? stat.value }}</div>
+          <div class="text-caption font-weight-bold text-medium-emphasis kpi-label" :title="stat.title">{{ stat.title }}</div>
+        </div>
+      </v-card>
+    </div>
+
+    <!-- Trend row: headline total + the period-scoped bar chart, grouped
+         together because both answer "what's happening in the selected
+         period", unlike the KPI strip above (always all-time / right-now). -->
     <v-row v-if="loading" class="mb-2">
       <v-col cols="12" lg="7">
         <v-card elevation="0" rounded="xl" class="pa-6" style="min-height: 220px;">
@@ -60,22 +91,28 @@
         </v-card>
       </v-col>
       <v-col cols="12" lg="5">
-        <v-skeleton-loader type="card@2"></v-skeleton-loader>
+        <v-skeleton-loader type="card" height="286"></v-skeleton-loader>
       </v-col>
     </v-row>
 
     <v-row v-else class="mb-2">
-      <!-- Headline metric -->
       <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 0 }">
-          <div class="d-flex justify-space-between align-start mb-2">
+        <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 6 }">
+          <div class="d-flex justify-space-between align-start mb-2 flex-wrap gap-2">
             <div>
-              <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Total Requests</div>
-              <div class="text-caption text-medium-emphasis">{{ periodLabel }}</div>
+              <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Requests Filed</div>
+              <div class="text-caption text-medium-emphasis">{{ periodLabelFor(heroPeriod) }}</div>
             </div>
-            <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
-              <v-icon color="primary" size="20">mdi-chart-line</v-icon>
-            </v-avatar>
+            <div class="d-flex align-center gap-3">
+              <v-btn-toggle v-model="heroPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+              </v-btn-toggle>
+              <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
+                <v-icon color="primary" size="20">mdi-chart-line</v-icon>
+              </v-avatar>
+            </div>
           </div>
           <div class="text-h1 font-weight-black mb-4">{{ displayValues.hero ?? heroTotal }}</div>
           <div style="height: 70px;">
@@ -84,47 +121,77 @@
         </v-card>
       </v-col>
 
-      <!-- Secondary stat grid -->
       <v-col cols="12" lg="5">
-        <v-row dense class="h-100">
-          <v-col cols="6" v-for="(stat, i) in kpiStats" :key="stat.title">
-            <v-card elevation="0" rounded="xl" class="soft-card stagger-item pa-4 h-100" :style="{ '--stagger-i': i + 1 }">
-              <v-avatar :color="stat.color || 'primary'" variant="tonal" size="36" rounded="lg" class="mb-3">
-                <v-icon :color="stat.color || 'primary'" size="18">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
-              </v-avatar>
-              <div class="text-h5 font-weight-black mb-1">{{ displayValues[stat.title] ?? stat.value }}</div>
-              <div class="text-caption font-weight-bold text-medium-emphasis">{{ stat.title }}</div>
-            </v-card>
-          </v-col>
-        </v-row>
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 7 }">
+          <v-card-item class="pb-0">
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Request Trend</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(trendPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="trendPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+              </v-btn-toggle>
+            </div>
+          </v-card-item>
+          <v-card-text class="pt-2">
+            <v-sheet height="220" color="transparent">
+              <Line v-if="chartDataRaw" :data="barChartData" :options="chartOptions" />
+              <div class="d-flex align-center justify-center h-100" v-else>
+                <v-progress-circular indeterminate color="primary"></v-progress-circular>
+              </div>
+            </v-sheet>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
 
-    <!-- Heatmap & Zones -->
+    <!-- Geographic row: map + its data-table fallback, all-time scope -->
     <v-row class="mb-2">
       <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 2 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 8 }">
           <v-card-item>
-            <v-card-title class="text-body-1 font-weight-bold">Incident Heatmap</v-card-title>
-            <v-card-subtitle>All-time distribution</v-card-subtitle>
-            <template v-slot:append>
-              <v-icon>mdi-map-marker-radius</v-icon>
-            </template>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Requests by Barangay</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(mapPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="mapPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-card-text class="pt-0">
-            <div ref="mapEl" style="height: 320px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
+            <!-- 460, not the 320 this started at. Leaflet frames the view on
+                 the barangay polygons (fitBounds, below), and that cluster is
+                 close to square, so a 320px box in a 7/12 column drew a 3.3:1
+                 letterbox: boundaries in the middle third, the rest tiles with
+                 nothing plotted on them. -->
+            <div ref="mapEl" style="height: 460px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
           </v-card-text>
         </v-card>
       </v-col>
 
       <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 3 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 9 }">
           <v-card-item>
-            <v-card-title class="text-body-1 font-weight-bold">High Request Zones</v-card-title>
-            <v-card-subtitle>All-time</v-card-subtitle>
-            <template v-slot:append>
-              <v-icon>mdi-fire</v-icon>
-            </template>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Barangays with Most Requests</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(zonesPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="zonesPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-card-text class="pt-2">
             <div v-if="!topZones.length" class="text-center text-caption text-medium-emphasis py-8">
@@ -149,13 +216,23 @@
       </v-col>
     </v-row>
 
-    <!-- Activity feed & charts -->
+    <!-- Operational row: the feed staff act on, paired with the all-time
+         category breakdown that explains what it's mostly made of -->
     <v-row>
       <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 4 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 10 }">
           <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Activity Feed</v-card-title>
-            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Activity Feed</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(feedPeriod) }}</v-card-subtitle>
+              </div>
+              <v-btn-toggle v-model="feedPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <v-tabs v-model="feedTab" color="primary" density="compact" class="px-4">
             <v-tab value="all" class="text-none font-weight-bold">All</v-tab>
@@ -168,7 +245,7 @@
             <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
 
             <div v-else-if="!filteredFeed.length" class="text-center text-caption text-medium-emphasis py-8">
-              No activity {{ periodLabel.toLowerCase() }}
+              No activity {{ periodLabelFor(feedPeriod).toLowerCase() }}
             </div>
 
             <v-list v-else density="comfortable" class="pa-0">
@@ -190,25 +267,20 @@
       </v-col>
 
       <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item mb-6" :style="{ '--stagger-i': 5 }">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 11 }">
           <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Requests Overview</v-card-title>
-            <v-card-subtitle>{{ periodLabel }}</v-card-subtitle>
-          </v-card-item>
-          <v-card-text class="pt-2">
-            <v-sheet height="200" color="transparent">
-              <Bar v-if="chartDataRaw" :data="barChartData" :options="chartOptions" />
-              <div class="d-flex align-center justify-center h-100" v-else>
-                <v-progress-circular indeterminate color="primary"></v-progress-circular>
+            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Most Requested</v-card-title>
+                <v-card-subtitle class="pa-0">{{ periodLabelFor(volumePeriod) }}</v-card-subtitle>
               </div>
-            </v-sheet>
-          </v-card-text>
-        </v-card>
-
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 6 }">
-          <v-card-item class="pb-0">
-            <v-card-title class="text-body-1 font-weight-bold">Request Volume</v-card-title>
-            <v-card-subtitle>All-time by category</v-card-subtitle>
+              <v-btn-toggle v-model="volumePeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
+                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
+              </v-btn-toggle>
+            </div>
           </v-card-item>
           <div class="px-4 pb-2">
             <v-btn-toggle v-model="volumeToggle" color="primary" density="compact" variant="outlined" divided rounded="lg">
@@ -217,8 +289,8 @@
             </v-btn-toggle>
           </div>
           <v-card-text class="pt-0">
-            <v-sheet height="220" color="transparent">
-              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" />
+            <v-sheet height="320" color="transparent">
+              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
               <div v-else-if="chartDataRaw" class="text-caption text-medium-emphasis text-center py-8">No data yet</div>
               <div class="d-flex align-center justify-center h-100" v-else>
                 <v-progress-circular indeterminate color="primary"></v-progress-circular>
@@ -234,6 +306,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
@@ -250,6 +323,9 @@ import { API_BASE } from '@/config/api'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
 
+const router = useRouter()
+const goTo = (route) => router.push(route)
+
 const kpiStats = ref([])
 const serviceRequests = ref([])
 const borrowRequests = ref([])
@@ -258,12 +334,25 @@ const loading = ref(true)
 
 const chartDataRaw = ref(null)
 const volumeToggle = ref('services')
-const periodFilter = ref('week')
 const feedTab = ref('all')
 
-const topBarangays = ref([]) // Raw data, feeds the Leaflet map
+// Each stat-bearing card owns its period independently now — a single
+// shared toggle used to drive the hero card and the trend chart while the
+// map, the barangay ranking and the category breakdown were silently
+// always all-time, which is what the map/zones/volume cards default to
+// here so their look doesn't change until someone touches the toggle.
+const heroPeriod = ref('week')
+const trendPeriod = ref('week')
+const feedPeriod = ref('week')
+const mapPeriod = ref('all')
+const zonesPeriod = ref('all')
+const volumePeriod = ref('all')
 
-const periodLabel = computed(() => ({ today: 'Today', week: 'Last 7 days', month: 'Last 30 days' }[periodFilter.value]))
+const mapDataByPeriod = ref({}) // { today|week|month|all: [{name, requests}] } — feeds the Leaflet map + the barangay ranking
+const pieDataByPeriod = ref({}) // { today|week|month|all: { services: {...}, items: {...} } }
+
+const PERIOD_LABELS = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All-time' }
+const periodLabelFor = (period) => PERIOD_LABELS[period] || ''
 
 // Count-up animation for headline numbers on load / filter change
 const displayValues = reactive({})
@@ -308,8 +397,9 @@ const fetchDashboardData = async () => {
     serviceRequests.value = data.serviceRequests || []
     borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
-    topBarangays.value = data.mapData || []
+    mapDataByPeriod.value = data.mapDataByPeriod || {}
     chartDataRaw.value = data.charts || null
+    pieDataByPeriod.value = data.charts?.pieByPeriod || {}
 
   } catch (error) {
     console.error("Failed to load dashboard:", error)
@@ -349,7 +439,7 @@ const getHeatColor = (percentage) => {
 
 // Top 5 zones ranked by request volume, percentage relative to the busiest zone
 const topZones = computed(() => {
-  const list = topBarangays.value
+  const list = mapDataByPeriod.value[zonesPeriod.value] || []
   if (!list.length) return []
   const max = Math.max(...list.map(b => b.requests))
   return [...list]
@@ -361,11 +451,11 @@ const topZones = computed(() => {
 // Headline metric: real aggregate from the backend's day-by-day series (not the 5-item sample lists)
 const heroTotal = computed(() => {
   if (!chartDataRaw.value) return 0
-  if (periodFilter.value === 'today') {
+  if (heroPeriod.value === 'today') {
     const series = chartDataRaw.value.bar.week
     return series.data[series.data.length - 1] || 0
   }
-  const series = chartDataRaw.value.bar[periodFilter.value]
+  const series = chartDataRaw.value.bar[heroPeriod.value]
   return series.data.reduce((a, b) => a + b, 0)
 })
 
@@ -373,7 +463,7 @@ watch(heroTotal, (val) => animateValue('hero', val))
 
 const heroSparklineData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
+  const key = heroPeriod.value === 'today' ? 'week' : heroPeriod.value
   const source = chartDataRaw.value.bar[key]
   return {
     labels: source.labels,
@@ -420,13 +510,13 @@ const isWithinPeriod = (dateStr, period) => {
 const filteredFeed = computed(() => {
   return unifiedFeed.value.filter(item => {
     if (feedTab.value !== 'all' && item.kind !== feedTab.value) return false
-    return isWithinPeriod(item.date, periodFilter.value)
+    return isWithinPeriod(item.date, feedPeriod.value)
   })
 })
 
 const volumeChartData = computed(() => {
-  if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const source = chartDataRaw.value.pie[volumeToggle.value]
+  const source = pieDataByPeriod.value[volumePeriod.value]?.[volumeToggle.value]
+  if (!source) return { labels: [], datasets: [] }
   const paired = source.labels
     .map((label, i) => ({ label, value: source.data[i] }))
     .sort((a, b) => b.value - a.value)
@@ -443,28 +533,64 @@ const volumeChartData = computed(() => {
   }
 })
 
+// Compare-Categories charts should show every value as text, not hover-only —
+// a vue-chartjs `:plugins` prop scopes this to the Request Volume chart alone,
+// so the trend/sparkline Line charts elsewhere on the page stay uncluttered.
+const volumeValueLabelsPlugin = {
+  id: 'volumeValueLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart
+    const onSurface = getComputedStyle(document.documentElement).getPropertyValue('--v-theme-on-surface').trim() || '0,0,0'
+    ctx.save()
+    ctx.fillStyle = `rgba(${onSurface}, 0.85)`
+    ctx.font = '700 11px sans-serif'
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'left'
+    chart.data.datasets.forEach((dataset, dsIndex) => {
+      chart.getDatasetMeta(dsIndex).data.forEach((bar, i) => {
+        const value = dataset.data[i]
+        if (value === undefined || value === null) return
+        ctx.fillText(String(value), bar.x + 6, bar.y)
+      })
+    })
+    ctx.restore()
+  }
+}
+
 const volumeChartOptions = {
   indexAxis: 'y',
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
   scales: {
-    x: { beginAtZero: true, ticks: { precision: 0 } },
+    x: { beginAtZero: true, ticks: { precision: 0 }, grace: '15%' },
     y: { ticks: { font: { size: 11 } } }
   }
 }
 
+// Daily counts over a rolling window — a time axis, so a Line/area chart
+// reads the trend correctly. A bar-per-day implies discrete unrelated
+// categories, which is the wrong shape for this data (see chart-type rules:
+// time-series belongs on Line, Bar is for unordered category comparison).
 const barChartData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const key = periodFilter.value === 'today' ? 'week' : periodFilter.value
+  const key = trendPeriod.value === 'today' ? 'week' : trendPeriod.value
   const source = chartDataRaw.value.bar[key]
   return {
     labels: source.labels,
     datasets: [{
       label: 'Requests',
-      backgroundColor: '#297A67',
-      borderRadius: 4,
-      data: source.data
+      data: source.data,
+      borderColor: '#297A67',
+      backgroundColor: 'rgba(41, 122, 103, 0.15)',
+      fill: true,
+      borderWidth: 2,
+      tension: 0.35,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#297A67',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 1,
     }]
   }
 })
@@ -473,7 +599,11 @@ const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
-  scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+  interaction: { mode: 'index', intersect: false },
+  scales: {
+    x: { grid: { display: false } },
+    y: { beginAtZero: true, ticks: { precision: 0 } }
+  }
 }
 
 // Define colors based on request density
@@ -491,7 +621,7 @@ let geoLayer = null
 // Keyed on the exact backend name — no case folding, so a rename on either
 // side fails loudly as an unmatched grey polygon rather than silently.
 const requestCountByName = computed(() =>
-  Object.fromEntries(topBarangays.value.map(b => [b.name, b.requests]))
+  Object.fromEntries((mapDataByPeriod.value[mapPeriod.value] || []).map(b => [b.name, b.requests]))
 )
 
 const styleFor = (feature) => ({
@@ -580,6 +710,55 @@ onUnmounted(() => {
    overlay pane above it and keeps its true colours. */
 .v-theme--dark .map-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.8);
+}
+
+.lh-1 {
+  line-height: 1;
+}
+
+.kpi-tile {
+  min-height: 72px;
+}
+
+/* Wraps rather than truncating. A tile is ~306px at 1920 with five cards and
+   ~175px at the tablet tier, and "Pending Ambulance Requests" fits one line of
+   neither — ellipsing the one card that only appears when it needs acting on is
+   the wrong trade. Three lines is what the longest title needs at the narrowest
+   tier; the clamp only bites past that, so wider tiles still settle at one or
+   two and the grid keeps every tile the same height. */
+.kpi-label {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+/* Two up on a phone, three on a tablet, then one row of whatever arrived —
+   the same 600/960 breakpoints the old cols="6" sm="4" md="2" used, and the
+   8px gap a dense v-row produced (two 4px gutters). */
+.kpi-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 600px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .kpi-grid {
+    grid-template-columns: repeat(var(--kpi-count, 4), minmax(0, 1fr));
+  }
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .rank-badge {

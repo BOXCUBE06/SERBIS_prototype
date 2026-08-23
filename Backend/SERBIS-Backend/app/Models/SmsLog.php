@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * "what was sent to my barangay".
  */
 #[Table('tbl_sms_logs', key: 'sms_log_id')]
-#[Fillable(['sender_id', 'target_area_id', 'disaster_id', 'api_job_id', 'message_body', 'status'])]
+#[Fillable(['sender_id', 'target_area_id', 'api_job_id', 'message_body', 'status'])]
 class SmsLog extends Model
 {
     use HasFactory;

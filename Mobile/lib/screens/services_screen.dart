@@ -368,7 +368,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionHeader(title: selection.nameLocalized),
+                SectionHeader(title: selection.displayName(f)),
                 ServiceFormFields(
                   data: _formFor(selection.formKind),
                   onChanged: () => setState(() {}),
@@ -455,14 +455,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
           label: tr(f, 'services.choose_type'),
           items: _services,
           value: selected,
-          itemLabel: (s) => s.nameLocalized,
+          itemLabel: (s) => s.displayName(f),
           onChanged: (s) => setState(() => _selected = s),
         ),
-        if (selected.displayDescription.isNotEmpty)
+        if (selected.displayDescription(f).isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
-              selected.displayDescription,
+              selected.displayDescription(f),
               style: AppText.body(size: 12, color: AppColors.inkMuted),
             ),
           ),

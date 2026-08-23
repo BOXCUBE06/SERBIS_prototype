@@ -9,8 +9,11 @@
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
             <div>
-              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Targeted Text Blast</h2>
-              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">Dispatch critical SMS alerts to specific barangays</div>
+              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Text Blast (SMS)</h2>
+              <!-- "active, opted-in" is exact: SmsController::sendBlast filters
+                   status = Active AND sms_opt_in AND a non-null phone number, so
+                   "every resident" would overstate who actually receives this. -->
+              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">One message to the active, opted-in residents of the barangays you pick</div>
             </div>
           </div>
 
@@ -49,7 +52,29 @@
                   bg-color="grey-lighten-5"
                   class="font-weight-medium"
                   :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
-                ></v-select>
+                >
+                  <!-- The old duplicate panel had a Select All and the rewrite
+                       that swapped a hardcoded list for real GET /barangays rows
+                       dropped it. Deliberately NOT the old implementation: that
+                       one sent a literal 'all' sentinel, and sendBlast validates
+                       barangays.* as integer|exists:tbl_barangay,barangay_id, so
+                       'all' is a 422 now. This selects every real barangay_id. -->
+                  <template #prepend-item>
+                    <v-list-item :title="allBarangaysSelected ? 'Clear all' : 'Select all barangays'" @click="toggleAllBarangays">
+                      <template #prepend>
+                        <v-checkbox-btn
+                          :model-value="allBarangaysSelected"
+                          :indeterminate="someBarangaysSelected"
+                          color="error"
+                        ></v-checkbox-btn>
+                      </template>
+                      <template #subtitle>
+                        <span class="text-caption">{{ barangays.length }} barangays — everyone reachable in the municipality</span>
+                      </template>
+                    </v-list-item>
+                    <v-divider class="mt-2"></v-divider>
+                  </template>
+                </v-select>
               </div>
 
               <div class="mb-2">
@@ -66,7 +91,7 @@
                   counter="160"
                   class="font-weight-medium text-body-1"
                   :rules="[
-                    v => !!v || 'An emergency message is required.',
+                    v => !!v || 'A message is required.',
                     v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
                   ]"
                 ></v-textarea>
@@ -86,7 +111,11 @@
                   elevation="2"
                 >
                   <v-icon start size="24" class="mr-2">mdi-send</v-icon>
-                  <span class="text-h6 font-weight-bold">Dispatch Blast</span>
+                  <!-- "Send", not "Dispatch". Dispatch means sending a vehicle
+                       everywhere else in this panel (Ambulance Dispatch
+                       Requests, Approve & Dispatch); reusing it for SMS blurs
+                       the one word the desk uses for a physical response. -->
+                  <span class="text-h6 font-weight-bold">Send Blast</span>
                 </v-btn>
               </div>
             </v-form>
@@ -127,6 +156,19 @@ const isValid = computed(() => {
     && selectedBarangays.value.length > 0
 })
 
+// Guarded on barangays.length > 0 so an empty list (still loading, or the
+// request failed) does not report "all selected" when nothing is.
+const allBarangaysSelected = computed(() =>
+  barangays.value.length > 0 && selectedBarangays.value.length === barangays.value.length)
+const someBarangaysSelected = computed(() =>
+  selectedBarangays.value.length > 0 && !allBarangaysSelected.value)
+
+const toggleAllBarangays = () => {
+  selectedBarangays.value = allBarangaysSelected.value
+    ? []
+    : barangays.value.map(b => b.barangay_id)
+}
+
 const fetchBarangays = async () => {
   barangaysLoading.value = true
   try {
@@ -151,12 +193,18 @@ const sendSmsBlast = async () => {
   const { valid } = await form.value.validate()
   if (!valid) return
 
-  const targetNames = barangays.value
-    .filter(b => selectedBarangays.value.includes(b.barangay_id))
-    .map(b => b.barangay_name)
-    .join(', ')
+  // Selecting every barangay is one tap now, and the blast is billed per real
+  // send — so the confirmation names the scale instead of listing every
+  // barangay, which is the case where a wall of names reads as detail rather
+  // than as a warning.
+  const confirmMessage = allBarangaysSelected.value
+    ? `Send this message to EVERY barangay in the municipality — all ${barangays.value.length} of them, and every active, opted-in resident in each?`
+    : `Send this message to the active, opted-in residents of: ${barangays.value
+        .filter(b => selectedBarangays.value.includes(b.barangay_id))
+        .map(b => b.barangay_name)
+        .join(', ')}?`
 
-  if (!confirm(`Dispatch this alert to all active residents in: ${targetNames}?`)) return
+  if (!confirm(confirmMessage)) return
 
   loading.value = true
   alert.value.show = false

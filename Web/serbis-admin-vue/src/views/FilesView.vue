@@ -7,7 +7,7 @@
           <!-- Header -->
           <v-row class="mb-6" align="center" justify="space-between">
             <v-col cols="12" md="5">
-              <h2 class="text-h5 font-weight-bold text-high-emphasis">Info Materials</h2>
+              <h2 class="text-h5 font-weight-bold text-high-emphasis">Documents</h2>
               <div class="text-subtitle-2 text-medium-emphasis">
                 {{ files.length }} published · residents receive these on the mobile app
               </div>

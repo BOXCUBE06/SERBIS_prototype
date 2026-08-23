@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
+use App\Http\Controllers\ConductionRequestController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\ResidentController;
@@ -70,6 +71,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // exist and never did — the route 500'd on any request. No client ever
         // called it; /admin/dashboard below is the panel's analytics source.
         Route::get('/admin/service-requests', [ServiceRequestController::class, 'adminIndex']);
+        // Walk-in requests, filed by staff at the counter — separate from the
+        // resident-facing POST /service-requests above.
+        Route::post('/admin/service-requests', [ServiceRequestController::class, 'adminStore']);
         Route::get('/admin/dashboard', [\App\Http\Controllers\AnalyticsController::class, 'index']);
 
         // Info Materials Administrative CRUD Routes
@@ -98,5 +102,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
         Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update', 'destroy']);
+
+        // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and
+        // tracked entirely by staff — there is no resident-facing route, the
+        // same way tbl_vehicles has none.
+        Route::apiResource('conduction-requests', ConductionRequestController::class)->only(['index', 'store', 'show']);
+        Route::patch('conduction-requests/{id}/trip-log', [ConductionRequestController::class, 'tripLog']);
     });
 });

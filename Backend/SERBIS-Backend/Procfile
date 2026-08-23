@@ -1,3 +1,18 @@
+# Process definitions for Procfile-reading platforms.
+#
+# NOTE: the deployment target is Render's Docker service, which reads none of
+# this. The release line below is reproduced — and extended with the seed step
+# it never had — in docker-entrypoint.sh. See docs/deploy-render.md. This file
+# is kept only so a Procfile-reading platform is not left with nothing.
+#
+# There is deliberately NO `web:` line. The one that used to be here called
+# vendor/bin/heroku-php-apache2, a binary supplied by Heroku's PHP buildpack —
+# nothing in composer.json installs it, so it existed on exactly zero of the
+# platforms this app was going to. With no web line, Nixpacks supplies its own
+# nginx + php-fpm and serves public/ correctly.
+#
+# There is also no `worker:` line any more. routes/console.php schedules one
+# command, daily, and app/ dispatches no queued jobs at all, so an always-on
+# worker process would bill full-time to run sanctum:prune-expired once a day.
+# Use the platform's cron feature instead.
 release: php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan storage:link
-web: vendor/bin/heroku-php-apache2 public/
-worker: php artisan schedule:work

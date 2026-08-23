@@ -41,7 +41,13 @@ class ResidentController extends Controller
             'phone_number' => 'required|string',
             'email_address' => 'required|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
-            'status' => 'required|string',
+            // The column carries exactly three values and 'required|string'
+            // accepted every other one, 'banana' included. That was not
+            // theoretical: SmsController::sendBlast() is the only functional
+            // reader and it matches 'Active' exactly, so a typo or a miscased
+            // status dropped the resident out of every blast with nothing
+            // logged and nothing visibly wrong in the admin list.
+            'status' => 'required|in:Active,Inactive,Deactivated',
         ]);
 
         // Columns assigned one at a time, never a splat of $validated. A splat
@@ -92,7 +98,11 @@ class ResidentController extends Controller
             'phone_number' => 'required|string',
             'email_address' => 'required|email|unique:tbl_residents,email_address,' . $id . ',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
-            'status' => 'required|string',
+            // Same three values as store(). Both admin write paths reach this
+            // method — the list's status toggle and the edit form's radio —
+            // and the vocabulary is mirrored in the panel at
+            // Web/serbis-admin-vue/src/composables/residentStatus.ts.
+            'status' => 'required|in:Active,Inactive,Deactivated',
             'password' => ['nullable', 'string', Password::min(8)->mixedCase()->numbers()], // Must be nullable on update
         ]);
 

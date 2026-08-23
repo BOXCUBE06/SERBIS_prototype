@@ -19,7 +19,7 @@ class IsAdmin
     {
         $user = Auth::user();
 
-        if (!$user instanceof User || strtolower($user->role) !== 'admin') {
+        if (!$user instanceof User || !$user->isAdmin()) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
