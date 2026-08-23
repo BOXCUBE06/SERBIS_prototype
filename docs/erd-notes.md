@@ -13,7 +13,7 @@ diagram was produced under the decisions below; each is reversible.
 
 | # | Decision | Why |
 |---|---|---|
-| 1 | **`tbl_services` was added.** It was absent from the brief's entity list. | `tbl_service_request.service_id` and `tbl_service_translations.service_id` are both `NOT NULL` foreign keys to it. Without it, two entities carry a mandatory key pointing at nothing. |
+| 1 | **`tbl_services` was added.** It was absent from the brief's entity list. | `tbl_service_request.service_id` is a `NOT NULL` foreign key to it. Without it, that entity carries a mandatory key pointing at nothing. |
 | 2 | **`tbl_sms_logs` was added.** Also absent from the brief's list. | `tbl_recipients.sms_log_id` is a `NOT NULL` foreign key to it, and `tbl_sms_logs` is the **only** table in the schema that references `tbl_disaster`. Omitting it would strand `tbl_recipients` and leave `tbl_disaster` falsely isolated. |
 | 3 | **`tbl_disaster`, `tbl_sms_logs` and `tbl_recipients` are shown**, though unimplemented (§4). | The brief named two of the three as required entities. They are real tables with real constraints. |
 | 4 | **`users` is shown as an isolated entity** (§5). | The brief asked for it. It has no relationship to anything, and the brief's own rule is to draw such a table isolated rather than connect it to something plausible. |
@@ -79,7 +79,6 @@ does not.
 Every relationship that *is* declared in `app/Models/` has a matching database
 constraint. Checked individually: `Barangay::residents`, `Resident::barangay`,
 `ServiceRequest::{resident, service, admin, vehicle}`, `Vehicle::serviceRequests`,
-`Service::translations`, `ServiceTranslation::service`,
 `SystemLog::{admin, resident}`, `EquipmentBorrowing::{resident, equipment}`.
 
 ---
@@ -89,11 +88,11 @@ constraint. Checked individually: `Barangay::residents`, `Resident::barangay`,
 **There are none.** A true one-to-one requires a foreign key column that also
 carries a unique constraint, and no foreign key in this schema does.
 
-The nearest thing is `tbl_service_translations`, whose unique index covers
-`(service_id, locale)` — the foreign key *plus* a non-key column. That composite
-is what makes the relationship one-to-many: one service, many locales, at most
-one row per locale. It is the guard against a service accumulating two names for
-the same language, not a one-to-one.
+There is not even a near miss any more. `tbl_service_translations` used to hold
+the only unique index touching a foreign key — `(service_id, locale)`, the key
+*plus* a non-key column, which is what made that relationship one-to-many rather
+than one-to-one — and the table was dropped when service translations moved into
+the mobile app. No unique index in the schema now covers a foreign key at all.
 
 ---
 
@@ -139,8 +138,7 @@ It is drawn isolated because it is isolated.
   key follows suit as `admin_id`, so the table name and its key disagree with each
   other as well: a table called "user" whose rows are admins.
 - **`tbl_service_request` is singular** where `tbl_info_materials`,
-  `tbl_system_logs`, `tbl_sms_logs`, `tbl_recipients` and
-  `tbl_service_translations` are plural.
+  `tbl_system_logs`, `tbl_sms_logs` and `tbl_recipients` are plural.
 - **`tbl_equipments`** is a plural of a mass noun.
 - **Primary keys do not follow one convention**: `files_id` for
   `tbl_info_materials`, `log_id` for `tbl_system_logs`, `borrow_id` for
@@ -168,6 +166,23 @@ model, controller and query, and is out of scope here.
 | `tbl_equipment_borrowing.status` | `Pending`, `Approved`, `Released`, `Returned`, `Denied` | Database `enum` |
 | `tbl_sms_logs.status` | Not defined | Unpopulated (§4) |
 | `tbl_recipients.status` | Not defined | Unpopulated (§4) |
+| `tbl_services.code` | One slug per service — `flood-evacuation`, `ambulance-medical-response`, … | Uniqueness by database index; everything else in the application (below) |
+
+### `tbl_services.code` — unique in the database, immutable only in the app
+
+`code` is the field a client keys behaviour on: `service_id` is positional and
+`service_name` is display text an admin can rewrite. The database enforces that
+it is `NOT NULL` and unique, and nothing more.
+
+Immutability is application-side and rests on two independent omissions. `code`
+is absent from `#[Fillable]` on `App\Models\Service`, so no mass assignment can
+carry it; and it is absent from `ServiceController`'s validation rules, so a
+request that sends one has it discarded before that. A `creating` hook — never
+`saving` — slugifies `service_name` when no code is set, which is why a rename
+cannot move the code.
+
+A direct `UPDATE` against the table would still change it. Nothing in the
+schema prevents that.
 
 ### `tbl_residents.status` — `Deactivated` and `Inactive` are synonyms
 

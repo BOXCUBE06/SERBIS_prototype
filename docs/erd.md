@@ -66,18 +66,9 @@ erDiagram
 
     tbl_services {
         bigint service_id PK
-        varchar(255) service_name "untranslated name"
-        text description "nullable, untranslated"
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    tbl_service_translations {
-        bigint service_translation_id PK
-        bigint service_id FK "NOT NULL, composite unique with locale"
-        varchar(10) locale UK "BCP 47 subtag, composite unique with service_id"
-        varchar(255) name
-        text description "nullable, falls back to English"
+        varchar(50) code UK "stable slug, set once at creation"
+        varchar(255) service_name "display name, admin-editable"
+        text description "nullable"
         timestamp created_at
         timestamp updated_at
     }
@@ -215,7 +206,6 @@ erDiagram
     tbl_residents           |o--o{ tbl_system_logs          : "performs"
 
     tbl_services            ||--o{ tbl_service_request      : "is requested as"
-    tbl_services            ||--o{ tbl_service_translations : "is localised by"
 
     tbl_vehicles            |o--o{ tbl_service_request      : "is dispatched to"
 
