@@ -117,7 +117,7 @@ class SmsController extends Controller
             ->whereHas('recipients', fn ($query) => $query->where('resident_id', $user->getKey()))
             ->with('barangay:barangay_id,barangay_name')
             ->latest()
-            ->get(['sms_log_id', 'target_area_id', 'disaster_id', 'message_body', 'status', 'created_at']);
+            ->get(['sms_log_id', 'target_area_id', 'message_body', 'status', 'created_at']);
 
         return response()->json(['data' => $advisories]);
     }
@@ -246,9 +246,6 @@ class SmsController extends Controller
                 $log = SmsLog::create([
                     'sender_id'      => $senderId,
                     'target_area_id' => $barangayId,
-                    // Nullable since 2026-08-03: a blast is worth recording
-                    // whether or not the emergency has been classified.
-                    'disaster_id'    => null,
                     'api_job_id'     => $apiJobId,
                     'message_body'   => $message,
                     'status'         => $status,

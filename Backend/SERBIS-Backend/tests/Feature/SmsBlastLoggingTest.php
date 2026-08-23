@@ -79,7 +79,6 @@ class SmsBlastLoggingTest extends TestCase
         $logA = SmsLog::where('target_area_id', $this->barangayA->barangay_id)->firstOrFail();
         $this->assertSame('Sent', $logA->status);
         $this->assertSame('job-123', $logA->api_job_id);
-        $this->assertNull($logA->disaster_id);
         $this->assertSame('Evacuate low-lying areas immediately.', $logA->message_body);
         $this->assertEqualsCanonicalizing(
             [$a1->resident_id, $a2->resident_id],
