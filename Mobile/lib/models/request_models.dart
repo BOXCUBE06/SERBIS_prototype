@@ -220,7 +220,13 @@ extension ServiceTypeX on ServiceType {
 /// so the misfiling was silent).
 class ServiceCatalogItem {
   final int id;
+
+  /// The English name from `tbl_services.service_name`. Shown only when this
+  /// build has no entry for [code] — a service the MDRRMO added after it
+  /// shipped. Everything else is named from the app's own translation table.
   final String name;
+
+  /// The English blurb, used on the same terms as [name].
   final String? description;
 
   /// The server's stable identifier — `tbl_services.code`, a slug like
@@ -235,24 +241,23 @@ class ServiceCatalogItem {
   const ServiceCatalogItem({
     required this.id,
     required this.name,
-    required this.nameLocalized,
     this.code = '',
     this.description,
-    this.descriptionLocalized,
   });
 
-  /// What the UI shows: the localized blurb where there is one, the English
-  /// column otherwise.
-  String get displayDescription => descriptionLocalized ?? description ?? '';
+  /// The name to show, resolved from the app's own translation table by [code].
+  ///
+  /// The API's `name_localized` is no longer read. It came from a translations
+  /// table in the database, which meant the label on an emergency form could be
+  /// edited between two launches of the app; and it forced every screen to
+  /// re-fetch the whole catalogue on a language switch, because the language
+  /// lived in the query string.
+  String displayName(bool filipino) => serviceNameFor(filipino, code, name);
 
-  /// The service's name in the language the catalogue was fetched in. The
-  /// server resolves this from tbl_service_translations and falls back to
-  /// English, so it is never blank.
-  final String nameLocalized;
-
-  /// The blurb in the same language. Falls back independently of the name: a
-  /// locale can have a translated name and no translated description.
-  final String? descriptionLocalized;
+  /// The blurb under the name, resolved the same way. Empty rather than null:
+  /// it is rendered straight into a Text widget.
+  String displayDescription(bool filipino) =>
+      serviceDescriptionFor(filipino, code, description ?? '');
 
   factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) {
     final idValue = json['service_id'] ?? json['id'];
@@ -260,19 +265,13 @@ class ServiceCatalogItem {
         ? idValue
         : int.tryParse(idValue?.toString() ?? '') ?? 0;
     final name = (json['service_name'] ?? json['name'] ?? '') as String;
-    final localized = json['name_localized'] as String?;
-    final localizedDescription = json['description_localized'] as String?;
+    // `name_localized` and `description_localized` are deliberately not read.
+    // The server still sends them; nothing here depends on them any more.
     return ServiceCatalogItem(
       id: id,
       name: name,
       code: (json['code'] as String?) ?? '',
-      // Older builds of the API send neither localized field.
-      nameLocalized: localized == null || localized.isEmpty ? name : localized,
       description: json['description'] as String?,
-      descriptionLocalized:
-          localizedDescription == null || localizedDescription.isEmpty
-              ? null
-              : localizedDescription,
     );
   }
 

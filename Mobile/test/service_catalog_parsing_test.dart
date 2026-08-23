@@ -47,26 +47,43 @@ void main() {
       final item = ServiceCatalogItem.fromJson(englishRow());
 
       expect(item.id, 1);
+      expect(item.code, 'flood-evacuation');
       expect(item.name, 'Flood Evacuation');
-      expect(item.nameLocalized, 'Flood Evacuation');
+      expect(item.displayName(false), 'Flood Evacuation');
       expect(
-        item.displayDescription,
+        item.displayDescription(false),
         'Assistance and evacuation services during floods.',
       );
     });
 
-    test('a Filipino row shows Tagalog and keeps English underneath', () {
-      final item = ServiceCatalogItem.fromJson(filipinoRow());
+    test('Tagalog comes from the app, not from the payload', () {
+      // The English row on purpose: it carries no Tagalog anywhere, and the
+      // Filipino label still resolves. That is the whole move — the strings
+      // are a property of this build, not of whatever the server happens to
+      // hold in its translations table.
+      final item = ServiceCatalogItem.fromJson(englishRow());
 
-      expect(item.nameLocalized, 'Paglikas sa Baha');
-      expect(item.displayDescription, 'Tulong at paglikas tuwing may baha.');
-      // The English pair is what the form and icon are keyed on, so it has to
-      // survive the translation.
+      expect(item.displayName(true), 'Paglikas sa Baha');
+      expect(item.displayDescription(true), 'Tulong at paglikas tuwing may baha.');
+      // The English column is untouched underneath.
       expect(item.name, 'Flood Evacuation');
-      expect(
-        item.description,
-        'Assistance and evacuation services during floods.',
-      );
+    });
+
+    test('a name_localized the server still sends is ignored', () {
+      // The API keeps emitting it for now. If this build read it, a row could
+      // be labelled from the database again — which is what the move exists to
+      // stop.
+      final item = ServiceCatalogItem.fromJson(<String, dynamic>{
+        'service_id': 1,
+        'code': 'flood-evacuation',
+        'service_name': 'Flood Evacuation',
+        'name_localized': 'SERVER SAYS SOMETHING ELSE',
+        'description_localized': 'SERVER BLURB',
+      });
+
+      expect(item.displayName(true), 'Paglikas sa Baha');
+      expect(item.displayName(false), 'Flood Evacuation');
+      expect(item.displayDescription(true), 'Tulong at paglikas tuwing may baha.');
     });
 
     test('the id is the server row id, not the list position', () {
@@ -203,65 +220,35 @@ void main() {
       });
 
       expect(item.name, '');
-      expect(item.nameLocalized, '');
+      expect(item.displayName(false), '');
       expect(item.formKind, ServiceFormKind.generic);
     });
 
-    test('missing localized fields fall back to the English ones', () {
-      // What a build talking to an older API sees. The name must never come
-      // back blank — it is the label on the tile the resident taps.
+    test('a service this build has never heard of keeps its English name', () {
+      // The MDRRMO adds a service in the panel. There is no entry for its code
+      // here, so the tile shows what the server called it — in both languages,
+      // because inventing Tagalog for it is not this app's job.
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
-        'service_id': 1,
-        'service_name': 'Flood Evacuation',
-        'description': 'Assistance and evacuation services during floods.',
+        'service_id': 11,
+        'code': 'livestock-rescue',
+        'service_name': 'Livestock Rescue',
+        'description': 'Rescue for farm animals.',
       });
 
-      expect(item.nameLocalized, 'Flood Evacuation');
-      expect(item.descriptionLocalized, isNull);
-      expect(
-        item.displayDescription,
-        'Assistance and evacuation services during floods.',
-      );
-    });
-
-    test('an empty localized name is treated as absent, not as a blank tile',
-        () {
-      final item = ServiceCatalogItem.fromJson(<String, dynamic>{
-        'service_id': 1,
-        'service_name': 'Flood Evacuation',
-        'name_localized': '',
-      });
-
-      expect(item.nameLocalized, 'Flood Evacuation');
-    });
-
-    test('an empty localized description falls back independently', () {
-      // The two fall back separately on purpose: a locale can have a
-      // translated name and no translated blurb.
-      final item = ServiceCatalogItem.fromJson(<String, dynamic>{
-        'service_id': 1,
-        'service_name': 'Flood Evacuation',
-        'name_localized': 'Paglikas sa Baha',
-        'description': 'Assistance and evacuation services during floods.',
-        'description_localized': '',
-      });
-
-      expect(item.nameLocalized, 'Paglikas sa Baha');
-      expect(item.descriptionLocalized, isNull);
-      expect(
-        item.displayDescription,
-        'Assistance and evacuation services during floods.',
-      );
+      expect(item.displayName(false), 'Livestock Rescue');
+      expect(item.displayName(true), 'Livestock Rescue');
+      expect(item.displayDescription(true), 'Rescue for farm animals.');
     });
 
     test('a row with no description reads as empty, never null', () {
       // displayDescription is rendered straight into a Text widget.
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
         'service_id': 1,
+        'code': 'unknown-service',
         'service_name': 'Flood Evacuation',
       });
 
-      expect(item.displayDescription, '');
+      expect(item.displayDescription(false), '');
     });
   });
 }

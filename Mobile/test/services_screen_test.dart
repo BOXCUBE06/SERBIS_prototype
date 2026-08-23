@@ -107,27 +107,25 @@ class FakeApi extends ApiService {
   /// rather than a race the fake usually wins.
   Future<void>? servicesGate;
 
-  /// `code` is what decides the form and the badge now, so it has to be here:
-  /// a catalogue row without one resolves to the generic form, which is what
-  /// these tests would then be asserting against.
+  /// `code` decides the form, the badge and now the label as well: the screen
+  /// names a service from the app's own translation table, so `service_name`
+  /// below is only what an unknown code would fall back to. The names asserted
+  /// in these tests are the ones that table holds.
   static final List<Map<String, dynamic>> _defaultCatalogue = [
     {
       'service_id': 1,
       'code': 'flood-evacuation',
       'service_name': 'Flood Evacuation',
-      'name_localized': 'Flood Evacuation',
     },
     {
       'service_id': 3,
       'code': 'ambulance-medical-response',
-      'service_name': 'Ambulance Service',
-      'name_localized': 'Ambulance Service',
+      'service_name': 'Ambulance/Medical Response',
     },
     {
       'service_id': 5,
       'code': 'road-clearing',
       'service_name': 'Road Clearing',
-      'name_localized': 'Road Clearing',
     },
   ];
 
@@ -327,7 +325,7 @@ void main() {
       await _openServiceDropdown(tester);
 
       expect(find.text('Flood Evacuation'), findsWidgets);
-      expect(find.text('Ambulance Service'), findsWidgets);
+      expect(find.text('Ambulance/Medical Response'), findsWidgets);
       expect(find.text('Road Clearing'), findsWidgets);
     });
 
@@ -356,7 +354,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Couldn't load services"), findsNothing);
-      expect(find.text('Ambulance Service'), findsWidgets);
+      expect(find.text('Ambulance/Medical Response'), findsWidgets);
     });
   });
 
@@ -382,14 +380,14 @@ void main() {
         (tester) async {
       await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
 
-      expect(find.text('Ambulance Service'), findsNWidgets(2));
+      expect(find.text('Ambulance/Medical Response'), findsNWidgets(2));
 
       await _chooseService(tester, 'Road Clearing');
 
       // Twice: once in the closed button, once as the form header. The old
       // selection is gone from both.
       expect(find.text('Road Clearing'), findsNWidgets(2));
-      expect(find.text('Ambulance Service'), findsNothing);
+      expect(find.text('Ambulance/Medical Response'), findsNothing);
     });
 
     testWidgets('the patient name starts as the signed-in resident', (tester) async {
@@ -413,7 +411,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await _chooseService(tester, 'Road Clearing');
-      await _chooseService(tester, 'Ambulance Service');
+      await _chooseService(tester, 'Ambulance/Medical Response');
 
       expect(find.widgetWithText(TextField, 'Juan Dela Cruz'), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Maria Dela Cruz'), findsNothing);
