@@ -19,7 +19,6 @@ class DatabaseSeeder extends Seeder
             // 2. Dependent Tables (Require Foreign Keys)
             ResidentSeeder::class, // Requires tbl_barangay
             InfoMaterialSeeder::class, // Requires tbl_user (uploader_id)
-            ServiceTranslationSeeder::class, // Requires tbl_services
             
             // 3. Relational/Analytics Tables
             ServiceRequestSeeder::class,

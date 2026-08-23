@@ -29,9 +29,6 @@ class ProductionSeeder extends Seeder
             ServiceSeeder::class,
             EquipmentSeeder::class,
             VehicleSeeder::class,
-
-            // After ServiceSeeder: keyed on the English service name.
-            ServiceTranslationSeeder::class,
         ]);
     }
 }

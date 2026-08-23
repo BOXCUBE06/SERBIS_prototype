@@ -10,12 +10,11 @@ class ServiceController extends Controller
 {
     /**
      * Accepts `?locale=` (default `en`) and returns each service's
-     * `name_localized`. Translations are eager-loaded: resolving them per row
-     * would be one query per service on a list the app fetches at launch.
+     * `name_localized`.
      */
     public function index(Request $request)
     {
-        $services = Service::with('translations')->get();
+        $services = Service::all();
 
         return ServiceResource::collection($services);
     }
@@ -34,7 +33,7 @@ class ServiceController extends Controller
 
     public function show(Request $request, $id)
     {
-        $service = Service::with('translations')->find($id);
+        $service = Service::find($id);
 
         if (!$service) {
             return response()->json(['message' => 'Service not found'], 404);
