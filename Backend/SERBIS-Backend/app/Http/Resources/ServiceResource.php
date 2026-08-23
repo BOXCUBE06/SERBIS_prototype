@@ -2,25 +2,25 @@
 
 namespace App\Http\Resources;
 
-use App\Models\ServiceTranslation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * The first API resource in this codebase; everything else still serializes
- * models directly. Introduced because `name_localized` is not a column — it
- * depends on the caller's `?locale=`, so it cannot come from the model's
- * default serialization.
+ * models directly. It was introduced for `name_localized`, a field that had no
+ * column behind it, and that field is gone — the app translates service names
+ * itself now, off `code`.
  *
- * `service_name` is still emitted unchanged. Older clients read it, and it is
- * the untranslated name an admin sees in the panel.
+ * It stays because `code` is worth stating explicitly: this payload is the one
+ * place a client is told which field is safe to key behaviour on, and a raw
+ * model serialization would hand back every column with nothing to distinguish
+ * the stable identifier from the display text. The collection's `{data}`
+ * wrapper is also part of the endpoint's contract now.
  */
 class ServiceResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $locale = self::localeFrom($request);
-
         return [
             'service_id' => $this->service_id,
             // The stable identifier. `service_id` is positional and
@@ -28,27 +28,9 @@ class ServiceResource extends JsonResource
             // the only field in this payload a client may key behaviour on.
             'code' => $this->code,
             'service_name' => $this->service_name,
-            'name_localized' => $this->nameForLocale($locale),
             'description' => $this->description,
-            'description_localized' => $this->descriptionForLocale($locale),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
-    }
-
-    /**
-     * Reads `?locale=`, defaulting to English. Anything that is not a plausible
-     * language subtag is ignored rather than rejected: a bad locale should give
-     * the resident an English label, not a 422 in front of an emergency form.
-     */
-    public static function localeFrom(Request $request): string
-    {
-        $locale = $request->query('locale');
-
-        if (!is_string($locale) || !preg_match('/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/', $locale)) {
-            return ServiceTranslation::fallbackLocale();
-        }
-
-        return $locale;
     }
 }

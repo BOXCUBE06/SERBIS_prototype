@@ -8,10 +8,6 @@ use Illuminate\Http\Request;
 
 class ServiceController extends Controller
 {
-    /**
-     * Accepts `?locale=` (default `en`) and returns each service's
-     * `name_localized`.
-     */
     public function index(Request $request)
     {
         $services = Service::all();
