@@ -18,6 +18,7 @@ import 'package:serbis/models/request_models.dart';
 /// English column, so they are never absent and never blank.
 Map<String, dynamic> englishRow() => <String, dynamic>{
       'service_id': 1,
+      'code': 'flood-evacuation',
       'service_name': 'Flood Evacuation',
       'name_localized': 'Flood Evacuation',
       'description': 'Assistance and evacuation services during floods.',
@@ -31,6 +32,7 @@ Map<String, dynamic> englishRow() => <String, dynamic>{
 /// and `description` stay English, and only the `_localized` pair moves.
 Map<String, dynamic> filipinoRow() => <String, dynamic>{
       'service_id': 1,
+      'code': 'flood-evacuation',
       'service_name': 'Flood Evacuation',
       'name_localized': 'Paglikas sa Baha',
       'description': 'Assistance and evacuation services during floods.',
@@ -81,22 +83,49 @@ void main() {
     });
   });
 
-  group('the form and icon follow the English name', () {
+  group('the form and icon follow the service code', () {
     test('a translated ambulance row still gets the ambulance form', () {
-      // The regression this guards: keyed on `nameLocalized`, a Tagalog label
-      // matches none of the English substrings and every translated service
-      // silently drops to the generic description form. The resident would
-      // lose the guided fields in exactly the language they chose.
+      // Neither name is consulted any more, which is the point: the code is
+      // the same string in every locale, so a Tagalog label cannot drop the
+      // resident to the generic form in the language they chose.
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
         'service_id': 3,
+        'code': 'ambulance-medical-response',
         'service_name': 'Ambulance Service',
         'name_localized': 'Serbisyong Ambulansya',
         'description': 'Emergency medical transport.',
         'description_localized': 'Pang-emerhensiyang transportasyong medikal.',
       });
 
+      expect(item.code, 'ambulance-medical-response');
       expect(item.formKind, ServiceFormKind.ambulance);
       expect(item.icon, isNotNull);
+    });
+
+    test('a renamed service keeps the form its code says it has', () {
+      // The bug this whole change exists to kill. An admin editing
+      // `service_name` in the panel used to move the service to another form
+      // — "Road Clearing" to "Street Clearing" lost the road form outright,
+      // because the old lookup matched the substring "road".
+      final item = ServiceCatalogItem.fromJson(<String, dynamic>{
+        'service_id': 5,
+        'code': 'road-clearing',
+        'service_name': 'Street Sweeping',
+      });
+
+      expect(item.formKind, ServiceFormKind.road);
+    });
+
+    test('a name that reads like another service does not borrow its form', () {
+      // The mirror of the case above: the name says ambulance, the code says
+      // animal rescue, and the code wins.
+      final item = ServiceCatalogItem.fromJson(<String, dynamic>{
+        'service_id': 9,
+        'code': 'animal-rescue',
+        'service_name': 'Animal Ambulance and Medical Transfer',
+      });
+
+      expect(item.formKind, ServiceFormKind.generic);
     });
 
     test('a translated flood row is not an ambulance', () {
@@ -106,10 +135,12 @@ void main() {
     });
 
     test('a service nobody hardcoded gets the generic form', () {
-      // The point of deriving this from the name: the MDRRMO can add a service
-      // in the admin panel and the app files it without a code change.
+      // The MDRRMO can add a service in the admin panel and the app files it
+      // without a code change; it just gets the generic form until one of the
+      // switches above learns its code.
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
         'service_id': 11,
+        'code': 'livestock-rescue',
         'service_name': 'Livestock Rescue',
       });
 
@@ -126,7 +157,20 @@ void main() {
 
       expect(item.id, 5);
       expect(item.name, 'Road Clearing');
-      expect(item.formKind, ServiceFormKind.road);
+    });
+
+    test('a payload with no code gets the generic form, not one guessed from the name',
+        () {
+      // An API too old to send a code. The generic form is the honest answer:
+      // guessing "road" out of the name is the behaviour that let a rename
+      // change a resident's form, and it is not coming back as a fallback.
+      final item = ServiceCatalogItem.fromJson(<String, dynamic>{
+        'id': 5,
+        'name': 'Road Clearing',
+      });
+
+      expect(item.code, '');
+      expect(item.formKind, ServiceFormKind.generic);
     });
 
     test('an id sent as a string is still a number', () {

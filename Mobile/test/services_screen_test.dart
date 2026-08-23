@@ -107,10 +107,28 @@ class FakeApi extends ApiService {
   /// rather than a race the fake usually wins.
   Future<void>? servicesGate;
 
+  /// `code` is what decides the form and the badge now, so it has to be here:
+  /// a catalogue row without one resolves to the generic form, which is what
+  /// these tests would then be asserting against.
   static final List<Map<String, dynamic>> _defaultCatalogue = [
-    {'service_id': 1, 'service_name': 'Flood Evacuation', 'name_localized': 'Flood Evacuation'},
-    {'service_id': 3, 'service_name': 'Ambulance Service', 'name_localized': 'Ambulance Service'},
-    {'service_id': 5, 'service_name': 'Road Clearing', 'name_localized': 'Road Clearing'},
+    {
+      'service_id': 1,
+      'code': 'flood-evacuation',
+      'service_name': 'Flood Evacuation',
+      'name_localized': 'Flood Evacuation',
+    },
+    {
+      'service_id': 3,
+      'code': 'ambulance-medical-response',
+      'service_name': 'Ambulance Service',
+      'name_localized': 'Ambulance Service',
+    },
+    {
+      'service_id': 5,
+      'code': 'road-clearing',
+      'service_name': 'Road Clearing',
+      'name_localized': 'Road Clearing',
+    },
   ];
 
   @override

@@ -156,8 +156,8 @@ class AppState extends ChangeNotifier {
       if (service.id == request.serviceId) {
         return request.copyWith(
           serviceName: service.nameLocalized,
-          // English too: the icon and colour are keyed on it.
-          serviceNameEn: service.name,
+          // The code too: the icon, colour and type are keyed on it.
+          serviceCode: service.code,
         );
       }
     }
