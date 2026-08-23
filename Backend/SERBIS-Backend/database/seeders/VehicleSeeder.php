@@ -3,12 +3,24 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use App\Models\Vehicle;
 
 class VehicleSeeder extends Seeder
 {
+    /**
+     * The MDRRMO's fleet. Runs on production; real data.
+     */
     public function run(): void
     {
+        // unit_identifier is not unique, so a second run puts a second AMB-01
+        // in the dispatch dropdown with no way to tell them apart.
+        if (DB::table('tbl_vehicles')->exists()) {
+            $this->command?->warn('VehicleSeeder skipped: tbl_vehicles is not empty.');
+
+            return;
+        }
+
         $vehicles = [
             // Ambulances (4)
             ['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'TYPE I', 'status' => 'Available'],

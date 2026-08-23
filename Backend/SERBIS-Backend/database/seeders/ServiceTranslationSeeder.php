@@ -64,11 +64,6 @@ class ServiceTranslationSeeder extends Seeder
 
     public function run(): void
     {
-        if (!app()->environment(['local', 'testing'])) {
-            $this->command->warn('ServiceTranslationSeeder skipped: not a local environment.');
-            return;
-        }
-
         $services = DB::table('tbl_services')->get(['service_id', 'service_name', 'description']);
 
         if ($services->isEmpty()) {

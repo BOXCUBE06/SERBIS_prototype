@@ -16,6 +16,19 @@ class MockRequestSeeder extends Seeder
 {
     public function run()
     {
+        // This seeder TRUNCATES tbl_service_request and tbl_equipment_borrowings
+        // before inserting fifty fabricated rows. Run once against a live
+        // database and every real request the MDRRMO has taken is gone, with no
+        // undo. Nothing else in this repository destroys data.
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn(
+                'MockRequestSeeder skipped: refuses to truncate and re-seed outside local/testing (env: '
+                . app()->environment() . ').'
+            );
+
+            return;
+        }
+
         $faker = Faker::create();
 
         // 1. Fetch existing foreign keys

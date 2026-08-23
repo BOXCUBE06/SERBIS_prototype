@@ -10,6 +10,18 @@ class ServiceRequestSeeder extends Seeder
 {
     public function run(): void
     {
+        // Thirty invented requests attributed to whichever residents happen to
+        // hold ids 1-10. On a real deployment that is fabricated case history
+        // in the MDRRMO's own records, so the guard is not optional.
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn(
+                'ServiceRequestSeeder skipped: refuses to seed simulated requests outside local/testing (env: '
+                . app()->environment() . ').'
+            );
+
+            return;
+        }
+
         $statuses = ['Pending', 'Responding', 'Resolved'];
         $records = [];
 

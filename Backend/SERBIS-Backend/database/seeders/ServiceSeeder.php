@@ -9,10 +9,19 @@ use Illuminate\Support\Facades\Schema;
 class ServiceSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * The ten services the MDRRMO offers. Runs on production; this is their
+     * data, not test data.
      */
     public function run(): void
     {
+        // service_name carries no unique constraint, so a second run appends a
+        // duplicate set and every service appears twice in the mobile picker.
+        if (DB::table('tbl_services')->exists()) {
+            $this->command?->warn('ServiceSeeder skipped: tbl_services is not empty.');
+
+            return;
+        }
+
         Schema::disableForeignKeyConstraints();
 
         $services = [
