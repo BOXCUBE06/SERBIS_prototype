@@ -23,6 +23,10 @@ class ServiceResource extends JsonResource
 
         return [
             'service_id' => $this->service_id,
+            // The stable identifier. `service_id` is positional and
+            // `service_name` is display text an admin can rewrite, so this is
+            // the only field in this payload a client may key behaviour on.
+            'code' => $this->code,
             'service_name' => $this->service_name,
             'name_localized' => $this->nameForLocale($locale),
             'description' => $this->description,
