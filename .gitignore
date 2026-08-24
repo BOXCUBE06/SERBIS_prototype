@@ -2,7 +2,7 @@
 # Local REST API / MCP path, but is not part of the codebase.
 /obsidian-vault/
 
-# Transfer-bundle leftovers (carry secrets: APP_KEY, SkySMS key)
+# Transfer-bundle leftovers (carry secrets: APP_KEY, PhilSMS key)
 /backend-env/
 /claude-global/
 /README-TRANSFER.md

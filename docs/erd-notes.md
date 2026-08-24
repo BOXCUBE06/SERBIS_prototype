@@ -104,7 +104,7 @@ the repository reads or writes any of them.
 
 This matters because `SmsController::sendBlast` — the feature these tables were
 designed for — persists nothing. It selects phone numbers from `tbl_residents`,
-posts them to the SkySMS bulk endpoint, and returns a count. There is no SMS log
+posts them to the PhilSMS bulk endpoint, and returns a count. There is no SMS log
 row, no recipient row, and no link to a disaster.
 
 They are shown in the diagram because they are real tables with real constraints
@@ -219,7 +219,7 @@ Sources for the two unenforced vocabularies above, so neither is taken on trust:
 
 ### `tbl_sms_logs.api_job_id`
 
-Intended to hold the SkySMS job handle returned by the bulk-send endpoint.
+Intended to hold the PhilSMS job handle returned by the bulk-send endpoint.
 Unpopulated — nothing writes it (§4).
 
 ### `tbl_equipments.status` vs `available_quantity`

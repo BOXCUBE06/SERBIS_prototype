@@ -150,7 +150,7 @@ erDiagram
         bigint sender_id FK "NOT NULL, to tbl_user.admin_id"
         bigint target_area_id FK "NOT NULL, to tbl_barangay.barangay_id"
         bigint disaster_id FK "NOT NULL"
-        varchar(255) api_job_id "nullable, SkySMS job handle"
+        varchar(255) api_job_id "nullable, PhilSMS job handle"
         text message_body
         varchar(255) status "value set not yet defined"
         timestamp created_at
