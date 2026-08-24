@@ -47,7 +47,7 @@ class ResidentEmailVerificationTest extends TestCase
         Mail::fake();
         // PhilSMS has no sandbox. An escaped request is a billed real send.
         Http::fake([
-            'app.philsms.com/*' => fn () => Http::response(['status' => $this->smsStatus], 200),
+            'dashboard.philsms.com/*' => fn () => Http::response(['status' => $this->smsStatus], 200),
         ]);
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }

@@ -60,7 +60,7 @@ class SmsHistoryTest extends TestCase
 
     private function blast(string $message, int $status = 200): void
     {
-        Http::fake(['app.philsms.com/*' => Http::response(['job_id' => 'job-1'], $status)]);
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['job_id' => 'job-1'], $status)]);
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => $message,

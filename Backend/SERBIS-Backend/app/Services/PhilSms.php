@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Http;
  */
 class PhilSms
 {
-    private const ENDPOINT = 'https://app.philsms.com/api/v3/sms/send';
+    private const ENDPOINT = 'https://dashboard.philsms.com/api/v3/sms/send';
 
     /**
      * @param  array<int, string>  $numbers

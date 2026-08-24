@@ -151,7 +151,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
     public function test_the_blast_skips_residents_who_opted_out(): void
     {
-        Http::fake(['app.philsms.com/*' => Http::response(['job_id' => 'job-1'], 200)]);
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['job_id' => 'job-1'], 200)]);
 
         $optedIn = $this->resident('09171111111');
         $optedOut = $this->resident('09172222222', ['sms_opt_in' => false]);
@@ -176,7 +176,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
     public function test_an_opted_out_resident_sees_no_advisory_for_a_blast_they_missed(): void
     {
-        Http::fake(['app.philsms.com/*' => Http::response([], 200)]);
+        Http::fake(['dashboard.philsms.com/*' => Http::response([], 200)]);
 
         $this->resident('09171111111');
         $optedOut = $this->resident('09172222222', ['sms_opt_in' => false]);
