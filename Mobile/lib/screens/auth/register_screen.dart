@@ -3,6 +3,7 @@ library serbis.screens.auth.register;
 
 import 'package:flutter/material.dart';
 import '../../state/account_store.dart';
+import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
@@ -10,9 +11,10 @@ import '../../widgets/shared_widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
   final UserStore userStore;
-  /// Carries the address the account was created with — registration is not
-  /// finished until the code mailed to it comes back.
-  final void Function(String email) onRegisterSuccess;
+  /// Carries the address the account was created with, and where the first
+  /// code was sent — registration is not finished until that code comes back.
+  final void Function(String email, VerificationDelivery? delivery)
+      onRegisterSuccess;
   final VoidCallback onGoToLogin;
 
   const RegisterScreen({
@@ -126,7 +128,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _loading = true);
 
     try {
-      final error = await widget.userStore.register(
+      final outcome = await widget.userStore.register(
         firstName:   _firstNameCtrl.text.trim(),
         lastName:    _lastNameCtrl.text.trim(),
         barangayId:  barangayId,
@@ -137,14 +139,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
-      if (error != null) {
-        setState(() => _formError = error);
+      if (outcome.failed) {
+        setState(() => _formError = outcome.error);
         return;
       }
-      // The account exists but is not usable yet — the emailed code finishes
-      // it. The address goes with the callback so the verify screen never asks
-      // the resident to retype what they just entered.
-      widget.onRegisterSuccess(_emailCtrl.text.trim());
+      // The account exists but is not usable yet — the code finishes it. The
+      // address goes with the callback so the verify screen never asks the
+      // resident to retype what they just entered.
+      widget.onRegisterSuccess(_emailCtrl.text.trim(), outcome.delivery);
     } catch (error) {
       // `UserStore.register` converts an ApiException into a returned message
       // rather than throwing, so anything arriving here escaped the HTTP layer

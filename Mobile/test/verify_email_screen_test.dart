@@ -9,7 +9,11 @@
 //  * verifying hands back a signed-in resident, so the caller navigates into
 //    the app rather than to a login form;
 //  * resend is disabled during the cooldown, because the server answers 429
-//    inside it and the resident would be tapping into a refusal.
+//    inside it and the resident would be tapping into a refusal;
+//  * the screen names the channel the code was actually sent on. It is told
+//    that per send rather than assuming, because SMS is the primary channel
+//    and mail is the fallback for a number the vendor cannot dial — so the
+//    same resident can be texted once and mailed the next time.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +29,15 @@ class _FakeVerifyApi extends ApiService {
 
   int resendCalls = 0;
   Object? resendError;
+
+  /// What the server reports about the code the resend just sent. Settable so
+  /// a test can make the channel change under an open screen, which is what
+  /// happens when the vendor rejects a number and mail takes over.
+  VerificationDelivery? resendDelivery = const VerificationDelivery(
+    channel: 'sms',
+    sentTo: '4567',
+    retryAfter: 60,
+  );
 
   @override
   Future<Map<String, dynamic>> verifyEmail({
@@ -48,16 +61,21 @@ class _FakeVerifyApi extends ApiService {
   }
 
   @override
-  Future<void> resendVerificationCode({required String email}) async {
+  Future<VerificationDelivery?> resendVerificationCode({
+    required String email,
+  }) async {
     resendCalls++;
     final failure = resendError;
     if (failure != null) throw failure;
+
+    return resendDelivery;
   }
 }
 
 Future<_FakeVerifyApi> _pump(
   WidgetTester tester, {
   _FakeVerifyApi? api,
+  VerificationDelivery? delivery,
   void Function(AppUser)? onVerified,
   VoidCallback? onGoToLogin,
 }) async {
@@ -75,6 +93,7 @@ Future<_FakeVerifyApi> _pump(
     home: VerifyEmailScreen(
       userStore: UserStore(fake),
       email: 'grace@test.local',
+      delivery: delivery,
       onVerified: onVerified ?? (_) {},
       onGoToLogin: onGoToLogin ?? () {},
     ),
@@ -91,6 +110,67 @@ void main() {
     expect(find.textContaining('grace@test.local'), findsOneWidget);
   });
 
+  testWidgets('names the number when the code went by text', (tester) async {
+    await _pump(
+      tester,
+      delivery: const VerificationDelivery(
+        channel: 'sms',
+        sentTo: '4567',
+        retryAfter: 60,
+      ),
+    );
+
+    expect(find.text('Check your messages'), findsOneWidget);
+    expect(find.textContaining('ending in 4567'), findsOneWidget);
+    // The address is not what was used, so it must not be named.
+    expect(find.textContaining('grace@test.local'), findsNothing);
+  });
+
+  testWidgets('starts the countdown at what the server reported',
+      (tester) async {
+    // A login inside the cooldown sends no new code and reports the remainder,
+    // so the button must not re-enable a full minute later than it should.
+    await _pump(
+      tester,
+      delivery: const VerificationDelivery(
+        channel: 'sms',
+        sentTo: '4567',
+        retryAfter: 12,
+      ),
+    );
+
+    expect(find.text('Resend code in 12s'), findsOneWidget);
+  });
+
+  testWidgets('relabels itself when a resend falls back to email',
+      (tester) async {
+    final api = _FakeVerifyApi()
+      ..resendDelivery = const VerificationDelivery(
+        channel: 'email',
+        sentTo: 'grace@test.local',
+        retryAfter: 60,
+      );
+    await _pump(
+      tester,
+      api: api,
+      delivery: const VerificationDelivery(
+        channel: 'sms',
+        sentTo: '4567',
+        retryAfter: 0,
+      ),
+    );
+
+    expect(find.text('Check your messages'), findsOneWidget);
+
+    await tester.tap(find.text('Send a new code'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(api.resendCalls, 1);
+    expect(find.text('Check your email'), findsOneWidget);
+    expect(find.textContaining('grace@test.local'), findsOneWidget);
+  });
+
   testWidgets('refuses a short code without calling the server',
       (tester) async {
     final api = await _pump(tester);
@@ -100,7 +180,7 @@ void main() {
     await tester.pump();
 
     expect(api.verifyCalls, 0);
-    expect(find.text('Enter the 6-digit code from your email.'), findsWidgets);
+    expect(find.text('Enter the 6-digit code we sent you.'), findsWidgets);
   });
 
   testWidgets('sends a six-digit code and hands back the resident',

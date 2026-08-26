@@ -49,7 +49,7 @@ class AuthController extends Controller
             'status'        => 'Inactive',
         ]);
 
-        $this->sendVerificationCode($resident);
+        $channel = $this->sendVerificationCode($resident);
 
         // Still no token and still no 'message' key — the mobile client reads any
         // `message` on this response as an error to show the resident. A token is
@@ -60,7 +60,7 @@ class AuthController extends Controller
             'resident' => $resident,
             'verification_required' => true,
             'email_address' => $resident->email_address,
-        ], 201);
+        ] + $this->deliveryPayload($resident, $channel), 201);
     }
 
     /**
@@ -154,19 +154,19 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $this->sendVerificationCode($resident);
+        $channel = $this->sendVerificationCode($resident);
 
         return response()->json([
             'message' => 'A new code is on its way.',
             'code' => 'code_sent',
-        ]);
+        ] + $this->deliveryPayload($resident, $channel));
     }
 
     /**
      * The plain code exists only between these two lines. Everything stored is
      * hashed, so this is the single point where it can be sent.
      */
-    private function sendVerificationCode(Resident $resident): void
+    private function sendVerificationCode(Resident $resident): string
     {
         $code = $resident->issueVerificationCode();
 
@@ -176,14 +176,14 @@ class AuthController extends Controller
         // number the vendor cannot dial — the column is still email_verified_at
         // either way, because what is being proven is ownership of the account,
         // not of a particular channel.
-        if (PhilSms::configured() && PhilSms::normalize((string) $resident->phone_number) !== '') {
+        if ($this->smsIsUsableFor($resident)) {
             $response = app(PhilSms::class)->send(
                 [$resident->phone_number],
                 "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
             );
 
             if (PhilSms::accepted($response)) {
-                return;
+                return 'sms';
             }
 
             Log::warning('OTP SMS failed, falling back to email', [
@@ -195,6 +195,44 @@ class AuthController extends Controller
         Mail::to($resident->email_address)->send(
             new ResidentVerificationCode($resident, $code)
         );
+
+        return 'email';
+    }
+
+    /**
+     * Tells a client where the code it is waiting for actually went, and how
+     * long before another can be asked for.
+     *
+     * The channel is not knowable in advance — sendVerificationCode falls back
+     * to mail when the vendor cannot dial the number — so the screen that says
+     * "check your messages" has to be told after the fact rather than assuming.
+     *
+     * `sent_to` is the last four digits for SMS and the full address for mail:
+     * enough for a resident to recognise which of their own contacts it is,
+     * without writing a whole phone number into a response body.
+     */
+    /**
+     * Whether the vendor could carry a code to this resident at all. Only a
+     * send can prove it — the vendor can still reject a dialable number — so
+     * this is the question asked before trying, not a promise it worked.
+     */
+    private function smsIsUsableFor(Resident $resident): bool
+    {
+        return PhilSms::configured()
+            && PhilSms::normalize((string) $resident->phone_number) !== '';
+    }
+
+    private function deliveryPayload(Resident $resident, string $channel): array
+    {
+        $digits = preg_replace('/\D/', '', (string) $resident->phone_number);
+
+        return [
+            'channel' => $channel,
+            'sent_to' => $channel === 'sms'
+                ? substr($digits, -4)
+                : $resident->email_address,
+            'retry_after' => $resident->secondsUntilResendAllowed(),
+        ];
     }
 
     // Lets a client rebuild the signed-in user from a stored token. Without this,
@@ -356,11 +394,27 @@ class AuthController extends Controller
         // Checked after the password on purpose: answering before it would turn
         // this route into an oracle for which addresses have accounts.
         if (!$resident->hasVerifiedEmail()) {
+            // The client answers this by opening the code screen, so a code has
+            // to be in flight by the time it gets there. Without this the
+            // resident waited on a message nobody had sent and only got one by
+            // tapping Resend.
+            //
+            // Guarded by the same per-account cooldown the resend route uses,
+            // and for the same reason: PhilSMS bills every send and has no
+            // sandbox. Login is retried far more often than Resend is tapped,
+            // so an unguarded send here would be the most expensive line in
+            // the app. Inside the cooldown the outstanding code is still valid
+            // and still has most of its 15 minutes left, so there is nothing
+            // to reissue.
+            $channel = $resident->secondsUntilResendAllowed() === 0
+                ? $this->sendVerificationCode($resident)
+                : ($this->smsIsUsableFor($resident) ? 'sms' : 'email');
+
             return response()->json([
-                'message' => 'Please verify your email address to finish creating your account.',
+                'message' => 'Please enter the code we just sent to finish creating your account.',
                 'code' => 'email_unverified',
                 'email_address' => $resident->email_address,
-            ], 403);
+            ] + $this->deliveryPayload($resident, $channel), 403);
         }
 
         // There is deliberately NO `status` check here, unlike adminLogin above.

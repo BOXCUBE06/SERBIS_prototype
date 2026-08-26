@@ -331,6 +331,65 @@ class ResidentEmailVerificationTest extends TestCase
         $response->assertJsonMissingPath('token');
     }
 
+    public function test_logging_in_unverified_texts_a_fresh_code(): void
+    {
+        $first = $this->registerAndCaptureCode();
+
+        // Past the cooldown, so this login is entitled to send.
+        Resident::where('email_address', 'grace@test.local')
+            ->update(['verification_code_sent_at' => now()->subMinutes(5)]);
+
+        $response = $this->postJson('/api/resident/login', [
+            'email_address' => 'grace@test.local',
+            'password' => 'Password123',
+        ])->assertStatus(403);
+
+        $codes = $this->codesTexted();
+        $this->assertCount(2, $codes, 'The refused login must text a code of its own.');
+        $this->assertNotSame($first, $codes[1], 'The login must issue a new code, not resend the old one.');
+
+        // What the code screen needs to label itself and start its counter.
+        $response->assertJsonPath('channel', 'sms');
+        $response->assertJsonPath('sent_to', '4567');
+        // Not an exact 60: the countdown is measured from the moment the code
+        // was issued, and whole seconds are truncated.
+        $this->assertGreaterThan(55, $response->json('retry_after'));
+        $this->assertLessThanOrEqual(Resident::RESEND_COOLDOWN_SECONDS, $response->json('retry_after'));
+    }
+
+    public function test_logging_in_again_inside_the_cooldown_does_not_text_twice(): void
+    {
+        $this->registerAndCaptureCode();
+
+        // Registration just sent one, so the cooldown is running.
+        $response = $this->postJson('/api/resident/login', [
+            'email_address' => 'grace@test.local',
+            'password' => 'Password123',
+        ])->assertStatus(403);
+
+        $this->assertCount(1, $this->codesTexted(), 'A login inside the cooldown must not bill a second send.');
+        // Still told where the outstanding code went, and how long is left on it.
+        $response->assertJsonPath('channel', 'sms');
+        $this->assertGreaterThan(0, $response->json('retry_after'));
+    }
+
+    public function test_a_login_that_cannot_be_texted_falls_back_to_email(): void
+    {
+        $this->postJson('/api/register', $this->payload(['phone_number' => '12345']))
+            ->assertStatus(201);
+
+        Resident::where('email_address', 'grace@test.local')
+            ->update(['verification_code_sent_at' => now()->subMinutes(5)]);
+
+        $response = $this->postJson('/api/resident/login', [
+            'email_address' => 'grace@test.local',
+            'password' => 'Password123',
+        ])->assertStatus(403);
+
+        $response->assertJsonPath('channel', 'email');
+        $response->assertJsonPath('sent_to', 'grace@test.local');
+        Mail::assertSent(ResidentVerificationCode::class, 2);
+    }
     public function test_a_verified_resident_can_log_in(): void
     {
         $code = $this->registerAndCaptureCode();
