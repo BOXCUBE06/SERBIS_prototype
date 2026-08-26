@@ -146,7 +146,7 @@ void main() {
       expect(lines, contains('Condition: Not described'));
       expect(
         lines,
-        contains('Pick-up location not specified → destination not specified'),
+        contains('Address not specified → destination not specified'),
       );
     });
 
