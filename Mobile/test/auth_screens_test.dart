@@ -75,6 +75,15 @@ class _FakeAuthApi extends ApiService {
   /// The message `register` RETURNS — a server rejection, not an exception.
   String? registerMessage;
 
+  /// What a real 201 reports about the code it just sent. Fixed here because
+  /// no test in this file cares which channel it was — the ones that do live
+  /// in verify_email_screen_test.dart.
+  static const registerDelivery = VerificationDelivery(
+    channel: 'sms',
+    sentTo: '4567',
+    retryAfter: 60,
+  );
+
   /// Thrown by `register` when set. A different path from [registerMessage].
   Object? registerError;
 
@@ -113,7 +122,7 @@ class _FakeAuthApi extends ApiService {
   }
 
   @override
-  Future<String?> register({
+  Future<RegisterOutcome> register({
     required String firstName,
     String? middleName,
     required String lastName,
@@ -135,7 +144,11 @@ class _FakeAuthApi extends ApiService {
     final failure = registerError;
     if (failure != null) throw failure;
 
-    return registerMessage;
+    final message = registerMessage;
+
+    return message == null
+        ? const RegisterOutcome.sent(registerDelivery)
+        : RegisterOutcome.failed(message);
   }
 }
 
@@ -180,7 +193,8 @@ Future<_FakeAuthApi> _pumpLogin(
   String? infoMessage,
   void Function(AppUser)? onLoginSuccess,
   VoidCallback? onGoToRegister,
-  void Function(String email)? onEmailUnverified,
+  void Function(String email, VerificationDelivery? delivery)?
+      onEmailUnverified,
 }) async {
   // A phone-shaped viewport, but WIDER than a real phone on purpose. The
   // default 800x600 clips these forms and the offscreen rows never build; 360
@@ -201,7 +215,7 @@ Future<_FakeAuthApi> _pumpLogin(
       userStore: UserStore(fake),
       onLoginSuccess: onLoginSuccess ?? (_) {},
       onGoToRegister: onGoToRegister ?? () {},
-      onEmailUnverified: onEmailUnverified ?? (_) {},
+      onEmailUnverified: onEmailUnverified ?? (_, __) {},
       infoMessage: infoMessage,
     ),
   ));
@@ -213,7 +227,8 @@ Future<_FakeAuthApi> _pumpLogin(
 Future<_FakeAuthApi> _pumpRegister(
   WidgetTester tester, {
   _FakeAuthApi? api,
-  void Function(String email)? onRegisterSuccess,
+  void Function(String email, VerificationDelivery? delivery)?
+      onRegisterSuccess,
   VoidCallback? onGoToLogin,
 }) async {
   // Taller than the login screen: seven fields, a picker and a consent row.
@@ -228,7 +243,7 @@ Future<_FakeAuthApi> _pumpRegister(
     theme: buildAppTheme(),
     home: RegisterScreen(
       userStore: UserStore(fake),
-      onRegisterSuccess: onRegisterSuccess ?? (_) {},
+      onRegisterSuccess: onRegisterSuccess ?? (_, __) {},
       onGoToLogin: onGoToLogin ?? () {},
     ),
   ));
@@ -417,7 +432,7 @@ void main() {
         tester,
         api: api,
         onLoginSuccess: (_) => succeeded = true,
-        onEmailUnverified: (email) => routedTo = email,
+        onEmailUnverified: (email, _) => routedTo = email,
       );
 
       await tester.enterText(_field('Email address'), '  maria@example.com  ');
@@ -664,7 +679,7 @@ void main() {
       var succeeded = false;
       final api = await _pumpRegister(
         tester,
-        onRegisterSuccess: (_) => succeeded = true,
+        onRegisterSuccess: (_, __) => succeeded = true,
       );
 
       await _fillValidRegistration(tester);
@@ -707,7 +722,7 @@ void main() {
       await _pumpRegister(
         tester,
         api: api,
-        onRegisterSuccess: (_) => succeeded = true,
+        onRegisterSuccess: (_, __) => succeeded = true,
       );
 
       await _fillValidRegistration(tester);
@@ -731,7 +746,7 @@ void main() {
       await _pumpRegister(
         tester,
         api: api,
-        onRegisterSuccess: (_) => succeeded = true,
+        onRegisterSuccess: (_, __) => succeeded = true,
       );
 
       await _fillValidRegistration(tester);

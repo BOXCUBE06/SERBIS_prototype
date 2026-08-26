@@ -121,7 +121,7 @@ class UserStore {
 
   bool get hasSession => _api.isLoggedIn;
 
-  Future<String?> register({
+  Future<RegisterOutcome> register({
     required String firstName,
     String? middleName,
     required String lastName,
@@ -152,7 +152,9 @@ class UserStore {
     return AppUser.fromJson(json);
   }
 
-  Future<void> resendVerificationCode({required String email}) {
+  Future<VerificationDelivery?> resendVerificationCode({
+    required String email,
+  }) {
     return _api.resendVerificationCode(email: email);
   }
 

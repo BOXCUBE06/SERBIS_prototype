@@ -273,7 +273,7 @@ void main() {
       var signedOut = 0;
       api.onUnauthorized = () => signedOut++;
 
-      final message = await withResponse(
+      final outcome = await withResponse(
         (_) => json(401, <String, dynamic>{'message': 'Invalid credentials.'}),
         () => api.register(
           firstName: 'Maria',
@@ -285,7 +285,9 @@ void main() {
         ),
       );
 
-      expect(message, 'Invalid credentials.');
+      // register reports a rejection in its outcome rather than throwing, so
+      // the message travels as data.
+      expect(outcome.error, 'Invalid credentials.');
       expect(signedOut, 0);
       expect(api.isLoggedIn, isTrue, reason: 'the stored token is unrelated');
     });

@@ -117,6 +117,10 @@ class _AuthGateState extends State<AuthGate> {
   /// and by a login the server refused as unverified.
   String? _pendingVerificationEmail;
 
+  /// Where the code the resident is about to type was sent, and how much of
+  /// the resend cooldown is left. Null only if the server did not say.
+  VerificationDelivery? _pendingDelivery;
+
   @override
   void initState() {
     super.initState();
@@ -196,10 +200,11 @@ class _AuthGateState extends State<AuthGate> {
   /// the account is not usable until the emailed code comes back, and verifying
   /// issues a token, so a resident who finishes never sees a login screen at
   /// all on their first run.
-  void _afterRegister(String email) {
+  void _afterRegister(String email, VerificationDelivery? delivery) {
     setState(() {
       _view = _AuthView.verifyEmail;
       _pendingVerificationEmail = email;
+      _pendingDelivery = delivery;
       _loginInfoMessage = null;
     });
   }
@@ -247,10 +252,11 @@ class _AuthGateState extends State<AuthGate> {
             _loginInfoMessage = null;
           });
         },
-        onEmailUnverified: (email) {
+        onEmailUnverified: (email, delivery) {
           setState(() {
             _view = _AuthView.verifyEmail;
             _pendingVerificationEmail = email;
+            _pendingDelivery = delivery;
             _loginInfoMessage = null;
           });
         },
@@ -262,6 +268,7 @@ class _AuthGateState extends State<AuthGate> {
       return VerifyEmailScreen(
         userStore: _userStore,
         email: _pendingVerificationEmail!,
+        delivery: _pendingDelivery,
         // Verifying issues a token, so this is a real sign-in, not a hand-off
         // back to the login form.
         onVerified: _login,

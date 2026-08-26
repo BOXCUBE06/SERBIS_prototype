@@ -1,5 +1,7 @@
 library serbis.state.api_exception;
 
+import 'verification_delivery.dart';
+
 /// A failed API call. Carries the HTTP status so callers can tell a dead
 /// network (`statusCode == null`) from a real rejection, and a message that is
 /// already safe to show a resident.
@@ -16,7 +18,17 @@ class ApiException implements Exception {
   /// the message text, which is written for a person and changes freely.
   final String? code;
 
-  const ApiException(this.message, {this.statusCode, this.code});
+  /// Set when the rejection still put a code in flight — the 403 that turns a
+  /// login into a verification screen sends one, and reports here where it
+  /// went. Null on every other failure.
+  final VerificationDelivery? delivery;
+
+  const ApiException(
+    this.message, {
+    this.statusCode,
+    this.code,
+    this.delivery,
+  });
 
   /// The account exists and the password was right, but the address was never
   /// verified. The register flow left it half-finished; the resident resumes at
@@ -29,6 +41,10 @@ class ApiException implements Exception {
 
   /// No response at all — offline, wrong base URL, or a timeout.
   bool get isNetwork => statusCode == null;
+
+  /// Seconds the server says to wait before asking for another code. Present
+  /// on `resend_too_soon` and on the unverified-login refusal.
+  int? get retryAfter => delivery?.retryAfter;
 
   @override
   String toString() => message;

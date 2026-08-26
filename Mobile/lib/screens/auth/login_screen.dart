@@ -16,7 +16,8 @@ class LoginScreen extends StatefulWidget {
 
   /// The credentials were right but the address is unverified. Carries it so
   /// the verify screen can resume a registration that was left half-finished.
-  final void Function(String email) onEmailUnverified;
+  final void Function(String email, VerificationDelivery? delivery)
+      onEmailUnverified;
   final String? infoMessage;
 
   const LoginScreen({
@@ -63,8 +64,12 @@ class _LoginScreenState extends State<LoginScreen> {
       // An abandoned registration: the password was right, the address was
       // never verified. Sending them to the code screen is the only useful
       // answer — an error on this form leaves them with nothing to do.
+      //
+      // The refusal sent a fresh code on its way out, so the delivery details
+      // ride along: without them the code screen would have to guess which
+      // channel it went by and start its cooldown from zero.
       if (e.isEmailUnverified) {
-        widget.onEmailUnverified(_emailCtrl.text.trim());
+        widget.onEmailUnverified(_emailCtrl.text.trim(), e.delivery);
         return;
       }
       // Already resident-readable: "Invalid resident credentials." on a bad

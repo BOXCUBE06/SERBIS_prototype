@@ -10,15 +10,22 @@ import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/form_inputs.dart';
 
-/// The second half of registration: the code from the email comes back here.
+/// The second half of registration: the code the server sent comes back here.
 ///
 /// Reached two ways — straight after registering, and from the login screen
-/// when the server refuses an unverified account. Both hand it the address, so
-/// the resident never retypes it and the code can only ever be checked against
-/// the account it was issued for.
+/// when the server refuses an unverified account. Both send a code on the way
+/// here and both hand over the address, so the resident never retypes it and
+/// the code can only ever be checked against the account it was issued for.
 class VerifyEmailScreen extends StatefulWidget {
   final UserStore userStore;
   final String email;
+
+  /// Which channel carried the code and how long is left on the resend
+  /// cooldown, as reported by whichever call sent it. Null when the server did
+  /// not say, and the screen then falls back to naming the email address and
+  /// assuming a full cooldown.
+  final VerificationDelivery? delivery;
+
   final void Function(AppUser user) onVerified;
   final VoidCallback onGoToLogin;
 
@@ -26,6 +33,7 @@ class VerifyEmailScreen extends StatefulWidget {
     super.key,
     required this.userStore,
     required this.email,
+    required this.delivery,
     required this.onVerified,
     required this.onGoToLogin,
   });
@@ -44,6 +52,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   String? _error;
   String? _notice;
 
+  /// Starts as whatever brought the resident here reported, and is replaced on
+  /// every resend: a text the vendor rejects falls back to mail, so the channel
+  /// can change under a screen that is already open.
+  VerificationDelivery? _delivery;
+
   /// Mirrors the server's per-account cooldown so the resident sees a counter
   /// instead of tapping resend into a 429.
   int _resendIn = 0;
@@ -52,9 +65,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   void initState() {
     super.initState();
+    _delivery = widget.delivery;
     // A code was just sent by whatever brought us here, so the cooldown is
-    // already running server-side.
-    _startCooldown(60);
+    // already running server-side. Seeding it from the server's own count is
+    // what stops the button re-enabling before a send would be accepted.
+    _startCooldown(
+      _delivery?.retryAfter ?? VerificationDelivery.fallbackCooldownSeconds,
+    );
   }
 
   @override
@@ -86,7 +103,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     // Checked here as well as on the server so an obviously-wrong length never
     // costs a round trip, and never burns one of the five attempts a minute.
     if (code.length != 6) {
-      setState(() => _error = 'Enter the 6-digit code from your email.');
+      setState(() => _error = 'Enter the 6-digit code we sent you.');
       return;
     }
 
@@ -124,17 +141,27 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
 
     try {
-      await widget.userStore.resendVerificationCode(email: widget.email);
+      final delivery =
+          await widget.userStore.resendVerificationCode(email: widget.email);
       if (!mounted) return;
-      setState(() => _notice = 'A new code is on its way.');
-      _startCooldown(60);
+      setState(() {
+        _notice = 'A new code is on its way.';
+        // Relabels the screen when the channel changed — a number the vendor
+        // could not text this time falls back to mail.
+        if (delivery != null) _delivery = delivery;
+      });
+      _startCooldown(
+        delivery?.retryAfter ?? VerificationDelivery.fallbackCooldownSeconds,
+      );
     } on ApiException catch (e) {
       AppLog.error(_logArea, 'resend', status: e.statusCode, reason: e.message);
       if (!mounted) return;
       setState(() => _error = e.message);
       // The server knows the real remaining wait; trust it over the local clock.
       if (e.code == 'resend_too_soon') {
-        _startCooldown(60);
+        _startCooldown(
+          e.retryAfter ?? VerificationDelivery.fallbackCooldownSeconds,
+        );
       }
     } catch (error) {
       AppLog.error(_logArea, 'resend', reason: error.toString());
@@ -145,9 +172,28 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
   }
 
+  /// Names the channel the code actually went out on. Falls back to the email
+  /// address, which is the one contact detail this screen is always given.
+  String get _sentToLine {
+    final delivery = _delivery;
+
+    if (delivery == null) {
+      return 'We sent a 6-digit code to ${widget.email}.';
+    }
+    if (delivery.bySms) {
+      return delivery.sentTo.isEmpty
+          ? 'We sent a 6-digit code by text message to your phone.'
+          : 'We sent a 6-digit code by text message to the number ending in '
+              '${delivery.sentTo}.';
+    }
+    return 'We sent a 6-digit code to '
+        '${delivery.sentTo.isEmpty ? widget.email : delivery.sentTo}.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final canResend = _resendIn <= 0 && !_resending && !_submitting;
+    final bySms = _delivery?.bySms ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -158,14 +204,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 24),
-              const Text(
-                'Check your email',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              Text(
+                bySms ? 'Check your messages' : 'Check your email',
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                'We sent a 6-digit code to ${widget.email}. '
-                'Enter it below to finish creating your account.',
+                '$_sentToLine Enter it below to finish creating your account.',
                 style: const TextStyle(fontSize: 15, height: 1.5),
               ),
               const SizedBox(height: 24),

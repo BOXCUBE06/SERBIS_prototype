@@ -8,8 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_exception.dart';
 import 'app_log.dart';
+import 'verification_delivery.dart';
 
 export 'api_exception.dart';
+export 'verification_delivery.dart';
 
 class ApiService {
   /// Log area for everything in this file. Every line the HTTP layer writes
@@ -267,6 +269,8 @@ class ApiService {
       message,
       statusCode: status,
       code: code is String ? code : null,
+      // A refusal can still have sent a code — see [VerificationDelivery].
+      delivery: VerificationDelivery.fromJson(body),
     );
   }
 
@@ -299,7 +303,10 @@ class ApiService {
     return 'Request failed ($status).';
   }
 
-  Future<String?> register({
+  /// Creates the account and asks the server to send the first code. The
+  /// returned outcome carries either the message to show on the form or the
+  /// delivery details the code screen needs.
+  Future<RegisterOutcome> register({
     required String firstName,
     String? middleName,
     required String lastName,
@@ -311,7 +318,7 @@ class ApiService {
     try {
       // No 'role': it is not a column on tbl_residents and the server assigns
       // status itself. barangay_id and phone_number are both required there.
-      await _post(
+      final data = await _post(
         '/register',
         {
           'first_name': firstName,
@@ -327,9 +334,9 @@ class ApiService {
         isAuthEndpoint: true,
       );
 
-      return null;
+      return RegisterOutcome.sent(VerificationDelivery.fromJson(data));
     } on ApiException catch (e) {
-      return e.message;
+      return RegisterOutcome.failed(e.message);
     }
   }
 
@@ -375,12 +382,18 @@ class ApiService {
   /// Asks for a replacement code. The server refuses inside its cooldown with
   /// 429 and a `retry_after`, which surfaces as an [ApiException] carrying
   /// `code == 'resend_too_soon'`.
-  Future<void> resendVerificationCode({required String email}) async {
-    await _post(
+  Future<VerificationDelivery?> resendVerificationCode({
+    required String email,
+  }) async {
+    final data = await _post(
       '/resident/verify-email/resend',
       {'email_address': email},
       isAuthEndpoint: true,
     );
+
+    // The channel can differ from the one the last code went out on, so the
+    // screen relabels itself from this rather than keeping its first answer.
+    return VerificationDelivery.fromJson(data);
   }
 
   /// Rebuilds the signed-in resident from a stored token on relaunch.
