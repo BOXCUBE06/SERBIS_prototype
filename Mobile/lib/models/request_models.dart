@@ -101,7 +101,7 @@ extension ServiceTypeX on ServiceType {
 
   String get subtitle {
     if (this == ServiceType.ambulance) {
-      return 'Pick-up & drop-off';
+      return 'Patient transport';
     }
     if (this == ServiceType.transfer) {
       return 'Incl. dialysis patients';

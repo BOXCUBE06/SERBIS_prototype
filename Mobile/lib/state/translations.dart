@@ -27,7 +27,7 @@ const Map<String, (String, String)> _strings = {
   'status.disapproved': ('Not approved', 'Hindi inaprubahan'),
 
   'type.ambulance.title': ('Medical Transport / Ambulance', 'Medical Transport / Ambulansya'),
-  'type.ambulance.subtitle': ('Pick-up & drop-off', 'Pagsundo at paghatid'),
+  'type.ambulance.subtitle': ('Patient transport', 'Paghahatid ng pasyente'),
   'type.transfer.title': ('Hospital Transfer', 'Paglilipat sa Ospital'),
   'type.transfer.subtitle': ('Incl. dialysis patients', 'Kasama ang mga dialysis patient'),
   'type.road.title': ('Road Clearing', 'Paglinis ng Daan'),

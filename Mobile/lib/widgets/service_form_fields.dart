@@ -27,7 +27,7 @@ class ServiceFormFields extends StatelessWidget {
             controller: form.patient,
           ),
           AppTextField(
-            label: 'Pick-up location',
+            label: 'Address',
             hint: 'Purok / street, barangay',
             controller: form.pickup,
           ),

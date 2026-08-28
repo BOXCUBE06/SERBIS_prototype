@@ -69,7 +69,7 @@ class AmbulanceFormData extends ServiceFormData {
       [
         serviceName,
         'Patient: ${_or(patient, 'Not specified')}',
-        '${_or(pickup, 'Pick-up location not specified')} → '
+        '${_or(pickup, 'Address not specified')} → '
             '${_or(destination, 'destination not specified')}',
         'Condition: ${_or(condition, 'Not described')}',
         'Contact: ${_contactLine(contactNumber)}',
