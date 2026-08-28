@@ -30,7 +30,25 @@ return [
         env('APP_ENV') === 'local' ? env('MOBILE_DEV_URL') : null,
     ]),
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        // Vercel gives every push its own generated hostname, so a preview
+        // deploy can never be named in ADMIN_FRONTEND_URL ahead of time. Two
+        // shapes exist and both are matched here:
+        //
+        //   serbis-prototype-1zky96pn2-absolute3-js.vercel.app   (deployment)
+        //   serbis-prototype-git-main-absolute3-js.vercel.app    (branch alias)
+        //
+        // The middle segment allows hyphens because a branch alias puts the
+        // branch name there. It stays pinned between this project's prefix and
+        // this team's slug, so it admits only our own previews - not every
+        // *.vercel.app site. Team slug is 'absolute3-js', hyphen included; it
+        // is not the 'Absolute3Js' display name.
+        //
+        // The production host, serbis-prototype.vercel.app, deliberately does
+        // NOT match: it has no middle segment and is named outright by
+        // ADMIN_FRONTEND_URL in allowed_origins above.
+        '#^https://serbis-prototype-[a-z0-9-]+-absolute3-js\.vercel\.app$#i',
+    ],
 
     'allowed_headers' => ['Content-Type', 'Authorization', 'X-Requested-With'],
 
