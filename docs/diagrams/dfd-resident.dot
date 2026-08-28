@@ -1,0 +1,182 @@
+/*
+ * SERBIS — Data Flow Diagram, Level 1: Resident (processes 1.x)
+ *
+ * Gane-Sarson notation: external entities left, numbered processes centre,
+ * open-ended data stores right, one row per process. External entities and
+ * data stores are repeated per row, as Gane-Sarson permits, so that no flow
+ * line has to cross the diagram.
+ *
+ * Every process corresponds to routes that actually exist in
+ * Backend/SERBIS-Backend/routes/api.php; the routes are named in the comment
+ * above each process. Nothing is drawn from a capability the API does not
+ * expose to a resident.
+ *
+ * Black and white, to match the existing figures.
+ *
+ * LAYOUT NOTES
+ *   - rankdir = LR, so a rank is a column: entities | processes | data stores.
+ *     Flows that logically run store -> process are written process -> store
+ *     with dir = back, so the arrowhead still points at the process but the
+ *     store can never be pulled into a left-hand rank.
+ *   - Row order top-to-bottom follows the process number; the invisible
+ *     chains at the foot of the file pin it, and the store chain is listed in
+ *     process order so each store sits beside the row that uses it.
+ *   - ranksep is deliberately small. Every labelled edge already gets its own
+ *     label rank, so the label bands supply the separation between columns; a
+ *     large ranksep only adds empty page that `size` then scales the text down
+ *     to pay for.
+ *
+ * TYPOGRAPHY NOTE — why the font sizes look large in this source
+ *   `size` scales the finished drawing down to fit the page, and the font
+ *   sizes below are pre-scale values. The drawing lays out at 14.15 x 19.07
+ *   in and is scaled by 0.447 to reach 6.32 x 8.52 in, so the authored
+ *   21 pt / 16 pt print at roughly 9.4 pt / 7.1 pt.
+ *
+ *   That is the ceiling for this figure at a 6.5 in text width, and it was
+ *   measured, not assumed: raising the authored sizes from 14/11 to 31/24
+ *   moved the printed result only from 8.4/6.6 pt to 9.3/7.1 pt, because the
+ *   drawing grows at the same rate the font does and `size` cancels the gain.
+ *   The width is spent on two bands of edge-label text (~3.4 in) that cannot
+ *   shrink while the flow labels keep their present wording. To print at a
+ *   true 14 pt / 11 pt the figure would have to give up the edge-label bands
+ *   (numbered flows plus a key beneath the figure) — a content decision, so
+ *   it is deliberately not done here.
+ *
+ *   The trailing comma in "Times New Roman," is required: without it Pango
+ *   parses "Roman" as a style keyword, fails to find family "Times New", and
+ *   silently falls back to Sans.
+ *
+ * Render:  dot -Tpng -Gdpi=300 -o dfd-resident.png dfd-resident.dot
+ */
+digraph SERBIS_DFD_RESIDENT {
+    graph [
+        rankdir = LR,
+        pad = 0.20,
+        splines = spline,
+        nodesep = 0.22,
+        ranksep = 0.30,
+        size = "6.5,9",
+        newrank = true,
+        fontname = "Times New Roman,",
+        fontsize = 21,
+        labelloc = "t",
+        label = <<FONT FACE="Times New Roman," POINT-SIZE="24"><B>Figure — Data Flow Diagram Level 1: Resident</B></FONT>>
+    ];
+    node [fontname = "Times New Roman,", fontsize = 21, color = black, fillcolor = white, style = filled];
+    edge [fontname = "Times New Roman,", fontsize = 16, color = black, arrowsize = 0.7];
+
+    /* ---- external entities ------------------------------------------ */
+    node [shape = box, width = 1.88, height = 0.93, fixedsize = true];
+    e11 [label = "Resident"];
+    e12 [label = "Resident"];
+    e13 [label = "Resident"];
+    e14 [label = "Resident"];
+    e15 [label = "Resident"];
+    e16 [label = "Resident"];
+
+    /* ---- processes ---------------------------------------------------
+     * Gane-Sarson rounded box. Process number bold on its own line, name
+     * underneath, so the number reads as a label and not as a prefix.
+     */
+    node [shape = box, style = "filled,rounded", width = 3.08, height = 1.43, fixedsize = true];
+
+    /* POST /register · POST /resident/verify-email ·
+       POST /resident/verify-email/resend · GET /barangays */
+    p11 [label = <<B>1.1</B><BR/>Register and<BR/>Verify Account>];
+
+    /* POST /resident/login · POST /logout · GET /me */
+    p12 [label = <<B>1.2</B><BR/>Authenticate<BR/>Resident>];
+
+    /* PATCH /me · POST /me/photo · DELETE /me/photo */
+    p13 [label = <<B>1.3</B><BR/>Maintain<BR/>Profile>];
+
+    /* GET /services · POST /service-requests · GET /service-requests ·
+       GET /service-requests/{id} · /valid-id · /site-photo ·
+       PATCH /service-requests/{id}/cancel */
+    p14 [label = <<B>1.4</B><BR/>File and Track<BR/>Service Request>];
+
+    /* GET /equipments · POST /borrowings · GET /borrowings ·
+       GET /borrowings/{id} */
+    p15 [label = <<B>1.5</B><BR/>Request Equipment<BR/>Borrowing>];
+
+    /* GET /advisories · GET /info-materials */
+    p16 [label = <<B>1.6</B><BR/>Read Advisories<BR/>and Materials>];
+
+    /* ---- data stores: open-ended on the right ------------------------
+     * One fixed cell geometry for every store, so no box is wider than any
+     * other and the D-number compartments line up down the column.
+     */
+    node [shape = plaintext, style = "", width = 0, height = 0, fixedsize = false];
+    d_barangay [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D1</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_barangay</TD></TR></TABLE>>];
+    d_res1     [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D2</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_residents</TD></TR></TABLE>>];
+    d_res2     [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D2</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_residents</TD></TR></TABLE>>];
+    d_res3     [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D2</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_residents</TD></TR></TABLE>>];
+    d_tok1     [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D3</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">personal_access_tokens</TD></TR></TABLE>>];
+    d_log1     [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D4</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_system_logs</TD></TR></TABLE>>];
+    d_svc      [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D5</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_services</TD></TR></TABLE>>];
+    d_req      [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D6</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_service_request</TD></TR></TABLE>>];
+    d_equip    [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D7</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_equipments</TD></TR></TABLE>>];
+    d_borrow   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D8</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_equipment_borrowing</TD></TR></TABLE>>];
+    /* two tables behind one store: stacked, not run together on one line */
+    d_sms      [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D9</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT" BALIGN="LEFT">tbl_sms_logs<BR/>tbl_recipients</TD></TR></TABLE>>];
+    d_info     [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="285" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D10</B></TD><TD BORDER="1" SIDES="TB" WIDTH="233" HEIGHT="66" ALIGN="LEFT">tbl_info_materials</TD></TR></TABLE>>];
+
+    /* PhilSMS is an external entity, not a store. It sits on the right because
+       process 1.1 is the only resident-side process that reaches it. */
+    node [shape = box, style = filled, width = 2.33, height = 0.93, fixedsize = true];
+    philsms [label = "PhilSMS\nSMS Gateway"];
+
+    /* ---- 1.1 Register and Verify Account ----------------------------- */
+    e11 -> p11 [label = "  registration details,\l  barangay selection,\l  verification code\l"];
+    e11 -> p11 [dir = back, label = "  barangay list,\l  verification outcome\l"];
+    p11 -> d_barangay [label = "  read"];
+    p11 -> d_res1 [label = "  new resident row,\l  hashed code, expiry\l"];
+    p11 -> d_res1 [dir = back, label = "  stored code\l"];
+    p11 -> philsms [label = "  code by SMS\l  (e-mail on fallback)\l"];
+
+    /* ---- 1.2 Authenticate Resident ------------------------------------ */
+    e12 -> p12 [label = "  e-mail address,\l  password\l"];
+    e12 -> p12 [dir = back, label = "  access token,\l  own profile\l"];
+    p12 -> d_res2 [dir = back, label = "  credential check\l"];
+    p12 -> d_tok1 [label = "  issued / revoked\l  token\l"];
+
+    /* ---- 1.3 Maintain Profile ----------------------------------------- */
+    e13 -> p13 [label = "  name, phone number,\l  SMS opt-in, photo file\l"];
+    e13 -> p13 [dir = back, label = "  updated profile\l"];
+    p13 -> d_res3 [label = "  profile changes,\l  photo path\l"];
+    p13 -> d_log1 [label = "  audit entry\l"];
+
+    /* ---- 1.4 File and Track Service Request ---------------------------- */
+    e14 -> p14 [label = "  chosen service, description,\l  valid ID, site photo,\l  cancellation\l"];
+    e14 -> p14 [dir = back, label = "  service catalogue,\l  own requests, status,\l  remarks\l"];
+    p14 -> d_svc [dir = back, label = "  service list\l"];
+    p14 -> d_req [label = "  new request,\l  Cancelled status\l"];
+    p14 -> d_req [dir = back, label = "  own request rows\l"];
+
+    /* ---- 1.5 Request Equipment Borrowing ------------------------------- */
+    e15 -> p15 [label = "  item and quantity\l"];
+    e15 -> p15 [dir = back, label = "  available items,\l  borrowing status,\l  due date\l"];
+    p15 -> d_equip [dir = back, label = "  availability\l"];
+    p15 -> d_borrow [label = "  Pending borrowing\l"];
+    p15 -> d_borrow [dir = back, label = "  own borrowings\l"];
+
+    /* ---- 1.6 Read Advisories and Materials ----------------------------- */
+    e16 -> p16 [label = "  request for advisories,\l  request for materials\l"];
+    e16 -> p16 [dir = back, label = "  advisories addressed to\l  this resident, published\l  materials with file links\l"];
+    p16 -> d_sms [dir = back, label = "  blasts this resident\l  was a recipient of\l"];
+    p16 -> d_info [dir = back, label = "  published materials\l"];
+
+    /* ---- column pinning and row order ----------------------------------
+     * rankdir=LR makes a rank a column, so each stripe is a rank=same group.
+     * The invisible chains inside each group fix the top-to-bottom order;
+     * without them dot is free to reorder rows to shorten edges.
+     */
+    { rank = same; e11; e12; e13; e14; e15; e16; }
+    { rank = same; p11; p12; p13; p14; p15; p16; }
+    { rank = same; d_barangay; d_res1; philsms; d_res2; d_tok1; d_res3; d_log1; d_svc; d_req; d_equip; d_borrow; d_sms; d_info; }
+
+    edge [style = invis, weight = 100];
+    e11 -> e12 -> e13 -> e14 -> e15 -> e16;
+    p11 -> p12 -> p13 -> p14 -> p15 -> p16;
+    d_barangay -> d_res1 -> philsms -> d_res2 -> d_tok1 -> d_res3 -> d_log1 -> d_svc -> d_req -> d_equip -> d_borrow -> d_sms -> d_info;
+}

@@ -1,0 +1,221 @@
+/*
+ * SERBIS — Data Flow Diagram, Level 1: Admin / MDRRMO Personnel (processes 2.x)
+ *
+ * Gane-Sarson notation: external entities left, numbered processes centre,
+ * open-ended data stores right, one row per process. Entities and stores are
+ * repeated per row so that no flow line crosses the diagram.
+ *
+ * Coverage: every admin-only route inside the `is.admin` group of
+ * Backend/SERBIS-Backend/routes/api.php is accounted for by exactly one
+ * process; the routes each process covers are named in the comment above it.
+ * Related CRUD routes are grouped into a single process to keep the figure
+ * readable — no route is omitted.
+ *
+ * Black and white, to match the existing figures.
+ *
+ * LAYOUT NOTES
+ *   - rankdir = LR, so a rank is a column: entities | processes | data stores.
+ *     Flows that logically run store -> process are written process -> store
+ *     with dir = back, so the arrowhead still points at the process but the
+ *     store can never be pulled into a left-hand rank. Without this the whole
+ *     store rank collapses into the entity rank — which is exactly what the
+ *     previous revision of this file did, leaving two columns instead of
+ *     three, with stores and entities interleaved down the left-hand side.
+ *   - Row order top-to-bottom follows the process number; the invisible
+ *     chains at the foot of the file pin it, and the store chain is listed in
+ *     process order so each store sits beside the row that uses it.
+ *   - ranksep is deliberately small. Every labelled edge already gets its own
+ *     label rank, so the label bands supply the separation between columns; a
+ *     large ranksep only adds empty page that `size` then scales the text down
+ *     to pay for.
+ *
+ * TYPOGRAPHY NOTE — why the font sizes look large in this source
+ *   `size` scales the finished drawing down to fit the page, so the sizes
+ *   below are pre-scale values, not printed points. See dfd-resident.dot for
+ *   the measured sweep behind these numbers.
+ *
+ *   The trailing comma in "Times New Roman," is required: without it Pango
+ *   parses "Roman" as a style keyword, fails to find family "Times New", and
+ *   silently falls back to Sans.
+ *
+ * Render:  dot -Tpng -Gdpi=300 -o dfd-admin.png dfd-admin.dot
+ */
+digraph SERBIS_DFD_ADMIN {
+    /* ------------------------------------------------------------------
+     * 1. GRAPH, NODE, AND EDGE DEFAULTS
+     * ------------------------------------------------------------------ */
+    graph [
+        rankdir = LR,
+        pad = 0.20,
+        splines = spline,
+        nodesep = 0.10,
+        ranksep = 0.30,
+        size = "6.5,9",
+        newrank = true,
+        fontname = "Times New Roman,",
+        fontsize = 21,
+        labelloc = "t",
+        label = <<FONT FACE="Times New Roman," POINT-SIZE="24"><B>Figure — Data Flow Diagram Level 1: Admin (MDRRMO Personnel)</B></FONT>>
+    ];
+    node [fontname = "Times New Roman,", fontsize = 21, color = black, fillcolor = white, style = filled];
+    edge [fontname = "Times New Roman,", fontsize = 16, color = black, arrowsize = 0.7];
+
+    /* ------------------------------------------------------------------
+     * 2. EXTERNAL ENTITIES
+     * ------------------------------------------------------------------ */
+    node [shape = box, width = 2.75, height = 0.93, fixedsize = true];
+
+    a21 [label = "Admin\n(MDRRMO Personnel)"];
+    a22 [label = "Admin\n(MDRRMO Personnel)"];
+    a23 [label = "Admin\n(MDRRMO Personnel)"];
+    a24 [label = "Admin\n(MDRRMO Personnel)"];
+    a25 [label = "Admin\n(MDRRMO Personnel)"];
+    a26 [label = "Admin\n(MDRRMO Personnel)"];
+    a27 [label = "Admin\n(MDRRMO Personnel)"];
+    a28 [label = "Admin\n(MDRRMO Personnel)"];
+    a29 [label = "Admin\n(MDRRMO Personnel)"];
+
+    /* ------------------------------------------------------------------
+     * 3. PROCESSES
+     * Gane-Sarson rounded box. Process number bold on its own line, name
+     * underneath, so the number reads as a label and not as a prefix.
+     * ------------------------------------------------------------------ */
+    node [shape = box, style = "filled,rounded", width = 3.30, height = 1.43, fixedsize = true];
+
+    /* POST /admin/login · POST /logout · GET /me */
+    p21 [label = <<B>2.1</B><BR/>Authenticate<BR/>Admin>];
+
+    /* GET /admin/service-requests · POST /admin/service-requests (walk-in) · PUT /service-requests/{id} · DELETE /service-requests/{id} · GET /service-requests/{id}/valid-id · /site-photo */
+    p22 [label = <<B>2.2</B><BR/>Manage Service<BR/>Requests>];
+
+    /* POST /sms/blast · GET /logs/sms */
+    p23 [label = <<B>2.3</B><BR/>Broadcast<BR/>Advisory SMS>];
+
+    /* apiResource residents · GET residents/{id}/photo · apiResource admins · PATCH admins/{id}/reactivate */
+    p24 [label = <<B>2.4</B><BR/>Manage Resident and<BR/>Staff Accounts>];
+
+    /* apiResource services (except index, show) · apiResource barangays (except index, show) */
+    p25 [label = <<B>2.5</B><BR/>Maintain Services<BR/>and Barangays>];
+
+    /* apiResource equipments (except index, show) · apiResource borrowings (update, destroy) */
+    p26 [label = <<B>2.6</B><BR/>Manage Equipment<BR/>and Borrowings>];
+
+    /* apiResource vehicles */
+    p27 [label = <<B>2.7</B><BR/>Manage Vehicle<BR/>Fleet>];
+
+    /* apiResource conduction-requests (index, store, show) · PATCH conduction-requests/{id}/trip-log */
+    p28 [label = <<B>2.8</B><BR/>File Conduction<BR/>Request and Trip Log>];
+
+    /* GET /admin/info-materials · POST /admin/info-materials · DELETE /admin/info-materials/{id} · GET /admin/dashboard · GET /logs/system */
+    p29 [label = <<B>2.9</B><BR/>Publish Materials and<BR/>Monitor Dashboard>];
+
+    /* ------------------------------------------------------------------
+     * 4. DATA STORES
+     * One fixed cell geometry for every store, so no box is wider than any
+     * other and the D-number compartments line up down the column.
+     * ------------------------------------------------------------------ */
+    node [shape = plaintext, style = "", width = 0, height = 0, fixedsize = false];
+
+    s_user1  [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D1</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_user</TD></TR></TABLE>>];
+    s_user2  [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D1</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_user</TD></TR></TABLE>>];
+
+    s_tok    [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D2</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">personal_access_tokens</TD></TR></TABLE>>];
+    s_req    [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D3</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_service_request</TD></TR></TABLE>>];
+
+    s_log1   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D4</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_system_logs</TD></TR></TABLE>>];
+    s_log2   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D4</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_system_logs</TD></TR></TABLE>>];
+
+    /* two tables behind one store: stacked, not run together on one line */
+    s_sms    [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D5</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT" BALIGN="LEFT">tbl_sms_logs<BR/>tbl_recipients</TD></TR></TABLE>>];
+
+    s_res1   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D6</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_residents</TD></TR></TABLE>>];
+    s_res2   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D6</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_residents</TD></TR></TABLE>>];
+
+    s_svc    [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D7</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_services</TD></TR></TABLE>>];
+    s_brgy   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D8</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_barangay</TD></TR></TABLE>>];
+    s_equip  [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D9</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_equipments</TD></TR></TABLE>>];
+    s_borrow [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D10</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_equipment_borrowing</TD></TR></TABLE>>];
+    s_veh    [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D11</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_vehicles</TD></TR></TABLE>>];
+    s_cond   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D12</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_conduction_requests</TD></TR></TABLE>>];
+    s_people [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D13</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_conduction_request_people</TD></TR></TABLE>>];
+    s_info   [label = <<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" FIXEDSIZE="TRUE" WIDTH="345" HEIGHT="66"><TR><TD BORDER="1" SIDES="LTB" WIDTH="52" HEIGHT="66" ALIGN="CENTER"><B>D14</B></TD><TD BORDER="1" SIDES="TB" WIDTH="293" HEIGHT="66" ALIGN="LEFT">tbl_info_materials</TD></TR></TABLE>>];
+
+    /* PhilSMS is an external entity, not a store. It sits on the right because
+       process 2.3 is the only admin-side process that reaches it. */
+    node [shape = box, style = filled, width = 2.33, height = 0.93, fixedsize = true];
+    philsms [label = "PhilSMS\nSMS Gateway"];
+
+    /* ------------------------------------------------------------------
+     * 5. DATA FLOWS (Grouped by Process)
+     * ------------------------------------------------------------------ */
+
+    /* 2.1 Authenticate Admin */
+    a21 -> p21     [label = "  e-mail address,\l  password\l"];
+    a21 -> p21     [dir = back, label = "  access token,\l  own account\l"];
+    p21 -> s_user1 [dir = back, label = "  credential and\l  status check\l"];
+    p21 -> s_tok   [label = "  issued / revoked\l  token\l"];
+
+    /* 2.2 Manage Service Requests */
+    a22 -> p22     [label = "  status decision, remarks,\l  assigned vehicle,\l  walk-in name and contact\l"];
+    a22 -> p22     [dir = back, label = "  request queue, resident\l  details, valid ID and\l  site photo\l"];
+    p22 -> s_req   [dir = back, label = "  request rows\l"];
+    p22 -> s_req   [label = "  status, remarks,\l  processed_by,\l  walk-in request\l"];
+    p22 -> s_log1  [label = "  audit entry\l"];
+
+    /* 2.3 Broadcast Advisory SMS */
+    a23 -> p23     [label = "  message body,\l  target barangay\l"];
+    a23 -> p23     [dir = back, label = "  send outcome,\l  blast history\l"];
+    p23 -> s_res1  [dir = back, label = "  opted-in numbers\l  in the barangay\l"];
+    p23 -> philsms [label = "  recipient numbers,\l  message body\l"];
+    p23 -> philsms [dir = back, label = "  acceptance status,\l  provider job id\l"];
+    p23 -> s_sms   [label = "  blast row,\l  one recipient row\l  per resident\l"];
+
+    /* 2.4 Manage Resident and Staff Accounts */
+    a24 -> p24     [label = "  resident and staff details,\l  status change, reactivation\l"];
+    a24 -> p24     [dir = back, label = "  account listings,\l  resident photo\l"];
+    p24 -> s_res2  [label = "  resident record\l"];
+    p24 -> s_user2 [label = "  staff record,\l  Active / Inactive\l"];
+
+    /* 2.5 Maintain Services and Barangays */
+    a25 -> p25     [label = "  service name, category,\l  description; barangay name\l"];
+    a25 -> p25     [dir = back, label = "  service and\l  barangay listings\l"];
+    p25 -> s_svc   [label = "  service record\l  (code is never rewritten)\l"];
+    p25 -> s_brgy  [label = "  barangay record\l"];
+
+    /* 2.6 Manage Equipment and Borrowings */
+    a26 -> p26     [label = "  item, total and available\l  quantity; approve, deny,\l  release, confirm return\l"];
+    a26 -> p26     [dir = back, label = "  inventory, borrowing queue,\l  overdue items\l"];
+    p26 -> s_equip [label = "  inventory record,\l  adjusted availability\l"];
+    p26 -> s_borrow[label = "  status, due date,\l  denial reason,\l  released_at, returned_at\l"];
+    p26 -> s_borrow[dir = back, label = "  borrowing rows\l"];
+
+    /* 2.7 Manage Vehicle Fleet */
+    a27 -> p27     [label = "  unit identifier, type,\l  specification, status\l"];
+    a27 -> p27     [dir = back, label = "  fleet listing\l"];
+    p27 -> s_veh   [label = "  vehicle record\l"];
+
+    /* 2.8 File Conduction Request and Trip Log */
+    a28 -> p28     [label = "  patient details, diagnosis,\l  origin and destination,\l  crew names, trip log times\l  and odometer readings\l"];
+    a28 -> p28     [dir = back, label = "  conduction request\l  listing and detail\l"];
+    p28 -> s_cond  [label = "  request row,\l  trip log fields\l"];
+    p28 -> s_people[label = "  drivers, passengers,\l  relatives\l"];
+
+    /* 2.9 Publish Materials and Monitor Dashboard */
+    a29 -> p29     [label = "  title and file upload,\l  deletion, date filters\l"];
+    a29 -> p29     [dir = back, label = "  material list, dashboard\l  analytics and barangay\l  request map, audit trail\l"];
+    p29 -> s_info  [label = "  material record,\l  stored file path\l"];
+    p29 -> s_log2  [dir = back, label = "  audit entries\l"];
+
+    /* ------------------------------------------------------------------
+     * 6. COLUMN PINNING AND ROW ORDER (LAYOUT CONTROL)
+     * ------------------------------------------------------------------ */
+    { rank = same; a21; a22; a23; a24; a25; a26; a27; a28; a29; }
+    { rank = same; p21; p22; p23; p24; p25; p26; p27; p28; p29; }
+    { rank = same; s_user1; s_tok; s_req; s_log1; s_res1; philsms; s_sms; s_res2; s_user2; s_svc; s_brgy; s_equip; s_borrow; s_veh; s_cond; s_people; s_info; s_log2; }
+
+    edge [style = invis, weight = 100];
+
+    a21 -> a22 -> a23 -> a24 -> a25 -> a26 -> a27 -> a28 -> a29;
+    p21 -> p22 -> p23 -> p24 -> p25 -> p26 -> p27 -> p28 -> p29;
+    s_user1 -> s_tok -> s_req -> s_log1 -> s_res1 -> philsms -> s_sms -> s_res2 -> s_user2 -> s_svc -> s_brgy -> s_equip -> s_borrow -> s_veh -> s_cond -> s_people -> s_info -> s_log2;
+}

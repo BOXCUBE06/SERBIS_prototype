@@ -52,3 +52,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Gradle build output for the Android host project. Regenerated on every
+# build; `/build/` above only covers the Flutter root.
+/android/build/

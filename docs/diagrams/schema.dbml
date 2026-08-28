@@ -1,0 +1,214 @@
+// SERBIS schema — derived from Backend/SERBIS-Backend/database/migrations/,
+// cross-checked against app/Models/. Paste into https://dbdiagram.io.
+//
+// Gone, do not draw: tbl_disaster + users (2026_08_22_110000),
+// tbl_sms_logs.disaster_id (2026_08_23_100000), tbl_service_translations
+// (2026_08_23_120000).
+// Excluded as framework tables: cache, cache_locks, jobs, job_batches,
+// failed_jobs, sessions, password_reset_tokens, migrations.
+
+Table tbl_barangay {
+  barangay_id   bigint [pk, increment]
+  barangay_name varchar
+  created_at    timestamp
+  updated_at    timestamp
+}
+
+Table tbl_user {
+  admin_id      bigint [pk, increment]
+  first_name    varchar
+  last_name     varchar
+  role          varchar
+  status        varchar [default: 'Active']
+  email_address varchar [unique]
+  password      varchar
+  created_at    timestamp
+  updated_at    timestamp
+}
+
+Table tbl_residents {
+  resident_id                  bigint [pk, increment]
+  barangay_id                  bigint [not null, ref: > tbl_barangay.barangay_id]
+  first_name                   varchar
+  middle_name                  varchar [null]
+  last_name                    varchar
+  phone_number                 varchar
+  password                     varchar
+  photo                        varchar [null]
+  status                       varchar
+  sms_opt_in                   boolean [default: true]
+  email_address                varchar [unique]
+  email_verified_at            timestamp [null]
+  verification_code            varchar [null]
+  verification_code_expires_at timestamp [null]
+  verification_code_sent_at    timestamp [null]
+  created_at                   timestamp
+  updated_at                   timestamp
+}
+
+Table tbl_services {
+  service_id   bigint [pk, increment]
+  service_name varchar
+  code         varchar(50) [unique, not null]
+  description  text [null]
+  created_at   timestamp
+  updated_at   timestamp
+}
+
+Table tbl_service_request {
+  request_id             bigint [pk, increment]
+  resident_id            bigint [null, ref: > tbl_residents.resident_id]   // nullable since walk-in
+  walk_in_name           varchar [null]
+  walk_in_contact_number varchar [null]
+  service_id             bigint [not null, ref: > tbl_services.service_id]
+  vehicle_id             bigint [null, ref: > tbl_vehicles.vehicle_id]     // ON DELETE SET NULL
+  processed_by           bigint [null, ref: > tbl_user.admin_id]
+  description            text [null]
+  valid_id               varchar [null]
+  site_photo             varchar [null]
+  status                 varchar
+  remarks                text [null]
+  created_at             timestamp
+  updated_at             timestamp
+
+  indexes {
+    status
+    created_at
+    (status, created_at)
+  }
+}
+
+Table tbl_sms_logs {
+  sms_log_id     bigint [pk, increment]
+  sender_id      bigint [not null, ref: > tbl_user.admin_id]
+  target_area_id bigint [not null, ref: > tbl_barangay.barangay_id]
+  api_job_id     varchar [null]
+  message_body   text
+  status         varchar
+  created_at     timestamp
+  updated_at     timestamp
+}
+
+Table tbl_recipients {
+  recipient_id bigint [pk, increment]
+  sms_log_id   bigint [not null, ref: > tbl_sms_logs.sms_log_id]
+  resident_id  bigint [not null, ref: > tbl_residents.resident_id]
+  status       varchar
+  created_at   timestamp
+  updated_at   timestamp
+}
+
+Table tbl_system_logs {
+  log_id         bigint [pk, increment]
+  admin_id       bigint [null, ref: > tbl_user.admin_id]
+  resident_id    bigint [null, ref: > tbl_residents.resident_id]
+  action_type    varchar
+  auditable_type varchar   // polymorphic, no FK constraint
+  auditable_id   bigint    // polymorphic, no FK constraint
+  old_values     json [null]
+  new_values     json [null]
+  ip_address     varchar(45) [null]
+  user_agent     text [null]
+  created_at     timestamp
+  updated_at     timestamp
+}
+
+Table tbl_info_materials {
+  files_id    bigint [pk, increment]
+  uploader_id bigint [not null, ref: > tbl_user.admin_id]
+  title       varchar
+  file_path   varchar
+  file_type   varchar
+  file_size   int
+  created_at  timestamp
+  updated_at  timestamp
+}
+
+Table tbl_vehicles {
+  vehicle_id      bigint [pk, increment]
+  unit_identifier varchar [unique]
+  type            varchar
+  specification   varchar [null]
+  status          varchar [default: 'Available']
+  created_at      timestamp
+  updated_at      timestamp
+}
+
+Table tbl_equipments {
+  equipment_id       bigint [pk, increment]
+  item_name          varchar [unique]
+  total_quantity     int
+  available_quantity int
+  status             varchar [note: 'enum: Available, Unavailable', default: 'Available']
+  created_at         timestamp
+  updated_at         timestamp
+}
+
+Table tbl_equipment_borrowing {
+  borrow_id     bigint [pk, increment]
+  resident_id   bigint [not null, ref: > tbl_residents.resident_id]   // ON DELETE CASCADE
+  equipment_id  bigint [not null, ref: > tbl_equipments.equipment_id] // ON DELETE CASCADE
+  quantity      int
+  due_date      date [null]
+  status        varchar [note: 'enum: Pending, Approved, Released, Returned, Denied', default: 'Pending']
+  denial_reason varchar(255) [null]
+  released_at   timestamp [null]
+  returned_at   timestamp [null]
+  created_at    timestamp
+  updated_at    timestamp
+
+  indexes {
+    status
+  }
+}
+
+Table tbl_conduction_requests {
+  conduction_request_id  bigint [pk, increment]
+  patient_name           varchar
+  patient_age            tinyint [null]
+  patient_address        varchar
+  patient_sex            varchar [null, note: 'enum: male, female']
+  patient_contact_number varchar
+  vehicle                varchar [null, note: 'free text, NOT a key to tbl_vehicles']
+  medical_diagnosis      text
+  plate_no               varchar [null]
+  origin                 varchar
+  destination            varchar
+  departed_office_at     datetime [null]
+  arrived_destination_at datetime [null]
+  departed_destination_at datetime [null]
+  returned_office_at     datetime [null]
+  odometer_start         int [null]
+  odometer_end           int [null]
+  others                 text [null]
+  created_at             timestamp
+  updated_at             timestamp
+}
+
+Table tbl_conduction_request_people {
+  id                    bigint [pk, increment]
+  conduction_request_id bigint [not null, ref: > tbl_conduction_requests.conduction_request_id] // CASCADE
+  role                  varchar [note: 'enum: driver, passenger, relative']
+  name                  varchar
+  position              tinyint [default: 0]
+  created_at            timestamp
+  updated_at            timestamp
+}
+
+Table personal_access_tokens {
+  id             bigint [pk, increment]
+  tokenable_type varchar   // polymorphic: tbl_user or tbl_residents, no FK constraint
+  tokenable_id   bigint
+  name           text
+  token          varchar(64) [unique]
+  abilities      text [null]
+  last_used_at   timestamp [null]
+  expires_at     timestamp [null]
+  created_at     timestamp
+  updated_at     timestamp
+
+  indexes {
+    (tokenable_type, tokenable_id)
+    expires_at
+  }
+}

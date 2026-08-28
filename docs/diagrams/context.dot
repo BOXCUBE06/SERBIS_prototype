@@ -1,0 +1,72 @@
+/*
+ * SERBIS — Context Diagram (Data Flow Diagram, Level 0)
+ *
+ * Every flow below is traceable to a route in
+ * Backend/SERBIS-Backend/routes/api.php; the route is named in the flow's
+ * comment. Flows that could not be traced to a route were dropped.
+ *
+ * Black and white, to match the existing figures.
+ *
+ * Render:  dot -Tpng -Gdpi=300 -o context.png context.dot
+ */
+digraph SERBIS_CONTEXT {
+    graph [
+        rankdir = LR,
+        splines = spline,
+        nodesep = 0.6,
+        ranksep = 1.6,
+        size = "6.5,9",
+        fontname = "Times New Roman,",
+        fontsize = 10,
+        labelloc = "t",
+        label = <<FONT FACE="Times New Roman," POINT-SIZE="12"><B>Figure — Context Diagram (DFD Level 0), SERBIS</B></FONT>>
+    ];
+    node [fontname = "Times New Roman,", fontsize = 10, color = black, fillcolor = white, style = filled];
+    edge [fontname = "Times New Roman,", fontsize = 9, color = black, arrowsize = 0.7];
+
+    /* External entities — square terminators. */
+    resident [shape = box, width = 1.5, height = 0.7, label = "Resident"];
+    admin    [shape = box, width = 1.5, height = 0.9, label = "Admin\n(MDRRMO Personnel)"];
+    philsms  [shape = box, width = 1.5, height = 0.9, label = "PhilSMS\nSMS Gateway"];
+
+    /* The single process. */
+    system [
+        shape = box,
+        style = "filled,rounded",
+        width = 2.6,
+        height = 1.6,
+        label = "0\n\nSERBIS\nDisaster Response and\nResource Management\nSystem for MDRRMO,\nEchague, Isabela"
+    ];
+
+    /* ---------------- Resident flows ---------------- */
+    /* POST /register, POST /resident/verify-email(/resend), POST /resident/login,
+       POST /service-requests, POST /borrowings, PATCH /me, POST /me/photo,
+       PATCH /service-requests/{id}/cancel */
+    resident -> system [label = "  registration details, verification code,\l  login credentials, profile edits and photo,\l  service request with valid ID and site photo,\l  equipment borrowing request, cancellation\l"];
+
+    /* GET /barangays, GET /me, GET /services, GET /service-requests,
+       GET /equipments, GET /borrowings, GET /advisories, GET /info-materials */
+    system -> resident [label = "  barangay list, access token and profile,\l  service catalogue, request status and remarks,\l  equipment availability, borrowing status,\l  barangay advisories, information materials\l"];
+
+    /* ---------------- Admin flows ---------------- */
+    /* POST /admin/login, PUT /service-requests/{id}, POST /admin/service-requests,
+       POST /sms/blast, apiResource residents|admins|services|barangays|equipments|
+       vehicles|borrowings, POST /admin/info-materials,
+       POST /conduction-requests, PATCH /conduction-requests/{id}/trip-log */
+    admin -> system [label = "  admin credentials, request decision and remarks,\l  walk-in request, blast message and target barangay,\l  resident, staff, service, barangay, equipment and\l  vehicle records, conduction request and trip log,\l  uploaded information material\l"];
+
+    /* GET /admin/dashboard, GET /admin/service-requests, GET /logs/sms,
+       GET /logs/system, GET /admin/info-materials, index of each apiResource */
+    system -> admin [label = "  dashboard analytics and barangay request map,\l  request queue, borrowing queue, SMS history,\l  system audit trail, record listings\l"];
+
+    /* ---------------- PhilSMS flows ---------------- */
+    /* App\Services\PhilSms::send() — called by SmsController::sendBlast for a
+       blast, and by AuthController::sendVerificationCode for a resident's
+       registration code (e-mail is used only when the number cannot be
+       normalized to Philippine E.164). */
+    system -> philsms [label = "  recipient numbers and message body\l  (advisory blast, verification code)\l"];
+
+    /* PhilSms::accepted() reads the vendor response; the outcome is written to
+       tbl_sms_logs.status and tbl_sms_logs.api_job_id. */
+    philsms -> system [label = "  acceptance status, provider job id\l"];
+}

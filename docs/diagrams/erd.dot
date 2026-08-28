@@ -1,0 +1,354 @@
+/*
+ * SERBIS — Entity Relationship Diagram
+ * Disaster Response and Resource Management System, MDRRMO Echague, Isabela
+ *
+ * Derived entirely from Backend/SERBIS-Backend/database/migrations/ and
+ * cross-checked against app/Models/. Nothing here is carried over from an
+ * earlier diagram without a migration to justify it.
+ *
+ * Excluded as framework infrastructure: cache, cache_locks, jobs, job_batches,
+ * failed_jobs, sessions, password_reset_tokens, migrations.
+ * Dropped and therefore absent: tbl_disaster and users
+ * (2026_08_22_110000_drop_tbl_disaster_and_users_tables.php),
+ * tbl_service_translations (2026_08_23_120000).
+ *
+ * Crow's-foot notation. The parent end carries the child's obligation:
+ *   ||  (teetee)   exactly one  — child's foreign key is NOT NULL
+ *   |o  (teeodot)  zero or one  — child's foreign key is nullable
+ * The child end is always "zero or many" (crowodot); no relationship in this
+ * schema forces a parent row to have at least one child.
+ *
+ * Render:  dot -Tpng -Gdpi=300 -o erd.png erd.dot
+ */
+digraph SERBIS_ERD {
+    graph [
+        rankdir = LR,
+        splines = spline,
+        overlap = false,
+        nodesep = 0.22,
+        ranksep = 0.6,
+        size = "6.5,9",
+        fontname = "Times New Roman,",
+        fontsize = 10,
+        labelloc = "t",
+        label = <<FONT FACE="Times New Roman," POINT-SIZE="13"><B>SERBIS — Entity Relationship Diagram</B></FONT>>
+    ];
+    node [shape = plaintext, fontname = "Times New Roman,", fontsize = 10];
+    edge [fontname = "Times New Roman,", fontsize = 9, color = "#444444", dir = both];
+
+    /* ------------------------------------------------------------------ *
+     * Entities. Header colour groups the module, it carries no other      *
+     * meaning: blue = core records, orange = SMS, green = fleet and       *
+     * equipment, purple = ambulance conduction, grey = authentication.    *
+     * ------------------------------------------------------------------ */
+
+    tbl_barangay [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E5AAC"><FONT COLOR="#FFFFFF"><B>tbl_barangay</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="barangay_id">barangay_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT">barangay_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_user [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E5AAC"><FONT COLOR="#FFFFFF"><B>tbl_user</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="admin_id">admin_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT">first_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">last_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">role</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">email_address</TD><TD ALIGN="RIGHT">UK</TD></TR>
+        <TR><TD ALIGN="LEFT">password</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_residents [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E5AAC"><FONT COLOR="#FFFFFF"><B>tbl_residents</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="resident_id">resident_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="barangay_id">barangay_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">first_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">middle_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">last_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">phone_number</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">password</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">photo</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">sms_opt_in</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">email_address</TD><TD ALIGN="RIGHT">UK</TD></TR>
+        <TR><TD ALIGN="LEFT">email_verified_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">verification_code</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">verification_code_expires_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">verification_code_sent_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_services [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E5AAC"><FONT COLOR="#FFFFFF"><B>tbl_services</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="service_id">service_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT">service_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">code</TD><TD ALIGN="RIGHT">UK</TD></TR>
+        <TR><TD ALIGN="LEFT">description</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_service_request [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E5AAC"><FONT COLOR="#FFFFFF"><B>tbl_service_request</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="request_id">request_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="resident_id">resident_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">walk_in_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">walk_in_contact_number</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="service_id">service_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="vehicle_id">vehicle_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="processed_by">processed_by</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">description</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">valid_id</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">site_photo</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">remarks</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_sms_logs [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#B5651D"><FONT COLOR="#FFFFFF"><B>tbl_sms_logs</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="sms_log_id">sms_log_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="sender_id">sender_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="target_area_id">target_area_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">api_job_id</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">message_body</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_recipients [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#B5651D"><FONT COLOR="#FFFFFF"><B>tbl_recipients</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="recipient_id">recipient_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="sms_log_id">sms_log_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="resident_id">resident_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_system_logs [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#5B6770"><FONT COLOR="#FFFFFF"><B>tbl_system_logs</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="log_id">log_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="admin_id">admin_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="resident_id">resident_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">action_type</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">auditable_type</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">auditable_id</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">old_values</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">new_values</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">ip_address</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">user_agent</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_info_materials [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E5AAC"><FONT COLOR="#FFFFFF"><B>tbl_info_materials</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="files_id">files_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="uploader_id">uploader_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">title</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">file_path</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">file_type</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">file_size</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_vehicles [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E7D4E"><FONT COLOR="#FFFFFF"><B>tbl_vehicles</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="vehicle_id">vehicle_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT">unit_identifier</TD><TD ALIGN="RIGHT">UK</TD></TR>
+        <TR><TD ALIGN="LEFT">type</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">specification</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_equipments [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E7D4E"><FONT COLOR="#FFFFFF"><B>tbl_equipments</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="equipment_id">equipment_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT">item_name</TD><TD ALIGN="RIGHT">UK</TD></TR>
+        <TR><TD ALIGN="LEFT">total_quantity</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">available_quantity</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_equipment_borrowing [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#2E7D4E"><FONT COLOR="#FFFFFF"><B>tbl_equipment_borrowing</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="borrow_id">borrow_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="resident_id">resident_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="equipment_id">equipment_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">quantity</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">due_date</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">status</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">denial_reason</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">released_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">returned_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_conduction_requests [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#5F41AA"><FONT COLOR="#FFFFFF"><B>tbl_conduction_requests</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="conduction_request_id">conduction_request_id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT">patient_name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">patient_age</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">patient_address</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">patient_sex</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">patient_contact_number</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">vehicle</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">medical_diagnosis</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">plate_no</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">origin</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">destination</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">departed_office_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">arrived_destination_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">departed_destination_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">returned_office_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">odometer_start</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">odometer_end</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">others</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    tbl_conduction_request_people [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#5F41AA"><FONT COLOR="#FFFFFF"><B>tbl_conduction_request_people</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="id">id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="conduction_request_id">conduction_request_id</TD><TD ALIGN="RIGHT">FK</TD></TR>
+        <TR><TD ALIGN="LEFT">role</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">position</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    personal_access_tokens [label = <
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD COLSPAN="2" BGCOLOR="#5B6770"><FONT COLOR="#FFFFFF"><B>personal_access_tokens</B></FONT></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="id">id</TD><TD ALIGN="RIGHT"><B>PK</B></TD></TR>
+        <TR><TD ALIGN="LEFT" PORT="tokenable">tokenable_type</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">tokenable_id</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">name</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">token</TD><TD ALIGN="RIGHT">UK</TD></TR>
+        <TR><TD ALIGN="LEFT">abilities</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">last_used_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">expires_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">created_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        <TR><TD ALIGN="LEFT">updated_at</TD><TD ALIGN="RIGHT"> </TD></TR>
+        </TABLE>
+    >];
+
+    /* ------------------------------------------------------------------ *
+     * Relationships enforced by an actual FOREIGN KEY constraint.         *
+     * ------------------------------------------------------------------ */
+
+    tbl_barangay:barangay_id -> tbl_residents:barangay_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "resides in"];
+
+    tbl_barangay:barangay_id -> tbl_sms_logs:target_area_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "targets"];
+
+    tbl_user:admin_id -> tbl_sms_logs:sender_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "sends"];
+
+    tbl_user:admin_id -> tbl_info_materials:uploader_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "uploads"];
+
+    tbl_user:admin_id -> tbl_system_logs:admin_id
+        [arrowtail = teeodot, arrowhead = crowodot, label = "acts as"];
+
+    tbl_residents:resident_id -> tbl_system_logs:resident_id
+        [arrowtail = teeodot, arrowhead = crowodot, label = "acts as"];
+
+    tbl_sms_logs:sms_log_id -> tbl_recipients:sms_log_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "delivered to"];
+
+    tbl_residents:resident_id -> tbl_recipients:resident_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "receives"];
+
+    tbl_residents:resident_id -> tbl_service_request:resident_id
+        [arrowtail = teeodot, arrowhead = crowodot, label = "files"];
+
+    tbl_services:service_id -> tbl_service_request:service_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "requested as"];
+
+    tbl_vehicles:vehicle_id -> tbl_service_request:vehicle_id
+        [arrowtail = teeodot, arrowhead = crowodot, label = "assigned to"];
+
+    tbl_user:admin_id -> tbl_service_request:processed_by
+        [arrowtail = teeodot, arrowhead = crowodot, label = "processes"];
+
+    tbl_residents:resident_id -> tbl_equipment_borrowing:resident_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "borrows"];
+
+    tbl_equipments:equipment_id -> tbl_equipment_borrowing:equipment_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "borrowed as"];
+
+    tbl_conduction_requests:conduction_request_id -> tbl_conduction_request_people:conduction_request_id
+        [arrowtail = teetee, arrowhead = crowodot, label = "carries"];
+
+    /* Polymorphic, and therefore unenforced by the database. Drawn dashed so
+       the diagram does not claim a constraint that does not exist. */
+    tbl_user:admin_id -> personal_access_tokens:tokenable
+        [arrowtail = teeodot, arrowhead = crowodot, style = dashed, label = "authenticates\n(polymorphic)"];
+
+    tbl_residents:resident_id -> personal_access_tokens:tokenable
+        [arrowtail = teeodot, arrowhead = crowodot, style = dashed, label = "authenticates\n(polymorphic)"];
+
+    /* ------------------------------------------------------------------ *
+     * Notes rendered on the diagram itself.                               *
+     * ------------------------------------------------------------------ */
+    notes [shape = note, fillcolor = "#FFFBE6", style = "filled", fontsize = 9, label = <
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD ALIGN="LEFT"><B>Notes</B></TD></TR>
+        <TR><TD ALIGN="LEFT">1. tbl_system_logs.auditable_type / auditable_id are polymorphic and carry</TD></TR>
+        <TR><TD ALIGN="LEFT">    no foreign key. They are drawn as plain columns, with no relationship line.</TD></TR>
+        <TR><TD ALIGN="LEFT">2. tbl_conduction_requests.vehicle and .plate_no are free text, not keys to</TD></TR>
+        <TR><TD ALIGN="LEFT">    tbl_vehicles. The paper form they digitize records a unit by name.</TD></TR>
+        <TR><TD ALIGN="LEFT">3. tbl_service_request.resident_id is nullable: a walk-in request filed at the</TD></TR>
+        <TR><TD ALIGN="LEFT">    counter carries walk_in_name and walk_in_contact_number instead.</TD></TR>
+        <TR><TD ALIGN="LEFT">4. tbl_disaster is gone, and so is tbl_sms_logs.disaster_id — the table on</TD></TR>
+        <TR><TD ALIGN="LEFT">    2026-08-22, the column on 2026-08-23. Neither appears here.</TD></TR>
+        </TABLE>
+    >];
+}
