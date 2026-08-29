@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\ConductionRequest;
+use App\Models\Service;
+use App\Models\ServiceRequest;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -62,6 +65,48 @@ class ConductionRequestTest extends TestCase
         $this->assertCount(2, $conductionRequest->people);
         $this->assertSame('Pedro Santos', $conductionRequest->drivers()->first()->name);
         $this->assertSame('Maria Santos', $conductionRequest->authorizedPassengers()->first()->name);
+    }
+
+    /**
+     * The model has carried service_request_id/vehicle_id in $fillable since
+     * they were added — this proves store()'s own validate() actually lets
+     * them through rather than silently stripping them, which is what
+     * DISPATCH's prefill flow depends on to link a trip log back to its
+     * booking.
+     */
+    public function test_a_conduction_request_can_be_linked_to_its_booking(): void
+    {
+        $service = Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01',
+            'type' => 'Ambulance',
+            'specification' => 'Type I',
+            'status' => 'Available',
+        ]);
+
+        $booking = ServiceRequest::create([
+            'service_id' => $service->service_id,
+            'vehicle_id' => $vehicle->vehicle_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+        ]);
+
+        $response = $this->postJson('/api/conduction-requests', $this->payload([
+            'service_request_id' => $booking->request_id,
+            'vehicle_id' => $vehicle->vehicle_id,
+        ]));
+
+        $response->assertStatus(201)
+            ->assertJsonPath('service_request_id', $booking->request_id)
+            ->assertJsonPath('vehicle_id', $vehicle->vehicle_id);
+
+        $conductionRequest = ConductionRequest::first();
+        $this->assertSame($booking->request_id, $conductionRequest->service_request_id);
+        $this->assertSame($vehicle->vehicle_id, $conductionRequest->vehicle_id);
     }
 
     public function test_required_patient_fields_are_enforced(): void

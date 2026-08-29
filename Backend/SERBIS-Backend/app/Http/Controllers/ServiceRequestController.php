@@ -594,13 +594,181 @@ class ServiceRequestController extends Controller
             // back "Vehicle Unknown".
             'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id',
             'status' => 'sometimes|required|in:'.implode(',', self::STATUSES),
-            'remarks' => 'nullable|string',
+            // Required the moment this call is the one rejecting the request —
+            // a resident reading "Disapproved" with no reason is the complaint
+            // this column exists to prevent. Not required for any other status,
+            // reject is the only transition this endpoint makes without a human
+            // having already typed something into the request beforehand.
+            'remarks' => 'nullable|string|required_if:status,Disapproved',
         ]);
 
         DB::transaction(function () use ($serviceRequest, $validated) {
             $this->syncFleet($serviceRequest, $validated);
 
             $serviceRequest->update($validated);
+        });
+
+        return response()->json($serviceRequest->fresh(['vehicle']));
+    }
+
+    /**
+     * Assigns a unit to a Booked request. Status stays 'Booked' — approval is
+     * not dispatch, it is the office committing capacity to a window that is
+     * usually still days away. That is exactly why this does NOT mark the
+     * vehicle 'Dispatched' the way store()'s immediate-claim path and
+     * syncFleet() both do for a live request: that convention means "out
+     * right now", and flipping it for a booking that has not happened yet
+     * would wrongly clear the unit off every OTHER day's availability. A unit
+     * only becomes 'Dispatched' when it actually leaves — that is dispatch,
+     * a later step this endpoint does not perform.
+     */
+    public function approve(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::find($id);
+
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($serviceRequest->status !== 'Booked') {
+            return response()->json([
+                'message' => 'Only a booked request can be approved.',
+            ], 422);
+        }
+
+        if (!$serviceRequest->scheduled_at) {
+            return response()->json([
+                'message' => 'This request has no scheduled time to approve against.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'vehicle_id' => 'required|integer|exists:tbl_vehicles,vehicle_id',
+            // Staff-adjustable; defaults to +2h below when absent. Same Manila
+            // parse as everywhere else a human types a time into this system.
+            'scheduled_end' => 'nullable|date',
+        ]);
+
+        $scheduledEnd = !empty($validated['scheduled_end'])
+            ? Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc()
+            : $serviceRequest->scheduled_at->copy()->addHours(self::DEFAULT_BOOKING_HOURS);
+
+        if ($scheduledEnd->lte($serviceRequest->scheduled_at)) {
+            throw ValidationException::withMessages([
+                'scheduled_end' => 'scheduled_end must be after scheduled_at.',
+            ]);
+        }
+
+        DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledEnd) {
+            // Same serialising lock as store(): whoever gets here first
+            // decides who the window's last free unit goes to.
+            $units = Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+            $vehicle = $units->firstWhere('vehicle_id', (int) $validated['vehicle_id']);
+
+            if (!$vehicle) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is not an Ambulance.',
+                ]);
+            }
+
+            if ($vehicle->status === 'Maintenance') {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is under Maintenance and cannot be assigned.',
+                ]);
+            }
+
+            // Re-checked, not trusted from submission time: the window may
+            // have filled with other approvals since this request was filed.
+            $freeIds = $this->availability
+                ->availableAmbulances($serviceRequest->scheduled_at, $scheduledEnd, $serviceRequest->request_id)
+                ->pluck('vehicle_id');
+
+            if (!$freeIds->contains($vehicle->vehicle_id)) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is no longer free for this window.',
+                ]);
+            }
+
+            if ($serviceRequest->vehicle_id && $serviceRequest->vehicle_id !== $vehicle->vehicle_id) {
+                $this->releaseVehicle($serviceRequest->vehicle_id);
+            }
+
+            $serviceRequest->update([
+                'vehicle_id' => $vehicle->vehicle_id,
+                'scheduled_end' => $scheduledEnd,
+                'approved_at' => now(),
+                'processed_by' => $request->user()->getKey(),
+            ]);
+        });
+
+        return response()->json($serviceRequest->fresh(['vehicle']));
+    }
+
+    /**
+     * Moves an existing Booked request to a new window. Does not touch
+     * vehicle_id — a request not yet approved has none to move, and one
+     * already approved keeps its unit as long as that unit is still free for
+     * the new time; see the self-exclusion note on AmbulanceAvailability.
+     */
+    public function reschedule(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::find($id);
+
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($serviceRequest->status !== 'Booked') {
+            return response()->json([
+                'message' => 'Only a booked request can be rescheduled.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'scheduled_at' => 'required|date',
+            'scheduled_end' => 'required|date',
+            // TracksHistory logs the scheduled_at/scheduled_end change on its
+            // own, but the *reason* only reaches that log because remarks moves
+            // in the same update — so it is not optional here, unlike update().
+            'remarks' => 'required|string',
+        ]);
+
+        $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
+        $scheduledEnd = Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc();
+
+        if ($scheduledEnd->lte($scheduledAt)) {
+            throw ValidationException::withMessages([
+                'scheduled_end' => 'scheduled_end must be after scheduled_at.',
+            ]);
+        }
+
+        DB::transaction(function () use ($serviceRequest, $scheduledAt, $scheduledEnd, $validated) {
+            Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+            $freeIds = $this->availability
+                ->availableAmbulances($scheduledAt, $scheduledEnd, $serviceRequest->request_id)
+                ->pluck('vehicle_id');
+
+            if ($serviceRequest->vehicle_id) {
+                // Already approved: the unit it already holds must specifically
+                // still be free for the new time, not just some other unit.
+                if (!$freeIds->contains($serviceRequest->vehicle_id)) {
+                    throw ValidationException::withMessages([
+                        'scheduled_at' => 'The assigned unit is not free for that time.',
+                    ]);
+                }
+            } elseif ($freeIds->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'No ambulance is available for that time.',
+                ]);
+            }
+
+            $serviceRequest->update([
+                'scheduled_at' => $scheduledAt,
+                'scheduled_end' => $scheduledEnd,
+                'remarks' => $validated['remarks'],
+            ]);
         });
 
         return response()->json($serviceRequest->fresh(['vehicle']));

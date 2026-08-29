@@ -37,17 +37,24 @@ class AmbulanceAvailability
      * null check: `NULL < $end` and `NULL > $start` are both false in SQL, so
      * such a row can never satisfy the overlap. A unit out on that kind of
      * trip is still caught by the 'Dispatched' rule above.
+     *
+     * `$excludeServiceRequestId` is for rescheduling a booking that already
+     * holds a unit: without it, the booking's own not-yet-updated row would
+     * count as a conflict against itself the moment the new window is checked
+     * against the old one still on record. The two other callers — filing a
+     * new request, and the read-only endpoint — never have a row to exclude.
      */
-    public function availableAmbulances(Carbon $start, Carbon $end): Collection
+    public function availableAmbulances(Carbon $start, Carbon $end, ?int $excludeServiceRequestId = null): Collection
     {
         return Vehicle::query()
             ->where('type', 'Ambulance')
             ->where('status', '!=', 'Maintenance')
             ->where('status', '!=', 'Dispatched')
-            ->whereDoesntHave('serviceRequests', function (Builder $query) use ($start, $end): void {
+            ->whereDoesntHave('serviceRequests', function (Builder $query) use ($start, $end, $excludeServiceRequestId): void {
                 $query->whereNotIn('status', ServiceRequestController::TERMINAL_STATUSES)
                     ->where('scheduled_at', '<', $end)
-                    ->where('scheduled_end', '>', $start);
+                    ->where('scheduled_end', '>', $start)
+                    ->when($excludeServiceRequestId, fn (Builder $q) => $q->where('request_id', '!=', $excludeServiceRequestId));
             })
             ->get();
     }

@@ -13,7 +13,7 @@
         class="text-none font-weight-bold px-6"
         height="44"
         prepend-icon="mdi-plus"
-        @click="openCreate"
+        @click="openCreate()"
       >New Ambulance Dispatch Request</v-btn>
     </div>
 
@@ -108,7 +108,15 @@
     <v-dialog v-model="createDialog.open" max-width="720" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
+          <div>
+            <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
+            <!-- Prefilled fields came from the booking's own description, a
+                 best-effort read — nothing here is locked, so this is a note
+                 to the operator, not a guarantee. -->
+            <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis">
+              Dispatching booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
+            </div>
+          </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
@@ -296,9 +304,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+
+const route = useRoute()
+const router = useRouter()
 
 const STATUS_ACCENT = {
   'Not dispatched': '#B45309',
@@ -394,6 +406,10 @@ const rowProps = ({ item }) => ({
 
 // Create dialog
 const emptyCreateForm = () => ({
+  // Set only when this dialog was opened by dispatching an approved booking
+  // (openDispatchFromQuery below); a plain "New Ambulance Dispatch Request"
+  // leaves both null, exactly as before this feature existed.
+  service_request_id: null, vehicle_id: null,
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
   patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
   origin: '', destination: '',
@@ -402,9 +418,87 @@ const emptyCreateForm = () => ({
 const createDialog = ref({ open: false, form: emptyCreateForm() })
 const createForm = ref(null)
 
-const openCreate = () => {
+// The known line prefixes AmbulanceFormData writes into a booking's
+// description (Mobile/lib/models/service_forms.dart:65-77). Best-effort
+// only: a line that doesn't match, or that is still the app's own "not
+// specified" placeholder, is left blank rather than guessing — staff typing
+// it in from the paper form, same as any other new request, is the
+// acceptable fallback this is not allowed to block.
+const AMBULANCE_PLACEHOLDERS = {
+  patient_name: 'Not specified',
+  origin: 'Address not specified',
+  destination: 'destination not specified',
+  medical_diagnosis: 'Not described',
+  patient_contact_number: 'See resident profile',
+}
+
+const cleanParsed = (value, placeholder) => {
+  const trimmed = (value ?? '').trim()
+  return trimmed === '' || trimmed === placeholder ? '' : trimmed
+}
+
+const parseAmbulanceDescription = (description) => {
+  const result = { patient_name: '', origin: '', destination: '', medical_diagnosis: '', patient_contact_number: '' }
+  if (!description) return result
+
+  for (const rawLine of description.split('\n')) {
+    const line = rawLine.trim()
+
+    const patient = line.match(/^Patient:\s*(.*)$/)
+    if (patient) { result.patient_name = cleanParsed(patient[1], AMBULANCE_PLACEHOLDERS.patient_name); continue }
+
+    const condition = line.match(/^Condition:\s*(.*)$/)
+    if (condition) { result.medical_diagnosis = cleanParsed(condition[1], AMBULANCE_PLACEHOLDERS.medical_diagnosis); continue }
+
+    const contact = line.match(/^Contact:\s*(.*)$/)
+    if (contact) { result.patient_contact_number = cleanParsed(contact[1], AMBULANCE_PLACEHOLDERS.patient_contact_number); continue }
+
+    if (line.includes('→')) {
+      const [from, to] = line.split('→')
+      result.origin = cleanParsed(from, AMBULANCE_PLACEHOLDERS.origin)
+      result.destination = cleanParsed(to, AMBULANCE_PLACEHOLDERS.destination)
+    }
+  }
+
+  return result
+}
+
+// `booking` is the tbl_service_request row this dispatch fulfils — absent
+// for the plain "New Ambulance Dispatch Request" button, which behaves
+// exactly as it always has.
+const openCreate = (booking = null) => {
   apiError.value = ''
-  createDialog.value = { open: true, form: emptyCreateForm() }
+  const form = emptyCreateForm()
+
+  if (booking) {
+    Object.assign(form, parseAmbulanceDescription(booking.description))
+    form.service_request_id = booking.request_id
+    form.vehicle_id = booking.vehicle_id ?? null
+  }
+
+  createDialog.value = { open: true, form }
+}
+
+// Entry point from ManageRequestView's "Dispatch" action: /conduction-requests
+// ?dispatch=<request_id>. Fetches that one booking and opens the create
+// dialog prefilled from it. The query param is stripped either way so a
+// refresh of this page does not reopen the dialog against a request that may
+// already be dispatched.
+const openDispatchFromQuery = async () => {
+  const id = route.query.dispatch
+  if (!id) return
+
+  router.replace({ query: { ...route.query, dispatch: undefined } })
+
+  try {
+    const res = await fetch(`${API_BASE}/service-requests/${id}`, { headers: getHeaders() })
+    if (!res.ok) throw new Error('Could not load that booking')
+    const booking = await res.json()
+    openCreate(booking)
+  } catch {
+    notify('Could not load the booking to dispatch — fill in the form manually.', 'error')
+    openCreate()
+  }
 }
 
 const addPerson = (field) => { createDialog.value.form[field].push('') }
@@ -564,7 +658,10 @@ const submitTripLog = async () => {
   }
 }
 
-onMounted(fetchData)
+onMounted(async () => {
+  await fetchData()
+  await openDispatchFromQuery()
+})
 </script>
 
 <style scoped>

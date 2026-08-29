@@ -48,6 +48,13 @@ class ConductionRequestController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            // Links this trip log back to the booking it fulfils, and the unit
+            // running it. Both nullable: a walk-in trip with no prior booking is
+            // still the common case, and nothing before this wrote either — the
+            // model has carried them in $fillable since the columns were added,
+            // but store() never actually accepted them as input until now.
+            'service_request_id' => 'nullable|integer|exists:tbl_service_request,request_id',
+            'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id',
             'patient_name' => 'required|string|max:255',
             'patient_age' => 'nullable|integer|min:0|max:150',
             'patient_address' => 'required|string|max:255',

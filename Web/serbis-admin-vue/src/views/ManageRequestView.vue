@@ -427,6 +427,15 @@
                   Mark as Resolved
                 </v-btn>
               </template>
+              <!-- A Booked request only reaches here once approve() has given
+                   it a vehicle_id — see showActions above. Approving one in
+                   the first place, and rescheduling it, are not built in this
+                   panel yet; this is the one action that exists for it so far. -->
+              <template v-else-if="selectedRequest.status === 'Booked' && selectedRequest.vehicle_id">
+                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white w-100" height="40" @click="dispatchBooking(selectedRequest)">
+                  Dispatch
+                </v-btn>
+              </template>
             </div>
           </template>
         </v-card>
@@ -677,11 +686,20 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 
 const route = useRoute()
+const router = useRouter()
+
+// Hands off to the Ambulance Dispatch Requests page's own create dialog,
+// prefilled from this booking's description — see
+// ConductionRequestView.vue's openDispatchFromQuery/parseAmbulanceDescription
+// for the parsing this triggers.
+const dispatchBooking = (targetRequest) => {
+  router.push({ path: '/conduction-requests', query: { dispatch: itemId(targetRequest) } })
+}
 
 // The split view needs a real breakpoint, not a media query in CSS: below it
 // the two panes are rendered one at a time rather than merely restyled, so the
@@ -1029,7 +1047,14 @@ const emptyListMessage = computed(() => {
 })
 
 const showActions = computed(() =>
-  selectedRequest.value && (selectedRequest.value.status === 'Pending' || !selectedRequest.value.status || selectedRequest.value.status === 'Responding')
+  selectedRequest.value && (
+    selectedRequest.value.status === 'Pending'
+    || !selectedRequest.value.status
+    || selectedRequest.value.status === 'Responding'
+    // Only once a unit is assigned — an unapproved Booked request has
+    // nothing to dispatch yet, and approving it is not built here.
+    || (selectedRequest.value.status === 'Booked' && selectedRequest.value.vehicle_id)
+  )
 )
 
 // Writes what is on screen: the current status filter and search, in the order

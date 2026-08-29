@@ -105,6 +105,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);    
         Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
+        // Their own routes, not update(): both re-check ambulance availability
+        // under a lock, which update()/syncFleet() were never built to do.
+        Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
+        Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
         Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update', 'destroy']);
 
         // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and
