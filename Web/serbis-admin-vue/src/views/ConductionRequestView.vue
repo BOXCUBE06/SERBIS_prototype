@@ -206,8 +206,6 @@
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 65vh;">
-          <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
-
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>
@@ -369,9 +367,8 @@ const fetchData = async () => {
       throw new Error(errData.message || `Request failed (${res.status})`)
     }
     const data = await res.json()
-    const rows = data.data || data
-    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
-    items.value = rows
+    if (!Array.isArray(data)) throw new Error('The server returned an unexpected response')
+    items.value = data
     loadError.value = ''
   } catch (error) {
     loadError.value = error.message || 'Could not reach the server'
