@@ -4,13 +4,35 @@ namespace App\Http\Controllers;
 
 use App\Models\Vehicle;
 use App\Models\ServiceRequest;
+use App\Services\AmbulanceAvailability;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ServiceRequestController extends Controller
 {
+    public function __construct(private readonly AmbulanceAvailability $availability)
+    {
+    }
+
+    /**
+     * The wall clock a resident's `scheduled_at` is typed against. Duplicated
+     * from ConductionRequestController::OFFICE_TIMEZONE and
+     * AmbulanceAvailabilityController::OFFICE_TIMEZONE rather than shared —
+     * all three are the same fixed IANA name, not a business rule that could
+     * drift.
+     */
+    private const OFFICE_TIMEZONE = 'Asia/Manila';
+
+    /** How soon a resident may book. Anything closer is an emergency, not a schedule. */
+    private const MINIMUM_LEAD_TIME_HOURS = 1;
+
+    /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
+    private const DEFAULT_BOOKING_HOURS = 2;
+
     /**
      * The status column's whole vocabulary. Seeders, the admin panel's tabs and
      * the mobile ReqStatus enum all already agree on these five; the column was
@@ -69,7 +91,30 @@ class ServiceRequestController extends Controller
             // where stopping to photograph anything is the wrong advice.
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
+            // Absent means "as soon as you can" — the request behaves exactly as
+            // it always has. Present means a scheduled ambulance booking; see
+            // the checks right below, which run before any file touches disk.
+            'scheduled_at' => 'nullable|date',
         ]);
+
+        $scheduledAt = null;
+        if (!empty($validated['scheduled_at'])) {
+            $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
+
+            if ($scheduledAt->isPast()) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'Scheduled time must be in the future.',
+                ]);
+            }
+
+            if ($scheduledAt->lt(now()->addHours(self::MINIMUM_LEAD_TIME_HOURS))) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'Scheduled bookings need at least '
+                        . self::MINIMUM_LEAD_TIME_HOURS
+                        . ' hour of lead time. Anything sooner is an emergency — call it in instead.',
+                ]);
+            }
+        }
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -101,11 +146,18 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt) {
                 $vehicle = null;
                 $vehicleId = null;
 
-                if (!empty($validated['required_vehicle_type'])) {
+                // A scheduled booking never claims a unit here, even if a caller
+                // somehow also sent required_vehicle_type: which ambulance goes
+                // out is a staffing decision made at approval (phase 5), not
+                // something this endpoint locks in before anyone on duty has
+                // seen the booking. required_vehicle_type's own immediate-claim
+                // path below is therefore for the unscheduled, "as soon as you
+                // can" case only — unchanged from before this feature existed.
+                if (!$scheduledAt && !empty($validated['required_vehicle_type'])) {
                     $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
                                       ->where('status', 'Available')
                                       ->lockForUpdate()
@@ -117,15 +169,45 @@ class ServiceRequestController extends Controller
                     $vehicleId = $vehicle->vehicle_id;
                 }
 
+                if ($scheduledAt) {
+                    // Locks every Ambulance unit before the availability check
+                    // runs, and before it — not just around it — so the check's
+                    // own plain read is guaranteed to see any booking a
+                    // concurrent request just committed, rather than a snapshot
+                    // from before this transaction started. Two residents racing
+                    // for the same slot are serialised here: the second blocks
+                    // on this lock until the first commits, then re-checks
+                    // against what the first actually booked.
+                    Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+                    $freeUnits = $this->availability->availableAmbulances(
+                        $scheduledAt,
+                        $scheduledAt->copy()->addHours(self::DEFAULT_BOOKING_HOURS)
+                    );
+
+                    if ($freeUnits->isEmpty()) {
+                        throw ValidationException::withMessages([
+                            'scheduled_at' => 'No ambulance is available for that time. Try a different slot.',
+                        ]);
+                    }
+                }
+
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $validated['service_id'],
                     'description' => $validated['description'],
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
-                    'status' => 'Pending',
+                    // A scheduled booking is approved capacity, not a request
+                    // waiting on staff triage — 'Pending' would queue it next to
+                    // a report nobody has looked at yet. scheduled_end and
+                    // vehicle_id both stay null regardless of the check above
+                    // finding a free unit: which one actually goes out, and the
+                    // real end of its booking, are set at approval.
+                    'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
+                    'scheduled_at' => $scheduledAt,
                 ]);
 
                 if ($vehicle) {
