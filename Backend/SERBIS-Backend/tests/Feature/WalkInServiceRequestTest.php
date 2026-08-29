@@ -7,6 +7,8 @@ use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
+use App\Models\Vehicle;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -133,6 +135,77 @@ class WalkInServiceRequestTest extends TestCase
             'service_id' => $this->service->service_id,
             'description' => 'Missing requester entirely.',
         ])->assertStatus(422)->assertJsonValidationErrors(['walk_in_name', 'walk_in_contact_number']);
+    }
+
+    /** Same Manila-local naive shape the mobile app's picker sends. */
+    private function manilaString(Carbon $instant): string
+    {
+        return $instant->copy()->setTimezone('Asia/Manila')->format('Y-m-d H:i:s');
+    }
+
+    public function test_staff_can_book_a_walk_in_for_a_future_slot(): void
+    {
+        Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available']);
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+
+        $response = $this->postJson('/api/admin/service-requests', [
+            'walk_in_name' => 'Rosario Bautista',
+            'walk_in_contact_number' => '09181234567',
+            'service_id' => $this->service->service_id,
+            'description' => 'Booked at the counter for a hospital transfer.',
+            'scheduled_at' => $this->manilaString($target),
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('status', 'Booked')
+            ->assertJsonPath('vehicle_id', null);
+
+        $created = ServiceRequest::findOrFail($response->json('request_id'));
+        $this->assertTrue($created->scheduled_at->utc()->equalTo($target));
+    }
+
+    public function test_a_scheduled_walk_in_does_not_claim_a_unit_even_with_required_vehicle_type(): void
+    {
+        Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available']);
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+
+        $response = $this->postJson('/api/admin/service-requests', [
+            'walk_in_name' => 'Rosario Bautista',
+            'walk_in_contact_number' => '09181234567',
+            'service_id' => $this->service->service_id,
+            'description' => 'Booked at the counter.',
+            'required_vehicle_type' => 'Ambulance',
+            'scheduled_at' => $this->manilaString($target),
+        ]);
+
+        $response->assertStatus(201)->assertJsonPath('vehicle_id', null);
+        $this->assertSame('Available', Vehicle::first()->status);
+    }
+
+    public function test_no_ambulance_available_for_the_walk_in_window_is_rejected(): void
+    {
+        $unit = Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available']);
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+
+        ServiceRequest::create([
+            'service_id' => $this->service->service_id,
+            'vehicle_id' => $unit->vehicle_id,
+            'description' => 'Existing booking',
+            'status' => 'Booked',
+            'scheduled_at' => $target->copy(),
+            'scheduled_end' => $target->copy()->addHours(2),
+        ]);
+
+        $response = $this->postJson('/api/admin/service-requests', [
+            'walk_in_name' => 'Rosario Bautista',
+            'walk_in_contact_number' => '09181234567',
+            'service_id' => $this->service->service_id,
+            'description' => 'Booked at the counter.',
+            'scheduled_at' => $this->manilaString($target),
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('scheduled_at');
+        $this->assertSame(1, ServiceRequest::count());
     }
 
     public function test_a_resident_cannot_call_the_staff_only_route(): void
