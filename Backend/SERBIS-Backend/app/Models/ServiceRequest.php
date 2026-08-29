@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
@@ -65,5 +66,11 @@ class ServiceRequest extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
+    }
+
+    /** The trip log(s) filed against this booking. Nothing enforces one-per-request at the schema level. */
+    public function conductionRequests(): HasMany
+    {
+        return $this->hasMany(ConductionRequest::class, 'service_request_id', 'request_id');
     }
 }

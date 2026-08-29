@@ -33,6 +33,9 @@ class ServiceRequestController extends Controller
     /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
     private const DEFAULT_BOOKING_HOURS = 2;
 
+    /** How close to scheduled_at a resident may still back out on their own. */
+    private const CANCEL_CUTOFF_HOURS = 2;
+
     /**
      * The status column's whole vocabulary. Seeders, the admin panel's tabs and
      * the mobile ReqStatus enum all already agree on these five; the column was
@@ -458,10 +461,34 @@ class ServiceRequestController extends Controller
         }
 
         // Once a unit is Responding the cancellation is an operational decision,
-        // not a resident one — the crew is already moving.
-        if ($serviceRequest->status !== 'Pending') {
+        // not a resident one — the crew is already moving. Booked joins Pending
+        // here: a booking that has not yet been approved into a live dispatch is
+        // still purely the resident's own plan to withdraw.
+        if (!in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
             return response()->json([
-                'message' => 'Only a pending request can be cancelled.',
+                'message' => 'Only a pending or booked request can be cancelled.',
+            ], 422);
+        }
+
+        // A booking too close to its own start is no longer just "the resident
+        // changed their mind" — the office may already be staging for it. Only
+        // Booked requests carry a scheduled_at, so Pending is never touched by
+        // this check.
+        if ($serviceRequest->scheduled_at
+            && now()->gte($serviceRequest->scheduled_at->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
+        ) {
+            return response()->json([
+                'message' => 'This booking is too close to its scheduled time to cancel. Call the office instead.',
+            ], 422);
+        }
+
+        // departed_office_at is the trip log's own first checkpoint — once it is
+        // set the crew has physically left, and the booking behind it is no
+        // longer the resident's to withdraw regardless of what tbl_service_request
+        // itself still says.
+        if ($serviceRequest->conductionRequests()->whereNotNull('departed_office_at')->exists()) {
+            return response()->json([
+                'message' => 'This trip has already been dispatched and cannot be cancelled here.',
             ], 422);
         }
 
@@ -469,15 +496,7 @@ class ServiceRequestController extends Controller
             // store() can attach and dispatch a vehicle while the request is still
             // Pending, so cancelling has to hand the unit back or it leaks out of
             // the fleet with no request pointing at it.
-            if ($serviceRequest->vehicle_id) {
-                $vehicle = Vehicle::where('vehicle_id', $serviceRequest->vehicle_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($vehicle && $vehicle->status === 'Dispatched') {
-                    $vehicle->update(['status' => 'Available']);
-                }
-            }
+            $this->releaseVehicle($serviceRequest->vehicle_id);
 
             $serviceRequest->update(['status' => 'Cancelled']);
         });
