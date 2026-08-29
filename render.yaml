@@ -171,6 +171,16 @@ services:
 # accumulates is dead rows in personal_access_tokens, at the rate the app issues
 # tokens. At demo scale that is negligible; it is a cleanup job, not a control.
 #
+# ALSO DEFERRED FOR THE SAME REASON: an ambulance booking's day-before SMS
+# reminder. It was scoped as a scheduled command alongside the other booking
+# notifications (approved/rejected/rescheduled, which fire inline from
+# ServiceRequestController and need no scheduler at all), but a reminder that
+# fires the day before a booking is inherently a scheduled job, and there is
+# nothing scheduled on this deployment to hang it off — see above. Not built
+# as a workaround (a request-time check, a fake queue) because none of those
+# actually run once a day unprompted; they would just be a reminder that
+# silently never fires. Out of scope until this cron is restored.
+#
 # Until this is restored, prune by hand when it matters:
 #
 #     php artisan sanctum:prune-expired --hours=24

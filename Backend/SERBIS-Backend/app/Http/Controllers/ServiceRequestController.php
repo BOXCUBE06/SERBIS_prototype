@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Vehicle;
 use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
+use App\Services\PhilSms;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -571,6 +573,84 @@ class ServiceRequestController extends Controller
         }
     }
 
+    /**
+     * Texts a resident that their booking's status changed. Follows the OTP
+     * call pattern at AuthController::sendVerificationCode(): PhilSms is the
+     * only channel — there is no Laravel Notifications setup, and
+     * MAIL_MAILER is 'log' in production (render.yaml), so an email
+     * "fallback" here would not actually reach anyone, unlike the OTP flow
+     * where email is a real second channel. Walk-in bookings carry no
+     * resident_id and are silently skipped; there is no one to text.
+     *
+     * Deliberately best-effort: this always runs after the transaction that
+     * made the change has already committed (called from outside every
+     * DB::transaction() block below), so a delivery failure can only ever
+     * fail to inform, never undo a booking that already landed. Never
+     * throws — every failure path is caught and logged instead. The
+     * 45-second poll and cold-launch fetch this is compensating for
+     * (main.dart:320, :390) still catch a resident up if the text never
+     * arrives.
+     */
+    private function notifyResident(ServiceRequest $serviceRequest, string $message): void
+    {
+        if ($serviceRequest->resident_id === null) {
+            return;
+        }
+
+        $resident = $serviceRequest->resident ?? $serviceRequest->resident()->first();
+
+        if (!$resident || !PhilSms::configured()) {
+            return;
+        }
+
+        $number = PhilSms::normalize((string) $resident->phone_number);
+
+        if ($number === '') {
+            return;
+        }
+
+        try {
+            $response = app(PhilSms::class)->send([$number], $message);
+
+            if (!PhilSms::accepted($response)) {
+                Log::warning('Booking status-change SMS not accepted', [
+                    'request_id' => $serviceRequest->request_id,
+                    'status' => $response->status(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Booking status-change SMS failed', [
+                'request_id' => $serviceRequest->request_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
+    private function forResident(Carbon $instant): string
+    {
+        return $instant->copy()->timezone(self::OFFICE_TIMEZONE)->format('M j, Y g:i A');
+    }
+
+    private function approvalMessage(ServiceRequest $serviceRequest): string
+    {
+        $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a unit';
+
+        return 'SERBIS: Your ambulance booking for '.$this->forResident($serviceRequest->scheduled_at)
+            .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
+    }
+
+    private function rejectionMessage(string $reason): string
+    {
+        return 'SERBIS: Your ambulance booking request was not approved. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
+    private function rescheduleMessage(ServiceRequest $serviceRequest, string $reason): string
+    {
+        return 'SERBIS: Your ambulance booking has been moved to '.$this->forResident($serviceRequest->scheduled_at)
+            .'. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
@@ -602,11 +682,21 @@ class ServiceRequestController extends Controller
             'remarks' => 'nullable|string|required_if:status,Disapproved',
         ]);
 
+        // Captured before update() overwrites status: rejecting a booking is
+        // the case this endpoint notifies for (the panel's older, unscheduled
+        // Pending -> Disapproved flow is not "a booking" and stays silent).
+        $wasBookingRejection = $serviceRequest->scheduled_at !== null
+            && ($validated['status'] ?? null) === 'Disapproved';
+
         DB::transaction(function () use ($serviceRequest, $validated) {
             $this->syncFleet($serviceRequest, $validated);
 
             $serviceRequest->update($validated);
         });
+
+        if ($wasBookingRejection) {
+            $this->notifyResident($serviceRequest, $this->rejectionMessage((string) $validated['remarks']));
+        }
 
         return response()->json($serviceRequest->fresh(['vehicle']));
     }
@@ -702,7 +792,10 @@ class ServiceRequestController extends Controller
             ]);
         });
 
-        return response()->json($serviceRequest->fresh(['vehicle']));
+        $fresh = $serviceRequest->fresh(['vehicle']);
+        $this->notifyResident($fresh, $this->approvalMessage($fresh));
+
+        return response()->json($fresh);
     }
 
     /**
@@ -771,7 +864,10 @@ class ServiceRequestController extends Controller
             ]);
         });
 
-        return response()->json($serviceRequest->fresh(['vehicle']));
+        $fresh = $serviceRequest->fresh(['vehicle']);
+        $this->notifyResident($fresh, $this->rescheduleMessage($fresh, (string) $validated['remarks']));
+
+        return response()->json($fresh);
     }
 
     public function destroy($id)

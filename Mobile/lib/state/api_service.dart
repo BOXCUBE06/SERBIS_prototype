@@ -44,9 +44,10 @@ class ApiService {
 
   /// Keychain on iOS, EncryptedSharedPreferences on Android. The token used to
   /// sit in plain `SharedPreferences`, which is a readable XML file on a rooted
-  /// device and survives in device backups — and Sanctum tokens never expire,
-  /// so a lifted one is a permanent credential to an account holding a
-  /// government ID scan.
+  /// device and survives in device backups — and a resident's Sanctum token is
+  /// good for 30 days (`resident_expiration` in config/sanctum.php), so a
+  /// lifted one is a working credential to an account holding a government ID
+  /// scan for weeks, not just until the next request.
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
@@ -477,7 +478,9 @@ class ApiService {
     } catch (_) {
       // Best effort, and already logged by _send/_decode. The local token is
       // dropped either way, so there is nothing further to record — but note
-      // the server-side token survives, and Sanctum tokens do not expire.
+      // the server-side token is not revoked by this failure. It is not
+      // permanent either: it still expires on its own after 30 days
+      // (resident_expiration in config/sanctum.php), just not immediately.
     }
 
     await _clearToken();

@@ -11,12 +11,16 @@ use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
  * PATCH /api/service-requests/{id}/approve — its own route, not update(),
  * because it re-checks ambulance availability under a lock that update() was
  * never built to take.
+ *
+ * PhilSMS has no sandbox — preventStrayRequests() is what makes an
+ * approval test safe to run at all, same as SmsBlastLoggingTest.
  */
 class ServiceRequestApproveTest extends TestCase
 {
@@ -31,6 +35,8 @@ class ServiceRequestApproveTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Http::preventStrayRequests();
 
         $this->admin = User::create([
             'first_name' => 'MDRRMO',
@@ -88,6 +94,8 @@ class ServiceRequestApproveTest extends TestCase
 
     public function test_approving_assigns_the_unit_and_keeps_status_booked(): void
     {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
         $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
         $request = $this->bookedRequest($target);
 
@@ -111,6 +119,8 @@ class ServiceRequestApproveTest extends TestCase
 
     public function test_approving_accepts_a_staff_adjusted_scheduled_end(): void
     {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
         $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
         $request = $this->bookedRequest($target);
         $customEnd = $target->copy()->addHours(3);
@@ -148,6 +158,11 @@ class ServiceRequestApproveTest extends TestCase
     /** The window filled between submission and approval — the exact race this endpoint's lock exists for. */
     public function test_approving_into_a_window_that_filled_after_submission_is_refused(): void
     {
+        // Only the second, successful call below reaches notifyResident() —
+        // the first 422 throws inside the transaction and never gets there —
+        // but the fake is harmless to register up front either way.
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
         $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
         $request = $this->bookedRequest($target);
 
@@ -172,5 +187,39 @@ class ServiceRequestApproveTest extends TestCase
         $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
             'vehicle_id' => $this->amb02->vehicle_id,
         ])->assertOk();
+    }
+
+    public function test_approving_texts_the_resident_the_unit_and_time(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+        $request = $this->bookedRequest($target);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->amb01->vehicle_id,
+        ])->assertOk();
+
+        Http::assertSent(function ($sent) {
+            return $sent->url() === 'https://dashboard.philsms.com/api/v3/sms/send'
+                && str_contains($sent['message'], 'AMB-01')
+                && str_contains($sent['message'], 'approved');
+        });
+    }
+
+    public function test_a_send_failure_does_not_affect_the_approval_itself(): void
+    {
+        // No fake registered — preventStrayRequests() throws the moment
+        // notifyResident() tries to send, which is exactly the failure this
+        // proves survives: never thrown back to the caller, and the
+        // approval itself still commits and still answers 200.
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+        $request = $this->bookedRequest($target);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->amb01->vehicle_id,
+        ])->assertOk()->assertJsonPath('status', 'Booked');
+
+        $this->assertSame($this->amb01->vehicle_id, $request->fresh()->vehicle_id);
     }
 }
