@@ -341,6 +341,11 @@ const headers = [
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const statusAccent = (status) => STATUS_ACCENT[status] || '#64748B'
+// One path for every timestamp on this page — created_at and all four trip log
+// checkpoints. The checkpoints used to arrive without an offset, which new Date()
+// reads as local time; that happened to render correctly only because the column
+// held office wall clock. They are real UTC instants now and carry a 'Z', so the
+// same conversion is right for all five and there is no special case to keep.
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
 const matchesSearch = (r) => {
@@ -455,8 +460,9 @@ const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: 
 // record, so they come from one place rather than two copies that can drift.
 const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete Trip Log')
 
-// API sends 'YYYY-MM-DD HH:mm:ss' (UTC-cast datetime column); the input wants
-// 'YYYY-MM-DDTHH:mm' in local time.
+// The API sends an ISO instant with an offset; <input type="datetime-local">
+// wants 'YYYY-MM-DDTHH:mm' with none. new Date() resolves the offset and the
+// local getters below render it in the viewer's zone, which is the office's.
 const toInputValue = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
@@ -522,6 +528,10 @@ const submitTripLog = async () => {
   tripLog.value.error = ''
   try {
     const form = tripLog.value.form
+    // Sent back naive, exactly as the input holds it. The server reads a
+    // checkpoint with no offset as Asia/Manila and converts — see
+    // ConductionRequestController::OFFICE_TIMEZONE — so this round-trips what
+    // the staffer typed without the browser having to name a zone.
     const body = {
       departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
       arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,
