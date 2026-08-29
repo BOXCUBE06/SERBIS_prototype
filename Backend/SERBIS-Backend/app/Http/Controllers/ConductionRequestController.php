@@ -20,6 +20,16 @@ class ConductionRequestController extends Controller
         'patient_relatives' => 'relative',
     ];
 
+    /**
+     * The wall clock the trip log is written against. The four checkpoints are
+     * typed into <input type="datetime-local">, which sends a naive string with
+     * no offset, and the MDRRMO office runs on Manila time and enters nothing
+     * else. Named here rather than read from config('app.timezone'): that one is
+     * UTC and governs how the application stores instants, which is the opposite
+     * end of this conversion.
+     */
+    private const OFFICE_TIMEZONE = 'Asia/Manila';
+
     /** The trip log's four checkpoints, in the order they actually happen. */
     private const TRIP_SEQUENCE = [
         'departed_office_at' => 'Departed office',
@@ -123,6 +133,22 @@ class ConductionRequestController extends Controller
             'odometer_end' => 'sometimes|nullable|integer|min:0',
             'others' => 'sometimes|nullable|string',
         ]);
+
+        // Naive checkpoint strings are office local, not UTC. Read under
+        // app.timezone a typed 09:00 was taken to mean 09:00 UTC, so the column
+        // held an instant eight hours off the trip it described — invisible only
+        // because nothing ever compared a checkpoint against created_at or now().
+        // Converted here, before every check below, so the comparisons and the
+        // stored value are all real instants. A string that does carry an offset
+        // is honoured as sent rather than re-read as Manila.
+        foreach (array_keys(self::TRIP_SEQUENCE) as $field) {
+            if (array_key_exists($field, $validated) && $validated[$field] !== null) {
+                $validated[$field] = \Carbon\Carbon::parse(
+                    $validated[$field],
+                    self::OFFICE_TIMEZONE
+                )->utc();
+            }
+        }
 
         // Checked against the *effective* record — this update's fields layered
         // over what is already stored — not just the fields sent in this one
