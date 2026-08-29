@@ -266,12 +266,14 @@ class ApiService {
     // `body` is null when the reply was not JSON at all, so this cannot be
     // an unconditional lookup.
     final code = body?['code'];
+    final challengeId = body?['challenge_id'];
     throw ApiException(
       message,
       statusCode: status,
       code: code is String ? code : null,
       // A refusal can still have sent a code — see [VerificationDelivery].
       delivery: VerificationDelivery.fromJson(body),
+      challengeId: challengeId is String ? challengeId : null,
     );
   }
 
@@ -394,6 +396,43 @@ class ApiService {
 
     // The channel can differ from the one the last code went out on, so the
     // screen relabels itself from this rather than keeping its first answer.
+    return VerificationDelivery.fromJson(data);
+  }
+
+  /// Second half of resident login: the SMS (or mail-fallback) code that came
+  /// back on the `mfa_required` refusal. Mirrors [verifyEmail] — success
+  /// saves the token the same way — but this is a distinct server-side code
+  /// from the signup one and the two must not be confused.
+  Future<Map<String, dynamic>> verifyLoginCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final data = await _post(
+      '/resident/login/verify',
+      {'challenge_id': challengeId, 'code': code},
+      isAuthEndpoint: true,
+    );
+
+    if (data['token'] != null) {
+      await _saveToken(data['token'] as String);
+      return (data['user'] as Map<String, dynamic>?) ?? {};
+    }
+
+    throw const ApiException('That code was not accepted.');
+  }
+
+  /// Asks for a replacement login code against an existing challenge. Takes
+  /// the challenge id, not the email/password — the resident already proved
+  /// the password once to get this challenge.
+  Future<VerificationDelivery?> resendLoginCode({
+    required String challengeId,
+  }) async {
+    final data = await _post(
+      '/resident/login/resend',
+      {'challenge_id': challengeId},
+      isAuthEndpoint: true,
+    );
+
     return VerificationDelivery.fromJson(data);
   }
 

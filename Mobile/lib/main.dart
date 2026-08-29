@@ -8,6 +8,7 @@ import 'models/request_models.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/verify_email_screen.dart';
+import 'screens/auth/verify_login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
@@ -102,7 +103,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-enum _AuthView { login, register, verifyEmail }
+enum _AuthView { login, register, verifyEmail, verifyLogin }
 
 class _AuthGateState extends State<AuthGate> {
   final ApiService _api = ApiService();
@@ -120,6 +121,10 @@ class _AuthGateState extends State<AuthGate> {
   /// Where the code the resident is about to type was sent, and how much of
   /// the resend cooldown is left. Null only if the server did not say.
   VerificationDelivery? _pendingDelivery;
+
+  /// The login MFA challenge id, set when the password was right and a code
+  /// is what's left. Opaque — held only to hand to VerifyLoginScreen.
+  String? _pendingLoginChallengeId;
 
   @override
   void initState() {
@@ -260,6 +265,15 @@ class _AuthGateState extends State<AuthGate> {
             _loginInfoMessage = null;
           });
         },
+        onMfaRequired: (email, challengeId, delivery) {
+          setState(() {
+            _view = _AuthView.verifyLogin;
+            _pendingVerificationEmail = email;
+            _pendingLoginChallengeId = challengeId;
+            _pendingDelivery = delivery;
+            _loginInfoMessage = null;
+          });
+        },
         infoMessage: _loginInfoMessage,
       );
     }
@@ -276,6 +290,25 @@ class _AuthGateState extends State<AuthGate> {
           setState(() {
             _view = _AuthView.login;
             _pendingVerificationEmail = null;
+          });
+        },
+      );
+    }
+
+    if (_view == _AuthView.verifyLogin &&
+        _pendingVerificationEmail != null &&
+        _pendingLoginChallengeId != null) {
+      return VerifyLoginScreen(
+        userStore: _userStore,
+        email: _pendingVerificationEmail!,
+        challengeId: _pendingLoginChallengeId!,
+        delivery: _pendingDelivery,
+        onVerified: _login,
+        onGoToLogin: () {
+          setState(() {
+            _view = _AuthView.login;
+            _pendingVerificationEmail = null;
+            _pendingLoginChallengeId = null;
           });
         },
       );
