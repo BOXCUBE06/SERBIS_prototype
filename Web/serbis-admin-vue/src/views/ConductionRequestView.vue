@@ -243,7 +243,7 @@
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end border-t">
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" @click="openTripLog(selected)">
-            {{ selected.departed_office_at ? 'Update trip log' : 'Complete Trip Log' }}
+            {{ tripLogAction(selected) }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -253,7 +253,7 @@
     <v-dialog v-model="tripLog.open" max-width="600" persistent>
       <v-card rounded="lg">
         <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
-          Complete Trip Log
+          {{ tripLog.title }}
         </v-card-title>
         <v-card-text class="pa-6">
           <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
@@ -449,7 +449,11 @@ const emptyTripLogForm = () => ({
   departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
 })
-const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null })
+const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
+
+// The button that opens the dialog and the dialog's own title read the same
+// record, so they come from one place rather than two copies that can drift.
+const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete Trip Log')
 
 // API sends 'YYYY-MM-DD HH:mm:ss' (UTC-cast datetime column); the input wants
 // 'YYYY-MM-DDTHH:mm' in local time.
@@ -465,6 +469,8 @@ const openTripLog = (record) => {
     open: true,
     error: '',
     target: record,
+    // Captured at open time so the title stays put while the form is edited.
+    title: tripLogAction(record),
     form: {
       departed_office_at: toInputValue(record.departed_office_at),
       arrived_destination_at: toInputValue(record.arrived_destination_at),
