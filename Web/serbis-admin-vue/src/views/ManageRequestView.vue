@@ -861,6 +861,48 @@
             class="mb-2"
           ></v-select>
 
+          <template v-if="isAmbulanceService">
+            <v-divider class="mb-4"></v-divider>
+            <v-switch
+              v-model="createDialog.scheduleForLater"
+              color="secondary"
+              density="comfortable"
+              hide-details
+              class="mb-2 flex-grow-0"
+              label="Schedule for a later time"
+            ></v-switch>
+
+            <template v-if="createDialog.scheduleForLater">
+              <v-text-field
+                v-model="createDialog.form.scheduled_at"
+                type="datetime-local"
+                :min="minScheduleValue"
+                label="Scheduled time"
+                hint="At least 1 hour from now — sooner is an emergency, dispatch now instead."
+                persistent-hint
+                variant="outlined"
+                density="comfortable"
+                class="mb-2"
+                @update:model-value="checkWalkInAvailability"
+              ></v-text-field>
+
+              <div v-if="walkInAvailability.checking" class="d-flex align-center gap-2 text-caption text-medium-emphasis mb-2">
+                <v-progress-circular indeterminate size="14" width="2"></v-progress-circular>
+                Checking availability…
+              </div>
+              <div
+                v-else-if="walkInAvailability.checked"
+                class="d-flex align-center gap-2 text-caption mb-2"
+                :class="walkInAvailability.freeCount > 0 ? 'text-success' : 'text-warning'"
+              >
+                <v-icon size="16">{{ walkInAvailability.freeCount > 0 ? 'mdi-check-circle-outline' : 'mdi-alert-circle-outline' }}</v-icon>
+                {{ walkInAvailability.freeCount > 0
+                  ? `${walkInAvailability.freeCount} unit${walkInAvailability.freeCount === 1 ? '' : 's'} free for this window`
+                  : 'No ambulance free for this window — try a different time.' }}
+              </div>
+            </template>
+          </template>
+
           <v-file-input
             v-model="createDialog.form.valid_id"
             label="Valid ID (optional — already checked in person)"
@@ -981,11 +1023,71 @@ const emptyCreateForm = () => ({
   required_vehicle_type: null,
   valid_id: null,
   site_photo: null,
+  scheduled_at: '',
 })
-const createDialog = ref({ open: false, loading: false, error: '', requesterType: 'resident', form: emptyCreateForm() })
+const emptyWalkInAvailability = () => ({ checking: false, checked: false, freeCount: 0 })
+const createDialog = ref({
+  open: false,
+  loading: false,
+  error: '',
+  requesterType: 'resident',
+  scheduleForLater: false,
+  form: emptyCreateForm(),
+})
+const walkInAvailability = ref(emptyWalkInAvailability())
 
 const openCreateDialog = () => {
-  createDialog.value = { open: true, loading: false, error: '', requesterType: 'resident', form: emptyCreateForm() }
+  createDialog.value = {
+    open: true,
+    loading: false,
+    error: '',
+    requesterType: 'resident',
+    scheduleForLater: false,
+    form: emptyCreateForm(),
+  }
+  walkInAvailability.value = emptyWalkInAvailability()
+}
+
+// Same exact-code match as the mobile app's formKindForServiceCode: only this
+// one service carries a scheduling concept server-side today.
+const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
+const isAmbulanceService = computed(() =>
+  services.value.find(s => s.service_id === createDialog.value.form.service_id)?.code === AMBULANCE_SERVICE_CODE
+)
+
+// Matches ServiceRequestController::MINIMUM_LEAD_TIME_HOURS — sized here only
+// to grey out an unreachable pick, the server still decides for real.
+const minScheduleValue = computed(() => toDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000)))
+
+let walkInAvailabilityToken = 0
+const checkWalkInAvailability = async () => {
+  const raw = createDialog.value.form.scheduled_at
+  walkInAvailabilityToken += 1
+  const token = walkInAvailabilityToken
+
+  if (!raw) {
+    walkInAvailability.value = emptyWalkInAvailability()
+    return
+  }
+  const start = new Date(raw)
+  if (Number.isNaN(start.getTime())) {
+    walkInAvailability.value = emptyWalkInAvailability()
+    return
+  }
+
+  walkInAvailability.value = { checking: true, checked: false, freeCount: 0 }
+  try {
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000)
+    const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() })
+    const res = await fetch(`${API_BASE}/ambulance-availability?${params}`, { headers: getHeaders() })
+    const units = res.ok ? await res.json() : []
+    // The staffer may have changed the pick again while this was in flight.
+    if (token !== walkInAvailabilityToken) return
+    walkInAvailability.value = { checking: false, checked: true, freeCount: Array.isArray(units) ? units.length : 0 }
+  } catch {
+    if (token !== walkInAvailabilityToken) return
+    walkInAvailability.value = emptyWalkInAvailability()
+  }
 }
 
 // `kind` is the whole state machine: 'approve' and 'disapprove' act on the
@@ -1715,6 +1817,10 @@ const submitWalkIn = async () => {
     createDialog.value.error = 'Description is required'
     return
   }
+  if (isAmbulanceService.value && createDialog.value.scheduleForLater && !form.scheduled_at) {
+    createDialog.value.error = 'Pick a date and time, or turn off scheduling to dispatch now'
+    return
+  }
 
   createDialog.value.loading = true
   createDialog.value.error = ''
@@ -1729,6 +1835,9 @@ const submitWalkIn = async () => {
     body.append('service_id', form.service_id)
     body.append('description', form.description.trim())
     if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
+    if (isAmbulanceService.value && createDialog.value.scheduleForLater && form.scheduled_at) {
+      body.append('scheduled_at', form.scheduled_at.replace('T', ' ') + ':00')
+    }
     const validIdFile = singleFile(form.valid_id)
     if (validIdFile) body.append('valid_id', validIdFile)
     const sitePhotoFile = singleFile(form.site_photo)

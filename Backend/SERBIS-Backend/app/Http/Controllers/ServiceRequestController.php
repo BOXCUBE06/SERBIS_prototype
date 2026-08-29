@@ -102,24 +102,7 @@ class ServiceRequestController extends Controller
             'scheduled_at' => 'nullable|date',
         ]);
 
-        $scheduledAt = null;
-        if (!empty($validated['scheduled_at'])) {
-            $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
-
-            if ($scheduledAt->isPast()) {
-                throw ValidationException::withMessages([
-                    'scheduled_at' => 'Scheduled time must be in the future.',
-                ]);
-            }
-
-            if ($scheduledAt->lt(now()->addHours(self::MINIMUM_LEAD_TIME_HOURS))) {
-                throw ValidationException::withMessages([
-                    'scheduled_at' => 'Scheduled bookings need at least '
-                        . self::MINIMUM_LEAD_TIME_HOURS
-                        . ' hour of lead time. Anything sooner is an emergency — call it in instead.',
-                ]);
-            }
-        }
+        $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -238,6 +221,36 @@ class ServiceRequestController extends Controller
         return response()->json($serviceRequest, 201);
     }
 
+    /**
+     * Shared by store() and adminStore(): a resident's own submission and a
+     * staff-filed walk-in must reject the same malformed slot the same way,
+     * or the two paths drift the way the naive/offset checkpoint parsing did.
+     */
+    private function resolveScheduledAt(?string $raw): ?Carbon
+    {
+        if (empty($raw)) {
+            return null;
+        }
+
+        $scheduledAt = Carbon::parse($raw, self::OFFICE_TIMEZONE)->utc();
+
+        if ($scheduledAt->isPast()) {
+            throw ValidationException::withMessages([
+                'scheduled_at' => 'Scheduled time must be in the future.',
+            ]);
+        }
+
+        if ($scheduledAt->lt(now()->addHours(self::MINIMUM_LEAD_TIME_HOURS))) {
+            throw ValidationException::withMessages([
+                'scheduled_at' => 'Scheduled bookings need at least '
+                    . self::MINIMUM_LEAD_TIME_HOURS
+                    . ' hour of lead time. Anything sooner is an emergency — call it in instead.',
+            ]);
+        }
+
+        return $scheduledAt;
+    }
+
     // Deleting the upload is best-effort on purpose: the caller is already on a
     // failure path, and a storage error here would replace the real reason for
     // the failure with a misleading one.
@@ -283,7 +296,12 @@ class ServiceRequestController extends Controller
             'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
+            // Same "absent means as soon as possible" contract as store() — a
+            // walk-in ambulance request can be booked for a future slot too.
+            'scheduled_at' => 'nullable|date',
         ]);
+
+        $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 
         $residentId = $validated['resident_id'] ?? null;
         // Walk-in fields are dropped rather than merely left unvalidated when a
@@ -315,11 +333,14 @@ class ServiceRequestController extends Controller
         }
 
         try {
-            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath) {
+            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath, $scheduledAt) {
                 $vehicle = null;
                 $vehicleId = null;
 
-                if (!empty($validated['required_vehicle_type'])) {
+                // Same split as store(): an immediate walk-in may claim a unit
+                // here, but a booking's unit is a staffing decision made at
+                // approval, not something this counter form locks in.
+                if (!$scheduledAt && !empty($validated['required_vehicle_type'])) {
                     $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
                                       ->where('status', 'Available')
                                       ->lockForUpdate()
@@ -331,6 +352,21 @@ class ServiceRequestController extends Controller
                     $vehicleId = $vehicle->vehicle_id;
                 }
 
+                if ($scheduledAt) {
+                    Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+                    $freeUnits = $this->availability->availableAmbulances(
+                        $scheduledAt,
+                        $scheduledAt->copy()->addHours(self::DEFAULT_BOOKING_HOURS)
+                    );
+
+                    if ($freeUnits->isEmpty()) {
+                        throw ValidationException::withMessages([
+                            'scheduled_at' => 'No ambulance is available for that time. Try a different slot.',
+                        ]);
+                    }
+                }
+
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $residentId,
                     'walk_in_name' => $walkInName,
@@ -339,9 +375,10 @@ class ServiceRequestController extends Controller
                     'description' => $validated['description'],
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
-                    'status' => 'Pending',
+                    'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
+                    'scheduled_at' => $scheduledAt,
                 ]);
 
                 if ($vehicle) {
