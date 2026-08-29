@@ -20,6 +20,13 @@ use App\Http\Controllers\AnalyticsController;
 
 Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
 Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middleware('throttle:login');
+// Second half of each login: password already checked, an MFA code is what's
+// left. These carry a challenge_id, not an email_address, so they get their
+// own 'mfa' limiter (keyed on challenge_id) rather than 'login' — see the
+// comment on RateLimiter::for('mfa', ...) in AppServiceProvider.
+Route::post('/admin/login/verify', [AuthController::class, 'adminLoginVerify'])->middleware('throttle:mfa');
+Route::post('/resident/login/verify', [AuthController::class, 'residentLoginVerify'])->middleware('throttle:mfa');
+Route::post('/resident/login/resend', [AuthController::class, 'resendLoginCode'])->middleware('throttle:mfa');
 // Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
 // the submitted email address as well as the IP.
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');

@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResidentLoginCode;
 use App\Mail\ResidentVerificationCode;
 use App\Models\User; // Represents Admins/Staff
 use App\Models\Resident;
 use App\Services\PhilSms;
+use App\Services\Totp;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -359,15 +363,143 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // Password proven. A token is not issued yet — the admin still owes a
+        // TOTP code. The challenge is single-use and short-lived; adminLoginVerify
+        // is the only place it can be spent.
+        $challengeId = $this->issueMfaChallenge('admin', $admin->admin_id);
+        $enrolled = app(Totp::class)->isEnrolled($admin->admin_id);
+
+        $payload = [
+            'message' => 'Enter the code from your authenticator app to finish signing in.',
+            'code' => 'mfa_required',
+            'challenge_id' => $challengeId,
+            'enrollment_required' => !$enrolled,
+        ];
+
+        // The QR only goes out once. Showing it on every login would let anyone
+        // who learns the password re-enroll their own authenticator silently —
+        // exactly the self-enroll gap this flag exists to close.
+        if (!$enrolled) {
+            $uri = app(Totp::class)->provisioningUri($admin->admin_id, $admin->email_address);
+            $payload['qr_code'] = app(Totp::class)->qrCodeDataUri($uri);
+            $payload['secret'] = app(Totp::class)->secretFor($admin->admin_id);
+        }
+
+        return response()->json($payload, 403);
+    }
+
+    /**
+     * Second half of admin login: the TOTP code comes back here. The first
+     * code an admin ever submits both signs them in and marks them enrolled —
+     * there is no separate "confirm enrollment" step, because a correct code
+     * is already proof the authenticator app was set up correctly.
+     */
+    public function adminLoginVerify(Request $request)
+    {
+        $request->validate([
+            'challenge_id' => 'required|string',
+            'code' => 'required|string',
+        ]);
+
+        $challenge = $this->consumeMfaChallengeAttempt('admin', $request->challenge_id);
+
+        if ($challenge === null) {
+            return response()->json([
+                'message' => 'That login attempt has expired. Please log in again.',
+                'code' => 'mfa_challenge_expired',
+            ], 422);
+        }
+
+        if ($challenge === false) {
+            return response()->json([
+                'message' => 'Too many wrong codes. Please log in again.',
+                'code' => 'too_many_attempts',
+            ], 429);
+        }
+
+        $admin = User::find($challenge['id']);
+
+        if (!$admin || !app(Totp::class)->verify($admin->admin_id, (string) $request->code)) {
+            return response()->json([
+                'message' => 'That code is not right. Check your authenticator app and try again.',
+                'code' => 'invalid_code',
+            ], 422);
+        }
+
+        Cache::forget("mfa:challenge:{$request->challenge_id}");
+        app(Totp::class)->markEnrolled($admin->admin_id);
+
         return response()->json([
-            'token' => $admin->createToken(
-                'admin-token',
-                ['*'],
-                now()->addMinutes(config('sanctum.admin_expiration')),
-            )->plainTextToken,
+            'token' => $this->issueAdminToken($admin),
             'role' => 'admin',
-            'user' => $admin
+            'user' => $admin,
         ], 200);
+    }
+
+    private function issueAdminToken(User $admin): string
+    {
+        return $admin->createToken(
+            'admin-token',
+            ['*'],
+            now()->addMinutes(config('sanctum.admin_expiration')),
+        )->plainTextToken;
+    }
+
+    private function issueResidentToken(Resident $resident): string
+    {
+        return $resident->createToken(
+            'resident-token',
+            ['*'],
+            now()->addMinutes(config('sanctum.resident_expiration')),
+        )->plainTextToken;
+    }
+
+    /**
+     * Creates a short-lived, single-use login challenge. Kept in cache rather
+     * than a table — nothing about a challenge needs to survive a restart or
+     * be queried, and it's gone in 5 minutes either way.
+     */
+    private function issueMfaChallenge(string $type, int $id, array $extra = []): string
+    {
+        $challengeId = Str::random(64);
+
+        Cache::put(
+            "mfa:challenge:{$challengeId}",
+            array_merge(['type' => $type, 'id' => $id, 'attempts' => 0], $extra),
+            now()->addMinutes(5),
+        );
+
+        return $challengeId;
+    }
+
+    /**
+     * Looks up a challenge and checks it is still alive and of the expected
+     * type, without spending an attempt — a wrong `challenge_id` or expired
+     * challenge is a client-side problem, not a guess against a code.
+     *
+     * Returns null when the challenge is missing/expired/wrong-type, false
+     * when the attempt cap has already been hit (and invalidates it), or the
+     * challenge array — with `attempts` already incremented in the cache —
+     * when the caller should go on to check the code itself.
+     */
+    private function consumeMfaChallengeAttempt(string $type, string $challengeId): array|false|null
+    {
+        $challenge = Cache::get("mfa:challenge:{$challengeId}");
+
+        if (!is_array($challenge) || ($challenge['type'] ?? null) !== $type) {
+            return null;
+        }
+
+        if (($challenge['attempts'] ?? 0) >= 5) {
+            Cache::forget("mfa:challenge:{$challengeId}");
+
+            return false;
+        }
+
+        $challenge['attempts'] = ($challenge['attempts'] ?? 0) + 1;
+        Cache::put("mfa:challenge:{$challengeId}", $challenge, now()->addMinutes(5));
+
+        return $challenge;
     }
 
     // Endpoint specifically for the Mobile App
@@ -446,17 +578,172 @@ class AuthController extends Controller
         // without one the resident sees a generic failure and retries forever.
         // The onboarding copy implying a gate should change at the same time.
 
+        // Password proven and the account is a real one. A token is not issued
+        // yet — a code goes to the resident's phone (or mail, same fallback
+        // sendVerificationCode uses) and has to come back to /resident/login/verify
+        // first. This is deliberately a *different* code from the signup one:
+        // it never touches verification_code on the model, so a login attempt
+        // can never spend or clobber an in-flight signup code and vice versa.
+        ['channel' => $channel, 'challenge_id' => $challengeId] = $this->sendLoginCode($resident, null);
+
         return response()->json([
-            'token' => $resident->createToken(
-                'resident-token',
-                ['*'],
-                now()->addMinutes(config('sanctum.resident_expiration')),
-            )->plainTextToken,
+            'message' => 'Enter the code we just sent to finish signing in.',
+            'code' => 'mfa_required',
+            'challenge_id' => $challengeId,
+        ] + $this->deliveryPayloadFor($resident, $channel, $challengeId), 403);
+    }
+
+    /**
+     * Second half of resident login: the SMS (or email-fallback) code comes
+     * back here.
+     */
+    public function residentLoginVerify(Request $request)
+    {
+        $request->validate([
+            'challenge_id' => 'required|string',
+            'code' => 'required|string',
+        ]);
+
+        $challenge = $this->consumeMfaChallengeAttempt('resident', $request->challenge_id);
+
+        if ($challenge === null) {
+            return response()->json([
+                'message' => 'That login attempt has expired. Please log in again.',
+                'code' => 'mfa_challenge_expired',
+            ], 422);
+        }
+
+        if ($challenge === false) {
+            return response()->json([
+                'message' => 'Too many wrong codes. Please log in again.',
+                'code' => 'too_many_attempts',
+            ], 429);
+        }
+
+        $resident = Resident::find($challenge['id']);
+
+        if (!$resident || !Hash::check((string) $request->code, $challenge['code_hash'] ?? '')) {
+            return response()->json([
+                'message' => 'That code is not right, or it has expired. Ask for a new one.',
+                'code' => 'invalid_code',
+            ], 422);
+        }
+
+        Cache::forget("mfa:challenge:{$request->challenge_id}");
+
+        return response()->json([
+            'token' => $this->issueResidentToken($resident),
             'role' => 'resident',
-            // Load the barangay relation so the mobile profile has a location on
-            // login, matching what /me returns. Residents have no address column.
-            'user' => $resident->load('barangay')
+            'user' => $resident->load('barangay'),
         ], 200);
+    }
+
+    /**
+     * Issues a replacement login code against an existing challenge. Takes the
+     * challenge id, not the email/password — the resident already proved the
+     * password once to get this challenge, and resend must not ask again.
+     */
+    public function resendLoginCode(Request $request)
+    {
+        $request->validate([
+            'challenge_id' => 'required|string',
+        ]);
+
+        $challenge = Cache::get("mfa:challenge:{$request->challenge_id}");
+
+        if (!is_array($challenge) || ($challenge['type'] ?? null) !== 'resident') {
+            return response()->json([
+                'message' => 'That login attempt has expired. Please log in again.',
+                'code' => 'mfa_challenge_expired',
+            ], 422);
+        }
+
+        $sentAt = $challenge['sent_at'] ?? null;
+        $wait = $sentAt ? max(0, Resident::RESEND_COOLDOWN_SECONDS - (int) now()->diffInSeconds($sentAt, true)) : 0;
+
+        if ($wait > 0) {
+            return response()->json([
+                'message' => "Please wait {$wait} seconds before asking for another code.",
+                'code' => 'resend_too_soon',
+                'retry_after' => $wait,
+            ], 429);
+        }
+
+        $resident = Resident::find($challenge['id']);
+
+        if (!$resident) {
+            return response()->json([
+                'message' => 'That login attempt has expired. Please log in again.',
+                'code' => 'mfa_challenge_expired',
+            ], 422);
+        }
+
+        ['channel' => $channel, 'challenge_id' => $challengeId] = $this->sendLoginCode($resident, $request->challenge_id);
+
+        return response()->json([
+            'message' => 'A new code is on its way.',
+            'code' => 'code_sent',
+        ] + $this->deliveryPayloadFor($resident, $channel, $challengeId), 200);
+    }
+
+    /**
+     * Sends (or resends, against an existing challenge id) a login code for a
+     * resident and stores its hash in the challenge — never in
+     * Resident::verification_code, which belongs to the signup gate alone.
+     *
+     * @return array{channel: string, challenge_id: string}
+     */
+    private function sendLoginCode(Resident $resident, ?string $challengeId): array
+    {
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $extra = ['code_hash' => Hash::make($code), 'sent_at' => now()];
+
+        if ($challengeId === null) {
+            $challengeId = $this->issueMfaChallenge('resident', $resident->resident_id, $extra);
+        } else {
+            $challenge = Cache::get("mfa:challenge:{$challengeId}", []);
+            Cache::put(
+                "mfa:challenge:{$challengeId}",
+                array_merge($challenge, $extra, ['attempts' => 0]),
+                now()->addMinutes(5),
+            );
+        }
+
+        if ($this->smsIsUsableFor($resident)) {
+            $response = app(PhilSms::class)->send(
+                [$resident->phone_number],
+                "Your SERBIS login code is {$code}. It expires in 5 minutes.",
+            );
+
+            if (PhilSms::accepted($response)) {
+                return ['channel' => 'sms', 'challenge_id' => $challengeId];
+            }
+
+            Log::warning('Login OTP SMS failed, falling back to email', [
+                'resident_id' => $resident->resident_id,
+            ]);
+        }
+
+        Mail::to($resident->email_address)->send(
+            new ResidentLoginCode($resident, $code)
+        );
+
+        return ['channel' => 'email', 'challenge_id' => $challengeId];
+    }
+
+    private function deliveryPayloadFor(Resident $resident, string $channel, string $challengeId): array
+    {
+        $digits = preg_replace('/\D/', '', (string) $resident->phone_number);
+        $sentAt = Cache::get("mfa:challenge:{$challengeId}")['sent_at'] ?? null;
+        $wait = $sentAt ? max(0, Resident::RESEND_COOLDOWN_SECONDS - (int) now()->diffInSeconds($sentAt, true)) : 0;
+
+        return [
+            'channel' => $channel,
+            'sent_to' => $channel === 'sms'
+                ? substr($digits, -4)
+                : $resident->email_address,
+            'retry_after' => $wait,
+        ];
     }
 
     public function logout(Request $request)
