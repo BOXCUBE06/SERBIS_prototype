@@ -865,7 +865,7 @@ const validId = createAttachment('valid-id', 'Could not load the attached ID.')
 // label change, not an API one.
 const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
 
-const statusTabs = ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
+const statusTabs = ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
 // arrival so the operator lands on the filtered view, not "All".
@@ -898,7 +898,7 @@ const requesterBarangay = (item) => {
 }
 
 const requestCounts = computed(() => {
-  const counts = { All: requests.value.length, Pending: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
+  const counts = { All: requests.value.length, Pending: 0, Booked: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
   requests.value.forEach(req => {
     const status = req.status || 'Pending'
     if (counts[status] !== undefined) counts[status]++
@@ -1465,6 +1465,8 @@ onUnmounted(releaseAttachments)
   background-color: rgba(var(--v-theme-primary), 0.08);
 }
 .request-row.row-pending { border-left-color: rgb(var(--v-theme-warning)); }
+.request-row.row-booked { border-left-color: #6D28D9; }
+.v-theme--dark .request-row.row-booked { border-left-color: #A78BFA; }
 .request-row.row-responding { border-left-color: rgb(var(--v-theme-info)); }
 .request-row.row-resolved { border-left-color: rgb(var(--v-theme-success)); }
 .request-row.row-disapproved,
@@ -1526,6 +1528,16 @@ onUnmounted(releaseAttachments)
   background: rgba(var(--v-theme-warning), 0.14);
   color: rgb(var(--v-theme-warning-strong));
 }
+/* Booked is the one status with no semantic token behind it -- the theme
+   carries five hues and all five are spoken for, and Booked has to be told
+   apart from Responding at a glance. Literal violet, measured the same way the
+   tokens in plugins/vuetify.ts were: #5B21B6 on rgba(#6D28D9, 0.14) over white
+   is 7.14:1, and #A78BFA on its own 10% tint over #131B2E is 5.42:1. Both
+   clear AA. Promote to a token pair if a second component ever needs it. */
+.pill-booked {
+  background: rgba(109, 40, 217, 0.14);
+  color: #5B21B6;
+}
 .pill-responding {
   background: rgba(var(--v-theme-info), 0.14);
   color: rgb(var(--v-theme-info-strong));
@@ -1544,6 +1556,7 @@ onUnmounted(releaseAttachments)
    over #131B2E lifts the background far enough to eat the margin. Keep each
    status on its own hue; only the alpha changes. */
 .v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
 .v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
 .v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
 .v-theme--dark .pill-disapproved,

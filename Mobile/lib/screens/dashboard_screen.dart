@@ -283,6 +283,7 @@ class HomeScreen extends StatelessWidget {
 
   String _statusMessage(bool f, ReqStatus status) => switch (status) {
         ReqStatus.review => tr(f, 'home.status.review'),
+        ReqStatus.booked => tr(f, 'home.status.booked'),
         ReqStatus.scheduled => tr(f, 'home.status.scheduled'),
         ReqStatus.completed => tr(f, 'home.status.completed'),
         ReqStatus.cancelled => tr(f, 'home.status.cancelled'),

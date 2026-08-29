@@ -17,7 +17,7 @@ class ServiceRequestController extends Controller
      * simply never constrained to them, so a typo in a client wrote a status no
      * screen could render and no filter could find.
      */
-    private const STATUSES = ['Pending', 'Responding', 'Resolved', 'Cancelled', 'Disapproved'];
+    private const STATUSES = ['Pending', 'Booked', 'Responding', 'Resolved', 'Cancelled', 'Disapproved'];
 
     /**
      * Statuses that end the request. A unit held by one of these is not coming

@@ -794,7 +794,9 @@ class AppState extends ChangeNotifier {
     }
 
     for (final item in requests) {
-      if (item.status == ReqStatus.review || item.status == ReqStatus.scheduled) {
+      if (item.status == ReqStatus.review ||
+          item.status == ReqStatus.booked ||
+          item.status == ReqStatus.scheduled) {
         return item;
       }
     }
