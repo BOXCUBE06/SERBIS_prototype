@@ -7,102 +7,123 @@
           MDRRMO Conduction Request Form — Echague Rescue EMS
         </div>
       </div>
-      <v-btn
-        color="primary"
-        variant="flat"
-        class="text-none font-weight-bold px-6"
-        height="44"
-        prepend-icon="mdi-plus"
-        @click="openCreate()"
-      >New Ambulance Dispatch Request</v-btn>
     </div>
 
-    <div v-if="!loadError" class="filter-bar">
-      <v-text-field
-        v-model="search"
-        label="Search"
-        placeholder="Patient, origin or destination"
-        prepend-inner-icon="mdi-magnify"
-        variant="outlined"
-        density="compact"
-        hide-details
-        clearable
-        rounded="lg"
-        class="filter-field"
-      ></v-text-field>
-      <v-select
-        v-model="statusFilter"
-        :items="statusOptions"
-        label="Trip status"
-        prepend-inner-icon="mdi-map-marker-path"
-        variant="outlined"
-        density="compact"
-        hide-details
-        rounded="lg"
-        class="filter-field"
-      ></v-select>
-    </div>
+    <!-- Bookings: the resident-facing request/approval flow, filtered to
+         Ambulance/Medical Response — moved here from Resident Requests so
+         staff have one place for everything ambulance. Trip Logs: the
+         dispatch record itself, unchanged, for a unit that is actually
+         rolling. -->
+    <v-tabs v-model="activeTab" color="primary" class="mb-5">
+      <v-tab value="bookings" class="text-none font-weight-bold">Bookings</v-tab>
+      <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
+    </v-tabs>
 
-    <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
-      {{ apiError }}
-    </v-alert>
+    <v-window v-model="activeTab">
+      <v-window-item value="bookings">
+        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" />
+      </v-window-item>
 
-    <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
+      <v-window-item value="trip-logs">
+        <div class="d-flex justify-end mb-4">
+          <v-btn
+            color="primary"
+            variant="flat"
+            class="text-none font-weight-bold px-6"
+            height="44"
+            prepend-icon="mdi-plus"
+            @click="openCreate()"
+          >New Ambulance Dispatch Request</v-btn>
+        </div>
 
-    <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
-      <div class="text-center py-12 px-6">
-        <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
-        <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance dispatch requests</div>
-        <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
-        <v-btn color="primary" variant="flat" class="text-none font-weight-bold px-6" height="44" :loading="reloading" @click="fetchData">
-          Try again
-        </v-btn>
-      </div>
-    </v-card>
+        <div v-if="!loadError" class="filter-bar">
+          <v-text-field
+            v-model="search"
+            label="Search"
+            placeholder="Patient, origin or destination"
+            prepend-inner-icon="mdi-magnify"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            rounded="lg"
+            class="filter-field"
+          ></v-text-field>
+          <v-select
+            v-model="statusFilter"
+            :items="statusOptions"
+            label="Trip status"
+            prepend-inner-icon="mdi-map-marker-path"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            class="filter-field"
+          ></v-select>
+        </div>
 
-    <v-card v-else elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
-      <v-data-table
-        :headers="headers"
-        :items="filteredItems"
-        :items-per-page="10"
-        density="comfortable"
-        hover
-        class="bg-transparent conduction-table"
-        item-value="conduction_request_id"
-        :row-props="rowProps"
-        @click:row="(_e, { item }) => openDetail(item)"
-      >
-        <template v-slot:item.rowNumber="{ item }">
-          <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-        </template>
+        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
+          {{ apiError }}
+        </v-alert>
 
-        <template v-slot:item.patient="{ item }">
-          <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
-          <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
-        </template>
+        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-        <template v-slot:item.trip="{ item }">
-          <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
-        </template>
-
-        <template v-slot:item.trip_status="{ item }">
-          <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
-            {{ item.trip_status }}
-          </v-chip>
-        </template>
-
-        <template v-slot:item.created_at="{ item }">
-          {{ fmtDateTime(item.created_at) }}
-        </template>
-
-        <template v-slot:no-data>
-          <div class="text-center py-12">
-            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
+          <div class="text-center py-12 px-6">
+            <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
+            <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance dispatch requests</div>
+            <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
+            <v-btn color="primary" variant="flat" class="text-none font-weight-bold px-6" height="44" :loading="reloading" @click="fetchData">
+              Try again
+            </v-btn>
           </div>
-        </template>
-      </v-data-table>
-    </v-card>
+        </v-card>
+
+        <v-card v-else elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
+          <v-data-table
+            :headers="headers"
+            :items="filteredItems"
+            :items-per-page="10"
+            density="comfortable"
+            hover
+            class="bg-transparent conduction-table"
+            item-value="conduction_request_id"
+            :row-props="rowProps"
+            @click:row="(_e, { item }) => openDetail(item)"
+          >
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+            </template>
+
+            <template v-slot:item.patient="{ item }">
+              <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
+              <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
+            </template>
+
+            <template v-slot:item.trip="{ item }">
+              <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
+            </template>
+
+            <template v-slot:item.trip_status="{ item }">
+              <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
+                {{ item.trip_status }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.created_at="{ item }">
+              {{ fmtDateTime(item.created_at) }}
+            </template>
+
+            <template v-slot:no-data>
+              <div class="text-center py-12">
+                <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
+                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+              </div>
+            </template>
+          </v-data-table>
+        </v-card>
+      </v-window-item>
+    </v-window>
 
     <!-- Create -->
     <v-dialog v-model="createDialog.open" max-width="720" scrollable persistent>
@@ -325,13 +346,14 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 
-const route = useRoute()
-const router = useRouter()
+// 'bookings' first: a staffer arriving on this page is more often checking on
+// a resident's request than filling in a trip log by hand.
+const activeTab = ref('bookings')
 
 const STATUS_ACCENT = {
   'Not dispatched': '#B45309',
@@ -428,7 +450,7 @@ const rowProps = ({ item }) => ({
 // Create dialog
 const emptyCreateForm = () => ({
   // Set only when this dialog was opened by dispatching an approved booking
-  // (openDispatchFromQuery below); a plain "New Ambulance Dispatch Request"
+  // (handleDispatchBooking below); a plain "New Ambulance Dispatch Request"
   // leaves both null, exactly as before this feature existed.
   service_request_id: null, vehicle_id: null,
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
@@ -500,26 +522,14 @@ const openCreate = (booking = null) => {
   createDialog.value = { open: true, form }
 }
 
-// Entry point from ManageRequestView's "Dispatch" action: /conduction-requests
-// ?dispatch=<request_id>. Fetches that one booking and opens the create
-// dialog prefilled from it. The query param is stripped either way so a
-// refresh of this page does not reopen the dialog against a request that may
-// already be dispatched.
-const openDispatchFromQuery = async () => {
-  const id = route.query.dispatch
-  if (!id) return
-
-  router.replace({ query: { ...route.query, dispatch: undefined } })
-
-  try {
-    const res = await fetch(`${API_BASE}/service-requests/${id}`, { headers: getHeaders() })
-    if (!res.ok) throw new Error('Could not load that booking')
-    const booking = await res.json()
-    openCreate(booking)
-  } catch {
-    notify('Could not load the booking to dispatch — fill in the form manually.', 'error')
-    openCreate()
-  }
+// Fired by the Bookings tab's "Dispatch" button (ServiceRequestQueue,
+// scope="ambulance") on an approved booking. Both tabs live on this one page
+// now, so this is a tab switch plus the same prefill openCreate has always
+// done — no more round trip through a /conduction-requests?dispatch=<id>
+// query param and a second fetch for a booking the caller already has.
+const handleDispatchBooking = (booking) => {
+  activeTab.value = 'trip-logs'
+  openCreate(booking)
 }
 
 const addPerson = (field) => { createDialog.value.form[field].push('') }
@@ -679,10 +689,7 @@ const submitTripLog = async () => {
   }
 }
 
-onMounted(async () => {
-  await fetchData()
-  await openDispatchFromQuery()
-})
+onMounted(fetchData)
 </script>
 
 <style scoped>
