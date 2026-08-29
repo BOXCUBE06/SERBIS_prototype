@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\CompletesAdminMfa;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class AdminAccountTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, CompletesAdminMfa;
 
     private User $admin;
 
@@ -83,10 +84,8 @@ class AdminAccountTest extends TestCase
 
         // Creating a row that cannot authenticate would pass every assertion
         // above and still leave the office locked out of the account it made.
-        $this->postJson('/api/admin/login', [
-            'email_address' => 'grace@test.local',
-            'password' => 'Password123',
-        ])->assertStatus(200)->assertJsonStructure(['token']);
+        $this->loginAdmin('grace@test.local', 'Password123')
+            ->assertStatus(200)->assertJsonStructure(['token']);
     }
 
     public function test_the_role_cannot_be_set_by_the_client(): void
@@ -291,10 +290,7 @@ class AdminAccountTest extends TestCase
 
         // An employee back from leave keeps their name on the work they did,
         // instead of needing a second account.
-        $this->postJson('/api/admin/login', [
-            'email_address' => 'other@test.local',
-            'password' => 'Password123',
-        ])->assertStatus(200);
+        $this->loginAdmin('other@test.local', 'Password123')->assertStatus(200);
     }
 
     public function test_a_missing_admin_is_a_404_not_a_500(): void

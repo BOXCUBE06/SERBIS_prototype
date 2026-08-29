@@ -7,6 +7,7 @@ use App\Models\Resident;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -33,6 +34,12 @@ class ResidentLoginStatusTest extends TestCase
     {
         parent::setUp();
 
+        // Login now ends in an SMS-challenge step (see AuthController::residentLogin);
+        // PhilSMS has no sandbox, so the vendor is faked the same way
+        // ResidentEmailVerificationTest fakes it for the signup code.
+        Http::fake([
+            'dashboard.philsms.com/*' => fn () => Http::response(['status' => 'success'], 200),
+        ]);
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }
 
@@ -57,11 +64,29 @@ class ResidentLoginStatusTest extends TestCase
         return $resident->fresh();
     }
 
+    /**
+     * Completes both halves of resident login and returns the final response
+     * — the one carrying the token — so callers assert against it exactly as
+     * they would have against the old one-step /resident/login. Tests in this
+     * file are about `status`, which is decided before the MFA challenge is
+     * even issued, so this just gets them past the code prompt.
+     */
     private function login(Resident $resident): \Illuminate\Testing\TestResponse
     {
-        return $this->postJson('/api/resident/login', [
+        $first = $this->postJson('/api/resident/login', [
             'email_address' => $resident->email_address,
             'password' => 'password123',
+        ]);
+
+        if ($first->status() !== 403 || $first->json('code') !== 'mfa_required') {
+            return $first;
+        }
+
+        preg_match('/[0-9]{6}/', Http::recorded()->last()[0]['message'] ?? '', $match);
+
+        return $this->postJson('/api/resident/login/verify', [
+            'challenge_id' => $first->json('challenge_id'),
+            'code' => $match[0] ?? '',
         ]);
     }
 

@@ -176,6 +176,23 @@ class UserStore {
     return AppUser.fromJson(json);
   }
 
+  /// Second half of login: the code sent on the `mfa_required` refusal.
+  /// Returns the signed-in resident, same as [login] would have — the server
+  /// issues the token here instead.
+  Future<AppUser> verifyLoginCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final json = await _api.verifyLoginCode(challengeId: challengeId, code: code);
+    return AppUser.fromJson(json);
+  }
+
+  Future<VerificationDelivery?> resendLoginCode({
+    required String challengeId,
+  }) {
+    return _api.resendLoginCode(challengeId: challengeId);
+  }
+
   /// Saves the resident's own contact details and returns the refreshed
   /// profile, so the caller does not have to re-fetch `/me` to see the result.
   Future<AppUser> updateProfile({

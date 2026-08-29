@@ -41,6 +41,23 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(20)->by('ip:'.$request->ip()),
             ];
         });
+
+        // MFA verify/resend carry a challenge_id, not an email_address. Reusing
+        // 'login' above would key every one of them on 'email:|ip:X' — the SAME
+        // empty-email bucket for every admin and resident behind one IP, capped
+        // at 5/min combined. An office on one connection would lock each other
+        // out of finishing a login. Keyed by challenge_id instead: it identifies
+        // one login attempt as precisely as an email identifies one account, and
+        // the challenge's own 5-attempt cap (AuthController::consumeMfaChallengeAttempt)
+        // is still the real brake — this is defence in depth, same as 'login' is.
+        RateLimiter::for('mfa', function (Request $request) {
+            $challenge = Str::lower((string) $request->input('challenge_id'));
+
+            return [
+                Limit::perMinute(10)->by('challenge:'.$challenge.'|'.$request->ip()),
+                Limit::perMinute(20)->by('ip:'.$request->ip()),
+            ];
+        });
     }
 
     /**

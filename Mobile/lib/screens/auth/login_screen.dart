@@ -18,6 +18,15 @@ class LoginScreen extends StatefulWidget {
   /// the verify screen can resume a registration that was left half-finished.
   final void Function(String email, VerificationDelivery? delivery)
       onEmailUnverified;
+
+  /// The password was right; an SMS (or mail-fallback) code is what's left.
+  /// `challengeId` goes straight to `/resident/login/verify` — the login
+  /// screen never inspects it.
+  final void Function(
+    String email,
+    String challengeId,
+    VerificationDelivery? delivery,
+  ) onMfaRequired;
   final String? infoMessage;
 
   const LoginScreen({
@@ -26,6 +35,7 @@ class LoginScreen extends StatefulWidget {
     required this.onLoginSuccess,
     required this.onGoToRegister,
     required this.onEmailUnverified,
+    required this.onMfaRequired,
     this.infoMessage,
   });
 
@@ -70,6 +80,12 @@ class _LoginScreenState extends State<LoginScreen> {
       // channel it went by and start its cooldown from zero.
       if (e.isEmailUnverified) {
         widget.onEmailUnverified(_emailCtrl.text.trim(), e.delivery);
+        return;
+      }
+      // Password proven; a code is on its way. challengeId is always present
+      // when the server sends mfa_required — the server never omits it.
+      if (e.isMfaRequired && e.challengeId != null) {
+        widget.onMfaRequired(_emailCtrl.text.trim(), e.challengeId!, e.delivery);
         return;
       }
       // Already resident-readable: "Invalid resident credentials." on a bad

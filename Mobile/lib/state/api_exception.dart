@@ -23,17 +23,28 @@ class ApiException implements Exception {
   /// went. Null on every other failure.
   final VerificationDelivery? delivery;
 
+  /// The login-MFA challenge id, present on `mfa_required`. Opaque to the
+  /// client — it goes back to `/…/login/verify` (or `/resident/login/resend`)
+  /// exactly as received, never parsed or stored anywhere else.
+  final String? challengeId;
+
   const ApiException(
     this.message, {
     this.statusCode,
     this.code,
     this.delivery,
+    this.challengeId,
   });
 
   /// The account exists and the password was right, but the address was never
   /// verified. The register flow left it half-finished; the resident resumes at
   /// the code screen rather than being told their password is wrong.
   bool get isEmailUnverified => code == 'email_unverified';
+
+  /// Password proven; a TOTP (admin) or SMS/email (resident) code is what's
+  /// left. The login screen routes to a verify screen instead of showing this
+  /// as a form error.
+  bool get isMfaRequired => code == 'mfa_required';
 
   /// The token was rejected. Distinct from a failed login, which the auth
   /// endpoints report as a plain message instead.

@@ -195,6 +195,8 @@ Future<_FakeAuthApi> _pumpLogin(
   VoidCallback? onGoToRegister,
   void Function(String email, VerificationDelivery? delivery)?
       onEmailUnverified,
+  void Function(String email, String challengeId, VerificationDelivery? delivery)?
+      onMfaRequired,
 }) async {
   // A phone-shaped viewport, but WIDER than a real phone on purpose. The
   // default 800x600 clips these forms and the offscreen rows never build; 360
@@ -216,6 +218,7 @@ Future<_FakeAuthApi> _pumpLogin(
       onLoginSuccess: onLoginSuccess ?? (_) {},
       onGoToRegister: onGoToRegister ?? () {},
       onEmailUnverified: onEmailUnverified ?? (_, __) {},
+      onMfaRequired: onMfaRequired ?? (_, __, ___) {},
       infoMessage: infoMessage,
     ),
   ));

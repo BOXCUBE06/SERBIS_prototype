@@ -399,9 +399,16 @@ class ResidentEmailVerificationTest extends TestCase
             'code' => $code,
         ])->assertStatus(200);
 
-        $this->postJson('/api/resident/login', [
+        $login = $this->postJson('/api/resident/login', [
             'email_address' => 'grace@test.local',
             'password' => 'Password123',
+        ])->assertStatus(403)->assertJsonPath('code', 'mfa_required');
+
+        $loginCode = collect($this->codesTexted())->last();
+
+        $this->postJson('/api/resident/login/verify', [
+            'challenge_id' => $login->json('challenge_id'),
+            'code' => $loginCode,
         ])->assertStatus(200)->assertJsonStructure(['token']);
     }
 
