@@ -206,6 +206,31 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Which Ambulance units GET /ambulance-availability reports free for
+  /// `[start, end)`. Advisory only — shown before submit so a resident is not
+  /// steered toward an obviously full slot, not a guarantee, since the
+  /// server re-checks under a lock at submission regardless.
+  ///
+  /// Returns `null` when the check itself could not be reached, which the
+  /// caller must treat as "could not check" and not as "nothing is free" —
+  /// an empty list and a dead network are different facts and must not read
+  /// the same on screen. Never routed through `lastError`/[_fail]: this runs
+  /// while the resident is still filling in the form, and a snackbar over an
+  /// in-progress booking would report a failure nothing has been submitted
+  /// against yet.
+  Future<List<Map<String, dynamic>>?> checkAmbulanceAvailability(
+    DateTime start,
+    DateTime end,
+  ) async {
+    try {
+      return await _api.getAmbulanceAvailability(start: start, end: end);
+    } catch (error) {
+      AppLog.error(_logArea, 'check ambulance availability', error: error,
+          reason: 'inline advisory, not surfaced as lastError');
+      return null;
+    }
+  }
+
   /// Names a freshly filed borrow request against the catalogue, mirroring
   /// [_resolveService]: `POST /borrowings`' 201 returns the row with no
   /// `equipment` relation loaded, so without this an optimistic row would show
@@ -682,6 +707,9 @@ class AppState extends ChangeNotifier {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
   }) async {
+    // request.scheduledAt, if any, rides along on `request` itself — the
+    // optimistic row already carries it, and it is read off there below
+    // rather than repeated as a separate parameter.
     requests.insert(0, request);
     notifyListeners();
 
@@ -705,6 +733,7 @@ class AppState extends ChangeNotifier {
         requiredVehicleType: requiredVehicleType,
         sitePhotoBytes: sitePhotoBytes,
         sitePhotoFileName: sitePhotoFileName,
+        scheduledAt: request.scheduledAt,
       );
 
       final confirmed = _resolveService(ServiceRequest.fromJson(result));

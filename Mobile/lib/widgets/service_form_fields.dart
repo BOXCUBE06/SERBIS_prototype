@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/service_forms.dart';
+import '../state/request_store.dart';
+import 'ambulance_schedule_field.dart';
 import 'form_inputs.dart';
 
 /// Renders whichever of the four guided forms the resident picked.
@@ -15,7 +17,18 @@ class ServiceFormFields extends StatelessWidget {
   final ServiceFormData data;
   final VoidCallback onChanged;
 
-  const ServiceFormFields({super.key, required this.data, required this.onChanged});
+  /// Only read by the ambulance branch, for [AmbulanceScheduleField]'s
+  /// availability check — the other three forms have no use for either.
+  final AppState appState;
+  final bool filipino;
+
+  const ServiceFormFields({
+    super.key,
+    required this.data,
+    required this.onChanged,
+    required this.appState,
+    required this.filipino,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +54,12 @@ class ServiceFormFields extends StatelessWidget {
             hint: "Briefly describe the patient's condition",
             lines: 3,
             controller: form.condition,
+          ),
+          AmbulanceScheduleField(
+            form: form,
+            appState: appState,
+            filipino: filipino,
+            onChanged: onChanged,
           ),
         ]),
       RoadFormData form => Column(children: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/hotlines.dart';
+import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import 'shared_widgets.dart';
@@ -265,17 +266,25 @@ class ConfirmationSheet extends StatelessWidget {
   final bool filipino;
   final VoidCallback onViewTrack;
 
+  /// Set only for an ambulance booking. Shown with
+  /// [formatBookingConfirmationTime], not [formatTimelineTime] — a booking
+  /// confirmation is exactly the case that formatter's own doc comment says
+  /// needs the year, since a resident can reopen this weeks after filing.
+  final DateTime? scheduledAt;
+
   const ConfirmationSheet({
     super.key,
     required this.refNo,
     required this.filipino,
     required this.onViewTrack,
+    this.scheduledAt,
   });
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
     final body = tr(f, 'services.confirm.body').replaceAll('{ref}', refNo);
+    final scheduled = scheduledAt;
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -300,6 +309,22 @@ class ConfirmationSheet extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.6),
           ),
+          if (scheduled != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.green50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${tr(f, 'services.confirm.scheduled_for')} '
+                '${formatBookingConfirmationTime(scheduled, f)}',
+                textAlign: TextAlign.center,
+                style: AppText.display(size: 12.5, weight: FontWeight.w600, color: AppColors.green900),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           AppButton(label: tr(f, 'services.confirm.view_track'), onPressed: onViewTrack),
         ],

@@ -11,7 +11,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/service_forms.dart';
+import 'package:serbis/state/api_service.dart';
+import 'package:serbis/state/request_store.dart';
 import 'package:serbis/widgets/service_form_fields.dart';
+
+/// Only the ambulance form's schedule field ever reaches this — the others
+/// never touch AppState — and this test never taps it, so a throwaway
+/// instance with no network is enough.
+final AppState _appState = AppState(ApiService());
 
 /// Fills every field on screen with a distinct value and returns them in
 /// order. The values are 11 digits because the contact fields strip everything
@@ -35,7 +42,12 @@ Future<void> _pump(WidgetTester tester, ServiceFormData data) async {
   await tester.pumpWidget(MaterialApp(
     home: Scaffold(
       body: SingleChildScrollView(
-        child: ServiceFormFields(data: data, onChanged: () {}),
+        child: ServiceFormFields(
+          data: data,
+          onChanged: () {},
+          appState: _appState,
+          filipino: false,
+        ),
       ),
     ),
   ));
@@ -218,7 +230,12 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: ServiceFormFields(data: form, onChanged: () => changes++),
+          body: ServiceFormFields(
+            data: form,
+            onChanged: () => changes++,
+            appState: _appState,
+            filipino: false,
+          ),
         ),
       ));
 

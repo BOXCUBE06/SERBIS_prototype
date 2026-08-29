@@ -61,6 +61,14 @@ class AmbulanceFormData extends ServiceFormData {
   final TextEditingController destination = TextEditingController();
   final TextEditingController condition = TextEditingController();
 
+  /// Picked via the framework's showDatePicker + showTimePicker
+  /// (AmbulanceScheduleField). Null means "as soon as possible" — the
+  /// unscheduled request this form has always filed. A plain field, not a
+  /// controller: there is no text input for it, and unlike the controllers
+  /// above it must survive to `ServiceRequest.scheduledAt` untouched by
+  /// [metaLines], never folded into prose.
+  DateTime? scheduledAt;
+
   @override
   List<String> metaLines({
     required String serviceName,

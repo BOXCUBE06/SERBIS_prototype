@@ -34,6 +34,7 @@ class _RecordingApi extends ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    DateTime? scheduledAt,
   }) async {
     this.validIdFileBytes = validIdFileBytes;
     this.sitePhotoBytes = sitePhotoBytes;

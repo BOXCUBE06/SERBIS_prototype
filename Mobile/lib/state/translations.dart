@@ -143,6 +143,30 @@ const Map<String, (String, String)> _strings = {
     'Natanggap ang iyong kahilingan. Maaari mong subaybayan ang status nito anumang oras sa Track tab. Reference #{ref}.',
   ),
   'services.confirm.view_track': ('View in Track', 'Tingnan sa Track'),
+  'services.confirm.scheduled_for': ('Scheduled for', 'Naka-iskedyul para sa'),
+
+  // ---- Ambulance scheduling ----
+  'ambulance_schedule.title': ('When', 'Kailan'),
+  'ambulance_schedule.asap': ('As soon as possible', 'Sa lalong madaling panahon'),
+  'ambulance_schedule.pick_button': ('Schedule for a specific time', 'Mag-iskedyul ng partikular na oras'),
+  'ambulance_schedule.change': ('Change', 'Palitan'),
+  'ambulance_schedule.use_asap': (
+    'Use "as soon as possible" instead',
+    'Gamitin na lang ang "sa lalong madaling panahon"',
+  ),
+  'ambulance_schedule.lead_time_error': (
+    'Please pick a time at least 1 hour from now.',
+    'Pumili ng oras na hindi bababa sa 1 oras mula ngayon.',
+  ),
+  'ambulance_schedule.checking': ('Checking availability…', 'Sinusuri ang availability…'),
+  'ambulance_schedule.some_free': (
+    'At least one ambulance may be free at that time.',
+    'May kaunting ambulansyang maaaring libre sa oras na iyon.',
+  ),
+  'ambulance_schedule.none_free': (
+    'No ambulance may be free at that time yet. You can still submit — MDRRMO will confirm.',
+    'Maaaring walang libreng ambulansya sa oras na iyon. Maaari ka pa ring magsumite — kukumpirmahin ito ng MDRRMO.',
+  ),
 
   'track.title': ('Track Your Requests', 'Subaybayan ang Iyong mga Kahilingan'),
   'track.empty_title': ('No requests yet', 'Walang kahilingan pa'),
