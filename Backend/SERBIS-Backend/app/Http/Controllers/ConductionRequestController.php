@@ -141,6 +141,25 @@ class ConductionRequestController extends Controller
             ]);
         }
 
+        // A later checkpoint filled in while an earlier one is still blank
+        // leaves a record the panel cannot describe: `trip_status` reads
+        // 'Completed' off `returned_office_at` while the detail view still
+        // offers to start the trip off a null `departed_office_at`. The
+        // chronological check below only compares checkpoints that are
+        // filled, so it cannot catch a gap on its own.
+        $previousField = null;
+        $previousLabel = null;
+        foreach (self::TRIP_SEQUENCE as $field => $label) {
+            if ($effective($field) !== null && $previousField !== null && $effective($previousField) === null) {
+                throw ValidationException::withMessages([
+                    $field => "{$label} cannot be recorded while {$previousLabel} is still blank.",
+                ]);
+            }
+
+            $previousField = $field;
+            $previousLabel = $label;
+        }
+
         $checkpoints = [];
         foreach (self::TRIP_SEQUENCE as $field => $label) {
             $value = $effective($field);

@@ -487,7 +487,7 @@ const CHECKPOINTS = [
   ['returned_office_at', 'Returned to office'],
 ]
 
-// Same two rules the server enforces, checked client-side first so a mistake
+// Same three rules the server enforces, checked client-side first so a mistake
 // shows next to the field instead of round-tripping to the API to find out.
 const validateTripLog = (form) => {
   const start = form.odometer_start
@@ -495,9 +495,14 @@ const validateTripLog = (form) => {
   if (start !== null && start !== '' && end !== null && end !== '' && Number(end) < Number(start)) {
     return 'Odometer reading on return must be at or after the reading at departure.'
   }
-  const filled = CHECKPOINTS
+  const checkpoints = CHECKPOINTS
     .map(([field, label]) => ({ field, label, at: form[field] ? new Date(form[field]) : null }))
-    .filter((c) => c.at)
+  for (let i = 1; i < checkpoints.length; i++) {
+    if (checkpoints[i].at && !checkpoints[i - 1].at) {
+      return `${checkpoints[i].label} cannot be recorded while ${checkpoints[i - 1].label} is still blank.`
+    }
+  }
+  const filled = checkpoints.filter((c) => c.at)
   for (let i = 1; i < filled.length; i++) {
     if (filled[i].at < filled[i - 1].at) {
       return `${filled[i].label} cannot be earlier than ${filled[i - 1].label}.`

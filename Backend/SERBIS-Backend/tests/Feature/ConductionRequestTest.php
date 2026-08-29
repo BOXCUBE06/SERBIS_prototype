@@ -145,6 +145,30 @@ class ConductionRequestTest extends TestCase
             ->assertJsonValidationErrors(['arrived_destination_at']);
     }
 
+    public function test_a_checkpoint_cannot_be_recorded_while_an_earlier_one_is_blank(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['patient_name' => 'Gap Case']));
+
+        // The state the panel could not describe: trip_status would have read
+        // 'Completed' while the detail view still offered to start the trip.
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'returned_office_at' => '2026-08-18 09:30:00',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['returned_office_at']);
+
+        // A gap in the middle is rejected too, and the departure that shares
+        // the call is not saved on its own.
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => '2026-08-18 08:00:00',
+            'departed_destination_at' => '2026-08-18 09:00:00',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['departed_destination_at']);
+
+        $conductionRequest->refresh();
+        $this->assertNull($conductionRequest->departed_office_at);
+        $this->assertSame('Not dispatched', $conductionRequest->trip_status);
+    }
+
     public function test_index_lists_requests_with_their_people(): void
     {
         $this->postJson('/api/conduction-requests', $this->payload())->assertStatus(201);
