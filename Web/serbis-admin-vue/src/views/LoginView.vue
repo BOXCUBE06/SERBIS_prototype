@@ -29,8 +29,11 @@
       <!-- Right Side -->
       <div class="form-panel d-flex flex-column justify-center pa-8">
         <div class="form-block">
-          <v-form @submit.prevent="handleLogin" class="w-100">
-            
+          <!-- Password step. Unchanged apart from handleLogin now branching
+               into the MFA step on a 403/mfa_required instead of always
+               storing a token — see script setup. -->
+          <v-form v-if="step === 'password'" @submit.prevent="handleLogin" class="w-100">
+
             <!-- Session-expiry notice. Not an error — the admin did nothing
                  wrong — so it must not look like a failed sign-in. Without it,
                  an expired token drops the visitor here with no explanation. -->
@@ -155,6 +158,76 @@
             </v-btn>
 
           </v-form>
+
+          <!-- MFA step. No token exists yet — handleLogin never called
+               setToken for the mfa_required branch — so the router guard
+               needs no changes: this whole page still looks unauthenticated
+               to it until handleMfaSubmit succeeds. -->
+          <v-form v-else @submit.prevent="handleMfaSubmit" class="w-100">
+            <v-alert
+              v-if="mfaError"
+              role="alert"
+              type="error"
+              variant="flat"
+              rounded="lg"
+              density="comfortable"
+              class="mb-4"
+              closable
+              @click:close="mfaError = ''"
+              style="background-color: rgba(211, 47, 47, 0.15); border: 1px solid rgba(211, 47, 47, 0.4);"
+            >
+              <span class="text-body-2 font-weight-medium" style="color: #ffcdd2;">
+                {{ mfaError }}
+              </span>
+            </v-alert>
+
+            <!-- The QR only ever appears once per admin — see the code
+                 comment on enrollment in AuthController::adminLogin. A second
+                 login after enrollment sticks skips straight to the plain
+                 code prompt below. -->
+            <template v-if="enrollmentRequired">
+              <p class="text-body-2 text-white mb-3">
+                Scan this with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code it shows.
+              </p>
+              <div class="d-flex justify-center mb-4">
+                <img :src="qrCodeDataUri" alt="Authenticator enrollment QR code" class="mfa-qr" />
+              </div>
+            </template>
+            <p v-else class="text-body-2 text-white mb-4">
+              Enter the 6-digit code from your authenticator app.
+            </p>
+
+            <v-otp-input
+              v-model="mfaCode"
+              length="6"
+              class="mb-4"
+              :disabled="mfaLoading"
+              @finish="handleMfaSubmit"
+            ></v-otp-input>
+
+            <v-btn
+              type="submit"
+              color="#297A67"
+              block
+              height="52"
+              rounded="md"
+              elevation="0"
+              class="text-none font-weight-bold text-body-1 text-white"
+              :loading="mfaLoading"
+              :disabled="mfaCode.length !== 6"
+            >
+              VERIFY
+            </v-btn>
+
+            <v-btn
+              variant="text"
+              block
+              class="text-none text-white mt-2"
+              @click="step = 'password'"
+            >
+              Back to sign in
+            </v-btn>
+          </v-form>
         </div>
       </div>
 
@@ -202,6 +275,16 @@ const credentials = reactive({
   password: ''
 })
 
+// MFA step. challengeId/qrCodeDataUri/enrollmentRequired come straight off
+// the mfa_required response — nothing is derived or guessed client-side.
+const step = ref('password')
+const mfaChallengeId = ref('')
+const mfaCode = ref('')
+const qrCodeDataUri = ref('')
+const enrollmentRequired = ref(false)
+const mfaError = ref('')
+const mfaLoading = ref(false)
+
 // The throttle bucket is keyed per email, so a lockout on one address says
 // nothing about another. Editing the email releases the button — a typo'd
 // address must not lock the account the user actually meant.
@@ -234,6 +317,15 @@ const handleLogin = async () => {
       router.push('/')
     } else if (response.status === 401) {
       errorMessage.value = 'Invalid email or password. Please try again.'
+    } else if (response.status === 403 && data.code === 'mfa_required') {
+      // Password proven. No token yet — that only happens once handleMfaSubmit
+      // succeeds — so nothing here needs the router guard's attention.
+      mfaChallengeId.value = data.challenge_id
+      enrollmentRequired.value = !!data.enrollment_required
+      qrCodeDataUri.value = data.qr_code || ''
+      mfaCode.value = ''
+      mfaError.value = ''
+      step.value = 'mfa'
     } else if (response.status === 403) {
       // A deactivated account (audit #29). The server's own wording is shown
       // rather than the generic fallback: the credentials were correct, so
@@ -261,6 +353,54 @@ const handleLogin = async () => {
     errorMessage.value = 'Network error. Please check your connection.'
   } finally {
     loading.value = false
+  }
+}
+
+const handleMfaSubmit = async () => {
+  if (mfaCode.value.length !== 6) return
+
+  mfaLoading.value = true
+  mfaError.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE}/admin/login/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        challenge_id: mfaChallengeId.value,
+        code: mfaCode.value
+      })
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      setToken(data.token, rememberMe.value)
+      router.push('/')
+    } else if (response.status === 422 && data.code === 'mfa_challenge_expired') {
+      // The 5-minute challenge is gone. Nothing left to verify against —
+      // back to the password step rather than a code field that can never
+      // succeed.
+      step.value = 'password'
+      errorMessage.value = data.message || 'That login attempt expired. Please sign in again.'
+    } else if (response.status === 422) {
+      mfaError.value = data.message || 'That code is not right. Try again.'
+      mfaCode.value = ''
+    } else if (response.status === 429) {
+      // The challenge is invalidated server-side once this fires — same as
+      // an expired one, there is nothing left to submit a code against.
+      step.value = 'password'
+      errorMessage.value = data.message || 'Too many wrong codes. Please sign in again.'
+    } else {
+      mfaError.value = 'Something went wrong. Please try again.'
+    }
+  } catch (error) {
+    mfaError.value = 'Network error. Please check your connection.'
+  } finally {
+    mfaLoading.value = false
   }
 }
 </script>
@@ -440,5 +580,16 @@ const handleLogin = async () => {
 
 .hover-underline:hover {
   text-decoration: underline !important;
+}
+
+/* White backing plate: the QR is an SVG rendered on a transparent background
+   (BaconQrCode's SvgImageBackEnd), and this form sits on the dark half of the
+   card. Without it the code's light modules would vanish into the panel. */
+.mfa-qr {
+  width: 180px;
+  height: 180px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
 }
 </style>
