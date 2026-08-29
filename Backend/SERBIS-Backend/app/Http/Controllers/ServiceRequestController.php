@@ -24,8 +24,11 @@ class ServiceRequestController extends Controller
      * back on its own — nothing else in the system ever returns it to the fleet,
      * so every vehicle dispatched was leaving Available permanently and the
      * picker emptied out after one dispatch per vehicle.
+     *
+     * Public: App\Services\AmbulanceAvailability reads this list rather than
+     * keeping its own copy, so the two cannot drift apart.
      */
-    private const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
+    public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
    public function adminIndex()
     {
