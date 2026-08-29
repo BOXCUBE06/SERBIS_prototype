@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id'])]
+#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id', 'scheduled_at', 'scheduled_end', 'approved_at'])]
 #[Hidden(['valid_id', 'site_photo'])]
 #[Appends(['has_valid_id', 'has_site_photo'])]
 class ServiceRequest extends Model
@@ -20,6 +20,12 @@ class ServiceRequest extends Model
     use HasFactory, TracksHistory;
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
+
+    protected $casts = [
+        'scheduled_at' => 'datetime',
+        'scheduled_end' => 'datetime',
+        'approved_at' => 'datetime',
+    ];
 
     /**
      * The `valid_id` storage path is hidden so it never reaches a client; the image
