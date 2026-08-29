@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\TracksHistory;
 
@@ -14,6 +15,8 @@ class ConductionRequest extends Model
     protected $primaryKey = 'conduction_request_id';
 
     protected $fillable = [
+        'service_request_id',
+        'vehicle_id',
         'patient_name',
         'patient_age',
         'patient_address',
@@ -56,6 +59,16 @@ class ConductionRequest extends Model
     protected $ignoreLogging = ['created_at', 'updated_at'];
 
     protected $appends = ['trip_status'];
+
+    public function serviceRequest(): BelongsTo
+    {
+        return $this->belongsTo(ServiceRequest::class, 'service_request_id', 'request_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
+    }
 
     public function people(): HasMany
     {
