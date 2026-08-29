@@ -9,12 +9,15 @@ import '../state/translations.dart';
 /// actors: the resident withdraws a request, the MDRRMO refuses one. Telling a
 /// resident they cancelled a request the agency turned down is wrong, and it
 /// hides that there are remarks explaining the refusal.
-enum ReqStatus { review, scheduled, completed, cancelled, disapproved }
+enum ReqStatus { review, booked, scheduled, completed, cancelled, disapproved }
 
 extension ReqStatusX on ReqStatus {
   String get label {
     if (this == ReqStatus.review) {
       return 'Under review';
+    }
+    if (this == ReqStatus.booked) {
+      return 'Booked';
     }
     if (this == ReqStatus.scheduled) {
       return 'Scheduled';
@@ -32,6 +35,9 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.review) {
       return tr(filipino, 'status.review');
     }
+    if (this == ReqStatus.booked) {
+      return tr(filipino, 'status.booked');
+    }
     if (this == ReqStatus.scheduled) {
       return tr(filipino, 'status.scheduled');
     }
@@ -48,6 +54,12 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.review) {
       return AppColors.blue50;
     }
+    // The violet already in the palette on the animal-rescue badge. Booked has
+    // to be told apart from Scheduled at a glance -- they are adjacent states
+    // and amber is taken -- and the theme carries no sixth semantic hue.
+    if (this == ReqStatus.booked) {
+      return const Color(0xFFEDE7F6);
+    }
     if (this == ReqStatus.scheduled) {
       return AppColors.amber50;
     }
@@ -63,6 +75,9 @@ extension ReqStatusX on ReqStatus {
   Color get fg {
     if (this == ReqStatus.review) {
       return AppColors.blue600;
+    }
+    if (this == ReqStatus.booked) {
+      return const Color(0xFF6A1B9A);
     }
     if (this == ReqStatus.scheduled) {
       return AppColors.amber600;
@@ -524,6 +539,20 @@ class ServiceRequest {
             RequestStepState.pending,
           ),
         ];
+      case ReqStatus.booked:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.booked'),
+            movedLabel,
+            RequestStepState.current,
+          ),
+          TimelineStep(
+            tr(filipino, 'timeline.completed'),
+            tr(filipino, 'timeline.awaiting'),
+            RequestStepState.pending,
+          ),
+        ];
       case ReqStatus.scheduled:
         return [
           submitted,
@@ -626,7 +655,11 @@ class ServiceRequest {
     final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
     final status = getStatusFromText(statusText);
 
-    final isActive = status == ReqStatus.review || status == ReqStatus.scheduled;
+    // Booked counts as active: an approved booking that has not been dispatched
+    // is exactly the case a resident must still be able to withdraw.
+    final isActive = status == ReqStatus.review ||
+        status == ReqStatus.booked ||
+        status == ReqStatus.scheduled;
 
     return ServiceRequest(
       id: id,
@@ -720,8 +753,18 @@ DateTime? _parseTimestamp(dynamic value) {
 }
 
 ReqStatus getStatusFromText(String statusText) {
-  // Backend vocabulary: Pending / Responding / Resolved / Disapproved / Cancelled.
-  // 'scheduled'/'dispatched'/'completed' are kept for legacy/local rows.
+  // Backend vocabulary: Pending / Booked / Responding / Resolved / Disapproved /
+  // Cancelled. 'scheduled'/'dispatched'/'completed' are kept for legacy/local
+  // rows.
+  //
+  // 'booked' is deliberately NOT folded into the scheduled branch below.
+  // Responding means a crew is already moving; Booked means a slot is held and
+  // nothing has left the office yet, and the timeline renders the two
+  // differently.
+  if (statusText == 'booked') {
+    return ReqStatus.booked;
+  }
+
   if (statusText == 'scheduled' ||
       statusText == 'dispatched' ||
       statusText == 'responding') {

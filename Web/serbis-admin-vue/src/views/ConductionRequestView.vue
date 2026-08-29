@@ -206,8 +206,6 @@
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 65vh;">
-          <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
-
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>
@@ -245,7 +243,7 @@
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end border-t">
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" @click="openTripLog(selected)">
-            {{ selected.departed_office_at ? 'Update trip log' : 'Complete Trip Log' }}
+            {{ tripLogAction(selected) }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -255,7 +253,7 @@
     <v-dialog v-model="tripLog.open" max-width="600" persistent>
       <v-card rounded="lg">
         <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
-          Complete Trip Log
+          {{ tripLog.title }}
         </v-card-title>
         <v-card-text class="pa-6">
           <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
@@ -343,6 +341,11 @@ const headers = [
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const statusAccent = (status) => STATUS_ACCENT[status] || '#64748B'
+// One path for every timestamp on this page — created_at and all four trip log
+// checkpoints. The checkpoints used to arrive without an offset, which new Date()
+// reads as local time; that happened to render correctly only because the column
+// held office wall clock. They are real UTC instants now and carry a 'Z', so the
+// same conversion is right for all five and there is no special case to keep.
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
 const matchesSearch = (r) => {
@@ -369,9 +372,8 @@ const fetchData = async () => {
       throw new Error(errData.message || `Request failed (${res.status})`)
     }
     const data = await res.json()
-    const rows = data.data || data
-    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
-    items.value = rows
+    if (!Array.isArray(data)) throw new Error('The server returned an unexpected response')
+    items.value = data
     loadError.value = ''
   } catch (error) {
     loadError.value = error.message || 'Could not reach the server'
@@ -452,10 +454,15 @@ const emptyTripLogForm = () => ({
   departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
 })
-const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null })
+const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
 
-// API sends 'YYYY-MM-DD HH:mm:ss' (UTC-cast datetime column); the input wants
-// 'YYYY-MM-DDTHH:mm' in local time.
+// The button that opens the dialog and the dialog's own title read the same
+// record, so they come from one place rather than two copies that can drift.
+const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete Trip Log')
+
+// The API sends an ISO instant with an offset; <input type="datetime-local">
+// wants 'YYYY-MM-DDTHH:mm' with none. new Date() resolves the offset and the
+// local getters below render it in the viewer's zone, which is the office's.
 const toInputValue = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
@@ -468,6 +475,8 @@ const openTripLog = (record) => {
     open: true,
     error: '',
     target: record,
+    // Captured at open time so the title stays put while the form is edited.
+    title: tripLogAction(record),
     form: {
       departed_office_at: toInputValue(record.departed_office_at),
       arrived_destination_at: toInputValue(record.arrived_destination_at),
@@ -487,7 +496,7 @@ const CHECKPOINTS = [
   ['returned_office_at', 'Returned to office'],
 ]
 
-// Same two rules the server enforces, checked client-side first so a mistake
+// Same three rules the server enforces, checked client-side first so a mistake
 // shows next to the field instead of round-tripping to the API to find out.
 const validateTripLog = (form) => {
   const start = form.odometer_start
@@ -495,9 +504,14 @@ const validateTripLog = (form) => {
   if (start !== null && start !== '' && end !== null && end !== '' && Number(end) < Number(start)) {
     return 'Odometer reading on return must be at or after the reading at departure.'
   }
-  const filled = CHECKPOINTS
+  const checkpoints = CHECKPOINTS
     .map(([field, label]) => ({ field, label, at: form[field] ? new Date(form[field]) : null }))
-    .filter((c) => c.at)
+  for (let i = 1; i < checkpoints.length; i++) {
+    if (checkpoints[i].at && !checkpoints[i - 1].at) {
+      return `${checkpoints[i].label} cannot be recorded while ${checkpoints[i - 1].label} is still blank.`
+    }
+  }
+  const filled = checkpoints.filter((c) => c.at)
   for (let i = 1; i < filled.length; i++) {
     if (filled[i].at < filled[i - 1].at) {
       return `${filled[i].label} cannot be earlier than ${filled[i - 1].label}.`
@@ -514,6 +528,10 @@ const submitTripLog = async () => {
   tripLog.value.error = ''
   try {
     const form = tripLog.value.form
+    // Sent back naive, exactly as the input holds it. The server reads a
+    // checkpoint with no offset as Asia/Manila and converts — see
+    // ConductionRequestController::OFFICE_TIMEZONE — so this round-trips what
+    // the staffer typed without the browser having to name a zone.
     const body = {
       departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
       arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ConductionRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -143,6 +144,65 @@ class ConductionRequestTest extends TestCase
             'arrived_destination_at' => '2026-08-18 08:30:00',
         ])->assertStatus(422)
             ->assertJsonValidationErrors(['arrived_destination_at']);
+    }
+
+    public function test_a_checkpoint_cannot_be_recorded_while_an_earlier_one_is_blank(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['patient_name' => 'Gap Case']));
+
+        // The state the panel could not describe: trip_status would have read
+        // 'Completed' while the detail view still offered to start the trip.
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'returned_office_at' => '2026-08-18 09:30:00',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['returned_office_at']);
+
+        // A gap in the middle is rejected too, and the departure that shares
+        // the call is not saved on its own.
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => '2026-08-18 08:00:00',
+            'departed_destination_at' => '2026-08-18 09:00:00',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['departed_destination_at']);
+
+        $conductionRequest->refresh();
+        $this->assertNull($conductionRequest->departed_office_at);
+        $this->assertSame('Not dispatched', $conductionRequest->trip_status);
+    }
+
+    public function test_a_naive_checkpoint_is_read_as_office_local_and_stored_as_utc(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['patient_name' => 'Timezone Case']));
+
+        // Exactly what <input type="datetime-local"> sends: no offset, no zone.
+        // The office typed 8 AM Manila.
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => '2026-08-18 08:00:00',
+        ])->assertStatus(200);
+
+        // Read straight off the column, not through the model: the cast is what
+        // is being checked, so going through it would prove nothing.
+        $stored = DB::table('tbl_conduction_requests')
+            ->where('conduction_request_id', $conductionRequest->conduction_request_id)
+            ->value('departed_office_at');
+
+        $this->assertSame('2026-08-18 00:00:00', (string) $stored);
+    }
+
+    public function test_a_checkpoint_sent_with_an_offset_is_honoured_as_sent(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['patient_name' => 'Explicit Offset']));
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => '2026-08-18T08:00:00+00:00',
+        ])->assertStatus(200);
+
+        $stored = DB::table('tbl_conduction_requests')
+            ->where('conduction_request_id', $conductionRequest->conduction_request_id)
+            ->value('departed_office_at');
+
+        // Already UTC, so it is not shifted a second time.
+        $this->assertSame('2026-08-18 08:00:00', (string) $stored);
     }
 
     public function test_index_lists_requests_with_their_people(): void

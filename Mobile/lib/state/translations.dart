@@ -12,6 +12,7 @@ const Map<String, (String, String)> _strings = {
 
   'timeline.submitted': ('Request submitted', 'Naisumite ang kahilingan'),
   'timeline.review': ('Under review by MDRRMO', 'Sinusuri ng MDRRMO'),
+  'timeline.booked': ('Booked by MDRRMO', 'Nakabook sa MDRRMO'),
   'timeline.responding': ('MDRRMO is responding', 'Tumutugon ang MDRRMO'),
   'timeline.completed': ('Completed', 'Natapos'),
   'timeline.cancelled': ('Cancelled', 'Kinansela'),
@@ -21,6 +22,7 @@ const Map<String, (String, String)> _strings = {
   'timeline.today': ('Today', 'Ngayon'),
 
   'status.review': ('Under review', 'Sinusuri'),
+  'status.booked': ('Booked', 'Nakabook'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
   'status.completed': ('Completed', 'Natapos'),
   'status.cancelled': ('Cancelled', 'Kinansela'),
@@ -102,6 +104,12 @@ const Map<String, (String, String)> _strings = {
         "You'll be notified once it's processed.",
     'Ang iyong kahilingan ay ipinasa na sa MDRRMO para sa pagsusuri. '
         'Aabisuhan ka kapag ito ay naproseso.',
+  ),
+  'home.status.booked': (
+    'Your request is booked. '
+        'You will be notified before the schedule.',
+    'Nakabook na ang iyong kahilingan. '
+        'Aabisuhan ka bago ang iskedyul.',
   ),
   'home.status.scheduled': (
     'Your request has been scheduled. '

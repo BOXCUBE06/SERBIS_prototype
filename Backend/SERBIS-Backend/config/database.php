@@ -59,6 +59,15 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // Sent as SET time_zone on every connection. Without it the session
+            // inherits the host's zone, so the UTC literal Laravel writes into a
+            // timestamp column is read as local time and stored eight hours out
+            // on a +08 host and correctly on a UTC one — the same code producing
+            // different instants per machine, and a dump silently shifted when
+            // moved between them. Pinned rather than derived from app.timezone so
+            // the two cannot drift apart; both are UTC, and only this one governs
+            // what MySQL does with a timestamp.
+            'timezone' => '+00:00',
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,
@@ -79,6 +88,15 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // Sent as SET time_zone on every connection. Without it the session
+            // inherits the host's zone, so the UTC literal Laravel writes into a
+            // timestamp column is read as local time and stored eight hours out
+            // on a +08 host and correctly on a UTC one — the same code producing
+            // different instants per machine, and a dump silently shifted when
+            // moved between them. Pinned rather than derived from app.timezone so
+            // the two cannot drift apart; both are UTC, and only this one governs
+            // what MySQL does with a timestamp.
+            'timezone' => '+00:00',
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,
