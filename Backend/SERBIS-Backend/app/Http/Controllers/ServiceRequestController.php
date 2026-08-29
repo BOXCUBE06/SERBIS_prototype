@@ -276,6 +276,52 @@ class ServiceRequestController extends Controller
     }
 
     /**
+     * Decides who may read a private file, scoping the query in place for a
+     * resident. Returns null to proceed, or the response to send instead.
+     *
+     * The routes that stream a government ID scan or a site photo sit OUTSIDE
+     * the `is.admin` group on purpose — staff read any resident's file while a
+     * resident reads only their own, and a middleware that refuses non-admins
+     * outright cannot express that. The cost is that the two checks `is.admin`
+     * performs do not run, so they have to run here instead:
+     *
+     *  - `isAdmin()`, because `tbl_user.role` is an unconstrained varchar and
+     *    an `instanceof User` test alone would let a row with any other role
+     *    read every ID scan in the system.
+     *  - `isDeactivated()`, because deactivating an account through the panel
+     *    revokes its tokens but a direct database edit does not — the exact
+     *    case IsAdmin's own comment names. Without this the closed account
+     *    keeps reading ID scans for the rest of its token's 8-hour life.
+     */
+    private function guardPrivateFile(Request $request, $query): ?\Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user instanceof \App\Models\Resident) {
+            $query->where('resident_id', $user->getKey());
+
+            return null;
+        }
+
+        // 404, not 403: to anything that is not a recognised staff account this
+        // must look the same as a request that does not exist, matching the
+        // non-owner answer below.
+        if (! $user instanceof \App\Models\User || ! $user->isAdmin()) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        // Named rather than folded into the line above, and worded exactly as
+        // IsAdmin words it: the holder of this token was staff, and telling
+        // them the account is closed is not a disclosure — they already knew
+        // these records exist.
+        if ($user->isDeactivated()) {
+            return response()->json(['message' => 'This account has been deactivated.'], 403);
+        }
+
+        return null;
+    }
+
+    /**
      * Staff-filed requests for a walk-in — someone at the office counter
      * rather than the mobile app. Kept separate from store() rather than
      * branching that method on caller type: store() stays exactly what a
@@ -426,12 +472,10 @@ class ServiceRequestController extends Controller
 
     public function validId(Request $request, $id)
     {
-        $user = $request->user();
-
         $query = ServiceRequest::query();
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        if ($refusal = $this->guardPrivateFile($request, $query)) {
+            return $refusal;
         }
 
         $serviceRequest = $query->find($id);
@@ -454,12 +498,10 @@ class ServiceRequestController extends Controller
     // it by public URL would be the mistake audit #8 already cost us once.
     public function sitePhoto(Request $request, $id)
     {
-        $user = $request->user();
-
         $query = ServiceRequest::query();
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        if ($refusal = $this->guardPrivateFile($request, $query)) {
+            return $refusal;
         }
 
         $serviceRequest = $query->find($id);
@@ -677,15 +719,51 @@ class ServiceRequestController extends Controller
             .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
     }
 
+    /** One billed PhilSMS segment. Past this the vendor charges for a second. */
+    private const SMS_SEGMENT_LIMIT = 160;
+
+    /**
+     * Assembles a message whose middle is staff-typed, trimming that middle —
+     * and only that middle — until the whole body fits one segment.
+     *
+     * The `max:160` on `remarks` bounds what a human types, but it cannot
+     * bound the *assembled* body: these templates add roughly eighty
+     * characters of their own, so a remark at the cap would still bill two
+     * segments. Trimming here rather than raising the validation cap keeps the
+     * limit the admin is shown (160) the same as the limit on the field they
+     * are typing into, and keeps the suffix — which says who sent the text —
+     * from being what gets cut.
+     */
+    private function withReason(string $prefix, string $reason, string $suffix): string
+    {
+        $budget = self::SMS_SEGMENT_LIMIT - mb_strlen($prefix) - mb_strlen($suffix);
+
+        if (mb_strlen($reason) > $budget) {
+            // Ellipsis included in the budget, so the result lands on the limit
+            // rather than one character past it.
+            $reason = mb_substr($reason, 0, max(0, $budget - 1)).'…';
+        }
+
+        return $prefix.$reason.$suffix;
+    }
+
     private function rejectionMessage(string $reason): string
     {
-        return 'SERBIS: Your ambulance booking request was not approved. Reason: '.$reason.' — MDRRMO Echague';
+        return $this->withReason(
+            'SERBIS: Your ambulance booking request was not approved. Reason: ',
+            $reason,
+            ' — MDRRMO Echague',
+        );
     }
 
     private function rescheduleMessage(ServiceRequest $serviceRequest, string $reason): string
     {
-        return 'SERBIS: Your ambulance booking has been moved to '.$this->forResident($serviceRequest->scheduled_at)
-            .'. Reason: '.$reason.' — MDRRMO Echague';
+        return $this->withReason(
+            'SERBIS: Your ambulance booking has been moved to '
+                .$this->forResident($serviceRequest->scheduled_at).'. Reason: ',
+            $reason,
+            ' — MDRRMO Echague',
+        );
     }
 
     public function update(Request $request, $id)
@@ -716,7 +794,15 @@ class ServiceRequestController extends Controller
             // this column exists to prevent. Not required for any other status,
             // reject is the only transition this endpoint makes without a human
             // having already typed something into the request beforehand.
-            'remarks' => 'nullable|string|required_if:status,Disapproved',
+            //
+            // Capped for the same reason SmsController::sendBlast caps its
+            // message at 160: on a rejection this string is pasted into a
+            // PhilSMS body, and PhilSMS bills per segment with no sandbox. The
+            // column is a TEXT and took anything, so a long remark was a
+            // multi-segment billed message nobody priced. 160 is the cap on
+            // what a human types; notifyResident's own builder is what
+            // guarantees the assembled body still fits one segment.
+            'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
         ]);
 
         // Captured before update() overwrites status: rejecting a booking is
@@ -861,7 +947,8 @@ class ServiceRequestController extends Controller
             // TracksHistory logs the scheduled_at/scheduled_end change on its
             // own, but the *reason* only reaches that log because remarks moves
             // in the same update — so it is not optional here, unlike update().
-            'remarks' => 'required|string',
+            // Capped like update()'s copy: this one always reaches PhilSMS.
+            'remarks' => 'required|string|max:160',
         ]);
 
         $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
