@@ -76,13 +76,18 @@
               Drop a file here, or click to browse
             </div>
             <div class="text-caption text-medium-emphasis">
-              PDF, Word, images or ZIP — max 10 MB. This is what residents will download.
+              PDF or images — max 10 MB. This is what residents will download.
             </div>
+            <!-- Kept in step with InfoMaterialController::store's `mimes:` rule.
+                 Word and ZIP were dropped there because these files are served
+                 by public URL from the agency's own origin; offering them here
+                 would only earn the admin a 422. The Word and archive icons
+                 below stay — rows uploaded before the change still render. -->
             <input
               ref="fileInput"
               type="file"
               class="d-none"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip"
+              accept=".pdf,.jpg,.jpeg,.png"
               @change="onPick"
             />
           </div>

@@ -28,7 +28,16 @@ class InfoMaterialController extends Controller
     {
         $request->validate([
             'title' => 'required|string|max:255',
-            'file' => 'required|file|mimes:pdf,doc,docx,jpg,png,zip|max:10240',
+            // No doc/docx/zip. Unlike every other upload in this system these
+            // land on the PUBLIC disk and are handed out by URL from the
+            // agency's own origin, so whatever is accepted here is something
+            // the MDRRMO is publishing: a .doc carries macros, and a .zip is an
+            // opaque container that turns a disaster-advisory library into a
+            // general file host. Both were accepted only because this endpoint
+            // was written before the disk was public. PDFs and images cover
+            // what the library actually publishes — an advisory, an infographic,
+            // an evacuation map.
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ]);
 
         $file = $request->file('file');
