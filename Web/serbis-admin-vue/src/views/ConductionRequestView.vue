@@ -64,7 +64,7 @@
       <v-data-table
         :headers="headers"
         :items="filteredItems"
-        :items-per-page="-1"
+        :items-per-page="10"
         density="comfortable"
         hover
         class="bg-transparent conduction-table"
@@ -214,6 +214,27 @@
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 65vh;">
+          <!-- Only ever present on a trip dispatched from a resident's own
+               booking — a walk-in trip log, still the common case, carries no
+               service_request_id and shows none of this. -->
+          <v-alert
+            v-if="selected.service_request_id"
+            type="info"
+            variant="tonal"
+            density="compact"
+            border="start"
+            class="mb-4"
+          >
+            <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
+            <div class="text-body-2">
+              Booking #{{ selected.service_request_id }}
+              <template v-if="selected.service_request?.scheduled_at">
+                — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
+              </template>
+              <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+            </div>
+          </v-alert>
+
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>

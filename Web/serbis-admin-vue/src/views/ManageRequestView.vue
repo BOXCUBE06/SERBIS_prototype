@@ -24,6 +24,18 @@
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
           Log Walk-in Request
         </v-btn>
+        <!-- Same outlined-primary treatment as Export below: a supporting
+             view, not the page's one decision. -->
+        <v-btn
+          color="primary"
+          variant="outlined"
+          class="text-none font-weight-bold px-6"
+          height="40"
+          @click="openDayView"
+        >
+          <v-icon start size="small">mdi-calendar-clock</v-icon>
+          Ambulance Day View
+        </v-btn>
         <!-- This used to be a button with no handler and no export function
              behind it, styled larger than either real action on the page. It
              now writes what the operator is actually looking at: the current
@@ -189,7 +201,14 @@
                   <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
                   <div class="d-flex align-center text-caption text-medium-emphasis">
                     <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
-                    <span class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
+                    <!-- A Booked row's own scheduled time is the date an operator
+                         actually needs here, not when it was filed — created_at
+                         stays as the fallback for every other status. -->
+                    <template v-if="item.scheduled_at">
+                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0">mdi-calendar-clock</v-icon>
+                      <span class="row-date">{{ formatDateTime(item.scheduled_at) }}</span>
+                    </template>
+                    <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
                 </div>
                 <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(item.status)">{{ item.status || 'Pending' }}</span>
@@ -251,15 +270,22 @@
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <v-row class="detail-group">
-                <v-col cols="12" sm="4">
+                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
                   <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'N/A' }}</div>
                 </v-col>
-                <v-col cols="12" sm="4">
+                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>
                   <div class="font-weight-medium text-body-2">{{ formatDateTime(selectedRequest.created_at) }}</div>
                 </v-col>
-                <v-col cols="12" sm="4">
+                <v-col v-if="selectedRequest.scheduled_at" cols="12" sm="4" md="3">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Scheduled</div>
+                  <div class="font-weight-medium text-body-2">
+                    {{ formatDateTime(selectedRequest.scheduled_at) }}
+                    <template v-if="selectedRequest.scheduled_end"> – {{ formatTime(selectedRequest.scheduled_end) }}</template>
+                  </div>
+                </v-col>
+                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
                   <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
                 </v-col>
@@ -427,14 +453,74 @@
                   Mark as Resolved
                 </v-btn>
               </template>
-              <!-- A Booked request only reaches here once approve() has given
-                   it a vehicle_id — see showActions above. Approving one in
-                   the first place, and rescheduling it, are not built in this
-                   panel yet; this is the one action that exists for it so far. -->
-              <template v-else-if="selectedRequest.status === 'Booked' && selectedRequest.vehicle_id">
-                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white w-100" height="40" @click="dispatchBooking(selectedRequest)">
-                  Dispatch
-                </v-btn>
+              <template v-else-if="selectedRequest.status === 'Booked'">
+                <!-- Not yet approved: same unit-and-button row as the Pending
+                     branch above, same gating, same picker dialog — only the
+                     data source differs (see openAssignUnitModal), and Reject
+                     reuses the existing Disapprove flow untouched. -->
+                <template v-if="!selectedRequest.vehicle_id">
+                  <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
+                    <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
+                      <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
+                        {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
+                      </v-icon>
+                    </v-avatar>
+                    <div class="min-width-0">
+                      <div class="text-body-2 font-weight-bold text-truncate">
+                        {{ formData.vehicle_id ? getSelectedVehicleName() : 'No unit selected' }}
+                      </div>
+                      <div class="text-caption text-medium-emphasis text-truncate">
+                        <template v-if="formData.vehicle_id">
+                          Free for this window<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
+                        </template>
+                        <template v-else>Select a unit free for the scheduled window.</template>
+                      </div>
+                    </div>
+                  </div>
+
+                  <v-btn
+                    color="primary"
+                    variant="outlined"
+                    class="text-none font-weight-bold"
+                    height="40"
+                    :loading="scheduledAvailabilityLoading"
+                    @click="openAssignUnitModal"
+                  >
+                    {{ formData.vehicle_id ? 'Change Unit' : 'Assign Unit' }}
+                  </v-btn>
+                  <v-btn variant="text" class="text-none font-weight-bold" height="40" @click="openReschedule">
+                    Reschedule
+                  </v-btn>
+                  <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+                    Reject
+                  </v-btn>
+                  <v-btn
+                    color="secondary"
+                    variant="flat"
+                    class="text-none font-weight-bold text-white"
+                    height="40"
+                    :loading="loading"
+                    :disabled="!formData.vehicle_id"
+                    :aria-describedby="!formData.vehicle_id ? 'approve-gate' : undefined"
+                    @click="approveBooking"
+                  >
+                    Approve
+                  </v-btn>
+                  <span id="approve-gate" class="d-sr-only">
+                    Disabled until a unit is chosen with the Assign Unit button beside it.
+                  </span>
+                </template>
+
+                <!-- Already approved: the fleet decision is made, so what is
+                     left is moving the time or actually sending the crew. -->
+                <template v-else>
+                  <v-btn variant="text" class="text-none font-weight-bold" height="40" @click="openReschedule">
+                    Reschedule
+                  </v-btn>
+                  <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" @click="dispatchBooking(selectedRequest)">
+                    Dispatch
+                  </v-btn>
+                </template>
               </template>
             </div>
           </template>
@@ -470,7 +556,9 @@
     <v-dialog v-model="vehicleModal.isOpen" max-width="600">
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
-          <span class="text-h6 font-weight-bold">Available Vehicles</span>
+          <span class="text-h6 font-weight-bold">
+            {{ selectedRequest?.status === 'Booked' ? 'Units Free for This Window' : 'Available Vehicles' }}
+          </span>
           <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
 
@@ -479,7 +567,10 @@
              compare fourteen of them. One column, one unit per row, matching the
              fleet list this picker is a view of. -->
         <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
-          <v-list v-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
+          <div v-if="scheduledAvailabilityLoading" class="pa-4">
+            <v-skeleton-loader type="list-item-avatar-two-line" v-for="n in 3" :key="n" class="mb-1"></v-skeleton-loader>
+          </div>
+          <v-list v-else-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
             <v-list-item
               v-for="v in availableVehicles"
               :key="v.vehicle_id"
@@ -511,7 +602,11 @@
           <div v-else class="pa-6 text-center text-medium-emphasis">
             <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
             <div class="text-h6 font-weight-bold">No Vehicles Available</div>
-            <div class="text-body-2">All fleet vehicles are currently dispatched or under maintenance.</div>
+            <div class="text-body-2">
+              {{ selectedRequest?.status === 'Booked'
+                ? 'No Ambulance unit is free for the scheduled window. Try Reschedule instead.'
+                : 'All fleet vehicles are currently dispatched or under maintenance.' }}
+            </div>
           </div>
         </v-card-text>
       </v-card>
@@ -557,6 +652,126 @@
             @click="confirmReason"
           >{{ reasonCopy.confirm }}</v-btn>
         </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Reschedule a Booked request. Its own dialog rather than folding into
+         reasonDialog above: that one collects one reason string for a status
+         flip, this collects two datetimes plus a reason, and remarks here is
+         required unconditionally, not gated on `kind`. -->
+    <v-dialog v-model="rescheduleDialog.open" max-width="440">
+      <v-card rounded="lg">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          Reschedule booking
+        </v-card-title>
+        <v-card-text class="px-5 pt-2">
+          <v-text-field
+            v-model="rescheduleDialog.form.scheduled_at"
+            type="datetime-local"
+            label="New scheduled time"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+          ></v-text-field>
+          <v-text-field
+            v-model="rescheduleDialog.form.scheduled_end"
+            type="datetime-local"
+            label="Ends"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+          ></v-text-field>
+          <v-textarea
+            v-model="rescheduleDialog.form.remarks"
+            label="Reason for the change"
+            hint="Required — this is what a resident sees, and what the log records."
+            persistent-hint
+            variant="outlined"
+            rows="2"
+            counter="255"
+            maxlength="255"
+            :error-messages="rescheduleDialog.error"
+            @update:model-value="rescheduleDialog.error = ''"
+          ></v-textarea>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="rescheduleDialog.open = false">Cancel</v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="px-6 text-none font-weight-bold text-white"
+            height="44"
+            :loading="loading"
+            @click="submitReschedule"
+          >Reschedule</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Ambulance Day View — every unit against one day's booked windows, read
+         straight from GET /ambulance-availability?date=. A picture of the
+         fleet's schedule, not an action surface: nothing in here writes
+         anything, which is why it is its own dialog rather than folded into
+         the detail panel above. -->
+    <v-dialog v-model="dayView.open" max-width="820" scrollable>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-4 border-b bg-surface">
+          <div class="d-flex align-center gap-2">
+            <v-btn icon="mdi-chevron-left" variant="text" density="comfortable" aria-label="Previous day" @click="shiftDayViewDate(-1)"></v-btn>
+            <div>
+              <div class="text-h6 font-weight-bold text-high-emphasis">Ambulance Day View</div>
+              <div class="text-caption text-medium-emphasis">{{ dayViewDateLabel }}</div>
+            </div>
+            <v-btn icon="mdi-chevron-right" variant="text" density="comfortable" aria-label="Next day" @click="shiftDayViewDate(1)"></v-btn>
+          </div>
+          <div class="d-flex align-center gap-2">
+            <v-text-field
+              v-model="dayView.date"
+              type="date"
+              variant="outlined"
+              density="compact"
+              hide-details
+              style="max-width: 170px;"
+            ></v-text-field>
+            <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="dayView.open = false"></v-btn>
+          </div>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <div v-if="dayView.loading">
+            <v-skeleton-loader v-for="n in 4" :key="n" type="list-item-two-line" class="mb-3"></v-skeleton-loader>
+          </div>
+
+          <template v-else-if="dayView.units.length">
+            <!-- Hour scale, shared by every track below it. -->
+            <div class="day-view-scale">
+              <span v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-scale-label" :style="{ left: mark.left }">{{ mark.label }}</span>
+            </div>
+
+            <div v-for="unit in dayView.units" :key="unit.vehicle_id" class="day-view-row">
+              <div class="day-view-unit">
+                <div class="font-weight-bold text-body-2 text-truncate">{{ unit.unit_identifier }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ unit.specification || '&nbsp;' }}</div>
+                <span v-if="unit.is_maintenance" class="status-pill status-pill--sm pill-disapproved mt-1">Maintenance</span>
+              </div>
+              <div class="day-view-track" :class="{ 'day-view-track--maintenance': unit.is_maintenance }">
+                <div v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-hourline" :style="{ left: mark.left }"></div>
+                <div
+                  v-for="(w, i) in unit.booked_windows"
+                  :key="i"
+                  class="day-view-segment"
+                  :style="dayViewSegmentStyle(w)"
+                  :title="`${formatTime(w.scheduled_at)} – ${formatTime(w.scheduled_end)}`"
+                >{{ dayViewSegmentLabel(w) }}</div>
+              </div>
+            </div>
+          </template>
+
+          <div v-else class="pa-6 text-center text-medium-emphasis">
+            <v-icon size="40" class="mb-2">mdi-ambulance</v-icon>
+            <div class="text-body-2">No Ambulance units to show.</div>
+          </div>
+        </v-card-text>
       </v-card>
     </v-dialog>
 
@@ -924,7 +1139,50 @@ const requestCounts = computed(() => {
   return counts
 })
 
-const availableVehicles = computed(() => vehicles.value.filter(v => v.status === 'Available'))
+// A Booked request's picker is scoped to its own window, not to "Available"
+// right now: a unit that is Dispatched on an unrelated trip today can still
+// be free for a booking days out, and one sitting idle right now can already
+// be booked for that same future window. GET /ambulance-availability answers
+// that; the generic Available-status filter below is wrong for this case and
+// stays only for the unscheduled, immediate-dispatch flow it was built for.
+const scheduledAvailability = ref([])
+const scheduledAvailabilityLoading = ref(false)
+
+const fetchScheduledAvailability = async (req) => {
+  scheduledAvailability.value = []
+  if (!req?.scheduled_at) return
+
+  scheduledAvailabilityLoading.value = true
+  try {
+    const start = new Date(req.scheduled_at)
+    const end = req.scheduled_end ? new Date(req.scheduled_end) : new Date(start.getTime() + 2 * 60 * 60 * 1000)
+    const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() })
+    const res = await fetch(`${API_BASE}/ambulance-availability?${params}`, { headers: getHeaders() })
+    scheduledAvailability.value = res.ok ? await res.json() : []
+  } catch {
+    scheduledAvailability.value = []
+  } finally {
+    scheduledAvailabilityLoading.value = false
+  }
+}
+
+const openAssignUnitModal = async () => {
+  await fetchScheduledAvailability(selectedRequest.value)
+  vehicleModal.value.isOpen = true
+}
+
+const availableVehicles = computed(() => {
+  if (selectedRequest.value?.status === 'Booked') {
+    // /ambulance-availability's window form returns {vehicle_id,
+    // unit_identifier, specification} only — cross-referenced against the
+    // fleet already on screen for `type`, which vehicleIcon() needs, rather
+    // than growing a second vehicle shape this list has to render.
+    return scheduledAvailability.value
+      .map(u => vehicles.value.find(v => v.vehicle_id === u.vehicle_id))
+      .filter(Boolean)
+  }
+  return vehicles.value.filter(v => v.status === 'Available')
+})
 
 const residentOptions = computed(() => residents.value
   .map(r => ({
@@ -1051,9 +1309,7 @@ const showActions = computed(() =>
     selectedRequest.value.status === 'Pending'
     || !selectedRequest.value.status
     || selectedRequest.value.status === 'Responding'
-    // Only once a unit is assigned — an unapproved Booked request has
-    // nothing to dispatch yet, and approving it is not built here.
-    || (selectedRequest.value.status === 'Booked' && selectedRequest.value.vehicle_id)
+    || selectedRequest.value.status === 'Booked'
   )
 )
 
@@ -1110,6 +1366,9 @@ const toggleSelect = (item) => {
 
 const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+// scheduled_end shares a day with scheduled_at on every booking this renders
+// for, so only the time carries new information.
+const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, { timeStyle: 'short' })
 
 // Mirrors the `row-${status}` pattern the list rows already use, so the pill and
 // the row's left border are driven by the same string and cannot disagree.
@@ -1239,6 +1498,197 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
   } finally {
     loading.value = false
   }
+}
+
+// Its own route, not update(): the server re-checks availability for the
+// window under a lock before committing, since the picker above may already
+// be stale by the time this fires.
+const approveBooking = async () => {
+  if (!formData.value.vehicle_id) return
+
+  loading.value = true
+  apiError.value = ''
+  const id = itemId(selectedRequest.value)
+
+  try {
+    const res = await fetch(`${API_BASE}/service-requests/${id}/approve`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ vehicle_id: formData.value.vehicle_id }),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to approve the booking')
+    }
+
+    await fetchData()
+  } catch (error) {
+    apiError.value = error.message
+  } finally {
+    loading.value = false
+  }
+}
+
+// Reschedule dialog — its own small form rather than folding into formData:
+// remarks here is a required reason for THIS change, not the general-purpose
+// admin note formData.remarks holds for update().
+const emptyRescheduleForm = () => ({ scheduled_at: '', scheduled_end: '', remarks: '' })
+const rescheduleDialog = ref({ open: false, form: emptyRescheduleForm(), error: '' })
+
+// datetime-local wants "YYYY-MM DDTHH:mm" in whatever timezone the input is
+// rendered in, which browsers treat as local — matching formatDateTime's own
+// reliance on the browser's local time rather than a hardcoded Manila offset.
+const toDateTimeLocal = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const openReschedule = () => {
+  apiError.value = ''
+  const req = selectedRequest.value
+  rescheduleDialog.value = {
+    open: true,
+    error: '',
+    form: {
+      scheduled_at: toDateTimeLocal(req.scheduled_at),
+      scheduled_end: toDateTimeLocal(req.scheduled_end) || toDateTimeLocal(new Date(new Date(req.scheduled_at).getTime() + 2 * 60 * 60 * 1000)),
+      remarks: '',
+    },
+  }
+}
+
+const submitReschedule = async () => {
+  const form = rescheduleDialog.value.form
+  if (!form.scheduled_at || !form.scheduled_end || !form.remarks.trim()) {
+    rescheduleDialog.value.error = 'Every field here is required.'
+    return
+  }
+
+  loading.value = true
+  rescheduleDialog.value.error = ''
+  const id = itemId(selectedRequest.value)
+
+  try {
+    const res = await fetch(`${API_BASE}/service-requests/${id}/reschedule`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        scheduled_at: form.scheduled_at.replace('T', ' ') + ':00',
+        scheduled_end: form.scheduled_end.replace('T', ' ') + ':00',
+        remarks: form.remarks,
+      }),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to reschedule the booking')
+    }
+
+    await fetchData()
+    rescheduleDialog.value.open = false
+  } catch (error) {
+    rescheduleDialog.value.error = error.message
+  } finally {
+    loading.value = false
+  }
+}
+
+// Ambulance Day View — a read-only picture of one day's schedule, straight
+// off GET /ambulance-availability?date=. Local-date arithmetic throughout,
+// not UTC: the endpoint's own day boundary is Manila's, and this panel
+// already assumes the office machine's local time IS Manila everywhere else
+// (formatDateTime, formatDate) — matching that rather than hardcoding the
+// offset a second way.
+const todayLocalDate = () => {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+const dayView = ref({ open: false, date: todayLocalDate(), loading: false, units: [] })
+
+const fetchDayView = async () => {
+  dayView.value.loading = true
+  try {
+    const res = await fetch(`${API_BASE}/ambulance-availability?date=${dayView.value.date}`, { headers: getHeaders() })
+    dayView.value.units = res.ok ? await res.json() : []
+  } catch {
+    dayView.value.units = []
+  } finally {
+    dayView.value.loading = false
+  }
+}
+
+const openDayView = () => {
+  dayView.value.open = true
+  fetchDayView()
+}
+
+const shiftDayViewDate = (deltaDays) => {
+  const [y, m, d] = dayView.value.date.split('-').map(Number)
+  const next = new Date(y, m - 1, d + deltaDays)
+  const pad = (n) => String(n).padStart(2, '0')
+  dayView.value.date = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`
+}
+
+// The date field is its own trigger too — typing a date, not just the arrow
+// buttons, has to refetch.
+watch(() => dayView.value.date, () => { if (dayView.value.open) fetchDayView() })
+
+const dayViewDateLabel = computed(() => {
+  const [y, m, d] = dayView.value.date.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+})
+
+const dayViewHourMarks = [0, 6, 12, 18, 24].map((hour) => ({
+  hour,
+  left: `${(hour / 24) * 100}%`,
+  label: hour === 0 || hour === 24 ? '12 AM' : hour === 12 ? '12 PM' : hour < 12 ? `${hour} AM` : `${hour - 12} PM`,
+}))
+
+// Position and width as a percentage of the visible day, clamped to it — a
+// window that starts before local midnight or ends after the next one still
+// renders, just cut off at the track's own edges rather than overflowing it.
+const dayViewSegmentStyle = (window) => {
+  const [y, m, d] = dayView.value.date.split('-').map(Number)
+  const dayStart = new Date(y, m - 1, d)
+  const minutesInDay = 24 * 60
+
+  const startMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_at) - dayStart) / 60000))
+  const endMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_end) - dayStart) / 60000))
+
+  return {
+    left: `${(startMin / minutesInDay) * 100}%`,
+    width: `${Math.max(0.75, ((endMin - startMin) / minutesInDay) * 100)}%`,
+  }
+}
+
+// A 2-hour segment is roughly 8% of the track — too narrow for
+// "9:00 AM – 11:00 AM" at any legible size. Drops the minutes when both ends
+// land on the hour (true for every booking this feature writes, since
+// scheduled_end defaults to +2h) and the leading period when both ends share
+// one, so a same-morning window reads "9–11 AM" instead of repeating it. The
+// title attribute beside this still carries the full formatTime string for
+// anything this still doesn't fit.
+const dayViewSegmentLabel = (window) => {
+  const start = new Date(window.scheduled_at)
+  const end = new Date(window.scheduled_end)
+
+  const hourLabel = (d) => {
+    const h12 = d.getHours() % 12 === 0 ? 12 : d.getHours() % 12
+    const mins = d.getMinutes()
+    return mins === 0 ? `${h12}` : `${h12}:${String(mins).padStart(2, '0')}`
+  }
+  const period = (d) => (d.getHours() < 12 ? 'AM' : 'PM')
+
+  return period(start) === period(end)
+    ? `${hourLabel(start)}–${hourLabel(end)} ${period(end)}`
+    : `${hourLabel(start)} ${period(start)}–${hourLabel(end)} ${period(end)}`
 }
 
 // v-file-input's v-model is always an array in this Vuetify version, single
@@ -1586,4 +2036,81 @@ onUnmounted(releaseAttachments)
 .v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
 .v-theme--dark .pill-disapproved,
 .v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
+
+/* Ambulance Day View. Booked segments reuse .pill-booked's exact violet — the
+   same status already means "Booked" everywhere else on this page, so the
+   track borrows its vocabulary rather than inventing a second color for the
+   same fact. */
+.day-view-scale {
+  position: relative;
+  height: 20px;
+  margin-left: 152px;
+}
+.day-view-scale-label {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: rgba(var(--v-theme-on-surface), 0.5);
+}
+.day-view-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
+}
+.day-view-row:last-child {
+  border-bottom: none;
+}
+.day-view-unit {
+  flex: 0 0 136px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.day-view-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 40px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+.day-view-track--maintenance {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(var(--v-theme-on-surface), 0.04),
+    rgba(var(--v-theme-on-surface), 0.04) 8px,
+    rgba(var(--v-theme-on-surface), 0.07) 8px,
+    rgba(var(--v-theme-on-surface), 0.07) 16px
+  );
+}
+.day-view-hourline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.day-view-segment {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 6px;
+  background: rgba(109, 40, 217, 0.14);
+  color: #5B21B6;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+.v-theme--dark .day-view-segment {
+  background: rgba(167, 139, 250, 0.18);
+  color: #A78BFA;
+}
 </style>

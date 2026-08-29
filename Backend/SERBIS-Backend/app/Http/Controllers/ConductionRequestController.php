@@ -40,7 +40,9 @@ class ConductionRequestController extends Controller
 
     public function index()
     {
-        $requests = ConductionRequest::with('people')->latest()->get();
+        // serviceRequest eager-loaded so the panel can show the booking a trip
+        // log fulfils without a second round trip per row.
+        $requests = ConductionRequest::with(['people', 'serviceRequest'])->latest()->get();
 
         return response()->json($requests);
     }
@@ -107,7 +109,7 @@ class ConductionRequestController extends Controller
 
     public function show($id)
     {
-        $conductionRequest = ConductionRequest::with('people')->find($id);
+        $conductionRequest = ConductionRequest::with(['people', 'serviceRequest'])->find($id);
 
         if (!$conductionRequest) {
             return response()->json(['message' => 'Conduction request not found'], 404);

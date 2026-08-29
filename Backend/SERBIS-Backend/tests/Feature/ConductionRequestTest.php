@@ -109,6 +109,39 @@ class ConductionRequestTest extends TestCase
         $this->assertSame($vehicle->vehicle_id, $conductionRequest->vehicle_id);
     }
 
+    /**
+     * The admin panel's detail view shows the linked booking's own
+     * scheduled_at and status — index() and show() both have to eager-load
+     * the relation for that, not just carry the bare id.
+     */
+    public function test_index_and_show_eager_load_the_linked_booking(): void
+    {
+        $service = Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+
+        $booking = ServiceRequest::create([
+            'service_id' => $service->service_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+            'scheduled_at' => '2026-09-01 09:00:00',
+        ]);
+
+        $conductionRequest = ConductionRequest::create($this->payload([
+            'service_request_id' => $booking->request_id,
+        ]));
+
+        $this->getJson('/api/conduction-requests')
+            ->assertOk()
+            ->assertJsonPath('0.service_request.request_id', $booking->request_id)
+            ->assertJsonPath('0.service_request.status', 'Booked');
+
+        $this->getJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}")
+            ->assertOk()
+            ->assertJsonPath('service_request.request_id', $booking->request_id);
+    }
+
     public function test_required_patient_fields_are_enforced(): void
     {
         $this->postJson('/api/conduction-requests', $this->payload(['patient_name' => '']))
