@@ -6,6 +6,7 @@ use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class ConductionRequestController extends Controller
@@ -149,11 +150,28 @@ class ConductionRequestController extends Controller
         // because nothing ever compared a checkpoint against created_at or now().
         // Converted here, before every check below, so the comparisons and the
         // stored value are all real instants. A string that does carry an offset
-        // is honoured as sent rather than re-read as Manila.
+        // is honoured as sent rather than re-read as Manila — accepting both
+        // shapes on this one endpoint, indefinitely for now, is deliberate: the
+        // admin panel's <input type="datetime-local"> can only ever send the
+        // naive shape, so that is not a temporary skew to wait out. What this
+        // does watch for is a caller that starts sending the offset-carrying
+        // shape instead — the day this admin form (or any other client) is
+        // changed to send one, the naive branch below should stop firing
+        // entirely, and the log line is what makes that transition visible
+        // rather than assumed.
         foreach (array_keys(self::TRIP_SEQUENCE) as $field) {
             if (array_key_exists($field, $validated) && $validated[$field] !== null) {
+                $raw = (string) $validated[$field];
+
+                if (!self::carriesExplicitOffset($raw)) {
+                    Log::info('Conduction checkpoint received with no UTC offset — read as Asia/Manila.', [
+                        'conduction_request_id' => $conductionRequest->conduction_request_id,
+                        'field' => $field,
+                    ]);
+                }
+
                 $validated[$field] = \Carbon\Carbon::parse(
-                    $validated[$field],
+                    $raw,
                     self::OFFICE_TIMEZONE
                 )->utc();
             }
@@ -214,5 +232,17 @@ class ConductionRequestController extends Controller
         $conductionRequest->update($validated);
 
         return response()->json($conductionRequest->fresh('people'));
+    }
+
+    /**
+     * Whether a datetime string names its own UTC offset — 'Z', or a numeric
+     * '+08:00'/'+0800' suffix — rather than being naive wall clock. Only the
+     * shape is checked, not the value itself; Carbon::parse() below still does
+     * the real parsing and still wins if this is ever wrong about a format it
+     * has not seen before.
+     */
+    private static function carriesExplicitOffset(string $value): bool
+    {
+        return (bool) preg_match('/(Z|[+-]\d{2}:?\d{2})$/', trim($value));
     }
 }

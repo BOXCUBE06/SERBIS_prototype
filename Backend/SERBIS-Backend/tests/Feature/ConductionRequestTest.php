@@ -172,6 +172,57 @@ class ConductionRequestTest extends TestCase
         $this->assertSame(10025, $conductionRequest->odometer_end);
     }
 
+    /**
+     * The admin panel's <input type="datetime-local"> can only ever send a
+     * naive string — that is not a defect to fix, but the day some caller
+     * starts sending an offset instead should be visible, not assumed. Both
+     * shapes must keep working and resolve to the identical instant either
+     * way.
+     */
+    public function test_a_naive_checkpoint_is_logged_and_read_as_manila(): void
+    {
+        \Illuminate\Support\Facades\Log::spy();
+
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => '2026-08-18 08:00:00',
+        ])->assertStatus(200);
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('info')->once()->withArgs(
+            fn (string $message, array $context) => str_contains($message, 'no UTC offset')
+                && $context['field'] === 'departed_office_at'
+                && $context['conduction_request_id'] === $conductionRequest->conduction_request_id
+        );
+
+        // 8 AM Manila is midnight UTC.
+        $this->assertTrue(
+            $conductionRequest->fresh()->departed_office_at->utc()->equalTo(
+                \Carbon\Carbon::parse('2026-08-18 00:00:00', 'UTC')
+            )
+        );
+    }
+
+    public function test_an_offset_carrying_checkpoint_is_not_logged_and_is_honoured_as_sent(): void
+    {
+        \Illuminate\Support\Facades\Log::spy();
+
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        // The same instant as the naive test above, sent as UTC directly.
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => '2026-08-18T00:00:00.000000Z',
+        ])->assertStatus(200);
+
+        \Illuminate\Support\Facades\Log::shouldNotHaveReceived('info');
+
+        $this->assertTrue(
+            $conductionRequest->fresh()->departed_office_at->utc()->equalTo(
+                \Carbon\Carbon::parse('2026-08-18 00:00:00', 'UTC')
+            )
+        );
+    }
+
     public function test_odometer_end_before_odometer_start_is_rejected(): void
     {
         $conductionRequest = ConductionRequest::create($this->payload(['patient_name' => 'Odometer Case']));
