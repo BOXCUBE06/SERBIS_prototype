@@ -9,10 +9,11 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id'])]
+#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'status', 'remarks', 'vehicle_id', 'scheduled_at', 'scheduled_end', 'approved_at'])]
 #[Hidden(['valid_id', 'site_photo'])]
 #[Appends(['has_valid_id', 'has_site_photo'])]
 class ServiceRequest extends Model
@@ -20,6 +21,12 @@ class ServiceRequest extends Model
     use HasFactory, TracksHistory;
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
+
+    protected $casts = [
+        'scheduled_at' => 'datetime',
+        'scheduled_end' => 'datetime',
+        'approved_at' => 'datetime',
+    ];
 
     /**
      * The `valid_id` storage path is hidden so it never reaches a client; the image
@@ -59,5 +66,11 @@ class ServiceRequest extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
+    }
+
+    /** The trip log(s) filed against this booking. Nothing enforces one-per-request at the schema level. */
+    public function conductionRequests(): HasMany
+    {
+        return $this->hasMany(ConductionRequest::class, 'service_request_id', 'request_id');
     }
 }

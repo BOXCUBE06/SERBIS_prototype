@@ -155,6 +155,7 @@ class FakeApi extends ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    DateTime? scheduledAt,
   }) async {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
@@ -205,7 +206,15 @@ Future<void> _pump(
   // A tall phone. The default 800x600 surface clips this screen badly enough
   // that the submit button never builds, which would make it unfindable for a
   // reason that has nothing to do with the code under test.
-  tester.view.physicalSize = const Size(1080, 4800);
+  //
+  // 5600, not the original 4800: the ambulance form grew a schedule picker
+  // (AmbulanceScheduleField), and 4800 was tuned tightly enough that the new
+  // field pushed Submit below the fold on exactly the tests that skip
+  // attaching a file first. ensureVisible() ought to scroll to it regardless
+  // of height, but this screen was deliberately sized to avoid depending on
+  // that in the first place — keep it that way rather than debug why only
+  // some tests needed the scroll to actually work.
+  tester.view.physicalSize = const Size(1080, 5600);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AmbulanceAvailabilityController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\ConductionRequestController;
@@ -57,6 +58,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // What the MDRRMO has texted to this resident's barangay. Scoped to blasts
     // they were actually a recipient of, not to their barangay membership.
     Route::get('advisories', [SmsController::class, 'advisories']);
+    // Shared between the resident booking picker and the admin calendar —
+    // both need "which ambulances are free", neither gets patient details.
+    Route::get('ambulance-availability', [AmbulanceAvailabilityController::class, 'index']);
     // Owner-scoped cancel. The general update() stays admin-only below.
     Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
@@ -101,6 +105,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);    
         Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
+        // Their own routes, not update(): both re-check ambulance availability
+        // under a lock, which update()/syncFleet() were never built to do.
+        Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
+        Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
         Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update', 'destroy']);
 
         // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and

@@ -9,12 +9,15 @@ import '../state/translations.dart';
 /// actors: the resident withdraws a request, the MDRRMO refuses one. Telling a
 /// resident they cancelled a request the agency turned down is wrong, and it
 /// hides that there are remarks explaining the refusal.
-enum ReqStatus { review, scheduled, completed, cancelled, disapproved }
+enum ReqStatus { review, booked, scheduled, completed, cancelled, disapproved }
 
 extension ReqStatusX on ReqStatus {
   String get label {
     if (this == ReqStatus.review) {
       return 'Under review';
+    }
+    if (this == ReqStatus.booked) {
+      return 'Booked';
     }
     if (this == ReqStatus.scheduled) {
       return 'Scheduled';
@@ -32,6 +35,9 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.review) {
       return tr(filipino, 'status.review');
     }
+    if (this == ReqStatus.booked) {
+      return tr(filipino, 'status.booked');
+    }
     if (this == ReqStatus.scheduled) {
       return tr(filipino, 'status.scheduled');
     }
@@ -48,6 +54,12 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.review) {
       return AppColors.blue50;
     }
+    // The violet already in the palette on the animal-rescue badge. Booked has
+    // to be told apart from Scheduled at a glance -- they are adjacent states
+    // and amber is taken -- and the theme carries no sixth semantic hue.
+    if (this == ReqStatus.booked) {
+      return const Color(0xFFEDE7F6);
+    }
     if (this == ReqStatus.scheduled) {
       return AppColors.amber50;
     }
@@ -63,6 +75,9 @@ extension ReqStatusX on ReqStatus {
   Color get fg {
     if (this == ReqStatus.review) {
       return AppColors.blue600;
+    }
+    if (this == ReqStatus.booked) {
+      return const Color(0xFF6A1B9A);
     }
     if (this == ReqStatus.scheduled) {
       return AppColors.amber600;
@@ -400,6 +415,27 @@ String formatTimelineTime(DateTime at, bool filipino) {
   return '${months[local.month - 1]} ${local.day}, $clock';
 }
 
+/// Renders a timestamp for a booking confirmation: "Aug 1, 2026, 3:04 PM".
+///
+/// [formatTimelineTime] is wrong here on purpose, not by oversight — it drops
+/// the year, which is fine for a timeline entry that is always read within
+/// days of "now" but wrong for a booking that can sit weeks out. A resident
+/// re-opening the app in January must not read an August confirmation as
+/// last year's.
+String formatBookingConfirmationTime(DateTime at, bool filipino) {
+  final local = at.toLocal();
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${months[local.month - 1]} ${local.day}, ${local.year}, '
+      '$hour12:$minute $period';
+}
+
 class ServiceRequest {
   final int? id;
   final int? serviceId;
@@ -433,6 +469,14 @@ class ServiceRequest {
   /// instead. Such a row shows the neutral badge until the next fetch.
   final String? serviceCode;
 
+  /// The ambulance booking's own window start, distinct from [createdAt] (when
+  /// it was filed). Null means "as soon as you can" — an ordinary, unscheduled
+  /// request, which is every request this app has ever sent. Deliberately a
+  /// real field rather than a line folded into [description]: a prose date is
+  /// not a value anything can compare, filter or re-send, and a resident's
+  /// booking confirmation would be reading it back out of free text.
+  final DateTime? scheduledAt;
+
   const ServiceRequest({
     this.id,
     this.serviceId,
@@ -447,6 +491,7 @@ class ServiceRequest {
     this.updatedAt,
     this.serviceName,
     this.serviceCode,
+    this.scheduledAt,
   });
 
   bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
@@ -516,6 +561,20 @@ class ServiceRequest {
           TimelineStep(
             tr(filipino, 'timeline.review'),
             tr(filipino, 'timeline.awaiting'),
+            RequestStepState.current,
+          ),
+          TimelineStep(
+            tr(filipino, 'timeline.completed'),
+            tr(filipino, 'timeline.awaiting'),
+            RequestStepState.pending,
+          ),
+        ];
+      case ReqStatus.booked:
+        return [
+          submitted,
+          TimelineStep(
+            tr(filipino, 'timeline.booked'),
+            movedLabel,
             RequestStepState.current,
           ),
           TimelineStep(
@@ -595,6 +654,7 @@ class ServiceRequest {
       cancellable: cancellable ?? this.cancellable,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      scheduledAt: scheduledAt,
     );
   }
 
@@ -626,7 +686,11 @@ class ServiceRequest {
     final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
     final status = getStatusFromText(statusText);
 
-    final isActive = status == ReqStatus.review || status == ReqStatus.scheduled;
+    // Booked counts as active: an approved booking that has not been dispatched
+    // is exactly the case a resident must still be able to withdraw.
+    final isActive = status == ReqStatus.review ||
+        status == ReqStatus.booked ||
+        status == ReqStatus.scheduled;
 
     return ServiceRequest(
       id: id,
@@ -648,6 +712,9 @@ class ServiceRequest {
       // every timeline entry would read eight hours early in the Philippines.
       createdAt: _parseTimestamp(json['created_at']),
       updatedAt: _parseTimestamp(json['updated_at']),
+      // Absent on every request that is not a booking, and on an ordinary
+      // request from a server build that predates this column.
+      scheduledAt: _parseTimestamp(json['scheduled_at']),
     );
   }
 }
@@ -669,6 +736,7 @@ extension ServiceRequestCache on ServiceRequest {
         'updated_at': updatedAt?.toIso8601String(),
         'service_name': serviceName,
         'service_code': serviceCode,
+        'scheduled_at': scheduledAt?.toIso8601String(),
       };
 
   /// Rebuilds a cached row, or returns null for an entry this version of the
@@ -706,6 +774,11 @@ extension ServiceRequestCache on ServiceRequest {
       // row reads back with a neutral badge and the next fetch relabels it,
       // which is preferable to reviving the name-keyed lookup for one release.
       serviceCode: json['service_code'] as String?,
+      // Same tolerance as service_code: a row cached by a build before this
+      // feature existed has no 'scheduled_at' key at all. json['scheduled_at']
+      // reads as null rather than throwing, so that row comes back as an
+      // ordinary unscheduled request instead of failing to parse.
+      scheduledAt: _parseTimestamp(json['scheduled_at']),
     );
   }
 }
@@ -720,8 +793,18 @@ DateTime? _parseTimestamp(dynamic value) {
 }
 
 ReqStatus getStatusFromText(String statusText) {
-  // Backend vocabulary: Pending / Responding / Resolved / Disapproved / Cancelled.
-  // 'scheduled'/'dispatched'/'completed' are kept for legacy/local rows.
+  // Backend vocabulary: Pending / Booked / Responding / Resolved / Disapproved /
+  // Cancelled. 'scheduled'/'dispatched'/'completed' are kept for legacy/local
+  // rows.
+  //
+  // 'booked' is deliberately NOT folded into the scheduled branch below.
+  // Responding means a crew is already moving; Booked means a slot is held and
+  // nothing has left the office yet, and the timeline renders the two
+  // differently.
+  if (statusText == 'booked') {
+    return ReqStatus.booked;
+  }
+
   if (statusText == 'scheduled' ||
       statusText == 'dispatched' ||
       statusText == 'responding') {

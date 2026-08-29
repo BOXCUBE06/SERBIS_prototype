@@ -4,28 +4,58 @@ namespace App\Http\Controllers;
 
 use App\Models\Vehicle;
 use App\Models\ServiceRequest;
+use App\Services\AmbulanceAvailability;
+use App\Services\PhilSms;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ServiceRequestController extends Controller
 {
+    public function __construct(private readonly AmbulanceAvailability $availability)
+    {
+    }
+
+    /**
+     * The wall clock a resident's `scheduled_at` is typed against. Duplicated
+     * from ConductionRequestController::OFFICE_TIMEZONE and
+     * AmbulanceAvailabilityController::OFFICE_TIMEZONE rather than shared —
+     * all three are the same fixed IANA name, not a business rule that could
+     * drift.
+     */
+    private const OFFICE_TIMEZONE = 'Asia/Manila';
+
+    /** How soon a resident may book. Anything closer is an emergency, not a schedule. */
+    private const MINIMUM_LEAD_TIME_HOURS = 1;
+
+    /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
+    private const DEFAULT_BOOKING_HOURS = 2;
+
+    /** How close to scheduled_at a resident may still back out on their own. */
+    private const CANCEL_CUTOFF_HOURS = 2;
+
     /**
      * The status column's whole vocabulary. Seeders, the admin panel's tabs and
      * the mobile ReqStatus enum all already agree on these five; the column was
      * simply never constrained to them, so a typo in a client wrote a status no
      * screen could render and no filter could find.
      */
-    private const STATUSES = ['Pending', 'Responding', 'Resolved', 'Cancelled', 'Disapproved'];
+    private const STATUSES = ['Pending', 'Booked', 'Responding', 'Resolved', 'Cancelled', 'Disapproved'];
 
     /**
      * Statuses that end the request. A unit held by one of these is not coming
      * back on its own — nothing else in the system ever returns it to the fleet,
      * so every vehicle dispatched was leaving Available permanently and the
      * picker emptied out after one dispatch per vehicle.
+     *
+     * Public: App\Services\AmbulanceAvailability reads this list rather than
+     * keeping its own copy, so the two cannot drift apart.
      */
-    private const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
+    public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
    public function adminIndex()
     {
@@ -66,7 +96,30 @@ class ServiceRequestController extends Controller
             // where stopping to photograph anything is the wrong advice.
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
+            // Absent means "as soon as you can" — the request behaves exactly as
+            // it always has. Present means a scheduled ambulance booking; see
+            // the checks right below, which run before any file touches disk.
+            'scheduled_at' => 'nullable|date',
         ]);
+
+        $scheduledAt = null;
+        if (!empty($validated['scheduled_at'])) {
+            $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
+
+            if ($scheduledAt->isPast()) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'Scheduled time must be in the future.',
+                ]);
+            }
+
+            if ($scheduledAt->lt(now()->addHours(self::MINIMUM_LEAD_TIME_HOURS))) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'Scheduled bookings need at least '
+                        . self::MINIMUM_LEAD_TIME_HOURS
+                        . ' hour of lead time. Anything sooner is an emergency — call it in instead.',
+                ]);
+            }
+        }
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -98,11 +151,18 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt) {
                 $vehicle = null;
                 $vehicleId = null;
 
-                if (!empty($validated['required_vehicle_type'])) {
+                // A scheduled booking never claims a unit here, even if a caller
+                // somehow also sent required_vehicle_type: which ambulance goes
+                // out is a staffing decision made at approval (phase 5), not
+                // something this endpoint locks in before anyone on duty has
+                // seen the booking. required_vehicle_type's own immediate-claim
+                // path below is therefore for the unscheduled, "as soon as you
+                // can" case only — unchanged from before this feature existed.
+                if (!$scheduledAt && !empty($validated['required_vehicle_type'])) {
                     $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
                                       ->where('status', 'Available')
                                       ->lockForUpdate()
@@ -114,15 +174,45 @@ class ServiceRequestController extends Controller
                     $vehicleId = $vehicle->vehicle_id;
                 }
 
+                if ($scheduledAt) {
+                    // Locks every Ambulance unit before the availability check
+                    // runs, and before it — not just around it — so the check's
+                    // own plain read is guaranteed to see any booking a
+                    // concurrent request just committed, rather than a snapshot
+                    // from before this transaction started. Two residents racing
+                    // for the same slot are serialised here: the second blocks
+                    // on this lock until the first commits, then re-checks
+                    // against what the first actually booked.
+                    Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+                    $freeUnits = $this->availability->availableAmbulances(
+                        $scheduledAt,
+                        $scheduledAt->copy()->addHours(self::DEFAULT_BOOKING_HOURS)
+                    );
+
+                    if ($freeUnits->isEmpty()) {
+                        throw ValidationException::withMessages([
+                            'scheduled_at' => 'No ambulance is available for that time. Try a different slot.',
+                        ]);
+                    }
+                }
+
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $validated['service_id'],
                     'description' => $validated['description'],
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
-                    'status' => 'Pending',
+                    // A scheduled booking is approved capacity, not a request
+                    // waiting on staff triage — 'Pending' would queue it next to
+                    // a report nobody has looked at yet. scheduled_end and
+                    // vehicle_id both stay null regardless of the check above
+                    // finding a free unit: which one actually goes out, and the
+                    // real end of its booking, are set at approval.
+                    'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
+                    'scheduled_at' => $scheduledAt,
                 ]);
 
                 if ($vehicle) {
@@ -373,10 +463,34 @@ class ServiceRequestController extends Controller
         }
 
         // Once a unit is Responding the cancellation is an operational decision,
-        // not a resident one — the crew is already moving.
-        if ($serviceRequest->status !== 'Pending') {
+        // not a resident one — the crew is already moving. Booked joins Pending
+        // here: a booking that has not yet been approved into a live dispatch is
+        // still purely the resident's own plan to withdraw.
+        if (!in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
             return response()->json([
-                'message' => 'Only a pending request can be cancelled.',
+                'message' => 'Only a pending or booked request can be cancelled.',
+            ], 422);
+        }
+
+        // A booking too close to its own start is no longer just "the resident
+        // changed their mind" — the office may already be staging for it. Only
+        // Booked requests carry a scheduled_at, so Pending is never touched by
+        // this check.
+        if ($serviceRequest->scheduled_at
+            && now()->gte($serviceRequest->scheduled_at->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
+        ) {
+            return response()->json([
+                'message' => 'This booking is too close to its scheduled time to cancel. Call the office instead.',
+            ], 422);
+        }
+
+        // departed_office_at is the trip log's own first checkpoint — once it is
+        // set the crew has physically left, and the booking behind it is no
+        // longer the resident's to withdraw regardless of what tbl_service_request
+        // itself still says.
+        if ($serviceRequest->conductionRequests()->whereNotNull('departed_office_at')->exists()) {
+            return response()->json([
+                'message' => 'This trip has already been dispatched and cannot be cancelled here.',
             ], 422);
         }
 
@@ -384,15 +498,7 @@ class ServiceRequestController extends Controller
             // store() can attach and dispatch a vehicle while the request is still
             // Pending, so cancelling has to hand the unit back or it leaks out of
             // the fleet with no request pointing at it.
-            if ($serviceRequest->vehicle_id) {
-                $vehicle = Vehicle::where('vehicle_id', $serviceRequest->vehicle_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($vehicle && $vehicle->status === 'Dispatched') {
-                    $vehicle->update(['status' => 'Available']);
-                }
-            }
+            $this->releaseVehicle($serviceRequest->vehicle_id);
 
             $serviceRequest->update(['status' => 'Cancelled']);
         });
@@ -467,6 +573,84 @@ class ServiceRequestController extends Controller
         }
     }
 
+    /**
+     * Texts a resident that their booking's status changed. Follows the OTP
+     * call pattern at AuthController::sendVerificationCode(): PhilSms is the
+     * only channel — there is no Laravel Notifications setup, and
+     * MAIL_MAILER is 'log' in production (render.yaml), so an email
+     * "fallback" here would not actually reach anyone, unlike the OTP flow
+     * where email is a real second channel. Walk-in bookings carry no
+     * resident_id and are silently skipped; there is no one to text.
+     *
+     * Deliberately best-effort: this always runs after the transaction that
+     * made the change has already committed (called from outside every
+     * DB::transaction() block below), so a delivery failure can only ever
+     * fail to inform, never undo a booking that already landed. Never
+     * throws — every failure path is caught and logged instead. The
+     * 45-second poll and cold-launch fetch this is compensating for
+     * (main.dart:320, :390) still catch a resident up if the text never
+     * arrives.
+     */
+    private function notifyResident(ServiceRequest $serviceRequest, string $message): void
+    {
+        if ($serviceRequest->resident_id === null) {
+            return;
+        }
+
+        $resident = $serviceRequest->resident ?? $serviceRequest->resident()->first();
+
+        if (!$resident || !PhilSms::configured()) {
+            return;
+        }
+
+        $number = PhilSms::normalize((string) $resident->phone_number);
+
+        if ($number === '') {
+            return;
+        }
+
+        try {
+            $response = app(PhilSms::class)->send([$number], $message);
+
+            if (!PhilSms::accepted($response)) {
+                Log::warning('Booking status-change SMS not accepted', [
+                    'request_id' => $serviceRequest->request_id,
+                    'status' => $response->status(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Booking status-change SMS failed', [
+                'request_id' => $serviceRequest->request_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
+    private function forResident(Carbon $instant): string
+    {
+        return $instant->copy()->timezone(self::OFFICE_TIMEZONE)->format('M j, Y g:i A');
+    }
+
+    private function approvalMessage(ServiceRequest $serviceRequest): string
+    {
+        $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a unit';
+
+        return 'SERBIS: Your ambulance booking for '.$this->forResident($serviceRequest->scheduled_at)
+            .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
+    }
+
+    private function rejectionMessage(string $reason): string
+    {
+        return 'SERBIS: Your ambulance booking request was not approved. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
+    private function rescheduleMessage(ServiceRequest $serviceRequest, string $reason): string
+    {
+        return 'SERBIS: Your ambulance booking has been moved to '.$this->forResident($serviceRequest->scheduled_at)
+            .'. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
@@ -490,8 +674,19 @@ class ServiceRequestController extends Controller
             // back "Vehicle Unknown".
             'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id',
             'status' => 'sometimes|required|in:'.implode(',', self::STATUSES),
-            'remarks' => 'nullable|string',
+            // Required the moment this call is the one rejecting the request —
+            // a resident reading "Disapproved" with no reason is the complaint
+            // this column exists to prevent. Not required for any other status,
+            // reject is the only transition this endpoint makes without a human
+            // having already typed something into the request beforehand.
+            'remarks' => 'nullable|string|required_if:status,Disapproved',
         ]);
+
+        // Captured before update() overwrites status: rejecting a booking is
+        // the case this endpoint notifies for (the panel's older, unscheduled
+        // Pending -> Disapproved flow is not "a booking" and stays silent).
+        $wasBookingRejection = $serviceRequest->scheduled_at !== null
+            && ($validated['status'] ?? null) === 'Disapproved';
 
         DB::transaction(function () use ($serviceRequest, $validated) {
             $this->syncFleet($serviceRequest, $validated);
@@ -499,7 +694,180 @@ class ServiceRequestController extends Controller
             $serviceRequest->update($validated);
         });
 
+        if ($wasBookingRejection) {
+            $this->notifyResident($serviceRequest, $this->rejectionMessage((string) $validated['remarks']));
+        }
+
         return response()->json($serviceRequest->fresh(['vehicle']));
+    }
+
+    /**
+     * Assigns a unit to a Booked request. Status stays 'Booked' — approval is
+     * not dispatch, it is the office committing capacity to a window that is
+     * usually still days away. That is exactly why this does NOT mark the
+     * vehicle 'Dispatched' the way store()'s immediate-claim path and
+     * syncFleet() both do for a live request: that convention means "out
+     * right now", and flipping it for a booking that has not happened yet
+     * would wrongly clear the unit off every OTHER day's availability. A unit
+     * only becomes 'Dispatched' when it actually leaves — that is dispatch,
+     * a later step this endpoint does not perform.
+     */
+    public function approve(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::find($id);
+
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($serviceRequest->status !== 'Booked') {
+            return response()->json([
+                'message' => 'Only a booked request can be approved.',
+            ], 422);
+        }
+
+        if (!$serviceRequest->scheduled_at) {
+            return response()->json([
+                'message' => 'This request has no scheduled time to approve against.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'vehicle_id' => 'required|integer|exists:tbl_vehicles,vehicle_id',
+            // Staff-adjustable; defaults to +2h below when absent. Same Manila
+            // parse as everywhere else a human types a time into this system.
+            'scheduled_end' => 'nullable|date',
+        ]);
+
+        $scheduledEnd = !empty($validated['scheduled_end'])
+            ? Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc()
+            : $serviceRequest->scheduled_at->copy()->addHours(self::DEFAULT_BOOKING_HOURS);
+
+        if ($scheduledEnd->lte($serviceRequest->scheduled_at)) {
+            throw ValidationException::withMessages([
+                'scheduled_end' => 'scheduled_end must be after scheduled_at.',
+            ]);
+        }
+
+        DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledEnd) {
+            // Same serialising lock as store(): whoever gets here first
+            // decides who the window's last free unit goes to.
+            $units = Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+            $vehicle = $units->firstWhere('vehicle_id', (int) $validated['vehicle_id']);
+
+            if (!$vehicle) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is not an Ambulance.',
+                ]);
+            }
+
+            if ($vehicle->status === 'Maintenance') {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is under Maintenance and cannot be assigned.',
+                ]);
+            }
+
+            // Re-checked, not trusted from submission time: the window may
+            // have filled with other approvals since this request was filed.
+            $freeIds = $this->availability
+                ->availableAmbulances($serviceRequest->scheduled_at, $scheduledEnd, $serviceRequest->request_id)
+                ->pluck('vehicle_id');
+
+            if (!$freeIds->contains($vehicle->vehicle_id)) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is no longer free for this window.',
+                ]);
+            }
+
+            if ($serviceRequest->vehicle_id && $serviceRequest->vehicle_id !== $vehicle->vehicle_id) {
+                $this->releaseVehicle($serviceRequest->vehicle_id);
+            }
+
+            $serviceRequest->update([
+                'vehicle_id' => $vehicle->vehicle_id,
+                'scheduled_end' => $scheduledEnd,
+                'approved_at' => now(),
+                'processed_by' => $request->user()->getKey(),
+            ]);
+        });
+
+        $fresh = $serviceRequest->fresh(['vehicle']);
+        $this->notifyResident($fresh, $this->approvalMessage($fresh));
+
+        return response()->json($fresh);
+    }
+
+    /**
+     * Moves an existing Booked request to a new window. Does not touch
+     * vehicle_id — a request not yet approved has none to move, and one
+     * already approved keeps its unit as long as that unit is still free for
+     * the new time; see the self-exclusion note on AmbulanceAvailability.
+     */
+    public function reschedule(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::find($id);
+
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($serviceRequest->status !== 'Booked') {
+            return response()->json([
+                'message' => 'Only a booked request can be rescheduled.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'scheduled_at' => 'required|date',
+            'scheduled_end' => 'required|date',
+            // TracksHistory logs the scheduled_at/scheduled_end change on its
+            // own, but the *reason* only reaches that log because remarks moves
+            // in the same update — so it is not optional here, unlike update().
+            'remarks' => 'required|string',
+        ]);
+
+        $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
+        $scheduledEnd = Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc();
+
+        if ($scheduledEnd->lte($scheduledAt)) {
+            throw ValidationException::withMessages([
+                'scheduled_end' => 'scheduled_end must be after scheduled_at.',
+            ]);
+        }
+
+        DB::transaction(function () use ($serviceRequest, $scheduledAt, $scheduledEnd, $validated) {
+            Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
+
+            $freeIds = $this->availability
+                ->availableAmbulances($scheduledAt, $scheduledEnd, $serviceRequest->request_id)
+                ->pluck('vehicle_id');
+
+            if ($serviceRequest->vehicle_id) {
+                // Already approved: the unit it already holds must specifically
+                // still be free for the new time, not just some other unit.
+                if (!$freeIds->contains($serviceRequest->vehicle_id)) {
+                    throw ValidationException::withMessages([
+                        'scheduled_at' => 'The assigned unit is not free for that time.',
+                    ]);
+                }
+            } elseif ($freeIds->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'No ambulance is available for that time.',
+                ]);
+            }
+
+            $serviceRequest->update([
+                'scheduled_at' => $scheduledAt,
+                'scheduled_end' => $scheduledEnd,
+                'remarks' => $validated['remarks'],
+            ]);
+        });
+
+        $fresh = $serviceRequest->fresh(['vehicle']);
+        $this->notifyResident($fresh, $this->rescheduleMessage($fresh, (string) $validated['remarks']));
+
+        return response()->json($fresh);
     }
 
     public function destroy($id)

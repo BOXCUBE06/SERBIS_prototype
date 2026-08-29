@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\TracksHistory;
 
@@ -14,6 +15,8 @@ class ConductionRequest extends Model
     protected $primaryKey = 'conduction_request_id';
 
     protected $fillable = [
+        'service_request_id',
+        'vehicle_id',
         'patient_name',
         'patient_age',
         'patient_address',
@@ -34,24 +37,38 @@ class ConductionRequest extends Model
     ];
 
     /**
-     * Format-cast, not a bare 'datetime'. These four are wall-clock times an
-     * MDRRMO staffer typed into a plain <input type="datetime-local">, with
-     * no timezone attached — the office runs on Manila time and never enters
-     * anything else. A bare 'datetime' cast serialises with a 'Z' (app.timezone
-     * is UTC), which tells a browser "this is a UTC instant" and shifts a
-     * typed 09:00 to 5:00 PM on render. The 'T', no-offset format here is
-     * parsed by JS as local time, so what was typed is what comes back.
+     * Plain 'datetime', so these serialise with an offset like every other
+     * timestamp the API sends.
+     *
+     * They used to be format-cast to 'Y-m-d\TH:i:s', which emits no offset. That
+     * was a workaround for the column holding the office's wall clock rather
+     * than an instant: a browser reads a no-offset string as local time, so what
+     * a staffer typed was what came back. ConductionRequestController::tripLog()
+     * now converts on the way in and the column holds a real UTC instant, which
+     * makes the offset the thing that has to be sent — Flutter parses inbound
+     * timestamps with DateTime.tryParse(...).toLocal() and would silently
+     * mis-shift a bare string, and the panel hands the value to new Date().
      */
     protected $casts = [
-        'departed_office_at' => 'datetime:Y-m-d\TH:i:s',
-        'arrived_destination_at' => 'datetime:Y-m-d\TH:i:s',
-        'departed_destination_at' => 'datetime:Y-m-d\TH:i:s',
-        'returned_office_at' => 'datetime:Y-m-d\TH:i:s',
+        'departed_office_at' => 'datetime',
+        'arrived_destination_at' => 'datetime',
+        'departed_destination_at' => 'datetime',
+        'returned_office_at' => 'datetime',
     ];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
 
     protected $appends = ['trip_status'];
+
+    public function serviceRequest(): BelongsTo
+    {
+        return $this->belongsTo(ServiceRequest::class, 'service_request_id', 'request_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
+    }
 
     public function people(): HasMany
     {

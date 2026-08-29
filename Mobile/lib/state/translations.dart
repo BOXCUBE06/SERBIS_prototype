@@ -12,6 +12,7 @@ const Map<String, (String, String)> _strings = {
 
   'timeline.submitted': ('Request submitted', 'Naisumite ang kahilingan'),
   'timeline.review': ('Under review by MDRRMO', 'Sinusuri ng MDRRMO'),
+  'timeline.booked': ('Booked by MDRRMO', 'Nakabook sa MDRRMO'),
   'timeline.responding': ('MDRRMO is responding', 'Tumutugon ang MDRRMO'),
   'timeline.completed': ('Completed', 'Natapos'),
   'timeline.cancelled': ('Cancelled', 'Kinansela'),
@@ -21,6 +22,7 @@ const Map<String, (String, String)> _strings = {
   'timeline.today': ('Today', 'Ngayon'),
 
   'status.review': ('Under review', 'Sinusuri'),
+  'status.booked': ('Booked', 'Nakabook'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
   'status.completed': ('Completed', 'Natapos'),
   'status.cancelled': ('Cancelled', 'Kinansela'),
@@ -103,6 +105,12 @@ const Map<String, (String, String)> _strings = {
     'Ang iyong kahilingan ay ipinasa na sa MDRRMO para sa pagsusuri. '
         'Aabisuhan ka kapag ito ay naproseso.',
   ),
+  'home.status.booked': (
+    'Your request is booked. '
+        'You will be notified before the schedule.',
+    'Nakabook na ang iyong kahilingan. '
+        'Aabisuhan ka bago ang iskedyul.',
+  ),
   'home.status.scheduled': (
     'Your request has been scheduled. '
         "You'll be notified of any updates.",
@@ -135,6 +143,30 @@ const Map<String, (String, String)> _strings = {
     'Natanggap ang iyong kahilingan. Maaari mong subaybayan ang status nito anumang oras sa Track tab. Reference #{ref}.',
   ),
   'services.confirm.view_track': ('View in Track', 'Tingnan sa Track'),
+  'services.confirm.scheduled_for': ('Scheduled for', 'Naka-iskedyul para sa'),
+
+  // ---- Ambulance scheduling ----
+  'ambulance_schedule.title': ('When', 'Kailan'),
+  'ambulance_schedule.asap': ('As soon as possible', 'Sa lalong madaling panahon'),
+  'ambulance_schedule.pick_button': ('Schedule for a specific time', 'Mag-iskedyul ng partikular na oras'),
+  'ambulance_schedule.change': ('Change', 'Palitan'),
+  'ambulance_schedule.use_asap': (
+    'Use "as soon as possible" instead',
+    'Gamitin na lang ang "sa lalong madaling panahon"',
+  ),
+  'ambulance_schedule.lead_time_error': (
+    'Please pick a time at least 1 hour from now.',
+    'Pumili ng oras na hindi bababa sa 1 oras mula ngayon.',
+  ),
+  'ambulance_schedule.checking': ('Checking availability…', 'Sinusuri ang availability…'),
+  'ambulance_schedule.some_free': (
+    'At least one ambulance may be free at that time.',
+    'May kaunting ambulansyang maaaring libre sa oras na iyon.',
+  ),
+  'ambulance_schedule.none_free': (
+    'No ambulance may be free at that time yet. You can still submit — MDRRMO will confirm.',
+    'Maaaring walang libreng ambulansya sa oras na iyon. Maaari ka pa ring magsumite — kukumpirmahin ito ng MDRRMO.',
+  ),
 
   'track.title': ('Track Your Requests', 'Subaybayan ang Iyong mga Kahilingan'),
   'track.empty_title': ('No requests yet', 'Walang kahilingan pa'),

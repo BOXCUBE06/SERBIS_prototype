@@ -13,7 +13,7 @@
         class="text-none font-weight-bold px-6"
         height="44"
         prepend-icon="mdi-plus"
-        @click="openCreate"
+        @click="openCreate()"
       >New Ambulance Dispatch Request</v-btn>
     </div>
 
@@ -64,7 +64,7 @@
       <v-data-table
         :headers="headers"
         :items="filteredItems"
-        :items-per-page="-1"
+        :items-per-page="10"
         density="comfortable"
         hover
         class="bg-transparent conduction-table"
@@ -108,7 +108,15 @@
     <v-dialog v-model="createDialog.open" max-width="720" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
+          <div>
+            <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
+            <!-- Prefilled fields came from the booking's own description, a
+                 best-effort read — nothing here is locked, so this is a note
+                 to the operator, not a guarantee. -->
+            <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis">
+              Dispatching booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
+            </div>
+          </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
@@ -206,7 +214,26 @@
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 65vh;">
-          <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
+          <!-- Only ever present on a trip dispatched from a resident's own
+               booking — a walk-in trip log, still the common case, carries no
+               service_request_id and shows none of this. -->
+          <v-alert
+            v-if="selected.service_request_id"
+            type="info"
+            variant="tonal"
+            density="compact"
+            border="start"
+            class="mb-4"
+          >
+            <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
+            <div class="text-body-2">
+              Booking #{{ selected.service_request_id }}
+              <template v-if="selected.service_request?.scheduled_at">
+                — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
+              </template>
+              <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+            </div>
+          </v-alert>
 
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
@@ -245,7 +272,7 @@
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end border-t">
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" @click="openTripLog(selected)">
-            {{ selected.departed_office_at ? 'Update trip log' : 'Complete Trip Log' }}
+            {{ tripLogAction(selected) }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -255,7 +282,7 @@
     <v-dialog v-model="tripLog.open" max-width="600" persistent>
       <v-card rounded="lg">
         <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
-          Complete Trip Log
+          {{ tripLog.title }}
         </v-card-title>
         <v-card-text class="pa-6">
           <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
@@ -298,9 +325,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+
+const route = useRoute()
+const router = useRouter()
 
 const STATUS_ACCENT = {
   'Not dispatched': '#B45309',
@@ -343,6 +374,11 @@ const headers = [
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const statusAccent = (status) => STATUS_ACCENT[status] || '#64748B'
+// One path for every timestamp on this page — created_at and all four trip log
+// checkpoints. The checkpoints used to arrive without an offset, which new Date()
+// reads as local time; that happened to render correctly only because the column
+// held office wall clock. They are real UTC instants now and carry a 'Z', so the
+// same conversion is right for all five and there is no special case to keep.
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
 const matchesSearch = (r) => {
@@ -369,9 +405,8 @@ const fetchData = async () => {
       throw new Error(errData.message || `Request failed (${res.status})`)
     }
     const data = await res.json()
-    const rows = data.data || data
-    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
-    items.value = rows
+    if (!Array.isArray(data)) throw new Error('The server returned an unexpected response')
+    items.value = data
     loadError.value = ''
   } catch (error) {
     loadError.value = error.message || 'Could not reach the server'
@@ -392,6 +427,10 @@ const rowProps = ({ item }) => ({
 
 // Create dialog
 const emptyCreateForm = () => ({
+  // Set only when this dialog was opened by dispatching an approved booking
+  // (openDispatchFromQuery below); a plain "New Ambulance Dispatch Request"
+  // leaves both null, exactly as before this feature existed.
+  service_request_id: null, vehicle_id: null,
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
   patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
   origin: '', destination: '',
@@ -400,9 +439,87 @@ const emptyCreateForm = () => ({
 const createDialog = ref({ open: false, form: emptyCreateForm() })
 const createForm = ref(null)
 
-const openCreate = () => {
+// The known line prefixes AmbulanceFormData writes into a booking's
+// description (Mobile/lib/models/service_forms.dart:65-77). Best-effort
+// only: a line that doesn't match, or that is still the app's own "not
+// specified" placeholder, is left blank rather than guessing — staff typing
+// it in from the paper form, same as any other new request, is the
+// acceptable fallback this is not allowed to block.
+const AMBULANCE_PLACEHOLDERS = {
+  patient_name: 'Not specified',
+  origin: 'Address not specified',
+  destination: 'destination not specified',
+  medical_diagnosis: 'Not described',
+  patient_contact_number: 'See resident profile',
+}
+
+const cleanParsed = (value, placeholder) => {
+  const trimmed = (value ?? '').trim()
+  return trimmed === '' || trimmed === placeholder ? '' : trimmed
+}
+
+const parseAmbulanceDescription = (description) => {
+  const result = { patient_name: '', origin: '', destination: '', medical_diagnosis: '', patient_contact_number: '' }
+  if (!description) return result
+
+  for (const rawLine of description.split('\n')) {
+    const line = rawLine.trim()
+
+    const patient = line.match(/^Patient:\s*(.*)$/)
+    if (patient) { result.patient_name = cleanParsed(patient[1], AMBULANCE_PLACEHOLDERS.patient_name); continue }
+
+    const condition = line.match(/^Condition:\s*(.*)$/)
+    if (condition) { result.medical_diagnosis = cleanParsed(condition[1], AMBULANCE_PLACEHOLDERS.medical_diagnosis); continue }
+
+    const contact = line.match(/^Contact:\s*(.*)$/)
+    if (contact) { result.patient_contact_number = cleanParsed(contact[1], AMBULANCE_PLACEHOLDERS.patient_contact_number); continue }
+
+    if (line.includes('→')) {
+      const [from, to] = line.split('→')
+      result.origin = cleanParsed(from, AMBULANCE_PLACEHOLDERS.origin)
+      result.destination = cleanParsed(to, AMBULANCE_PLACEHOLDERS.destination)
+    }
+  }
+
+  return result
+}
+
+// `booking` is the tbl_service_request row this dispatch fulfils — absent
+// for the plain "New Ambulance Dispatch Request" button, which behaves
+// exactly as it always has.
+const openCreate = (booking = null) => {
   apiError.value = ''
-  createDialog.value = { open: true, form: emptyCreateForm() }
+  const form = emptyCreateForm()
+
+  if (booking) {
+    Object.assign(form, parseAmbulanceDescription(booking.description))
+    form.service_request_id = booking.request_id
+    form.vehicle_id = booking.vehicle_id ?? null
+  }
+
+  createDialog.value = { open: true, form }
+}
+
+// Entry point from ManageRequestView's "Dispatch" action: /conduction-requests
+// ?dispatch=<request_id>. Fetches that one booking and opens the create
+// dialog prefilled from it. The query param is stripped either way so a
+// refresh of this page does not reopen the dialog against a request that may
+// already be dispatched.
+const openDispatchFromQuery = async () => {
+  const id = route.query.dispatch
+  if (!id) return
+
+  router.replace({ query: { ...route.query, dispatch: undefined } })
+
+  try {
+    const res = await fetch(`${API_BASE}/service-requests/${id}`, { headers: getHeaders() })
+    if (!res.ok) throw new Error('Could not load that booking')
+    const booking = await res.json()
+    openCreate(booking)
+  } catch {
+    notify('Could not load the booking to dispatch — fill in the form manually.', 'error')
+    openCreate()
+  }
 }
 
 const addPerson = (field) => { createDialog.value.form[field].push('') }
@@ -452,10 +569,15 @@ const emptyTripLogForm = () => ({
   departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
 })
-const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null })
+const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
 
-// API sends 'YYYY-MM-DD HH:mm:ss' (UTC-cast datetime column); the input wants
-// 'YYYY-MM-DDTHH:mm' in local time.
+// The button that opens the dialog and the dialog's own title read the same
+// record, so they come from one place rather than two copies that can drift.
+const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete Trip Log')
+
+// The API sends an ISO instant with an offset; <input type="datetime-local">
+// wants 'YYYY-MM-DDTHH:mm' with none. new Date() resolves the offset and the
+// local getters below render it in the viewer's zone, which is the office's.
 const toInputValue = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
@@ -468,6 +590,8 @@ const openTripLog = (record) => {
     open: true,
     error: '',
     target: record,
+    // Captured at open time so the title stays put while the form is edited.
+    title: tripLogAction(record),
     form: {
       departed_office_at: toInputValue(record.departed_office_at),
       arrived_destination_at: toInputValue(record.arrived_destination_at),
@@ -487,7 +611,7 @@ const CHECKPOINTS = [
   ['returned_office_at', 'Returned to office'],
 ]
 
-// Same two rules the server enforces, checked client-side first so a mistake
+// Same three rules the server enforces, checked client-side first so a mistake
 // shows next to the field instead of round-tripping to the API to find out.
 const validateTripLog = (form) => {
   const start = form.odometer_start
@@ -495,9 +619,14 @@ const validateTripLog = (form) => {
   if (start !== null && start !== '' && end !== null && end !== '' && Number(end) < Number(start)) {
     return 'Odometer reading on return must be at or after the reading at departure.'
   }
-  const filled = CHECKPOINTS
+  const checkpoints = CHECKPOINTS
     .map(([field, label]) => ({ field, label, at: form[field] ? new Date(form[field]) : null }))
-    .filter((c) => c.at)
+  for (let i = 1; i < checkpoints.length; i++) {
+    if (checkpoints[i].at && !checkpoints[i - 1].at) {
+      return `${checkpoints[i].label} cannot be recorded while ${checkpoints[i - 1].label} is still blank.`
+    }
+  }
+  const filled = checkpoints.filter((c) => c.at)
   for (let i = 1; i < filled.length; i++) {
     if (filled[i].at < filled[i - 1].at) {
       return `${filled[i].label} cannot be earlier than ${filled[i - 1].label}.`
@@ -514,6 +643,10 @@ const submitTripLog = async () => {
   tripLog.value.error = ''
   try {
     const form = tripLog.value.form
+    // Sent back naive, exactly as the input holds it. The server reads a
+    // checkpoint with no offset as Asia/Manila and converts — see
+    // ConductionRequestController::OFFICE_TIMEZONE — so this round-trips what
+    // the staffer typed without the browser having to name a zone.
     const body = {
       departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
       arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,
@@ -546,7 +679,10 @@ const submitTripLog = async () => {
   }
 }
 
-onMounted(fetchData)
+onMounted(async () => {
+  await fetchData()
+  await openDispatchFromQuery()
+})
 </script>
 
 <style scoped>

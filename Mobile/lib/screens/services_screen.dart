@@ -250,6 +250,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       submittedLabel: _nowLabel(),
     );
 
+    // Null on every form but the ambulance one, and null there too unless the
+    // resident picked a date and time — "as soon as possible" either way.
+    final scheduledAt = form is AmbulanceFormData ? form.scheduledAt : null;
+
     final request = ServiceRequest(
       serviceId: service.id,
       description: metaLines.join('\n'),
@@ -264,6 +268,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       // The server's created_at replaces this the moment the row comes back;
       // until then the timeline still has a real submission time to show.
       createdAt: DateTime.now(),
+      scheduledAt: scheduledAt,
     );
 
     setState(() => _submitting = true);
@@ -280,6 +285,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
         // required to make at all.
         sitePhotoBytes: _sitePhotoFile?.bytes,
         sitePhotoFileName: _sitePhotoFile?.bytes == null ? null : _sitePhotoFile?.name,
+        // Plumbed through three layers and sent by nothing until now. For an
+        // unscheduled ambulance request the server still claims a unit
+        // immediately, same as before; a scheduled one ignores this
+        // entirely and re-checks availability under a lock at approval
+        // instead — sending it here is harmless either way.
+        requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
       );
     } finally {
       if (mounted) {
@@ -321,6 +332,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       builder: (_) => ConfirmationSheet(
         refNo: filed.refNo,
         filipino: f,
+        scheduledAt: filed.scheduledAt,
         onViewTrack: () {
           Navigator.pop(context);
           widget.onSubmitted();
@@ -372,6 +384,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ServiceFormFields(
                   data: _formFor(selection.formKind),
                   onChanged: () => setState(() {}),
+                  appState: widget.appState,
+                  filipino: f,
                 ),
                 AttachmentUploadField(
                   label: 'Valid ID (required)',
