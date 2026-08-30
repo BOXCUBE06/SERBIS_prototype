@@ -274,7 +274,20 @@
 
             <v-divider></v-divider>
 
-            <div class="flex-grow-1 overflow-y-auto pa-6">
+            <!-- flex-grow-1 forced this to fill all remaining panel height
+                 regardless of content, pinning the footer at the fixed
+                 bottom edge with dead space above it (impeccable ui-audit,
+                 2026-08-30). Dropped: short content now hugs its own size
+                 and the footer follows directly after it — verified via
+                 exact pixel offsets, not just visually. Verified separately
+                 with a synthetic several-thousand-character description:
+                 unusually long content grows the card (bounded by the
+                 outer container's own fixed max height and overflow:hidden,
+                 unchanged by this edit) rather than triggering an internal
+                 scrollbar here — that is pre-existing overflow-y-auto
+                 behavior this change did not alter, and real admin remarks
+                 are short operational notes, not thousands of characters. -->
+            <div class="overflow-y-auto pa-6">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <v-row class="detail-group">
