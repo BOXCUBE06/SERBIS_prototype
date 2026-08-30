@@ -2,7 +2,7 @@
 // — which the coverage run of 2026-08-06 measured at 0 of 13 lines. The
 // catalogue is parsed on every launch and again on every language switch, and
 // it is the single source of truth for `service_id`. The map it replaced filed
-// an ambulance request as Flood Evacuation, silently, because every id passed
+// an ambulance request as Road Clearing, silently, because every id passed
 // the server's `exists` rule.
 //
 // The two fixtures below are the real `GET /api/services` rows, read off the
@@ -13,17 +13,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
 
-/// `GET /api/services?locale=en`, service 1, verbatim. The English locale still
+/// `GET /api/services?locale=en`, a catalogue row verbatim. The English locale still
 /// fills both localized keys — the server resolves them and falls back to the
 /// English column, so they are never absent and never blank.
 Map<String, dynamic> englishRow() => <String, dynamic>{
       'service_id': 1,
-      'code': 'flood-evacuation',
-      'service_name': 'Flood Evacuation',
-      'name_localized': 'Flood Evacuation',
-      'description': 'Assistance and evacuation services during floods.',
+      'code': 'road-clearing',
+      'service_name': 'Road Clearing',
+      'name_localized': 'Road Clearing',
+      'description': 'Clearing roads of debris and obstacles after natural calamities.',
       'description_localized':
-          'Assistance and evacuation services during floods.',
+          'Clearing roads of debris and obstacles after natural calamities.',
       'created_at': '2026-07-22T04:52:57.000000Z',
       'updated_at': '2026-07-22T04:52:57.000000Z',
     };
@@ -32,11 +32,11 @@ Map<String, dynamic> englishRow() => <String, dynamic>{
 /// and `description` stay English, and only the `_localized` pair moves.
 Map<String, dynamic> filipinoRow() => <String, dynamic>{
       'service_id': 1,
-      'code': 'flood-evacuation',
-      'service_name': 'Flood Evacuation',
-      'name_localized': 'Paglikas sa Baha',
-      'description': 'Assistance and evacuation services during floods.',
-      'description_localized': 'Tulong at paglikas tuwing may baha.',
+      'code': 'road-clearing',
+      'service_name': 'Road Clearing',
+      'name_localized': 'Paglinis ng Daan',
+      'description': 'Clearing roads of debris and obstacles after natural calamities.',
+      'description_localized': 'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.',
       'created_at': '2026-07-22T04:52:57.000000Z',
       'updated_at': '2026-07-22T04:52:57.000000Z',
     };
@@ -47,12 +47,12 @@ void main() {
       final item = ServiceCatalogItem.fromJson(englishRow());
 
       expect(item.id, 1);
-      expect(item.code, 'flood-evacuation');
-      expect(item.name, 'Flood Evacuation');
-      expect(item.displayName(false), 'Flood Evacuation');
+      expect(item.code, 'road-clearing');
+      expect(item.name, 'Road Clearing');
+      expect(item.displayName(false), 'Road Clearing');
       expect(
         item.displayDescription(false),
-        'Assistance and evacuation services during floods.',
+        'Clearing roads of debris and obstacles after natural calamities.',
       );
     });
 
@@ -63,10 +63,11 @@ void main() {
       // hold in its translations table.
       final item = ServiceCatalogItem.fromJson(englishRow());
 
-      expect(item.displayName(true), 'Paglikas sa Baha');
-      expect(item.displayDescription(true), 'Tulong at paglikas tuwing may baha.');
+      expect(item.displayName(true), 'Paglinis ng Daan');
+      expect(item.displayDescription(true),
+          'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.');
       // The English column is untouched underneath.
-      expect(item.name, 'Flood Evacuation');
+      expect(item.name, 'Road Clearing');
     });
 
     test('a name_localized the server still sends is ignored', () {
@@ -75,15 +76,16 @@ void main() {
       // stop.
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
         'service_id': 1,
-        'code': 'flood-evacuation',
-        'service_name': 'Flood Evacuation',
+        'code': 'road-clearing',
+        'service_name': 'Road Clearing',
         'name_localized': 'SERVER SAYS SOMETHING ELSE',
         'description_localized': 'SERVER BLURB',
       });
 
-      expect(item.displayName(true), 'Paglikas sa Baha');
-      expect(item.displayName(false), 'Flood Evacuation');
-      expect(item.displayDescription(true), 'Tulong at paglikas tuwing may baha.');
+      expect(item.displayName(true), 'Paglinis ng Daan');
+      expect(item.displayName(false), 'Road Clearing');
+      expect(item.displayDescription(true),
+          'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.');
     });
 
     test('the id is the server row id, not the list position', () {
@@ -145,7 +147,7 @@ void main() {
       expect(item.formKind, ServiceFormKind.generic);
     });
 
-    test('a translated flood row is not an ambulance', () {
+    test('a translated row is not an ambulance', () {
       final item = ServiceCatalogItem.fromJson(filipinoRow());
 
       expect(item.formKind, isNot(ServiceFormKind.ambulance));
@@ -207,7 +209,7 @@ void main() {
       for (final value in <dynamic>[null, 'abc', <String>[]]) {
         final item = ServiceCatalogItem.fromJson(<String, dynamic>{
           'service_id': value,
-          'service_name': 'Flood Evacuation',
+          'service_name': 'Road Clearing',
         });
 
         expect(item.id, 0, reason: 'id from ${value.runtimeType}');
@@ -245,7 +247,7 @@ void main() {
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
         'service_id': 1,
         'code': 'unknown-service',
-        'service_name': 'Flood Evacuation',
+        'service_name': 'Road Clearing',
       });
 
       expect(item.displayDescription(false), '');

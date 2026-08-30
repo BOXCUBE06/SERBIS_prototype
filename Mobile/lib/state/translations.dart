@@ -271,16 +271,6 @@ const Map<String, (String, String)> _strings = {
   //
   // The Tagalog below is the wording reviewed and confirmed by the project
   // owner on 2026-07-26, carried over unchanged.
-  'service.flood-evacuation.name': ('Flood Evacuation', 'Paglikas sa Baha'),
-  'service.flood-evacuation.desc': (
-    'Assistance and evacuation services during floods.',
-    'Tulong at paglikas tuwing may baha.',
-  ),
-  'service.fire-rescue.name': ('Fire Rescue', 'Pagsagip sa Sunog'),
-  'service.fire-rescue.desc': (
-    'Emergency fire rescue operations.',
-    'Pang-emerhensiyang pagsagip sa sunog.',
-  ),
   'service.ambulance-medical-response.name': (
     'Ambulance/Medical Response',
     'Ambulansya / Tugong Medikal',
@@ -303,11 +293,6 @@ const Map<String, (String, String)> _strings = {
   'service.road-clearing.desc': (
     'Clearing roads of debris and obstacles after natural calamities.',
     'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.',
-  ),
-  'service.search-and-rescue.name': ('Search and Rescue', 'Paghahanap at Pagsagip'),
-  'service.search-and-rescue.desc': (
-    'Search and rescue operations for missing persons.',
-    'Paghahanap at pagsagip sa mga nawawalang tao.',
   ),
   'service.power-line-repair.name': (
     'Power Line Repair',
