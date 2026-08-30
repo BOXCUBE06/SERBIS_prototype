@@ -42,10 +42,34 @@ class PurgeRetiredServices extends Command
 
     public function handle(): int
     {
+        // Always, before anything else. "Nothing to do" is the same sentence
+        // whether this ran against production or fell back to the local .env
+        // because an environment variable did not take -- and those two mean
+        // opposite things. Print the connection so the operator can tell.
+        $this->line(sprintf(
+            'Connected to %s@%s:%s/%s',
+            config('database.connections.'.config('database.default').'.username'),
+            config('database.connections.'.config('database.default').'.host'),
+            config('database.connections.'.config('database.default').'.port'),
+            DB::getDatabaseName(),
+        ));
+        $this->newLine();
+
         $services = Service::whereIn('service_name', self::RETIRED)->get();
 
         if ($services->isEmpty()) {
             $this->info('Nothing to do: none of the three retired services exist on this database.');
+
+            // Diagnostic, read-only. If the three are absent this either
+            // already ran, or this is not the database that was meant -- and
+            // the catalogue that IS here settles which.
+            $present = Service::orderBy('service_id')->pluck('service_name', 'service_id');
+
+            $this->newLine();
+            $this->line('Services on this database (' . $present->count() . '):');
+            foreach ($present as $id => $name) {
+                $this->line("  id={$id}  {$name}");
+            }
 
             return self::SUCCESS;
         }
