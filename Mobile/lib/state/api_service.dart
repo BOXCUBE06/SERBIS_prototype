@@ -851,10 +851,12 @@ class ApiService {
   Future<Map<String, dynamic>> submitBorrowRequest({
     required int equipmentId,
     required int quantity,
+    required String purpose,
   }) async {
     return _post('/borrowings', {
       'equipment_id': equipmentId,
       'quantity': quantity,
+      'purpose': purpose,
     });
   }
 }

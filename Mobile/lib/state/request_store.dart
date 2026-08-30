@@ -362,10 +362,12 @@ class AppState extends ChangeNotifier {
   Future<BorrowRequest?> submitBorrowRequest({
     required Equipment item,
     required int quantity,
+    required String purpose,
   }) async {
     final optimistic = _resolveBorrow(BorrowRequest(
       equipmentId: item.id,
       quantity: quantity,
+      purpose: purpose,
       status: BorrowStatus.pending,
       createdAt: DateTime.now(),
       equipmentName: item.name,
@@ -378,6 +380,7 @@ class AppState extends ChangeNotifier {
       final result = await _api.submitBorrowRequest(
         equipmentId: item.id,
         quantity: quantity,
+        purpose: purpose,
       );
 
       final confirmed = _resolveBorrow(BorrowRequest.fromJson(result));

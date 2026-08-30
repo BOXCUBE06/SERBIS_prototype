@@ -17,6 +17,7 @@ class EquipmentBorrowing extends Model
         'resident_id',
         'equipment_id',
         'quantity',
+        'purpose',
         'due_date',
         'status',
         'denial_reason',

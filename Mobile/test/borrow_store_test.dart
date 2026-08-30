@@ -17,6 +17,7 @@ class _FakeApi extends ApiService {
   Object? loadError;
   int getBorrowingsCalls = 0;
   int submitCalls = 0;
+  String? lastPurpose;
 
   @override
   Future<List<Map<String, dynamic>>> getEquipments() async {
@@ -34,14 +35,17 @@ class _FakeApi extends ApiService {
   Future<Map<String, dynamic>> submitBorrowRequest({
     required int equipmentId,
     required int quantity,
+    required String purpose,
   }) async {
     submitCalls++;
+    lastPurpose = purpose;
     if (submitError != null) throw submitError!;
     return submitResult ??
         <String, dynamic>{
           'borrow_id': 99,
           'equipment_id': equipmentId,
           'quantity': quantity,
+          'purpose': purpose,
           'status': 'Pending',
         };
   }
@@ -66,7 +70,8 @@ void main() {
       });
       final state = AppState(api);
 
-      final result = state.submitBorrowRequest(item: _wheelchair, quantity: 1);
+      final result = state.submitBorrowRequest(
+          item: _wheelchair, quantity: 1, purpose: 'Barangay drill');
 
       // Synchronously inserted, before the fake's Future even resolves.
       expect(state.borrowRequests, hasLength(1));
@@ -89,7 +94,8 @@ void main() {
       ));
       final state = AppState(api);
 
-      final confirmed = await state.submitBorrowRequest(item: _wheelchair, quantity: 5);
+      final confirmed = await state.submitBorrowRequest(
+          item: _wheelchair, quantity: 5, purpose: 'Barangay drill');
 
       expect(confirmed, isNull);
       expect(state.borrowRequests, isEmpty);
@@ -103,9 +109,27 @@ void main() {
       final api = _FakeApi();
       final state = AppState(api);
 
-      state.submitBorrowRequest(item: _wheelchair, quantity: 1);
+      state.submitBorrowRequest(
+          item: _wheelchair, quantity: 1, purpose: 'Barangay drill');
 
       expect(state.borrowRequests.single.equipmentName, 'Wheelchair');
+    });
+
+    test('the optimistic row carries the purpose, and it reaches the API', () async {
+      // The optimistic card is what the resident sees until the server
+      // answers; without this it shows the request with no reason attached.
+      final api = _FakeApi();
+      final state = AppState(api);
+
+      final pending = state.submitBorrowRequest(
+          item: _wheelchair, quantity: 1, purpose: 'Evacuation centre setup');
+
+      expect(state.borrowRequests.single.purpose, 'Evacuation centre setup');
+
+      await pending;
+
+      expect(api.lastPurpose, 'Evacuation centre setup');
+      expect(state.borrowRequests.single.purpose, 'Evacuation centre setup');
     });
   });
 
