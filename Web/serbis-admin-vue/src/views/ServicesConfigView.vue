@@ -150,8 +150,8 @@
             :items-per-page-options="[10, 25, 50, -1]"
             items-per-page-text="Rows per page"
           >
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+            <template v-slot:item.rowNumber="{ index }">
+              <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
             </template>
 
             <template v-slot:item.service_name="{ item }">
@@ -314,7 +314,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
+import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/services`
@@ -330,9 +330,16 @@ const categories = {
 }
 
 const headers = [
-  // Position, not `service_id` — see useRowNumber. The key has gaps in it, and
-  // printing one as "the number of the service" would have people reading a
-  // deleted row into a missing number.
+  // Display position, not `service_id` and — deliberately, unlike every
+  // other table's '#' column in this app — not useRowNumbers' stable
+  // per-row identity either. That composable numbers a row by where it
+  // sits in the *unsorted* source array, so sorting this table (default
+  // sort is by Service, on load) produced a scrambled sequence like
+  // 3, 9, 8, 2, 1, 7... reading as broken rather than as a stable id
+  // (impeccable ui-audit, 2026-08-30). useServerRowNumber's page-offset
+  // math is reused here even though this table paginates client-side —
+  // it needs only the slot's own index, which is already relative to the
+  // current sorted+paginated page.
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Service', key: 'service_name', minWidth: '260px' },
   { title: 'Description', key: 'description', sortable: false, minWidth: '280px' },
@@ -410,7 +417,7 @@ const filteredServices = computed(() => {
   })
 })
 
-const rowNumber = useRowNumbers(filteredServices, 'service_id')
+const rowNumber = useServerRowNumber(page, itemsPerPage)
 
 const nameError = computed(() =>
   touched.value.name && !form.value.service_name.trim() ? 'Service name is required.' : '',
