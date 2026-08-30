@@ -241,7 +241,18 @@ class AnalyticsController extends Controller
         $weekSeries = $fillDates(6);
         $monthSeries = $fillDates(29);
 
-        return [
+        // json round-trip, not a plain return: serviceRequests, borrowRequests,
+        // systemLogs, mapDataByPeriod and charts.pieByPeriod all hold
+        // Illuminate\Support\Collection instances (from ->map()/->keys()/
+        // ->values()), and config/cache.php sets serializable_classes to
+        // false — FileStore::get() then calls unserialize() with
+        // allowed_classes => false, which refuses to restore any object on a
+        // cache hit and hands back a broken __PHP_Incomplete_Class instead.
+        // json_encode already knows how to flatten a Collection (it
+        // implements JsonSerializable); decoding that back with true turns
+        // the whole structure into plain arrays, so nothing but scalars and
+        // arrays ever reaches the cache.
+        return json_decode(json_encode([
             'kpiStats' => $kpiStats,
             'serviceRequests' => $serviceRequests,
             'borrowRequests' => $borrowRequests,
@@ -254,7 +265,7 @@ class AnalyticsController extends Controller
                     'month' => ['labels' => array_keys($monthSeries), 'data' => array_values($monthSeries)],
                 ]
             ]
-        ];
+        ]), true);
         }));
     }
 }
