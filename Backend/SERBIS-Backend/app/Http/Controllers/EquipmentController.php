@@ -8,9 +8,26 @@ use Illuminate\Validation\Rule;
 
 class EquipmentController extends Controller
 {
-    public function index()
+    /**
+     * Scoped by who is asking, the same way EquipmentBorrowingController::index
+     * is. An `Unavailable` item was still listed to residents, because the only
+     * thing the borrow screen gates on is `available_quantity > 0` -- so an
+     * item withdrawn from lending (under repair, condemned, reserved) kept
+     * appearing with a working Borrow button as long as its count was above
+     * zero. `status` was decorative for everyone except the admin who set it.
+     *
+     * Admins still get the whole inventory: the panel has to show, and edit,
+     * exactly the rows a resident must not see.
+     */
+    public function index(Request $request)
     {
-        return response()->json(Equipment::all());
+        $query = Equipment::query();
+
+        if ($request->user() instanceof \App\Models\Resident) {
+            $query->where('status', 'Available');
+        }
+
+        return response()->json($query->get());
     }
 
     public function store(Request $request)
