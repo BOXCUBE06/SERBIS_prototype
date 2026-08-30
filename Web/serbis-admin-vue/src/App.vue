@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -35,10 +35,15 @@ const isAuthPage = computed(() => route?.path === '/login')
 const isFixedHeight = computed(() => route?.meta?.fixedHeight === true)
 
 const { mobile } = useDisplay()
-// Closed by default: on first mobile load there is nothing to dismiss yet.
-// Desktop ignores this entirely — the drawer is permanent there regardless
-// of model-value.
-const sidebarOpen = ref(false)
+// `permanent` on v-navigation-drawer changes behaviour (no scrim, no
+// auto-close) — it does NOT force visibility regardless of model-value, as
+// wrongly assumed the first time this was written. A bare `ref(false)` left
+// the drawer closed on every fresh load, desktop included, since desktop
+// never renders the hamburger that would reopen it. Start open on desktop,
+// closed on mobile, and keep it in sync if the breakpoint is crossed during
+// the session (a resized window, a rotated tablet).
+const sidebarOpen = ref(!mobile.value)
+watch(mobile, (isMobile) => { sidebarOpen.value = !isMobile })
 
 useAppTheme().init()
 </script>
