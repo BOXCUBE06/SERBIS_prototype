@@ -213,4 +213,49 @@ class ServiceRequestRescheduleTest extends TestCase
 
         $this->assertTrue($request->fresh()->scheduled_at->utc()->equalTo($newStart));
     }
+
+    /**
+     * PhilSMS bills per segment and has no sandbox, so the length of this body
+     * is a cost, not a cosmetic detail. `remarks` was `required|string` with no
+     * ceiling while SmsController::sendBlast had capped its own message at 160
+     * from the start — the two paths that text one resident simply never got
+     * the same treatment.
+     */
+    public function test_an_over_long_remark_is_refused_rather_than_billed(): void
+    {
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => str_repeat('a', 161),
+        ])->assertStatus(422)->assertJsonValidationErrors('remarks');
+    }
+
+    /**
+     * The cap on the field is not on its own enough: the template adds about
+     * ninety characters of its own, so a remark at the limit would still bill
+     * two segments. The assembled body is what has to fit.
+     */
+    public function test_the_assembled_text_stays_within_one_segment(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => str_repeat('a', 160),
+        ])->assertOk();
+
+        Http::assertSent(function ($sent) {
+            // The attribution survives the trim — it is the reason, not the
+            // sender, that gets cut.
+            return mb_strlen($sent['message']) <= 160
+                && str_contains($sent['message'], 'MDRRMO Echague');
+        });
+    }
 }

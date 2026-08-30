@@ -231,8 +231,24 @@ class ResidentController extends Controller
 
         // 404 rather than 403 for another resident's id, matching validId() and
         // sitePhoto(): the response must not confirm which accounts exist.
-        if ($user instanceof Resident && (string) $user->getKey() !== (string) $id) {
-            return response()->json(['message' => 'Resident not found'], 404);
+        if ($user instanceof Resident) {
+            if ((string) $user->getKey() !== (string) $id) {
+                return response()->json(['message' => 'Resident not found'], 404);
+            }
+        } else {
+            // Staff branch. This route sits outside `is.admin` so that staff can
+            // read any resident's photo while a resident reads only their own,
+            // which means neither of that middleware's checks has run — see
+            // ServiceRequestController::guardPrivateFile for the same guard and
+            // the full reasoning. `role` is an unconstrained varchar, and a
+            // deactivation applied by direct database edit revokes no tokens.
+            if (! $user instanceof \App\Models\User || ! $user->isAdmin()) {
+                return response()->json(['message' => 'Resident not found'], 404);
+            }
+
+            if ($user->isDeactivated()) {
+                return response()->json(['message' => 'This account has been deactivated.'], 403);
+            }
         }
 
         $resident = Resident::find($id);
