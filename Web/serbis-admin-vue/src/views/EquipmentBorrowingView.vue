@@ -655,21 +655,29 @@ const historyHeaders = [
   { title: 'Outcome', key: 'status', align: 'center', width: '16%' },
 ]
 
-// Option lists come from the records actually loaded, so a barangay with no
-// borrowings never appears as a filter that can only ever return nothing.
-const distinct = (pick) => {
-  const values = new Set()
-  for (const b of borrowings.value) {
-    const v = pick(b)
-    if (v) values.add(v)
-  }
-  return [...values].sort((a, b) => a.localeCompare(b))
-}
+// Sourced from the master lists (/equipments, /barangays — same endpoints
+// EquipmentInventoryView and SmsView/UsersView already use), not from
+// borrowings.value. The prior version derived options from loaded records
+// only, so an item or barangay with zero borrowings could never even be
+// selected as a filter (impeccable ui-audit, 2026-08-30) — a barangay
+// genuinely having no current borrowers is exactly the case a filter
+// exists to confirm, not a case to hide.
+const equipmentMaster = ref([])
+const barangayMaster = ref([])
 
-const itemOptions = computed(() => [ALL_ITEMS, ...distinct((b) => b.equipment?.item_name)])
+const itemOptions = computed(() => [
+  ALL_ITEMS,
+  ...[...equipmentMaster.value]
+    .map((e) => e.item_name)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b)),
+])
 const barangayOptions = computed(() => [
   ALL_BARANGAYS,
-  ...distinct((b) => b.resident?.barangay?.barangay_name),
+  ...[...barangayMaster.value]
+    .map((b) => b.barangay_name)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b)),
 ])
 
 // `clearable` writes null, not '', so the guard is not decorative.
@@ -934,6 +942,28 @@ const fetchData = async () => {
   }
 }
 
+// Failures here are non-fatal to the page — the filters just fall back to
+// showing only "All items"/"All barangays" until they load, same as any
+// other list this app fetches for a picker rather than for primary content.
+const fetchMasterLists = async () => {
+  try {
+    const [equipRes, barangayRes] = await Promise.all([
+      fetch(`${API_BASE}/equipments`, { headers: getHeaders() }),
+      fetch(`${API_BASE}/barangays`, { headers: getHeaders() }),
+    ])
+    if (equipRes.ok) {
+      const data = await equipRes.json()
+      equipmentMaster.value = data.data || data
+    }
+    if (barangayRes.ok) {
+      const data = await barangayRes.json()
+      barangayMaster.value = data.data || data
+    }
+  } catch (error) {
+    console.error('Failed to fetch equipment/barangay master lists:', error)
+  }
+}
+
 const openDetail = (item) => {
   apiError.value = ''
   selectedRecord.value = item
@@ -1064,7 +1094,10 @@ const updateStatus = async (record, newStatus, extra = {}) => {
   }
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  fetchMasterLists()
+})
 </script>
 
 <style scoped>
