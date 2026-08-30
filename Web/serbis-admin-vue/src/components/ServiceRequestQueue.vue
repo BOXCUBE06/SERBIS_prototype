@@ -63,8 +63,8 @@
           @click="exportCsv"
         >
           <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          Export {{ filteredAndSortedRequests.length }}
-          <span class="d-sr-only">requests as CSV</span>
+          {{ filteredAndSortedRequests.length ? `Export ${filteredAndSortedRequests.length}` : 'Nothing to export' }}
+          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">requests as CSV</span>
         </v-btn>
         </div>
       </div>
@@ -88,7 +88,7 @@
             <v-text-field
               v-model="search"
               prepend-inner-icon="mdi-magnify"
-              placeholder="Search resident, service, barangay..."
+              placeholder="Search by name, service, barangay..."
               variant="outlined"
               density="compact"
               hide-details
@@ -309,7 +309,7 @@
                   <template v-if="descriptionLines.length">
                     <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
                   </template>
-                  <template v-else>No description provided by resident.</template>
+                  <template v-else>No description provided by the Head of the Family.</template>
                 </v-card>
               </div>
 
@@ -452,7 +452,7 @@
                 >
                   Approve &amp; Dispatch
                 </v-btn>
-                <span id="dispatch-gate" class="d-sr-only">
+                <span v-if="!formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
                   Disabled until a vehicle is chosen with the Select Vehicle button beside it.
                 </span>
               </template>
@@ -514,7 +514,7 @@
                   >
                     Approve
                   </v-btn>
-                  <span id="approve-gate" class="d-sr-only">
+                  <span v-if="!formData.vehicle_id" id="approve-gate" class="d-sr-only">
                     Disabled until a unit is chosen with the Assign Unit button beside it.
                   </span>
                 </template>
@@ -692,7 +692,7 @@
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
             label="Reason for the change"
-            hint="Required — this is what a resident sees, and what the log records."
+            hint="Required — this is what the Head of the Family sees, and what the log records."
             persistent-hint
             variant="outlined"
             rows="2"
@@ -804,7 +804,7 @@
             divided
             class="mb-4 d-flex"
           >
-            <v-btn value="resident" class="text-none flex-grow-1">Registered resident</v-btn>
+            <v-btn value="resident" class="text-none flex-grow-1">Registered Head of the Family</v-btn>
             <v-btn value="walkin" class="text-none flex-grow-1">No account</v-btn>
           </v-btn-toggle>
 
@@ -812,7 +812,7 @@
             v-if="createDialog.requesterType === 'resident'"
             v-model="createDialog.form.resident_id"
             :items="residentOptions"
-            label="Resident"
+            label="Head of the Family"
             placeholder="Search by name"
             variant="outlined"
             density="comfortable"
@@ -1126,14 +1126,14 @@ const reasonDialog = ref(emptyReason())
 
 const reasonCopy = computed(() => {
   const req = selectedRequest.value
-  const who = req && requesterName(req) !== 'Unknown resident' && requesterName(req) !== 'Unknown requester' ? requesterName(req) : ''
+  const who = req && requesterName(req) !== 'Unknown Head of the Family' && requesterName(req) !== 'Unknown requester' ? requesterName(req) : ''
   const what = selectedRequest.value?.service?.service_name || 'this service'
   switch (reasonDialog.value.kind) {
     case 'approve':
       return {
         title: 'Approve and dispatch',
         body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
-        label: 'Note for the resident (optional)',
+        label: 'Note for the Head of the Family (optional)',
         confirm: 'Approve & dispatch',
       }
     case 'bulk':
@@ -1170,7 +1170,7 @@ const confirmReason = () => {
   const { kind, reason } = reasonDialog.value
   const trimmed = reason.trim()
   if (kind !== 'approve' && !trimmed) {
-    reasonDialog.value.error = 'Give a reason — the resident is shown this'
+    reasonDialog.value.error = 'Give a reason — the Head of the Family is shown this'
     return
   }
   if (kind === 'bulk') return bulkDisapprove(trimmed)
@@ -1244,7 +1244,7 @@ const itemId = (item) => item.request_id || item.id
 // to "Last, First" while the detail beside it read "First Last" -- the same
 // resident, written two ways, six inches apart.
 const residentName = (resident) =>
-  `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown resident'
+  `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown Head of the Family'
 
 // A walk-in with no account carries no `resident` object at all — these read
 // walk_in_name/walk_in_contact_number instead, so the list row, the detail
@@ -1315,7 +1315,11 @@ const availableVehicles = computed(() => {
       .map(u => vehicles.value.find(v => v.vehicle_id === u.vehicle_id))
       .filter(Boolean)
   }
-  return vehicles.value.filter(v => v.status === 'Available')
+  // Ambulance is the only service this modal ever assigns a vehicle for, but
+  // the fleet also holds Rescue Vehicles, Fire Trucks and Boats — without
+  // this filter every one of those showed up as a valid pick for a medical
+  // dispatch (impeccable critique, P0, 2026-08-30).
+  return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
 })
 
 const residentOptions = computed(() => residents.value
@@ -1353,14 +1357,14 @@ const attachments = computed(() => {
       label: 'Landmark',
       present: !!req.has_site_photo,
       state: sitePhoto.state,
-      alt: 'Landmark photo attached by the resident',
+      alt: 'Landmark photo attached by the Head of the Family',
     },
     {
       key: 'valid-id',
       label: 'Valid ID',
       present: !!req.has_valid_id,
       state: validId.state,
-      alt: 'Valid ID attached by the resident',
+      alt: 'Valid ID attached by the Head of the Family',
     },
   ].filter(a => a.present)
 })
@@ -1466,7 +1470,7 @@ const exportCsv = () => {
   const rows = filteredAndSortedRequests.value
   if (!rows.length) return
 
-  const header = ['Request ID', 'Resident', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
+  const header = ['Request ID', 'Head of the Family', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
   const body = rows.map(r => [
     itemId(r),
     requesterName(r),
@@ -1843,7 +1847,7 @@ const submitWalkIn = async () => {
   const isResident = createDialog.value.requesterType === 'resident'
 
   if (isResident && !form.resident_id) {
-    createDialog.value.error = 'Pick a resident'
+    createDialog.value.error = 'Pick a Head of the Family'
     return
   }
   if (!isResident && (!form.walk_in_name.trim() || !form.walk_in_contact_number.trim())) {

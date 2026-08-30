@@ -1,8 +1,16 @@
 <template>
   <v-app>
-    <AppSidebar v-if="!isAuthPage" />
+    <!-- Mobile-only: the drawer is temporary and closed by default below the
+         breakpoint (see AppSidebar.vue), so there has to be some way to open
+         it that isn't already off-screen itself. Desktop keeps the permanent
+         drawer it always had; this bar never renders there. -->
+    <v-app-bar v-if="!isAuthPage && mobile" theme="dark" color="#0A2620" density="comfortable" flat>
+      <v-app-bar-nav-icon aria-label="Open menu" @click="sidebarOpen = true"></v-app-bar-nav-icon>
+      <span class="text-subtitle-1 font-weight-black text-white tracking-widest">SERBIS</span>
+    </v-app-bar>
+    <AppSidebar v-if="!isAuthPage" v-model:open="sidebarOpen" />
     <v-main>
-      <div v-if="!isAuthPage" class="outer-wrapper">
+      <div v-if="!isAuthPage" class="outer-wrapper" :class="{ 'outer-wrapper--mobile': mobile }">
         <div class="inner-wrapper" :class="{ 'inner-wrapper--fixed': isFixedHeight }">
           <RouterView />
         </div>
@@ -13,8 +21,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useDisplay } from 'vuetify'
 import AppSidebar from '@/components/AppSidebar.vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 
@@ -24,6 +33,12 @@ const isAuthPage = computed(() => route?.path === '/login')
 
 // Set by the route, not sniffed from the path — see the note in router/index.ts.
 const isFixedHeight = computed(() => route?.meta?.fixedHeight === true)
+
+const { mobile } = useDisplay()
+// Closed by default: on first mobile load there is nothing to dismiss yet.
+// Desktop ignores this entirely — the drawer is permanent there regardless
+// of model-value.
+const sidebarOpen = ref(false)
 
 useAppTheme().init()
 </script>
@@ -58,7 +73,22 @@ useAppTheme().init()
   height: 100vh;
   padding: 12px;
   box-sizing: border-box;
-  margin-left: 260px; 
+  margin-left: 260px;
+}
+
+/* Matches this codebase's existing 959px breakpoint (see LoginView.vue) and
+   Vuetify's own default mobile threshold, so this and the drawer's
+   useDisplay().mobile flip at the same width. Below it the drawer is an
+   overlay, not a permanent 260px column, so the margin that reserved space
+   for it has nothing left to reserve. */
+@media (max-width: 959px) {
+  .outer-wrapper {
+    margin-left: 0;
+  }
+}
+
+.outer-wrapper--mobile {
+  height: calc(100vh - 56px);
 }
 
 .inner-wrapper {

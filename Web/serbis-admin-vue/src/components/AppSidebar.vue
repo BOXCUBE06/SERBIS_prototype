@@ -1,7 +1,9 @@
 <template>
   <v-navigation-drawer
+    v-model="isOpen"
     theme="dark"
-    permanent
+    :permanent="!mobile"
+    :temporary="mobile"
     width="260"
     class="modern-drawer"
   >
@@ -107,11 +109,22 @@
 </template>
 
 <script setup lang="ts">
+import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
 import { useAppTheme } from '@/composables/useAppTheme'
 
 const { isLoggingOut, showLogoutDialog, handleLogout } = useAuth()
 const { theme, toggle } = useAppTheme()
+
+// permanent forces the drawer to render at full width regardless of
+// model-value, which is what made every page below Vuetify's own mobile
+// breakpoint unusable — the drawer never yielded the screen, and
+// App.vue's .outer-wrapper margin-left:260px pushed everything else into a
+// sliver beside it (impeccable critique, P0, 2026-08-30). Below the
+// breakpoint this becomes a real temporary drawer instead: closed by
+// default, opened by the hamburger button App.vue renders only on mobile.
+const { mobile } = useDisplay()
+const isOpen = defineModel<boolean>('open', { default: true })
 
 const mainMenu = [
   { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
