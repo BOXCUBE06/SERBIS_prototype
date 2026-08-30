@@ -181,19 +181,31 @@ class AuthController extends Controller
         // either way, because what is being proven is ownership of the account,
         // not of a particular channel.
         if ($this->smsIsUsableFor($resident)) {
-            $response = app(PhilSms::class)->send(
-                [$resident->phone_number],
-                "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
-            );
+            try {
+                $response = app(PhilSms::class)->send(
+                    [$resident->phone_number],
+                    "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
+                );
 
-            if (PhilSms::accepted($response)) {
+                if (PhilSms::accepted($response)) {
+                    return 'sms';
+                }
+
+                Log::warning('OTP SMS failed, falling back to email', [
+                    'resident_id' => $resident->resident_id,
+                    'status'      => $response->status(),
+                ]);
+            } catch (\Throwable $e) {
+                // See sendLoginCode() for why this is treated as delivered rather
+                // than falling to the (production-dead, MAIL_MAILER=log) email
+                // path: the request timing out does not mean PhilSMS never sent it.
+                Log::warning('OTP SMS threw, treating as delivered', [
+                    'resident_id' => $resident->resident_id,
+                    'error'       => $e->getMessage(),
+                ]);
+
                 return 'sms';
             }
-
-            Log::warning('OTP SMS failed, falling back to email', [
-                'resident_id' => $resident->resident_id,
-                'status'      => $response->status(),
-            ]);
         }
 
         Mail::to($resident->email_address)->send(
