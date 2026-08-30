@@ -317,9 +317,9 @@ ServiceFormKind formKindForServiceCode(String code) {
     case 'relief-goods-distribution':
     case 'sandbagging':
       return ServiceFormKind.relief;
-    // flood-evacuation, fire-rescue, search-and-rescue, power-line-repair and
-    // animal-rescue have no guided form of their own and take the generic one,
-    // which is what the keyword matching resolved them to as well.
+    // power-line-repair and animal-rescue have no guided form of their own and
+    // take the generic one, which is what the keyword matching resolved them
+    // to as well.
     default:
       return ServiceFormKind.generic;
   }
@@ -338,10 +338,6 @@ IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
   switch (code) {
     case 'ambulance-medical-response':
       return (icon: Icons.local_hospital_rounded, bg: AppColors.red50, fg: AppColors.red600);
-    case 'fire-rescue':
-      return (icon: Icons.local_fire_department_rounded, bg: AppColors.red50, fg: AppColors.red600);
-    case 'flood-evacuation':
-      return (icon: Icons.water_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
     case 'road-clearing':
     case 'debris-removal':
       return (icon: Icons.construction_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
@@ -349,8 +345,6 @@ IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
       return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
     case 'animal-rescue':
       return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
-    case 'search-and-rescue':
-      return (icon: Icons.travel_explore_rounded, bg: AppColors.blue50, fg: AppColors.blue600);
     case 'power-line-repair':
       return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
     case 'sandbagging':
