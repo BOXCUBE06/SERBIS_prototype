@@ -516,6 +516,21 @@ class AuthController extends Controller
                 'message' => 'Invalid resident credentials.'
             ], 401);
         }
+        // ---------------------------------------------------------------
+        // TEMPORARY DIAGNOSTIC (2026-08-30). Production answers this route
+        // with a 500 whose body is Laravel's opaque "Server Error", and the
+        // stack trace is unreachable: LOG_CHANNEL=stack writes
+        // storage/logs/laravel.log *inside* the container, so Render's log
+        // view shows access lines only. This try/catch reports the throw site
+        // in the response body so the phone screen shows it.
+        //
+        // REVERT IMMEDIATELY after the cause is known -- it discloses internal
+        // class names and file paths to any caller. Opened below the password
+        // check on purpose: an anonymous caller cannot reach it without valid
+        // credentials, and the validate() above stays outside so a 422 is not
+        // rewritten into a 500.
+        // ---------------------------------------------------------------
+        try {
 
         // Only an abandoned registration reaches this. Verification happens as
         // the last step of signing up, so a resident who finished it never sees
@@ -590,6 +605,21 @@ class AuthController extends Controller
             'code' => 'mfa_required',
             'challenge_id' => $challengeId,
         ] + $this->deliveryPayloadFor($resident, $channel, $challengeId), 403);
+        } catch (\Throwable $e) {
+            // TEMPORARY -- see the block above. Logged as well as returned, so
+            // the trace is on disk if LOG_CHANNEL is ever pointed at stderr.
+            Log::error('Resident login threw', [
+                'exception' => get_class($e),
+                'where'     => $e->getFile().':'.$e->getLine(),
+                'message'   => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => get_class($e).' @ '.basename($e->getFile()).':'.$e->getLine()
+                    .' -- '.mb_substr($e->getMessage(), 0, 300),
+                'code'    => 'diagnostic',
+            ], 500);
+        }
     }
 
     /**
