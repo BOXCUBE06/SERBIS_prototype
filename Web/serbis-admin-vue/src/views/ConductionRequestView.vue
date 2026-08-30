@@ -79,7 +79,14 @@
           </div>
         </v-card>
 
-        <v-card v-else elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
+        <!-- Table at lgAndUp, same breakpoint Bookings' two-pane layout uses
+             (ServiceRequestQueue.vue's `twoUp`) — so at any given width both
+             tabs are in the same layout mode, not two different products
+             switching at two different points (impeccable critique, P1,
+             2026-08-30). Below it, a card list in Bookings' own visual
+             language (soft-card, rounded-xl, avatar-initial rows) replaces a
+             table that forced a 704px min-width and horizontal scroll. -->
+        <v-card v-else-if="isWide" elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
           <v-data-table
             :headers="headers"
             :items="filteredItems"
@@ -121,6 +128,39 @@
               </div>
             </template>
           </v-data-table>
+        </v-card>
+
+        <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden">
+          <div v-if="!filteredItems.length" class="text-center py-12 px-6">
+            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
+            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+          </div>
+          <div v-else>
+            <div
+              v-for="item in filteredItems" :key="item.conduction_request_id"
+              class="d-flex align-center px-4 py-3 trip-row"
+              role="button"
+              tabindex="0"
+              :aria-label="`Open details for ${item.patient_name}`"
+              @click="openDetail(item)"
+              @keydown.enter.prevent="openDetail(item)"
+              @keydown.space.prevent="openDetail(item)"
+            >
+              <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
+                <span class="font-weight-bold text-caption">{{ (item.patient_name || '?').slice(0, 2).toUpperCase() }}</span>
+              </v-avatar>
+              <div class="flex-grow-1 min-width-0">
+                <div class="text-body-2 font-weight-bold text-truncate">{{ item.patient_name }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">
+                  {{ item.origin }} <v-icon size="10" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}
+                </div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
+              </div>
+              <v-chip size="small" variant="flat" class="font-weight-bold ml-2 flex-shrink-0" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
+                {{ item.trip_status }}
+              </v-chip>
+            </div>
+          </div>
         </v-card>
       </v-window-item>
     </v-window>
@@ -346,6 +386,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
@@ -354,6 +395,12 @@ import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
 const activeTab = ref('bookings')
+
+// Same breakpoint ServiceRequestQueue's `twoUp` uses for its own two-pane vs
+// single-column switch, so this tab changes layout mode in step with the
+// Bookings tab beside it rather than at a different width of its own.
+const { lgAndUp } = useDisplay()
+const isWide = lgAndUp
 
 const STATUS_ACCENT = {
   'Not dispatched': '#B45309',
@@ -724,6 +771,30 @@ onMounted(fetchData)
   font-weight: 500;
   color: rgb(var(--v-theme-on-surface));
   margin-bottom: 8px;
+}
+
+/* Mirrors ServiceRequestQueue.vue's .soft-card/.request-row exactly (same
+   values, not shared — scoped styles don't cross files here, same pattern
+   already used for OFFICE_TIMEZONE and STATUS_ACCENT-style constants
+   elsewhere in this codebase) so the two tabs read as one container language
+   below the breakpoint instead of two different products sharing a tab bar. */
+.soft-card {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
+}
+.trip-row {
+  cursor: pointer;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
+  transition: background-color 150ms ease;
+}
+.trip-row:last-child { border-bottom: none; }
+.trip-row:hover {
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
+}
+.trip-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
+  background-color: rgba(var(--v-theme-primary), 0.06);
 }
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
