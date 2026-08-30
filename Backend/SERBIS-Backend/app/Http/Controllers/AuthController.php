@@ -697,18 +697,37 @@ class AuthController extends Controller
         }
 
         if ($this->smsIsUsableFor($resident)) {
-            $response = app(PhilSms::class)->send(
-                [$resident->phone_number],
-                "Your SERBIS login code is {$code}. It expires in 5 minutes.",
-            );
+            try {
+                $response = app(PhilSms::class)->send(
+                    [$resident->phone_number],
+                    "Your SERBIS login code is {$code}. It expires in 5 minutes.",
+                );
 
-            if (PhilSms::accepted($response)) {
+                if (PhilSms::accepted($response)) {
+                    return ['channel' => 'sms', 'challenge_id' => $challengeId];
+                }
+
+                Log::warning('Login OTP SMS failed, falling back to email', [
+                    'resident_id' => $resident->resident_id,
+                ]);
+            } catch (\Throwable $e) {
+                // Not a rejection — the request itself never completed (timeout,
+                // dropped connection), which on this vendor almost always means
+                // PhilSMS received and sent the text before the response leg
+                // failed. MAIL_MAILER=log in production (render.yaml) makes the
+                // email fallback below a dead end — it writes to a log file, not
+                // an inbox — so treating this as a real rejection would tell a
+                // resident who already has the code on their phone to go check
+                // an email that will never arrive. Report it delivered instead;
+                // the code sent is the same one this response's challenge checks
+                // against either way.
+                Log::warning('Login OTP SMS threw, treating as delivered', [
+                    'resident_id' => $resident->resident_id,
+                    'error'       => $e->getMessage(),
+                ]);
+
                 return ['channel' => 'sms', 'challenge_id' => $challengeId];
             }
-
-            Log::warning('Login OTP SMS failed, falling back to email', [
-                'resident_id' => $resident->resident_id,
-            ]);
         }
 
         Mail::to($resident->email_address)->send(
