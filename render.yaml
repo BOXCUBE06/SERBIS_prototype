@@ -39,10 +39,22 @@ envVarGroups:
       - key: APP_URL
         sync: false
 
+      # stderr, not stack. `stack` resolves to `single`, which writes
+      # storage/logs/laravel.log INSIDE the container — a file on an ephemeral
+      # filesystem that Render's log view never reads and that vanishes on
+      # every redeploy. That is why the 2026-08-30 resident-login 500 could
+      # only be traced by shipping a temporary commit that returned the
+      # exception's file:line in the HTTP response, and reverting it after —
+      # two deploys to read one stack trace. Render captures stdout/stderr, so
+      # this puts the same trace in the dashboard.
       - key: LOG_CHANNEL
-        value: stack
+        value: stderr
+      # warning, not error: the SMS path logs its failures at warning level
+      # (`Login OTP SMS failed, falling back to email`), and at `error` those
+      # never appear — which is the one signal the carrier/delivery questions
+      # need. Still above info, so this does not log every request.
       - key: LOG_LEVEL
-        value: error
+        value: warning
 
       # Aiven MySQL 8. Host, port, database and user come from the Aiven service
       # overview; none of them is a Render reference variable, because the
