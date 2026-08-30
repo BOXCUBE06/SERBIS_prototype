@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Barangay;
 use App\Models\Resident;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -74,6 +75,41 @@ class ResidentMfaLoginTest extends TestCase
             ->assertJsonStructure(['challenge_id', 'sent_to', 'retry_after']);
 
         $response->assertJsonMissingPath('token');
+    }
+
+    /**
+     * The suite runs on CACHE_STORE=array (phpunit.xml), which keeps live PHP
+     * objects and never serializes, so every other test here passed while
+     * production 500d. Production runs the file store, and config/cache.php
+     * sets 'serializable_classes' => false, so FileStore::get() unserializes
+     * with allowed_classes => false: any object put in the challenge comes back
+     * as __PHP_Incomplete_Class. This test pins the login to that store so a
+     * Carbon (or any other object) put in the challenge payload fails here
+     * rather than on a resident's phone.
+     */
+    public function test_login_survives_a_cache_store_that_cannot_restore_objects(): void
+    {
+        config(['cache.default' => 'file']);
+        Cache::store('file')->flush();
+
+        $resident = $this->verifiedResident();
+
+        $response = $this->postJson('/api/resident/login', [
+            'email_address' => $resident->email_address,
+            'password' => 'Password123',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonPath('code', 'mfa_required')
+            ->assertJsonPath('retry_after', 60);
+
+        // The resend cooldown has to survive the round trip too — it is read
+        // back out of the cache, which is where the TypeError came from.
+        $this->postJson('/api/resident/login/resend', [
+            'challenge_id' => $response->json('challenge_id'),
+        ])->assertStatus(429)->assertJsonPath('code', 'resend_too_soon');
+
+        Cache::store('file')->flush();
     }
 
     public function test_correct_code_completes_login(): void
