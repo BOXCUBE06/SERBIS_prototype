@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Service;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -22,6 +23,29 @@ class ServiceRequestSeeder extends Seeder
             return;
         }
 
+        // Was `rand(1, 5)` with a comment assuming "at least 5 services". That
+        // is an assumption about auto-increment ids, not about the catalogue:
+        // removing an entry from ServiceSeeder shifts every id after it, so the
+        // range silently starts pointing at different services -- or, once the
+        // catalogue is shorter than the literal, at rows that do not exist and
+        // an FK violation mid-seed. Codes are stable and immutable by design,
+        // so resolve against those instead.
+        $serviceIds = Service::whereIn('code', [
+            'ambulance-medical-response',
+            'relief-goods-distribution',
+            'road-clearing',
+            'debris-removal',
+            'animal-rescue',
+        ])->pluck('service_id')->all();
+
+        if (empty($serviceIds)) {
+            $this->command?->warn(
+                'ServiceRequestSeeder skipped: none of the expected service codes exist -- run ServiceSeeder first.'
+            );
+
+            return;
+        }
+
         $statuses = ['Pending', 'Responding', 'Resolved'];
         $records = [];
 
@@ -31,7 +55,7 @@ class ServiceRequestSeeder extends Seeder
 
             $records[] = [
                 'resident_id' => rand(1, 10), // Assumes you have at least 10 residents seeded
-                'service_id' => rand(1, 5),   // Assumes you have at least 5 services seeded
+                'service_id' => $serviceIds[array_rand($serviceIds)],
                 'vehicle_id' => null,
                 'processed_by' => null,
                 'description' => 'Simulated dashboard test data ' . $i,
