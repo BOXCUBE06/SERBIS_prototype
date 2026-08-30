@@ -14,12 +14,12 @@ class EquipmentBorrowingSeeder extends Seeder
      * offsets into the real id lists, never literal ids.
      */
     private const SCENARIOS = [
-        ['resident' => 0, 'equipment' => 0, 'quantity' => 1, 'status' => 'Pending',  'created' => 2,   'updated' => 2,  'released' => null, 'returned' => null],
-        ['resident' => 1, 'equipment' => 2, 'quantity' => 2, 'status' => 'Approved', 'created' => 24,  'updated' => 5,  'released' => null, 'returned' => null],
-        ['resident' => 2, 'equipment' => 3, 'quantity' => 1, 'status' => 'Released', 'created' => 72,  'updated' => 48, 'released' => 48,   'returned' => null],
-        ['resident' => 3, 'equipment' => 1, 'quantity' => 1, 'status' => 'Returned', 'created' => 144, 'updated' => 24, 'released' => 120,  'returned' => 24],
-        ['resident' => 4, 'equipment' => 4, 'quantity' => 1, 'status' => 'Denied',   'created' => 48,  'updated' => 24, 'released' => null, 'returned' => null],
-        ['resident' => 5, 'equipment' => 6, 'quantity' => 3, 'status' => 'Pending',  'created' => 1,   'updated' => 1,  'released' => null, 'returned' => null],
+        ['resident' => 0, 'equipment' => 0, 'quantity' => 1, 'purpose' => 'Barangay flood drill this weekend.', 'status' => 'Pending',  'created' => 2,   'updated' => 2,  'released' => null, 'returned' => null],
+        ['resident' => 1, 'equipment' => 2, 'quantity' => 2, 'purpose' => 'Standby cover for the fiesta parade route.', 'status' => 'Approved', 'created' => 24,  'updated' => 5,  'released' => null, 'returned' => null],
+        ['resident' => 2, 'equipment' => 3, 'quantity' => 1, 'purpose' => 'Clearing debris along the riverbank after the storm.', 'status' => 'Released', 'created' => 72,  'updated' => 48, 'released' => 48,   'returned' => null],
+        ['resident' => 3, 'equipment' => 1, 'quantity' => 1, 'purpose' => 'First aid post for the barangay basketball league.', 'status' => 'Returned', 'created' => 144, 'updated' => 24, 'released' => 120,  'returned' => 24],
+        ['resident' => 4, 'equipment' => 4, 'quantity' => 1, 'purpose' => 'Personal use at a family outing.', 'status' => 'Denied',   'created' => 48,  'updated' => 24, 'released' => null, 'returned' => null],
+        ['resident' => 5, 'equipment' => 6, 'quantity' => 3, 'purpose' => 'Evacuation centre setup for the incoming typhoon.', 'status' => 'Pending',  'created' => 1,   'updated' => 1,  'released' => null, 'returned' => null],
     ];
 
     public function run(): void
@@ -57,6 +57,7 @@ class EquipmentBorrowingSeeder extends Seeder
                 'resident_id'  => $residentIds[$s['resident'] % count($residentIds)],
                 'equipment_id' => $equipmentIds[$s['equipment'] % count($equipmentIds)],
                 'quantity'     => $s['quantity'],
+                'purpose'      => $s['purpose'],
                 'status'       => $s['status'],
                 'released_at'  => $at($s['released']),
                 'returned_at'  => $at($s['returned']),

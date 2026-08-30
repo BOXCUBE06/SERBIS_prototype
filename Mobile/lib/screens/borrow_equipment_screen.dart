@@ -5,6 +5,7 @@ import '../models/borrow_models.dart';
 import '../models/request_models.dart' show formatTimelineTime;
 import '../state/request_store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/form_inputs.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -315,6 +316,24 @@ class _BorrowRequestCard extends StatelessWidget {
               _StatusChip(request.status),
             ],
           ),
+          // Rows filed before `purpose` existed have none, and the card says
+          // nothing rather than showing an empty quote.
+          if (request.purpose != null && request.purpose!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.notes_rounded, size: 14, color: AppColors.inkFaint),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    request.purpose!,
+                    style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.45),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (request.status == BorrowStatus.denied && request.denialReason != null) ...[
             const SizedBox(height: 10),
             Container(
@@ -427,9 +446,33 @@ class _BorrowSheet extends StatefulWidget {
 }
 
 class _BorrowSheetState extends State<_BorrowSheet> {
+  /// Matches `purpose`'s column width. The server rejects anything longer, and
+  /// finding that out only after a round trip loses what was typed past 255.
+  static const _purposeMaxLength = 255;
+
   late int _quantity = widget.item.availableQuantity > 0 ? 1 : 0;
+  final TextEditingController _purpose = TextEditingController();
   bool _submitting = false;
   String? _error;
+  String? _purposeError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Clears the "tell MDRRMO..." error as soon as there is something to send,
+    // rather than leaving a red field under text that would now be accepted.
+    _purpose.addListener(() {
+      if (_purposeError != null && _purpose.text.trim().isNotEmpty) {
+        setState(() => _purposeError = null);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _purpose.dispose();
+    super.dispose();
+  }
 
   void _step(int delta) {
     final next = _quantity + delta;
@@ -439,6 +482,16 @@ class _BorrowSheetState extends State<_BorrowSheet> {
 
   Future<void> _confirm() async {
     if (_submitting || _quantity < 1) return;
+
+    // Checked here as well as on the server: `purpose` is `required` on
+    // `POST /borrowings`, and a round trip to be told the box is empty is a
+    // worse way to learn it than the field going red.
+    final purpose = _purpose.text.trim();
+    if (purpose.isEmpty) {
+      setState(() => _purposeError = 'Tell MDRRMO what you need this for.');
+      return;
+    }
+
     setState(() {
       _submitting = true;
       _error = null;
@@ -447,6 +500,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     final result = await widget.appState.submitBorrowRequest(
       item: widget.item,
       quantity: _quantity,
+      purpose: purpose,
     );
 
     if (!mounted) return;
@@ -472,56 +526,74 @@ class _BorrowSheetState extends State<_BorrowSheet> {
           color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
-              ),
-            ),
-            Text(widget.item.name, style: AppText.display(size: 17)),
-            const SizedBox(height: 4),
-            Text(
-              '${widget.item.availableQuantity} available to borrow',
-              style: AppText.body(size: 12.5, color: AppColors.inkMuted),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _stepButton(Icons.remove_rounded, () => _step(-1)),
-                SizedBox(
-                  width: 56,
-                  child: Text(
-                    '$_quantity',
-                    textAlign: TextAlign.center,
-                    style: AppText.display(size: 22),
-                  ),
+        // The stepper plus a three-line field no longer clears the keyboard on
+        // a short phone; without this the sheet overflows instead of scrolling.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
                 ),
-                _stepButton(Icons.add_rounded, () => _step(1)),
+              ),
+              Text(widget.item.name, style: AppText.display(size: 17)),
+              const SizedBox(height: 4),
+              Text(
+                '${widget.item.availableQuantity} available to borrow',
+                style: AppText.body(size: 12.5, color: AppColors.inkMuted),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _stepButton(Icons.remove_rounded, () => _step(-1)),
+                  SizedBox(
+                    width: 56,
+                    child: Text(
+                      '$_quantity',
+                      textAlign: TextAlign.center,
+                      style: AppText.display(size: 22),
+                    ),
+                  ),
+                  _stepButton(Icons.add_rounded, () => _step(1)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              AppTextField(
+                label: 'What do you need it for?',
+                hint: 'e.g. Barangay flood drill this weekend',
+                controller: _purpose,
+                lines: 3,
+                maxLength: _purposeMaxLength,
+                errorText: _purposeError,
+                enabled: !_submitting,
+              ),
+              Text(
+                'MDRRMO reviews this before approving the loan.',
+                style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(10)),
+                  child: Text(_error!, style: AppText.body(size: 12, color: AppColors.red600, height: 1.5)),
+                ),
               ],
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(10)),
-                child: Text(_error!, style: AppText.body(size: 12, color: AppColors.red600, height: 1.5)),
+              const SizedBox(height: 20),
+              AppButton(
+                label: 'Request this item',
+                onPressed: _confirm,
+                loading: _submitting,
               ),
             ],
-            const SizedBox(height: 20),
-            AppButton(
-              label: 'Request this item',
-              onPressed: _confirm,
-              loading: _submitting,
-            ),
-          ],
+          ),
         ),
       ),
     );

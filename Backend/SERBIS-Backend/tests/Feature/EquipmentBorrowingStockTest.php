@@ -55,12 +55,58 @@ class EquipmentBorrowingStockTest extends TestCase
         ]);
     }
 
-    private function borrow(int $quantity, ?int $equipmentId = null)
+    private function borrow(int $quantity, ?int $equipmentId = null, mixed $purpose = 'Barangay flood drill')
     {
-        return $this->actingAs($this->resident)->postJson('/api/borrowings', [
+        $payload = [
             'equipment_id' => $equipmentId ?? $this->equipment->getKey(),
             'quantity' => $quantity,
-        ]);
+        ];
+
+        // Distinguishes "sent nothing" from "sent an empty box": the first is a
+        // client that predates the field, the second is a resident who skipped
+        // it, and both must be rejected.
+        if ($purpose !== null) {
+            $payload['purpose'] = $purpose;
+        }
+
+        return $this->actingAs($this->resident)->postJson('/api/borrowings', $payload);
+    }
+
+    public function test_the_purpose_is_stored_with_the_request(): void
+    {
+        $this->borrow(1, null, 'Evacuation centre setup')
+            ->assertStatus(201)
+            ->assertJsonPath('purpose', 'Evacuation centre setup');
+
+        $this->assertSame('Evacuation centre setup', EquipmentBorrowing::first()->purpose);
+    }
+
+    public function test_a_request_without_a_purpose_is_rejected(): void
+    {
+        $this->borrow(1, null, null)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('purpose');
+
+        $this->assertSame(0, EquipmentBorrowing::count());
+    }
+
+    /** Whitespace is trimmed to null before validation, so it fails the same way. */
+    public function test_a_blank_purpose_is_rejected(): void
+    {
+        $this->borrow(1, null, '   ')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('purpose');
+
+        $this->assertSame(0, EquipmentBorrowing::count());
+    }
+
+    public function test_a_purpose_over_the_column_length_is_rejected(): void
+    {
+        $this->borrow(1, null, str_repeat('a', 256))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('purpose');
+
+        $this->assertSame(0, EquipmentBorrowing::count());
     }
 
     public function test_a_request_within_stock_is_accepted(): void

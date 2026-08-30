@@ -107,6 +107,11 @@ class BorrowRequest {
   final int? id;
   final int equipmentId;
   final int quantity;
+
+  /// What the resident said the item is for. `POST /borrowings` requires it,
+  /// so anything filed from this app has one; rows filed before the column
+  /// existed do not, and the card falls back rather than showing an empty line.
+  final String? purpose;
   final BorrowStatus status;
   final String? denialReason;
   final DateTime? dueDate;
@@ -125,6 +130,7 @@ class BorrowRequest {
     this.id,
     required this.equipmentId,
     required this.quantity,
+    this.purpose,
     required this.status,
     this.denialReason,
     this.dueDate,
@@ -147,6 +153,7 @@ class BorrowRequest {
       id: id ?? this.id,
       equipmentId: equipmentId,
       quantity: quantity,
+      purpose: purpose,
       status: status ?? this.status,
       denialReason: denialReason ?? this.denialReason,
       dueDate: dueDate ?? this.dueDate,
@@ -178,6 +185,7 @@ class BorrowRequest {
       id: id,
       equipmentId: equipmentId,
       quantity: quantity,
+      purpose: json['purpose'] as String?,
       status: borrowStatusFromText((json['status'] as String?) ?? 'Pending'),
       denialReason: json['denial_reason'] as String?,
       dueDate: _parseDate(json['due_date']),
@@ -196,6 +204,7 @@ extension BorrowRequestCache on BorrowRequest {
         'id': id,
         'equipment_id': equipmentId,
         'quantity': quantity,
+        'purpose': purpose,
         'status': status.name,
         'denial_reason': denialReason,
         'due_date': dueDate == null
@@ -222,6 +231,7 @@ extension BorrowRequestCache on BorrowRequest {
       id: id,
       equipmentId: json['equipment_id'] is int ? json['equipment_id'] as int : 0,
       quantity: json['quantity'] is int ? json['quantity'] as int : 0,
+      purpose: json['purpose'] as String?,
       status: BorrowStatus.values.firstWhere(
         (value) => value.name == json['status'],
         orElse: () => BorrowStatus.pending,

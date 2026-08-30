@@ -28,7 +28,7 @@
       <v-text-field
         v-model="search"
         label="Search"
-        placeholder="Resident or item"
+        placeholder="Resident, item or purpose"
         prepend-inner-icon="mdi-magnify"
         variant="outlined"
         density="compact"
@@ -238,6 +238,11 @@
               <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
                 Only {{ item.equipment?.available_quantity ?? 0 }} in stock
               </div>
+              <v-tooltip v-if="item.purpose" :text="item.purpose" location="bottom" max-width="360">
+                <template v-slot:activator="{ props }">
+                  <div v-bind="props" class="text-caption text-medium-emphasis cell-truncate">{{ item.purpose }}</div>
+                </template>
+              </v-tooltip>
             </div>
           </template>
 
@@ -456,6 +461,17 @@
                 <div class="text-h3 font-weight-black text-high-emphasis">{{ selectedRecord?.quantity }}<span class="text-h5 text-medium-emphasis ml-1">×</span></div>
               </v-card>
 
+              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Purpose</h3>
+              <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
+                <!-- Requests filed before the field existed have no purpose, and
+                     an empty box reads as a resident who left it blank. -->
+                <div
+                  class="text-body-1"
+                  :class="selectedRecord?.purpose ? 'text-high-emphasis' : 'text-medium-emphasis font-italic'"
+                  style="white-space: pre-wrap;"
+                >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
+              </v-card>
+
               <v-row class="mb-4">
                 <v-col cols="6">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
@@ -504,6 +520,16 @@
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ actionCopy.body }}</div>
+
+          <!-- Only where the purpose is still being weighed. A return has
+               nothing left to decide, and repeating it there is noise. -->
+          <v-alert
+            v-if="actionDialog.mode !== 'confirm' && actionDialog.record?.purpose"
+            variant="tonal" density="compact" class="mb-4" icon="mdi-note-text-outline"
+          >
+            <div class="text-caption font-weight-bold text-uppercase mb-1">Their stated purpose</div>
+            <div class="text-body-2" style="white-space: pre-wrap;">{{ actionDialog.record.purpose }}</div>
+          </v-alert>
 
           <v-alert
             v-if="actionDialog.mode === 'confirm' && actionDialog.error"
@@ -686,7 +712,8 @@ const matchesSearch = (b) => {
   if (!q) return true
   const name = `${b.resident?.first_name || ''} ${b.resident?.last_name || ''}`.toLowerCase()
   const item = (b.equipment?.item_name || '').toLowerCase()
-  return name.includes(q) || item.includes(q)
+  const purpose = (b.purpose || '').toLowerCase()
+  return name.includes(q) || item.includes(q) || purpose.includes(q)
 }
 
 const matchesItem = (b) =>

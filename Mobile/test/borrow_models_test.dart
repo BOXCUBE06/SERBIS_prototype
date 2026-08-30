@@ -59,6 +59,7 @@ void main() {
         'equipment_id': 3,
         'quantity': 2,
         'status': 'Approved',
+        'purpose': 'Barangay flood drill',
         'due_date': '2026-08-20',
         'created_at': '2026-08-10T08:00:00.000000Z',
         'released_at': null,
@@ -71,7 +72,19 @@ void main() {
       expect(request.quantity, 2);
       expect(request.status, BorrowStatus.approved);
       expect(request.equipmentName, 'Wheelchair');
+      expect(request.purpose, 'Barangay flood drill');
       expect(request.dueDate, DateTime(2026, 8, 20));
+    });
+
+    test('a row filed before the purpose column existed reads as null', () {
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 12,
+        'equipment_id': 3,
+        'quantity': 2,
+        'status': 'Approved',
+      });
+
+      expect(request.purpose, isNull);
     });
 
     test("POST's 201 has no equipment relation — name is null until resolved", () {
@@ -109,6 +122,7 @@ void main() {
         id: 12,
         equipmentId: 3,
         quantity: 2,
+        purpose: 'Barangay flood drill',
         status: BorrowStatus.approved,
         dueDate: DateTime(2026, 8, 20),
         createdAt: DateTime.utc(2026, 8, 10, 8),
@@ -123,6 +137,7 @@ void main() {
       expect(restored.quantity, 2);
       expect(restored.status, BorrowStatus.approved);
       expect(restored.dueDate, DateTime(2026, 8, 20));
+      expect(restored.purpose, 'Barangay flood drill');
       expect(restored.equipmentName, 'Wheelchair');
     });
 

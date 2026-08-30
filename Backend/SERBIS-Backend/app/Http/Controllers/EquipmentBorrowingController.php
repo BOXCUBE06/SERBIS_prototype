@@ -49,6 +49,13 @@ class EquipmentBorrowingController extends Controller
         $validated = $request->validate([
             'equipment_id' => 'required|exists:tbl_equipments,equipment_id',
             'quantity' => 'required|integer|min:1',
+            // Required on the way in, nullable in the column: rows filed
+            // before the column existed have no purpose, but a new request
+            // that does not say what the item is for gives MDRRMO nothing to
+            // decide on beyond stock. TrimStrings + ConvertEmptyStringsToNull
+            // run ahead of this, so a box of spaces fails `required` here
+            // rather than storing as a blank reason.
+            'purpose' => 'required|string|max:255',
         ]);
 
         // The rules above bound the shape and never the amount, so a resident
@@ -78,6 +85,7 @@ class EquipmentBorrowingController extends Controller
             'resident_id' => $request->user()->getKey(),
             'equipment_id' => $validated['equipment_id'],
             'quantity' => $validated['quantity'],
+            'purpose' => $validated['purpose'],
             'status' => 'Pending',
         ]);
 

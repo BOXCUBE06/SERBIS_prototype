@@ -46,6 +46,7 @@ class _FakeApi extends ApiService {
   int submitCalls = 0;
   int getEquipmentsCalls = 0;
   int? lastQuantity;
+  String? lastPurpose;
 
   /// Holds the catalogue fetch open so the loading frame is observable rather
   /// than a race the fake usually wins.
@@ -68,14 +69,17 @@ class _FakeApi extends ApiService {
   Future<Map<String, dynamic>> submitBorrowRequest({
     required int equipmentId,
     required int quantity,
+    required String purpose,
   }) async {
     submitCalls++;
     lastQuantity = quantity;
+    lastPurpose = purpose;
     if (submitError != null) throw submitError!;
     return <String, dynamic>{
       'borrow_id': 77,
       'equipment_id': equipmentId,
       'quantity': quantity,
+      'purpose': purpose,
       'status': 'Pending',
       'created_at': DateTime.now().toIso8601String(),
     };
@@ -170,6 +174,50 @@ void main() {
       return state;
     }
 
+    /// Every submit path below has to clear the required purpose field first,
+    /// or it never reaches the API at all.
+    Future<void> fillPurpose(WidgetTester tester, [String text = 'Barangay flood drill']) async {
+      await tester.enterText(find.byType(TextField), text);
+      await tester.pump();
+    }
+
+    testWidgets('an empty purpose is refused before anything is sent', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await openSheet(tester, api);
+
+      await tester.tap(find.text('Request this item'));
+      await tester.pumpAndSettle();
+
+      expect(api.submitCalls, 0, reason: 'nothing to review, so nothing to file');
+      expect(find.text('Tell MDRRMO what you need this for.'), findsOneWidget);
+      expect(find.text('Request this item'), findsOneWidget);
+    });
+
+    testWidgets('whitespace alone does not count as a purpose', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await openSheet(tester, api);
+
+      await fillPurpose(tester, '   ');
+      await tester.tap(find.text('Request this item'));
+      await tester.pumpAndSettle();
+
+      expect(api.submitCalls, 0);
+      expect(find.text('Tell MDRRMO what you need this for.'), findsOneWidget);
+    });
+
+    testWidgets('the error clears once there is something to send', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await openSheet(tester, api);
+
+      await tester.tap(find.text('Request this item'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tell MDRRMO what you need this for.'), findsOneWidget);
+
+      await fillPurpose(tester);
+
+      expect(find.text('Tell MDRRMO what you need this for.'), findsNothing);
+    });
+
     testWidgets('the stepper clamps at 1 and at what is in stock', (tester) async {
       final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
       await openSheet(tester, api);
@@ -201,6 +249,7 @@ void main() {
       );
       await openSheet(tester, api);
 
+      await fillPurpose(tester);
       await tester.tap(find.text('Request this item'));
       await tester.pumpAndSettle();
 
@@ -218,11 +267,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.add_rounded));
       await tester.pump();
+      await fillPurpose(tester, 'Evacuation centre setup');
       await tester.tap(find.text('Request this item'));
       await tester.pumpAndSettle();
 
       expect(api.submitCalls, 1);
       expect(api.lastQuantity, 2, reason: 'the stepper value must reach the server');
+      expect(api.lastPurpose, 'Evacuation centre setup',
+          reason: 'what MDRRMO decides on must reach the server too');
 
       // Sheet gone.
       expect(find.text('Request this item'), findsNothing);
