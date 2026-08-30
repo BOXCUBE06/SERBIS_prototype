@@ -34,7 +34,15 @@ class PhilSms
             'Authorization' => 'Bearer '.config('services.philsms.token'),
             'Content-Type'  => 'application/json',
             'Accept'        => 'application/json',
-        ])->post(self::ENDPOINT, [
+        ])
+            // Guzzle has no timeout by default, so a slow PhilSMS response used to
+            // run into PHP's own max_execution_time (30s, php.ini-production) —
+            // a fatal script-kill, not a Throwable, that no caller's try/catch can
+            // intercept. Timing out here first turns that into an ordinary
+            // ConnectionException the caller can actually catch.
+            ->timeout(10)
+            ->connectTimeout(5)
+            ->post(self::ENDPOINT, [
             'recipient' => $recipients,
             'sender_id' => config('services.philsms.sender_id'),
             'type'      => 'plain',
