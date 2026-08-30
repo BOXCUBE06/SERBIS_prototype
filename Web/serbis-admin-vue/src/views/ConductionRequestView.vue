@@ -503,7 +503,11 @@ const emptyCreateForm = () => ({
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
   patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
   origin: '', destination: '',
-  drivers: ['', ''], authorized_passengers: ['', ''], patient_relatives: ['', ''],
+  // One blank slot each, not two — "Add {label}" already covers the case
+  // that needs more, and starting at two padded the common one-driver,
+  // zero-passenger trip with a field nobody was going to fill (impeccable
+  // polish, 2026-08-30).
+  drivers: [''], authorized_passengers: [''], patient_relatives: [''],
 })
 const createDialog = ref({ open: false, form: emptyCreateForm() })
 const createForm = ref(null)
