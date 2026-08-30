@@ -221,6 +221,20 @@
                 </div>
                 <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(item.status)">{{ item.status || 'Pending' }}</span>
               </div>
+
+              <!-- itemsPerPage is sized off windowHeight so a full page fills
+                   the panel with no gap (see the computed above) — that
+                   leaves this blank whenever a filter/search genuinely has
+                   fewer results than a page holds, which reads as broken
+                   rather than as "this is everything" (impeccable ui-audit,
+                   2026-08-30). pagedRequests.length < itemsPerPage only ever
+                   true on the last page, so this can't appear mid-list. -->
+              <div
+                v-if="pagedRequests.length < itemsPerPage"
+                class="text-center text-caption text-medium-emphasis py-6"
+              >
+                Showing all {{ filteredAndSortedRequests.length }} {{ filteredAndSortedRequests.length === 1 ? 'result' : 'results' }}
+              </div>
             </div>
           </div>
 
