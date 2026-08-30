@@ -72,12 +72,23 @@ envVarGroups:
       - key: ADMIN_SEED_PASSWORD
         sync: false
 
-      # All three are database-backed, so no Redis service is needed. The tables
-      # are created by the same migrate the entrypoint runs.
+      # SESSION_DRIVER and QUEUE_CONNECTION are database-backed and inert —
+      # confirmed 2026-08-30 (perf audit finding #7): no session middleware
+      # runs on the api group (bearer-token auth only) and nothing anywhere
+      # in app/ dispatches a queued job. Their tables are still created by the
+      # same migrate the entrypoint runs, in case either is ever put to use.
+      #
+      # CACHE_STORE moved off database (perf audit finding #1): throttleApi()
+      # in bootstrap/app.php applies to every route, so a database-backed
+      # limiter meant 2 extra Aiven round trips on every single request. file
+      # costs nothing on the free single-instance plan; if this service is
+      # ever scaled to more than one instance, or the admin TOTP path in
+      # Totp.php is ever re-enabled, move it to a real shared store (Redis)
+      # instead of back to database — see Totp.php:20-23.
       - key: SESSION_DRIVER
         value: database
       - key: CACHE_STORE
-        value: database
+        value: file
       - key: QUEUE_CONNECTION
         value: database
 
