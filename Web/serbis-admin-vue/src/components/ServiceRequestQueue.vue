@@ -1315,7 +1315,11 @@ const availableVehicles = computed(() => {
       .map(u => vehicles.value.find(v => v.vehicle_id === u.vehicle_id))
       .filter(Boolean)
   }
-  return vehicles.value.filter(v => v.status === 'Available')
+  // Ambulance is the only service this modal ever assigns a vehicle for, but
+  // the fleet also holds Rescue Vehicles, Fire Trucks and Boats — without
+  // this filter every one of those showed up as a valid pick for a medical
+  // dispatch (impeccable critique, P0, 2026-08-30).
+  return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
 })
 
 const residentOptions = computed(() => residents.value
