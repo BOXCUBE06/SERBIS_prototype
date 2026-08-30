@@ -10,6 +10,7 @@ use App\Models\Vehicle;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -17,6 +18,13 @@ class AnalyticsController extends Controller
 {
    public function index(Request $request): JsonResponse
     {
+        // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
+        // ~25 queries per admin dashboard load). No discriminator in the key:
+        // nothing below reads $request, so the payload is identical for every
+        // admin. TTL-only staleness — no explicit invalidation on the write
+        // paths that feed these numbers, so a change can take up to 5 minutes
+        // to show up on the dashboard.
+        return response()->json(Cache::remember('analytics:dashboard', 300, function () {
         // 1. Calculate KPI Stats
         $totalResidents = Resident::count();
         $pendingService = ServiceRequest::where('status', 'Pending')->count();
@@ -233,7 +241,7 @@ class AnalyticsController extends Controller
         $weekSeries = $fillDates(6);
         $monthSeries = $fillDates(29);
 
-        return response()->json([
+        return [
             'kpiStats' => $kpiStats,
             'serviceRequests' => $serviceRequests,
             'borrowRequests' => $borrowRequests,
@@ -246,6 +254,7 @@ class AnalyticsController extends Controller
                     'month' => ['labels' => array_keys($monthSeries), 'data' => array_values($monthSeries)],
                 ]
             ]
-        ]);
+        ];
+        }));
     }
 }
