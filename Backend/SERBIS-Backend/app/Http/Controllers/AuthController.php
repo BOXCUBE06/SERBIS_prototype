@@ -516,21 +516,6 @@ class AuthController extends Controller
                 'message' => 'Invalid resident credentials.'
             ], 401);
         }
-        // ---------------------------------------------------------------
-        // TEMPORARY DIAGNOSTIC (2026-08-30). Production answers this route
-        // with a 500 whose body is Laravel's opaque "Server Error", and the
-        // stack trace is unreachable: LOG_CHANNEL=stack writes
-        // storage/logs/laravel.log *inside* the container, so Render's log
-        // view shows access lines only. This try/catch reports the throw site
-        // in the response body so the phone screen shows it.
-        //
-        // REVERT IMMEDIATELY after the cause is known -- it discloses internal
-        // class names and file paths to any caller. Opened below the password
-        // check on purpose: an anonymous caller cannot reach it without valid
-        // credentials, and the validate() above stays outside so a 422 is not
-        // rewritten into a 500.
-        // ---------------------------------------------------------------
-        try {
 
         // Only an abandoned registration reaches this. Verification happens as
         // the last step of signing up, so a resident who finished it never sees
@@ -605,21 +590,6 @@ class AuthController extends Controller
             'code' => 'mfa_required',
             'challenge_id' => $challengeId,
         ] + $this->deliveryPayloadFor($resident, $channel, $challengeId), 403);
-        } catch (\Throwable $e) {
-            // TEMPORARY -- see the block above. Logged as well as returned, so
-            // the trace is on disk if LOG_CHANNEL is ever pointed at stderr.
-            Log::error('Resident login threw', [
-                'exception' => get_class($e),
-                'where'     => $e->getFile().':'.$e->getLine(),
-                'message'   => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'message' => get_class($e).' @ '.basename($e->getFile()).':'.$e->getLine()
-                    .' -- '.mb_substr($e->getMessage(), 0, 300),
-                'code'    => 'diagnostic',
-            ], 500);
-        }
     }
 
     /**
@@ -687,8 +657,7 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $sentAt = $challenge['sent_at'] ?? null;
-        $wait = $sentAt ? max(0, Resident::RESEND_COOLDOWN_SECONDS - (int) now()->diffInSeconds($sentAt, true)) : 0;
+        $wait = $this->mfaResendWait($challenge);
 
         if ($wait > 0) {
             return response()->json([
@@ -725,7 +694,14 @@ class AuthController extends Controller
     private function sendLoginCode(Resident $resident, ?string $challengeId): array
     {
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $extra = ['code_hash' => Hash::make($code), 'sent_at' => now()];
+        // sent_at is a Unix timestamp and NOT a Carbon. config/cache.php sets
+        // 'serializable_classes' => false, so FileStore::get() unserializes with
+        // allowed_classes => false and hands back __PHP_Incomplete_Class for any
+        // object it stored. A Carbon written here came back as one and killed
+        // the login response with a TypeError inside Carbon's diffInSeconds().
+        // Same trap AnalyticsController.php works around with a json round-trip;
+        // an int needs no round-trip and survives every cache store.
+        $extra = ['code_hash' => Hash::make($code), 'sent_at' => now()->getTimestamp()];
 
         if ($challengeId === null) {
             $challengeId = $this->issueMfaChallenge('resident', $resident->resident_id, $extra);
@@ -779,11 +755,30 @@ class AuthController extends Controller
         return ['channel' => 'email', 'challenge_id' => $challengeId];
     }
 
+    /**
+     * Seconds left on an MFA challenge's resend cooldown.
+     *
+     * Anything that is not an int is treated as "no cooldown": a challenge
+     * written before sent_at became a timestamp, a cache miss, and the
+     * __PHP_Incomplete_Class a restored object would be all land here. None of
+     * them is worth a 500 — the worst case is one extra code, which the route's
+     * own rate limiter still caps.
+     */
+    private function mfaResendWait(mixed $challenge): int
+    {
+        $sentAt = is_array($challenge) ? ($challenge['sent_at'] ?? null) : null;
+
+        if (!is_int($sentAt)) {
+            return 0;
+        }
+
+        return max(0, Resident::RESEND_COOLDOWN_SECONDS - (now()->getTimestamp() - $sentAt));
+    }
+
     private function deliveryPayloadFor(Resident $resident, string $channel, string $challengeId): array
     {
         $digits = preg_replace('/\D/', '', (string) $resident->phone_number);
-        $sentAt = Cache::get("mfa:challenge:{$challengeId}")['sent_at'] ?? null;
-        $wait = $sentAt ? max(0, Resident::RESEND_COOLDOWN_SECONDS - (int) now()->diffInSeconds($sentAt, true)) : 0;
+        $wait = $this->mfaResendWait(Cache::get("mfa:challenge:{$challengeId}"));
 
         return [
             'channel' => $channel,
