@@ -363,29 +363,16 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Password proven. A token is not issued yet — the admin still owes a
-        // TOTP code. The challenge is single-use and short-lived; adminLoginVerify
-        // is the only place it can be spent.
-        $challengeId = $this->issueMfaChallenge('admin', $admin->admin_id);
-        $enrolled = app(Totp::class)->isEnrolled($admin->admin_id);
-
-        $payload = [
-            'message' => 'Enter the code from your authenticator app to finish signing in.',
-            'code' => 'mfa_required',
-            'challenge_id' => $challengeId,
-            'enrollment_required' => !$enrolled,
-        ];
-
-        // The QR only goes out once. Showing it on every login would let anyone
-        // who learns the password re-enroll their own authenticator silently —
-        // exactly the self-enroll gap this flag exists to close.
-        if (!$enrolled) {
-            $uri = app(Totp::class)->provisioningUri($admin->admin_id, $admin->email_address);
-            $payload['qr_code'] = app(Totp::class)->qrCodeDataUri($uri);
-            $payload['secret'] = app(Totp::class)->secretFor($admin->admin_id);
-        }
-
-        return response()->json($payload, 403);
+        // MFA disabled for admin for now (2026-08-30) — the TOTP QR-enrollment
+        // step locked an admin out with no recovery path. adminLoginVerify and
+        // the Totp service are left in place, unused, so this is cheap to turn
+        // back on once a replacement (email/SMS code, or TOTP + recovery codes)
+        // is decided. See serbis-status memory for the options considered.
+        return response()->json([
+            'token' => $this->issueAdminToken($admin),
+            'role' => 'admin',
+            'user' => $admin,
+        ]);
     }
 
     /**
