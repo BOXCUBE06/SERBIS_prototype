@@ -40,8 +40,14 @@ class PhilSms
             // a fatal script-kill, not a Throwable, that no caller's try/catch can
             // intercept. Timing out here first turns that into an ordinary
             // ConnectionException the caller can actually catch.
-            ->timeout(10)
-            ->connectTimeout(5)
+            //
+            // Kept well under the mobile client's own 15s per-request timeout
+            // (api_service.dart) too: this is one leg of that request, not the
+            // whole thing, so it needs headroom left for bcrypt/cache/JSON
+            // overhead and real network latency on top, or the phone can still
+            // give up first even after the backend answers correctly.
+            ->timeout(6)
+            ->connectTimeout(3)
             ->post(self::ENDPOINT, [
             'recipient' => $recipients,
             'sender_id' => config('services.philsms.sender_id'),
