@@ -1,11 +1,19 @@
 <template>
+  <!-- Embedded (standalone=false) drops the fixed calc(100vh - 300px): that
+       number assumed this component owned a whole route's worth of vertical
+       space below a fixed page chrome, which is not true on the Ambulance
+       Dispatch Requests tab — its own header and tab bar sit above this, at
+       a height this component has no way to know. Forcing a height here
+       anyway is what produced the internal list/detail scrollbars: the page
+       already scrolls, so this must stop competing with it (layout
+       redesign, impeccable review 2026-08-31, item 2). -->
   <v-container
     fluid
     class="overflow-hidden dashboard-bg"
     :class="standalone ? 'pa-5 fill-height' : 'pa-0'"
-    :style="standalone ? {} : { height: 'calc(100vh - 300px)', minHeight: '480px' }"
+    :style="standalone ? {} : { minHeight: '480px' }"
   >
-    <div class="d-flex flex-column w-100 h-100">
+    <div class="d-flex flex-column w-100" :class="{ 'h-100': standalone }">
 
       <!-- Toolbar -->
       <div class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
@@ -74,7 +82,16 @@
            md breakpoint the two stop competing for one narrow column and become
            one surface at a time: the list until a request is picked, the detail
            with a way back after. -->
-      <div class="d-flex flex-grow-1 gap-4 overflow-hidden" :class="twoUp ? 'flex-row' : 'flex-column'" style="min-height: 0;">
+      <!-- overflow-hidden/min-height:0 only apply standalone: that pairing is
+           what bounds this row to the root container's fixed height and
+           forces the list/detail panes below to scroll internally instead of
+           growing — exactly what standalone=false must not do (see the root
+           v-container's own comment above). -->
+      <div
+        class="d-flex flex-grow-1 gap-4"
+        :class="[twoUp ? 'flex-row' : 'flex-column', standalone ? 'overflow-hidden' : '']"
+        :style="standalone ? 'min-height: 0;' : ''"
+      >
 
         <!-- LEFT: request list -->
         <v-card
@@ -160,7 +177,10 @@
 
           <v-divider></v-divider>
 
-          <div class="flex-grow-1 overflow-y-auto">
+          <!-- Scrolls only standalone. Embedded, the page itself scrolls —
+               see the root v-container comment — and itemsPerPage below
+               already bounds how many rows this ever holds at once. -->
+          <div class="flex-grow-1" :class="{ 'overflow-y-auto': standalone }">
             <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
 
             <div v-else-if="!pagedRequests.length" class="text-center text-caption text-medium-emphasis py-10">
@@ -301,7 +321,12 @@
                  scrollbar here — that is pre-existing overflow-y-auto
                  behavior this change did not alter, and real admin remarks
                  are short operational notes, not thousands of characters. -->
-            <div class="overflow-y-auto pa-6">
+            <!-- Scrolls only standalone, same reasoning as the list's own
+                 scroll region above. Embedded, this grows to its natural
+                 content height and the footer below follows directly after
+                 it in normal page flow rather than in its own clipped
+                 region. -->
+            <div class="pa-6" :class="{ 'overflow-y-auto': standalone }">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <v-row class="detail-group">
@@ -1172,7 +1197,16 @@ const page = ref(1)
 const ROW_HEIGHT = 73
 const LIST_CHROME = 348
 
+// windowHeight only means "room this list has to fill" in the standalone
+// case, where this component owns the whole viewport-height container it is
+// measured against. Embedded (standalone=false) the page scrolls instead —
+// see the root v-container's comment — so a fixed page size matching Trip
+// Logs' own v-data-table (:items-per-page="10" in ConductionRequestView.vue)
+// is the right number here, not a window-height measurement with no
+// relationship to this component's actual, unbounded-by-design height.
 const itemsPerPage = computed(() => {
+  if (!props.standalone) return 10
+
   const rowsFit = Math.floor((windowHeight.value - LIST_CHROME) / ROW_HEIGHT)
   return Math.min(20, Math.max(5, rowsFit))
 })
