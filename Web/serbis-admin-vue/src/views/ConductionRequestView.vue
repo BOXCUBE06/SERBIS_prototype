@@ -21,7 +21,7 @@
 
     <v-window v-model="activeTab">
       <v-window-item value="bookings">
-        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" />
+        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
       </v-window-item>
 
       <v-window-item value="trip-logs">
@@ -370,6 +370,37 @@
               <v-textarea v-model="tripLog.form.others" label="Others" variant="outlined" density="comfortable" rows="2"></v-textarea>
             </v-col>
           </v-row>
+
+          <!-- The one personnel role this dialog can edit — see
+               ConductionRequestController::tripLog(). A stub created by
+               Approve & Dispatch (C5's bridge) always starts with none,
+               and a driver is required before this request can resolve. -->
+          <div class="d-flex align-center justify-space-between mb-1">
+            <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Drivers</span>
+            <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addTripDriver">
+              Add driver
+            </v-btn>
+          </div>
+          <div
+            v-for="(_n, idx) in tripLog.form.drivers"
+            :key="idx"
+            class="d-flex align-center gap-2 mb-2"
+          >
+            <v-text-field
+              v-model="tripLog.form.drivers[idx]"
+              :label="`Driver ${idx + 1}`"
+              variant="outlined"
+              density="compact"
+              hide-details
+            ></v-text-field>
+            <v-btn
+              icon="mdi-close"
+              variant="text"
+              size="small"
+              :aria-label="`Remove driver ${idx + 1}`"
+              @click="removeTripDriver(idx)"
+            ></v-btn>
+          </div>
         </v-card-text>
         <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
@@ -551,6 +582,20 @@ const handleDispatchBooking = (booking) => {
   openCreate(booking)
 }
 
+// Fired by the Bookings tab's "Open Trip Record" button (C5's bridge — a
+// Responding row's stub, created at Approve & Dispatch). Refetches first:
+// the stub may have been created moments ago by this same click chain, and
+// `items` is this view's own copy, last loaded independently of whatever
+// ServiceRequestQueue.vue just did.
+const handleOpenTripRecord = async (conductionRequestId) => {
+  if (!conductionRequestId) return
+  await fetchData()
+  const record = items.value.find(i => i.conduction_request_id === conductionRequestId)
+  if (!record) return
+  activeTab.value = 'trip-logs'
+  openTripLog(record)
+}
+
 const addPerson = (field) => { createDialog.value.form[field].push('') }
 const removePerson = (field, idx) => { createDialog.value.form[field].splice(idx, 1) }
 
@@ -597,7 +642,13 @@ const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.ro
 const emptyTripLogForm = () => ({
   departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
+  // The one personnel role this dialog can edit — see the validation
+  // comment on ConductionRequestController::tripLog(). A stub created by
+  // C5's bridge (openTripRecord below) always starts with none.
+  drivers: [''],
 })
+const addTripDriver = () => { tripLog.value.form.drivers.push('') }
+const removeTripDriver = (idx) => { tripLog.value.form.drivers.splice(idx, 1) }
 const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
 
 // The button that opens the dialog and the dialog's own title read the same
@@ -629,6 +680,10 @@ const openTripLog = (record) => {
       odometer_start: record.odometer_start,
       odometer_end: record.odometer_end,
       others: record.others || '',
+      drivers: (() => {
+        const names = (record.people || []).filter(p => p.role === 'driver').map(p => p.name)
+        return names.length ? names : ['']
+      })(),
     },
   }
 }
@@ -684,6 +739,7 @@ const submitTripLog = async () => {
       odometer_start: form.odometer_start === '' ? null : form.odometer_start,
       odometer_end: form.odometer_end === '' ? null : form.odometer_end,
       others: form.others || null,
+      drivers: form.drivers,
     }
     const id = tripLog.value.target.conduction_request_id
     const res = await fetch(`${API_BASE}/conduction-requests/${id}/trip-log`, {

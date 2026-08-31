@@ -77,10 +77,13 @@ class ServiceRequestController extends Controller
    public function adminIndex()
     {
         // Added 'resident.barangay'
-        $requests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle'])
+        // conductionRequests.people: C5's bridge — the Bookings queue's
+        // Responding row needs its linked trip record (and who is driving
+        // it) without a second round trip per row.
+        $requests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people'])
             ->latest()
             ->get();
-            
+
         return response()->json(['data' => $requests]);
     }
 
@@ -870,23 +873,109 @@ class ServiceRequestController extends Controller
             'internal_notes' => 'nullable|string|max:1000',
         ]);
 
+        $ambulanceServiceId = $this->ambulanceServiceId();
+        $isAmbulanceRequest = $ambulanceServiceId !== null && $serviceRequest->service_id === $ambulanceServiceId;
+
+        // The bridge's other half (docs/dispatch-audit.md finding 1): the
+        // instant path could always reach Resolved with zero rows in
+        // tbl_conduction_requests. Checked before the transaction below so a
+        // rejection is a clean 422, not a status flip followed by an error.
+        if ($isAmbulanceRequest && ($validated['status'] ?? null) === 'Resolved') {
+            $trip = $serviceRequest->conductionRequests()->latest('conduction_request_id')->first();
+            $missing = [];
+
+            if (!$trip) {
+                $missing[] = 'a trip record — approve the dispatch again to create one';
+            } else {
+                if (!$trip->arrived_destination_at) {
+                    $missing[] = 'arrival time';
+                }
+                if ($trip->odometer_start === null) {
+                    $missing[] = 'odometer at departure';
+                }
+                if ($trip->odometer_end === null) {
+                    $missing[] = 'odometer on return';
+                }
+                if (!$trip->drivers()->exists()) {
+                    $missing[] = 'a driver';
+                }
+            }
+
+            if ($missing) {
+                throw ValidationException::withMessages([
+                    'status' => 'Cannot resolve — missing '.implode(', ', $missing).'.',
+                ]);
+            }
+        }
+
         // Captured before update() overwrites status: rejecting a booking is
         // the case this endpoint notifies for (the panel's older, unscheduled
         // Pending -> Disapproved flow is not "a booking" and stays silent).
         $wasBookingRejection = $serviceRequest->scheduled_at !== null
             && ($validated['status'] ?? null) === 'Disapproved';
 
-        DB::transaction(function () use ($serviceRequest, $validated) {
+        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
             $serviceRequest->update($validated);
+
+            // The bridge itself: this is the one place the instant path ever
+            // transitions to Responding, so it is the one place that can
+            // guarantee a linked trip record exists from here on. Guarded on
+            // conductionRequests()->exists() so re-approving (a vehicle swap,
+            // say) never creates a second one next to a trip already in
+            // progress.
+            if ($isAmbulanceRequest
+                && ($validated['status'] ?? null) === 'Responding'
+                && !$serviceRequest->conductionRequests()->exists()
+            ) {
+                $this->createConductionStub($serviceRequest);
+            }
         });
 
         if ($wasBookingRejection) {
             $this->notifyResident($serviceRequest, $this->rejectionMessage((string) $validated['remarks']));
         }
 
-        return response()->json($serviceRequest->fresh(['vehicle']));
+        return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
+    }
+
+    /**
+     * The stub C5 creates the moment an ambulance request goes Responding.
+     * Filled from whatever the request already has — C3's structured columns
+     * when the walk-in form supplied them, the account's own contact — and
+     * the same honest placeholders AmbulanceFormData already writes into
+     * `description` when a mobile submission leaves a field blank, so a
+     * gap here reads the same way a gap already did. patient_name,
+     * patient_address, patient_contact_number, medical_diagnosis, origin and
+     * destination are the six columns NOT NULL at the database level
+     * (docs/dispatch-audit.md finding 7) — every other trip field is filled
+     * in later, by hand, while the crew is actually out.
+     */
+    private function createConductionStub(ServiceRequest $serviceRequest): void
+    {
+        $serviceRequest->loadMissing('resident');
+
+        $patientName = $serviceRequest->patient_name
+            ?: ($serviceRequest->resident
+                ? trim("{$serviceRequest->resident->first_name} {$serviceRequest->resident->last_name}")
+                : $serviceRequest->walk_in_name)
+            ?: 'Not specified';
+
+        $contactNumber = $serviceRequest->resident?->phone_number
+            ?: $serviceRequest->walk_in_contact_number
+            ?: 'See resident profile';
+
+        \App\Models\ConductionRequest::create([
+            'service_request_id' => $serviceRequest->request_id,
+            'vehicle_id' => $serviceRequest->vehicle_id,
+            'patient_name' => $patientName,
+            'patient_address' => $serviceRequest->patient_address ?: 'Address not specified',
+            'patient_contact_number' => $contactNumber,
+            'medical_diagnosis' => $serviceRequest->condition_notes ?: 'Not described',
+            'origin' => $serviceRequest->pickup_location ?: 'Address not specified',
+            'destination' => $serviceRequest->destination ?: 'destination not specified',
+        ]);
     }
 
     /**

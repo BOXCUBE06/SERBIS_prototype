@@ -142,6 +142,14 @@ class ConductionRequestController extends Controller
             'odometer_start' => 'sometimes|nullable|integer|min:0',
             'odometer_end' => 'sometimes|nullable|integer|min:0',
             'others' => 'sometimes|nullable|string|max:5000',
+            // Only drivers, not authorized_passengers/patient_relatives —
+            // ServiceRequestController's resolution gate only ever needs one
+            // of the three, and a stub created by C5's bridge (see
+            // createConductionStub) has none of them yet. Passengers and
+            // relatives stay create-time-only for now; this is the one this
+            // form has an actual reason to edit after the fact.
+            'drivers' => 'sometimes|array',
+            'drivers.*' => 'nullable|string|max:255',
         ]);
 
         // Naive checkpoint strings are office local, not UTC. Read under
@@ -225,6 +233,28 @@ class ConductionRequestController extends Controller
             if ($checkpoints[$i]['at']->lt($checkpoints[$i - 1]['at'])) {
                 throw ValidationException::withMessages([
                     $checkpoints[$i]['field'] => "{$checkpoints[$i]['label']} cannot be earlier than {$checkpoints[$i - 1]['label']}.",
+                ]);
+            }
+        }
+
+        // Replaces the role wholesale rather than diffing — same approach
+        // store() takes for all three roles at creation, just scoped to one
+        // role here since this is the only one this endpoint ever touches.
+        if (array_key_exists('drivers', $validated)) {
+            $conductionRequest->people()->where('role', 'driver')->delete();
+
+            $position = 0;
+            foreach ($validated['drivers'] as $name) {
+                $name = trim((string) $name);
+                if ($name === '') {
+                    continue;
+                }
+
+                ConductionRequestPerson::create([
+                    'conduction_request_id' => $conductionRequest->conduction_request_id,
+                    'role' => 'driver',
+                    'name' => $name,
+                    'position' => $position++,
                 ]);
             }
         }

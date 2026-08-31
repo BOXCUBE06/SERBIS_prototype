@@ -173,6 +173,58 @@ class ConductionRequestTest extends TestCase
     }
 
     /**
+     * C5's bridge (ServiceRequestController::createConductionStub) creates a
+     * trip record with no personnel at all — a driver is only ever known
+     * once the crew is assigned, not at approval time. This is the one
+     * place that gap can be closed after the fact.
+     */
+    public function test_trip_log_can_set_drivers_on_a_stub_with_none(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['drivers' => []]));
+        $this->assertSame(0, $conductionRequest->drivers()->count());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'drivers' => ['Rico Santos'],
+        ])->assertOk();
+
+        $this->assertSame(['Rico Santos'], $conductionRequest->drivers()->pluck('name')->all());
+    }
+
+    public function test_trip_log_replaces_drivers_rather_than_appending(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+        \App\Models\ConductionRequestPerson::create([
+            'conduction_request_id' => $conductionRequest->conduction_request_id,
+            'role' => 'driver', 'name' => 'Pedro Santos', 'position' => 0,
+        ]);
+        $this->assertSame(1, $conductionRequest->drivers()->count());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'drivers' => ['Rico Santos', 'Ben Cruz'],
+        ])->assertOk();
+
+        $this->assertSame(
+            ['Rico Santos', 'Ben Cruz'],
+            $conductionRequest->drivers()->pluck('name')->all(),
+        );
+    }
+
+    public function test_trip_log_without_a_drivers_key_leaves_existing_drivers_alone(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+        \App\Models\ConductionRequestPerson::create([
+            'conduction_request_id' => $conductionRequest->conduction_request_id,
+            'role' => 'driver', 'name' => 'Pedro Santos', 'position' => 0,
+        ]);
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'odometer_start' => 500,
+        ])->assertOk();
+
+        $this->assertSame(['Pedro Santos'], $conductionRequest->drivers()->pluck('name')->all());
+    }
+
+    /**
      * The admin panel's <input type="datetime-local"> can only ever send a
      * naive string — that is not a defect to fix, but the day some caller
      * starts sending an offset instead should be visible, not assumed. Both

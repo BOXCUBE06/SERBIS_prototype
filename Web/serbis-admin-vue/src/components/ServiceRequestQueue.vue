@@ -416,6 +416,39 @@
                 </v-alert>
               </div>
 
+              <!-- The trip record C5 creates the moment this request went
+                   Responding (ServiceRequestController::createConductionStub)
+                   — surfaced here rather than rebuilt here: "Open Trip
+                   Record" jumps to the Trip Logs tab's own dialog, which
+                   already has every field (checkpoints, odometer, drivers,
+                   passengers, relatives) rather than a second, thinner copy
+                   of the same form living in this panel. Resolving is
+                   refused server-side without an arrival time, both
+                   odometer readings and a driver — the error surfaces
+                   through the alert above the fields, same as any other
+                   apiError, naming exactly what's missing. -->
+              <div v-if="scope === 'ambulance'" class="detail-group">
+                <v-alert type="warning" variant="tonal" border="start" rounded="lg">
+                  <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
+                  <template v-if="respondingTrip">
+                    <div class="text-body-2">
+                      {{ tripDriverNames || 'No driver recorded yet' }}
+                      <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
+                    </div>
+                    <div class="text-caption text-medium-emphasis mb-2">
+                      Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
+                    </div>
+                    <v-btn
+                      variant="outlined" size="small" class="text-none font-weight-bold"
+                      @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
+                    >Open Trip Record</v-btn>
+                  </template>
+                  <div v-else class="text-body-2">
+                    No trip record found for this request — Mark as Resolved will explain what's missing.
+                  </div>
+                </v-alert>
+              </div>
+
               <!-- Staff-only scratch pad. Deliberately never pre-fills the
                    approve/decline dialog below (reasonDialog) — that field
                    goes to the requester, this one never does, and the two
@@ -1093,7 +1126,7 @@ const props = defineProps({
 // board sits inside a tab on the same page as the trip-log form, so the
 // parent just switches tabs and opens its own create dialog prefilled from
 // this booking, rather than the old /conduction-requests?dispatch=<id> hop.
-const emit = defineEmits(['dispatch-booking'])
+const emit = defineEmits(['dispatch-booking', 'open-trip-record'])
 
 const route = useRoute()
 
@@ -1325,6 +1358,17 @@ const confirmReason = () => {
   formData.value.remarks = trimmed
   return updateStatus(kind === 'approve' ? 'Responding' : 'Disapproved')
 }
+
+// C5's bridge: adminIndex() eager-loads conductionRequests.people, so the
+// stub created at Approve & Dispatch is already sitting on the row by the
+// time this renders — no second round trip. `?.[0]` rather than a find: one
+// service request has at most one trip in practice (createConductionStub is
+// guarded on conductionRequests()->exists()), and the relation has no other
+// row to prefer.
+const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
+const tripDriverNames = computed(() =>
+  (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
+)
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
 // photo of the scene. Both live on the private disk and both are served only by
@@ -1776,8 +1820,14 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     })
 
     if (!res.ok) {
-      const errData = await res.json()
-      throw new Error(errData.message || 'Failed to update request')
+      const errData = await res.json().catch(() => ({}))
+      // C5's resolution gate answers with a specific ValidationException
+      // message ("Cannot resolve — missing arrival time, ...") in
+      // errors.status, not in the generic top-level `message` Laravel
+      // sends for a validation failure ("The given data was invalid.").
+      // Same errors-first pattern submitWalkIn/submitCreate already use.
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to update request')
     }
 
     // The vehicle's own status used to be flipped here, by a second request.
