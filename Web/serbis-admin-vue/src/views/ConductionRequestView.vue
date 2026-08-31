@@ -171,11 +171,11 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div>
             <span class="text-h6 font-weight-bold text-high-emphasis">Ambulance Trip Record</span>
-            <!-- Prefilled fields came from the booking's own description, a
-                 best-effort read — nothing here is locked, so this is a note
-                 to the operator, not a guarantee. -->
+            <!-- Prefilled from the booking's own structured columns
+                 (ServiceRequestController::adminStore()) — nothing here is
+                 locked, so this is a note to the operator, not a guarantee. -->
             <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis">
-              Dispatching booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
+              Linked to booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
             </div>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
@@ -184,6 +184,23 @@
           <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
 
           <v-form ref="createForm">
+            <!-- C6: the one way this form ever links to a booking, whether
+                 reached by typing here or by the Dispatch button (which just
+                 pre-selects this same field — see openCreate). Left empty on
+                 purpose is the legitimate walk-up-emergency case: a trip
+                 record with no booking behind it at all. -->
+            <v-autocomplete
+              :model-value="createDialog.form.service_request_id"
+              @update:model-value="onLinkBooking"
+              :items="bookingOptions"
+              label="Link to approved service request (optional)"
+              placeholder="Search by name or date"
+              variant="outlined"
+              density="comfortable"
+              clearable
+              class="mb-4"
+            ></v-autocomplete>
+
             <h3 class="section-title">Patient</h3>
             <v-row dense>
               <v-col cols="12" sm="8">
@@ -525,6 +542,39 @@ const rowProps = ({ item }) => ({
   },
 })
 
+// C6: the create dialog's own "Link to approved service request" search —
+// same source ServiceRequestQueue.vue reads, fetched independently here
+// since that component keeps its own list private. Same exact-code match
+// as its AMBULANCE_SERVICE_CODE (duplicated rather than shared — see the
+// OFFICE_TIMEZONE precedent in ServiceRequestController).
+const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
+const bookings = ref([])
+const fetchBookings = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() })
+    if (!res.ok) return
+    const data = await res.json()
+    bookings.value = (data.data || data).filter(r => r.service?.code === AMBULANCE_SERVICE_CODE)
+  } catch {
+    // The create dialog just shows nothing to link — filing a trip record
+    // standalone still works, which is the case this must never block.
+  }
+}
+
+// A booking is linkable once it is an approved, scheduled dispatch with no
+// trip filed against it yet — exactly what the Dispatch button already
+// targets (see handleDispatchBooking). Excludes Pending: C5's bridge means
+// an instant approval already has its own stub the moment it exists, so
+// there is nothing left here for a search to find.
+const linkableBookings = computed(() => bookings.value.filter(r =>
+  r.status === 'Booked' && r.vehicle_id && !(r.conduction_requests || []).length
+))
+const bookingLabel = (r) => {
+  const who = r.resident ? `${r.resident.first_name} ${r.resident.last_name}` : (r.walk_in_name || 'Walk-in')
+  return `${who} — ${fmtDateTime(r.scheduled_at)}`
+}
+const bookingOptions = computed(() => linkableBookings.value.map(r => ({ title: bookingLabel(r), value: r.request_id })))
+
 // Create dialog
 const emptyCreateForm = () => ({
   // Set only when this dialog was opened by dispatching an approved booking
@@ -552,24 +602,43 @@ const createForm = ref(null)
 // existed, simply has these columns null: the fields come up blank, same as
 // the old parser's own fallback, and staff types them in from the paper
 // form same as any other new request.
+// C6: one prefill implementation, reached two ways — the Dispatch button
+// below and the create dialog's own "Link to approved service request"
+// autocomplete. Structural, not parsed out of prose: the contact number is
+// the booking's own resident/walk-in contact, whichever it was filed under.
+const applyBooking = (booking, form = createDialog.value.form) => {
+  form.patient_name = booking.patient_name || ''
+  form.patient_address = booking.patient_address || ''
+  form.origin = booking.pickup_location || ''
+  form.destination = booking.destination || ''
+  form.medical_diagnosis = booking.condition_notes || ''
+  form.patient_contact_number = booking.resident?.phone_number || booking.walk_in_contact_number || ''
+  form.service_request_id = booking.request_id
+  form.vehicle_id = booking.vehicle_id ?? null
+}
+
 const openCreate = (booking = null) => {
   apiError.value = ''
   const form = emptyCreateForm()
-
-  if (booking) {
-    form.patient_name = booking.patient_name || ''
-    form.patient_address = booking.patient_address || ''
-    form.origin = booking.pickup_location || ''
-    form.destination = booking.destination || ''
-    form.medical_diagnosis = booking.condition_notes || ''
-    // Structural, not parsed out of prose: the contact this booking was
-    // filed under, whether that is an account's own number or a walk-in's.
-    form.patient_contact_number = booking.resident?.phone_number || booking.walk_in_contact_number || ''
-    form.service_request_id = booking.request_id
-    form.vehicle_id = booking.vehicle_id ?? null
-  }
-
+  if (booking) applyBooking(booking, form)
   createDialog.value = { open: true, form }
+  // Background refresh for the autocomplete's own options, not for this
+  // booking — that one is already in hand and applied synchronously above,
+  // so there is no dialog-opens-then-fields-pop-in flash to wait out.
+  fetchBookings()
+}
+
+// Fired by the create dialog's own "Link to approved service request"
+// autocomplete. Clearing it (id undefined) only drops the linkage — it does
+// not blank fields staff may already have typed, since the standalone,
+// no-booking case is exactly what clearing this field means to choose.
+const onLinkBooking = (id) => {
+  if (!id) {
+    createDialog.value.form.service_request_id = null
+    return
+  }
+  const booking = linkableBookings.value.find(r => r.request_id === id)
+  if (booking) applyBooking(booking)
 }
 
 // Fired by the Bookings tab's "Dispatch" button (ServiceRequestQueue,
