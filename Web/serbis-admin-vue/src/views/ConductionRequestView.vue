@@ -19,7 +19,12 @@
       <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
     </v-tabs>
 
-    <v-window v-model="activeTab">
+    <!-- overflow:hidden is v-window's own base style, there to clip the
+         slide transition between tabs — it also clips the Bookings tab's
+         sticky action footer (ServiceRequestQueue.vue), the same class of
+         problem the detail card's own overflow-hidden was for the same
+         reason. Overridden below, scoped to just this page's v-window. -->
+    <v-window v-model="activeTab" class="ambulance-tab-window">
       <v-window-item value="bookings">
         <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
       </v-window-item>
@@ -929,6 +934,17 @@ onMounted(fetchData)
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .page-header { margin-bottom: 28px; }
+
+/* See the template comment on v-window. Sticky positioning cannot travel
+   past an ancestor whose overflow is anything but visible, and v-window
+   sets its own to hidden for the slide transition -- this loses that clip
+   only during a tab switch (the transition briefly not being cropped at the
+   window's edge), which is a non-issue: the two tabs are the same width and
+   nothing in either one is wide enough to visibly overshoot during the
+   ~300ms animation. */
+.ambulance-tab-window {
+  overflow: visible;
+}
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
 .filter-field { width: 240px; max-width: 100%; }
 @media (max-width: 599px) {

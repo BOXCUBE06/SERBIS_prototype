@@ -9,8 +9,8 @@
        redesign, impeccable review 2026-08-31, item 2). -->
   <v-container
     fluid
-    class="overflow-hidden dashboard-bg"
-    :class="standalone ? 'pa-5 fill-height' : 'pa-0'"
+    class="dashboard-bg"
+    :class="[standalone ? 'pa-5 fill-height overflow-hidden' : 'pa-0']"
     :style="standalone ? {} : { minHeight: '480px' }"
   >
     <div class="d-flex flex-column w-100" :class="{ 'h-100': standalone }">
@@ -266,11 +266,20 @@
         </v-card>
 
         <!-- RIGHT: detail panel -->
+        <!-- overflow-hidden dropped standalone=false: position:sticky on the
+             action footer below needs an unbroken chain of overflow:visible
+             ancestors up to the shell's own scrolling container, or the
+             sticky footer silently stops sticking (a well-known CSS trap —
+             any ancestor's overflow other than visible caps how far a sticky
+             descendant can travel). Rounded="xl" still clips fine: nothing
+             inside this card paints its own square-edged background out to
+             the card boundary. -->
         <v-card
           v-if="twoUp || selectedRequest"
           elevation="0"
           rounded="xl"
-          class="soft-card d-flex flex-column overflow-hidden flex-grow-1"
+          class="soft-card d-flex flex-column flex-grow-1"
+          :class="standalone ? 'overflow-hidden' : 'detail-card--unbounded'"
         >
           <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
             <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
@@ -325,8 +334,16 @@
                  scroll region above. Embedded, this grows to its natural
                  content height and the footer below follows directly after
                  it in normal page flow rather than in its own clipped
-                 region. -->
-            <div class="pa-6" :class="{ 'overflow-y-auto': standalone }">
+                 region. detail-content--reserve-footer adds bottom padding
+                 matching the sticky footer's own height (see its CSS) --
+                 without it, the sticky footer visually floats on top of
+                 whatever content is scrolled to that position while the
+                 page scrolls past it, covering the last few form fields
+                 mid-scroll rather than only once they're actually done. -->
+            <div
+              class="pa-6"
+              :class="standalone ? 'overflow-y-auto' : (showActions ? 'detail-content--reserve-footer' : '')"
+            >
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <v-row class="detail-group">
@@ -502,8 +519,20 @@
               </div>
             </div>
 
-            <v-divider v-if="showActions"></v-divider>
-            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3 flex-wrap" style="flex-shrink: 0;">
+            <!-- Standalone keeps the plain divider: that layout already shows
+                 this footer without scrolling (own bounded height, content
+                 scrolls internally above it). Embedded, there is no internal
+                 scroll for it to sit safely outside of any more (see item 2),
+                 so it needs to be the thing that stays on screen instead —
+                 sticky, not a static divider, which would just scroll away
+                 with everything above it. -->
+            <v-divider v-if="showActions && standalone"></v-divider>
+            <div
+              v-if="showActions"
+              class="d-flex justify-end align-center pa-4 gap-3 flex-wrap"
+              :class="{ 'action-footer--sticky bg-surface': !standalone }"
+              :style="standalone ? 'flex-shrink: 0;' : ''"
+            >
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
                 <!-- The unit and the button it unlocks now sit in one row. They
                      used to be a scroll apart — the picker was a card up in the
@@ -2249,6 +2278,42 @@ onUnmounted(releaseAttachments)
 .soft-card {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
+}
+
+/* Vuetify's own .v-card rule sets overflow:hidden as a base component
+   style, at the same specificity as the plain "overflow-hidden" utility
+   class this replaces standalone=false — removing just the utility class
+   (tried first) did nothing, since the component style still won. This
+   named class exists solely to sit later in the cascade and override it,
+   which is what actually lets the sticky footer below travel beyond the
+   card's own box instead of being clipped at its edge. */
+.detail-card--unbounded {
+  overflow: visible;
+}
+
+/* Embedded-only (standalone=false). Same border token .soft-card and
+   .trip-row already use, standing in for the plain v-divider this replaces —
+   a sticky element's own static-position sibling divider does not travel
+   with it once stuck, so the boundary line has to live on the sticky
+   element itself. bg-surface (applied alongside this class, see the
+   template) keeps scrolled-past content from showing through once this
+   detaches from normal flow. */
+.action-footer--sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+
+/* 96px: the tallest single-line footer measured (Pending's vehicle-info +
+   Select Vehicle + Disapprove + Approve & Dispatch, 81px) plus headroom for
+   flex-wrap pushing a busy footer onto two lines on a narrower viewport --
+   reserves that much extra bottom space so the sticky footer above never
+   floats over the last field mid-scroll, only once the content genuinely
+   ends. Approximate on purpose: exactly matching every footer variant's
+   real height would need JS measurement for a cosmetic-only concern. */
+.detail-content--reserve-footer {
+  padding-bottom: 96px !important;
 }
 
 .subtle-surface {
