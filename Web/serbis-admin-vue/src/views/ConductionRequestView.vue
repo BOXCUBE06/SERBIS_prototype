@@ -26,11 +26,15 @@
          reason. Overridden below, scoped to just this page's v-window. -->
     <v-window v-model="activeTab" class="ambulance-tab-window">
       <v-window-item value="bookings">
-        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
+        <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
       </v-window-item>
 
       <v-window-item value="trip-logs">
-        <div class="d-flex justify-end mb-4">
+        <!-- mb-4→mb-3 and .filter-bar's own margin below, tightened to
+             match: a handful of rows sitting under generous spacing tuned
+             for a page expecting far more content read as excess dead
+             space above a mostly-empty table (item 7). -->
+        <div class="d-flex justify-end mb-3">
           <v-btn
             color="primary"
             variant="flat"
@@ -347,13 +351,24 @@
             border="start"
             class="mb-4"
           >
-            <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
-            <div class="text-body-2">
-              Booking #{{ selected.service_request_id }}
-              <template v-if="selected.service_request?.scheduled_at">
-                — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
-              </template>
-              <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+            <div class="d-flex align-center justify-space-between gap-3 flex-wrap">
+              <div>
+                <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
+                <div class="text-body-2">
+                  Booking #{{ selected.service_request_id }}
+                  <template v-if="selected.service_request?.scheduled_at">
+                    — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
+                  </template>
+                  <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+                </div>
+              </div>
+              <!-- The reverse of Bookings' own "Open Trip Record" (item 7 of
+                   the layout redesign) — this link used to only go one way.
+                   Text was there to read, nothing to click. -->
+              <v-btn
+                variant="outlined" size="small" class="text-none font-weight-bold flex-shrink-0"
+                @click="openBooking(selected.service_request_id)"
+              >Open Booking</v-btn>
             </div>
           </v-alert>
 
@@ -477,7 +492,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
@@ -754,6 +769,22 @@ const handleOpenTripRecord = async (conductionRequestId) => {
   openTripLog(record)
 }
 
+// The reverse of the above — a trip's own detail dialog linking back to the
+// booking that dispatched it (item 7 of the layout redesign: this link only
+// ever went one way before). ServiceRequestQueue.vue keeps its own request
+// list and selection state private, so this reaches in via defineExpose
+// rather than duplicating that state here. v-window keeps both tabs
+// mounted (confirmed while building the sticky footer for item 1 — inactive
+// tab content is hidden, not destroyed), so the ref is already valid the
+// instant the tab switches; nextTick is just to let that switch paint
+// before the child's own scroll/selection work runs.
+const bookingsQueueRef = ref(null)
+const openBooking = (requestId) => {
+  detail.value.open = false
+  activeTab.value = 'bookings'
+  nextTick(() => bookingsQueueRef.value?.selectRequestById(requestId))
+}
+
 const addPerson = (field) => { createDialog.value.form[field].push('') }
 const removePerson = (field, idx) => { createDialog.value.form[field].splice(idx, 1) }
 
@@ -948,7 +979,7 @@ onMounted(fetchData)
 .ambulance-tab-window {
   overflow: visible;
 }
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
 .filter-field { width: 240px; max-width: 100%; }
 @media (max-width: 599px) {
   .filter-field { flex: 1 1 100%; width: 100%; }
@@ -1056,6 +1087,16 @@ onMounted(fetchData)
 .v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
+/* VDataTableFooter has no prop to drop just the items-per-page selector —
+   an empty itemsPerPageOptions array (tried first) still renders the
+   select, just with nothing in it, which opens to a blank dropdown on
+   click. Real trip-log volume here is a handful of rows; offering a
+   page-size picker for a dataset smaller than any of its own options (10)
+   was the "large empty page" complaint (item 7). Plain prev/next plus the
+   "x-y of z" count is what's left. */
+.conduction-table :deep(.v-data-table-footer__items-per-page) {
+  display: none;
+}
 .row-number {
   font-size: 0.95rem;
   font-weight: 700;

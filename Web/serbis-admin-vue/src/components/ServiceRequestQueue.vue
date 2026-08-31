@@ -1886,6 +1886,24 @@ const selectRequest = (item, resetRemarks = true) => {
   loadAttachments(item)
 }
 
+// Called from ConductionRequestView.vue's Trip Logs tab ("Open Booking" on a
+// linked trip's detail dialog) — the reverse of dispatch-booking/
+// open-trip-record above, so the link between a trip and its booking goes
+// both ways instead of only out from Bookings (item 7 of the layout
+// redesign). Resets search and the status filter so the target row is
+// actually visible in the list too, not just the detail panel — a
+// lingering filter from whatever the operator was doing on this tab before
+// would otherwise hide the row while still selecting it underneath.
+const selectRequestById = (id) => {
+  const item = requests.value.find((r) => itemId(r) === id)
+  if (!item) return
+  search.value = ''
+  filters.status = 'All'
+  selectRequest(item)
+}
+
+defineExpose({ selectRequestById })
+
 const selectVehicle = (id) => {
   formData.value.vehicle_id = id
   vehicleModal.value.isOpen = false
