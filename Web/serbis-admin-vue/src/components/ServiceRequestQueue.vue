@@ -1188,6 +1188,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import { statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
@@ -1806,7 +1807,9 @@ const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, 
 // the row's left border are driven by the same string and cannot disagree.
 // Replaces getStatusColor: a Vuetify colour name only ever fed v-chip, whose
 // tonal variant is what made these unreadable in the first place.
-const statusPillClass = (status) => `pill-${(status || 'Pending').toLowerCase()}`
+// Moved to composables/adminUi.ts — item 5 of the layout redesign needs the
+// exact same mapping in ConductionRequestView.vue too, for the shared
+// status vocabulary between the two tabs.
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${getToken()}`,

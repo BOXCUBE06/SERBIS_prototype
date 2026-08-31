@@ -99,3 +99,36 @@ export function fmtDateTime(value: string | Date | null | undefined): string {
     minute: '2-digit',
   })
 }
+
+/**
+ * The Ambulance Dispatch Requests page described one lifecycle two ways:
+ * ConductionRequest::getTripStatusAttribute()'s 'Not dispatched' / 'In
+ * transit' / 'Completed' for a trip's own checkpoints, versus
+ * ServiceRequest's Pending/Booked/Responding/Resolved/Disapproved/Cancelled
+ * for the request it was filed against. A trip's three states are a strict
+ * subset of the request vocabulary — a trip never starts Pending and never
+ * resolves to Disapproved or Cancelled, those are pre-dispatch outcomes —
+ * so this maps onto the existing words rather than inventing a fourth
+ * wording and a fourth color scale (impeccable review 2026-08-31, item 5).
+ */
+const TRIP_STATUS_TO_SHARED_STATUS: Record<string, string> = {
+  'Not dispatched': 'Booked',
+  'In transit': 'Responding',
+  'Completed': 'Resolved',
+}
+
+/** A raw trip_status value, in the shared Bookings-tab vocabulary. */
+export function sharedStatusLabel(tripStatus: string): string {
+  return TRIP_STATUS_TO_SHARED_STATUS[tripStatus] || tripStatus
+}
+
+/**
+ * The CSS class for ServiceRequestQueue.vue's .status-pill system, given a
+ * status already in the shared vocabulary above. Trivial on its own, but
+ * shared here rather than left as ServiceRequestQueue's private one-liner
+ * now that ConductionRequestView.vue needs the exact same mapping to render
+ * the same badge language.
+ */
+export function statusPillClass(status: string | null | undefined): string {
+  return `pill-${(status || 'Pending').toLowerCase()}`
+}

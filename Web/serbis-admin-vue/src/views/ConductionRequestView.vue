@@ -117,9 +117,9 @@
             </template>
 
             <template v-slot:item.trip_status="{ item }">
-              <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
-                {{ item.trip_status }}
-              </v-chip>
+              <span class="status-pill status-pill--sm" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
+                {{ sharedStatusLabel(item.trip_status) }}
+              </span>
             </template>
 
             <template v-slot:item.created_at="{ item }">
@@ -161,9 +161,9 @@
                 </div>
                 <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
               </div>
-              <v-chip size="small" variant="flat" class="font-weight-bold ml-2 flex-shrink-0" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
-                {{ item.trip_status }}
-              </v-chip>
+              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
+                {{ sharedStatusLabel(item.trip_status) }}
+              </span>
             </div>
           </div>
         </v-card>
@@ -329,9 +329,9 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(selected.trip_status), color: '#FFFFFF' }">
-              {{ selected.trip_status }}
-            </v-chip>
+            <span class="status-pill" :class="statusPillClass(sharedStatusLabel(selected.trip_status))">
+              {{ sharedStatusLabel(selected.trip_status) }}
+            </span>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
@@ -481,6 +481,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
+import { sharedStatusLabel, statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 
@@ -494,13 +495,16 @@ const activeTab = ref('bookings')
 const { lgAndUp } = useDisplay()
 const isWide = lgAndUp
 
-const STATUS_ACCENT = {
-  'Not dispatched': '#B45309',
-  'In transit': '#0E7490',
-  'Completed': '#297A67',
-}
 const ALL_STATUS = 'All'
-const statusOptions = [ALL_STATUS, 'Not dispatched', 'In transit', 'Completed']
+// Filtering still compares the raw trip_status value (matchesStatus below is
+// unchanged) -- only the label shown in the dropdown and on every badge
+// moves to the shared vocabulary (adminUi.ts's sharedStatusLabel), so the
+// underlying value stays exactly what the API sends.
+const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
+const statusOptions = [
+  { title: ALL_STATUS, value: ALL_STATUS },
+  ...RAW_TRIP_STATUSES.map((s) => ({ title: sharedStatusLabel(s), value: s })),
+]
 
 const personnelGroups = [
   { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver' },
@@ -534,7 +538,6 @@ const headers = [
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
-const statusAccent = (status) => STATUS_ACCENT[status] || '#64748B'
 // One path for every timestamp on this page — created_at and all four trip log
 // checkpoints. The checkpoints used to arrive without an offset, which new Date()
 // reads as local time; that happened to render correctly only because the column
@@ -977,9 +980,10 @@ onMounted(fetchData)
 
 /* Mirrors ServiceRequestQueue.vue's .soft-card/.request-row exactly (same
    values, not shared — scoped styles don't cross files here, same pattern
-   already used for OFFICE_TIMEZONE and STATUS_ACCENT-style constants
-   elsewhere in this codebase) so the two tabs read as one container language
-   below the breakpoint instead of two different products sharing a tab bar. */
+   already used for OFFICE_TIMEZONE elsewhere in this codebase, and for this
+   file's own .status-pill/.pill-* further down) so the two tabs read as one
+   container language below the breakpoint instead of two different
+   products sharing a tab bar. */
 .soft-card {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
@@ -998,6 +1002,58 @@ onMounted(fetchData)
   box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
   background-color: rgba(var(--v-theme-primary), 0.06);
 }
+
+/* Mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly (same
+   values, not shared — scoped styles don't cross files here, same pattern
+   as .soft-card/.trip-row above) — item 5 of the layout redesign: a trip's
+   status now speaks the same badge language as a booking's, via
+   sharedStatusLabel() in adminUi.ts, so the two need the same CSS to render
+   identically, not just the same words. Only pill-booked/-responding/
+   -resolved are ever reachable from a trip_status here, but the full set is
+   kept for exact parity with the source. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.status-pill--sm {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.pill-pending {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
+.pill-booked {
+  background: rgba(109, 40, 217, 0.14);
+  color: #5B21B6;
+}
+.pill-responding {
+  background: rgba(var(--v-theme-info), 0.14);
+  color: rgb(var(--v-theme-info-strong));
+}
+.pill-resolved {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success-strong));
+}
+.pill-disapproved,
+.pill-cancelled {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error-strong));
+}
+.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
+.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
+.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
+.v-theme--dark .pill-disapproved,
+.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
 .row-number {
