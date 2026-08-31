@@ -89,6 +89,29 @@ class ConductionRequestController extends Controller
             'override_reason' => 'nullable|string|max:500',
         ]);
 
+        // A hard block, unlike the vehicle conflict below: a booking maps to
+        // at most one trip, full stop, so there is no override_reason for
+        // this one — the ServiceRequestQueue "Dispatch" button used to stay
+        // clickable after the trip it dispatched was already filed, and a
+        // second click filed a second trip against the same booking with
+        // nothing to stop it. The Booked→Responding flip in this same method
+        // now closes the button-side hole; this closes it at the one place
+        // every caller (button, and the create dialog's own booking search)
+        // actually goes through.
+        if (!empty($validated['service_request_id'])) {
+            $existingTrip = ConductionRequest::where('service_request_id', $validated['service_request_id'])->first();
+
+            if ($existingTrip) {
+                return response()->json([
+                    'message' => 'This booking already has a trip record filed against it.',
+                    'conflict' => [
+                        'conduction_request_id' => $existingTrip->conduction_request_id,
+                        'destination' => $existingTrip->destination,
+                    ],
+                ], 409);
+            }
+        }
+
         // A soft block, not a hard one: a unit already out on a trip is
         // exactly the kind of thing a genuine emergency sometimes has to
         // reassign anyway (see the plan's own reasoning — a system that

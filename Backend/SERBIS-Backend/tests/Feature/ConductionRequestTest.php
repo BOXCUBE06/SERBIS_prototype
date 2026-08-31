@@ -110,6 +110,58 @@ class ConductionRequestTest extends TestCase
     }
 
     /**
+     * The bug this guards: the "Dispatch" button on an already-approved
+     * Booked request stayed clickable after the first trip was filed
+     * (nothing flipped the request's status), so a second click filed a
+     * second conduction request against the same booking with nothing to
+     * stop it. Unlike the vehicle conflict below, there is no override —
+     * a booking maps to at most one trip.
+     */
+    public function test_filing_a_second_trip_against_an_already_dispatched_booking_is_refused(): void
+    {
+        $service = Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        $booking = ServiceRequest::create([
+            'service_id' => $service->service_id,
+            'vehicle_id' => $vehicle->vehicle_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+        ]);
+
+        $firstTrip = ConductionRequest::create($this->payload([
+            'service_request_id' => $booking->request_id,
+            'destination' => 'Echague District Hospital',
+        ]));
+
+        $response = $this->postJson('/api/conduction-requests', $this->payload([
+            'service_request_id' => $booking->request_id,
+        ]));
+
+        $response->assertStatus(409);
+        $this->assertSame('Echague District Hospital', $response->json('conflict.destination'));
+        $this->assertSame($firstTrip->conduction_request_id, $response->json('conflict.conduction_request_id'));
+        $this->assertSame(1, ConductionRequest::count());
+    }
+
+    /**
+     * The common case, per store()'s own comment: a walk-in trip with no
+     * prior booking. Filing several of these must never trip the new guard
+     * — it only ever compares non-null service_request_id values.
+     */
+    public function test_multiple_walk_in_trips_with_no_booking_are_unaffected_by_the_duplicate_guard(): void
+    {
+        $this->postJson('/api/conduction-requests', $this->payload())->assertStatus(201);
+        $this->postJson('/api/conduction-requests', $this->payload())->assertStatus(201);
+
+        $this->assertSame(2, ConductionRequest::count());
+    }
+
+    /**
      * C7 of docs/dispatch-audit.md's remediation plan: the standalone form's
      * free-text `vehicle` field never checked whether the unit was already
      * out. A picker bound to vehicle_id makes that checkable — this is the
