@@ -6,6 +6,7 @@ use App\Models\Vehicle;
 use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
 use App\Services\PhilSms;
+use App\Traits\ResolvesUploadDisks;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class ServiceRequestController extends Controller
 {
+    use ResolvesUploadDisks;
+
     public function __construct(private readonly AmbulanceAvailability $availability)
     {
     }
@@ -89,7 +92,7 @@ class ServiceRequestController extends Controller
     {
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string',
+            'description' => 'required|string|max:5000',
             'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
             // Optional second upload: a photo of the site, for the road-clearing
             // form. Not required, because most requests are filed in conditions
@@ -267,14 +270,6 @@ class ServiceRequestController extends Controller
         }
     }
 
-    // Government ID scans live wherever the deployment says. On a host with an
-    // ephemeral filesystem this must be object storage, or every scan is lost
-    // at the next deploy while the request rows that reference them survive.
-    private static function privateDisk(): string
-    {
-        return config('filesystems.uploads.private');
-    }
-
     /**
      * Decides who may read a private file, scoping the query in place for a
      * resident. Returns null to proceed, or the response to send instead.
@@ -338,7 +333,7 @@ class ServiceRequestController extends Controller
             'walk_in_name' => 'required_without:resident_id|nullable|string|max:255',
             'walk_in_contact_number' => 'required_without:resident_id|nullable|string|max:32',
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string',
+            'description' => 'required|string|max:5000',
             'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
@@ -470,7 +465,12 @@ class ServiceRequestController extends Controller
         return response()->json($serviceRequest);
     }
 
-    public function validId(Request $request, $id)
+    // Shared by validId() and sitePhoto() below — same ownership guard, same
+    // 404-instead-of-403 so a non-owner's request cannot even be confirmed to
+    // exist, same existence check against the disk. $column is always a
+    // hardcoded literal at the two call sites, never request input, so the
+    // dynamic property access introduces no injection surface.
+    private function servePrivateColumn(Request $request, $id, string $column, string $label)
     {
         $query = ServiceRequest::query();
 
@@ -482,15 +482,20 @@ class ServiceRequestController extends Controller
 
         // 404 rather than 403 for a non-owner, so the response does not disclose
         // that the request exists.
-        if (!$serviceRequest || !$serviceRequest->valid_id) {
+        if (!$serviceRequest || !$serviceRequest->{$column}) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
-        if (!Storage::disk(self::privateDisk())->exists($serviceRequest->valid_id)) {
-            return response()->json(['message' => 'Valid ID file not found'], 404);
+        if (!Storage::disk(self::privateDisk())->exists($serviceRequest->{$column})) {
+            return response()->json(['message' => "{$label} file not found"], 404);
         }
 
-        return Storage::disk(self::privateDisk())->response($serviceRequest->valid_id);
+        return Storage::disk(self::privateDisk())->response($serviceRequest->{$column});
+    }
+
+    public function validId(Request $request, $id)
+    {
+        return $this->servePrivateColumn($request, $id, 'valid_id', 'Valid ID');
     }
 
     // Same ownership rules as validId(). A site photo is less sensitive than a
@@ -498,25 +503,7 @@ class ServiceRequestController extends Controller
     // it by public URL would be the mistake audit #8 already cost us once.
     public function sitePhoto(Request $request, $id)
     {
-        $query = ServiceRequest::query();
-
-        if ($refusal = $this->guardPrivateFile($request, $query)) {
-            return $refusal;
-        }
-
-        $serviceRequest = $query->find($id);
-
-        // 404 rather than 403 for a non-owner, so the response does not disclose
-        // that the request exists.
-        if (!$serviceRequest || !$serviceRequest->site_photo) {
-            return response()->json(['message' => 'Service request not found'], 404);
-        }
-
-        if (!Storage::disk(self::privateDisk())->exists($serviceRequest->site_photo)) {
-            return response()->json(['message' => 'Site photo file not found'], 404);
-        }
-
-        return Storage::disk(self::privateDisk())->response($serviceRequest->site_photo);
+        return $this->servePrivateColumn($request, $id, 'site_photo', 'Site photo');
     }
 
     // Resident-facing cancel, kept separate from update() on purpose: update() is
@@ -778,7 +765,7 @@ class ServiceRequestController extends Controller
             'resident_id' => 'sometimes|required|integer|exists:tbl_residents,resident_id',
             'service_id' => 'sometimes|required|integer|exists:tbl_services,service_id',
             'processed_by' => 'nullable|integer|exists:tbl_user,admin_id',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
             // 'valid_id' is deliberately not accepted here. It is a storage path written
             // only by store(); allowing it to be set would let any admin point it at an
             // arbitrary file for validId() to stream back.

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Resident;
+use App\Services\PhilSms;
+use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -10,13 +12,7 @@ use Illuminate\Validation\Rules\Password;
 
 class ResidentController extends Controller
 {
-    // Profile photos live on the same private disk as the ID scans, for the same
-    // reason: on a host with an ephemeral filesystem a local disk loses every
-    // file at the next deploy while the rows that reference them survive.
-    private static function privateDisk(): string
-    {
-        return config('filesystems.uploads.private');
-    }
+    use ResolvesUploadDisks;
 
     public function index()
     {
@@ -35,10 +31,10 @@ class ResidentController extends Controller
         // until a feature reads the column, then a hole that predates it.
         $validated = $request->validate([
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
-            'first_name' => 'required|string',
-            'middle_name' => 'nullable|string',
-            'last_name' => 'required|string',
-            'phone_number' => 'required|string',
+            'first_name' => 'required|string|max:255',
+            'middle_name' => 'nullable|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             'email_address' => 'required|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
             // The column carries exactly three values and 'required|string'
@@ -92,10 +88,10 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name' => 'required|string',
-            'middle_name' => 'nullable|string',
-            'last_name' => 'required|string',
-            'phone_number' => 'required|string',
+            'first_name' => 'required|string|max:255',
+            'middle_name' => 'nullable|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             'email_address' => 'required|email|unique:tbl_residents,email_address,' . $id . ',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
             // Same three values as store(). Both admin write paths reach this

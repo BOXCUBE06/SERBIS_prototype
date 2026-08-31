@@ -591,6 +591,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
@@ -856,7 +857,10 @@ const resultSummary = computed(() => {
   return `Showing ${shown} of ${total} ${noun} requests`
 })
 
-const initials = (r) => `${r?.first_name?.charAt(0) || ''}${r?.last_name?.charAt(0) || ''}`
+// Now uppercased, matching every other avatar in the panel — the same
+// resident used to read "MS" on Residents and "mS" here. See
+// audits/code-duplication.md Finding 6.
+const initials = (r) => computeInitials(r)
 // Names a record for an accessible label: who and what, which is what tells
 // two otherwise identical "Approve" buttons apart.
 const cardLabel = (item) =>

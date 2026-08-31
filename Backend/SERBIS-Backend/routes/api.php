@@ -29,7 +29,7 @@ Route::post('/resident/login/verify', [AuthController::class, 'residentLoginVeri
 Route::post('/resident/login/resend', [AuthController::class, 'resendLoginCode'])->middleware('throttle:mfa');
 // Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
 // the submitted email address as well as the IP.
-Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
 // Second half of registration. Both share the 'login' limiter: verify is a
 // guessing target (a million codes, six digits) and resend sends real mail.
 // The per-account cooldown in resendVerificationCode is the other half of that

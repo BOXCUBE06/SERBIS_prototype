@@ -19,7 +19,7 @@ class ServiceController extends Controller
     {
         $validated = $request->validate([
             'service_name' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
         ]);
 
         $service = Service::create($validated);
@@ -48,7 +48,7 @@ class ServiceController extends Controller
 
         $validated = $request->validate([
             'service_name' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
         ]);
 
         $service->update($validated);

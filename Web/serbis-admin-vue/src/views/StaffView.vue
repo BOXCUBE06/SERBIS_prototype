@@ -254,6 +254,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
@@ -290,8 +291,7 @@ const getHeaders = () => ({
 const idOf = (item) => item?.admin_id ?? item?.id ?? null
 const isSelf = (item) => idOf(item) !== null && idOf(item) === myId.value
 const fullName = (item) => (item ? `${item.first_name} ${item.last_name}` : '')
-const initials = (item) =>
-  `${(item.first_name || '?').charAt(0)}${(item.last_name || '').charAt(0)}`.toUpperCase()
+const initials = (item) => computeInitials(item)
 
 // Mirrors the server: an account is closed only when it says Inactive. A null
 // status is a row someone inserted by hand, which is still the recovery path.

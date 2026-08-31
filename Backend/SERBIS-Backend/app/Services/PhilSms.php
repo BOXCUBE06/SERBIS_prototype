@@ -17,6 +17,15 @@ class PhilSms
 {
     private const ENDPOINT = 'https://dashboard.philsms.com/api/v3/sms/send';
 
+    // The three shapes normalize() accepts below, spelled out so a validation
+    // rule can require a real mobile number at the point of entry instead of
+    // accepting anything and failing silently later. 2026-08-31: the user
+    // decided registration and every admin-facing edit MUST require a real
+    // mobile number — no landline/undialable fallback going forward. Existing
+    // rows written before this rule still fall back to email in
+    // AuthController::smsIsUsableFor(); this only closes the door on new ones.
+    public const PHONE_REGEX = '/^(09\d{9}|639\d{9}|\+639\d{9})$/';
+
     /**
      * @param  array<int, string>  $numbers
      */

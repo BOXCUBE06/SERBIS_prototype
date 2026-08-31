@@ -22,12 +22,15 @@ use App\Traits\TracksHistory; // 1. Import the trait
 // from GET /api/residents/{id}/photo.
 #[Table('tbl_residents', key: 'resident_id')]
 #[Fillable(['barangay_id', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'sms_opt_in', 'email_address'])]
-// The three verification_* columns are Hidden and not Fillable. The code is a
-// short-lived credential that grants an account, and tbl_residents is what the
-// admin panel's Users view serialises — a code in that payload is a code any
-// signed-in admin can read off the wire and use. `email_verified_at` stays
-// visible: the panel shows it as a badge, and it discloses nothing.
-#[Hidden(['password', 'remember_token', 'photo', 'verification_code', 'verification_code_expires_at', 'verification_code_sent_at'])]
+// There is no verification code on this model. A code is a short-lived
+// credential that grants an account, and tbl_residents is what the admin
+// panel's Users view serialises — a code in that payload is a code any
+// signed-in admin can read off the wire and use. It lives in the cache instead,
+// alongside the rest of the pending sign-up; see AuthController::register().
+// `email_verified_at` stays visible: the panel shows it as a badge, and it
+// discloses nothing. A row only exists once it is set, so it is never null on
+// anything registered through the app.
+#[Hidden(['password', 'remember_token', 'photo'])]
 #[Appends(['has_photo', 'is_email_verified'])]
 class Resident extends Authenticatable
 {
@@ -44,13 +47,8 @@ class Resident extends Authenticatable
         // updated_at does not, and logging it copies a path we keep off every
         // response into a second table.
         'photo',
-        // A code hash plus its clock. Logging them copies a credential into a
-        // second table and fills the Logs page with a row every time anyone
-        // taps resend. `email_verified_at` is deliberately NOT here — an
-        // address becoming verified is exactly the change worth recording.
-        'verification_code',
-        'verification_code_expires_at',
-        'verification_code_sent_at',
+        // `email_verified_at` is deliberately NOT ignored — an address
+        // becoming verified is exactly the change worth recording.
     ];
 
     /**
@@ -61,14 +59,16 @@ class Resident extends Authenticatable
     protected $casts = [
         'sms_opt_in' => 'boolean',
         'email_verified_at' => 'datetime',
-        'verification_code_expires_at' => 'datetime',
-        'verification_code_sent_at' => 'datetime',
     ];
 
-    /** How long an issued code stays usable. */
+    /**
+     * How long an issued code stays usable, and how long a resident must wait
+     * before asking for another. Both are read by AuthController, which owns
+     * the codes themselves — they live here because the mail template and the
+     * MFA login path need the same two numbers.
+     */
     public const CODE_TTL_MINUTES = 15;
 
-    /** How long a resident must wait before asking for another code. */
     public const RESEND_COOLDOWN_SECONDS = 60;
 
     public function hasVerifiedEmail(): bool
@@ -77,63 +77,14 @@ class Resident extends Authenticatable
     }
 
     /**
-     * Issues a fresh six-digit code and returns the plain text one, which is the
-     * only moment it exists in readable form. Stored hashed, so a leaked database
-     * row cannot be turned back into a working code.
-     *
-     * Issuing replaces any outstanding code rather than adding a second valid
-     * one — otherwise every resend widens the window instead of moving it.
-     */
-    public function issueVerificationCode(): string
-    {
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        $this->forceFill([
-            'verification_code' => Hash::make($code),
-            'verification_code_expires_at' => now()->addMinutes(self::CODE_TTL_MINUTES),
-            'verification_code_sent_at' => now(),
-        ])->save();
-
-        return $code;
-    }
-
-    public function verificationCodeMatches(string $code): bool
-    {
-        if ($this->verification_code === null || $this->verification_code_expires_at === null) {
-            return false;
-        }
-
-        if ($this->verification_code_expires_at->isPast()) {
-            return false;
-        }
-
-        return Hash::check($code, $this->verification_code);
-    }
-
-    /**
-     * Clears the code as it marks the address verified. Leaving a spent code in
-     * the row means a second use of the same digits still matches until it
-     * happens to expire.
+     * Only reached for a row that already exists and has not been claimed: one
+     * written before the sign-up flow moved into the cache, or one the admin
+     * panel created. A self-registration is inserted with the timestamp already
+     * set, because its row is not created until the code comes back.
      */
     public function markEmailAsVerified(): void
     {
-        $this->forceFill([
-            'email_verified_at' => now(),
-            'verification_code' => null,
-            'verification_code_expires_at' => null,
-            'verification_code_sent_at' => null,
-        ])->save();
-    }
-
-    public function secondsUntilResendAllowed(): int
-    {
-        if ($this->verification_code_sent_at === null) {
-            return 0;
-        }
-
-        $ready = $this->verification_code_sent_at->addSeconds(self::RESEND_COOLDOWN_SECONDS);
-
-        return $ready->isFuture() ? now()->diffInSeconds($ready) : 0;
+        $this->forceFill(['email_verified_at' => now()])->save();
     }
 
     public function getIsEmailVerifiedAttribute(): bool

@@ -33,7 +33,7 @@ class EquipmentController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'item_name' => 'required|string|unique:tbl_equipments,item_name',
+            'item_name' => 'required|string|max:255|unique:tbl_equipments,item_name',
             'total_quantity' => 'required|integer|min:1',
             'status' => 'required|in:Available,Unavailable',
         ]);
@@ -67,9 +67,10 @@ class EquipmentController extends Controller
 
         $validated = $request->validate([
             'item_name' => [
-                'sometimes', 
-                'required', 
+                'sometimes',
+                'required',
                 'string',
+                'max:255',
                 Rule::unique('tbl_equipments')->ignore($equipment->equipment_id, 'equipment_id')
             ],
             'total_quantity' => 'sometimes|required|integer|min:0',
