@@ -37,14 +37,19 @@
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
           Log Service Request
         </v-btn>
-        <!-- Same outlined-primary treatment as Export below: a supporting
-             view, not the page's one decision. Ambulance-only: the fleet
+        <!-- text, not outlined: outlined still reads as a near-peer of Log
+             Service Request's filled button sitting right beside it — two
+             bordered, bold-labelled buttons plus a filled one is still three
+             things competing, just with one slightly heavier. Only Log
+             Service Request is the page's actual decision; this and Export
+             below are both supporting views, so both drop to the lightest
+             tier (item 8 of the layout redesign). Ambulance-only: the fleet
              schedule this shows has nothing to say about a road-clearing
              crew's queue. -->
         <v-btn
           v-if="scope === 'ambulance'"
           color="primary"
-          variant="outlined"
+          variant="text"
           class="text-none font-weight-bold px-6"
           height="40"
           @click="openDayView"
@@ -56,23 +61,24 @@
              behind it, styled larger than either real action on the page. It
              now writes what the operator is actually looking at: the current
              filter and search, in the order shown, not all 30 rows. -->
-        <!-- Outlined, not filled. Squinting at this screen, the heaviest mark
-             on it was this button: a near-black secondary fill on a pale page,
-             out-weighing "Approve & Dispatch" from the other end of the layout.
-             Exporting a CSV is a side errand. Same outlined-primary treatment
-             the vehicle picker uses, so the panel has one language for a
-             supporting action and keeps the fill for the decision. -->
+        <!-- text, not outlined — see the comment on Ambulance Day View
+             above; the same reasoning demoted this from its earlier
+             outlined treatment. Count dropped from the label itself (item
+             8): "Export 29" read as a fourth number competing with the
+             page's own counts (bookings total, per-status chips) for
+             attention it didn't need — the sr-only text and the disabled
+             "Nothing to export" state already say what it does without it. -->
         <v-btn
           color="primary"
-          variant="outlined"
+          variant="text"
           class="text-none font-weight-bold px-6"
           height="40"
           :disabled="!filteredAndSortedRequests.length"
           @click="exportCsv"
         >
           <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ filteredAndSortedRequests.length ? `Export ${filteredAndSortedRequests.length}` : 'Nothing to export' }}
-          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">requests as CSV</span>
+          {{ filteredAndSortedRequests.length ? 'Export' : 'Nothing to export' }}
+          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
         </v-btn>
         </div>
       </div>
