@@ -23,3 +23,7 @@
 # Working cache the design-review tooling keeps between runs. PRODUCT.md, the
 # one durable thing it writes, is tracked; this is not.
 /.impeccable/
+
+# Agent guidance for this repo. Local aid, not a deliverable -- kept out of
+# what the panel reviews.
+/CLAUDE.md
