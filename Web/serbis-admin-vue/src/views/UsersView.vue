@@ -422,6 +422,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
+import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import {
@@ -547,7 +548,7 @@ const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 292px)' : '60v
 
 const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-const initials = (r) => `${(r.first_name || '').charAt(0)}${(r.last_name || '').charAt(0)}`.toUpperCase()
+const initials = (r) => computeInitials(r)
 const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
 
 const liveMessage = ref('')

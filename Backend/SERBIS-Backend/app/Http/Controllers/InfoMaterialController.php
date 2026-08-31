@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\InfoMaterial;
+use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class InfoMaterialController extends Controller
 {
+    use ResolvesUploadDisks;
+
     public function index()
     {
         $materials = InfoMaterial::orderBy('created_at', 'desc')->get();
@@ -77,11 +80,6 @@ class InfoMaterialController extends Controller
 
     return response()->json(['message' => 'File deleted successfully']);
 }
-
-    private static function publicDisk(): string
-    {
-        return config('filesystems.uploads.public');
-    }
 
     // Rows created before the path shape changed are stored as "storage/<path>",
     // which is a URL fragment rather than a disk path. Strip it so both shapes

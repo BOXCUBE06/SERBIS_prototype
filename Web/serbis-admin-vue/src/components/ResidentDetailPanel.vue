@@ -132,6 +132,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { initials as computeInitials } from '@/composables/adminUi'
 import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   RESIDENT_STATUS,
@@ -182,9 +183,7 @@ watch(
   },
   { immediate: true },
 )
-const initials = computed(() =>
-  `${(props.resident.first_name || '').charAt(0)}${(props.resident.last_name || '').charAt(0)}`.toUpperCase(),
-)
+const initials = computed(() => computeInitials(props.resident))
 const barangayName = computed(
   () => props.resident.barangay?.barangay_name || props.resident.barangay_name || 'N/A',
 )

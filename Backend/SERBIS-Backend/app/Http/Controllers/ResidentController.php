@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Resident;
 use App\Services\PhilSms;
+use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -11,13 +12,7 @@ use Illuminate\Validation\Rules\Password;
 
 class ResidentController extends Controller
 {
-    // Profile photos live on the same private disk as the ID scans, for the same
-    // reason: on a host with an ephemeral filesystem a local disk loses every
-    // file at the next deploy while the rows that reference them survive.
-    private static function privateDisk(): string
-    {
-        return config('filesystems.uploads.private');
-    }
+    use ResolvesUploadDisks;
 
     public function index()
     {
