@@ -89,7 +89,7 @@ class ServiceRequestController extends Controller
     {
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string',
+            'description' => 'required|string|max:5000',
             'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
             // Optional second upload: a photo of the site, for the road-clearing
             // form. Not required, because most requests are filed in conditions
@@ -338,7 +338,7 @@ class ServiceRequestController extends Controller
             'walk_in_name' => 'required_without:resident_id|nullable|string|max:255',
             'walk_in_contact_number' => 'required_without:resident_id|nullable|string|max:32',
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string',
+            'description' => 'required|string|max:5000',
             'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
@@ -778,7 +778,7 @@ class ServiceRequestController extends Controller
             'resident_id' => 'sometimes|required|integer|exists:tbl_residents,resident_id',
             'service_id' => 'sometimes|required|integer|exists:tbl_services,service_id',
             'processed_by' => 'nullable|integer|exists:tbl_user,admin_id',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
             // 'valid_id' is deliberately not accepted here. It is a storage path written
             // only by store(); allowing it to be set would let any admin point it at an
             // arbitrary file for validId() to stream back.

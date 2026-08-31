@@ -26,7 +26,7 @@ class AppServiceProvider extends ServiceProvider
     {
         self::assertDebugIsOffInProduction();
 
-        // Auth throttling for /register, /admin/login, /resident/login.
+        // Auth throttling for /admin/login, /resident/login.
         //
         // Keyed by submitted email first so one account under attack cannot lock out
         // everyone else behind the same IP. The looser IP limit is a fallback that still
@@ -39,6 +39,32 @@ class AppServiceProvider extends ServiceProvider
             return [
                 Limit::perMinute(5)->by('email:'.$email.'|'.$request->ip()),
                 Limit::perMinute(20)->by('ip:'.$request->ip()),
+            ];
+        });
+
+        // /register only. It used to share 'login' above, which is the wrong
+        // shape for it: 'login' keys its tight 5/min limit on the submitted
+        // email, but every registration attempt submits a NEW email by
+        // definition, so that key never repeats and the tight limit never
+        // engages — only the loose 20/min-per-IP fallback ever applied, and
+        // being per-minute it resets forever, so a script sitting at 20/min
+        // could create an unbounded number of accounts over a day. Each
+        // registration also creates a `tbl_residents` row immediately and, if
+        // the phone number is a real one, bills a real PhilSMS send before
+        // anyone confirms the address — so both the row-spam and the billing
+        // exposure scale with how long a script is left running, not with any
+        // single burst. The per-hour tier is the actual fix; per-minute stays
+        // as a fast-fail for a tight loop. Same CGNAT reasoning as 'login'
+        // keeps this IP-only rather than adding an email key that would never
+        // repeat here either.
+        RateLimiter::for('register', function (Request $request) {
+            // Distinct key suffixes per tier: ThrottleRequests builds its cache
+            // key from the limiter name plus this ->by() value alone, with no
+            // regard for decay — two tiers sharing one key would collide onto
+            // the same bucket and count each request against both at once.
+            return [
+                Limit::perMinute(5)->by('ip-burst:'.$request->ip()),
+                Limit::perHour(15)->by('ip-hour:'.$request->ip()),
             ];
         });
 

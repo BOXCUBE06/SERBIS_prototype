@@ -64,7 +64,7 @@ class ConductionRequestController extends Controller
             'patient_sex' => 'nullable|in:male,female',
             'patient_contact_number' => 'required|string|max:32',
             'vehicle' => 'nullable|string|max:255',
-            'medical_diagnosis' => 'required|string',
+            'medical_diagnosis' => 'required|string|max:5000',
             'plate_no' => 'nullable|string|max:32',
             'origin' => 'required|string|max:255',
             'destination' => 'required|string|max:255',
@@ -141,7 +141,7 @@ class ConductionRequestController extends Controller
             'returned_office_at' => 'sometimes|nullable|date',
             'odometer_start' => 'sometimes|nullable|integer|min:0',
             'odometer_end' => 'sometimes|nullable|integer|min:0',
-            'others' => 'sometimes|nullable|string',
+            'others' => 'sometimes|nullable|string|max:5000',
         ]);
 
         // Naive checkpoint strings are office local, not UTC. Read under
