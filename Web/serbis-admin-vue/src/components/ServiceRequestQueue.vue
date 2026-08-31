@@ -1,19 +1,20 @@
 <template>
-  <!-- Embedded (standalone=false) drops the fixed calc(100vh - 300px): that
-       number assumed this component owned a whole route's worth of vertical
-       space below a fixed page chrome, which is not true on the Ambulance
-       Dispatch Requests tab — its own header and tab bar sit above this, at
-       a height this component has no way to know. Forcing a height here
-       anyway is what produced the internal list/detail scrollbars: the page
-       already scrolls, so this must stop competing with it (layout
-       redesign, impeccable review 2026-08-31, item 2). -->
+  <!-- height:100% + overflow-hidden apply either way now: the embedded case
+       (standalone=false, the Ambulance Dispatch Requests tab) used to fall
+       back to a guessed fixed height here because its route scrolled the
+       page underneath it — that route is fixedHeight now too
+       (router/index.ts), so this component's real ancestor chain gives it
+       an actual height to fill, the same way the standalone case already
+       worked. Only the outer padding still differs: pa-5 owns its own
+       margin as a whole route, pa-0 sits flush inside the tab it's
+       embedded in. -->
   <v-container
     fluid
-    class="dashboard-bg"
-    :class="[standalone ? 'pa-5 fill-height overflow-hidden' : 'pa-0']"
-    :style="standalone ? {} : { minHeight: '480px' }"
+    class="dashboard-bg overflow-hidden"
+    :class="[standalone ? 'pa-5' : 'pa-0']"
+    style="height: 100%; min-height: 480px;"
   >
-    <div class="d-flex flex-column w-100" :class="{ 'h-100': standalone }">
+    <div class="d-flex flex-column w-100 h-100">
 
       <!-- Toolbar -->
       <div class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
@@ -88,15 +89,10 @@
            md breakpoint the two stop competing for one narrow column and become
            one surface at a time: the list until a request is picked, the detail
            with a way back after. -->
-      <!-- overflow-hidden/min-height:0 only apply standalone: that pairing is
-           what bounds this row to the root container's fixed height and
-           forces the list/detail panes below to scroll internally instead of
-           growing — exactly what standalone=false must not do (see the root
-           v-container's own comment above). -->
       <div
-        class="d-flex flex-grow-1 gap-4"
-        :class="[twoUp ? 'flex-row' : 'flex-column', standalone ? 'overflow-hidden' : '']"
-        :style="standalone ? 'min-height: 0;' : ''"
+        class="d-flex flex-grow-1 gap-4 overflow-hidden"
+        :class="twoUp ? 'flex-row' : 'flex-column'"
+        style="min-height: 0;"
       >
 
         <!-- LEFT: request list -->
@@ -196,10 +192,7 @@
 
           <v-divider></v-divider>
 
-          <!-- Scrolls only standalone. Embedded, the page itself scrolls —
-               see the root v-container comment — and itemsPerPage below
-               already bounds how many rows this ever holds at once. -->
-          <div class="flex-grow-1" :class="{ 'overflow-y-auto': standalone }">
+          <div class="flex-grow-1 overflow-y-auto">
             <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
 
             <div v-else-if="!pagedRequests.length" class="text-center text-caption text-medium-emphasis py-10">
@@ -292,20 +285,11 @@
         </v-card>
 
         <!-- RIGHT: detail panel -->
-        <!-- overflow-hidden dropped standalone=false: position:sticky on the
-             action footer below needs an unbroken chain of overflow:visible
-             ancestors up to the shell's own scrolling container, or the
-             sticky footer silently stops sticking (a well-known CSS trap —
-             any ancestor's overflow other than visible caps how far a sticky
-             descendant can travel). Rounded="xl" still clips fine: nothing
-             inside this card paints its own square-edged background out to
-             the card boundary. -->
         <v-card
           v-if="twoUp || selectedRequest"
           elevation="0"
           rounded="xl"
-          class="soft-card d-flex flex-column flex-grow-1"
-          :class="standalone ? 'overflow-hidden' : 'detail-card--unbounded'"
+          class="soft-card d-flex flex-column flex-grow-1 overflow-hidden"
         >
           <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
             <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
@@ -356,19 +340,8 @@
                  scrollbar here — that is pre-existing overflow-y-auto
                  behavior this change did not alter, and real admin remarks
                  are short operational notes, not thousands of characters. -->
-            <!-- Scrolls only standalone, same reasoning as the list's own
-                 scroll region above. Embedded, this grows to its natural
-                 content height and the footer below follows directly after
-                 it in normal page flow rather than in its own clipped
-                 region. detail-content--reserve-footer adds bottom padding
-                 matching the sticky footer's own height (see its CSS) --
-                 without it, the sticky footer visually floats on top of
-                 whatever content is scrolled to that position while the
-                 page scrolls past it, covering the last few form fields
-                 mid-scroll rather than only once they're actually done. -->
             <div
-              class="pa-6"
-              :class="standalone ? 'overflow-y-auto' : (showActions ? 'detail-content--reserve-footer' : '')"
+              class="pa-6 overflow-y-auto"
             >
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
@@ -422,7 +395,14 @@
               <div class="detail-group" v-if="attachments.length">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
 
-                <div class="d-flex flex-wrap gap-3">
+                <!-- A flex row is a block box, so it stretches to the full
+                     detail-pane width by default regardless of how many
+                     180px tiles it actually holds -- one attachment left a
+                     measured 746px of empty space beside it (layout
+                     redesign follow-up, item 1). width: fit-content makes
+                     the row's own box only as wide as its tiles need, same
+                     as any other content-sized element here. -->
+                <div class="d-flex flex-wrap gap-3 attachments-row">
                   <div v-for="a in attachments" :key="a.key">
                     <v-skeleton-loader
                       v-if="a.state.loading"
@@ -501,8 +481,12 @@
                    Warning is reserved for what actually needs attention: no
                    trip record at all, or one still open ('Not dispatched' /
                    'In transit'). -->
+              <!-- density="compact" only — same type/variant/border/copy,
+                   just Vuetify's own smaller padding scale, so this card
+                   stops overflowing the now-bounded canvas (layout redesign
+                   follow-up, item 3). -->
               <div v-if="scope === 'ambulance'" class="detail-group">
-                <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg">
+                <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
                   <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
                   <template v-if="respondingTrip">
                     <div class="text-body-2">
@@ -560,19 +544,11 @@
               </div>
             </div>
 
-            <!-- Standalone keeps the plain divider: that layout already shows
-                 this footer without scrolling (own bounded height, content
-                 scrolls internally above it). Embedded, there is no internal
-                 scroll for it to sit safely outside of any more (see item 2),
-                 so it needs to be the thing that stays on screen instead —
-                 sticky, not a static divider, which would just scroll away
-                 with everything above it. -->
-            <v-divider v-if="showActions && standalone"></v-divider>
+            <v-divider v-if="showActions"></v-divider>
             <div
               v-if="showActions"
               class="d-flex justify-end align-center pa-4 gap-3 flex-wrap"
-              :class="{ 'action-footer--sticky bg-surface': !standalone }"
-              :style="standalone ? 'flex-shrink: 0;' : ''"
+              style="flex-shrink: 0;"
             >
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
                 <!-- The unit and the button it unlocks now sit in one row. They
@@ -1268,16 +1244,7 @@ const page = ref(1)
 const ROW_HEIGHT = 73
 const LIST_CHROME = 348
 
-// windowHeight only means "room this list has to fill" in the standalone
-// case, where this component owns the whole viewport-height container it is
-// measured against. Embedded (standalone=false) the page scrolls instead —
-// see the root v-container's comment — so a fixed page size matching Trip
-// Logs' own v-data-table (:items-per-page="10" in ConductionRequestView.vue)
-// is the right number here, not a window-height measurement with no
-// relationship to this component's actual, unbounded-by-design height.
 const itemsPerPage = computed(() => {
-  if (!props.standalone) return 10
-
   const rowsFit = Math.floor((windowHeight.value - LIST_CHROME) / ROW_HEIGHT)
   return Math.min(20, Math.max(5, rowsFit))
 })
@@ -2350,42 +2317,6 @@ onUnmounted(releaseAttachments)
   box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
 }
 
-/* Vuetify's own .v-card rule sets overflow:hidden as a base component
-   style, at the same specificity as the plain "overflow-hidden" utility
-   class this replaces standalone=false — removing just the utility class
-   (tried first) did nothing, since the component style still won. This
-   named class exists solely to sit later in the cascade and override it,
-   which is what actually lets the sticky footer below travel beyond the
-   card's own box instead of being clipped at its edge. */
-.detail-card--unbounded {
-  overflow: visible;
-}
-
-/* Embedded-only (standalone=false). Same border token .soft-card and
-   .trip-row already use, standing in for the plain v-divider this replaces —
-   a sticky element's own static-position sibling divider does not travel
-   with it once stuck, so the boundary line has to live on the sticky
-   element itself. bg-surface (applied alongside this class, see the
-   template) keeps scrolled-past content from showing through once this
-   detaches from normal flow. */
-.action-footer--sticky {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-}
-
-/* 96px: the tallest single-line footer measured (Pending's vehicle-info +
-   Select Vehicle + Disapprove + Approve & Dispatch, 81px) plus headroom for
-   flex-wrap pushing a busy footer onto two lines on a narrower viewport --
-   reserves that much extra bottom space so the sticky footer above never
-   floats over the last field mid-scroll, only once the content genuinely
-   ends. Approximate on purpose: exactly matching every footer variant's
-   real height would need JS measurement for a cosmetic-only concern. */
-.detail-content--reserve-footer {
-  padding-bottom: 96px !important;
-}
-
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
 }
@@ -2509,6 +2440,11 @@ onUnmounted(releaseAttachments)
 
 .attachment-error {
   max-width: 320px;
+}
+
+.attachments-row {
+  width: fit-content;
+  max-width: 100%;
 }
 
 .request-row {
