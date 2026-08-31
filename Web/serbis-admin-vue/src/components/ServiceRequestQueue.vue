@@ -482,8 +482,14 @@
                    odometer readings and a driver — the error surfaces
                    through the alert above the fields, same as any other
                    apiError, naming exactly what's missing. -->
+              <!-- Alert type is state-driven, not fixed warning: a completed
+                   trip (returned_office_at set — trip_status 'Completed') is
+                   the request working as intended, not something to flag.
+                   Warning is reserved for what actually needs attention: no
+                   trip record at all, or one still open ('Not dispatched' /
+                   'In transit'). -->
               <div v-if="scope === 'ambulance'" class="detail-group">
-                <v-alert type="warning" variant="tonal" border="start" rounded="lg">
+                <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg">
                   <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
                   <template v-if="respondingTrip">
                     <div class="text-body-2">
@@ -498,8 +504,17 @@
                       @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
                     >Open Trip Record</v-btn>
                   </template>
-                  <div v-else class="text-body-2">
+                  <!-- "Mark as Resolved will explain what's missing" only
+                       makes sense on Responding — that's the only status
+                       this component ever shows that button on (see the
+                       template branch below). Every other status (Pending,
+                       Booked, terminal) pointed at a control the operator
+                       could not see. -->
+                  <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
                     No trip record found for this request — Mark as Resolved will explain what's missing.
+                  </div>
+                  <div v-else class="text-body-2">
+                    No trip record yet — one is created automatically once this request is dispatched.
                   </div>
                 </v-alert>
               </div>
@@ -1444,6 +1459,14 @@ const confirmReason = () => {
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
+)
+// trip_status is one of ConductionRequest::getTripStatusAttribute()'s three
+// values ('Not dispatched' | 'In transit' | 'Completed'), always present —
+// it's a model $appends, not conditionally selected. Only 'Completed' means
+// the record is actually done; missing entirely, still open, or never
+// started are all the same "needs attention" bucket the warning color is for.
+const tripRecordAlertType = computed(() =>
+  respondingTrip.value?.trip_status === 'Completed' ? 'success' : 'warning'
 )
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
