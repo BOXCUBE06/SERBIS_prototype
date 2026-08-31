@@ -132,7 +132,7 @@ const mainMenu = [
   { to: '/conduction-requests', icon: 'mdi-ambulance', title: 'Ambulance Dispatch Requests' },
   { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
   { to: '/vehicles', icon: 'mdi-ambulance', title: 'Vehicles' },
-  { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Equipment Inventory' },
+  { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Resource Management' },
   { to: '/sms', icon: 'mdi-message-text-fast-outline', title: 'Text Blast (SMS)' }
 ]
 
