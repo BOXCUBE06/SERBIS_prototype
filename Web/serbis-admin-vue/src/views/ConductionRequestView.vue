@@ -6,6 +6,16 @@
        standalone=true path already works. Header and tabs take their
        natural height; v-window gets what's left. -->
   <v-container fluid class="pa-6 bg-background d-flex flex-column" style="height: 100%;">
+    <!-- Right slot used to sit empty -- Bookings' own toolbar buttons lived
+         in a separate row inside ServiceRequestQueue.vue instead, and Trip
+         Logs' "+ Ambulance Trip Record" in one of its own below the filter
+         bar. Both moved here (layout redesign follow-up): one shared header
+         row instead of a header plus a second, mostly-empty button row per
+         tab, reclaiming that row's full height. Bookings' three buttons
+         call back into the child via bookingsQueueRef's exposed actions —
+         see ServiceRequestQueue.vue's own defineExpose — since it still
+         owns that state privately (the same reason "Open Booking" already
+         reaches in via a ref rather than duplicating state here). -->
     <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3" style="flex-shrink: 0;">
       <div>
         <h2 class="text-h5 font-weight-bold text-high-emphasis">Ambulance Dispatch Requests</h2>
@@ -13,6 +23,51 @@
           MDRRMO Conduction Request Form — Echague Rescue EMS
         </div>
       </div>
+
+      <div v-if="activeTab === 'bookings'" class="d-flex align-center gap-3">
+        <v-btn
+          color="secondary"
+          variant="flat"
+          class="text-none font-weight-bold px-6 text-white"
+          height="40"
+          @click="bookingsQueueRef?.openCreateDialog()"
+        >
+          <v-icon start size="small">mdi-account-plus-outline</v-icon>
+          Log Service Request
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="text"
+          class="text-none font-weight-bold px-6"
+          height="40"
+          @click="bookingsQueueRef?.openDayView()"
+        >
+          <v-icon start size="small">mdi-calendar-clock</v-icon>
+          Ambulance Day View
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="text"
+          class="text-none font-weight-bold px-6"
+          height="40"
+          :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
+          @click="bookingsQueueRef?.exportCsv()"
+        >
+          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+          {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
+          <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
+        </v-btn>
+      </div>
+
+      <v-btn
+        v-else-if="activeTab === 'trip-logs'"
+        color="primary"
+        variant="flat"
+        class="text-none font-weight-bold px-6"
+        height="44"
+        prepend-icon="mdi-plus"
+        @click="openCreate()"
+      >Ambulance Trip Record</v-btn>
     </div>
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
@@ -31,21 +86,6 @@
       </v-window-item>
 
       <v-window-item value="trip-logs" class="h-100 d-flex flex-column">
-        <!-- mb-4→mb-3 and .filter-bar's own margin below, tightened to
-             match: a handful of rows sitting under generous spacing tuned
-             for a page expecting far more content read as excess dead
-             space above a mostly-empty table (item 7). -->
-        <div class="d-flex justify-end mb-3" style="flex-shrink: 0;">
-          <v-btn
-            color="primary"
-            variant="flat"
-            class="text-none font-weight-bold px-6"
-            height="44"
-            prepend-icon="mdi-plus"
-            @click="openCreate()"
-          >Ambulance Trip Record</v-btn>
-        </div>
-
         <div v-if="!loadError" class="filter-bar">
           <v-text-field
             v-model="search"
@@ -994,7 +1034,11 @@ onMounted(fetchData)
 <style scoped>
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-.page-header { margin-bottom: 28px; }
+/* 28px→16px: sized for a header that was just a title, sitting above a
+   completely separate button row further down. With the buttons inline in
+   this same row now, that gap to the tabs read as oversized (layout
+   redesign follow-up). */
+.page-header { margin-bottom: 16px; }
 
 /* v-window's own internal wrapper (.v-window__container, the flex row that
    holds every window-item side by side for the slide transition) sizes

@@ -16,8 +16,15 @@
   >
     <div class="d-flex flex-column w-100 h-100">
 
-      <!-- Toolbar -->
-      <div class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
+      <!-- Toolbar. Standalone only (Resident Requests, which owns its whole
+           route and has no page-level header of its own to put this in).
+           Embedded (the Ambulance Dispatch Requests tab), ConductionRequestView.vue
+           renders this same button group in its own page-header instead, via
+           the exposed actions below -- this row would otherwise duplicate
+           that page's title and waste a whole row's height on redundant
+           "Ambulance Bookings" text the page-header's own title already
+           covers (layout redesign follow-up). -->
+      <div v-if="standalone" class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
         <div>
           <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">{{ scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests' }}</h2>
           <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} {{ scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays' }}</div>
@@ -1875,8 +1882,6 @@ const selectRequestById = (id) => {
   selectRequest(item)
 }
 
-defineExpose({ selectRequestById })
-
 const selectVehicle = (id) => {
   formData.value.vehicle_id = id
   vehicleModal.value.isOpen = false
@@ -2302,6 +2307,15 @@ watch(search, () => { page.value = 1 })
 
 onMounted(fetchData)
 onUnmounted(releaseAttachments)
+
+// Everything ConductionRequestView.vue's page-header needs to render this
+// component's own toolbar buttons externally when embedded (standalone=
+// false, toolbar hidden above) -- actions plus the one piece of reactive
+// state the Export button's label/disabled state depends on. Grouped at
+// the bottom, after every referenced const's own declaration, since
+// defineExpose runs inline during setup (not deferred like a template) and
+// openDayView in particular is declared well after where this used to sit.
+defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filteredAndSortedRequests })
 </script>
 
 <style scoped>
