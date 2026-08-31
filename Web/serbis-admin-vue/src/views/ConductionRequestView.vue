@@ -19,13 +19,22 @@
       <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
     </v-tabs>
 
-    <v-window v-model="activeTab">
+    <!-- overflow:hidden is v-window's own base style, there to clip the
+         slide transition between tabs — it also clips the Bookings tab's
+         sticky action footer (ServiceRequestQueue.vue), the same class of
+         problem the detail card's own overflow-hidden was for the same
+         reason. Overridden below, scoped to just this page's v-window. -->
+    <v-window v-model="activeTab" class="ambulance-tab-window">
       <v-window-item value="bookings">
-        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
+        <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
       </v-window-item>
 
       <v-window-item value="trip-logs">
-        <div class="d-flex justify-end mb-4">
+        <!-- mb-4→mb-3 and .filter-bar's own margin below, tightened to
+             match: a handful of rows sitting under generous spacing tuned
+             for a page expecting far more content read as excess dead
+             space above a mostly-empty table (item 7). -->
+        <div class="d-flex justify-end mb-3">
           <v-btn
             color="primary"
             variant="flat"
@@ -112,9 +121,9 @@
             </template>
 
             <template v-slot:item.trip_status="{ item }">
-              <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
-                {{ item.trip_status }}
-              </v-chip>
+              <span class="status-pill status-pill--sm" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
+                {{ sharedStatusLabel(item.trip_status) }}
+              </span>
             </template>
 
             <template v-slot:item.created_at="{ item }">
@@ -156,9 +165,9 @@
                 </div>
                 <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
               </div>
-              <v-chip size="small" variant="flat" class="font-weight-bold ml-2 flex-shrink-0" :style="{ backgroundColor: statusAccent(item.trip_status), color: '#FFFFFF' }">
-                {{ item.trip_status }}
-              </v-chip>
+              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
+                {{ sharedStatusLabel(item.trip_status) }}
+              </span>
             </div>
           </div>
         </v-card>
@@ -324,9 +333,9 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <v-chip size="small" variant="flat" class="font-weight-bold" :style="{ backgroundColor: statusAccent(selected.trip_status), color: '#FFFFFF' }">
-              {{ selected.trip_status }}
-            </v-chip>
+            <span class="status-pill" :class="statusPillClass(sharedStatusLabel(selected.trip_status))">
+              {{ sharedStatusLabel(selected.trip_status) }}
+            </span>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
@@ -342,13 +351,24 @@
             border="start"
             class="mb-4"
           >
-            <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
-            <div class="text-body-2">
-              Booking #{{ selected.service_request_id }}
-              <template v-if="selected.service_request?.scheduled_at">
-                — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
-              </template>
-              <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+            <div class="d-flex align-center justify-space-between gap-3 flex-wrap">
+              <div>
+                <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
+                <div class="text-body-2">
+                  Booking #{{ selected.service_request_id }}
+                  <template v-if="selected.service_request?.scheduled_at">
+                    — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
+                  </template>
+                  <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+                </div>
+              </div>
+              <!-- The reverse of Bookings' own "Open Trip Record" (item 7 of
+                   the layout redesign) — this link used to only go one way.
+                   Text was there to read, nothing to click. -->
+              <v-btn
+                variant="outlined" size="small" class="text-none font-weight-bold flex-shrink-0"
+                @click="openBooking(selected.service_request_id)"
+              >Open Booking</v-btn>
             </div>
           </v-alert>
 
@@ -472,10 +492,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
+import { sharedStatusLabel, statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 
@@ -489,13 +510,16 @@ const activeTab = ref('bookings')
 const { lgAndUp } = useDisplay()
 const isWide = lgAndUp
 
-const STATUS_ACCENT = {
-  'Not dispatched': '#B45309',
-  'In transit': '#0E7490',
-  'Completed': '#297A67',
-}
 const ALL_STATUS = 'All'
-const statusOptions = [ALL_STATUS, 'Not dispatched', 'In transit', 'Completed']
+// Filtering still compares the raw trip_status value (matchesStatus below is
+// unchanged) -- only the label shown in the dropdown and on every badge
+// moves to the shared vocabulary (adminUi.ts's sharedStatusLabel), so the
+// underlying value stays exactly what the API sends.
+const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
+const statusOptions = [
+  { title: ALL_STATUS, value: ALL_STATUS },
+  ...RAW_TRIP_STATUSES.map((s) => ({ title: sharedStatusLabel(s), value: s })),
+]
 
 const personnelGroups = [
   { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver' },
@@ -529,7 +553,6 @@ const headers = [
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
-const statusAccent = (status) => STATUS_ACCENT[status] || '#64748B'
 // One path for every timestamp on this page — created_at and all four trip log
 // checkpoints. The checkpoints used to arrive without an offset, which new Date()
 // reads as local time; that happened to render correctly only because the column
@@ -746,6 +769,22 @@ const handleOpenTripRecord = async (conductionRequestId) => {
   openTripLog(record)
 }
 
+// The reverse of the above — a trip's own detail dialog linking back to the
+// booking that dispatched it (item 7 of the layout redesign: this link only
+// ever went one way before). ServiceRequestQueue.vue keeps its own request
+// list and selection state private, so this reaches in via defineExpose
+// rather than duplicating that state here. v-window keeps both tabs
+// mounted (confirmed while building the sticky footer for item 1 — inactive
+// tab content is hidden, not destroyed), so the ref is already valid the
+// instant the tab switches; nextTick is just to let that switch paint
+// before the child's own scroll/selection work runs.
+const bookingsQueueRef = ref(null)
+const openBooking = (requestId) => {
+  detail.value.open = false
+  activeTab.value = 'bookings'
+  nextTick(() => bookingsQueueRef.value?.selectRequestById(requestId))
+}
+
 const addPerson = (field) => { createDialog.value.form[field].push('') }
 const removePerson = (field, idx) => { createDialog.value.form[field].splice(idx, 1) }
 
@@ -929,7 +968,18 @@ onMounted(fetchData)
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .page-header { margin-bottom: 28px; }
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
+
+/* See the template comment on v-window. Sticky positioning cannot travel
+   past an ancestor whose overflow is anything but visible, and v-window
+   sets its own to hidden for the slide transition -- this loses that clip
+   only during a tab switch (the transition briefly not being cropped at the
+   window's edge), which is a non-issue: the two tabs are the same width and
+   nothing in either one is wide enough to visibly overshoot during the
+   ~300ms animation. */
+.ambulance-tab-window {
+  overflow: visible;
+}
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
 .filter-field { width: 240px; max-width: 100%; }
 @media (max-width: 599px) {
   .filter-field { flex: 1 1 100%; width: 100%; }
@@ -961,9 +1011,10 @@ onMounted(fetchData)
 
 /* Mirrors ServiceRequestQueue.vue's .soft-card/.request-row exactly (same
    values, not shared — scoped styles don't cross files here, same pattern
-   already used for OFFICE_TIMEZONE and STATUS_ACCENT-style constants
-   elsewhere in this codebase) so the two tabs read as one container language
-   below the breakpoint instead of two different products sharing a tab bar. */
+   already used for OFFICE_TIMEZONE elsewhere in this codebase, and for this
+   file's own .status-pill/.pill-* further down) so the two tabs read as one
+   container language below the breakpoint instead of two different
+   products sharing a tab bar. */
 .soft-card {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
@@ -983,7 +1034,69 @@ onMounted(fetchData)
   background-color: rgba(var(--v-theme-primary), 0.06);
 }
 
+/* Mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly (same
+   values, not shared — scoped styles don't cross files here, same pattern
+   as .soft-card/.trip-row above) — item 5 of the layout redesign: a trip's
+   status now speaks the same badge language as a booking's, via
+   sharedStatusLabel() in adminUi.ts, so the two need the same CSS to render
+   identically, not just the same words. Only pill-booked/-responding/
+   -resolved are ever reachable from a trip_status here, but the full set is
+   kept for exact parity with the source. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.status-pill--sm {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.pill-pending {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
+.pill-booked {
+  background: rgba(109, 40, 217, 0.14);
+  color: #5B21B6;
+}
+.pill-responding {
+  background: rgba(var(--v-theme-info), 0.14);
+  color: rgb(var(--v-theme-info-strong));
+}
+.pill-resolved {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success-strong));
+}
+.pill-disapproved,
+.pill-cancelled {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error-strong));
+}
+.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
+.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
+.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
+.v-theme--dark .pill-disapproved,
+.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
+
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
+/* VDataTableFooter has no prop to drop just the items-per-page selector —
+   an empty itemsPerPageOptions array (tried first) still renders the
+   select, just with nothing in it, which opens to a blank dropdown on
+   click. Real trip-log volume here is a handful of rows; offering a
+   page-size picker for a dataset smaller than any of its own options (10)
+   was the "large empty page" complaint (item 7). Plain prev/next plus the
+   "x-y of z" count is what's left. */
+.conduction-table :deep(.v-data-table-footer__items-per-page) {
+  display: none;
+}
 .row-number {
   font-size: 0.95rem;
   font-weight: 700;

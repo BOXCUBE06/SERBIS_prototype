@@ -9,8 +9,8 @@
        redesign, impeccable review 2026-08-31, item 2). -->
   <v-container
     fluid
-    class="overflow-hidden dashboard-bg"
-    :class="standalone ? 'pa-5 fill-height' : 'pa-0'"
+    class="dashboard-bg"
+    :class="[standalone ? 'pa-5 fill-height overflow-hidden' : 'pa-0']"
     :style="standalone ? {} : { minHeight: '480px' }"
   >
     <div class="d-flex flex-column w-100" :class="{ 'h-100': standalone }">
@@ -37,14 +37,19 @@
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
           Log Service Request
         </v-btn>
-        <!-- Same outlined-primary treatment as Export below: a supporting
-             view, not the page's one decision. Ambulance-only: the fleet
+        <!-- text, not outlined: outlined still reads as a near-peer of Log
+             Service Request's filled button sitting right beside it — two
+             bordered, bold-labelled buttons plus a filled one is still three
+             things competing, just with one slightly heavier. Only Log
+             Service Request is the page's actual decision; this and Export
+             below are both supporting views, so both drop to the lightest
+             tier (item 8 of the layout redesign). Ambulance-only: the fleet
              schedule this shows has nothing to say about a road-clearing
              crew's queue. -->
         <v-btn
           v-if="scope === 'ambulance'"
           color="primary"
-          variant="outlined"
+          variant="text"
           class="text-none font-weight-bold px-6"
           height="40"
           @click="openDayView"
@@ -56,23 +61,24 @@
              behind it, styled larger than either real action on the page. It
              now writes what the operator is actually looking at: the current
              filter and search, in the order shown, not all 30 rows. -->
-        <!-- Outlined, not filled. Squinting at this screen, the heaviest mark
-             on it was this button: a near-black secondary fill on a pale page,
-             out-weighing "Approve & Dispatch" from the other end of the layout.
-             Exporting a CSV is a side errand. Same outlined-primary treatment
-             the vehicle picker uses, so the panel has one language for a
-             supporting action and keeps the fill for the decision. -->
+        <!-- text, not outlined — see the comment on Ambulance Day View
+             above; the same reasoning demoted this from its earlier
+             outlined treatment. Count dropped from the label itself (item
+             8): "Export 29" read as a fourth number competing with the
+             page's own counts (bookings total, per-status chips) for
+             attention it didn't need — the sr-only text and the disabled
+             "Nothing to export" state already say what it does without it. -->
         <v-btn
           color="primary"
-          variant="outlined"
+          variant="text"
           class="text-none font-weight-bold px-6"
           height="40"
           :disabled="!filteredAndSortedRequests.length"
           @click="exportCsv"
         >
           <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ filteredAndSortedRequests.length ? `Export ${filteredAndSortedRequests.length}` : 'Nothing to export' }}
-          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">requests as CSV</span>
+          {{ filteredAndSortedRequests.length ? 'Export' : 'Nothing to export' }}
+          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
         </v-btn>
         </div>
       </div>
@@ -135,13 +141,26 @@
                  to go with it — it rendered plain grey, telling active from
                  inactive by lightness alone. `mandatory` keeps one always on, so
                  clicking the selected chip cannot clear the filter to nothing. -->
-            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory column>
+            <!-- `column` (dropped) wraps chips to as many rows as it takes —
+                 seven statuses, half of them reading zero most of the time,
+                 wrapped to two rows every time. Without it VChipGroup falls
+                 back to its VSlideGroup base: one row, and if it still
+                 doesn't fit at the rail's narrowest it scrolls horizontally
+                 with its own prev/next arrows rather than wrapping.
+                 status-filter-chip--muted (zero-count, not the active
+                 filter) drops to a plain outline so an all-zero status
+                 reads as available-but-empty rather than competing on the
+                 same visual weight as a populated one — the chip itself
+                 still always renders (see the comment above this), only its
+                 weight changes. -->
+            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory>
               <v-chip
                 v-for="status in statusTabs" :key="status"
                 :value="status"
                 size="small" class="font-weight-bold"
+                :class="{ 'status-filter-chip--muted': status !== filters.status && !requestCounts[status] }"
                 color="primary"
-                :variant="status === filters.status ? 'flat' : 'tonal'"
+                :variant="status === filters.status ? 'flat' : (requestCounts[status] ? 'tonal' : 'outlined')"
               >
                 {{ status }} <span class="ml-1 font-weight-black">{{ requestCounts[status] }}</span>
               </v-chip>
@@ -227,8 +246,15 @@
                      name off the end of the row. -->
                 <div class="flex-grow-1 min-width-0">
                   <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
+                  <!-- Ambulance-scope rows are all the same one service —
+                       "Ambulance/Medical Response", truncated, told nothing
+                       an operator didn't already know from being on this
+                       page at all. Barangay is what actually distinguishes
+                       one row from the next here. The other board (scope
+                       'other') genuinely varies by service, so it keeps
+                       showing that instead. -->
                   <div class="d-flex align-center text-caption text-medium-emphasis">
-                    <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
+                    <span class="text-truncate">{{ scope === 'ambulance' ? requesterBarangay(item) : (item.service?.service_name || 'N/A') }}</span>
                     <!-- A Booked row's own scheduled time is the date an operator
                          actually needs here, not when it was filed — created_at
                          stays as the fallback for every other status. -->
@@ -266,11 +292,20 @@
         </v-card>
 
         <!-- RIGHT: detail panel -->
+        <!-- overflow-hidden dropped standalone=false: position:sticky on the
+             action footer below needs an unbroken chain of overflow:visible
+             ancestors up to the shell's own scrolling container, or the
+             sticky footer silently stops sticking (a well-known CSS trap —
+             any ancestor's overflow other than visible caps how far a sticky
+             descendant can travel). Rounded="xl" still clips fine: nothing
+             inside this card paints its own square-edged background out to
+             the card boundary. -->
         <v-card
           v-if="twoUp || selectedRequest"
           elevation="0"
           rounded="xl"
-          class="soft-card d-flex flex-column overflow-hidden flex-grow-1"
+          class="soft-card d-flex flex-column flex-grow-1"
+          :class="standalone ? 'overflow-hidden' : 'detail-card--unbounded'"
         >
           <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
             <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
@@ -325,8 +360,16 @@
                  scroll region above. Embedded, this grows to its natural
                  content height and the footer below follows directly after
                  it in normal page flow rather than in its own clipped
-                 region. -->
-            <div class="pa-6" :class="{ 'overflow-y-auto': standalone }">
+                 region. detail-content--reserve-footer adds bottom padding
+                 matching the sticky footer's own height (see its CSS) --
+                 without it, the sticky footer visually floats on top of
+                 whatever content is scrolled to that position while the
+                 page scrolls past it, covering the last few form fields
+                 mid-scroll rather than only once they're actually done. -->
+            <div
+              class="pa-6"
+              :class="standalone ? 'overflow-y-auto' : (showActions ? 'detail-content--reserve-footer' : '')"
+            >
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <v-row class="detail-group">
@@ -452,8 +495,14 @@
                    odometer readings and a driver — the error surfaces
                    through the alert above the fields, same as any other
                    apiError, naming exactly what's missing. -->
+              <!-- Alert type is state-driven, not fixed warning: a completed
+                   trip (returned_office_at set — trip_status 'Completed') is
+                   the request working as intended, not something to flag.
+                   Warning is reserved for what actually needs attention: no
+                   trip record at all, or one still open ('Not dispatched' /
+                   'In transit'). -->
               <div v-if="scope === 'ambulance'" class="detail-group">
-                <v-alert type="warning" variant="tonal" border="start" rounded="lg">
+                <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg">
                   <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
                   <template v-if="respondingTrip">
                     <div class="text-body-2">
@@ -468,8 +517,17 @@
                       @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
                     >Open Trip Record</v-btn>
                   </template>
-                  <div v-else class="text-body-2">
+                  <!-- "Mark as Resolved will explain what's missing" only
+                       makes sense on Responding — that's the only status
+                       this component ever shows that button on (see the
+                       template branch below). Every other status (Pending,
+                       Booked, terminal) pointed at a control the operator
+                       could not see. -->
+                  <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
                     No trip record found for this request — Mark as Resolved will explain what's missing.
+                  </div>
+                  <div v-else class="text-body-2">
+                    No trip record yet — one is created automatically once this request is dispatched.
                   </div>
                 </v-alert>
               </div>
@@ -502,8 +560,20 @@
               </div>
             </div>
 
-            <v-divider v-if="showActions"></v-divider>
-            <div v-if="showActions" class="d-flex justify-end align-center pa-4 gap-3 flex-wrap" style="flex-shrink: 0;">
+            <!-- Standalone keeps the plain divider: that layout already shows
+                 this footer without scrolling (own bounded height, content
+                 scrolls internally above it). Embedded, there is no internal
+                 scroll for it to sit safely outside of any more (see item 2),
+                 so it needs to be the thing that stays on screen instead —
+                 sticky, not a static divider, which would just scroll away
+                 with everything above it. -->
+            <v-divider v-if="showActions && standalone"></v-divider>
+            <div
+              v-if="showActions"
+              class="d-flex justify-end align-center pa-4 gap-3 flex-wrap"
+              :class="{ 'action-footer--sticky bg-surface': !standalone }"
+              :style="standalone ? 'flex-shrink: 0;' : ''"
+            >
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
                 <!-- The unit and the button it unlocks now sit in one row. They
                      used to be a scroll apart — the picker was a card up in the
@@ -1131,6 +1201,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import { statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
@@ -1402,6 +1473,14 @@ const confirmReason = () => {
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
+)
+// trip_status is one of ConductionRequest::getTripStatusAttribute()'s three
+// values ('Not dispatched' | 'In transit' | 'Completed'), always present —
+// it's a model $appends, not conditionally selected. Only 'Completed' means
+// the record is actually done; missing entirely, still open, or never
+// started are all the same "needs attention" bucket the warning color is for.
+const tripRecordAlertType = computed(() =>
+  respondingTrip.value?.trip_status === 'Completed' ? 'success' : 'warning'
 )
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
@@ -1741,7 +1820,9 @@ const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, 
 // the row's left border are driven by the same string and cannot disagree.
 // Replaces getStatusColor: a Vuetify colour name only ever fed v-chip, whose
 // tonal variant is what made these unreadable in the first place.
-const statusPillClass = (status) => `pill-${(status || 'Pending').toLowerCase()}`
+// Moved to composables/adminUi.ts — item 5 of the layout redesign needs the
+// exact same mapping in ConductionRequestView.vue too, for the shared
+// status vocabulary between the two tabs.
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${getToken()}`,
@@ -1810,6 +1891,24 @@ const selectRequest = (item, resetRemarks = true) => {
   }
   loadAttachments(item)
 }
+
+// Called from ConductionRequestView.vue's Trip Logs tab ("Open Booking" on a
+// linked trip's detail dialog) — the reverse of dispatch-booking/
+// open-trip-record above, so the link between a trip and its booking goes
+// both ways instead of only out from Bookings (item 7 of the layout
+// redesign). Resets search and the status filter so the target row is
+// actually visible in the list too, not just the detail panel — a
+// lingering filter from whatever the operator was doing on this tab before
+// would otherwise hide the row while still selecting it underneath.
+const selectRequestById = (id) => {
+  const item = requests.value.find((r) => itemId(r) === id)
+  if (!item) return
+  search.value = ''
+  filters.status = 'All'
+  selectRequest(item)
+}
+
+defineExpose({ selectRequestById })
 
 const selectVehicle = (id) => {
   formData.value.vehicle_id = id
@@ -2251,8 +2350,52 @@ onUnmounted(releaseAttachments)
   box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
 }
 
+/* Vuetify's own .v-card rule sets overflow:hidden as a base component
+   style, at the same specificity as the plain "overflow-hidden" utility
+   class this replaces standalone=false — removing just the utility class
+   (tried first) did nothing, since the component style still won. This
+   named class exists solely to sit later in the cascade and override it,
+   which is what actually lets the sticky footer below travel beyond the
+   card's own box instead of being clipped at its edge. */
+.detail-card--unbounded {
+  overflow: visible;
+}
+
+/* Embedded-only (standalone=false). Same border token .soft-card and
+   .trip-row already use, standing in for the plain v-divider this replaces —
+   a sticky element's own static-position sibling divider does not travel
+   with it once stuck, so the boundary line has to live on the sticky
+   element itself. bg-surface (applied alongside this class, see the
+   template) keeps scrolled-past content from showing through once this
+   detaches from normal flow. */
+.action-footer--sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+
+/* 96px: the tallest single-line footer measured (Pending's vehicle-info +
+   Select Vehicle + Disapprove + Approve & Dispatch, 81px) plus headroom for
+   flex-wrap pushing a busy footer onto two lines on a narrower viewport --
+   reserves that much extra bottom space so the sticky footer above never
+   floats over the last field mid-scroll, only once the content genuinely
+   ends. Approximate on purpose: exactly matching every footer variant's
+   real height would need JS measurement for a cosmetic-only concern. */
+.detail-content--reserve-footer {
+  padding-bottom: 96px !important;
+}
+
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+/* Outlined variant alone already reads quieter than tonal's colored fill;
+   this drops the label itself a step further so a zero-count status is
+   unambiguously the lightest thing in the row, not just a different border
+   style at the same boldness as a populated chip beside it. */
+.status-filter-chip--muted {
+  opacity: 0.6;
 }
 
 /* One unit per row in the picker, separated rather than floated. */
