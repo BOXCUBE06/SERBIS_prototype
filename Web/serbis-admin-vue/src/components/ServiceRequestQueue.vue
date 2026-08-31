@@ -907,6 +907,7 @@
           ></v-select>
 
           <v-textarea
+            v-if="scope !== 'ambulance'"
             v-model="createDialog.form.description"
             label="Description"
             variant="outlined"
@@ -915,6 +916,65 @@
             class="mb-2"
             :rules="[required]"
           ></v-textarea>
+
+          <!-- Ambulance only. Replaces the free-text description above with
+               the same fields the paper Conduction Request Form and the
+               mobile app's own AmbulanceFormData ask for, so what the
+               resident's own story ("transfer to another hospital, no
+               vehicle at home") becomes is structured data from the moment
+               it is taken, not a paragraph parsed back apart at dispatch
+               time. Server composes `description` from these — see
+               ServiceRequestController::adminStore(). -->
+          <template v-else>
+            <v-row dense>
+              <v-col cols="12" sm="8">
+                <v-text-field
+                  v-model="createDialog.form.patient_name"
+                  label="Patient name" variant="outlined" density="comfortable" class="mb-2"
+                  :rules="[required]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="6" sm="2">
+                <v-text-field
+                  v-model="createDialog.form.patient_age"
+                  label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="6" sm="2">
+                <v-select
+                  v-model="createDialog.form.patient_sex"
+                  :items="sexOptions"
+                  label="Sex" variant="outlined" density="comfortable" clearable class="mb-2"
+                ></v-select>
+              </v-col>
+            </v-row>
+            <v-text-field
+              v-model="createDialog.form.patient_address"
+              label="Patient address" variant="outlined" density="comfortable" class="mb-2"
+              :rules="[required]"
+            ></v-text-field>
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.pickup_location"
+                  label="Pickup location" variant="outlined" density="comfortable" class="mb-2"
+                  :rules="[required]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.destination"
+                  label="Destination" variant="outlined" density="comfortable" class="mb-2"
+                  :rules="[required]"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+            <v-textarea
+              v-model="createDialog.form.condition_notes"
+              label="Condition" variant="outlined" density="comfortable" rows="2" class="mb-2"
+              :rules="[required]"
+            ></v-textarea>
+          </template>
 
           <!-- Same reasoning as the service picker above: a unit type other
                than Ambulance has no meaning on this board. -->
@@ -1102,6 +1162,12 @@ const noteSaved = ref(false)
 let noteSavedTimer = null
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+// Same two values ConductionRequestView.vue's own create form offers, for
+// the same patient.
+const sexOptions = [
+  { title: 'Male', value: 'male' },
+  { title: 'Female', value: 'female' },
+]
 
 const emptyCreateForm = () => ({
   resident_id: null,
@@ -1109,6 +1175,14 @@ const emptyCreateForm = () => ({
   walk_in_contact_number: '',
   service_id: null,
   description: '',
+  // Ambulance only — see the v-else block in the template above.
+  patient_name: '',
+  patient_age: null,
+  patient_sex: null,
+  patient_address: '',
+  pickup_location: '',
+  destination: '',
+  condition_notes: '',
   required_vehicle_type: null,
   valid_id: null,
   site_photo: null,
@@ -1966,7 +2040,13 @@ const submitWalkIn = async () => {
     createDialog.value.error = 'Pick a service'
     return
   }
-  if (!form.description.trim()) {
+  if (props.scope === 'ambulance') {
+    if (!form.patient_name.trim() || !form.patient_address.trim() || !form.pickup_location.trim()
+        || !form.destination.trim() || !form.condition_notes.trim()) {
+      createDialog.value.error = 'Patient name, address, pickup, destination and condition are required'
+      return
+    }
+  } else if (!form.description.trim()) {
     createDialog.value.error = 'Description is required'
     return
   }
@@ -1986,7 +2066,20 @@ const submitWalkIn = async () => {
       body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
     }
     body.append('service_id', form.service_id)
-    body.append('description', form.description.trim())
+    if (props.scope === 'ambulance') {
+      // No 'description' — the server composes it from these, the same
+      // shape parseAmbulanceDescription and the mobile app's own
+      // AmbulanceFormData both already produce.
+      body.append('patient_name', form.patient_name.trim())
+      if (form.patient_age) body.append('patient_age', form.patient_age)
+      if (form.patient_sex) body.append('patient_sex', form.patient_sex)
+      body.append('patient_address', form.patient_address.trim())
+      body.append('pickup_location', form.pickup_location.trim())
+      body.append('destination', form.destination.trim())
+      body.append('condition_notes', form.condition_notes.trim())
+    } else {
+      body.append('description', form.description.trim())
+    }
     if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
     if (props.scope === 'ambulance' && createDialog.value.scheduleForLater && form.scheduled_at) {
       body.append('scheduled_at', form.scheduled_at.replace('T', ' ') + ':00')

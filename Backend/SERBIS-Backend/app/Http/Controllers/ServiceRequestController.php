@@ -60,6 +60,20 @@ class ServiceRequestController extends Controller
      */
     public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
+    /**
+     * Same literal the Vue panel keys off (ServiceRequestQueue.vue's
+     * AMBULANCE_SERVICE_CODE) — duplicated rather than shared for the same
+     * reason as OFFICE_TIMEZONE above: a fixed service identifier, not
+     * config that could drift.
+     */
+    private const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response';
+
+    /** Null if the service was seeded without a code column somehow, or does not exist. */
+    private function ambulanceServiceId(): ?int
+    {
+        return \App\Models\Service::where('code', self::AMBULANCE_SERVICE_CODE)->value('service_id');
+    }
+
    public function adminIndex()
     {
         // Added 'resident.barangay'
@@ -332,13 +346,34 @@ class ServiceRequestController extends Controller
      */
     public function adminStore(Request $request)
     {
+        // Resolved before validate() so it can be interpolated into
+        // required_if/required_unless below — Laravel's own rules take a
+        // literal, not a query, and the ambulance service's id is not a
+        // fixed one across environments the way its code is.
+        $ambulanceServiceId = $this->ambulanceServiceId();
+
         $validated = $request->validate([
             'resident_id' => 'nullable|integer|exists:tbl_residents,resident_id',
             // Required only when there is no account to pull them from.
             'walk_in_name' => 'required_without:resident_id|nullable|string|max:255',
             'walk_in_contact_number' => 'required_without:resident_id|nullable|string|max:32',
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string|max:5000',
+            // Every other service still types this by hand. For ambulance it
+            // is composed server-side below from the structured fields, so
+            // whatever the client sends here is ignored rather than trusted —
+            // see the parseAmbulanceDescription trap this exists to close.
+            'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
+            // Structured intake, ambulance only. patient_age/patient_sex stay
+            // optional even for ambulance — the paper form allows either to
+            // be unknown at intake and ConductionRequestController's own
+            // columns are nullable for the same reason.
+            'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'patient_age' => 'nullable|integer|min:0|max:150',
+            'patient_sex' => 'nullable|in:male,female',
+            'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'pickup_location' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'condition_notes' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
             'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
@@ -357,6 +392,26 @@ class ServiceRequestController extends Controller
         $walkInName = $residentId ? null : ($validated['walk_in_name'] ?? null);
         $walkInContact = $residentId ? null : ($validated['walk_in_contact_number'] ?? null);
         $ownerSegment = $residentId ?: 'walk-in';
+
+        // Same shape AmbulanceFormData.metaLines() writes on the mobile side
+        // (service_forms.dart) — Patient:/pickup → destination/Condition:/
+        // Contact:, one per line — so parseAmbulanceDescription reads an
+        // admin-filed walk-in exactly the way it already reads an app
+        // submission. Built server-side, from the columns that are now the
+        // source of truth, rather than whatever free text the client sent.
+        $isAmbulance = $ambulanceServiceId !== null && (int) $validated['service_id'] === $ambulanceServiceId;
+        $description = $validated['description'] ?? null;
+        if ($isAmbulance) {
+            $contactNumber = $residentId
+                ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
+                : ($walkInContact ?? '');
+            $description = implode("\n", [
+                'Patient: '.($validated['patient_name'] ?? 'Not specified'),
+                ($validated['pickup_location'] ?? 'Address not specified').' → '.($validated['destination'] ?? 'destination not specified'),
+                'Condition: '.($validated['condition_notes'] ?? 'Not described'),
+                'Contact: '.(trim($contactNumber) !== '' ? trim($contactNumber) : 'See resident profile'),
+            ]);
+        }
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -379,7 +434,7 @@ class ServiceRequestController extends Controller
         }
 
         try {
-            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath, $scheduledAt) {
+            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -418,7 +473,17 @@ class ServiceRequestController extends Controller
                     'walk_in_name' => $walkInName,
                     'walk_in_contact_number' => $walkInContact,
                     'service_id' => $validated['service_id'],
-                    'description' => $validated['description'],
+                    'description' => $description,
+                    // Ambulance-only. Null for every other service, same as
+                    // an app submission's row until the mobile app is on
+                    // this too — nothing reads these off a non-ambulance row.
+                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
+                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
+                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
+                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
+                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
+                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
+                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
