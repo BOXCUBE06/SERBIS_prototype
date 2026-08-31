@@ -240,8 +240,15 @@
                      name off the end of the row. -->
                 <div class="flex-grow-1 min-width-0">
                   <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
+                  <!-- Ambulance-scope rows are all the same one service —
+                       "Ambulance/Medical Response", truncated, told nothing
+                       an operator didn't already know from being on this
+                       page at all. Barangay is what actually distinguishes
+                       one row from the next here. The other board (scope
+                       'other') genuinely varies by service, so it keeps
+                       showing that instead. -->
                   <div class="d-flex align-center text-caption text-medium-emphasis">
-                    <span class="text-truncate">{{ item.service?.service_name || 'N/A' }}</span>
+                    <span class="text-truncate">{{ scope === 'ambulance' ? requesterBarangay(item) : (item.service?.service_name || 'N/A') }}</span>
                     <!-- A Booked row's own scheduled time is the date an operator
                          actually needs here, not when it was filed — created_at
                          stays as the fallback for every other status. -->
