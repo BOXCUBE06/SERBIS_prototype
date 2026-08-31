@@ -512,60 +512,28 @@ const emptyCreateForm = () => ({
 const createDialog = ref({ open: false, form: emptyCreateForm() })
 const createForm = ref(null)
 
-// The known line prefixes AmbulanceFormData writes into a booking's
-// description (Mobile/lib/models/service_forms.dart:65-77). Best-effort
-// only: a line that doesn't match, or that is still the app's own "not
-// specified" placeholder, is left blank rather than guessing — staff typing
-// it in from the paper form, same as any other new request, is the
-// acceptable fallback this is not allowed to block.
-const AMBULANCE_PLACEHOLDERS = {
-  patient_name: 'Not specified',
-  origin: 'Address not specified',
-  destination: 'destination not specified',
-  medical_diagnosis: 'Not described',
-  patient_contact_number: 'See resident profile',
-}
-
-const cleanParsed = (value, placeholder) => {
-  const trimmed = (value ?? '').trim()
-  return trimmed === '' || trimmed === placeholder ? '' : trimmed
-}
-
-const parseAmbulanceDescription = (description) => {
-  const result = { patient_name: '', origin: '', destination: '', medical_diagnosis: '', patient_contact_number: '' }
-  if (!description) return result
-
-  for (const rawLine of description.split('\n')) {
-    const line = rawLine.trim()
-
-    const patient = line.match(/^Patient:\s*(.*)$/)
-    if (patient) { result.patient_name = cleanParsed(patient[1], AMBULANCE_PLACEHOLDERS.patient_name); continue }
-
-    const condition = line.match(/^Condition:\s*(.*)$/)
-    if (condition) { result.medical_diagnosis = cleanParsed(condition[1], AMBULANCE_PLACEHOLDERS.medical_diagnosis); continue }
-
-    const contact = line.match(/^Contact:\s*(.*)$/)
-    if (contact) { result.patient_contact_number = cleanParsed(contact[1], AMBULANCE_PLACEHOLDERS.patient_contact_number); continue }
-
-    if (line.includes('→')) {
-      const [from, to] = line.split('→')
-      result.origin = cleanParsed(from, AMBULANCE_PLACEHOLDERS.origin)
-      result.destination = cleanParsed(to, AMBULANCE_PLACEHOLDERS.destination)
-    }
-  }
-
-  return result
-}
-
 // `booking` is the tbl_service_request row this dispatch fulfils — absent
-// for the plain "Ambulance Trip Record" button, which behaves
-// exactly as it always has.
+// for the plain "Ambulance Trip Record" button, which behaves exactly as it
+// always has. Reads the structured columns ServiceRequestController's
+// adminStore() writes and the backfill migration populated for historical
+// rows (2026_08_31_085924) directly — no more regex over `description`.
+// A booking the backfill could not parse, or one filed before either
+// existed, simply has these columns null: the fields come up blank, same as
+// the old parser's own fallback, and staff types them in from the paper
+// form same as any other new request.
 const openCreate = (booking = null) => {
   apiError.value = ''
   const form = emptyCreateForm()
 
   if (booking) {
-    Object.assign(form, parseAmbulanceDescription(booking.description))
+    form.patient_name = booking.patient_name || ''
+    form.patient_address = booking.patient_address || ''
+    form.origin = booking.pickup_location || ''
+    form.destination = booking.destination || ''
+    form.medical_diagnosis = booking.condition_notes || ''
+    // Structural, not parsed out of prose: the contact this booking was
+    // filed under, whether that is an account's own number or a walk-in's.
+    form.patient_contact_number = booking.resident?.phone_number || booking.walk_in_contact_number || ''
     form.service_request_id = booking.request_id
     form.vehicle_id = booking.vehicle_id ?? null
   }

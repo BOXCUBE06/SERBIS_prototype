@@ -360,8 +360,7 @@ class ServiceRequestController extends Controller
             'service_id' => 'required|exists:tbl_services,service_id',
             // Every other service still types this by hand. For ambulance it
             // is composed server-side below from the structured fields, so
-            // whatever the client sends here is ignored rather than trusted —
-            // see the parseAmbulanceDescription trap this exists to close.
+            // whatever the client sends here is ignored rather than trusted.
             'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
             // Structured intake, ambulance only. patient_age/patient_sex stay
             // optional even for ambulance — the paper form allows either to
@@ -395,10 +394,10 @@ class ServiceRequestController extends Controller
 
         // Same shape AmbulanceFormData.metaLines() writes on the mobile side
         // (service_forms.dart) — Patient:/pickup → destination/Condition:/
-        // Contact:, one per line — so parseAmbulanceDescription reads an
-        // admin-filed walk-in exactly the way it already reads an app
-        // submission. Built server-side, from the columns that are now the
-        // source of truth, rather than whatever free text the client sent.
+        // Contact:, one per line — kept for the request detail panel's own
+        // "Description" display, and for parity with an app submission. No
+        // longer read back apart by anything: ConductionRequestView.vue's
+        // dispatch pre-fill reads these columns directly.
         $isAmbulance = $ambulanceServiceId !== null && (int) $validated['service_id'] === $ambulanceServiceId;
         $description = $validated['description'] ?? null;
         if ($isAmbulance) {

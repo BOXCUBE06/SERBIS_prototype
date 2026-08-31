@@ -2067,9 +2067,11 @@ const submitWalkIn = async () => {
     }
     body.append('service_id', form.service_id)
     if (props.scope === 'ambulance') {
-      // No 'description' — the server composes it from these, the same
-      // shape parseAmbulanceDescription and the mobile app's own
-      // AmbulanceFormData both already produce.
+      // No 'description' — the server composes it from these, in the same
+      // readable shape the mobile app's own AmbulanceFormData produces.
+      // Dispatch itself now reads the structured columns directly
+      // (ConductionRequestView.vue's openCreate) — this is for the request
+      // detail panel's own "Description" display, not a parser anymore.
       body.append('patient_name', form.patient_name.trim())
       if (form.patient_age) body.append('patient_age', form.patient_age)
       if (form.patient_sex) body.append('patient_sex', form.patient_sex)
