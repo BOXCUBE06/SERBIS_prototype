@@ -550,14 +550,8 @@
                       @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
                     >Open Trip Record</v-btn>
                   </template>
-                  <!-- "Mark as Resolved will explain what's missing" only
-                       makes sense on Responding — that's the only status
-                       this component ever shows that button on (see the
-                       template branch below). Every other status (Pending,
-                       Booked, terminal) pointed at a control the operator
-                       could not see. -->
                   <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
-                    No trip record found for this request — Mark as Resolved will explain what's missing.
+                    No trip record found for this request.
                   </div>
                   <div v-else class="text-body-2">
                     No trip record yet — one is created automatically once this request is dispatched.
