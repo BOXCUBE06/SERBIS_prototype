@@ -27,7 +27,7 @@
           @click="openCreateDialog"
         >
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Walk-in Request
+          Log Service Request
         </v-btn>
         <!-- Same outlined-primary treatment as Export below: a supporting
              view, not the page's one decision. Ambulance-only: the fleet
@@ -817,7 +817,7 @@
     <v-dialog v-model="createDialog.open" max-width="640" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <span class="text-h6 font-weight-bold">Log Walk-in Request</span>
+          <span class="text-h6 font-weight-bold">Log Service Request</span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">

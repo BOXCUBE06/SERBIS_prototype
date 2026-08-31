@@ -33,7 +33,7 @@
             height="44"
             prepend-icon="mdi-plus"
             @click="openCreate()"
-          >New Ambulance Dispatch Request</v-btn>
+          >Ambulance Trip Record</v-btn>
         </div>
 
         <div v-if="!loadError" class="filter-bar">
@@ -71,7 +71,7 @@
         <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
-            <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance dispatch requests</div>
+            <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
             <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
             <v-btn color="primary" variant="flat" class="text-none font-weight-bold px-6" height="44" :loading="reloading" @click="fetchData">
               Try again
@@ -124,7 +124,7 @@
             <template v-slot:no-data>
               <div class="text-center py-12">
                 <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
               </div>
             </template>
           </v-data-table>
@@ -133,7 +133,7 @@
         <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden">
           <div v-if="!filteredItems.length" class="text-center py-12 px-6">
             <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
           </div>
           <div v-else>
             <div
@@ -170,7 +170,7 @@
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div>
-            <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
+            <span class="text-h6 font-weight-bold text-high-emphasis">Ambulance Trip Record</span>
             <!-- Prefilled fields came from the booking's own description, a
                  best-effort read — nothing here is locked, so this is a note
                  to the operator, not a guarantee. -->
@@ -479,7 +479,7 @@ const fetchData = async () => {
     loadError.value = ''
   } catch (error) {
     loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load ambulance dispatch requests', 'error')
+    notify('Could not load ambulance trip records', 'error')
   } finally {
     initialLoad.value = false
     reloading.value = false
@@ -497,7 +497,7 @@ const rowProps = ({ item }) => ({
 // Create dialog
 const emptyCreateForm = () => ({
   // Set only when this dialog was opened by dispatching an approved booking
-  // (handleDispatchBooking below); a plain "New Ambulance Dispatch Request"
+  // (handleDispatchBooking below); a plain "Ambulance Trip Record"
   // leaves both null, exactly as before this feature existed.
   service_request_id: null, vehicle_id: null,
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
@@ -558,7 +558,7 @@ const parseAmbulanceDescription = (description) => {
 }
 
 // `booking` is the tbl_service_request row this dispatch fulfils — absent
-// for the plain "New Ambulance Dispatch Request" button, which behaves
+// for the plain "Ambulance Trip Record" button, which behaves
 // exactly as it always has.
 const openCreate = (booking = null) => {
   apiError.value = ''
@@ -605,7 +605,7 @@ const submitCreate = async () => {
     }
     await fetchData()
     createDialog.value.open = false
-    notify('Ambulance dispatch request filed')
+    notify('Ambulance trip record filed')
   } catch (error) {
     apiError.value = error.message
   } finally {
