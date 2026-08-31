@@ -135,13 +135,26 @@
                  to go with it — it rendered plain grey, telling active from
                  inactive by lightness alone. `mandatory` keeps one always on, so
                  clicking the selected chip cannot clear the filter to nothing. -->
-            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory column>
+            <!-- `column` (dropped) wraps chips to as many rows as it takes —
+                 seven statuses, half of them reading zero most of the time,
+                 wrapped to two rows every time. Without it VChipGroup falls
+                 back to its VSlideGroup base: one row, and if it still
+                 doesn't fit at the rail's narrowest it scrolls horizontally
+                 with its own prev/next arrows rather than wrapping.
+                 status-filter-chip--muted (zero-count, not the active
+                 filter) drops to a plain outline so an all-zero status
+                 reads as available-but-empty rather than competing on the
+                 same visual weight as a populated one — the chip itself
+                 still always renders (see the comment above this), only its
+                 weight changes. -->
+            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory>
               <v-chip
                 v-for="status in statusTabs" :key="status"
                 :value="status"
                 size="small" class="font-weight-bold"
+                :class="{ 'status-filter-chip--muted': status !== filters.status && !requestCounts[status] }"
                 color="primary"
-                :variant="status === filters.status ? 'flat' : 'tonal'"
+                :variant="status === filters.status ? 'flat' : (requestCounts[status] ? 'tonal' : 'outlined')"
               >
                 {{ status }} <span class="ml-1 font-weight-black">{{ requestCounts[status] }}</span>
               </v-chip>
@@ -2318,6 +2331,14 @@ onUnmounted(releaseAttachments)
 
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+/* Outlined variant alone already reads quieter than tonal's colored fill;
+   this drops the label itself a step further so a zero-count status is
+   unambiguously the lightest thing in the row, not just a different border
+   style at the same boldness as a populated chip beside it. */
+.status-filter-chip--muted {
+  opacity: 0.6;
 }
 
 /* One unit per row in the picker, separated rather than floated. */
