@@ -162,6 +162,61 @@ class ConductionRequestTest extends TestCase
     }
 
     /**
+     * The other half of the same bug: filing a trip from the manual
+     * "Dispatch" path never advanced the booking past Booked, so it had no
+     * path to "Mark as Resolved" either (gated on status === 'Responding').
+     * Mirrors what ServiceRequestController::update() already does for the
+     * instant path's own Booked → Responding transition.
+     */
+    public function test_dispatching_a_booked_request_flips_it_to_responding(): void
+    {
+        $service = Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        $booking = ServiceRequest::create([
+            'service_id' => $service->service_id,
+            'vehicle_id' => $vehicle->vehicle_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+        ]);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'service_request_id' => $booking->request_id,
+        ]))->assertStatus(201);
+
+        $this->assertSame('Responding', $booking->fresh()->status);
+    }
+
+    /**
+     * The flip is gated on the linked request currently being Booked, not
+     * fired unconditionally — a create-dialog call against anything else
+     * (here, still Pending: never approved, no vehicle assigned) must leave
+     * that request's status exactly as it was.
+     */
+    public function test_filing_a_trip_against_a_non_booked_request_does_not_change_its_status(): void
+    {
+        $service = Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+        $pendingRequest = ServiceRequest::create([
+            'service_id' => $service->service_id,
+            'description' => 'Not yet approved',
+            'status' => 'Pending',
+        ]);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'service_request_id' => $pendingRequest->request_id,
+        ]))->assertStatus(201);
+
+        $this->assertSame('Pending', $pendingRequest->fresh()->status);
+    }
+
+    /**
      * C7 of docs/dispatch-audit.md's remediation plan: the standalone form's
      * free-text `vehicle` field never checked whether the unit was already
      * out. A picker bound to vehicle_id makes that checkable — this is the

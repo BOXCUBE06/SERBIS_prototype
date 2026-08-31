@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
+use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -163,6 +164,26 @@ class ConductionRequestController extends Controller
                         'name' => $name,
                         'position' => $position++,
                     ]);
+                }
+            }
+
+            // Mirrors the guard ServiceRequestController::update() uses
+            // around createConductionStub for the instant path: only ever
+            // Booked → Responding, never any other status. That is the one
+            // state the create dialog can ever hand this a linked booking
+            // in — linkableBookings on the Vue side (and the duplicate
+            // guard above) already ensure nothing reaches here twice, so
+            // this is belt-and-suspenders, not the only thing stopping a
+            // double transition. Before this, the manual "Dispatch" path
+            // filed the trip but left the booking sitting at Booked
+            // forever — which is also why "Mark as Resolved" (gated on
+            // status === 'Responding') was unreachable for a manually
+            // dispatched booking.
+            if (!empty($validated['service_request_id'])) {
+                $serviceRequest = ServiceRequest::find($validated['service_request_id']);
+
+                if ($serviceRequest && $serviceRequest->status === 'Booked') {
+                    $serviceRequest->update(['status' => 'Responding']);
                 }
             }
 
