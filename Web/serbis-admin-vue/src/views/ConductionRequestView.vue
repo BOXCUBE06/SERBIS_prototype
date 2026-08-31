@@ -1,6 +1,12 @@
 <template>
-  <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
-    <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3">
+  <!-- height:100% + flex column, matching /manage-requests' own canvas now
+       that this route is fixedHeight too (router/index.ts) — the shell's
+       .inner-wrapper is the one bounded, non-scrolling ancestor everything
+       below sizes against, the same way ServiceRequestQueue.vue's own
+       standalone=true path already works. Header and tabs take their
+       natural height; v-window gets what's left. -->
+  <v-container fluid class="pa-6 bg-background d-flex flex-column" style="height: 100%;">
+    <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3" style="flex-shrink: 0;">
       <div>
         <h2 class="text-h5 font-weight-bold text-high-emphasis">Ambulance Dispatch Requests</h2>
         <div class="text-subtitle-2 text-medium-emphasis">
@@ -14,27 +20,22 @@
          staff have one place for everything ambulance. Trip Logs: the
          dispatch record itself, unchanged, for a unit that is actually
          rolling. -->
-    <v-tabs v-model="activeTab" color="primary" class="mb-5">
+    <v-tabs v-model="activeTab" color="primary" class="mb-5" style="flex-shrink: 0;">
       <v-tab value="bookings" class="text-none font-weight-bold">Bookings</v-tab>
       <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
     </v-tabs>
 
-    <!-- overflow:hidden is v-window's own base style, there to clip the
-         slide transition between tabs — it also clips the Bookings tab's
-         sticky action footer (ServiceRequestQueue.vue), the same class of
-         problem the detail card's own overflow-hidden was for the same
-         reason. Overridden below, scoped to just this page's v-window. -->
-    <v-window v-model="activeTab" class="ambulance-tab-window">
-      <v-window-item value="bookings">
+    <v-window v-model="activeTab" class="flex-grow-1" style="min-height: 0;">
+      <v-window-item value="bookings" class="h-100">
         <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
       </v-window-item>
 
-      <v-window-item value="trip-logs">
+      <v-window-item value="trip-logs" class="h-100 d-flex flex-column">
         <!-- mb-4→mb-3 and .filter-bar's own margin below, tightened to
              match: a handful of rows sitting under generous spacing tuned
              for a page expecting far more content read as excess dead
              space above a mostly-empty table (item 7). -->
-        <div class="d-flex justify-end mb-3">
+        <div class="d-flex justify-end mb-3" style="flex-shrink: 0;">
           <v-btn
             color="primary"
             variant="flat"
@@ -71,13 +72,13 @@
           ></v-select>
         </div>
 
-        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
+        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" style="flex-shrink: 0;" @click:close="apiError = ''">
           {{ apiError }}
         </v-alert>
 
-        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
+        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg flex-grow-1"></v-skeleton-loader>
 
-        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
+        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface flex-grow-1">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
             <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
@@ -94,15 +95,41 @@
              switching at two different points (impeccable critique, P1,
              2026-08-30). Below it, a card list in Bookings' own visual
              language (soft-card, rounded-xl, avatar-initial rows) replaces a
-             table that forced a 704px min-width and horizontal scroll. -->
-        <v-card v-else-if="isWide" elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
+             table that forced a 704px min-width and horizontal scroll.
+
+             flex-grow-1 + height:100% on the card, height="100%" on the
+             table itself: short result sets used to leave whitespace below
+             the bordered table instead of inside it (Trip Logs fix,
+             layout redesign follow-up). Vuetify's v-data-table keeps its
+             header fixed and scrolls only the body when given a real
+             height, with the footer/pagination bar following directly
+             after — exactly the "table flexes, pagination stays pinned to
+             the container's bottom" the fix asked for, since the card
+             itself is now the thing bounded to the remaining flex height. -->
+        <!-- v-card is display:block by default -- v-data-table's own
+             height="100%" prop needs a parent whose *computed* height is
+             the resolution context for a percentage, and a percentage
+             cannot resolve against a block box the way it can a flex
+             item's main size. Forcing the card into an explicit flex
+             column and the table into flex:1 sidesteps that resolution
+             question entirely (found by comparing computed height of the
+             card, the table's own root, and its internal .v-table__wrapper
+             directly -- the table root sat at 242px against a 555px card
+             until this). -->
+        <v-card
+          v-else-if="isWide" elevation="0" border rounded="lg"
+          class="bg-surface overflow-hidden flex-grow-1 d-flex flex-column"
+          style="height: 100%; min-height: 0;"
+        >
           <v-data-table
             :headers="headers"
             :items="filteredItems"
             :items-per-page="10"
+            height="100%"
             density="comfortable"
             hover
-            class="bg-transparent conduction-table"
+            class="bg-transparent conduction-table flex-grow-1"
+            style="min-height: 0;"
             item-value="conduction_request_id"
             :row-props="rowProps"
             @click:row="(_e, { item }) => openDetail(item)"
@@ -139,12 +166,12 @@
           </v-data-table>
         </v-card>
 
-        <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden">
+        <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden flex-grow-1 d-flex flex-column" style="min-height: 0;">
           <div v-if="!filteredItems.length" class="text-center py-12 px-6">
             <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
             <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
           </div>
-          <div v-else>
+          <div v-else class="overflow-y-auto">
             <div
               v-for="item in filteredItems" :key="item.conduction_request_id"
               class="d-flex align-center px-4 py-3 trip-row"
@@ -969,17 +996,21 @@ onMounted(fetchData)
 .gap-3 { gap: 12px; }
 .page-header { margin-bottom: 28px; }
 
-/* See the template comment on v-window. Sticky positioning cannot travel
-   past an ancestor whose overflow is anything but visible, and v-window
-   sets its own to hidden for the slide transition -- this loses that clip
-   only during a tab switch (the transition briefly not being cropped at the
-   window's edge), which is a non-issue: the two tabs are the same width and
-   nothing in either one is wide enough to visibly overshoot during the
-   ~300ms animation. */
-.ambulance-tab-window {
-  overflow: visible;
+/* v-window's own internal wrapper (.v-window__container, the flex row that
+   holds every window-item side by side for the slide transition) sizes
+   itself to its content's natural height, not to v-window's own — v-window
+   is built for a horizontal carousel where that's the right default, not
+   for filling a fixed-height parent. Without this, v-window-item's h-100
+   resolves against an indeterminate parent (auto, not 100%), so the
+   Bookings detail pane's real content height leaks straight past
+   v-window's own overflow:hidden instead of being capped by it — found by
+   walking the ancestor chain and comparing rectHeight at each level, not by
+   reading the CSS and assuming it would work. */
+:deep(.v-window__container) {
+  height: 100%;
 }
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; flex-shrink: 0; }
 .filter-field { width: 240px; max-width: 100%; }
 @media (max-width: 599px) {
   .filter-field { flex: 1 1 100%; width: 100%; }
