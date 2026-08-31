@@ -21,7 +21,7 @@
 
     <v-window v-model="activeTab">
       <v-window-item value="bookings">
-        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" />
+        <ServiceRequestQueue scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
       </v-window-item>
 
       <v-window-item value="trip-logs">
@@ -33,7 +33,7 @@
             height="44"
             prepend-icon="mdi-plus"
             @click="openCreate()"
-          >New Ambulance Dispatch Request</v-btn>
+          >Ambulance Trip Record</v-btn>
         </div>
 
         <div v-if="!loadError" class="filter-bar">
@@ -71,7 +71,7 @@
         <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
-            <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance dispatch requests</div>
+            <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
             <div class="text-body-2 text-medium-emphasis mb-4">{{ loadError }}</div>
             <v-btn color="primary" variant="flat" class="text-none font-weight-bold px-6" height="44" :loading="reloading" @click="fetchData">
               Try again
@@ -124,7 +124,7 @@
             <template v-slot:no-data>
               <div class="text-center py-12">
                 <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
               </div>
             </template>
           </v-data-table>
@@ -133,7 +133,7 @@
         <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden">
           <div v-if="!filteredItems.length" class="text-center py-12 px-6">
             <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance dispatch requests yet</div>
+            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
           </div>
           <div v-else>
             <div
@@ -170,12 +170,12 @@
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div>
-            <span class="text-h6 font-weight-bold text-high-emphasis">New Ambulance Dispatch Request</span>
-            <!-- Prefilled fields came from the booking's own description, a
-                 best-effort read — nothing here is locked, so this is a note
-                 to the operator, not a guarantee. -->
+            <span class="text-h6 font-weight-bold text-high-emphasis">Ambulance Trip Record</span>
+            <!-- Prefilled from the booking's own structured columns
+                 (ServiceRequestController::adminStore()) — nothing here is
+                 locked, so this is a note to the operator, not a guarantee. -->
             <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis">
-              Dispatching booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
+              Linked to booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
             </div>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
@@ -184,6 +184,23 @@
           <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
 
           <v-form ref="createForm">
+            <!-- C6: the one way this form ever links to a booking, whether
+                 reached by typing here or by the Dispatch button (which just
+                 pre-selects this same field — see openCreate). Left empty on
+                 purpose is the legitimate walk-up-emergency case: a trip
+                 record with no booking behind it at all. -->
+            <v-autocomplete
+              :model-value="createDialog.form.service_request_id"
+              @update:model-value="onLinkBooking"
+              :items="bookingOptions"
+              label="Link to approved service request (optional)"
+              placeholder="Search by name or date"
+              variant="outlined"
+              density="comfortable"
+              clearable
+              class="mb-4"
+            ></v-autocomplete>
+
             <h3 class="section-title">Patient</h3>
             <v-row dense>
               <v-col cols="12" sm="8">
@@ -215,12 +232,51 @@
                 <v-text-field v-model="createDialog.form.destination" label="To:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.vehicle" label="Vehicle" variant="outlined" density="comfortable"></v-text-field>
+                <v-select
+                  v-model="createDialog.form.vehicle_id"
+                  :items="vehicleOptions"
+                  label="Fleet unit"
+                  variant="outlined"
+                  density="comfortable"
+                  clearable
+                  @update:model-value="onSelectFleetVehicle"
+                ></v-select>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field v-model="createDialog.form.plate_no" label="Plate no." variant="outlined" density="comfortable"></v-text-field>
               </v-col>
+              <!-- Fallback only, shown while no fleet unit is picked above —
+                   see the comment on onSelectFleetVehicle. Not the default:
+                   the picker is, since it is what the double-booking guard
+                   below can actually check. -->
+              <v-col v-if="!createDialog.form.vehicle_id" cols="12">
+                <v-text-field
+                  v-model="createDialog.form.vehicle"
+                  label="Vehicle name (not in the fleet — e.g. mutual aid)"
+                  variant="outlined"
+                  density="comfortable"
+                ></v-text-field>
+              </v-col>
             </v-row>
+
+            <!-- C7's double-booking guard. A soft block: filing anyway is
+                 always possible, but only with a reason, and that reason is
+                 what lands in the audit trail (ConductionRequestController::
+                 store(), vehicle_override_reason). -->
+            <v-alert v-if="createDialog.conflict" type="warning" variant="tonal" border="start" density="compact" class="mb-4">
+              This unit is already on a trip — heading to {{ createDialog.conflict.destination }}
+              (trip #{{ createDialog.conflict.conduction_request_id }}).
+            </v-alert>
+            <v-textarea
+              v-if="createDialog.conflict"
+              v-model="createDialog.form.override_reason"
+              label="Reason to file anyway (required)"
+              variant="outlined"
+              density="comfortable"
+              rows="2"
+              class="mb-4"
+              :rules="[required]"
+            ></v-textarea>
 
             <h3 class="section-title">Personnel</h3>
             <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
@@ -256,7 +312,7 @@
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitCreate">
-            File request
+            {{ createDialog.conflict ? 'File anyway' : 'File request' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -370,6 +426,37 @@
               <v-textarea v-model="tripLog.form.others" label="Others" variant="outlined" density="comfortable" rows="2"></v-textarea>
             </v-col>
           </v-row>
+
+          <!-- The one personnel role this dialog can edit — see
+               ConductionRequestController::tripLog(). A stub created by
+               Approve & Dispatch (C5's bridge) always starts with none,
+               and a driver is required before this request can resolve. -->
+          <div class="d-flex align-center justify-space-between mb-1">
+            <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Drivers</span>
+            <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addTripDriver">
+              Add driver
+            </v-btn>
+          </div>
+          <div
+            v-for="(_n, idx) in tripLog.form.drivers"
+            :key="idx"
+            class="d-flex align-center gap-2 mb-2"
+          >
+            <v-text-field
+              v-model="tripLog.form.drivers[idx]"
+              :label="`Driver ${idx + 1}`"
+              variant="outlined"
+              density="compact"
+              hide-details
+            ></v-text-field>
+            <v-btn
+              icon="mdi-close"
+              variant="text"
+              size="small"
+              :aria-label="`Remove driver ${idx + 1}`"
+              @click="removeTripDriver(idx)"
+            ></v-btn>
+          </div>
         </v-card-text>
         <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
@@ -479,7 +566,7 @@ const fetchData = async () => {
     loadError.value = ''
   } catch (error) {
     loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load ambulance dispatch requests', 'error')
+    notify('Could not load ambulance trip records', 'error')
   } finally {
     initialLoad.value = false
     reloading.value = false
@@ -494,12 +581,77 @@ const rowProps = ({ item }) => ({
   },
 })
 
+// C6: the create dialog's own "Link to approved service request" search —
+// same source ServiceRequestQueue.vue reads, fetched independently here
+// since that component keeps its own list private. Same exact-code match
+// as its AMBULANCE_SERVICE_CODE (duplicated rather than shared — see the
+// OFFICE_TIMEZONE precedent in ServiceRequestController).
+const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
+const bookings = ref([])
+const fetchBookings = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() })
+    if (!res.ok) return
+    const data = await res.json()
+    bookings.value = (data.data || data).filter(r => r.service?.code === AMBULANCE_SERVICE_CODE)
+  } catch {
+    // The create dialog just shows nothing to link — filing a trip record
+    // standalone still works, which is the case this must never block.
+  }
+}
+
+// A booking is linkable once it is an approved, scheduled dispatch with no
+// trip filed against it yet — exactly what the Dispatch button already
+// targets (see handleDispatchBooking). Excludes Pending: C5's bridge means
+// an instant approval already has its own stub the moment it exists, so
+// there is nothing left here for a search to find.
+const linkableBookings = computed(() => bookings.value.filter(r =>
+  r.status === 'Booked' && r.vehicle_id && !(r.conduction_requests || []).length
+))
+const bookingLabel = (r) => {
+  const who = r.resident ? `${r.resident.first_name} ${r.resident.last_name}` : (r.walk_in_name || 'Walk-in')
+  return `${who} — ${fmtDateTime(r.scheduled_at)}`
+}
+const bookingOptions = computed(() => linkableBookings.value.map(r => ({ title: bookingLabel(r), value: r.request_id })))
+
+// C7: the fleet picker. Own fetch rather than sharing ServiceRequestQueue's —
+// that component keeps its vehicle list private, same as bookings above.
+const vehicles = ref([])
+const fetchVehicles = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
+    if (!res.ok) return
+    const data = await res.json()
+    vehicles.value = data.data || data
+  } catch {
+    // The picker just shows no fleet units — the free-text fallback still
+    // files a trip record, which is the case this must never block.
+  }
+}
+const ambulanceVehicles = computed(() => vehicles.value.filter(v => v.type === 'Ambulance'))
+const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
+  title: `${v.unit_identifier}${v.specification ? ` (${v.specification})` : ''}`,
+  value: v.vehicle_id,
+})))
+// The free-text `vehicle` name column has no fleet equivalent to leave blank
+// and derive later — unlike a booking's own fields, this has to be written
+// at selection time. plate_no stays manual either way: tbl_vehicles tracks
+// no plate number for a real unit to derive it from.
+const onSelectFleetVehicle = (vehicleId) => {
+  const form = createDialog.value.form
+  const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
+  form.vehicle = vehicle ? `${vehicle.unit_identifier}${vehicle.specification ? ` (${vehicle.specification})` : ''}` : ''
+  // A new pick clears any conflict the previous one raised — it may not
+  // apply to this unit at all.
+  createDialog.value.conflict = null
+}
+
 // Create dialog
 const emptyCreateForm = () => ({
   // Set only when this dialog was opened by dispatching an approved booking
-  // (handleDispatchBooking below); a plain "New Ambulance Dispatch Request"
+  // (handleDispatchBooking below); a plain "Ambulance Trip Record"
   // leaves both null, exactly as before this feature existed.
-  service_request_id: null, vehicle_id: null,
+  service_request_id: null, vehicle_id: null, override_reason: '',
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
   patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
   origin: '', destination: '',
@@ -509,68 +661,65 @@ const emptyCreateForm = () => ({
   // polish, 2026-08-30).
   drivers: [''], authorized_passengers: [''], patient_relatives: [''],
 })
-const createDialog = ref({ open: false, form: emptyCreateForm() })
+const createDialog = ref({ open: false, form: emptyCreateForm(), conflict: null })
 const createForm = ref(null)
 
-// The known line prefixes AmbulanceFormData writes into a booking's
-// description (Mobile/lib/models/service_forms.dart:65-77). Best-effort
-// only: a line that doesn't match, or that is still the app's own "not
-// specified" placeholder, is left blank rather than guessing — staff typing
-// it in from the paper form, same as any other new request, is the
-// acceptable fallback this is not allowed to block.
-const AMBULANCE_PLACEHOLDERS = {
-  patient_name: 'Not specified',
-  origin: 'Address not specified',
-  destination: 'destination not specified',
-  medical_diagnosis: 'Not described',
-  patient_contact_number: 'See resident profile',
-}
-
-const cleanParsed = (value, placeholder) => {
-  const trimmed = (value ?? '').trim()
-  return trimmed === '' || trimmed === placeholder ? '' : trimmed
-}
-
-const parseAmbulanceDescription = (description) => {
-  const result = { patient_name: '', origin: '', destination: '', medical_diagnosis: '', patient_contact_number: '' }
-  if (!description) return result
-
-  for (const rawLine of description.split('\n')) {
-    const line = rawLine.trim()
-
-    const patient = line.match(/^Patient:\s*(.*)$/)
-    if (patient) { result.patient_name = cleanParsed(patient[1], AMBULANCE_PLACEHOLDERS.patient_name); continue }
-
-    const condition = line.match(/^Condition:\s*(.*)$/)
-    if (condition) { result.medical_diagnosis = cleanParsed(condition[1], AMBULANCE_PLACEHOLDERS.medical_diagnosis); continue }
-
-    const contact = line.match(/^Contact:\s*(.*)$/)
-    if (contact) { result.patient_contact_number = cleanParsed(contact[1], AMBULANCE_PLACEHOLDERS.patient_contact_number); continue }
-
-    if (line.includes('→')) {
-      const [from, to] = line.split('→')
-      result.origin = cleanParsed(from, AMBULANCE_PLACEHOLDERS.origin)
-      result.destination = cleanParsed(to, AMBULANCE_PLACEHOLDERS.destination)
-    }
-  }
-
-  return result
-}
-
 // `booking` is the tbl_service_request row this dispatch fulfils — absent
-// for the plain "New Ambulance Dispatch Request" button, which behaves
-// exactly as it always has.
+// for the plain "Ambulance Trip Record" button, which behaves exactly as it
+// always has. Reads the structured columns ServiceRequestController's
+// adminStore() writes and the backfill migration populated for historical
+// rows (2026_08_31_085924) directly — no more regex over `description`.
+// A booking the backfill could not parse, or one filed before either
+// existed, simply has these columns null: the fields come up blank, same as
+// the old parser's own fallback, and staff types them in from the paper
+// form same as any other new request.
+// C6: one prefill implementation, reached two ways — the Dispatch button
+// below and the create dialog's own "Link to approved service request"
+// autocomplete. Structural, not parsed out of prose: the contact number is
+// the booking's own resident/walk-in contact, whichever it was filed under.
+const applyBooking = (booking, form = createDialog.value.form) => {
+  form.patient_name = booking.patient_name || ''
+  form.patient_address = booking.patient_address || ''
+  form.origin = booking.pickup_location || ''
+  form.destination = booking.destination || ''
+  form.medical_diagnosis = booking.condition_notes || ''
+  form.patient_contact_number = booking.resident?.phone_number || booking.walk_in_contact_number || ''
+  form.service_request_id = booking.request_id
+  form.vehicle_id = booking.vehicle_id ?? null
+  // Best-effort: the fleet list this reads may not have loaded yet (see
+  // fetchVehicles below). If not, vehicle_id is still correctly linked —
+  // only the display name text is left for the operator to see once it
+  // arrives, or to type by hand.
+  const fleetUnit = ambulanceVehicles.value.find(v => v.vehicle_id === form.vehicle_id)
+  if (fleetUnit) form.vehicle = `${fleetUnit.unit_identifier}${fleetUnit.specification ? ` (${fleetUnit.specification})` : ''}`
+  createDialog.value.conflict = null
+}
+
 const openCreate = (booking = null) => {
   apiError.value = ''
   const form = emptyCreateForm()
+  if (booking) applyBooking(booking, form)
+  createDialog.value = { open: true, form, conflict: null }
+  // Background refresh for both lists. The booking already in hand (if any)
+  // was applied synchronously above, so there is no dialog-opens-then-
+  // fields-pop-in flash to wait out for that one; the fleet name derived
+  // just above may still fill in a moment after open if this is the fetch
+  // that populates it.
+  fetchBookings()
+  fetchVehicles()
+}
 
-  if (booking) {
-    Object.assign(form, parseAmbulanceDescription(booking.description))
-    form.service_request_id = booking.request_id
-    form.vehicle_id = booking.vehicle_id ?? null
+// Fired by the create dialog's own "Link to approved service request"
+// autocomplete. Clearing it (id undefined) only drops the linkage — it does
+// not blank fields staff may already have typed, since the standalone,
+// no-booking case is exactly what clearing this field means to choose.
+const onLinkBooking = (id) => {
+  if (!id) {
+    createDialog.value.form.service_request_id = null
+    return
   }
-
-  createDialog.value = { open: true, form }
+  const booking = linkableBookings.value.find(r => r.request_id === id)
+  if (booking) applyBooking(booking)
 }
 
 // Fired by the Bookings tab's "Dispatch" button (ServiceRequestQueue,
@@ -581,6 +730,20 @@ const openCreate = (booking = null) => {
 const handleDispatchBooking = (booking) => {
   activeTab.value = 'trip-logs'
   openCreate(booking)
+}
+
+// Fired by the Bookings tab's "Open Trip Record" button (C5's bridge — a
+// Responding row's stub, created at Approve & Dispatch). Refetches first:
+// the stub may have been created moments ago by this same click chain, and
+// `items` is this view's own copy, last loaded independently of whatever
+// ServiceRequestQueue.vue just did.
+const handleOpenTripRecord = async (conductionRequestId) => {
+  if (!conductionRequestId) return
+  await fetchData()
+  const record = items.value.find(i => i.conduction_request_id === conductionRequestId)
+  if (!record) return
+  activeTab.value = 'trip-logs'
+  openTripLog(record)
 }
 
 const addPerson = (field) => { createDialog.value.form[field].push('') }
@@ -600,12 +763,20 @@ const submitCreate = async () => {
     })
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
+      // 409: the double-booking guard, not a validation failure — surfaced
+      // as its own alert plus the required override field (see the
+      // template) rather than the generic apiError text, since "already on
+      // a trip" needs the conflicting trip named, not just stated.
+      if (res.status === 409 && errData.conflict) {
+        createDialog.value.conflict = errData.conflict
+        return
+      }
       const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
       throw new Error(firstError || errData.message || 'Failed to file the request')
     }
     await fetchData()
     createDialog.value.open = false
-    notify('Ambulance dispatch request filed')
+    notify('Ambulance trip record filed')
   } catch (error) {
     apiError.value = error.message
   } finally {
@@ -629,7 +800,13 @@ const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.ro
 const emptyTripLogForm = () => ({
   departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
+  // The one personnel role this dialog can edit — see the validation
+  // comment on ConductionRequestController::tripLog(). A stub created by
+  // C5's bridge (openTripRecord below) always starts with none.
+  drivers: [''],
 })
+const addTripDriver = () => { tripLog.value.form.drivers.push('') }
+const removeTripDriver = (idx) => { tripLog.value.form.drivers.splice(idx, 1) }
 const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
 
 // The button that opens the dialog and the dialog's own title read the same
@@ -661,6 +838,10 @@ const openTripLog = (record) => {
       odometer_start: record.odometer_start,
       odometer_end: record.odometer_end,
       others: record.others || '',
+      drivers: (() => {
+        const names = (record.people || []).filter(p => p.role === 'driver').map(p => p.name)
+        return names.length ? names : ['']
+      })(),
     },
   }
 }
@@ -716,6 +897,7 @@ const submitTripLog = async () => {
       odometer_start: form.odometer_start === '' ? null : form.odometer_start,
       odometer_end: form.odometer_end === '' ? null : form.odometer_end,
       others: form.others || null,
+      drivers: form.drivers,
     }
     const id = tripLog.value.target.conduction_request_id
     const res = await fetch(`${API_BASE}/conduction-requests/${id}/trip-log`, {

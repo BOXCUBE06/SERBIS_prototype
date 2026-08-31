@@ -60,13 +60,30 @@ class ServiceRequestController extends Controller
      */
     public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
+    /**
+     * Same literal the Vue panel keys off (ServiceRequestQueue.vue's
+     * AMBULANCE_SERVICE_CODE) — duplicated rather than shared for the same
+     * reason as OFFICE_TIMEZONE above: a fixed service identifier, not
+     * config that could drift.
+     */
+    private const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response';
+
+    /** Null if the service was seeded without a code column somehow, or does not exist. */
+    private function ambulanceServiceId(): ?int
+    {
+        return \App\Models\Service::where('code', self::AMBULANCE_SERVICE_CODE)->value('service_id');
+    }
+
    public function adminIndex()
     {
         // Added 'resident.barangay'
-        $requests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle'])
+        // conductionRequests.people: C5's bridge — the Bookings queue's
+        // Responding row needs its linked trip record (and who is driving
+        // it) without a second round trip per row.
+        $requests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people'])
             ->latest()
             ->get();
-            
+
         return response()->json(['data' => $requests]);
     }
 
@@ -80,11 +97,16 @@ class ServiceRequestController extends Controller
         } else {
             $residentId = $user->getKey();
             // Added 'resident.barangay'
+            //
+            // internal_notes is the operator-only scratch pad (see its migration) —
+            // hidden here rather than on the model, since adminIndex() and this
+            // same method's admin branch above both need it visible.
             $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])
                 ->where('resident_id', $residentId)
-                ->get();
+                ->get()
+                ->makeHidden('internal_notes');
         }
-        
+
         return response()->json($serviceRequests);
     }
 
@@ -327,13 +349,33 @@ class ServiceRequestController extends Controller
      */
     public function adminStore(Request $request)
     {
+        // Resolved before validate() so it can be interpolated into
+        // required_if/required_unless below — Laravel's own rules take a
+        // literal, not a query, and the ambulance service's id is not a
+        // fixed one across environments the way its code is.
+        $ambulanceServiceId = $this->ambulanceServiceId();
+
         $validated = $request->validate([
             'resident_id' => 'nullable|integer|exists:tbl_residents,resident_id',
             // Required only when there is no account to pull them from.
             'walk_in_name' => 'required_without:resident_id|nullable|string|max:255',
             'walk_in_contact_number' => 'required_without:resident_id|nullable|string|max:32',
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string|max:5000',
+            // Every other service still types this by hand. For ambulance it
+            // is composed server-side below from the structured fields, so
+            // whatever the client sends here is ignored rather than trusted.
+            'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
+            // Structured intake, ambulance only. patient_age/patient_sex stay
+            // optional even for ambulance — the paper form allows either to
+            // be unknown at intake and ConductionRequestController's own
+            // columns are nullable for the same reason.
+            'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'patient_age' => 'nullable|integer|min:0|max:150',
+            'patient_sex' => 'nullable|in:male,female',
+            'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'pickup_location' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'condition_notes' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
             'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
@@ -352,6 +394,26 @@ class ServiceRequestController extends Controller
         $walkInName = $residentId ? null : ($validated['walk_in_name'] ?? null);
         $walkInContact = $residentId ? null : ($validated['walk_in_contact_number'] ?? null);
         $ownerSegment = $residentId ?: 'walk-in';
+
+        // Same shape AmbulanceFormData.metaLines() writes on the mobile side
+        // (service_forms.dart) — Patient:/pickup → destination/Condition:/
+        // Contact:, one per line — kept for the request detail panel's own
+        // "Description" display, and for parity with an app submission. No
+        // longer read back apart by anything: ConductionRequestView.vue's
+        // dispatch pre-fill reads these columns directly.
+        $isAmbulance = $ambulanceServiceId !== null && (int) $validated['service_id'] === $ambulanceServiceId;
+        $description = $validated['description'] ?? null;
+        if ($isAmbulance) {
+            $contactNumber = $residentId
+                ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
+                : ($walkInContact ?? '');
+            $description = implode("\n", [
+                'Patient: '.($validated['patient_name'] ?? 'Not specified'),
+                ($validated['pickup_location'] ?? 'Address not specified').' → '.($validated['destination'] ?? 'destination not specified'),
+                'Condition: '.($validated['condition_notes'] ?? 'Not described'),
+                'Contact: '.(trim($contactNumber) !== '' ? trim($contactNumber) : 'See resident profile'),
+            ]);
+        }
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -374,7 +436,7 @@ class ServiceRequestController extends Controller
         }
 
         try {
-            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath, $scheduledAt) {
+            $serviceRequest = DB::transaction(function () use ($validated, $residentId, $walkInName, $walkInContact, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -413,7 +475,17 @@ class ServiceRequestController extends Controller
                     'walk_in_name' => $walkInName,
                     'walk_in_contact_number' => $walkInContact,
                     'service_id' => $validated['service_id'],
-                    'description' => $validated['description'],
+                    'description' => $description,
+                    // Ambulance-only. Null for every other service, same as
+                    // an app submission's row until the mobile app is on
+                    // this too — nothing reads these off a non-ambulance row.
+                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
+                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
+                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
+                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
+                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
+                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
+                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
@@ -460,6 +532,12 @@ class ServiceRequestController extends Controller
 
         if (!$serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        // Same reasoning as index()'s resident branch: internal_notes is for
+        // staff only, and this route serves the same model to both audiences.
+        if ($user instanceof \App\Models\Resident) {
+            $serviceRequest->makeHidden('internal_notes');
         }
 
         return response()->json($serviceRequest);
@@ -790,7 +868,45 @@ class ServiceRequestController extends Controller
             // what a human types; notifyResident's own builder is what
             // guarantees the assembled body still fits one segment.
             'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
+            // Staff-only, never sent to PhilSMS and never returned to a resident
+            // (see index()/show()) — so it carries no per-segment SMS cap.
+            'internal_notes' => 'nullable|string|max:1000',
         ]);
+
+        $ambulanceServiceId = $this->ambulanceServiceId();
+        $isAmbulanceRequest = $ambulanceServiceId !== null && $serviceRequest->service_id === $ambulanceServiceId;
+
+        // The bridge's other half (docs/dispatch-audit.md finding 1): the
+        // instant path could always reach Resolved with zero rows in
+        // tbl_conduction_requests. Checked before the transaction below so a
+        // rejection is a clean 422, not a status flip followed by an error.
+        if ($isAmbulanceRequest && ($validated['status'] ?? null) === 'Resolved') {
+            $trip = $serviceRequest->conductionRequests()->latest('conduction_request_id')->first();
+            $missing = [];
+
+            if (!$trip) {
+                $missing[] = 'a trip record — approve the dispatch again to create one';
+            } else {
+                if (!$trip->arrived_destination_at) {
+                    $missing[] = 'arrival time';
+                }
+                if ($trip->odometer_start === null) {
+                    $missing[] = 'odometer at departure';
+                }
+                if ($trip->odometer_end === null) {
+                    $missing[] = 'odometer on return';
+                }
+                if (!$trip->drivers()->exists()) {
+                    $missing[] = 'a driver';
+                }
+            }
+
+            if ($missing) {
+                throw ValidationException::withMessages([
+                    'status' => 'Cannot resolve — missing '.implode(', ', $missing).'.',
+                ]);
+            }
+        }
 
         // Captured before update() overwrites status: rejecting a booking is
         // the case this endpoint notifies for (the panel's older, unscheduled
@@ -798,17 +914,68 @@ class ServiceRequestController extends Controller
         $wasBookingRejection = $serviceRequest->scheduled_at !== null
             && ($validated['status'] ?? null) === 'Disapproved';
 
-        DB::transaction(function () use ($serviceRequest, $validated) {
+        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
             $serviceRequest->update($validated);
+
+            // The bridge itself: this is the one place the instant path ever
+            // transitions to Responding, so it is the one place that can
+            // guarantee a linked trip record exists from here on. Guarded on
+            // conductionRequests()->exists() so re-approving (a vehicle swap,
+            // say) never creates a second one next to a trip already in
+            // progress.
+            if ($isAmbulanceRequest
+                && ($validated['status'] ?? null) === 'Responding'
+                && !$serviceRequest->conductionRequests()->exists()
+            ) {
+                $this->createConductionStub($serviceRequest);
+            }
         });
 
         if ($wasBookingRejection) {
             $this->notifyResident($serviceRequest, $this->rejectionMessage((string) $validated['remarks']));
         }
 
-        return response()->json($serviceRequest->fresh(['vehicle']));
+        return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
+    }
+
+    /**
+     * The stub C5 creates the moment an ambulance request goes Responding.
+     * Filled from whatever the request already has — C3's structured columns
+     * when the walk-in form supplied them, the account's own contact — and
+     * the same honest placeholders AmbulanceFormData already writes into
+     * `description` when a mobile submission leaves a field blank, so a
+     * gap here reads the same way a gap already did. patient_name,
+     * patient_address, patient_contact_number, medical_diagnosis, origin and
+     * destination are the six columns NOT NULL at the database level
+     * (docs/dispatch-audit.md finding 7) — every other trip field is filled
+     * in later, by hand, while the crew is actually out.
+     */
+    private function createConductionStub(ServiceRequest $serviceRequest): void
+    {
+        $serviceRequest->loadMissing('resident');
+
+        $patientName = $serviceRequest->patient_name
+            ?: ($serviceRequest->resident
+                ? trim("{$serviceRequest->resident->first_name} {$serviceRequest->resident->last_name}")
+                : $serviceRequest->walk_in_name)
+            ?: 'Not specified';
+
+        $contactNumber = $serviceRequest->resident?->phone_number
+            ?: $serviceRequest->walk_in_contact_number
+            ?: 'See resident profile';
+
+        \App\Models\ConductionRequest::create([
+            'service_request_id' => $serviceRequest->request_id,
+            'vehicle_id' => $serviceRequest->vehicle_id,
+            'patient_name' => $patientName,
+            'patient_address' => $serviceRequest->patient_address ?: 'Address not specified',
+            'patient_contact_number' => $contactNumber,
+            'medical_diagnosis' => $serviceRequest->condition_notes ?: 'Not described',
+            'origin' => $serviceRequest->pickup_location ?: 'Address not specified',
+            'destination' => $serviceRequest->destination ?: 'destination not specified',
+        ]);
     }
 
     /**

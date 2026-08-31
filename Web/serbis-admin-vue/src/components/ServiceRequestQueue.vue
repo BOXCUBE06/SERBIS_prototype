@@ -27,7 +27,7 @@
           @click="openCreateDialog"
         >
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Walk-in Request
+          Log Service Request
         </v-btn>
         <!-- Same outlined-primary treatment as Export below: a supporting
              view, not the page's one decision. Ambulance-only: the fleet
@@ -416,12 +416,65 @@
                 </v-alert>
               </div>
 
+              <!-- The trip record C5 creates the moment this request went
+                   Responding (ServiceRequestController::createConductionStub)
+                   — surfaced here rather than rebuilt here: "Open Trip
+                   Record" jumps to the Trip Logs tab's own dialog, which
+                   already has every field (checkpoints, odometer, drivers,
+                   passengers, relatives) rather than a second, thinner copy
+                   of the same form living in this panel. Resolving is
+                   refused server-side without an arrival time, both
+                   odometer readings and a driver — the error surfaces
+                   through the alert above the fields, same as any other
+                   apiError, naming exactly what's missing. -->
+              <div v-if="scope === 'ambulance'" class="detail-group">
+                <v-alert type="warning" variant="tonal" border="start" rounded="lg">
+                  <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
+                  <template v-if="respondingTrip">
+                    <div class="text-body-2">
+                      {{ tripDriverNames || 'No driver recorded yet' }}
+                      <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
+                    </div>
+                    <div class="text-caption text-medium-emphasis mb-2">
+                      Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
+                    </div>
+                    <v-btn
+                      variant="outlined" size="small" class="text-none font-weight-bold"
+                      @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
+                    >Open Trip Record</v-btn>
+                  </template>
+                  <div v-else class="text-body-2">
+                    No trip record found for this request — Mark as Resolved will explain what's missing.
+                  </div>
+                </v-alert>
+              </div>
+
+              <!-- Staff-only scratch pad. Deliberately never pre-fills the
+                   approve/decline dialog below (reasonDialog) — that field
+                   goes to the requester, this one never does, and the two
+                   sharing a column used to mean an internal shorthand could
+                   reach a resident's phone unedited. Visible regardless of
+                   status: a note about what happened is still useful to read
+                   on a Resolved request, not just a Pending one. -->
               <v-textarea
-                v-if="selectedRequest.status === 'Pending' || selectedRequest.status === 'Responding' || !selectedRequest.status"
-                v-model="formData.remarks" label="Admin remarks" variant="outlined" density="comfortable" rounded="lg" rows="2"
-                hint="Carried into the approve and decline dialogs. Declining asks for one if this is empty."
+                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
+                hint="Never shown to the requester — for staff reading this request later."
                 persistent-hint
               ></v-textarea>
+              <!-- Its own save path, not the reasonDialog's: a terminal
+                   request (Resolved, Disapproved, Cancelled) shows no
+                   approve/decline action at all, so this is the only way a
+                   note typed here ever reaches the server. update() already
+                   accepts a partial body — no status, no vehicle_id — so this
+                   PATCH touches nothing else on the request. -->
+              <div class="d-flex align-center gap-3 mb-2">
+                <v-btn
+                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
+                  :loading="noteSaving"
+                  @click="saveInternalNote"
+                >Save note</v-btn>
+                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
+              </div>
             </div>
 
             <v-divider v-if="showActions"></v-divider>
@@ -662,9 +715,10 @@
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
           <v-textarea
+            v-if="reasonCopy.showField"
             v-model="reasonDialog.reason"
             :label="reasonCopy.label"
-            hint="This is shown with the request in the mobile app."
+            :hint="reasonCopy.hint"
             persistent-hint
             variant="outlined"
             rows="3"
@@ -674,6 +728,11 @@
             :error-messages="reasonDialog.error"
             @update:model-value="reasonDialog.error = ''"
           ></v-textarea>
+          <!-- Approve on a walk-in with no account: the note is optional and
+               there is no app to show it in, so there is nothing to type. -->
+          <div v-else class="text-caption text-medium-emphasis">
+            No linked account — there is no mobile app to show a note in.
+          </div>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
@@ -817,7 +876,7 @@
     <v-dialog v-model="createDialog.open" max-width="640" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <span class="text-h6 font-weight-bold">Log Walk-in Request</span>
+          <span class="text-h6 font-weight-bold">Log Service Request</span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
@@ -881,6 +940,7 @@
           ></v-select>
 
           <v-textarea
+            v-if="scope !== 'ambulance'"
             v-model="createDialog.form.description"
             label="Description"
             variant="outlined"
@@ -889,6 +949,65 @@
             class="mb-2"
             :rules="[required]"
           ></v-textarea>
+
+          <!-- Ambulance only. Replaces the free-text description above with
+               the same fields the paper Conduction Request Form and the
+               mobile app's own AmbulanceFormData ask for, so what the
+               resident's own story ("transfer to another hospital, no
+               vehicle at home") becomes is structured data from the moment
+               it is taken, not a paragraph parsed back apart at dispatch
+               time. Server composes `description` from these — see
+               ServiceRequestController::adminStore(). -->
+          <template v-else>
+            <v-row dense>
+              <v-col cols="12" sm="8">
+                <v-text-field
+                  v-model="createDialog.form.patient_name"
+                  label="Patient name" variant="outlined" density="comfortable" class="mb-2"
+                  :rules="[required]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="6" sm="2">
+                <v-text-field
+                  v-model="createDialog.form.patient_age"
+                  label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="6" sm="2">
+                <v-select
+                  v-model="createDialog.form.patient_sex"
+                  :items="sexOptions"
+                  label="Sex" variant="outlined" density="comfortable" clearable class="mb-2"
+                ></v-select>
+              </v-col>
+            </v-row>
+            <v-text-field
+              v-model="createDialog.form.patient_address"
+              label="Patient address" variant="outlined" density="comfortable" class="mb-2"
+              :rules="[required]"
+            ></v-text-field>
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.pickup_location"
+                  label="Pickup location" variant="outlined" density="comfortable" class="mb-2"
+                  :rules="[required]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.destination"
+                  label="Destination" variant="outlined" density="comfortable" class="mb-2"
+                  :rules="[required]"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+            <v-textarea
+              v-model="createDialog.form.condition_notes"
+              label="Condition" variant="outlined" density="comfortable" rows="2" class="mb-2"
+              :rules="[required]"
+            ></v-textarea>
+          </template>
 
           <!-- Same reasoning as the service picker above: a unit type other
                than Ambulance has no meaning on this board. -->
@@ -1007,7 +1126,7 @@ const props = defineProps({
 // board sits inside a tab on the same page as the trip-log form, so the
 // parent just switches tabs and opens its own create dialog prefilled from
 // this booking, rather than the old /conduction-requests?dispatch=<id> hop.
-const emit = defineEmits(['dispatch-booking'])
+const emit = defineEmits(['dispatch-booking', 'open-trip-record'])
 
 const route = useRoute()
 
@@ -1070,9 +1189,18 @@ const vehicleModal = ref({ isOpen: false })
 const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
 
-const formData = ref({ remarks: '', vehicle_id: null })
+const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
+const noteSaving = ref(false)
+const noteSaved = ref(false)
+let noteSavedTimer = null
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+// Same two values ConductionRequestView.vue's own create form offers, for
+// the same patient.
+const sexOptions = [
+  { title: 'Male', value: 'male' },
+  { title: 'Female', value: 'female' },
+]
 
 const emptyCreateForm = () => ({
   resident_id: null,
@@ -1080,6 +1208,14 @@ const emptyCreateForm = () => ({
   walk_in_contact_number: '',
   service_id: null,
   description: '',
+  // Ambulance only — see the v-else block in the template above.
+  patient_name: '',
+  patient_age: null,
+  patient_sex: null,
+  patient_address: '',
+  pickup_location: '',
+  destination: '',
+  condition_notes: '',
   required_vehicle_type: null,
   valid_id: null,
   site_photo: null,
@@ -1151,16 +1287,25 @@ const checkWalkInAvailability = async () => {
 const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
 const reasonDialog = ref(emptyReason())
 
+// Disapprove's reason is required at the API regardless of who asked — it is
+// the audit record of why, even for a walk-in with no account to read it. So
+// only 'approve' ever hides the field entirely; disapprove and bulk always
+// show it, with an honest hint about where it actually goes.
 const reasonCopy = computed(() => {
   const req = selectedRequest.value
   const who = req && requesterName(req) !== 'Unknown Head of the Family' && requesterName(req) !== 'Unknown requester' ? requesterName(req) : ''
   const what = selectedRequest.value?.service?.service_name || 'this service'
+  const hasAccount = req ? !isWalkIn(req) : true
+  const appHint = 'Shown to the Head of the Family in the mobile app.'
+  const noAppHint = 'No linked account — kept as an internal record only, not shown to anyone.'
   switch (reasonDialog.value.kind) {
     case 'approve':
       return {
         title: 'Approve and dispatch',
         body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
         label: 'Note for the Head of the Family (optional)',
+        hint: appHint,
+        showField: hasAccount,
         confirm: 'Approve & dispatch',
       }
     case 'bulk':
@@ -1168,6 +1313,8 @@ const reasonCopy = computed(() => {
         title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
         body: 'Every selected request is declined with this same reason.',
         label: 'Reason for declining',
+        hint: 'Shown to any Head of the Family in the selection with a linked account; kept as an internal record for a walk-in with none.',
+        showField: true,
         confirm: 'Disapprove all',
       }
     default:
@@ -1175,6 +1322,8 @@ const reasonCopy = computed(() => {
         title: 'Disapprove this request',
         body: who ? `${who} asked for ${what}.` : `A request for ${what}.`,
         label: 'Reason for declining',
+        hint: hasAccount ? appHint : noAppHint,
+        showField: true,
         confirm: 'Disapprove request',
       }
   }
@@ -1185,9 +1334,12 @@ const openReason = (kind) => {
     ...emptyReason(),
     open: true,
     kind,
-    // A remark already typed on the panel is the operator's own words; making
-    // them retype it in the dialog is how a required field turns into a "."
-    reason: kind === 'bulk' ? '' : (formData.value.remarks || ''),
+    // Always starts blank. This used to pre-fill from the panel's own
+    // "Admin remarks" box, which is why an operator's internal shorthand
+    // could reach a resident's phone unedited — that box is now
+    // formData.internal_notes, a separate column the API never returns to
+    // a resident, and the two must not feed each other again.
+    reason: '',
   }
 }
 
@@ -1206,6 +1358,17 @@ const confirmReason = () => {
   formData.value.remarks = trimmed
   return updateStatus(kind === 'approve' ? 'Responding' : 'Disapproved')
 }
+
+// C5's bridge: adminIndex() eager-loads conductionRequests.people, so the
+// stub created at Approve & Dispatch is already sitting on the row by the
+// time this renders — no second round trip. `?.[0]` rather than a find: one
+// service request has at most one trip in practice (createConductionStub is
+// guarded on conductionRequests()->exists()), and the relation has no other
+// row to prefer.
+const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
+const tripDriverNames = computed(() =>
+  (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
+)
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
 // photo of the scene. Both live on the private disk and both are served only by
@@ -1606,6 +1769,9 @@ const selectRequest = (item, resetRemarks = true) => {
   selectedRequest.value = item
   formData.value = {
     remarks: resetRemarks ? (item.remarks || '') : formData.value.remarks,
+    // Always fresh from the row — this is the operator's own note, not part
+    // of the reason-dialog round trip remarks above is kept for.
+    internal_notes: item.internal_notes || '',
     vehicle_id: item.vehicle_id || null
   }
   loadAttachments(item)
@@ -1648,13 +1814,20 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
       body: JSON.stringify({
         status: newStatus,
         remarks: formData.value.remarks,
+        internal_notes: formData.value.internal_notes,
         vehicle_id: formData.value.vehicle_id || targetRequest.vehicle_id
       })
     })
 
     if (!res.ok) {
-      const errData = await res.json()
-      throw new Error(errData.message || 'Failed to update request')
+      const errData = await res.json().catch(() => ({}))
+      // C5's resolution gate answers with a specific ValidationException
+      // message ("Cannot resolve — missing arrival time, ...") in
+      // errors.status, not in the generic top-level `message` Laravel
+      // sends for a validation failure ("The given data was invalid.").
+      // Same errors-first pattern submitWalkIn/submitCreate already use.
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to update request')
     }
 
     // The vehicle's own status used to be flipped here, by a second request.
@@ -1671,6 +1844,38 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     reasonDialog.value.error = error.message
   } finally {
     loading.value = false
+  }
+}
+
+// The only save path for a note typed while the request has no visible
+// action button at all (Booked, Resolved, Disapproved, Cancelled all hide
+// the reasonDialog trigger). Sends internal_notes alone — no status, no
+// vehicle_id — so update()'s partial-body support means nothing else on the
+// request moves.
+const saveInternalNote = async () => {
+  if (!selectedRequest.value) return
+  noteSaving.value = true
+  apiError.value = ''
+  const id = itemId(selectedRequest.value)
+
+  try {
+    const res = await fetch(`${API_BASE}/service-requests/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ internal_notes: formData.value.internal_notes }),
+    })
+    if (!res.ok) {
+      const errData = await res.json()
+      throw new Error(errData.message || 'Failed to save the note')
+    }
+    await fetchData()
+    noteSaved.value = true
+    clearTimeout(noteSavedTimer)
+    noteSavedTimer = setTimeout(() => { noteSaved.value = false }, 2000)
+  } catch (error) {
+    apiError.value = error.message
+  } finally {
+    noteSaving.value = false
   }
 }
 
@@ -1885,7 +2090,13 @@ const submitWalkIn = async () => {
     createDialog.value.error = 'Pick a service'
     return
   }
-  if (!form.description.trim()) {
+  if (props.scope === 'ambulance') {
+    if (!form.patient_name.trim() || !form.patient_address.trim() || !form.pickup_location.trim()
+        || !form.destination.trim() || !form.condition_notes.trim()) {
+      createDialog.value.error = 'Patient name, address, pickup, destination and condition are required'
+      return
+    }
+  } else if (!form.description.trim()) {
     createDialog.value.error = 'Description is required'
     return
   }
@@ -1905,7 +2116,22 @@ const submitWalkIn = async () => {
       body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
     }
     body.append('service_id', form.service_id)
-    body.append('description', form.description.trim())
+    if (props.scope === 'ambulance') {
+      // No 'description' — the server composes it from these, in the same
+      // readable shape the mobile app's own AmbulanceFormData produces.
+      // Dispatch itself now reads the structured columns directly
+      // (ConductionRequestView.vue's openCreate) — this is for the request
+      // detail panel's own "Description" display, not a parser anymore.
+      body.append('patient_name', form.patient_name.trim())
+      if (form.patient_age) body.append('patient_age', form.patient_age)
+      if (form.patient_sex) body.append('patient_sex', form.patient_sex)
+      body.append('patient_address', form.patient_address.trim())
+      body.append('pickup_location', form.pickup_location.trim())
+      body.append('destination', form.destination.trim())
+      body.append('condition_notes', form.condition_notes.trim())
+    } else {
+      body.append('description', form.description.trim())
+    }
     if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
     if (props.scope === 'ambulance' && createDialog.value.scheduleForLater && form.scheduled_at) {
       body.append('scheduled_at', form.scheduled_at.replace('T', ' ') + ':00')

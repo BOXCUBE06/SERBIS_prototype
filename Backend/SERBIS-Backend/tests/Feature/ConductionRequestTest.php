@@ -110,6 +110,134 @@ class ConductionRequestTest extends TestCase
     }
 
     /**
+     * C7 of docs/dispatch-audit.md's remediation plan: the standalone form's
+     * free-text `vehicle` field never checked whether the unit was already
+     * out. A picker bound to vehicle_id makes that checkable — this is the
+     * guard, exercised at the endpoint since the picker itself is a Vue
+     * concern with nothing here to test.
+     */
+    public function test_filing_against_a_unit_already_on_a_trip_is_refused(): void
+    {
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        $inProgress = ConductionRequest::create($this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'destination' => 'Echague District Hospital',
+            'departed_office_at' => '2026-08-31 08:00:00',
+        ]));
+        $this->assertSame('In transit', $inProgress->trip_status);
+
+        $response = $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+        ]));
+
+        $response->assertStatus(409);
+        $this->assertSame('Echague District Hospital', $response->json('conflict.destination'));
+        $this->assertSame($inProgress->conduction_request_id, $response->json('conflict.conduction_request_id'));
+        $this->assertSame(1, ConductionRequest::count());
+    }
+
+    public function test_a_returned_unit_is_no_longer_a_conflict(): void
+    {
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        ConductionRequest::create($this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'departed_office_at' => '2026-08-31 08:00:00',
+            'returned_office_at' => '2026-08-31 09:00:00',
+        ]));
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+        ]))->assertStatus(201);
+    }
+
+    public function test_a_unit_never_dispatched_is_not_a_conflict(): void
+    {
+        // ConductionRequest::create() alone — a filed but never-departed trip
+        // record — must not itself count as "already on a trip".
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        ConductionRequest::create($this->payload(['vehicle_id' => $vehicle->vehicle_id]));
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+        ]))->assertStatus(201);
+    }
+
+    public function test_a_reason_overrides_the_conflict_and_is_recorded(): void
+    {
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        ConductionRequest::create($this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'departed_office_at' => '2026-08-31 08:00:00',
+        ]));
+
+        $response = $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'override_reason' => 'Second patient, unit reassigned mid-trip on dispatcher instruction.',
+        ]));
+
+        $response->assertStatus(201);
+        $this->assertSame(2, ConductionRequest::count());
+        $this->assertSame(
+            'Second patient, unit reassigned mid-trip on dispatcher instruction.',
+            ConductionRequest::latest('conduction_request_id')->first()->vehicle_override_reason,
+        );
+    }
+
+    public function test_an_override_reason_is_not_stored_when_there_was_no_conflict(): void
+    {
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'override_reason' => 'Not needed, sent anyway.',
+        ]))->assertStatus(201);
+
+        $this->assertNull(ConductionRequest::first()->vehicle_override_reason);
+    }
+
+    public function test_the_conflict_is_logged_to_the_audit_trail(): void
+    {
+        $admin = User::create([
+            'first_name' => 'MDRRMO', 'last_name' => 'Admin', 'email_address' => 'admin2@test.local',
+            'password' => Hash::make('Password123'), 'role' => 'Admin', 'status' => 'Active',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+        ConductionRequest::create($this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'departed_office_at' => '2026-08-31 08:00:00',
+        ]));
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'override_reason' => 'Dispatcher-approved reassignment.',
+        ]))->assertStatus(201);
+
+        $newest = ConductionRequest::latest('conduction_request_id')->first();
+        $log = DB::table('tbl_system_logs')
+            ->where('auditable_type', ConductionRequest::class)
+            ->where('auditable_id', $newest->conduction_request_id)
+            ->where('action_type', 'created')
+            ->first();
+
+        $this->assertNotNull($log);
+        $this->assertStringContainsString('Dispatcher-approved reassignment.', $log->new_values);
+    }
+
+    /**
      * The admin panel's detail view shows the linked booking's own
      * scheduled_at and status — index() and show() both have to eager-load
      * the relation for that, not just carry the bare id.
@@ -170,6 +298,58 @@ class ConductionRequestTest extends TestCase
         $conductionRequest->refresh();
         $this->assertSame(10000, $conductionRequest->odometer_start);
         $this->assertSame(10025, $conductionRequest->odometer_end);
+    }
+
+    /**
+     * C5's bridge (ServiceRequestController::createConductionStub) creates a
+     * trip record with no personnel at all — a driver is only ever known
+     * once the crew is assigned, not at approval time. This is the one
+     * place that gap can be closed after the fact.
+     */
+    public function test_trip_log_can_set_drivers_on_a_stub_with_none(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['drivers' => []]));
+        $this->assertSame(0, $conductionRequest->drivers()->count());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'drivers' => ['Rico Santos'],
+        ])->assertOk();
+
+        $this->assertSame(['Rico Santos'], $conductionRequest->drivers()->pluck('name')->all());
+    }
+
+    public function test_trip_log_replaces_drivers_rather_than_appending(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+        \App\Models\ConductionRequestPerson::create([
+            'conduction_request_id' => $conductionRequest->conduction_request_id,
+            'role' => 'driver', 'name' => 'Pedro Santos', 'position' => 0,
+        ]);
+        $this->assertSame(1, $conductionRequest->drivers()->count());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'drivers' => ['Rico Santos', 'Ben Cruz'],
+        ])->assertOk();
+
+        $this->assertSame(
+            ['Rico Santos', 'Ben Cruz'],
+            $conductionRequest->drivers()->pluck('name')->all(),
+        );
+    }
+
+    public function test_trip_log_without_a_drivers_key_leaves_existing_drivers_alone(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+        \App\Models\ConductionRequestPerson::create([
+            'conduction_request_id' => $conductionRequest->conduction_request_id,
+            'role' => 'driver', 'name' => 'Pedro Santos', 'position' => 0,
+        ]);
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'odometer_start' => 500,
+        ])->assertOk();
+
+        $this->assertSame(['Pedro Santos'], $conductionRequest->drivers()->pluck('name')->all());
     }
 
     /**
