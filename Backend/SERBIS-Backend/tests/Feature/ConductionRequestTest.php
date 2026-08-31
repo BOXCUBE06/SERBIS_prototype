@@ -7,6 +7,7 @@ use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Models\Vehicle;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -214,6 +215,45 @@ class ConductionRequestTest extends TestCase
         ]))->assertStatus(201);
 
         $this->assertSame('Pending', $pendingRequest->fresh()->status);
+    }
+
+    /**
+     * The 409 above is the application's guard; this proves the schema
+     * backs it up. Goes through the model directly, not the endpoint — the
+     * point is that the constraint holds even if store()'s own check is
+     * ever bypassed, not that the controller works (already covered above).
+     */
+    public function test_the_unique_index_rejects_a_second_conduction_request_for_the_same_booking_at_the_db_level(): void
+    {
+        $service = Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+        $booking = ServiceRequest::create([
+            'service_id' => $service->service_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+        ]);
+
+        ConductionRequest::create($this->payload(['service_request_id' => $booking->request_id]));
+
+        $this->expectException(QueryException::class);
+
+        ConductionRequest::create($this->payload(['service_request_id' => $booking->request_id]));
+    }
+
+    /**
+     * The other half of the same constraint: nullable stays nullable. A
+     * unique index must not collapse every walk-in trip (no booking, no
+     * service_request_id) down to just one allowed row.
+     */
+    public function test_the_unique_index_allows_any_number_of_walk_in_trips_with_no_booking(): void
+    {
+        ConductionRequest::create($this->payload());
+        ConductionRequest::create($this->payload());
+        ConductionRequest::create($this->payload());
+
+        $this->assertSame(3, ConductionRequest::count());
     }
 
     /**
