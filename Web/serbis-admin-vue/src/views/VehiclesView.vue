@@ -118,7 +118,9 @@
                 </div>
                 <div class="min-w-0">
                   <div class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.unit_identifier }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.specification || 'Standard Unit' }}</div>
+                  <div class="text-caption text-medium-emphasis text-truncate">
+                    {{ item.specification || 'Standard Unit' }}<template v-if="item.plate_no"> &bull; {{ item.plate_no }}</template>
+                  </div>
                 </div>
               </div>
             </template>
@@ -198,6 +200,7 @@
         <v-card-text class="px-6 py-2">
           <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ formDialog.error }}</v-alert>
           <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+          <v-text-field v-model="form.plate_no" label="Plate no." placeholder="e.g. NBA 2021" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
           <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
           <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
           <v-select v-model="form.status" :items="STATUSES" label="Status *" variant="outlined" density="comfortable" rounded="lg"></v-select>
@@ -285,6 +288,7 @@ const filteredVehicles = computed(() => {
     const matchesStatus = statusFilter.value === 'All' || v.status === statusFilter.value
     const matchesSearch = !q ||
       (v.unit_identifier || '').toLowerCase().includes(q) ||
+      (v.plate_no || '').toLowerCase().includes(q) ||
       (v.specification || '').toLowerCase().includes(q)
     return matchesType && matchesStatus && matchesSearch
   })
@@ -349,13 +353,14 @@ const executeStatusChange = async () => {
 
 // --- Add / Edit ---
 const openAdd = () => {
-  form.value = { unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' }
+  form.value = { unit_identifier: '', plate_no: '', type: 'Ambulance', specification: '', status: 'Available' }
   formDialog.value = { show: true, editing: false, loading: false, error: '' }
 }
 const openEdit = (vehicle) => {
   form.value = {
     vehicle_id: vehicle.vehicle_id || vehicle.id,
     unit_identifier: vehicle.unit_identifier,
+    plate_no: vehicle.plate_no || '',
     type: vehicle.type,
     specification: vehicle.specification || '',
     status: vehicle.status,
@@ -374,6 +379,7 @@ const saveVehicle = async () => {
   const url = editing ? `${API}/${form.value.vehicle_id}` : API
   const payload = {
     unit_identifier: form.value.unit_identifier.trim(),
+    plate_no: form.value.plate_no?.trim() || null,
     type: form.value.type,
     specification: form.value.specification?.trim() || null,
     status: form.value.status,

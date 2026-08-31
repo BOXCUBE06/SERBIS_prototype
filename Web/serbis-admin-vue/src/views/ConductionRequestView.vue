@@ -725,12 +725,16 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
 })))
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
-// at selection time. plate_no stays manual either way: tbl_vehicles tracks
-// no plate number for a real unit to derive it from.
+// at selection time. plate_no now sources from the fleet unit's own record
+// the same way, now that tbl_vehicles actually tracks one — still just a
+// starting value in an editable field, not locked, since a real plate can
+// go stale (reassigned, repainted unit) faster than the fleet record gets
+// updated to match.
 const onSelectFleetVehicle = (vehicleId) => {
   const form = createDialog.value.form
   const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
   form.vehicle = vehicle ? `${vehicle.unit_identifier}${vehicle.specification ? ` (${vehicle.specification})` : ''}` : ''
+  form.plate_no = vehicle?.plate_no || ''
   // A new pick clears any conflict the previous one raised — it may not
   // apply to this unit at all.
   createDialog.value.conflict = null

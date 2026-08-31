@@ -19,6 +19,7 @@ class VehicleController extends Controller
     {
         $validated = $request->validate([
             'unit_identifier' => 'required|unique:tbl_vehicles,unit_identifier',
+            'plate_no' => 'nullable|string|max:32',
             'type' => 'required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
             'specification' => 'nullable|string',
             'status' => 'required|in:Available,Dispatched,Maintenance',
@@ -49,10 +50,11 @@ class VehicleController extends Controller
 
         $validated = $request->validate([
             'unit_identifier' => [
-                'sometimes', 
-                'required', 
+                'sometimes',
+                'required',
                 Rule::unique('tbl_vehicles')->ignore($vehicle->vehicle_id, 'vehicle_id')
             ],
+            'plate_no' => 'nullable|string|max:32',
             'type' => 'sometimes|required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
             'specification' => 'nullable|string',
             'status' => 'sometimes|required|in:Available,Dispatched,Maintenance',
