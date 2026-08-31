@@ -17,6 +17,7 @@ class ConductionRequest extends Model
     protected $fillable = [
         'service_request_id',
         'vehicle_id',
+        'vehicle_override_reason',
         'patient_name',
         'patient_age',
         'patient_address',

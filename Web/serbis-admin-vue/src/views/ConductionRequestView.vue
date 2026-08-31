@@ -232,12 +232,51 @@
                 <v-text-field v-model="createDialog.form.destination" label="To:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.vehicle" label="Vehicle" variant="outlined" density="comfortable"></v-text-field>
+                <v-select
+                  v-model="createDialog.form.vehicle_id"
+                  :items="vehicleOptions"
+                  label="Fleet unit"
+                  variant="outlined"
+                  density="comfortable"
+                  clearable
+                  @update:model-value="onSelectFleetVehicle"
+                ></v-select>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field v-model="createDialog.form.plate_no" label="Plate no." variant="outlined" density="comfortable"></v-text-field>
               </v-col>
+              <!-- Fallback only, shown while no fleet unit is picked above —
+                   see the comment on onSelectFleetVehicle. Not the default:
+                   the picker is, since it is what the double-booking guard
+                   below can actually check. -->
+              <v-col v-if="!createDialog.form.vehicle_id" cols="12">
+                <v-text-field
+                  v-model="createDialog.form.vehicle"
+                  label="Vehicle name (not in the fleet — e.g. mutual aid)"
+                  variant="outlined"
+                  density="comfortable"
+                ></v-text-field>
+              </v-col>
             </v-row>
+
+            <!-- C7's double-booking guard. A soft block: filing anyway is
+                 always possible, but only with a reason, and that reason is
+                 what lands in the audit trail (ConductionRequestController::
+                 store(), vehicle_override_reason). -->
+            <v-alert v-if="createDialog.conflict" type="warning" variant="tonal" border="start" density="compact" class="mb-4">
+              This unit is already on a trip — heading to {{ createDialog.conflict.destination }}
+              (trip #{{ createDialog.conflict.conduction_request_id }}).
+            </v-alert>
+            <v-textarea
+              v-if="createDialog.conflict"
+              v-model="createDialog.form.override_reason"
+              label="Reason to file anyway (required)"
+              variant="outlined"
+              density="comfortable"
+              rows="2"
+              class="mb-4"
+              :rules="[required]"
+            ></v-textarea>
 
             <h3 class="section-title">Personnel</h3>
             <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
@@ -273,7 +312,7 @@
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitCreate">
-            File request
+            {{ createDialog.conflict ? 'File anyway' : 'File request' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -575,12 +614,44 @@ const bookingLabel = (r) => {
 }
 const bookingOptions = computed(() => linkableBookings.value.map(r => ({ title: bookingLabel(r), value: r.request_id })))
 
+// C7: the fleet picker. Own fetch rather than sharing ServiceRequestQueue's —
+// that component keeps its vehicle list private, same as bookings above.
+const vehicles = ref([])
+const fetchVehicles = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
+    if (!res.ok) return
+    const data = await res.json()
+    vehicles.value = data.data || data
+  } catch {
+    // The picker just shows no fleet units — the free-text fallback still
+    // files a trip record, which is the case this must never block.
+  }
+}
+const ambulanceVehicles = computed(() => vehicles.value.filter(v => v.type === 'Ambulance'))
+const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
+  title: `${v.unit_identifier}${v.specification ? ` (${v.specification})` : ''}`,
+  value: v.vehicle_id,
+})))
+// The free-text `vehicle` name column has no fleet equivalent to leave blank
+// and derive later — unlike a booking's own fields, this has to be written
+// at selection time. plate_no stays manual either way: tbl_vehicles tracks
+// no plate number for a real unit to derive it from.
+const onSelectFleetVehicle = (vehicleId) => {
+  const form = createDialog.value.form
+  const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
+  form.vehicle = vehicle ? `${vehicle.unit_identifier}${vehicle.specification ? ` (${vehicle.specification})` : ''}` : ''
+  // A new pick clears any conflict the previous one raised — it may not
+  // apply to this unit at all.
+  createDialog.value.conflict = null
+}
+
 // Create dialog
 const emptyCreateForm = () => ({
   // Set only when this dialog was opened by dispatching an approved booking
   // (handleDispatchBooking below); a plain "Ambulance Trip Record"
   // leaves both null, exactly as before this feature existed.
-  service_request_id: null, vehicle_id: null,
+  service_request_id: null, vehicle_id: null, override_reason: '',
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
   patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
   origin: '', destination: '',
@@ -590,7 +661,7 @@ const emptyCreateForm = () => ({
   // polish, 2026-08-30).
   drivers: [''], authorized_passengers: [''], patient_relatives: [''],
 })
-const createDialog = ref({ open: false, form: emptyCreateForm() })
+const createDialog = ref({ open: false, form: emptyCreateForm(), conflict: null })
 const createForm = ref(null)
 
 // `booking` is the tbl_service_request row this dispatch fulfils — absent
@@ -615,17 +686,27 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   form.patient_contact_number = booking.resident?.phone_number || booking.walk_in_contact_number || ''
   form.service_request_id = booking.request_id
   form.vehicle_id = booking.vehicle_id ?? null
+  // Best-effort: the fleet list this reads may not have loaded yet (see
+  // fetchVehicles below). If not, vehicle_id is still correctly linked —
+  // only the display name text is left for the operator to see once it
+  // arrives, or to type by hand.
+  const fleetUnit = ambulanceVehicles.value.find(v => v.vehicle_id === form.vehicle_id)
+  if (fleetUnit) form.vehicle = `${fleetUnit.unit_identifier}${fleetUnit.specification ? ` (${fleetUnit.specification})` : ''}`
+  createDialog.value.conflict = null
 }
 
 const openCreate = (booking = null) => {
   apiError.value = ''
   const form = emptyCreateForm()
   if (booking) applyBooking(booking, form)
-  createDialog.value = { open: true, form }
-  // Background refresh for the autocomplete's own options, not for this
-  // booking — that one is already in hand and applied synchronously above,
-  // so there is no dialog-opens-then-fields-pop-in flash to wait out.
+  createDialog.value = { open: true, form, conflict: null }
+  // Background refresh for both lists. The booking already in hand (if any)
+  // was applied synchronously above, so there is no dialog-opens-then-
+  // fields-pop-in flash to wait out for that one; the fleet name derived
+  // just above may still fill in a moment after open if this is the fetch
+  // that populates it.
   fetchBookings()
+  fetchVehicles()
 }
 
 // Fired by the create dialog's own "Link to approved service request"
@@ -682,6 +763,14 @@ const submitCreate = async () => {
     })
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
+      // 409: the double-booking guard, not a validation failure — surfaced
+      // as its own alert plus the required override field (see the
+      // template) rather than the generic apiError text, since "already on
+      // a trip" needs the conflicting trip named, not just stated.
+      if (res.status === 409 && errData.conflict) {
+        createDialog.value.conflict = errData.conflict
+        return
+      }
       const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
       throw new Error(firstError || errData.message || 'Failed to file the request')
     }

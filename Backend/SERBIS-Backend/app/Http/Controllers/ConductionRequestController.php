@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -63,6 +64,11 @@ class ConductionRequestController extends Controller
             'patient_address' => 'required|string|max:255',
             'patient_sex' => 'nullable|in:male,female',
             'patient_contact_number' => 'required|string|max:32',
+            // Fallback only, for a unit outside the fleet table entirely
+            // (mutual aid from a neighbouring LGU) — the panel now sources
+            // this from tbl_vehicles via vehicle_id whenever the unit is one
+            // of ours. Kept independent of vehicle_id: a row can carry a
+            // real vehicle_id and this can still be blank, or vice versa.
             'vehicle' => 'nullable|string|max:255',
             'medical_diagnosis' => 'required|string|max:5000',
             'plate_no' => 'nullable|string|max:32',
@@ -77,10 +83,45 @@ class ConductionRequestController extends Controller
             'authorized_passengers.*' => 'nullable|string|max:255',
             'patient_relatives' => 'nullable|array',
             'patient_relatives.*' => 'nullable|string|max:255',
+
+            // Only meaningful, and only ever stored, when filing over an
+            // actual conflict below — see the double-booking guard.
+            'override_reason' => 'nullable|string|max:500',
         ]);
 
-        $conductionRequest = DB::transaction(function () use ($validated) {
-            $conductionRequest = ConductionRequest::create($validated);
+        // A soft block, not a hard one: a unit already out on a trip is
+        // exactly the kind of thing a genuine emergency sometimes has to
+        // reassign anyway (see the plan's own reasoning — a system that
+        // makes that impossible gets worked around outside the system).
+        // "Open" matches ConductionRequest::getTripStatusAttribute()'s own
+        // 'In transit' definition, not a new one: departed, not yet back.
+        $conflict = !empty($validated['vehicle_id'])
+            ? ConductionRequest::where('vehicle_id', $validated['vehicle_id'])
+                ->whereNotNull('departed_office_at')
+                ->whereNull('returned_office_at')
+                ->first()
+            : null;
+
+        if ($conflict && empty($validated['override_reason'])) {
+            return response()->json([
+                'message' => 'This unit is already on a trip.',
+                'conflict' => [
+                    'conduction_request_id' => $conflict->conduction_request_id,
+                    'destination' => $conflict->destination,
+                ],
+            ], 409);
+        }
+
+        // Recorded only when it was actually filed over a conflict — an
+        // override_reason sent with no conflict present (or none sent at
+        // all) leaves this null rather than storing noise.
+        $overrideReason = $conflict ? $validated['override_reason'] : null;
+
+        $conductionRequest = DB::transaction(function () use ($validated, $overrideReason) {
+            $conductionRequest = ConductionRequest::create([
+                ...Arr::except($validated, ['override_reason']),
+                'vehicle_override_reason' => $overrideReason,
+            ]);
 
             foreach (self::PEOPLE_FIELDS as $field => $role) {
                 $position = 0;
