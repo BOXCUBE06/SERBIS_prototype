@@ -80,11 +80,16 @@ class ServiceRequestController extends Controller
         } else {
             $residentId = $user->getKey();
             // Added 'resident.barangay'
+            //
+            // internal_notes is the operator-only scratch pad (see its migration) —
+            // hidden here rather than on the model, since adminIndex() and this
+            // same method's admin branch above both need it visible.
             $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])
                 ->where('resident_id', $residentId)
-                ->get();
+                ->get()
+                ->makeHidden('internal_notes');
         }
-        
+
         return response()->json($serviceRequests);
     }
 
@@ -462,6 +467,12 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
+        // Same reasoning as index()'s resident branch: internal_notes is for
+        // staff only, and this route serves the same model to both audiences.
+        if ($user instanceof \App\Models\Resident) {
+            $serviceRequest->makeHidden('internal_notes');
+        }
+
         return response()->json($serviceRequest);
     }
 
@@ -790,6 +801,9 @@ class ServiceRequestController extends Controller
             // what a human types; notifyResident's own builder is what
             // guarantees the assembled body still fits one segment.
             'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
+            // Staff-only, never sent to PhilSMS and never returned to a resident
+            // (see index()/show()) — so it carries no per-segment SMS cap.
+            'internal_notes' => 'nullable|string|max:1000',
         ]);
 
         // Captured before update() overwrites status: rejecting a booking is
