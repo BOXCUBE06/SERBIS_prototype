@@ -374,7 +374,49 @@
                 </v-col>
               </v-row>
 
-              <div class="detail-group">
+              <!-- Structured ambulance intake (C3's columns: patient_name,
+                   patient_age, patient_sex, patient_address, pickup_location,
+                   destination, condition_notes) shown as its own labeled
+                   fields when present, instead of only the server-composed
+                   `description` text those exact columns generate. The Log
+                   Service Request form (below) already asks for these seven
+                   fields separately; the detail view showed them nowhere
+                   individually, only folded back into one paragraph. -->
+              <v-row v-if="selectedRequest.patient_name" class="detail-group">
+                <v-col cols="12" sm="6" md="4">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Patient</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_name }}</div>
+                </v-col>
+                <v-col cols="6" sm="3" md="2">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Age</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_age ?? 'N/A' }}</div>
+                </v-col>
+                <v-col cols="6" sm="3" md="2">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Sex</div>
+                  <div class="font-weight-medium text-body-2 text-capitalize">{{ selectedRequest.patient_sex ?? 'N/A' }}</div>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Address</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_address || 'N/A' }}</div>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Pickup</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.pickup_location || 'N/A' }}</div>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Destination</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.destination || 'N/A' }}</div>
+                </v-col>
+                <v-col cols="12">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.condition_notes || 'N/A' }}</div>
+                </v-col>
+              </v-row>
+
+              <!-- Fallback: a non-ambulance service (still just typed as one
+                   free-text description) or a pre-C3 ambulance record the
+                   backfill couldn't fully read. -->
+              <div v-else class="detail-group">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
                 <!-- One element per line. The description arrives newline-
                      separated and was rendered as a single interpolation, so
