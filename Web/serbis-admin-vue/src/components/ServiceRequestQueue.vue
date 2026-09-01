@@ -873,22 +873,22 @@
           Reschedule booking
         </v-card-title>
         <v-card-text class="px-5 pt-2">
-          <v-text-field
+          <DateTimePickerField
             v-model="rescheduleDialog.form.scheduled_at"
             type="datetime-local"
             label="New scheduled time"
             variant="outlined"
             density="comfortable"
             class="mb-3"
-          ></v-text-field>
-          <v-text-field
+          ></DateTimePickerField>
+          <DateTimePickerField
             v-model="rescheduleDialog.form.scheduled_end"
             type="datetime-local"
             label="Ends"
             variant="outlined"
             density="comfortable"
             class="mb-3"
-          ></v-text-field>
+          ></DateTimePickerField>
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
             label="Reason for the change"
