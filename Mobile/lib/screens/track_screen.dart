@@ -215,6 +215,9 @@ class _RequestCard extends StatelessWidget {
   });
 
   Color _getAccentColor() {
+    if (request.isOverdue) {
+      return AppColors.red600;
+    }
     if (request.status == ReqStatus.completed) {
       return AppColors.green700;
     }
@@ -285,6 +288,26 @@ class _RequestCard extends StatelessWidget {
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                 child: Text(request.note!, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6)),
+              ),
+            if (request.isOverdue)
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                width: double.infinity,
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.red600),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        tr(filipino, 'common.booking_overdue'),
+                        style: AppText.body(size: 12, color: AppColors.red600, height: 1.6),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             // No isNotEmpty guard any more: the timeline is derived from the
             // request's own status and timestamps, so every card has one --

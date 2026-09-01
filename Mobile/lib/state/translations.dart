@@ -28,6 +28,11 @@ const Map<String, (String, String)> _strings = {
   'status.cancelled': ('Cancelled', 'Kinansela'),
   'status.disapproved': ('Not approved', 'Hindi inaprubahan'),
 
+  'common.booking_overdue': (
+    'Scheduled time has passed. Contact MDRRMO if you still need this.',
+    'Nakalipas na ang naka-iskedyul na oras. Makipag-ugnayan sa MDRRMO kung kailangan mo pa rin ito.',
+  ),
+
   'type.ambulance.title': ('Medical Transport / Ambulance', 'Medical Transport / Ambulansya'),
   'type.ambulance.subtitle': ('Patient transport', 'Paghahatid ng pasyente'),
   'type.transfer.title': ('Hospital Transfer', 'Paglilipat sa Ospital'),

@@ -227,14 +227,18 @@ class ConductionRequestController extends Controller
             'odometer_start' => 'sometimes|nullable|integer|min:0',
             'odometer_end' => 'sometimes|nullable|integer|min:0',
             'others' => 'sometimes|nullable|string|max:5000',
-            // Only drivers, not authorized_passengers/patient_relatives —
-            // ServiceRequestController's resolution gate only ever needs one
-            // of the three, and a stub created by C5's bridge (see
-            // createConductionStub) has none of them yet. Passengers and
-            // relatives stay create-time-only for now; this is the one this
-            // form has an actual reason to edit after the fact.
+            // All three PEOPLE_FIELDS roles, not just drivers — a stub the
+            // dispatch bridge creates (createConductionStub) starts with
+            // none of them, and until this form could add passengers and
+            // relatives too, the only way to record either was to have
+            // known them at the moment the trip was first filed, which the
+            // bridge path never is.
             'drivers' => 'sometimes|array',
             'drivers.*' => 'nullable|string|max:255',
+            'authorized_passengers' => 'sometimes|array',
+            'authorized_passengers.*' => 'nullable|string|max:255',
+            'patient_relatives' => 'sometimes|array',
+            'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
         // Naive checkpoint strings are office local, not UTC. Read under
@@ -323,13 +327,20 @@ class ConductionRequestController extends Controller
         }
 
         // Replaces the role wholesale rather than diffing — same approach
-        // store() takes for all three roles at creation, just scoped to one
-        // role here since this is the only one this endpoint ever touches.
-        if (array_key_exists('drivers', $validated)) {
-            $conductionRequest->people()->where('role', 'driver')->delete();
+        // store() takes for all three roles at creation. Each role is only
+        // ever touched when its own field is actually sent, matching the
+        // 'sometimes' semantics the rest of this endpoint uses: a call that
+        // reports a checkpoint but says nothing about passengers must not
+        // wipe passengers already on record.
+        foreach (self::PEOPLE_FIELDS as $field => $role) {
+            if (!array_key_exists($field, $validated)) {
+                continue;
+            }
+
+            $conductionRequest->people()->where('role', $role)->delete();
 
             $position = 0;
-            foreach ($validated['drivers'] as $name) {
+            foreach ($validated[$field] as $name) {
                 $name = trim((string) $name);
                 if ($name === '') {
                     continue;
@@ -337,7 +348,7 @@ class ConductionRequestController extends Controller
 
                 ConductionRequestPerson::create([
                     'conduction_request_id' => $conductionRequest->conduction_request_id,
-                    'role' => 'driver',
+                    'role' => $role,
                     'name' => $name,
                     'position' => $position++,
                 ]);

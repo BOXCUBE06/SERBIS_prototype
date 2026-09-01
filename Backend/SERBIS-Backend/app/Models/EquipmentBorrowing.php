@@ -32,6 +32,8 @@ class EquipmentBorrowing extends Model
      */
     protected $casts = [
         'due_date' => 'date:Y-m-d',
+        'released_at' => 'datetime',
+        'returned_at' => 'datetime',
     ];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];

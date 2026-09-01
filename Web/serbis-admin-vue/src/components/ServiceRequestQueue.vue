@@ -259,8 +259,9 @@
                          actually needs here, not when it was filed — created_at
                          stays as the fallback for every other status. -->
                     <template v-if="item.scheduled_at">
-                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0">mdi-calendar-clock</v-icon>
-                      <span class="row-date">{{ formatDateTime(item.scheduled_at) }}</span>
+                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
+                      <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
+                      <span v-if="isBookingOverdue(item.status, item.scheduled_at)" class="status-pill status-pill--sm pill-disapproved ml-2">Overdue</span>
                     </template>
                     <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
@@ -351,6 +352,15 @@
               class="pa-6 overflow-y-auto"
             >
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+              <v-alert
+                v-if="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)"
+                type="warning"
+                variant="tonal"
+                class="mb-4"
+                density="compact"
+              >
+                Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.
+              </v-alert>
 
               <v-row class="detail-group">
                 <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
@@ -873,22 +883,22 @@
           Reschedule booking
         </v-card-title>
         <v-card-text class="px-5 pt-2">
-          <v-text-field
+          <DateTimePickerField
             v-model="rescheduleDialog.form.scheduled_at"
             type="datetime-local"
             label="New scheduled time"
             variant="outlined"
             density="comfortable"
             class="mb-3"
-          ></v-text-field>
-          <v-text-field
+          ></DateTimePickerField>
+          <DateTimePickerField
             v-model="rescheduleDialog.form.scheduled_end"
             type="datetime-local"
             label="Ends"
             variant="outlined"
             density="comfortable"
             class="mb-3"
-          ></v-text-field>
+          ></DateTimePickerField>
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
             label="Reason for the change"
@@ -933,14 +943,14 @@
             <v-btn icon="mdi-chevron-right" variant="text" density="comfortable" aria-label="Next day" @click="shiftDayViewDate(1)"></v-btn>
           </div>
           <div class="d-flex align-center gap-2">
-            <v-text-field
+            <DateTimePickerField
               v-model="dayView.date"
               type="date"
               variant="outlined"
               density="compact"
               hide-details
               style="max-width: 170px;"
-            ></v-text-field>
+            ></DateTimePickerField>
             <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="dayView.open = false"></v-btn>
           </div>
         </v-card-title>
@@ -1148,7 +1158,7 @@
             ></v-switch>
 
             <template v-if="createDialog.scheduleForLater">
-              <v-text-field
+              <DateTimePickerField
                 v-model="createDialog.form.scheduled_at"
                 type="datetime-local"
                 :min="minScheduleValue"
@@ -1159,7 +1169,7 @@
                 density="comfortable"
                 class="mb-2"
                 @update:model-value="checkWalkInAvailability"
-              ></v-text-field>
+              ></DateTimePickerField>
 
               <div v-if="walkInAvailability.checking" class="d-flex align-center gap-2 text-caption text-medium-emphasis mb-2">
                 <v-progress-circular indeterminate size="14" width="2"></v-progress-circular>
@@ -1207,6 +1217,7 @@
             class="px-6 text-none font-weight-bold text-white"
             height="44"
             :loading="createDialog.loading"
+            :disabled="noAmbulanceFreeForWindow"
             @click="submitWalkIn"
           >File request</v-btn>
         </v-card-actions>
@@ -1220,8 +1231,9 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { statusPillClass } from '@/composables/adminUi'
+import { statusPillClass, isBookingOverdue } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
 // Bookings tab on the Ambulance Dispatch Requests page. 'other': every
@@ -1346,6 +1358,17 @@ const createDialog = ref({
   form: emptyCreateForm(),
 })
 const walkInAvailability = ref(emptyWalkInAvailability())
+
+// The orange inline warning (template above) used to be advisory only —
+// staff could click File Request anyway and get the same rejection back as
+// a red banner stacked on top of the warning that already explained it.
+// This is what stops the click; the warning text itself is what explains why.
+const noAmbulanceFreeForWindow = computed(() =>
+  props.scope === 'ambulance'
+  && createDialog.value.scheduleForLater
+  && walkInAvailability.value.checked
+  && walkInAvailability.value.freeCount === 0
+)
 
 const openCreateDialog = () => {
   createDialog.value = {
