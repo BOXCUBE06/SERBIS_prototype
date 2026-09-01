@@ -962,8 +962,12 @@ class ServiceRequestController extends Controller
      * gap here reads the same way a gap already did. patient_name,
      * patient_address, patient_contact_number, medical_diagnosis, origin and
      * destination are the six columns NOT NULL at the database level
-     * (docs/dispatch-audit.md finding 7) — every other trip field is filled
-     * in later, by hand, while the crew is actually out.
+     * (docs/dispatch-audit.md finding 7). `departed_office_at` is stamped
+     * with dispatch time below — without it, trip_status derives to 'Not
+     * dispatched' and the Trip Logs tab reads "Booked" while the Bookings
+     * tab already reads "Responding" for the same request. Every other trip
+     * field is still filled in later, by hand, while the crew is actually
+     * out.
      *
      * patient_age/patient_sex and the free-text vehicle/plate_no snapshot are
      * nullable, so they were silently left off this stub even though the
@@ -992,6 +996,7 @@ class ServiceRequestController extends Controller
         \App\Models\ConductionRequest::create([
             'service_request_id' => $serviceRequest->request_id,
             'vehicle_id' => $serviceRequest->vehicle_id,
+            'departed_office_at' => now(),
             'patient_name' => $patientName,
             'patient_age' => $serviceRequest->patient_age,
             'patient_sex' => $serviceRequest->patient_sex,
