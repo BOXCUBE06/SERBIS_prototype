@@ -536,7 +536,7 @@
             type="error" variant="tonal" density="compact" class="mb-4"
           >{{ actionDialog.error }}</v-alert>
 
-          <v-text-field
+          <DateTimePickerField
             v-if="actionDialog.mode === 'due'"
             v-model="actionDialog.dueDate"
             type="date"
@@ -546,7 +546,7 @@
             density="comfortable"
             :error-messages="actionDialog.error"
             @update:model-value="actionDialog.error = ''"
-          ></v-text-field>
+          ></DateTimePickerField>
 
           <v-textarea
             v-else-if="actionDialog.mode === 'deny'"
@@ -595,6 +595,7 @@ import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
 const route = useRoute()
 
