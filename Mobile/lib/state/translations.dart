@@ -150,15 +150,26 @@ const Map<String, (String, String)> _strings = {
   'services.confirm.view_track': ('View in Track', 'Tingnan sa Track'),
   'services.confirm.scheduled_for': ('Scheduled for', 'Naka-iskedyul para sa'),
 
+  // ---- Guided form section labels ----
+  // Group headings inside the four request forms, so related fields read as
+  // one group instead of a flat, identically-spaced list of inputs.
+  'form_section.patient': ('Patient', 'Pasyente'),
+  'form_section.trip': ('Trip details', 'Detalye ng Byahe'),
+  'form_section.condition': ('Condition', 'Kondisyon'),
+  'form_section.location': ('Location', 'Lokasyon'),
+  'form_section.description': ('Description', 'Paglalarawan'),
+  'form_section.household': ('Household', 'Sambahayan'),
+  'form_section.assistance': ('Assistance needed', 'Kailangang Tulong'),
+  'form_section.details': ('Details', 'Detalye'),
+  'form_section.attachments': ('Attachments', 'Mga Kalakip'),
+
   // ---- Ambulance scheduling ----
   'ambulance_schedule.title': ('When', 'Kailan'),
   'ambulance_schedule.asap': ('As soon as possible', 'Sa lalong madaling panahon'),
-  'ambulance_schedule.pick_button': ('Schedule for a specific time', 'Mag-iskedyul ng partikular na oras'),
+  // Short on purpose: this is a toggle segment label, not a sentence — the
+  // long-form phrasing lives in the confirmation card once a time is picked.
+  'ambulance_schedule.mode_scheduled': ('Scheduled', 'Naka-iskedyul'),
   'ambulance_schedule.change': ('Change', 'Palitan'),
-  'ambulance_schedule.use_asap': (
-    'Use "as soon as possible" instead',
-    'Gamitin na lang ang "sa lalong madaling panahon"',
-  ),
   'ambulance_schedule.lead_time_error': (
     'Please pick a time at least 1 hour from now.',
     'Pumili ng oras na hindi bababa sa 1 oras mula ngayon.',
@@ -242,31 +253,6 @@ const Map<String, (String, String)> _strings = {
   'profile.offline_materials_desc': ('{n} saved · {size} used', '{n} naka-save · {size} ang nagamit'),
   'profile.logout': ('Log out', 'Mag-log Out'),
   'profile.offline_title': ('Offline Materials', 'Mga Offline na Materyal'),
-
-  // The app records what went wrong so a resident can hand it to MDRRMO. There
-  // is no crash reporter and no server-side client error log: this is a system
-  // holding government ID scans, and shipping its failures to a third party is
-  // not a trade this project gets to make on residents' behalf.
-  'profile.report_problem': ('Report a problem', 'Mag-ulat ng Problema'),
-  'profile.report_events': ('{n} events recorded', '{n} kaganapan ang naitala'),
-  'profile.report_none': ('Nothing recorded yet', 'Wala pang naitala'),
-  'profile.report_explain': (
-    'This copies a list of what the app tried to do and what failed. It holds '
-        'no password, no ID photo and nothing you typed into a request.',
-    'Kokopyahin nito ang listahan ng sinubukan ng app at kung ano ang nabigo. '
-        'Walang password, walang larawan ng ID, at wala sa mga isinulat mo sa '
-        'kahilingan.',
-  ),
-  'profile.report_send': (
-    'Paste it into a message or email to MDRRMO.',
-    'I-paste ito sa mensahe o email sa MDRRMO.',
-  ),
-  'profile.report_empty': (
-    'Nothing has failed since you opened the app, so there is nothing to send.',
-    'Walang nabigo mula nang buksan mo ang app, kaya wala pang maipapadala.',
-  ),
-  'profile.report_copy': ('Copy report', 'Kopyahin ang Ulat'),
-  'profile.report_copied': ('Report copied.', 'Nakopya ang ulat.'),
 
   // The service catalogue, keyed on `tbl_services.code`. These used to come
   // from the API's `name_localized` / `description_localized`, resolved out of

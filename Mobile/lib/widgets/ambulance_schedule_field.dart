@@ -7,6 +7,7 @@ import '../models/service_forms.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'form_section.dart';
 
 /// How soon a resident may book, mirrored from the server's own
 /// `ServiceRequestController::MINIMUM_LEAD_TIME_HOURS`. Duplicated rather
@@ -141,96 +142,65 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
     widget.onChanged();
   }
 
+  /// Both toggle segments are visible at once now, so the mode itself is
+  /// never a mystery the way the old box-that-changes-shape was. Picking
+  /// "Scheduled" opens the picker immediately rather than requiring a second
+  /// tap; cancelling it at any step leaves [form.scheduledAt] null, which the
+  /// toggle reads straight off — so it snaps back to "As soon as possible" on
+  /// its own, with nothing extra to reset here.
+  void _onModeChanged(bool wantsScheduled) {
+    if (wantsScheduled) {
+      _pickDateTime();
+    } else {
+      _clear();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final f = widget.filipino;
     final scheduled = widget.form.scheduledAt;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            tr(f, 'ambulance_schedule.title'),
-            style: AppText.display(size: 12, weight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          if (scheduled == null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.line, width: 1.5),
-              ),
-              // A Row here overflowed on a 360px-wide phone: "Schedule for a
-              // specific time" plus TextButton's own padding does not fit
-              // beside the label at any reasonable text scale. A Column has
-              // no minimum width to overflow — the label wraps, the button
-              // sits on its own line below it.
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tr(f, 'ambulance_schedule.asap'),
-                    style: AppText.body(size: 13),
-                  ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                      onPressed: _pickDateTime,
-                      child: Text(tr(f, 'ambulance_schedule.pick_button')),
-                    ),
-                  ),
-                ],
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ModeToggle(
+          leftLabel: tr(f, 'ambulance_schedule.asap'),
+          rightLabel: tr(f, 'ambulance_schedule.mode_scheduled'),
+          rightSelected: scheduled != null,
+          onChanged: _onModeChanged,
+        ),
+        if (scheduled != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.green50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.green600, width: 1.5),
             ),
-          ] else ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.green50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.green600, width: 1.5),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.event_available_rounded, size: 18, color: AppColors.green700),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      formatBookingConfirmationTime(scheduled, f),
-                      style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.green900),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 2),
-            // Wrap, not Row: "Use "as soon as possible" instead" beside
-            // "Change" is the same overflow risk the ASAP button above hit —
-            // Wrap drops the second button to its own line instead of
-            // forcing width neither button will give up.
-            Wrap(
-              spacing: 4,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Icon(Icons.event_available_rounded, size: 18, color: AppColors.green700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    formatBookingConfirmationTime(scheduled, f),
+                    style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.green900),
+                  ),
+                ),
                 TextButton(
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
                   onPressed: _pickDateTime,
                   child: Text(tr(f, 'ambulance_schedule.change')),
                 ),
-                TextButton(
-                  onPressed: _clear,
-                  child: Text(tr(f, 'ambulance_schedule.use_asap')),
-                ),
               ],
             ),
-          ],
-          if (_leadTimeError != null)
+          ),
+        ],
+        if (_leadTimeError != null)
             Padding(
               padding: const EdgeInsets.only(top: 4, left: 2),
               child: Text(
@@ -282,8 +252,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
                 ],
               ),
             ),
-        ],
-      ),
+      ],
     );
   }
 }

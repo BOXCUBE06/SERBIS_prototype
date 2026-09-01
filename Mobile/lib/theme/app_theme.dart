@@ -34,6 +34,34 @@ class AppColors {
   );
 }
 
+/// A 4-unit scale so spacing reads as a deliberate rhythm instead of one
+/// value (13, formerly) repeated between every field regardless of whether
+/// it separates two related inputs or two unrelated sections.
+class AppSpacing {
+  AppSpacing._();
+
+  /// Between a label and its own input, or two lines of the same thought.
+  static const double xs = 4;
+
+  /// Between fields that belong to the same group (e.g. two rows of one
+  /// [FormSection]) — tight, so the grouping reads without a drawn border.
+  static const double sm = 8;
+
+  /// Default field-to-field gap outside an explicit group.
+  static const double md = 12;
+
+  /// Between a [FormSection]'s label and its first field, and general
+  /// component padding.
+  static const double lg = 16;
+
+  /// Between two [FormSection]s — the gap that has to read as "new topic"
+  /// against [sm]'s "same topic".
+  static const double xl = 24;
+
+  /// Around a whole screen or sheet.
+  static const double xxl = 32;
+}
+
 class AppText {
   AppText._();
 

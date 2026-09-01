@@ -259,11 +259,7 @@ class ServiceRequestController extends Controller
 
         $scheduledAt = Carbon::parse($raw, self::OFFICE_TIMEZONE)->utc();
 
-        if ($scheduledAt->isPast()) {
-            throw ValidationException::withMessages([
-                'scheduled_at' => 'Scheduled time must be in the future.',
-            ]);
-        }
+        $this->rejectIfPast($scheduledAt);
 
         if ($scheduledAt->lt(now()->addHours(self::MINIMUM_LEAD_TIME_HOURS))) {
             throw ValidationException::withMessages([
@@ -274,6 +270,23 @@ class ServiceRequestController extends Controller
         }
 
         return $scheduledAt;
+    }
+
+    /**
+     * Shared by resolveScheduledAt() and reschedule(): a past scheduled_at is
+     * nonsensical on every path, unlike MINIMUM_LEAD_TIME_HOURS below, which
+     * only resolveScheduledAt()'s callers (a resident's own submission, a
+     * staff-filed walk-in) apply — reschedule() is staff moving a booking
+     * they already own, not someone deciding whether now is "an emergency,
+     * not a schedule", so it deliberately does not layer that gate on top.
+     */
+    private function rejectIfPast(Carbon $scheduledAt): void
+    {
+        if ($scheduledAt->isPast()) {
+            throw ValidationException::withMessages([
+                'scheduled_at' => 'Scheduled time must be in the future.',
+            ]);
+        }
     }
 
     // Deleting the upload is best-effort on purpose: the caller is already on a
@@ -1141,6 +1154,8 @@ class ServiceRequestController extends Controller
 
         $scheduledAt = Carbon::parse($validated['scheduled_at'], self::OFFICE_TIMEZONE)->utc();
         $scheduledEnd = Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc();
+
+        $this->rejectIfPast($scheduledAt);
 
         if ($scheduledEnd->lte($scheduledAt)) {
             throw ValidationException::withMessages([

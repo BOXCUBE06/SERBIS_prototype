@@ -60,12 +60,12 @@ class AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.xs),
           TextField(
             controller: controller,
             maxLines: lines,
@@ -145,12 +145,12 @@ class AppDropdown<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.xs),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13),
             decoration: BoxDecoration(
