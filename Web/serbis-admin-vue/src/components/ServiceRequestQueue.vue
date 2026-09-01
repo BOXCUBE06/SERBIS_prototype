@@ -1241,7 +1241,7 @@ const props = defineProps({
 // board sits inside a tab on the same page as the trip-log form, so the
 // parent just switches tabs and opens its own create dialog prefilled from
 // this booking, rather than the old /conduction-requests?dispatch=<id> hop.
-const emit = defineEmits(['dispatch-booking', 'open-trip-record'])
+const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-created'])
 
 const route = useRoute()
 
@@ -1982,6 +1982,15 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     // Doing it from here could only ever handle the dispatch half — nothing was
     // releasing the unit afterwards, so the fleet drained one vehicle at a time.
     await fetchData()
+
+    // Responding is the one transition that makes the server create a trip
+    // stub (ServiceRequestController's C5 bridge) — Trip Logs keeps its own
+    // copy of the list, fetched independently, so without this the new row
+    // was invisible there until a full page reload.
+    if (newStatus === 'Responding') {
+      emit('trip-record-created')
+    }
+
     reasonDialog.value.open = false
   } catch (error) {
     // The dialog stays open on failure. Closing it would drop a typed reason on
