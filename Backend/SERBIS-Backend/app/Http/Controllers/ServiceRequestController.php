@@ -964,10 +964,18 @@ class ServiceRequestController extends Controller
      * destination are the six columns NOT NULL at the database level
      * (docs/dispatch-audit.md finding 7) — every other trip field is filled
      * in later, by hand, while the crew is actually out.
+     *
+     * patient_age/patient_sex and the free-text vehicle/plate_no snapshot are
+     * nullable, so they were silently left off this stub even though the
+     * request already had the first two and the fleet record already had the
+     * last two — the trip's own detail view then showed N/A for all four on
+     * every auto-dispatched trip. vehicle/plate_no mirror onSelectFleetVehicle
+     * in ConductionRequestView.vue exactly, so a stub reads the same as a
+     * manually-created trip for the same unit.
      */
     private function createConductionStub(ServiceRequest $serviceRequest): void
     {
-        $serviceRequest->loadMissing('resident');
+        $serviceRequest->loadMissing(['resident', 'vehicle']);
 
         $patientName = $serviceRequest->patient_name
             ?: ($serviceRequest->resident
@@ -979,15 +987,23 @@ class ServiceRequestController extends Controller
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
 
+        $vehicle = $serviceRequest->vehicle;
+
         \App\Models\ConductionRequest::create([
             'service_request_id' => $serviceRequest->request_id,
             'vehicle_id' => $serviceRequest->vehicle_id,
             'patient_name' => $patientName,
+            'patient_age' => $serviceRequest->patient_age,
+            'patient_sex' => $serviceRequest->patient_sex,
             'patient_address' => $serviceRequest->patient_address ?: 'Address not specified',
             'patient_contact_number' => $contactNumber,
             'medical_diagnosis' => $serviceRequest->condition_notes ?: 'Not described',
             'origin' => $serviceRequest->pickup_location ?: 'Address not specified',
             'destination' => $serviceRequest->destination ?: 'destination not specified',
+            'vehicle' => $vehicle
+                ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
+                : null,
+            'plate_no' => $vehicle?->plate_no,
         ]);
     }
 
