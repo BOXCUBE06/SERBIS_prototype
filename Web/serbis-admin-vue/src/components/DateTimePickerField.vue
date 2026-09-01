@@ -28,20 +28,27 @@
       ></v-text-field>
     </template>
 
-    <v-card min-width="300" class="pa-2">
-      <v-date-picker
-        v-model="pickerDate"
-        :min="dateMin"
-        hide-header
-        show-adjacent-months
-      ></v-date-picker>
+    <v-card min-width="300" class="pa-2 dtp-card">
+      <div class="dtp-panes">
+        <v-date-picker
+          v-model="pickerDate"
+          :min="dateMin"
+          hide-header
+          show-adjacent-months
+          class="dtp-pane"
+        ></v-date-picker>
 
-      <v-time-picker
-        v-if="type === 'datetime-local'"
-        v-model="pickerTime"
-        format="24hr"
-        class="mt-2"
-      ></v-time-picker>
+        <!-- ampm, not 24hr: a trip checkpoint typed as "01:00" with no
+             meridiem is ambiguous to whoever reads the log back. The bound
+             value is unaffected — VTimePicker's genValue() always emits
+             24-hour 'HH:mm' whichever format is displayed. -->
+        <v-time-picker
+          v-if="type === 'datetime-local'"
+          v-model="pickerTime"
+          format="ampm"
+          class="dtp-pane"
+        ></v-time-picker>
+      </div>
 
       <v-alert v-if="rangeError" type="error" variant="tonal" density="compact" class="mx-2 mb-2">
         {{ rangeError }}
@@ -169,3 +176,38 @@ function clear () {
   menuOpen.value = false
 }
 </script>
+
+<style scoped>
+/* Stacked, the date + time pair ran ~700px tall and pushed the menu past the
+   bottom of a 1280x800 window, where it drew over the dialog that opened it.
+   Side by side it fits; the card is capped at the viewport and scrolls the
+   pickers internally rather than growing, so Clear/Cancel/OK stay reachable. */
+.dtp-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+}
+
+.dtp-panes {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-y: auto;
+  /* min-height:0 or the flex item refuses to shrink below its content and
+     the max-height above does nothing. */
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.dtp-pane {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .dtp-panes {
+    flex-direction: column;
+  }
+}
+</style>
