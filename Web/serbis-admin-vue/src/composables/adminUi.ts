@@ -132,3 +132,17 @@ export function sharedStatusLabel(tripStatus: string): string {
 export function statusPillClass(status: string | null | undefined): string {
   return `pill-${(status || 'Pending').toLowerCase()}`
 }
+
+/**
+ * A Booked request whose scheduled_at has slipped into the past with nobody
+ * moving it off Booked. Nothing server-side watches for this (no worker, no
+ * cron on this deploy) and no notification fires either side — this is a
+ * client-side-only "someone should look at this" flag, not a guarantee the
+ * booking was actually missed.
+ */
+export function isBookingOverdue(status: string | null | undefined, scheduledAt: string | Date | null | undefined): boolean {
+  if (status !== 'Booked' || !scheduledAt) return false
+
+  const d = new Date(scheduledAt)
+  return !Number.isNaN(d.getTime()) && d.getTime() < Date.now()
+}

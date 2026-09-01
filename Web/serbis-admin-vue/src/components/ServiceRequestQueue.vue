@@ -259,8 +259,9 @@
                          actually needs here, not when it was filed — created_at
                          stays as the fallback for every other status. -->
                     <template v-if="item.scheduled_at">
-                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0">mdi-calendar-clock</v-icon>
-                      <span class="row-date">{{ formatDateTime(item.scheduled_at) }}</span>
+                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
+                      <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
+                      <span v-if="isBookingOverdue(item.status, item.scheduled_at)" class="status-pill status-pill--sm pill-disapproved ml-2">Overdue</span>
                     </template>
                     <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
@@ -351,6 +352,15 @@
               class="pa-6 overflow-y-auto"
             >
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+              <v-alert
+                v-if="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)"
+                type="warning"
+                variant="tonal"
+                class="mb-4"
+                density="compact"
+              >
+                Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.
+              </v-alert>
 
               <v-row class="detail-group">
                 <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
@@ -1221,7 +1231,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { statusPillClass } from '@/composables/adminUi'
+import { statusPillClass, isBookingOverdue } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
