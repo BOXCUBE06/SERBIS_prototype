@@ -640,13 +640,13 @@
                   class="text-none font-weight-bold text-white"
                   height="40"
                   :loading="loading"
-                  :disabled="!formData.vehicle_id"
-                  :aria-describedby="!formData.vehicle_id ? 'dispatch-gate' : undefined"
+                  :disabled="scope === 'ambulance' && !formData.vehicle_id"
+                  :aria-describedby="scope === 'ambulance' && !formData.vehicle_id ? 'dispatch-gate' : undefined"
                   @click="openReason('approve')"
                 >
                   Approve &amp; Dispatch
                 </v-btn>
-                <span v-if="!formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
+                <span v-if="scope === 'ambulance' && !formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
                   Disabled until a vehicle is chosen with the Select Vehicle button beside it.
                 </span>
               </template>
@@ -1628,11 +1628,16 @@ const availableVehicles = computed(() => {
       .map(u => vehicles.value.find(v => v.vehicle_id === u.vehicle_id))
       .filter(Boolean)
   }
-  // Ambulance is the only service this modal ever assigns a vehicle for, but
-  // the fleet also holds Rescue Vehicles, Fire Trucks and Boats — without
-  // this filter every one of those showed up as a valid pick for a medical
-  // dispatch (impeccable critique, P0, 2026-08-30).
-  return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
+  // Keyed off the same `scope` prop that already separates the two boards.
+  // The ambulance board only ever assigns a medical unit — without this
+  // filter every Rescue Vehicle/Fire Truck/Boat showed up as a valid pick
+  // for a medical dispatch (impeccable critique, P0, 2026-08-30). The other
+  // board is the mirror image: it dispatches everything BUT an ambulance,
+  // since ambulance requests never reach this board at all (scope='ambulance'
+  // handles those on their own).
+  return props.scope === 'ambulance'
+    ? vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
+    : vehicles.value.filter(v => v.status === 'Available' && v.type !== 'Ambulance')
 })
 
 const residentOptions = computed(() => residents.value
