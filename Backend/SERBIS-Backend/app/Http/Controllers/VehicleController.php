@@ -96,6 +96,34 @@ class VehicleController extends Controller
             return response()->json(['message' => 'Vehicle not found'], 404);
         }
 
+        // Deleting a unit is the harder version of the Maintenance flip above:
+        // that one takes the unit away for an unknown length of time, this one
+        // takes it away permanently and drops the row every request points at.
+        // Same reasoning, so the same query decides it, widened from 'Booked'
+        // to the whole non-terminal set — a Pending or Responding request on
+        // this unit is live work, and a delete would strand it just as badly.
+        if ($vehicle->status === 'Dispatched') {
+            return response()->json([
+                'message' => 'Cannot delete this unit: it is currently Dispatched.',
+            ], 422);
+        }
+
+        $futureRequests = ServiceRequest::where('vehicle_id', $vehicle->vehicle_id)
+            ->whereNotIn('status', ServiceRequestController::TERMINAL_STATUSES)
+            ->where('scheduled_at', '>', now())
+            ->orderBy('scheduled_at')
+            ->get(['request_id', 'scheduled_at']);
+
+        if ($futureRequests->isNotEmpty()) {
+            $names = $futureRequests
+                ->map(fn (ServiceRequest $r) => "#{$r->request_id} ({$r->scheduled_at->toIso8601String()})")
+                ->implode(', ');
+
+            return response()->json([
+                'message' => "Cannot delete this unit: it still holds future booked requests — {$names}.",
+            ], 422);
+        }
+
         $vehicle->delete();
 
         return response()->json(['message' => 'Vehicle successfully deleted']);
