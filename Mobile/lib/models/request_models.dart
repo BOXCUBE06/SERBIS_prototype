@@ -488,6 +488,15 @@ class ServiceRequest {
     this.scheduledAt,
   });
 
+  /// True once a Booked slot's own window has passed with nobody moving the
+  /// request off Booked -- no server job watches for this and no
+  /// notification fires, so this is purely a client-side "flag it" read of
+  /// [status] and [scheduledAt], not a guarantee the booking was missed.
+  bool get isOverdue =>
+      status == ReqStatus.booked &&
+      scheduledAt != null &&
+      scheduledAt!.isBefore(DateTime.now());
+
   bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
 
   /// The code the badge is chosen from. There is deliberately no fallback to
