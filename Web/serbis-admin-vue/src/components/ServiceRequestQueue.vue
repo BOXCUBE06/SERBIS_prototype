@@ -1148,7 +1148,7 @@
             ></v-switch>
 
             <template v-if="createDialog.scheduleForLater">
-              <v-text-field
+              <DateTimePickerField
                 v-model="createDialog.form.scheduled_at"
                 type="datetime-local"
                 :min="minScheduleValue"
@@ -1159,7 +1159,7 @@
                 density="comfortable"
                 class="mb-2"
                 @update:model-value="checkWalkInAvailability"
-              ></v-text-field>
+              ></DateTimePickerField>
 
               <div v-if="walkInAvailability.checking" class="d-flex align-center gap-2 text-caption text-medium-emphasis mb-2">
                 <v-progress-circular indeterminate size="14" width="2"></v-progress-circular>
