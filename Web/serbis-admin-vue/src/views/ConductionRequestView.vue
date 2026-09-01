@@ -492,16 +492,16 @@
           <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
           <v-row dense>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></v-text-field>
+              <DateTimePickerField v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></v-text-field>
+              <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.departed_destination_at" type="datetime-local" label="Departed destination" variant="outlined" density="comfortable"></v-text-field>
+              <DateTimePickerField v-model="tripLog.form.departed_destination_at" type="datetime-local" label="Departed destination" variant="outlined" density="comfortable"></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></v-text-field>
+              <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" variant="outlined" density="comfortable"></v-text-field>
@@ -570,6 +570,7 @@ import { useRowNumbers } from '@/composables/rowNumber'
 import { sharedStatusLabel, statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
+import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
