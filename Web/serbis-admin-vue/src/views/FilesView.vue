@@ -140,11 +140,9 @@
           </v-card>
 
           <!-- Loading skeleton -->
-          <v-row v-if="loadingList">
-            <v-col v-for="n in 4" :key="n" cols="12" sm="6" md="4" lg="3">
-              <v-skeleton-loader type="image, list-item-two-line" rounded="xl"></v-skeleton-loader>
-            </v-col>
-          </v-row>
+          <v-card v-if="loadingList" elevation="0" rounded="xl" class="subtle-border pa-8">
+            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
+          </v-card>
 
           <!-- Empty state -->
           <div v-else-if="!visibleFiles.length" class="empty-state subtle-surface">
@@ -157,47 +155,76 @@
             </div>
           </div>
 
-          <!-- Card grid -->
-          <v-row v-else>
-            <v-col
-              v-for="item in visibleFiles"
-              :key="item.files_id"
-              cols="12" sm="6" md="4" lg="3"
+          <!-- Materials list. This was a card grid, and it was the odd one out:
+               Resource Management, Vehicles and Activity Logs are all tables,
+               and the questions asked here are the ones a table answers - which
+               file is newest, which one is the 8 MB PDF, is the advisory still
+               up. Same v-data-table, same row height, same 10 per page as
+               VehiclesView, so all four read the same way. -->
+          <v-card v-else elevation="0" rounded="xl" class="subtle-border overflow-hidden">
+            <v-data-table
+              :headers="materialHeaders"
+              :items="visibleFiles"
+              :items-per-page="10"
+              item-value="files_id"
+              density="comfortable"
+              class="materials-table"
             >
-              <v-card rounded="xl" class="material-card subtle-border h-100 d-flex flex-column" elevation="0">
-                <div class="type-strip" :style="{ background: `rgb(var(--v-theme-${getFileIconColor(item.file_type)}))` }">
-                  <v-icon color="white" size="20">{{ getFileIcon(item.file_type) }}</v-icon>
-                  <span class="type-label">{{ (item.file_type || 'file').toUpperCase() }}</span>
-                </div>
+              <template v-slot:item.rowNumber="{ item }">
+                <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+              </template>
 
-                <div class="pa-4 flex-grow-1 d-flex flex-column">
-                  <div class="text-subtitle-1 font-weight-bold text-high-emphasis material-title">
-                    {{ item.title }}
+              <template v-slot:item.title="{ item }">
+                <div class="d-flex align-center gap-3 py-2">
+                  <div
+                    class="icon-wrapper"
+                    :style="{ background: `rgba(var(--v-theme-${getFileIconColor(item.file_type)}), 0.14)` }"
+                  >
+                    <v-icon :color="getFileIconColor(item.file_type)" size="22">{{ getFileIcon(item.file_type) }}</v-icon>
                   </div>
-                  <div class="text-caption text-medium-emphasis mt-1">
-                    {{ formatBytes(item.file_size) }} · {{ relativeDate(item.created_at) }}
-                  </div>
-
-                  <div class="d-flex gap-2 mt-auto pt-3">
-                    <v-btn
-                      variant="tonal" color="primary" size="small" rounded="lg"
-                      class="text-none flex-grow-1"
-                      :href="item.full_url" target="_blank" rel="noopener"
-                    >
-                      <v-icon start size="18">mdi-download</v-icon> Download
-                    </v-btn>
-                    <v-btn
-                      icon variant="text" size="small" color="error"
-                      :aria-label="`Delete ${item.title}`"
-                      @click="askDelete(item)"
-                    >
-                      <v-icon>mdi-delete-outline</v-icon>
-                    </v-btn>
+                  <div class="min-w-0">
+                    <div class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.title }}</div>
+                    <span
+                      class="type-badge"
+                      :style="{
+                        background: `rgba(var(--v-theme-${getFileIconColor(item.file_type)}), 0.14)`,
+                        color: `rgb(var(--v-theme-${getFileIconColor(item.file_type)}))`,
+                      }"
+                    >{{ (item.file_type || 'file').toUpperCase() }}</span>
                   </div>
                 </div>
-              </v-card>
-            </v-col>
-          </v-row>
+              </template>
+
+              <template v-slot:item.file_type="{ item }">
+                <span class="text-body-2 font-weight-medium text-high-emphasis">{{ typeLabel(item.file_type) }}</span>
+              </template>
+
+              <template v-slot:item.file_size="{ item }">
+                <span class="text-body-2 text-medium-emphasis file-size">{{ formatBytes(item.file_size) }}</span>
+              </template>
+
+              <template v-slot:item.created_at="{ item }">
+                <span class="text-body-2 text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
+              </template>
+
+              <template v-slot:item.actions="{ item }">
+                <div class="d-flex justify-end align-center gap-1">
+                  <v-btn
+                    variant="tonal" color="primary" size="small" rounded="lg"
+                    class="text-none"
+                    :href="item.full_url" target="_blank" rel="noopener"
+                  >
+                    <v-icon start size="18">mdi-download</v-icon> Download
+                  </v-btn>
+                  <v-btn
+                    icon="mdi-delete-outline" variant="text" size="small" color="error"
+                    :aria-label="`Delete ${item.title}`"
+                    @click="askDelete(item)"
+                  ></v-btn>
+                </div>
+              </template>
+            </v-data-table>
+          </v-card>
 
         </v-card>
       </v-col>
@@ -234,6 +261,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 
 const API = `${API_BASE}/admin/info-materials`
@@ -316,6 +344,29 @@ const visibleFiles = computed(() => {
     return matchesType && matchesSearch && matchesDate
   })
 })
+
+const rowNumber = useRowNumbers(visibleFiles, 'files_id')
+
+const materialHeaders = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+  { title: 'File', key: 'title', width: '38%' },
+  { title: 'Type', key: 'file_type', width: '15%' },
+  { title: 'Size', key: 'file_size', width: '11%' },
+  { title: 'Uploaded', key: 'created_at', width: '15%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '21%' },
+]
+
+// The badge on the file cell prints the raw extension; this column prints what
+// that extension is, off the same buckets the filter chips use, so the column
+// and the chip that hides a row can never disagree about what a file is.
+const typeLabels = {
+  pdf: 'PDF',
+  image: 'Image',
+  doc: 'Word document',
+  archive: 'Archive',
+  other: 'File',
+}
+const typeLabel = (ext) => typeLabels[category(ext)]
 
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes'
@@ -493,34 +544,37 @@ onMounted(fetchFiles)
 
 .staging-card { border: 1px solid rgba(var(--v-theme-primary), 0.4); }
 
-/* Material card */
-.material-card {
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.material-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(var(--v-theme-on-surface), 0.12) !important;
-}
-.type-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-}
-.type-label {
-  color: #fff;
-  font-size: 0.75rem;
+/* Materials table */
+.materials-table :deep(thead th) {
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.material-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.35;
-  min-height: 2.7em;
+.row-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.file-size { font-variant-numeric: tabular-nums; }
+
+.icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.type-badge {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 /* Empty state */
@@ -535,8 +589,6 @@ onMounted(fetchFiles)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .material-card,
   .dropzone { transition: none; }
-  .material-card:hover { transform: none; }
 }
 </style>
