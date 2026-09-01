@@ -79,6 +79,24 @@ class EquipmentController extends Controller
             'status' => 'sometimes|required|in:Available,Unavailable',
         ]);
 
+        // available_quantity's lte:total_quantity rule above only fires when
+        // both fields are sent together — it compares the incoming values
+        // against each other, not against what is already stored. A
+        // total_quantity sent alone skipped this entirely, so a total could be
+        // dropped below the available_quantity already on the row, leaving
+        // available > total with nothing to say so.
+        if (array_key_exists('total_quantity', $validated) && ! array_key_exists('available_quantity', $validated)) {
+            if ($validated['total_quantity'] < $equipment->available_quantity) {
+                $onLoan = $equipment->total_quantity - $equipment->available_quantity;
+
+                return response()->json([
+                    'message' => "Cannot set total to {$validated['total_quantity']} — "
+                        . "{$equipment->available_quantity} unit(s) are currently available "
+                        . "and {$onLoan} on loan; total cannot drop below what is available.",
+                ], 422);
+            }
+        }
+
         $equipment->update($validated);
 
         return response()->json($equipment);
