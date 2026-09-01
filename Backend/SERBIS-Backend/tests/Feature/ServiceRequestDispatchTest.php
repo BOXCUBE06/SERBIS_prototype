@@ -230,4 +230,32 @@ class ServiceRequestDispatchTest extends TestCase
 
         $this->assertSame('Maintenance', $this->vehicle->fresh()->status);
     }
+
+    public function test_claiming_a_unit_another_request_already_dispatched_is_rejected(): void
+    {
+        // Two admins racing for the same unit: the first request's dispatch
+        // already flipped it to Dispatched. A second request trying to claim
+        // that same vehicle_id must not silently succeed with an unattached
+        // unit — it must fail loudly and leave the loser's vehicle_id unset.
+        $winner = $this->pendingRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$winner->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+
+        $loser = $this->pendingRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$loser->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('vehicle_id');
+
+        $this->assertNull($loser->fresh()->vehicle_id);
+        $this->assertSame('Pending', $loser->fresh()->status);
+        $this->assertSame('Dispatched', $this->vehicle->fresh()->status);
+        $this->assertSame($this->vehicle->vehicle_id, $winner->fresh()->vehicle_id);
+    }
 }

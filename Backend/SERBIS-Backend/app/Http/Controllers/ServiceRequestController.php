@@ -693,10 +693,23 @@ class ServiceRequestController extends Controller
                 ->first();
 
             // Only Available is promoted. A unit already Dispatched to this same
-            // request stays as it is, and one under Maintenance is not quietly
-            // pressed into service by a status change.
+            // request stays as it is — every PUT re-sends the current vehicle_id
+            // (see the docblock above), so this is the common case, not an edge
+            // one, and must stay a silent no-op. One under Maintenance is also a
+            // silent no-op, deliberately — see
+            // test_a_vehicle_under_maintenance_is_not_pressed_into_service.
             if ($vehicle && $vehicle->status === 'Available') {
                 $vehicle->update(['status' => 'Dispatched']);
+            } elseif ($vehicle && $vehicle->status === 'Dispatched' && $incomingVehicleId !== $currentVehicleId) {
+                // A genuinely new claim (a fresh assignment or a swap) on a unit
+                // that lost the Available race to another admin since the
+                // picker last fetched it. Abort loudly rather than writing a
+                // vehicle_id the fleet never actually promoted: the surrounding
+                // DB::transaction (update(), above) rolls the whole request
+                // update back with it, so nothing partial lands.
+                throw ValidationException::withMessages([
+                    'vehicle_id' => $vehicle->unit_identifier.' is no longer available — pick another unit.',
+                ]);
             }
         }
     }
