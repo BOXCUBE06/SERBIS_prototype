@@ -693,10 +693,23 @@ class ServiceRequestController extends Controller
                 ->first();
 
             // Only Available is promoted. A unit already Dispatched to this same
-            // request stays as it is, and one under Maintenance is not quietly
-            // pressed into service by a status change.
+            // request stays as it is — every PUT re-sends the current vehicle_id
+            // (see the docblock above), so this is the common case, not an edge
+            // one, and must stay a silent no-op. One under Maintenance is also a
+            // silent no-op, deliberately — see
+            // test_a_vehicle_under_maintenance_is_not_pressed_into_service.
             if ($vehicle && $vehicle->status === 'Available') {
                 $vehicle->update(['status' => 'Dispatched']);
+            } elseif ($vehicle && $vehicle->status === 'Dispatched' && $incomingVehicleId !== $currentVehicleId) {
+                // A genuinely new claim (a fresh assignment or a swap) on a unit
+                // that lost the Available race to another admin since the
+                // picker last fetched it. Abort loudly rather than writing a
+                // vehicle_id the fleet never actually promoted: the surrounding
+                // DB::transaction (update(), above) rolls the whole request
+                // update back with it, so nothing partial lands.
+                throw ValidationException::withMessages([
+                    'vehicle_id' => $vehicle->unit_identifier.' is no longer available — pick another unit.',
+                ]);
             }
         }
     }
@@ -951,10 +964,18 @@ class ServiceRequestController extends Controller
      * destination are the six columns NOT NULL at the database level
      * (docs/dispatch-audit.md finding 7) — every other trip field is filled
      * in later, by hand, while the crew is actually out.
+     *
+     * patient_age/patient_sex and the free-text vehicle/plate_no snapshot are
+     * nullable, so they were silently left off this stub even though the
+     * request already had the first two and the fleet record already had the
+     * last two — the trip's own detail view then showed N/A for all four on
+     * every auto-dispatched trip. vehicle/plate_no mirror onSelectFleetVehicle
+     * in ConductionRequestView.vue exactly, so a stub reads the same as a
+     * manually-created trip for the same unit.
      */
     private function createConductionStub(ServiceRequest $serviceRequest): void
     {
-        $serviceRequest->loadMissing('resident');
+        $serviceRequest->loadMissing(['resident', 'vehicle']);
 
         $patientName = $serviceRequest->patient_name
             ?: ($serviceRequest->resident
@@ -966,15 +987,23 @@ class ServiceRequestController extends Controller
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
 
+        $vehicle = $serviceRequest->vehicle;
+
         \App\Models\ConductionRequest::create([
             'service_request_id' => $serviceRequest->request_id,
             'vehicle_id' => $serviceRequest->vehicle_id,
             'patient_name' => $patientName,
+            'patient_age' => $serviceRequest->patient_age,
+            'patient_sex' => $serviceRequest->patient_sex,
             'patient_address' => $serviceRequest->patient_address ?: 'Address not specified',
             'patient_contact_number' => $contactNumber,
             'medical_diagnosis' => $serviceRequest->condition_notes ?: 'Not described',
             'origin' => $serviceRequest->pickup_location ?: 'Address not specified',
             'destination' => $serviceRequest->destination ?: 'destination not specified',
+            'vehicle' => $vehicle
+                ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
+                : null,
+            'plate_no' => $vehicle?->plate_no,
         ]);
     }
 

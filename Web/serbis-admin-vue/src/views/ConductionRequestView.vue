@@ -82,7 +82,7 @@
 
     <v-window v-model="activeTab" class="flex-grow-1" style="min-height: 0;">
       <v-window-item value="bookings" class="h-100">
-        <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" />
+        <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
       </v-window-item>
 
       <v-window-item value="trip-logs" class="h-100 d-flex flex-column">
