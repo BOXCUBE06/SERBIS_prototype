@@ -43,13 +43,11 @@ String _contactLine(String accountNumber) =>
     accountNumber.trim().isEmpty ? 'See resident profile' : accountNumber.trim();
 
 class AmbulanceFormData extends ServiceFormData {
-  /// [patientName] prefills the field rather than replacing it. The account
-  /// holder is the likeliest patient, not the certain one — a head of the
-  /// family files for the household — so the field stays editable and the
-  /// description still reads whatever ends up in it.
-  AmbulanceFormData({String patientName = '', this.contactNumber = ''}) {
-    patient.text = patientName;
-  }
+  /// Patient name is never prefilled — the account holder is the likeliest
+  /// patient, not the certain one (a head of the family files for the
+  /// household), and a name already sitting in the field reads as a default
+  /// nobody actually chose.
+  AmbulanceFormData({this.contactNumber = ''});
 
   /// Straight off the account. `tbl_residents.phone_number` is `required` at
   /// registration and NOT NULL, so this is only ever empty if the profile has

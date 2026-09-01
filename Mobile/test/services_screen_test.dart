@@ -35,6 +35,7 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
+import 'package:serbis/widgets/form_inputs.dart';
 import 'package:serbis/widgets/service_widgets.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
@@ -252,6 +253,14 @@ Future<void> _tapUpload(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+/// The `TextField` inside the ambulance form's "Patient name" [AppTextField].
+/// Not found by its value the way the old prefilled-name tests did — the
+/// field starts empty now, so there is no text to search for.
+Finder _patientNameField() {
+  final field = find.byWidgetPredicate((w) => w is AppTextField && w.label == 'Patient name');
+  return find.descendant(of: field, matching: find.byType(TextField));
+}
+
 /// Attaches a valid ID through the real picker path, which is also what covers
 /// `_pickValidId` / `_pickImage`.
 Future<void> _attachValidId(WidgetTester tester, {String name = 'id.jpg'}) async {
@@ -399,31 +408,32 @@ void main() {
       expect(find.text('Ambulance/Medical Response'), findsNothing);
     });
 
-    testWidgets('the patient name starts as the signed-in resident', (tester) async {
+    testWidgets('the patient name starts empty, not the signed-in resident',
+        (tester) async {
+      // The account holder is the likeliest patient, not the certain one — a
+      // head of the family files for the household — so a name already
+      // sitting in the field would read as a default nobody actually chose.
       await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
 
-      expect(
-        find.widgetWithText(TextField, 'Maria Dela Cruz'),
-        findsOneWidget,
-        reason: 'the account already holds the name; asking again is friction',
-      );
+      final controller = tester.widget<TextField>(_patientNameField()).controller!;
+      expect(controller.text, isEmpty);
+      expect(find.text('Maria Dela Cruz'), findsNothing);
     });
 
-    testWidgets('an overwritten name survives switching services and back',
+    testWidgets('a typed name survives switching services and back',
         (tester) async {
-      // The prefill runs once per form, not on every build. Re-running it would
-      // overwrite a resident who filed for somebody else in their household.
+      // The typed value runs through putIfAbsent, not on every build. If it
+      // ran on every rebuild, switching services and back would wipe out
+      // whatever the resident had already typed.
       await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
 
-      final field = find.widgetWithText(TextField, 'Maria Dela Cruz');
-      await tester.enterText(field, 'Juan Dela Cruz');
+      await tester.enterText(_patientNameField(), 'Juan Dela Cruz');
       await tester.pumpAndSettle();
 
       await _chooseService(tester, 'Road Clearing');
       await _chooseService(tester, 'Ambulance/Medical Response');
 
       expect(find.widgetWithText(TextField, 'Juan Dela Cruz'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Maria Dela Cruz'), findsNothing);
     });
 
     testWidgets('an empty catalogue renders no form section at all',

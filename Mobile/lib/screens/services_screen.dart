@@ -140,7 +140,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   ServiceFormData _formFor(ServiceFormKind kind) =>
       _forms.putIfAbsent(kind, () => switch (kind) {
             ServiceFormKind.ambulance => AmbulanceFormData(
-                patientName: widget.user.fullName,
                 contactNumber: widget.user.phone,
               ),
             ServiceFormKind.road => RoadFormData(),
