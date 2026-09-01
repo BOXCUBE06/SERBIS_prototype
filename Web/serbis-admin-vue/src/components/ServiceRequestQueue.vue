@@ -933,14 +933,14 @@
             <v-btn icon="mdi-chevron-right" variant="text" density="comfortable" aria-label="Next day" @click="shiftDayViewDate(1)"></v-btn>
           </div>
           <div class="d-flex align-center gap-2">
-            <v-text-field
+            <DateTimePickerField
               v-model="dayView.date"
               type="date"
               variant="outlined"
               density="compact"
               hide-details
               style="max-width: 170px;"
-            ></v-text-field>
+            ></DateTimePickerField>
             <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="dayView.open = false"></v-btn>
           </div>
         </v-card-title>
@@ -1223,6 +1223,7 @@ import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
 // Bookings tab on the Ambulance Dispatch Requests page. 'other': every
