@@ -10,6 +10,14 @@ use Illuminate\Validation\Rule;
 class EquipmentController extends Controller
 {
     /**
+     * total_quantity/available_quantity are a plain MySQL `integer` column —
+     * signed INT, no `unsigned()`. The `integer` validation rule accepts
+     * PHP's much larger range, so a value past this bound reached the insert
+     * and threw SQLSTATE[22003] instead of a validation error.
+     */
+    private const MAX_QUANTITY = 2147483647;
+
+    /**
      * Scoped by who is asking, the same way EquipmentBorrowingController::index
      * is. An `Unavailable` item was still listed to residents, because the only
      * thing the borrow screen gates on is `available_quantity > 0` -- so an
@@ -35,7 +43,7 @@ class EquipmentController extends Controller
     {
         $validated = $request->validate([
             'item_name' => 'required|string|max:255|unique:tbl_equipments,item_name',
-            'total_quantity' => 'required|integer|min:1',
+            'total_quantity' => 'required|integer|min:1|max:'.self::MAX_QUANTITY,
             'status' => 'required|in:Available,Unavailable',
         ]);
 
@@ -74,8 +82,8 @@ class EquipmentController extends Controller
                 'max:255',
                 Rule::unique('tbl_equipments')->ignore($equipment->equipment_id, 'equipment_id')
             ],
-            'total_quantity' => 'sometimes|required|integer|min:0',
-            'available_quantity' => 'sometimes|required|integer|min:0|lte:total_quantity',
+            'total_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY,
+            'available_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY.'|lte:total_quantity',
             'status' => 'sometimes|required|in:Available,Unavailable',
         ]);
 
