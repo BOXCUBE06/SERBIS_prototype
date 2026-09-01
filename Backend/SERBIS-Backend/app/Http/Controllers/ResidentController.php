@@ -6,6 +6,7 @@ use App\Models\Resident;
 use App\Services\PhilSms;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
@@ -133,6 +134,20 @@ class ResidentController extends Controller
 
         if (!$resident) {
             return response()->json(['message' => 'Resident not found'], 404);
+        }
+
+        // tbl_service_request.resident_id is a plain RESTRICT foreign key, so
+        // deleting a resident with any request on file used to throw an
+        // uncaught 500 instead of a message an admin could act on. Checked
+        // here rather than caught after the fact: a caught QueryException
+        // cannot tell a resident-in-use failure apart from any other write
+        // error, and the count is worth showing.
+        $requestCount = DB::table('tbl_service_request')->where('resident_id', $id)->count();
+
+        if ($requestCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$requestCount} service request(s) still reference this resident.",
+            ], 422);
         }
 
         $resident->delete();

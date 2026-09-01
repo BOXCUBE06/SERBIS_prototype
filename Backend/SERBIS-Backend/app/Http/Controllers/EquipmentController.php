@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class EquipmentController extends Controller
@@ -86,9 +87,26 @@ class EquipmentController extends Controller
     public function destroy($id)
     {
         $equipment = Equipment::find($id);
-        
+
         if (!$equipment) {
             return response()->json(['message' => 'Equipment not found'], 404);
+        }
+
+        // tbl_equipment_borrowing.equipment_id cascades on delete, so this used
+        // to succeed silently and take every borrowing record with it — even a
+        // Released one, where the units are still physically out with a
+        // resident. The cascade stays (it is what a resolved item's old
+        // history should do); this only blocks deleting while a borrowing is
+        // still live enough to change state on its own.
+        $activeCount = DB::table('tbl_equipment_borrowing')
+            ->where('equipment_id', $id)
+            ->whereIn('status', ['Pending', 'Approved', 'Released'])
+            ->count();
+
+        if ($activeCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$activeCount} borrowing(s) still reference this equipment.",
+            ], 422);
         }
 
         $equipment->delete();

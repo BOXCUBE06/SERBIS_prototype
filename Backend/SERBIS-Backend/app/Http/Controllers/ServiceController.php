@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ServiceController extends Controller
 {
@@ -62,6 +63,16 @@ class ServiceController extends Controller
 
         if (!$service) {
             return response()->json(['message' => 'Service not found'], 404);
+        }
+
+        // tbl_service_request.service_id is a plain RESTRICT foreign key, same
+        // as resident_id on ResidentController::destroy() — same bug, same fix.
+        $requestCount = DB::table('tbl_service_request')->where('service_id', $id)->count();
+
+        if ($requestCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$requestCount} service request(s) still reference this service.",
+            ], 422);
         }
 
         $service->delete();
