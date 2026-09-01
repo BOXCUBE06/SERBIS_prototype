@@ -1163,7 +1163,7 @@
                 type="datetime-local"
                 :min="minScheduleValue"
                 label="Scheduled time"
-                hint="At least 1 hour from now — sooner is an emergency, dispatch now instead."
+                hint="At least 1 hour from now — for anything sooner, dispatch now instead."
                 persistent-hint
                 variant="outlined"
                 density="comfortable"
