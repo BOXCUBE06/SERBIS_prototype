@@ -514,35 +514,39 @@
             </v-col>
           </v-row>
 
-          <!-- The one personnel role this dialog can edit — see
+          <!-- All three PEOPLE_FIELDS roles, same pattern as the create
+               dialog's own Personnel section above (personnelGroups) — see
                ConductionRequestController::tripLog(). A stub created by
-               Approve & Dispatch (C5's bridge) always starts with none,
-               and a driver is required before this request can resolve. -->
-          <div class="d-flex align-center justify-space-between mb-1">
-            <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Drivers</span>
-            <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addTripDriver">
-              Add driver
-            </v-btn>
-          </div>
-          <div
-            v-for="(_n, idx) in tripLog.form.drivers"
-            :key="idx"
-            class="d-flex align-center gap-2 mb-2"
-          >
-            <v-text-field
-              v-model="tripLog.form.drivers[idx]"
-              :label="`Driver ${idx + 1}`"
-              variant="outlined"
-              density="compact"
-              hide-details
-            ></v-text-field>
-            <v-btn
-              icon="mdi-close"
-              variant="text"
-              size="small"
-              :aria-label="`Remove driver ${idx + 1}`"
-              @click="removeTripDriver(idx)"
-            ></v-btn>
+               Approve & Dispatch (C5's bridge) always starts with none of
+               them, and a driver is required before this request can
+               resolve. -->
+          <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
+              <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addTripPerson(group.field)">
+                Add {{ group.singular }}
+              </v-btn>
+            </div>
+            <div
+              v-for="(_n, idx) in tripLog.form[group.field]"
+              :key="idx"
+              class="d-flex align-center gap-2 mb-2"
+            >
+              <v-text-field
+                v-model="tripLog.form[group.field][idx]"
+                :label="`${group.singular} ${idx + 1}`"
+                variant="outlined"
+                density="compact"
+                hide-details
+              ></v-text-field>
+              <v-btn
+                icon="mdi-close"
+                variant="text"
+                size="small"
+                :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                @click="removeTripPerson(group.field, idx)"
+              ></v-btn>
+            </div>
           </div>
         </v-card-text>
         <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
@@ -910,13 +914,13 @@ const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.ro
 const emptyTripLogForm = () => ({
   departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
-  // The one personnel role this dialog can edit — see the validation
-  // comment on ConductionRequestController::tripLog(). A stub created by
-  // C5's bridge (openTripRecord below) always starts with none.
-  drivers: [''],
+  // All three PEOPLE_FIELDS roles — see ConductionRequestController::
+  // tripLog(). A stub created by C5's bridge (openTripRecord below) always
+  // starts with none of them.
+  drivers: [''], authorized_passengers: [''], patient_relatives: [''],
 })
-const addTripDriver = () => { tripLog.value.form.drivers.push('') }
-const removeTripDriver = (idx) => { tripLog.value.form.drivers.splice(idx, 1) }
+const addTripPerson = (field) => { tripLog.value.form[field].push('') }
+const removeTripPerson = (field, idx) => { tripLog.value.form[field].splice(idx, 1) }
 const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
 
 // The button that opens the dialog and the dialog's own title read the same
@@ -948,10 +952,10 @@ const openTripLog = (record) => {
       odometer_start: record.odometer_start,
       odometer_end: record.odometer_end,
       others: record.others || '',
-      drivers: (() => {
-        const names = (record.people || []).filter(p => p.role === 'driver').map(p => p.name)
-        return names.length ? names : ['']
-      })(),
+      ...Object.fromEntries(personnelGroups.map(({ field, role }) => {
+        const names = (record.people || []).filter(p => p.role === role).map(p => p.name)
+        return [field, names.length ? names : ['']]
+      })),
     },
   }
 }
@@ -1008,6 +1012,8 @@ const submitTripLog = async () => {
       odometer_end: form.odometer_end === '' ? null : form.odometer_end,
       others: form.others || null,
       drivers: form.drivers,
+      authorized_passengers: form.authorized_passengers,
+      patient_relatives: form.patient_relatives,
     }
     const id = tripLog.value.target.conduction_request_id
     const res = await fetch(`${API_BASE}/conduction-requests/${id}/trip-log`, {
