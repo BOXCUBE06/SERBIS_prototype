@@ -153,12 +153,10 @@ const Map<String, (String, String)> _strings = {
   // ---- Ambulance scheduling ----
   'ambulance_schedule.title': ('When', 'Kailan'),
   'ambulance_schedule.asap': ('As soon as possible', 'Sa lalong madaling panahon'),
-  'ambulance_schedule.pick_button': ('Schedule for a specific time', 'Mag-iskedyul ng partikular na oras'),
+  // Short on purpose: this is a toggle segment label, not a sentence — the
+  // long-form phrasing lives in the confirmation card once a time is picked.
+  'ambulance_schedule.mode_scheduled': ('Scheduled', 'Naka-iskedyul'),
   'ambulance_schedule.change': ('Change', 'Palitan'),
-  'ambulance_schedule.use_asap': (
-    'Use "as soon as possible" instead',
-    'Gamitin na lang ang "sa lalong madaling panahon"',
-  ),
   'ambulance_schedule.lead_time_error': (
     'Please pick a time at least 1 hour from now.',
     'Pumili ng oras na hindi bababa sa 1 oras mula ngayon.',
