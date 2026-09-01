@@ -171,7 +171,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
           onChanged: _onModeChanged,
         ),
         if (scheduled != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),

@@ -37,7 +37,7 @@ class AttachmentUploadField extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasFile = fileName != null;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

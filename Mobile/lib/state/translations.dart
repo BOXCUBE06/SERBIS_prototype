@@ -150,6 +150,19 @@ const Map<String, (String, String)> _strings = {
   'services.confirm.view_track': ('View in Track', 'Tingnan sa Track'),
   'services.confirm.scheduled_for': ('Scheduled for', 'Naka-iskedyul para sa'),
 
+  // ---- Guided form section labels ----
+  // Group headings inside the four request forms, so related fields read as
+  // one group instead of a flat, identically-spaced list of inputs.
+  'form_section.patient': ('Patient', 'Pasyente'),
+  'form_section.trip': ('Trip details', 'Detalye ng Byahe'),
+  'form_section.condition': ('Condition', 'Kondisyon'),
+  'form_section.location': ('Location', 'Lokasyon'),
+  'form_section.description': ('Description', 'Paglalarawan'),
+  'form_section.household': ('Household', 'Sambahayan'),
+  'form_section.assistance': ('Assistance needed', 'Kailangang Tulong'),
+  'form_section.details': ('Details', 'Detalye'),
+  'form_section.attachments': ('Attachments', 'Mga Kalakip'),
+
   // ---- Ambulance scheduling ----
   'ambulance_schedule.title': ('When', 'Kailan'),
   'ambulance_schedule.asap': ('As soon as possible', 'Sa lalong madaling panahon'),

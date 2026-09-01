@@ -11,6 +11,7 @@ import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/service_form_fields.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/form_section.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
 import 'borrow_equipment_screen.dart';
@@ -386,18 +387,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   appState: widget.appState,
                   filipino: f,
                 ),
-                AttachmentUploadField(
-                  label: 'Valid ID (required)',
-                  hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
-                  fileName: _validIdFile?.name,
-                  onTap: _pickValidId,
-                ),
-                AttachmentUploadField(
-                  label: 'Landmark (optional)',
-                  hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
-                  fileName: _sitePhotoFile?.name,
-                  onTap: _pickSitePhoto,
-                  onClear: () => setState(() => _sitePhotoFile = null),
+                FormSection(
+                  label: tr(f, 'form_section.attachments'),
+                  children: [
+                    AttachmentUploadField(
+                      label: 'Valid ID (required)',
+                      hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
+                      fileName: _validIdFile?.name,
+                      onTap: _pickValidId,
+                    ),
+                    AttachmentUploadField(
+                      label: 'Landmark (optional)',
+                      hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
+                      fileName: _sitePhotoFile?.name,
+                      onTap: _pickSitePhoto,
+                      onClear: () => setState(() => _sitePhotoFile = null),
+                    ),
+                  ],
                 ),
                 if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
                 const SizedBox(height: 6),
