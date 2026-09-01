@@ -1207,6 +1207,7 @@
             class="px-6 text-none font-weight-bold text-white"
             height="44"
             :loading="createDialog.loading"
+            :disabled="noAmbulanceFreeForWindow"
             @click="submitWalkIn"
           >File request</v-btn>
         </v-card-actions>
@@ -1346,6 +1347,17 @@ const createDialog = ref({
   form: emptyCreateForm(),
 })
 const walkInAvailability = ref(emptyWalkInAvailability())
+
+// The orange inline warning (template above) used to be advisory only —
+// staff could click File Request anyway and get the same rejection back as
+// a red banner stacked on top of the warning that already explained it.
+// This is what stops the click; the warning text itself is what explains why.
+const noAmbulanceFreeForWindow = computed(() =>
+  props.scope === 'ambulance'
+  && createDialog.value.scheduleForLater
+  && walkInAvailability.value.checked
+  && walkInAvailability.value.freeCount === 0
+)
 
 const openCreateDialog = () => {
   createDialog.value = {
