@@ -143,6 +143,21 @@ export function tripStatusLabel(tripStatus: string): string {
 }
 
 /**
+ * A Resolved outcome splits in two once no_arrival_reason exists: a real
+ * arrival, or a trip that closed with a stated reason it never got there.
+ * Both are the same 'Resolved' status/trip_status value underneath — this is
+ * what tells them apart on screen, without inventing a seventh status value.
+ */
+export function outcomeLabel(baseLabel: string, noArrivalReason?: string | null): string {
+  return baseLabel === 'Resolved' && noArrivalReason ? 'Resolved — no arrival' : baseLabel
+}
+
+/** The pill class matching outcomeLabel() above — same split, same inputs. */
+export function outcomePillClass(baseLabel: string, noArrivalReason?: string | null): string {
+  return baseLabel === 'Resolved' && noArrivalReason ? 'pill-resolved-no-arrival' : statusPillClass(baseLabel)
+}
+
+/**
  * The CSS class for ServiceRequestQueue.vue's .status-pill system, given a
  * status already in the shared vocabulary above. Trivial on its own, but
  * shared here rather than left as ServiceRequestQueue's private one-liner

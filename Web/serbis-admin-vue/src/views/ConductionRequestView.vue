@@ -188,8 +188,8 @@
             </template>
 
             <template v-slot:item.trip_status="{ item }">
-              <span class="status-pill status-pill--sm" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
-                {{ tripStatusLabel(item.trip_status) }}
+              <span class="status-pill status-pill--sm" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
+                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
               </span>
             </template>
 
@@ -232,8 +232,8 @@
                 </div>
                 <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
               </div>
-              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
-                {{ tripStatusLabel(item.trip_status) }}
+              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
+                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
               </span>
             </div>
           </div>
@@ -400,8 +400,8 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <span class="status-pill" :class="statusPillClass(sharedStatusLabel(selected.trip_status))">
-              {{ tripStatusLabel(selected.trip_status) }}
+            <span class="status-pill" :class="outcomePillClass(sharedStatusLabel(selected.trip_status), selected.no_arrival_reason)">
+              {{ outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason) }}
             </span>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
@@ -579,7 +579,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
-import { sharedStatusLabel, tripStatusLabel, statusPillClass } from '@/composables/adminUi'
+import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
@@ -1177,12 +1177,20 @@ onMounted(fetchData)
   background: rgba(var(--v-theme-error), 0.14);
   color: rgb(var(--v-theme-error-strong));
 }
+/* A sixth outcome, neither success nor failure — the five semantic hues are
+   already spoken for (see .pill-booked above), so this is a literal neutral
+   slate rather than reusing warning/error and implying "wrong" or "pending". */
+.pill-resolved-no-arrival {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
 .v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
 .v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
 .v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
 .v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
 .v-theme--dark .pill-disapproved,
 .v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
+.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
 /* VDataTableFooter has no prop to drop just the items-per-page selector —
