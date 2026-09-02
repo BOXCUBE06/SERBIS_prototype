@@ -1201,6 +1201,7 @@ class ServiceRequestController extends Controller
         // the case this endpoint notifies for (the panel's older, unscheduled
         // Pending -> Disapproved flow is not "a booking" and stays silent).
         $wasBookingRejection = $serviceRequest->scheduled_at !== null
+            && $serviceRequest->status !== 'Disapproved'
             && ($validated['status'] ?? null) === 'Disapproved';
 
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
