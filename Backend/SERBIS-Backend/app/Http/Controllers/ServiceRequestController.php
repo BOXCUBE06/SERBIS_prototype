@@ -982,13 +982,17 @@ class ServiceRequestController extends Controller
      * field is still filled in later, by hand, while the crew is actually
      * out.
      *
-     * patient_age/patient_sex and the free-text vehicle/plate_no snapshot are
+     * patient_age/patient_sex and the free-text vehicle snapshot are
      * nullable, so they were silently left off this stub even though the
      * request already had the first two and the fleet record already had the
-     * last two — the trip's own detail view then showed N/A for all four on
-     * every auto-dispatched trip. vehicle/plate_no mirror onSelectFleetVehicle
-     * in ConductionRequestView.vue exactly, so a stub reads the same as a
+     * last one — the trip's own detail view then showed N/A for all three on
+     * every auto-dispatched trip. `vehicle` mirrors onSelectFleetVehicle in
+     * ConductionRequestView.vue exactly, so a stub reads the same as a
      * manually-created trip for the same unit.
+     *
+     * plate_no is NOT filled here. tbl_vehicles carries no plate column any
+     * more, so the trip's own plate_no is free text again — typed on the trip
+     * form when someone knows it, left null when nobody does.
      */
     private function createConductionStub(ServiceRequest $serviceRequest): void
     {
@@ -1021,7 +1025,6 @@ class ServiceRequestController extends Controller
             'vehicle' => $vehicle
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,
-            'plate_no' => $vehicle?->plate_no,
         ]);
     }
 
