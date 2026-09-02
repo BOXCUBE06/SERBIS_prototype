@@ -1148,6 +1148,23 @@ class ServiceRequestController extends Controller
             }
         }
 
+        // Second-order guard, ambulance only: Booked -> Responding is legal
+        // by the matrix above — the non-ambulance instant-approval path and
+        // the manual "Dispatch" button both need it — but for an ambulance
+        // booking specifically it must still have gone through approve()
+        // first. approve() re-checks unit availability under a lock this
+        // method never takes, stamps approved_at, and sends the approval
+        // SMS; reaching Responding straight from Booked skipped all three.
+        if ($isAmbulanceRequest
+            && $serviceRequest->status === 'Booked'
+            && ($validated['status'] ?? null) === 'Responding'
+            && !$serviceRequest->approved_at
+        ) {
+            throw ValidationException::withMessages([
+                'status' => 'This booking must be approved before it can be dispatched.',
+            ]);
+        }
+
         // The bridge's other half (docs/dispatch-audit.md finding 1): the
         // instant path could always reach Resolved with zero rows in
         // tbl_conduction_requests. Checked before the transaction below so a

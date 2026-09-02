@@ -200,6 +200,8 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     /** Probe 3: an ambulance booking's real lifecycle — Booked -> Responding -> Resolved with a complete trip. */
     public function test_ambulance_booked_to_responding_to_resolved_with_a_complete_trip_record(): void
     {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
         $ambulanceVehicle = Vehicle::create([
             'unit_identifier' => 'AMB-01',
             'type' => 'Ambulance',
@@ -207,7 +209,18 @@ class ServiceRequestTransitionMatrixTest extends TestCase
             'status' => 'Available',
         ]);
 
-        $request = $this->requestWithStatus('Booked', ['service_id' => $this->ambulance->getKey()]);
+        $request = $this->requestWithStatus('Booked', [
+            'service_id' => $this->ambulance->getKey(),
+            'scheduled_at' => now()->addDays(2),
+        ]);
+
+        // The real dispatch board sequence: approve() first — it re-checks
+        // availability, stamps approved_at and sends the approval SMS —
+        // then the "Dispatch" button's own PUT is what update()'s ambulance
+        // gate (added alongside the matrix) now requires approved_at for.
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $ambulanceVehicle->vehicle_id,
+        ])->assertOk();
 
         $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
