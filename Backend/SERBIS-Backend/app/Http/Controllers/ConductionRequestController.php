@@ -33,6 +33,38 @@ class ConductionRequestController extends Controller
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
+    /**
+     * Ceiling on an odometer reading, in kilometres.
+     *
+     * The column is `unsignedInteger`, so without this the only limit was
+     * 4,294,967,295 — an extra digit on a six-figure reading stored silently
+     * and the end->=-start check below still passed, because both readings
+     * were wrong together.
+     *
+     * A six-digit odometer physically cannot display past 999,999, and a
+     * municipal rescue vehicle reaching a million kilometres would be roughly
+     * 25 years at 40,000 km a year. So this rejects nothing a staffer could
+     * read off a dashboard, and catches the fat-fingered extra digit.
+     */
+    private const MAX_ODOMETER = 1000000;
+
+    /**
+     * How many names one role may carry on a single trip.
+     *
+     * `tbl_conduction_request_people.position` is an `unsignedTinyInteger`, so
+     * the 256th name in a role writes 256 into a column that stops at 255 and
+     * takes the whole transaction down with a 500. The arrays were bounded per
+     * element (`max:255` on each name) and not in length.
+     *
+     * Twenty is an order of magnitude above any real trip — the paper form
+     * prints two slots per role. It also has to leave room for
+     * ServiceRequestController::copyRelativesToTrip(), which APPENDS a
+     * booking's intake relatives onto a trip that may already carry names
+     * typed into the create dialog: the worst case is two full lists on one
+     * trip, 40 rows, still nowhere near the column's limit.
+     */
+    private const MAX_PEOPLE_PER_ROLE = 20;
+
     /** The trip log's four checkpoints, in the order they actually happen. */
     private const TRIP_SEQUENCE = [
         'departed_office_at' => 'Departed office',
@@ -61,7 +93,10 @@ class ConductionRequestController extends Controller
             'service_request_id' => 'nullable|integer|exists:tbl_service_request,request_id',
             'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id',
             'patient_name' => 'required|string|max:255',
-            'patient_age' => 'nullable|integer|min:0|max:150',
+            // min:0 stays — a neonate transport is a real ambulance case and 0
+            // is the honest reading. 150 was not defensible: the oldest
+            // verified human lived to 122.
+            'patient_age' => 'nullable|integer|min:0|max:120',
             'patient_address' => 'required|string|max:255',
             'patient_sex' => 'nullable|in:male,female',
             'patient_contact_number' => 'required|string|max:32',
@@ -78,11 +113,13 @@ class ConductionRequestController extends Controller
 
             // The form shows 2 slots per role but must scale past that, so
             // these are arrays rather than fixed driver_1/driver_2 inputs.
-            'drivers' => 'nullable|array',
+            // Bounded in length as well as per element — see
+            // MAX_PEOPLE_PER_ROLE for what the 256th name does to `position`.
+            'drivers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
-            'authorized_passengers' => 'nullable|array',
+            'authorized_passengers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'authorized_passengers.*' => 'nullable|string|max:255',
-            'patient_relatives' => 'nullable|array',
+            'patient_relatives' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'patient_relatives.*' => 'nullable|string|max:255',
 
             // Only meaningful, and only ever stored, when filing over an
@@ -240,8 +277,8 @@ class ConductionRequestController extends Controller
             'no_arrival_reason' => 'sometimes|nullable|string|max:500',
             'departed_destination_at' => 'sometimes|nullable|date',
             'returned_office_at' => 'sometimes|nullable|date',
-            'odometer_start' => 'sometimes|nullable|integer|min:0',
-            'odometer_end' => 'sometimes|nullable|integer|min:0',
+            'odometer_start' => 'sometimes|nullable|integer|min:0|max:'.self::MAX_ODOMETER,
+            'odometer_end' => 'sometimes|nullable|integer|min:0|max:'.self::MAX_ODOMETER,
             'others' => 'sometimes|nullable|string|max:5000',
             // All three PEOPLE_FIELDS roles, not just drivers — a stub the
             // dispatch bridge creates (createConductionStub) starts with
@@ -249,11 +286,11 @@ class ConductionRequestController extends Controller
             // relatives too, the only way to record either was to have
             // known them at the moment the trip was first filed, which the
             // bridge path never is.
-            'drivers' => 'sometimes|array',
+            'drivers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
-            'authorized_passengers' => 'sometimes|array',
+            'authorized_passengers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'authorized_passengers.*' => 'nullable|string|max:255',
-            'patient_relatives' => 'sometimes|array',
+            'patient_relatives' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 

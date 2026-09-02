@@ -17,10 +17,15 @@ class VehicleController extends Controller
 
     public function store(Request $request)
     {
+        // Both string columns are varchar(255). Without the ceilings the
+        // validator passes an over-length value straight to MySQL, which is in
+        // strict mode and answers error 1406 — a 500 where the admin should
+        // have been shown a 422. `unit_identifier` also lacked `string`
+        // entirely, so an array reached the unique rule.
         $validated = $request->validate([
-            'unit_identifier' => 'required|unique:tbl_vehicles,unit_identifier',
+            'unit_identifier' => 'required|string|max:255|unique:tbl_vehicles,unit_identifier',
             'type' => 'required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
-            'specification' => 'nullable|string',
+            'specification' => 'nullable|string|max:255',
             'status' => 'required|in:Available,Dispatched,Maintenance',
         ]);
 
@@ -51,10 +56,12 @@ class VehicleController extends Controller
             'unit_identifier' => [
                 'sometimes',
                 'required',
+                'string',
+                'max:255',
                 Rule::unique('tbl_vehicles')->ignore($vehicle->vehicle_id, 'vehicle_id')
             ],
             'type' => 'sometimes|required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
-            'specification' => 'nullable|string',
+            'specification' => 'nullable|string|max:255',
             'status' => 'sometimes|required|in:Available,Dispatched,Maintenance',
         ]);
 

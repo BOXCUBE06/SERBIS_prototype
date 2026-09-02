@@ -236,16 +236,19 @@ class EquipmentBorrowingTransitionTest extends TestCase
     public function test_resending_the_current_status_is_a_no_op_not_a_transition(): void
     {
         $borrowing = $this->borrowingAt('Approved');
+        // Relative: `due_date` is bounded to [today, +1 year], so a hardcoded
+        // literal starts failing on a date unrelated to what this asserts.
+        $due = now()->addDays(9)->format('Y-m-d');
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", [
                 'status' => 'Approved',
-                'due_date' => '2026-08-12',
+                'due_date' => $due,
             ])
             ->assertOk();
 
         $borrowing->refresh();
-        $this->assertSame('2026-08-12', $borrowing->due_date->format('Y-m-d'));
+        $this->assertSame($due, $borrowing->due_date->format('Y-m-d'));
         $this->assertSame(4, $this->equipment->fresh()->available_quantity, 'a no-op must not move stock');
     }
 }

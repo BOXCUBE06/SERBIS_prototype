@@ -40,6 +40,28 @@ class ServiceRequestController extends Controller
     /** How soon a resident may book. Anything closer is an emergency, not a schedule. */
     private const MINIMUM_LEAD_TIME_HOURS = 1;
 
+    /**
+     * How far ahead a booking may be made. The other end of
+     * MINIMUM_LEAD_TIME_HOURS, and it was missing entirely — `nullable|date`
+     * accepted the year 3000, and AmbulanceAvailability would have carried
+     * that unit as booked for every window in between, forever.
+     *
+     * A year is far past anything the office schedules (a dialysis run is
+     * booked days out, not seasons) while still being a date a person could
+     * plausibly mean. Expressed as a strtotime expression because that is what
+     * Laravel's date-comparison rules take.
+     */
+    private const BOOKING_HORIZON = '+1 year';
+
+    /**
+     * Names one intake list may carry. Mirrors
+     * ConductionRequestController::MAX_PEOPLE_PER_ROLE, and for the same
+     * reason: `tbl_service_request_relatives.position` is an
+     * `unsignedTinyInteger`, and copyRelativesToTrip() carries these names
+     * onto the trip's own tinyint-backed table as well.
+     */
+    private const MAX_RELATIVES = 20;
+
     /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
     private const DEFAULT_BOOKING_HOURS = 2;
 
@@ -176,7 +198,7 @@ class ServiceRequestController extends Controller
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
-            'scheduled_at' => 'nullable|date',
+            'scheduled_at' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
             // Structured ambulance intake, mirroring adminStore()'s columns —
             // but deliberately looser about what is required. The counter form
             // demands five, because a staffer has the requester in front of
@@ -186,7 +208,11 @@ class ServiceRequestController extends Controller
             // actionable at all are required here — who is going, and where.
             'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'patient_age' => 'nullable|integer|min:0|max:150',
+            // min:0 stays — a neonate transport is a real ambulance case and 0
+            // is the honest reading. 150 was not defensible: the oldest
+            // verified human lived to 122. Mirrored in adminStore() and in
+            // ConductionRequestController::store().
+            'patient_age' => 'nullable|integer|min:0|max:120',
             'patient_sex' => 'nullable|in:male,female',
             'patient_address' => 'nullable|string|max:255',
             // The number for this patient, when it is not the account holder's.
@@ -200,7 +226,7 @@ class ServiceRequestController extends Controller
             // Who is coming with the patient, named at intake rather than at
             // dispatch. Optional on every service: nobody is required to bring
             // anyone, and a non-ambulance request simply never sends them.
-            'patient_relatives' => 'nullable|array',
+            'patient_relatives' => 'nullable|array|max:'.self::MAX_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
@@ -596,7 +622,8 @@ class ServiceRequestController extends Controller
             // be unknown at intake and ConductionRequestController's own
             // columns are nullable for the same reason.
             'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'patient_age' => 'nullable|integer|min:0|max:150',
+            // Same ceiling as store() — see the note there.
+            'patient_age' => 'nullable|integer|min:0|max:120',
             'patient_sex' => 'nullable|in:male,female',
             'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             // Optional on both paths: null means the patient is reachable on
@@ -610,11 +637,11 @@ class ServiceRequestController extends Controller
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
             // Same "absent means as soon as possible" contract as store() — a
             // walk-in ambulance request can be booked for a future slot too.
-            'scheduled_at' => 'nullable|date',
+            'scheduled_at' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
             // Same optional intake list as store(). Collected at the counter
             // now rather than waited for until dispatch, when the trip record
             // that used to be their only home is finally created.
-            'patient_relatives' => 'nullable|array',
+            'patient_relatives' => 'nullable|array|max:'.self::MAX_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
@@ -1359,8 +1386,10 @@ class ServiceRequestController extends Controller
         $validated = $request->validate([
             'vehicle_id' => 'required|integer|exists:tbl_vehicles,vehicle_id',
             // Staff-adjustable; defaults to +2h below when absent. Same Manila
-            // parse as everywhere else a human types a time into this system.
-            'scheduled_end' => 'nullable|date',
+            // parse as everywhere else a human types a time into this system,
+            // and the same horizon store() puts on scheduled_at — this is the
+            // column that decides how long the unit is held.
+            'scheduled_end' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
         ]);
 
         $scheduledEnd = !empty($validated['scheduled_end'])
@@ -1453,8 +1482,12 @@ class ServiceRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'scheduled_at' => 'required|date',
-            'scheduled_end' => 'required|date',
+            // Bounded here as well as in store(): this method takes its own
+            // dates and never passes through resolveScheduledAt(), so a
+            // booking moved to the year 3000 would otherwise be accepted by
+            // the one path that exists to move bookings.
+            'scheduled_at' => 'required|date|before_or_equal:'.self::BOOKING_HORIZON,
+            'scheduled_end' => 'required|date|before_or_equal:'.self::BOOKING_HORIZON,
             // TracksHistory logs the scheduled_at/scheduled_end change on its
             // own, but the *reason* only reaches that log because remarks moves
             // in the same update — so it is not optional here, unlike update().

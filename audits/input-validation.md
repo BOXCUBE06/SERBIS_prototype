@@ -39,6 +39,14 @@ The real weakness is narrower and duller: **validation rules describe types but 
 | `app/Http/Controllers/ConductionRequestController.php` | 67, 144 | `medical_diagnosis`, `others` → `string` | `text` |
 | `app/Http/Controllers/EquipmentController.php` | 36 | `item_name` → `required\|string\|unique:…` | `varchar(255)` |
 | `app/Http/Controllers/AuthController.php` | 79, 399–400, 602–603, 648 | `code`, `challenge_id` → `required\|string` | cache keys, not columns |
+| `app/Http/Controllers/VehicleController.php` | 21, 23, 51–55, 57 | `unit_identifier` → `required\|unique:…` (no `string`, no `max:`), `specification` → `nullable\|string` | `varchar(255)` |
+
+> **Correction, 2026-09-03.** The two `VehicleController` rules were **missed by
+> the original pass** and the matrix below recorded `/vehicles` `POST/PUT` as
+> length-bounded, which was false. They are the same defect as the rest of this
+> finding — `unit_identifier` additionally had no `string` rule at all, so an
+> array reached the `unique` check. Both are fixed and now covered by
+> `ValidationLengthLimitsTest`; the matrix row is corrected.
 
 `config/database.php:73,102` sets `'strict' => true`, so MySQL raises error 1406 (*Data too long for column*) instead of silently truncating. Laravel has no handler for it, so it surfaces as a 500.
 
@@ -165,7 +173,7 @@ Write endpoints. All routes except the six auth endpoints and `GET /barangays` s
 | `/equipments` | POST/PUT | admin | ✅ | ❌ | `item_name` unbounded (F1) |
 | `/services` | POST/PUT | admin | ✅ | ❌ | `description` unbounded (F1) |
 | `/barangays` | POST/PUT | admin | ✅ | ✅ | |
-| `/vehicles` | POST/PUT | admin | ✅ | ✅ | |
+| `/vehicles` | POST/PUT | admin | ✅ | ❌ | `unit_identifier`, `specification` unbounded (F1) — **corrected 2026-09-03, this row previously read ✅** |
 | `/conduction-requests` | POST | admin | ✅ | ❌ | `medical_diagnosis` unbounded (F1) |
 | `/conduction-requests/{id}/trip-log` | PATCH | admin | ✅ | ❌ | `others` unbounded (F1) |
 | `/sms/blast` | POST | admin | ✅ | ✅ | `max:160`, `barangays.*` `integer\|exists`; `throttle:3,60` |

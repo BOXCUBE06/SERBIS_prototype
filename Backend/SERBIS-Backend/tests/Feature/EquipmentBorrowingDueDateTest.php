@@ -73,21 +73,33 @@ class EquipmentBorrowingDueDateTest extends TestCase
         ]);
     }
 
+    /**
+     * Relative, not a hardcoded date. `due_date` is bounded to
+     * [today, +1 year] now, so a literal like '2026-08-10' passes until the
+     * day it silently starts failing for a reason that has nothing to do with
+     * what the test is checking.
+     */
+    private function dueDate(int $daysFromToday = 7): string
+    {
+        return now()->addDays($daysFromToday)->format('Y-m-d');
+    }
+
     public function test_approving_stores_the_due_date(): void
     {
         $borrowing = $this->pendingBorrowing();
+        $due = $this->dueDate();
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", [
                 'status' => 'Approved',
-                'due_date' => '2026-08-10',
+                'due_date' => $due,
             ])
             ->assertOk();
 
         $borrowing->refresh();
 
         $this->assertSame('Approved', $borrowing->status);
-        $this->assertSame('2026-08-10', $borrowing->due_date->format('Y-m-d'));
+        $this->assertSame($due, $borrowing->due_date->format('Y-m-d'));
     }
 
     public function test_due_date_serialises_without_a_time_component(): void
@@ -97,13 +109,15 @@ class EquipmentBorrowingDueDateTest extends TestCase
         // The panel compares this against today. A full ISO timestamp with a
         // timezone the date column does not store would have to be trimmed
         // back off on the client before it could be compared.
+        $due = $this->dueDate();
+
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", [
                 'status' => 'Approved',
-                'due_date' => '2026-08-10',
+                'due_date' => $due,
             ])
             ->assertOk()
-            ->assertJsonPath('due_date', '2026-08-10');
+            ->assertJsonPath('due_date', $due);
     }
 
     public function test_a_status_change_without_a_due_date_is_still_accepted(): void
