@@ -145,6 +145,19 @@ class ServiceRequestController extends Controller
     {
         $ambulanceServiceId = $this->ambulanceServiceId();
 
+        // Interpolated straight into required_if/required_unless below — a
+        // null here casts to '' in the rule string, which required_unless
+        // never matches. That degrades silently: description becomes
+        // required for every request (ambulance included) and
+        // patient_name/destination stop being required for none. Fail loudly
+        // instead — this is a seeding/config problem, not a validation one.
+        if ($ambulanceServiceId === null) {
+            throw new \RuntimeException(
+                'No service found with code "' . self::AMBULANCE_SERVICE_CODE . '" — '
+                . 'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
+            );
+        }
+
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
             // Ambulance is exempt because the server composes it below from the
@@ -602,6 +615,15 @@ class ServiceRequestController extends Controller
         // literal, not a query, and the ambulance service's id is not a
         // fixed one across environments the way its code is.
         $ambulanceServiceId = $this->ambulanceServiceId();
+
+        // Same failure mode as store(): a null here silently degrades the
+        // rules below instead of erroring. Fail loudly.
+        if ($ambulanceServiceId === null) {
+            throw new \RuntimeException(
+                'No service found with code "' . self::AMBULANCE_SERVICE_CODE . '" — '
+                . 'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
+            );
+        }
 
         $validated = $request->validate([
             'resident_id' => 'nullable|integer|exists:tbl_residents,resident_id',

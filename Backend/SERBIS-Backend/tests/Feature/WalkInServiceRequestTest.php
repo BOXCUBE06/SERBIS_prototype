@@ -45,6 +45,18 @@ class WalkInServiceRequestTest extends TestCase
             'description' => 'Pick-up and drop-off',
         ]);
 
+        // Not used by any request in this file — every test here files
+        // against $this->service, whose name deliberately does not slugify
+        // to 'ambulance-medical-response'. Exists only so
+        // ServiceRequestController::ambulanceServiceId() resolves a real id
+        // instead of null, which adminStore() now refuses to build
+        // validation rules against at all, regardless of which service the
+        // request targets.
+        Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
+
         $this->actingAs($this->admin);
     }
 
