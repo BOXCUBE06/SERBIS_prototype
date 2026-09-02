@@ -661,7 +661,10 @@
                 </span>
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
-                <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="updateStatus('Resolved')">
+                <!-- Confirmed, not immediate: resolving stamps a terminal
+                     status the panel offers no way back from, and this used
+                     to be one click with nothing between it and the request. -->
+                <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="openResolveConfirm">
                   Mark as Resolved
                 </v-btn>
               </template>
@@ -869,6 +872,46 @@
             :loading="loading || bulkLoading"
             @click="confirmReason"
           >{{ reasonCopy.confirm }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Resolve confirmation. Same shape as the panel's delete confirms
+         (EquipmentInventoryView, ServicesConfigView, VehiclesView): a short
+         v-dialog, the consequence spelled out in the body, Cancel beside a
+         filled confirm. Not folded into reasonDialog above — that one exists
+         to collect a reason string, and this collects nothing. It is a
+         speed bump, and the only thing it has to do is not be one click. -->
+    <v-dialog v-model="resolveDialog.open" max-width="440">
+      <v-card rounded="lg">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          Mark this request as resolved?
+        </v-card-title>
+        <v-card-text class="px-5 pt-2 text-body-2 text-medium-emphasis">
+          <p class="mb-3">
+            Resolving <strong class="text-high-emphasis">{{ resolveDialog.label }}</strong> closes it permanently.
+            The status cannot be changed back from this panel.
+          </p>
+          <p class="mb-0">
+            The trip log stays editable — return timestamps and odometer readings
+            can still be filled in after this. It is the status that is permanent,
+            not the record.
+          </p>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" :disabled="loading" @click="resolveDialog.open = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="success"
+            variant="flat"
+            class="px-6 text-none font-weight-bold"
+            height="44"
+            :loading="loading"
+            @click="confirmResolve"
+          >
+            Resolve permanently
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1474,6 +1517,37 @@ const checkWalkInAvailability = async () => {
 // empty reason.
 const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
 const reasonDialog = ref(emptyReason())
+
+// Resolve is terminal and the panel offers no way back, so it gets a
+// confirmation rather than firing on the click. `label` is captured at open
+// time purely so the dialog can name the request in its own copy; the resolve
+// itself still reads selectedRequest, exactly as the bare click did.
+const resolveDialog = ref({ open: false, label: '' })
+
+const openResolveConfirm = () => {
+  const req = selectedRequest.value
+  if (!req) return
+  const who = requesterName(req)
+  resolveDialog.value = {
+    open: true,
+    label: who && !who.startsWith('Unknown') ? `${who}'s request` : 'this request',
+  }
+}
+
+const confirmResolve = async () => {
+  await updateStatus('Resolved')
+  // updateStatus never throws — it catches and reports through apiError — so
+  // that is the only honest success signal here. Checking the request's own
+  // status instead would misread the case where resolving succeeds and the
+  // row then leaves the active filter, leaving selectedRequest null.
+  //
+  // Left open on failure so the resolve gate's refusal ("Cannot resolve —
+  // missing arrival time, a driver.") is read against the dialog that
+  // explains what the click was for, rather than over a closed one.
+  if (!apiError.value) {
+    resolveDialog.value.open = false
+  }
+}
 
 // Disapprove's reason is required at the API regardless of who asked — it is
 // the audit record of why, even for a walk-in with no account to read it. So
