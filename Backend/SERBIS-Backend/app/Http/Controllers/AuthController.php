@@ -31,6 +31,17 @@ class AuthController extends Controller
      */
     private const SIGNUP_WINDOW_HOURS = 24;
 
+    /**
+     * How many wrong guesses one sign-up code tolerates before it is retired.
+     * The same figure the login challenge uses (consumeMfaChallengeAttempt),
+     * and for the same reason: without it the only brake on guessing a
+     * six-digit code was the route's rate limiter, whose tight tier keys on
+     * the IP as well as the address — so the ceiling was per source address
+     * rather than per account, and distributed guessing scaled with the number
+     * of addresses an attacker had.
+     */
+    private const MAX_SIGNUP_ATTEMPTS = 5;
+
     // Resident self-registration for the mobile app. Admins live in tbl_user and
     // are deliberately not creatable here — there is no public route that writes
     // to that table.
@@ -152,7 +163,12 @@ class AuthController extends Controller
         }
 
         if (!$this->signupCodeMatches($entry, (string) $request->code)) {
-            $this->putPendingSignup($email, $entry);
+            if (! $this->spendSignupAttempt($email, $entry)) {
+                return response()->json([
+                    'message' => 'Too many wrong codes. Ask for a new one.',
+                    'code' => 'too_many_attempts',
+                ], 429);
+            }
 
             // One message for a wrong code and for an expired one. Separating
             // them tells someone guessing which half they got right.
@@ -320,6 +336,13 @@ class AuthController extends Controller
         $entry['code_hash'] = Hash::make($code);
         $entry['sent_at'] = now()->getTimestamp();
         $entry['expires_at'] = now()->addMinutes(Resident::CODE_TTL_MINUTES)->getTimestamp();
+        // A new code is a new secret, so it gets a fresh budget of guesses —
+        // the same reset sendLoginCode() performs on a resent login code. What
+        // stops that being a way around MAX_SIGNUP_ATTEMPTS is the resend
+        // cooldown (Resident::RESEND_COOLDOWN_SECONDS) plus the route limiter:
+        // buying another five guesses costs a minute's wait and a real message
+        // to the address being attacked.
+        $entry['attempts'] = 0;
         // Set once and carried through every reissue: resending moves the code's
         // clock, not the sign-up's, so a resident cannot hold an unfinished
         // sign-up open forever by tapping Resend.
@@ -391,6 +414,52 @@ class AuthController extends Controller
 
             return true;
         }
+    }
+
+    /**
+     * Records a wrong guess against a pending sign-up, and says whether the
+     * code survived it. False means this guess spent the last attempt.
+     *
+     * The counterpart of consumeMfaChallengeAttempt(), with one deliberate
+     * difference. That method destroys the challenge outright, which is right
+     * there: a challenge is one attempt at signing in, and the client answers
+     * `too_many_attempts` by sending the resident back to the login form to
+     * make another.
+     *
+     * This entry is not only a credential. It also holds the registration
+     * itself — the name, the barangay, the hashed password — for
+     * SIGNUP_WINDOW_HOURS, and for a fresh self-registration there is no
+     * tbl_residents row behind it yet. Destroying it would leave the code
+     * screen with a Resend button that answers 404, and the resident retyping
+     * the whole form. So the CODE is retired and the draft is kept: Resend
+     * issues a new one against the same sign-up, which is what
+     * verify_email_screen.dart already does with any error it is handed.
+     *
+     * Retiring rather than merely counting also means the spent code cannot be
+     * guessed after the cap — the hash is dropped from the cache store, not
+     * just marked.
+     */
+    private function spendSignupAttempt(string $email, array $entry): bool
+    {
+        $attempts = (int) ($entry['attempts'] ?? 0) + 1;
+        $entry['attempts'] = $attempts;
+        $survived = $attempts < self::MAX_SIGNUP_ATTEMPTS;
+
+        if (! $survived) {
+            // Both, deliberately. Dropping the hash is what actually ends the
+            // guessing; zeroing the clock is what signupCodeMatches() checks
+            // first, so the entry reads as expired to every path rather than
+            // as one with an empty hash.
+            unset($entry['code_hash']);
+            $entry['expires_at'] = 0;
+        }
+
+        // Written back either way, and putPendingSignup() re-stores it with the
+        // time the SIGN-UP has left rather than a fresh window — so a run of
+        // wrong guesses cannot hold the draft open past its own day.
+        $this->putPendingSignup($email, $entry);
+
+        return $survived;
     }
 
     private function signupCodeMatches(array $entry, string $code): bool

@@ -437,6 +437,124 @@ class ResidentEmailVerificationTest extends TestCase
         ])->assertStatus(200);
     }
 
+    /** Any six digits that are not the real code. */
+    private function wrongCode(string $real): string
+    {
+        return $real === '000000' ? '111111' : '000000';
+    }
+
+    private function submit(string $code): \Illuminate\Testing\TestResponse
+    {
+        return $this->postJson('/api/resident/verify-email', [
+            'email_address' => 'grace@test.local',
+            'code' => $code,
+        ]);
+    }
+
+    /**
+     * Guessing a six-digit code was bounded only by the route limiter, whose
+     * tight tier keys on the IP as well as the address — so the ceiling was per
+     * source address, and spreading the guesses across addresses raised it.
+     * The login challenge has had a per-code cap since it was written; this is
+     * the same cap on the sign-up code.
+     */
+    public function test_the_fifth_wrong_code_retires_it(): void
+    {
+        $code = $this->registerAndCaptureCode();
+        $wrong = $this->wrongCode($code);
+
+        // Four wrong guesses are refused and leave the code alive.
+        for ($i = 1; $i <= 4; $i++) {
+            $this->submit($wrong)
+                ->assertStatus(422)
+                ->assertJsonPath('code', 'invalid_code');
+        }
+
+        $this->submit($wrong)
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'too_many_attempts');
+    }
+
+    public function test_the_right_code_stops_working_once_the_cap_is_hit(): void
+    {
+        $code = $this->registerAndCaptureCode();
+        $wrong = $this->wrongCode($code);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->submit($wrong);
+        }
+
+        // Past the route limiter's own window. Five guesses is exactly its
+        // per-minute budget for this address, so without this step the next
+        // request would be answered by the throttle and this test would prove
+        // nothing about the attempt cap.
+        $this->travel(61)->seconds();
+
+        // The code that WOULD have worked. This is the assertion that matters:
+        // the cap retires the secret rather than merely counting against it.
+        $this->submit($code)
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'too_many_attempts');
+
+        $this->assertSame(0, Resident::count());
+    }
+
+    /**
+     * The deliberate difference from consumeMfaChallengeAttempt(), which
+     * destroys its challenge outright. A pending sign-up also holds the
+     * registration form, and for a fresh sign-up there is no tbl_residents row
+     * behind it — so destroying it would send the resident back to an empty
+     * form, and leave the code screen's Resend button answering 404.
+     */
+    public function test_the_sign_up_survives_the_cap_and_a_resend_finishes_it(): void
+    {
+        $first = $this->registerAndCaptureCode();
+        $wrong = $this->wrongCode($first);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->submit($wrong);
+        }
+
+        $this->travel(Resident::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+
+        $this->postJson('/api/resident/verify-email/resend', [
+            'email_address' => 'grace@test.local',
+        ])->assertStatus(200)->assertJsonPath('code', 'code_sent');
+
+        $second = collect($this->codesTexted())->first(fn (string $code) => $code !== $first);
+        $this->assertNotNull($second);
+
+        $this->submit($second)->assertStatus(200);
+
+        $this->assertSame(1, Resident::count());
+    }
+
+    /**
+     * A new code is a new secret, so it gets a new budget — the same reset
+     * sendLoginCode() performs. Without it the first wrong guess after a resend
+     * would answer 429 against a code nobody had guessed yet.
+     */
+    public function test_a_resend_restores_the_budget_of_guesses(): void
+    {
+        $first = $this->registerAndCaptureCode();
+        $wrong = $this->wrongCode($first);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->submit($wrong);
+        }
+
+        $this->travel(Resident::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+
+        $this->postJson('/api/resident/verify-email/resend', [
+            'email_address' => 'grace@test.local',
+        ])->assertStatus(200);
+
+        // 422, not 429: this is guess one of five against the new code.
+        $this->submit($this->wrongCode($first))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'invalid_code');
+    }
+
     public function test_an_expired_code_is_refused(): void
     {
         $code = $this->registerAndCaptureCode();
