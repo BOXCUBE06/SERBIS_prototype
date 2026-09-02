@@ -1396,7 +1396,7 @@ class ServiceRequestController extends Controller
             $serviceRequest->update([
                 'vehicle_id' => $vehicle->vehicle_id,
                 'scheduled_end' => $scheduledEnd,
-                'approved_at' => now(),
+                'approved_at' => $serviceRequest->approved_at ?? now(),
                 'processed_by' => $request->user()->getKey(),
             ]);
         });

@@ -225,7 +225,8 @@ class ServiceRequestApproveTest extends TestCase
             'vehicle_id' => $this->amb01->vehicle_id,
         ])->assertOk();
 
-        $this->assertNotNull($request->fresh()->approved_at);
+        $firstApprovedAt = $request->fresh()->approved_at;
+        $this->assertNotNull($firstApprovedAt);
         Http::assertSentCount(1);
 
         $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
@@ -235,7 +236,9 @@ class ServiceRequestApproveTest extends TestCase
         // The swap itself still happened...
         $this->assertSame($this->amb02->vehicle_id, $request->fresh()->vehicle_id);
         $this->assertSame('Available', $this->amb01->fresh()->status);
-        // ...but no second SMS went out for it — the gate is on approved_at
+        // ...approved_at records the original approval, not the swap...
+        $this->assertTrue($firstApprovedAt->equalTo($request->fresh()->approved_at));
+        // ...and no second SMS went out for it — the gate is on approved_at
         // already being set before the call, not on the call itself.
         Http::assertSentCount(1);
     }
