@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import '../data/safety_files.dart';
+import '../models/phone_number.dart';
 import '../state/account_store.dart';
 import '../state/api_service.dart';
 import '../state/material_cache.dart';
@@ -1051,9 +1052,11 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     final phone = _phone.text.trim();
     if (phone.isEmpty) {
       errors['phone'] = _tr('profile.required');
-    } else if (phone.length != 11 || !phone.startsWith('09')) {
-      // The field is digits-only and capped at 11 by AppTextField.phone, so the
-      // only reachable failures are "too short" and "does not start 09".
+    } else if (!PhoneNumber.isValid(phone)) {
+      // The server's own rule — see PhoneNumber. This was a hand-rolled
+      // "length 11 and starts 09", which is a strict subset: it refused the
+      // `+639…` shape the server accepts and registration allows, so a
+      // resident who signed up with one could not save their own profile.
       errors['phone'] = _tr('profile.phone_invalid');
     }
 

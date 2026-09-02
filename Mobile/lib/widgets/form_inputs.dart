@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/phone_number.dart';
 import '../theme/app_theme.dart';
 
 /// The app's labelled text field. Lived as `_Field` inside the services screen,
@@ -48,8 +49,21 @@ class AppTextField extends StatelessWidget {
     this.suffixIcon,
   });
 
-  /// The 11-digit numbers-only phone field, spelled once instead of at each of
-  /// the four call sites that used to repeat the formatter and the length.
+  /// The phone field, spelled once instead of at each of the call sites that
+  /// used to repeat the formatter and the length.
+  ///
+  /// Accepts the three shapes the backend does — `09XXXXXXXXX`,
+  /// `639XXXXXXXXX` and `+639XXXXXXXXX` — so `+` is allowed through and the
+  /// cap is [PhoneNumber.maxLength], not 11. It was digits-only and capped at
+  /// 11, which made the two country-code shapes impossible to type: a resident
+  /// who registered as `+639171234567` could see that number in their profile
+  /// and not retype it after clearing the field.
+  ///
+  /// This only bounds what can be entered. Whether it is a real number is the
+  /// caller's validator, because not every caller wants the same answer — the
+  /// account's own number must match the server's rule exactly, while the
+  /// ambulance form's patient contact is free text (`max:32`) server-side and
+  /// belongs to whoever is being carried, not to the account.
   factory AppTextField.phone({
     Key? key,
     String label = 'Contact number',
@@ -63,8 +77,8 @@ class AppTextField extends StatelessWidget {
         hint: '09XXXXXXXXX',
         controller: controller,
         keyboard: TextInputType.phone,
-        maxLength: 11,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        maxLength: PhoneNumber.maxLength,
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'))],
         errorText: errorText,
         enabled: enabled,
       );
