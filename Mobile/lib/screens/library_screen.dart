@@ -23,7 +23,13 @@ class LibraryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final filipino = appState.language == AppLanguage.filipino;
 
-    return ListView(
+    // First Aid, Disaster Preparedness and the hotline card are all compiled
+    // into the app — nothing to refresh there. MDRRMO Documents
+    // (_PublishedMaterials) is the one section this screen ever fetches over
+    // the network, so that is the only thing a pull refetches.
+    return RefreshIndicator(
+      onRefresh: appState.loadMaterials,
+      child: ListView(
       padding: EdgeInsets.zero,
       children: [
         AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
@@ -100,6 +106,7 @@ class LibraryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 110),
       ],
+      ),
     );
   }
 
