@@ -1,4 +1,3 @@
-
 library serbis.main;
 
 import 'dart:async';
@@ -21,7 +20,6 @@ import 'state/account_store.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
-import 'widgets/sos_button.dart';
 
 void main() {
   // A build with no `--dart-define=API_BASE_URL` has nowhere to send its calls.
@@ -54,7 +52,8 @@ class _MisconfiguredApp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.build_circle_outlined, color: Colors.white, size: 56),
+                Icon(Icons.build_circle_outlined,
+                    color: Colors.white, size: 56),
                 SizedBox(height: 16),
                 Text(
                   'This build has no API address',
@@ -71,7 +70,8 @@ class _MisconfiguredApp extends StatelessWidget {
                   'server. Rebuild with:\n\n'
                   'flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                  style:
+                      TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
                 ),
               ],
             ),
@@ -552,8 +552,6 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           ],
         ),
       ),
-      floatingActionButton: const SosFab(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _BottomNav(index: _index, onTap: _goTo),
     );
   }
@@ -593,7 +591,10 @@ class _BottomNav extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(active ? filled : outline, size: 22, color: active ? AppColors.green700 : AppColors.inkFaint),
+                    Icon(active ? filled : outline,
+                        size: 22,
+                        color:
+                            active ? AppColors.green700 : AppColors.inkFaint),
                     const SizedBox(height: 4),
                     Text(
                       label,
