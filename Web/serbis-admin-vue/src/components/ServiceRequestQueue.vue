@@ -266,7 +266,7 @@
                     <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
                 </div>
-                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(item.status)">{{ item.status || 'Pending' }}</span>
+                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)">{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
               </div>
 
               <!-- itemsPerPage is sized off windowHeight so a full page fills
@@ -328,8 +328,8 @@
                   <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
                 </div>
               </div>
-              <span class="status-pill" :class="statusPillClass(selectedRequest.status)">
-                {{ selectedRequest.status || 'Pending' }}
+              <span class="status-pill" :class="outcomePillClass(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)">
+                {{ outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason) }}
               </span>
             </div>
 
@@ -551,6 +551,9 @@
                     <div class="text-body-2">
                       {{ tripDriverNames || 'No driver recorded yet' }}
                       <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
+                    </div>
+                    <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
+                      <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
                     </div>
                     <div class="text-caption text-medium-emphasis mb-2">
                       Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
@@ -1274,7 +1277,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { statusPillClass, isBookingOverdue } from '@/composables/adminUi'
+import { outcomeLabel, outcomePillClass, isBookingOverdue } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
@@ -2713,6 +2716,13 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   background: rgba(var(--v-theme-error), 0.14);
   color: rgb(var(--v-theme-error-strong));
 }
+/* A sixth outcome, neither success nor failure — the five semantic hues are
+   already spoken for (see .pill-booked above), so this is a literal neutral
+   slate rather than reusing warning/error and implying "wrong" or "pending". */
+.pill-resolved-no-arrival {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
 /* The dark tokens are already bright enough to use as text, but they need the
    lighter 10% tint the measurements were taken against — 14% of a bright token
    over #131B2E lifts the background far enough to eat the margin. Keep each
@@ -2723,6 +2733,7 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
 .v-theme--dark .pill-disapproved,
 .v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
+.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
 
 /* Ambulance Day View. Booked segments reuse .pill-booked's exact violet — the
    same status already means "Booked" everywhere else on this page, so the
