@@ -5,6 +5,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
+import 'package:serbis/models/service_forms.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 
@@ -13,6 +14,7 @@ import 'package:serbis/state/request_store.dart';
 class _RecordingApi extends ApiService {
   DateTime? scheduledAt;
   String? requiredVehicleType;
+  AmbulanceIntake? intake;
   Object? error;
 
   @override
@@ -33,9 +35,11 @@ class _RecordingApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     DateTime? scheduledAt,
+    AmbulanceIntake? intake,
   }) async {
     this.scheduledAt = scheduledAt;
     this.requiredVehicleType = requiredVehicleType;
+    this.intake = intake;
 
     if (error != null) {
       throw error!;
@@ -105,6 +109,168 @@ void main() {
       // depends on: an offset marker, so it is honoured as sent rather than
       // re-read as Manila wall clock a second time.
       expect(sent, matches(RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$')));
+    });
+
+    test('an ambulance body carries the structured fields and no description', () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 3,
+        // Deliberately non-empty: the builder must drop it for an ambulance
+        // request rather than pass it along, because the server composes its
+        // own and a client copy would be a second composer.
+        description: 'a client-composed description',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        intake: const AmbulanceIntake(
+          patientName: 'Juan Dela Cruz',
+          destination: 'Echague District Hospital',
+          patientAge: '62',
+          patientSex: 'female',
+          patientAddress: 'Purok 2, San Fabian',
+          patientContactNumber: '09189999999',
+          pickupLocation: 'Purok 2, San Fabian',
+          conditionNotes: 'Chest pains',
+          relatives: ['Lalaine Ferrer', 'Rosa Dela Cruz'],
+        ),
+      );
+
+      expect(request.fields['patient_name'], 'Juan Dela Cruz');
+      expect(request.fields['destination'], 'Echague District Hospital');
+      expect(request.fields['patient_age'], '62');
+      expect(request.fields['patient_sex'], 'female');
+      expect(request.fields['patient_address'], 'Purok 2, San Fabian');
+      expect(request.fields['patient_contact_number'], '09189999999');
+      expect(request.fields['pickup_location'], 'Purok 2, San Fabian');
+      expect(request.fields['condition_notes'], 'Chest pains');
+
+      // Indexed keys, which is what PHP parses back into the array the
+      // `patient_relatives.*` rule validates.
+      expect(request.fields['patient_relatives[0]'], 'Lalaine Ferrer');
+      expect(request.fields['patient_relatives[1]'], 'Rosa Dela Cruz');
+
+      expect(request.fields.containsKey('description'), isFalse);
+    });
+
+    test('an unset optional field is absent, never an empty string', () {
+      // `nullable|integer` rejects '', and `in:male,female` rejects ''. An
+      // untouched field has to be missing from the body, not present and
+      // blank, or an optional field becomes a 422.
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 3,
+        description: 'x',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        intake: const AmbulanceIntake(
+          patientName: 'Juan Dela Cruz',
+          destination: 'Echague District Hospital',
+        ),
+      );
+
+      for (final key in const [
+        'patient_age',
+        'patient_sex',
+        'patient_address',
+        'patient_contact_number',
+        'pickup_location',
+        'condition_notes',
+        'patient_relatives[0]',
+      ]) {
+        expect(request.fields.containsKey(key), isFalse,
+            reason: '$key should be absent, not empty');
+      }
+    });
+
+    test('a non-ambulance body still carries a description and no patient fields', () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 3,
+        description: 'Fallen tree blocking the road',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+      );
+
+      expect(request.fields['description'], 'Fallen tree blocking the road');
+      expect(request.fields.containsKey('patient_name'), isFalse);
+      expect(request.fields.containsKey('destination'), isFalse);
+    });
+
+    test('a scheduled ambulance request keeps both the schedule and the fields', () {
+      final picked = DateTime(2026, 9, 4, 9, 0);
+
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 3,
+        description: 'x',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        scheduledAt: picked,
+        intake: const AmbulanceIntake(
+          patientName: 'Juan Dela Cruz',
+          destination: 'Echague District Hospital',
+        ),
+      );
+
+      expect(request.fields['scheduled_at'], picked.toUtc().toIso8601String());
+      expect(request.fields['scheduled_at'], endsWith('Z'));
+      expect(request.fields['patient_name'], 'Juan Dela Cruz');
+      expect(request.fields.containsKey('description'), isFalse);
+    });
+  });
+
+  group('AmbulanceIntake.from', () {
+    test('maps the dropdown\'s "Not specified" to null, not the label', () {
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+      form.patient.text = 'Juan Dela Cruz';
+      form.destination.text = 'Echague District Hospital';
+
+      final intake = AmbulanceIntake.from(form);
+
+      expect(intake.patientSex, isNull);
+      expect(intake.toFields().containsKey('patient_sex'), isFalse);
+    });
+
+    test('maps a picked sex to the lowercase value the API takes', () {
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+      form.patient.text = 'Juan Dela Cruz';
+      form.destination.text = 'Echague District Hospital';
+      form.sex = 'Female';
+
+      expect(AmbulanceIntake.from(form).patientSex, 'female');
+    });
+
+    test('an untouched age is null, not an empty string', () {
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+      form.patient.text = 'Juan Dela Cruz';
+      form.destination.text = 'Echague District Hospital';
+
+      final intake = AmbulanceIntake.from(form);
+
+      expect(intake.patientAge, isNull);
+      expect(intake.toFields().containsKey('patient_age'), isFalse);
+    });
+
+    test('reads the diagnosis controller into condition_notes', () {
+      // The label says "Medical diagnosis", the column is condition_notes, and
+      // this is the one place the two names meet.
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+      form.patient.text = 'Juan Dela Cruz';
+      form.destination.text = 'Echague District Hospital';
+      form.diagnosis.text = 'Chest pains';
+
+      expect(AmbulanceIntake.from(form).toFields()['condition_notes'], 'Chest pains');
+    });
+
+    test('drops blank relative slots', () {
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+      form.patient.text = 'Juan Dela Cruz';
+      form.destination.text = 'Echague District Hospital';
+      form.relatives[0].text = '   ';
+      form.addRelative();
+      form.relatives[1].text = 'Lalaine Ferrer';
+
+      expect(AmbulanceIntake.from(form).relatives, ['Lalaine Ferrer']);
     });
   });
 

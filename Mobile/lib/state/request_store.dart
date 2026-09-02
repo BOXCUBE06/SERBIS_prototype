@@ -6,6 +6,7 @@ import '../models/advisory.dart';
 import '../models/borrow_models.dart';
 import '../models/info_material.dart';
 import '../models/request_models.dart';
+import '../models/service_forms.dart' show AmbulanceIntake;
 import 'api_service.dart';
 import 'app_log.dart';
 import 'borrow_cache.dart';
@@ -709,6 +710,10 @@ class AppState extends ChangeNotifier {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    /// Present only for an ambulance request. When it is, the server composes
+    /// `description` from it and `request.description` is not sent at all —
+    /// the optimistic row still carries its own copy for the Track screen.
+    AmbulanceIntake? intake,
   }) async {
     // request.scheduledAt, if any, rides along on `request` itself — the
     // optimistic row already carries it, and it is read off there below
@@ -737,6 +742,7 @@ class AppState extends ChangeNotifier {
         sitePhotoBytes: sitePhotoBytes,
         sitePhotoFileName: sitePhotoFileName,
         scheduledAt: request.scheduledAt,
+        intake: intake,
       );
 
       final confirmed = _resolveService(ServiceRequest.fromJson(result));

@@ -315,6 +315,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
         // entirely and re-checks availability under a lock at approval
         // instead — sending it here is harmless either way.
         requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
+        // Ambulance only. Its presence is what tells the request builder to
+        // send the structured columns and omit `description` entirely — the
+        // server composes that from these same values, and a client-composed
+        // one would be a second composer on the wire.
+        intake: form is AmbulanceFormData ? AmbulanceIntake.from(form) : null,
       );
     } finally {
       if (mounted) {

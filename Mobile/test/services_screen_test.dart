@@ -30,6 +30,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
+import 'package:serbis/models/service_forms.dart';
 import 'package:serbis/screens/services_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
@@ -101,6 +102,12 @@ class FakeApi extends ApiService {
   /// one. Asserting on the widget tree would prove nothing about what was sent.
   String? lastDescription;
 
+  /// Non-null only for an ambulance request, and the thing to assert on for
+  /// one: the client stopped sending `description` for that service, so
+  /// [lastDescription] there is only the optimistic row's own copy, not what
+  /// went on the wire.
+  AmbulanceIntake? lastIntake;
+
   /// Set to a completer-backed future to hold a submit open mid-flight.
   Future<void>? submitGate;
 
@@ -157,11 +164,13 @@ class FakeApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     DateTime? scheduledAt,
+    AmbulanceIntake? intake,
   }) async {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
     lastSitePhotoName = sitePhotoFileName;
     lastDescription = description;
+    lastIntake = intake;
 
     if (submitGate != null) {
       await submitGate;
@@ -531,11 +540,16 @@ void main() {
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 
-    testWidgets("the account's number reaches the dispatcher in the description",
+    testWidgets("the account's number reaches the dispatcher as a real field",
         (tester) async {
-      // The resident never typed 09171234567 anywhere in this test -- it is on
-      // `_testUser`, and reaches the description by prefilling the patient
-      // contact field.
+      // Was an assertion on `lastDescription`. The client no longer composes a
+      // description for an ambulance request -- the server does, from these
+      // fields -- so asserting on the prose would be asserting on a string
+      // that never leaves the device. The number still has to arrive; it just
+      // arrives as patient_contact_number now.
+      //
+      // The resident never typed 09171234567 anywhere in this test: it is on
+      // `_testUser` and reaches the wire by prefilling the contact field.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
 
@@ -543,7 +557,8 @@ void main() {
       await _attachValidId(tester);
       await _submit(tester);
 
-      expect(api.lastDescription, contains('Contact: 09171234567'));
+      expect(api.lastIntake?.patientContactNumber, '09171234567');
+      expect(api.lastIntake?.toFields()['patient_contact_number'], '09171234567');
     });
 
     testWidgets("the account's address prefills the patient address",
@@ -557,7 +572,36 @@ void main() {
       await _attachValidId(tester);
       await _submit(tester);
 
-      expect(api.lastDescription, contains('Address: ${_testUser.address}'));
+      expect(api.lastIntake?.patientAddress, _testUser.address);
+    });
+
+    testWidgets('an ambulance request sends the structured fields, not a description',
+        (tester) async {
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      await _fillRequiredAmbulanceFields(tester);
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      final fields = api.lastIntake!.toFields();
+      expect(fields['patient_name'], 'Maria Santos');
+      expect(fields['destination'], 'Echague District Hospital');
+      // The one key the server refuses to take from a client for this service.
+      expect(fields.containsKey('description'), isFalse);
+    });
+
+    testWidgets('a non-ambulance request still sends a description and no intake',
+        (tester) async {
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.road);
+
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(api.lastIntake, isNull);
+      expect(api.lastDescription, isNotNull);
+      expect(api.lastDescription, contains('Road Clearing'));
     });
 
     testWidgets('a road request carries no contact line at all', (tester) async {

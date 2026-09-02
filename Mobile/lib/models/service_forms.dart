@@ -42,6 +42,94 @@ String _or(TextEditingController controller, String fallback) {
 String _contactLine(String accountNumber) =>
     accountNumber.trim().isEmpty ? 'See resident profile' : accountNumber.trim();
 
+/// The ambulance form's structured fields, as the API takes them.
+///
+/// A typed object rather than the `Map<String, String>` the multipart body
+/// ultimately needs, for the same reason the forms stopped being a map of
+/// string keys (M27): a field collected on screen and never sent is invisible
+/// in a map and a compile error here. [toFields] is the single place a key
+/// name is spelled, and it is the only thing the request builder reads.
+///
+/// `description` is deliberately absent. The server composes it for an
+/// ambulance request from exactly these values
+/// (ServiceRequestController::composeAmbulanceDescription) and ignores
+/// anything a client sends, so producing one here would be a second composer
+/// waiting to disagree with the first.
+class AmbulanceIntake {
+  const AmbulanceIntake({
+    required this.patientName,
+    required this.destination,
+    this.patientAge,
+    this.patientSex,
+    this.patientAddress,
+    this.patientContactNumber,
+    this.pickupLocation,
+    this.conditionNotes,
+    this.relatives = const [],
+  });
+
+  /// The two the server requires for this service; everything else is optional
+  /// there too, and admin verification fills the gaps by phone.
+  final String patientName;
+  final String destination;
+
+  /// Digits only, or null. Never the empty string: `nullable|integer` rejects
+  /// `''`, so an untouched field has to be absent from the body rather than
+  /// present and blank.
+  final String? patientAge;
+
+  /// 'male', 'female', or null — never the dropdown's own "Not specified"
+  /// label, which is a display string the API has no rule for.
+  final String? patientSex;
+
+  final String? patientAddress;
+  final String? patientContactNumber;
+
+  /// Null when the resident left it blank; the server fills it with their
+  /// registered barangay rather than the client guessing at it.
+  final String? pickupLocation;
+
+  /// `condition_notes` on tbl_service_request, labelled "Medical diagnosis" on
+  /// screen. One column, one controller, two names for the same fact.
+  final String? conditionNotes;
+
+  final List<String> relatives;
+
+  factory AmbulanceIntake.from(AmbulanceFormData form) {
+    String? optional(TextEditingController controller) {
+      final value = controller.text.trim();
+      return value.isEmpty ? null : value;
+    }
+
+    return AmbulanceIntake(
+      patientName: _text(form.patient),
+      destination: _text(form.destination),
+      patientAge: optional(form.age),
+      patientSex: form.sexValue,
+      patientAddress: optional(form.patientAddress),
+      patientContactNumber: optional(form.patientContact),
+      pickupLocation: optional(form.pickup),
+      conditionNotes: optional(form.diagnosis),
+      relatives: form.relativeNames,
+    );
+  }
+
+  /// The scalar multipart fields, with every null omitted rather than sent
+  /// empty. [relatives] is not here: it is a repeated key
+  /// (`patient_relatives[]`) and the builder attaches it separately.
+  Map<String, String> toFields() => {
+        'patient_name': patientName,
+        'destination': destination,
+        if (patientAge != null) 'patient_age': patientAge!,
+        if (patientSex != null) 'patient_sex': patientSex!,
+        if (patientAddress != null) 'patient_address': patientAddress!,
+        if (patientContactNumber != null)
+          'patient_contact_number': patientContactNumber!,
+        if (pickupLocation != null) 'pickup_location': pickupLocation!,
+        if (conditionNotes != null) 'condition_notes': conditionNotes!,
+      };
+}
+
 class AmbulanceFormData extends ServiceFormData {
   /// [accountAddress] and [contactNumber] seed the two fields the account can
   /// answer for; both stay fully editable, because the account answers for the
