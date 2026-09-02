@@ -123,5 +123,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // same way tbl_vehicles has none.
         Route::apiResource('conduction-requests', ConductionRequestController::class)->only(['index', 'store', 'show']);
         Route::patch('conduction-requests/{id}/trip-log', [ConductionRequestController::class, 'tripLog']);
+        Route::get('conduction-requests/{id}/print', [ConductionRequestController::class, 'print']);
     });
 });

@@ -307,6 +307,7 @@
 
         $patientName    = $val($request?->patient_name    ?: $trip->patient_name);
         $patientAge     = $val($request?->patient_age     ?: $trip->patient_age);
+        $patientAddress = $val($request?->patient_address ?: $trip->patient_address);
         $patientSex     = $val($request?->patient_sex     ?: $trip->patient_sex);
         $patientContact = $val($request?->patient_contact_number ?: $trip->patient_contact_number);
         $diagnosis      = $val($request?->condition_notes ?: $trip->medical_diagnosis);
@@ -353,6 +354,13 @@
             <div class="field w-sex">
                 <span class="label">Sex</span>
                 <span class="rule">{{ $patientSex ? ucfirst($patientSex) : '' }}</span>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="field">
+                <span class="label">Patient Address</span>
+                <span class="rule">{{ $patientAddress }}</span>
             </div>
         </div>
 
@@ -499,4 +507,5 @@
         </div>
     </footer>
 </body>
+<script>window.print()</script>
 </html>

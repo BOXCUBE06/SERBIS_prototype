@@ -257,6 +257,23 @@ class ConductionRequestController extends Controller
     }
 
     /**
+     * Admin-only printable rendering of the paper form. Eager-loads what
+     * conduction-request.blade.php expects (its own doc comment): people for
+     * drivers/passengers/manually-typed relatives, serviceRequest.relatives
+     * for a bridged trip's intake-named relatives.
+     */
+    public function print($id)
+    {
+        $conductionRequest = ConductionRequest::with(['people', 'serviceRequest.relatives'])->find($id);
+
+        if (!$conductionRequest) {
+            abort(404, 'Conduction request not found');
+        }
+
+        return view('conduction-request', ['trip' => $conductionRequest]);
+    }
+
+    /**
      * The trip log is filled in over several calls as the trip actually
      * happens — office staff cannot know the return odometer reading at
      * dispatch time — so every field is `sometimes`: a call touches only
