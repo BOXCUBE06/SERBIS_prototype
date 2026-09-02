@@ -275,7 +275,28 @@ class ApiService {
       // A refusal can still have sent a code — see [VerificationDelivery].
       delivery: VerificationDelivery.fromJson(body),
       challengeId: challengeId is String ? challengeId : null,
+      fieldErrors: _fieldErrors(body),
     );
+  }
+
+  /// Laravel's `errors` map flattened to one message per field. `_errorMessage`
+  /// above already picks the first of these for the banner; this keeps the
+  /// field names so a screen can mark the input that was actually rejected.
+  static Map<String, String> _fieldErrors(Map<String, dynamic>? body) {
+    final errors = body?['errors'];
+    if (errors is! Map<String, dynamic>) return const {};
+
+    final flattened = <String, String>{};
+
+    errors.forEach((field, messages) {
+      if (messages is List && messages.isNotEmpty) {
+        flattened[field] = messages.first.toString();
+      } else if (messages is String) {
+        flattened[field] = messages;
+      }
+    });
+
+    return flattened;
   }
 
   /// Laravel reports validation failures under `errors` and everything else
@@ -460,6 +481,7 @@ class ApiService {
     String? phoneNumber,
     String? email,
     bool? smsOptIn,
+    String? currentPassword,
   }) async {
     final data = await _patch(
       '/me',
@@ -470,6 +492,7 @@ class ApiService {
         phoneNumber: phoneNumber,
         email: email,
         smsOptIn: smsOptIn,
+        currentPassword: currentPassword,
       ),
     );
     return (data['user'] as Map<String, dynamic>?) ?? {};
@@ -490,6 +513,7 @@ class ApiService {
     String? phoneNumber,
     String? email,
     bool? smsOptIn,
+    String? currentPassword,
   }) {
     return <String, dynamic>{
       if (firstName != null) 'first_name': firstName,
@@ -497,6 +521,12 @@ class ApiService {
       if (lastName != null) 'last_name': lastName,
       if (phoneNumber != null) 'phone_number': phoneNumber,
       if (email != null) 'email_address': email,
+      // Proof of knowledge, not a column. The endpoint requires it only when
+      // `email_address` or `phone_number` actually moves — those are where a
+      // login code is delivered, so a bearer token alone must not be enough to
+      // change them. Omitted entirely on every other save, which is what keeps
+      // a surname correction from asking for a password.
+      if (currentPassword != null) 'current_password': currentPassword,
       // Sent as a JSON boolean, not '1'/'0'. The backend's rule accepts both,
       // but the column is boolean and the response is cast to one, so anything
       // else here would make the value that goes out differ in type from the

@@ -221,6 +221,7 @@ class UserStore {
     String? phoneNumber,
     String? email,
     bool? smsOptIn,
+    String? currentPassword,
   }) async {
     final json = await _api.updateProfile(
       firstName: firstName,
@@ -229,6 +230,7 @@ class UserStore {
       phoneNumber: phoneNumber,
       email: email,
       smsOptIn: smsOptIn,
+      currentPassword: currentPassword,
     );
     return _remember(json);
   }

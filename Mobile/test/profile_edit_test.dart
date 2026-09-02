@@ -40,6 +40,7 @@ class _FakeApi extends ApiService {
     String? phoneNumber,
     String? email,
     bool? smsOptIn,
+    String? currentPassword,
   }) async {
     calls.add({
       'first_name': firstName,
@@ -48,6 +49,7 @@ class _FakeApi extends ApiService {
       'phone_number': phoneNumber,
       'email_address': email,
       'sms_opt_in': smsOptIn,
+      'current_password': currentPassword,
     });
 
     final failure = failWith;
@@ -111,8 +113,19 @@ Future<_FakeApi> _openSheet(
   return api;
 }
 
-/// Fields are positional in the sheet: first, middle, last, phone, email.
+/// Fields are positional in the sheet: first, middle, last, phone, email, and —
+/// only once the email or phone has been edited — the current password at 5.
 Finder _field(int index) => find.byType(TextField).at(index);
+
+/// Types into the current-password field.
+///
+/// It does not exist until an edit to the email or phone brings it into the
+/// tree, so the pump between the two is load-bearing: without it `_field(5)`
+/// resolves against a five-field sheet and throws.
+Future<void> _enterPassword(WidgetTester tester, String value) async {
+  await tester.pump();
+  await tester.enterText(_field(5), value);
+}
 
 void main() {
   testWidgets('the sheet opens prefilled with what is on file', (tester) async {
@@ -132,6 +145,9 @@ void main() {
     final api = await _openSheet(tester);
 
     await tester.enterText(_field(3), '0917-123-4567abc');
+    // The number is a login-code destination, so moving it now needs the
+    // password before the sheet will send anything.
+    await _enterPassword(tester, 'password123');
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
@@ -230,6 +246,7 @@ void main() {
     );
 
     await tester.enterText(_field(4), 'taken@example.com');
+    await _enterPassword(tester, 'password123');
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
@@ -246,7 +263,151 @@ void main() {
 
     // Five fields: first, middle, last, phone, email. A sixth would mean the
     // barangay became writable — it is what every request is dispatched on, and
-    // the endpoint refuses it, so a field here could only ever fail.
+    // the endpoint refuses it, so a field here could only ever fail. The
+    // current-password field is the one legitimate sixth, and it is absent
+    // until a contact is edited — see the group below.
     expect(find.byType(TextField), findsNWidgets(5));
+  });
+
+  // The backend requires `current_password` to move `email_address` or
+  // `phone_number` (18b587d) because those are where a login code is delivered.
+  // Before this the sheet sent neither, so both edits 422'd with a message the
+  // resident had no field to satisfy.
+  group('the current-password field', () {
+    testWidgets('is absent until the email or phone actually changes',
+        (tester) async {
+      await _openSheet(tester);
+
+      expect(find.text('Current password'), findsNothing);
+
+      // A name edit is not a credential change and must not ask for anything.
+      await tester.enterText(_field(0), 'Maria Clara');
+      await tester.pump();
+
+      expect(find.text('Current password'), findsNothing);
+      expect(find.byType(TextField), findsNWidgets(5));
+    });
+
+    testWidgets('appears when the email is edited and goes away when it is put back',
+        (tester) async {
+      await _openSheet(tester);
+
+      await tester.enterText(_field(4), 'new@example.com');
+      await tester.pump();
+
+      expect(find.text('Current password'), findsOneWidget);
+      expect(find.byType(TextField), findsNWidgets(6));
+
+      // Undoing the edit takes the requirement away with it.
+      await tester.enterText(_field(4), 'maria@example.com');
+      await tester.pump();
+
+      expect(find.text('Current password'), findsNothing);
+      expect(find.byType(TextField), findsNWidgets(5));
+    });
+
+    testWidgets('appears when the phone is edited', (tester) async {
+      await _openSheet(tester);
+
+      await tester.enterText(_field(3), '09179999999');
+      await tester.pump();
+
+      expect(find.text('Current password'), findsOneWidget);
+    });
+
+    testWidgets('a blank password blocks the request entirely', (tester) async {
+      final api = await _openSheet(tester);
+
+      await tester.enterText(_field(4), 'new@example.com');
+      await tester.pump();
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter your current password to save this change.'),
+          findsOneWidget);
+      // The whole point: the 422 this replaces was a round trip that told the
+      // resident something they could do nothing about.
+      expect(api.calls, isEmpty);
+    });
+
+    testWidgets('is sent with a contact change', (tester) async {
+      final api = await _openSheet(tester);
+
+      await tester.enterText(_field(4), 'new@example.com');
+      await _enterPassword(tester, 'password123');
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      expect(api.calls.single['email_address'], 'new@example.com');
+      expect(api.calls.single['current_password'], 'password123');
+    });
+
+    testWidgets('is never sent when only a name changed', (tester) async {
+      final api = await _openSheet(tester);
+
+      await tester.enterText(_field(0), 'Maria Clara');
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      // Putting the password on the wire for a surname correction would be
+      // sending a credential nothing asked for.
+      expect(api.calls.single['current_password'], isNull);
+    });
+
+    testWidgets('a wrong password is reported under the field, not in the banner',
+        (tester) async {
+      final api = await _openSheet(tester);
+      api.failWith = const ApiException(
+        'Enter your current password to change the email address or phone number on this account.',
+        statusCode: 422,
+        fieldErrors: {
+          'current_password':
+              'Enter your current password to change the email address or phone number on this account.',
+        },
+      );
+
+      await tester.enterText(_field(4), 'new@example.com');
+      await _enterPassword(tester, 'wrong-password');
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      // Read off the field's own decoration, not with find.text: the banner
+      // renders the identical sentence, so a text finder passes whether the
+      // message landed on the field or in the banner and proves neither.
+      final password = tester.widget<TextField>(_field(5));
+      expect(
+        password.decoration?.errorText,
+        'Enter your current password to change the email address or phone number on this account.',
+      );
+
+      // And shown once. Twice — field and banner — reads as two problems.
+      expect(
+        find.text(
+            'Enter your current password to change the email address or phone number on this account.'),
+        findsOneWidget,
+      );
+      expect(find.text('Profile updated.'), findsNothing);
+      expect(find.text('Save changes'), findsOneWidget);
+    });
+
+    testWidgets('a 422 about another field still goes to the banner',
+        (tester) async {
+      final api = await _openSheet(tester);
+      api.failWith = const ApiException(
+        'The email address has already been taken.',
+        statusCode: 422,
+        fieldErrors: {
+          'email_address': 'The email address has already been taken.',
+        },
+      );
+
+      await tester.enterText(_field(4), 'taken@example.com');
+      await _enterPassword(tester, 'password123');
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('The email address has already been taken.'),
+          findsOneWidget);
+    });
   });
 }

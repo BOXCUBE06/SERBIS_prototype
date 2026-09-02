@@ -28,12 +28,22 @@ class ApiException implements Exception {
   /// exactly as received, never parsed or stored anywhere else.
   final String? challengeId;
 
+  /// Laravel's `errors` map, flattened to one message per field, so a screen
+  /// can put a rejection under the input that caused it instead of in a
+  /// form-wide banner. [message] is already the first of these — this is the
+  /// same information keyed by field name.
+  ///
+  /// Empty on every failure that is not a 422, and on a 422 whose body could
+  /// not be parsed.
+  final Map<String, String> fieldErrors;
+
   const ApiException(
     this.message, {
     this.statusCode,
     this.code,
     this.delivery,
     this.challengeId,
+    this.fieldErrors = const {},
   });
 
   /// The account exists and the password was right, but the address was never

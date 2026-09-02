@@ -40,6 +40,7 @@ class _FakeApi extends ApiService {
     String? phoneNumber,
     String? email,
     bool? smsOptIn,
+    String? currentPassword,
   }) async {
     calls.add({
       'first_name': firstName,
@@ -48,6 +49,7 @@ class _FakeApi extends ApiService {
       'phone_number': phoneNumber,
       'email_address': email,
       'sms_opt_in': smsOptIn,
+      'current_password': currentPassword,
     });
 
     final failure = failWith;

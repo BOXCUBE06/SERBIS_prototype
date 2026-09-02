@@ -23,6 +23,16 @@ class AppTextField extends StatelessWidget {
   /// edit a value that is already being sent.
   final bool enabled;
 
+  /// Masks what is typed. The reveal toggle is deliberately NOT built in —
+  /// this widget stays stateless, so a caller that wants one passes its own
+  /// [suffixIcon] and holds the flag. `AuthTextField` owns the state itself
+  /// because it is already stateful for its validator.
+  final bool obscure;
+
+  /// Rendered inside the field's right edge. Only the password reveal uses it
+  /// so far.
+  final Widget? suffixIcon;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -34,6 +44,8 @@ class AppTextField extends StatelessWidget {
     this.inputFormatters,
     this.errorText,
     this.enabled = true,
+    this.obscure = false,
+    this.suffixIcon,
   });
 
   /// The 11-digit numbers-only phone field, spelled once instead of at each of
@@ -68,17 +80,21 @@ class AppTextField extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           TextField(
             controller: controller,
-            maxLines: lines,
+            // A masked field cannot be multi-line: Flutter asserts on
+            // obscureText with maxLines > 1, and no caller wants both.
+            maxLines: obscure ? 1 : lines,
             keyboardType: keyboard,
             maxLength: maxLength,
             inputFormatters: inputFormatters,
             enabled: enabled,
+            obscureText: obscure,
             style: AppText.body(size: 13),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
               errorText: errorText,
               errorStyle: AppText.body(size: 11, color: AppColors.red600),
+              suffixIcon: suffixIcon,
               counterText: '',
               filled: true,
               fillColor: AppColors.surface,
