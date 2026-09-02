@@ -1131,6 +1131,40 @@
               label="Condition" variant="outlined" density="comfortable" rows="2" class="mb-2"
               :rules="[required]"
             ></v-textarea>
+
+            <!-- Who is travelling with the patient, asked here rather than at
+                 dispatch. The trip record these used to live on does not
+                 exist until the request reaches Responding, so anyone named
+                 at the counter had nowhere to be written down until now.
+                 Optional throughout: nobody has to bring anyone. -->
+            <div class="mb-2">
+              <div class="d-flex align-center justify-space-between mb-1">
+                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Patient / Relatives</span>
+                <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addRelative">
+                  Add relative
+                </v-btn>
+              </div>
+              <div
+                v-for="(_n, idx) in createDialog.form.patient_relatives"
+                :key="idx"
+                class="d-flex align-center gap-2 mb-2"
+              >
+                <v-text-field
+                  v-model="createDialog.form.patient_relatives[idx]"
+                  :label="`Relative ${idx + 1}`"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                ></v-text-field>
+                <v-btn
+                  icon="mdi-close"
+                  variant="text"
+                  size="small"
+                  :aria-label="`Remove relative ${idx + 1}`"
+                  @click="removeRelative(idx)"
+                ></v-btn>
+              </div>
+            </div>
           </template>
 
           <!-- Same reasoning as the service picker above: a unit type other
@@ -1343,6 +1377,10 @@ const emptyCreateForm = () => ({
   pickup_location: '',
   destination: '',
   condition_notes: '',
+  // One blank slot, matching the trip log form's own repeater: "Add relative"
+  // covers the case that needs more, and starting at two pads the common
+  // one-relative trip with a field nobody fills.
+  patient_relatives: [''],
   required_vehicle_type: null,
   valid_id: null,
   site_photo: null,
@@ -1382,6 +1420,18 @@ const openCreateDialog = () => {
     form: { ...emptyCreateForm(), service_id: props.scope === 'ambulance' ? ambulanceServiceId.value : null },
   }
   walkInAvailability.value = emptyWalkInAvailability()
+}
+
+// emptyCreateForm() builds a fresh array literal on every call, so each open
+// gets its own — the shallow spread above never shares one between dialogs.
+const addRelative = () => { createDialog.value.form.patient_relatives.push('') }
+const removeRelative = (idx) => {
+  const list = createDialog.value.form.patient_relatives
+  list.splice(idx, 1)
+  // Never leave the group with no field at all: an empty repeater reads as a
+  // broken section rather than an optional one, and "Add relative" becomes
+  // the only way back to a state the form started in.
+  if (list.length === 0) list.push('')
 }
 
 // Matches ServiceRequestController::MINIMUM_LEAD_TIME_HOURS — sized here only
@@ -2307,6 +2357,12 @@ const submitWalkIn = async () => {
       body.append('pickup_location', form.pickup_location.trim())
       body.append('destination', form.destination.trim())
       body.append('condition_notes', form.condition_notes.trim())
+      // Blank slots are dropped here as well as server-side: an untouched
+      // repeater must not post an empty name the backend then has to filter.
+      form.patient_relatives
+        .map(n => (n || '').trim())
+        .filter(n => n !== '')
+        .forEach(n => body.append('patient_relatives[]', n))
     } else {
       body.append('description', form.description.trim())
     }

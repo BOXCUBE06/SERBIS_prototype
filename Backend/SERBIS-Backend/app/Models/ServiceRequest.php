@@ -73,4 +73,15 @@ class ServiceRequest extends Model
     {
         return $this->hasMany(ConductionRequest::class, 'service_request_id', 'request_id');
     }
+
+    /**
+     * Relatives named at intake, before any trip record exists. Copied into
+     * the trip's own people table when one is created; the two are separate
+     * facts and both are kept.
+     */
+    public function relatives(): HasMany
+    {
+        return $this->hasMany(ServiceRequestRelative::class, 'service_request_id', 'request_id')
+            ->orderBy('position');
+    }
 }

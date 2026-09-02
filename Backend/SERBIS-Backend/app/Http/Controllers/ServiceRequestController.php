@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConductionRequest;
+use App\Models\ConductionRequestPerson;
+use App\Models\ServiceRequestRelative;
 use App\Models\Vehicle;
 use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
@@ -125,6 +128,11 @@ class ServiceRequestController extends Controller
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
             'scheduled_at' => 'nullable|date',
+            // Who is coming with the patient, named at intake rather than at
+            // dispatch. Optional on every service: nobody is required to bring
+            // anyone, and a non-ambulance request simply never sends them.
+            'patient_relatives' => 'nullable|array',
+            'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
@@ -223,6 +231,8 @@ class ServiceRequestController extends Controller
                     'scheduled_at' => $scheduledAt,
                 ]);
 
+                $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
+
                 if ($vehicle) {
                     $vehicle->update(['status' => 'Dispatched']);
                 }
@@ -243,7 +253,76 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest, 201);
+        return response()->json($serviceRequest->load('relatives'), 201);
+    }
+
+    /**
+     * Writes the intake relative list, shared by store() and adminStore().
+     *
+     * Blank slots are filtered here rather than by a validation rule, the
+     * same way ConductionRequestController does it: a form that renders two
+     * name fields and has one filled must not 422 over the empty one.
+     */
+    private function storeRelatives(ServiceRequest $serviceRequest, array $names): void
+    {
+        $position = 0;
+
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+
+            if ($name === '') {
+                continue;
+            }
+
+            ServiceRequestRelative::create([
+                'service_request_id' => $serviceRequest->request_id,
+                'name' => $name,
+                'position' => $position++,
+            ]);
+        }
+    }
+
+    /**
+     * Copies a request's intake relatives onto a freshly created trip record
+     * as role='relative' rows.
+     *
+     * The one place this is written, deliberately. There are two paths that
+     * create a trip against a booking — createConductionStub() below for the
+     * automatic Booked→Responding flip, and ConductionRequestController::
+     * store() for a manually filed one — and docs/dispatch-audit.md already
+     * names that split as the drift hazard that left the two halves of the
+     * dispatch bridge disagreeing. A second copy of this loop is exactly how
+     * relatives would end up reaching one path and not the other.
+     *
+     * Appends rather than replaces: a manually filed trip may already carry
+     * relatives someone typed into the create dialog, and those are a later,
+     * better-informed statement than the intake list. Positions continue past
+     * whatever is already there so the trip form renders one ordered list.
+     *
+     * Intentionally does NOT delete the intake rows. They are what the
+     * requester said at intake; the people table is what the crew logged.
+     * Both are worth keeping, and only the first survives if the trip record
+     * is ever deleted.
+     */
+    public static function copyRelativesToTrip(ServiceRequest $serviceRequest, ConductionRequest $trip): void
+    {
+        $relatives = $serviceRequest->relatives()->orderBy('position')->get();
+
+        if ($relatives->isEmpty()) {
+            return;
+        }
+
+        $position = (int) $trip->people()->where('role', 'relative')->max('position');
+        $hasExisting = $trip->people()->where('role', 'relative')->exists();
+
+        foreach ($relatives as $relative) {
+            ConductionRequestPerson::create([
+                'conduction_request_id' => $trip->conduction_request_id,
+                'role' => 'relative',
+                'name' => $relative->name,
+                'position' => $hasExisting ? ++$position : $position++,
+            ]);
+        }
     }
 
     /**
@@ -395,6 +474,11 @@ class ServiceRequestController extends Controller
             // Same "absent means as soon as possible" contract as store() — a
             // walk-in ambulance request can be booked for a future slot too.
             'scheduled_at' => 'nullable|date',
+            // Same optional intake list as store(). Collected at the counter
+            // now rather than waited for until dispatch, when the trip record
+            // that used to be their only home is finally created.
+            'patient_relatives' => 'nullable|array',
+            'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
@@ -507,6 +591,8 @@ class ServiceRequestController extends Controller
                     'scheduled_at' => $scheduledAt,
                 ]);
 
+                $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
+
                 if ($vehicle) {
                     $vehicle->update(['status' => 'Dispatched']);
                 }
@@ -527,7 +613,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['resident.barangay', 'service']), 201);
+        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives']), 201);
     }
 
     public function show(Request $request, $id)
@@ -1010,7 +1096,7 @@ class ServiceRequestController extends Controller
 
         $vehicle = $serviceRequest->vehicle;
 
-        \App\Models\ConductionRequest::create([
+        $trip = ConductionRequest::create([
             'service_request_id' => $serviceRequest->request_id,
             'vehicle_id' => $serviceRequest->vehicle_id,
             'departed_office_at' => now(),
@@ -1026,6 +1112,12 @@ class ServiceRequestController extends Controller
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,
         ]);
+
+        // Whoever the requester named at intake becomes the trip's starting
+        // relative list. A stub is created with no people at all otherwise,
+        // and until relatives were collected at intake there was nowhere for
+        // them to have come from.
+        self::copyRelativesToTrip($serviceRequest, $trip);
     }
 
     /**
