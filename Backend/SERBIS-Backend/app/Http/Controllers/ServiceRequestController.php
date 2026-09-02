@@ -1335,11 +1335,11 @@ class ServiceRequestController extends Controller
             'patient_name' => $patientName,
             'patient_age' => $serviceRequest->patient_age,
             'patient_sex' => $serviceRequest->patient_sex,
-            'patient_address' => $serviceRequest->patient_address ?: 'Address not specified',
+            'patient_address' => $serviceRequest->patient_address ?: null,
             'patient_contact_number' => $contactNumber,
-            'medical_diagnosis' => $serviceRequest->condition_notes ?: 'Not described',
-            'origin' => $serviceRequest->pickup_location ?: 'Address not specified',
-            'destination' => $serviceRequest->destination ?: 'destination not specified',
+            'medical_diagnosis' => $serviceRequest->condition_notes ?: null,
+            'origin' => $serviceRequest->pickup_location ?: null,
+            'destination' => $serviceRequest->destination ?: null,
             'vehicle' => $vehicle
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,

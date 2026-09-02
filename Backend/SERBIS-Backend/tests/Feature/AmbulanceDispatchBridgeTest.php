@@ -118,13 +118,14 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $trip = ConductionRequest::first();
         $this->assertSame('Maria Santos', $trip->patient_name);
         $this->assertSame('09171111111', $trip->patient_contact_number);
-        // No structured pickup/destination exists for this request, so these
-        // stay the same honest placeholders AmbulanceFormData already writes
-        // into `description` for an unfilled field — not blank, not a guess.
-        $this->assertSame('Address not specified', $trip->patient_address);
-        $this->assertSame('Address not specified', $trip->origin);
-        $this->assertSame('destination not specified', $trip->destination);
-        $this->assertSame('Not described', $trip->medical_diagnosis);
+        // No structured pickup/destination exists for this request, and the
+        // stub no longer invents placeholder text for them — a nullable
+        // column left blank prints as blank on the signed form, rather than
+        // as a literal that reads like something a person typed there.
+        $this->assertNull($trip->patient_address);
+        $this->assertNull($trip->origin);
+        $this->assertNull($trip->destination);
+        $this->assertNull($trip->medical_diagnosis);
     }
 
     public function test_the_stub_prefers_structured_columns_when_present(): void
