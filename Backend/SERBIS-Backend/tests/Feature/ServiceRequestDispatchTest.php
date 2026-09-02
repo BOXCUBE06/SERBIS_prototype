@@ -131,13 +131,14 @@ class ServiceRequestDispatchTest extends TestCase
 
     public function test_disapproving_releases_the_unit_too(): void
     {
+        // store()'s immediate-claim path dispatches a vehicle while the
+        // request is still Pending (see syncFleet()'s own docblock) — this
+        // is that same shape, reached directly rather than through
+        // Responding: ServiceRequestController::ALLOWED_TRANSITIONS allows
+        // Disapproved only from Pending or Booked, never from Responding.
         $request = $this->pendingRequest();
-
-        $this->actingAs($this->admin)
-            ->putJson("/api/service-requests/{$request->getKey()}", [
-                'status' => 'Responding',
-                'vehicle_id' => $this->vehicle->vehicle_id,
-            ])->assertOk();
+        $request->update(['vehicle_id' => $this->vehicle->vehicle_id]);
+        $this->vehicle->update(['status' => 'Dispatched']);
 
         $this->actingAs($this->admin)
             ->putJson("/api/service-requests/{$request->getKey()}", [

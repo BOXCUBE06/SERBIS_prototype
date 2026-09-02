@@ -64,6 +64,34 @@ class ServiceRequestController extends Controller
     public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
     /**
+     * update()'s whole state machine: for each target status, the statuses a
+     * request may move FROM to reach it. Anything not listed here as a source
+     * — including any of the three terminal statuses above, which is why none
+     * of them appear on the right of any entry — is refused. Before this
+     * existed update() only checked the target against STATUSES, so all 30
+     * from/to pairs were reachable: a Resolved request could be reopened, a
+     * Cancelled one dispatched, a Disapproved one resolved, and a Booked
+     * request could reach Responding without ever going through approve() —
+     * skipping its availability re-check, leaving approved_at NULL and
+     * approvalMessage() never sent.
+     *
+     * 'Cancelled' is deliberately absent as a key: cancel() is the only route
+     * that ever writes it, and it does so on the model directly rather than
+     * through this method, so update() has nothing to allow it into.
+     *
+     * Setting a request to the status it is already at is not a transition —
+     * see the same-status short-circuit in update() below, checked before
+     * this map — so a resend of the current status (a vehicle swap on an
+     * already-Responding request, say) is never looked up here at all.
+     */
+    private const ALLOWED_TRANSITIONS = [
+        'Booked' => ['Pending'],
+        'Responding' => ['Pending', 'Booked'],
+        'Resolved' => ['Responding'],
+        'Disapproved' => ['Pending', 'Booked'],
+    ];
+
+    /**
      * Same literal the Vue panel keys off (ServiceRequestQueue.vue's
      * AMBULANCE_SERVICE_CODE) — duplicated rather than shared for the same
      * reason as OFFICE_TIMEZONE above: a fixed service identifier, not
@@ -1100,6 +1128,25 @@ class ServiceRequestController extends Controller
 
         $ambulanceServiceId = $this->ambulanceServiceId();
         $isAmbulanceRequest = $ambulanceServiceId !== null && $serviceRequest->service_id === $ambulanceServiceId;
+
+        // The transition matrix. A resend of the current status (every PUT
+        // this panel makes carries one, whether or not the operator actually
+        // changed it — see updateStatus() and saveInternalNote() on the Vue
+        // side) is a no-op, not a transition, so it is exempted before the
+        // map is even consulted: that is what keeps a vehicle swap on an
+        // already-Responding request, or a second identical Disapprove,
+        // working exactly as before. An actual change of status is checked
+        // against ALLOWED_TRANSITIONS; nothing about it being the value
+        // already stored allows a status change any table below would allow.
+        if (array_key_exists('status', $validated) && $validated['status'] !== $serviceRequest->status) {
+            $allowedFrom = self::ALLOWED_TRANSITIONS[$validated['status']] ?? [];
+
+            if (!in_array($serviceRequest->status, $allowedFrom, true)) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot move from {$serviceRequest->status} to {$validated['status']}.",
+                ]);
+            }
+        }
 
         // The bridge's other half (docs/dispatch-audit.md finding 1): the
         // instant path could always reach Resolved with zero rows in
