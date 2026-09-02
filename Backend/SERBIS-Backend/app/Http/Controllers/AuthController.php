@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -521,7 +522,38 @@ class AuthController extends Controller
             // the four columns below — because it decides only what this account
             // receives, and there is nobody else who should be deciding it.
             'sms_opt_in'    => 'sometimes|required|boolean',
+            // Not a column. Proof of knowledge, required below only when this
+            // call actually moves one of the two contacts a login code is sent
+            // to. Left out of the assignment loop for the same reason every
+            // other non-column key is.
+            'current_password' => 'nullable|string',
         ]);
+
+        // email_address and phone_number are where a login code is delivered:
+        // sendLoginCode() texts the number and falls back to the address, so
+        // whoever controls them controls every future sign-in. Moving one is a
+        // credential change wearing a profile edit's clothes, and a bearer
+        // token alone must not be enough to do it — otherwise a token lifted
+        // from a shared phone converts into a permanent takeover, with no
+        // self-serve reset for the real owner to take the account back.
+        //
+        // Compared against what is stored, not merely "was the key sent": the
+        // mobile client PATCHes only the fields its form actually changed, but
+        // a client that sends the whole profile every time must not be asked
+        // for a password to save an unchanged one. It is also what keeps
+        // resubmitting your own address working, which the unique rule above
+        // already goes out of its way to allow.
+        $contactChanges = [];
+
+        foreach (['email_address', 'phone_number'] as $field) {
+            if (array_key_exists($field, $validated) && $validated[$field] !== $user->{$field}) {
+                $contactChanges[] = $field;
+            }
+        }
+
+        if ($contactChanges !== []) {
+            $this->assertCurrentPassword($request, $user);
+        }
 
         // Assigned key by key, never a splat of $validated. Four columns are
         // absent from the rules above and must stay that way:
@@ -552,12 +584,54 @@ class AuthController extends Controller
             $user->sms_opt_in = $request->boolean('sms_opt_in');
         }
 
+        // A new address has not been proved yet, so it does not inherit the old
+        // one's verified state. Assigned directly rather than in the loop above
+        // because `email_verified_at` is deliberately absent from the model's
+        // Fillable — completeSignup() forceFills it for the same reason.
+        //
+        // Nothing else has to be built to finish the job: residentLogin()
+        // already answers an unverified row by issuing a code and returning 403
+        // `email_unverified`, which the mobile client reads as "open the code
+        // screen", and adoptUnverifiedResident() already covers a row that
+        // exists but is unclaimed. So the next sign-in proves the new address
+        // through the flow that is there. The current session is deliberately
+        // left alive — it just proved the password, and ending it here would
+        // log the resident out of the edit they were making.
+        if (in_array('email_address', $contactChanges, true)) {
+            $user->email_verified_at = null;
+        }
+
         $user->save();
 
         return response()->json([
             'role' => 'resident',
             'user' => $user->load('barangay'),
         ]);
+    }
+
+    /**
+     * Proves the caller knows the account's password, rather than merely
+     * holding a token issued for it.
+     *
+     * Checked with Hash::check against the row, not with Laravel's
+     * `current_password` rule: that rule resolves the user from the default
+     * auth guard, which is `web`, while this request authenticates through
+     * `auth:sanctum` — so it would compare against a null user and reject a
+     * correct password. Both logins in this controller check the same way.
+     */
+    private function assertCurrentPassword(Request $request, Resident $resident): void
+    {
+        $current = (string) $request->input('current_password', '');
+
+        // One message for a missing password and a wrong one. The caller
+        // already holds a token for this account, so there is nothing to
+        // disclose by separating them — but there is nothing to gain either,
+        // and the client renders whichever it gets as-is.
+        if ($current === '' || ! Hash::check($current, (string) $resident->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => 'Enter your current password to change the email address or phone number on this account.',
+            ]);
+        }
     }
 
     // Both logins issue a token with an explicit expiry (audit #30). Before this,

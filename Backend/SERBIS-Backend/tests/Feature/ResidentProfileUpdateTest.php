@@ -46,6 +46,9 @@ class ResidentProfileUpdateTest extends TestCase
             'first_name' => 'Maria Clara',
             'phone_number' => '09179999999',
             'email_address' => 'maria.clara@test.local',
+            // Both contacts are where a login code lands, so moving either now
+            // needs the password — see ResidentContactChangeTest.
+            'current_password' => 'password123',
         ])->assertOk()->assertJsonPath('user.first_name', 'Maria Clara');
 
         $this->resident->refresh();
