@@ -119,11 +119,31 @@ class ResidentController extends Controller
 
         // An omitted or blank password leaves the stored hash alone; assigning
         // null would lock the resident out of their own account.
-        if (!empty($validated['password'])) {
+        $passwordChanged = !empty($validated['password']);
+
+        if ($passwordChanged) {
             $changes['password'] = bcrypt($validated['password']);
         }
 
         $resident->update($changes);
+
+        // Mirrors AdminController::update(). A password change that leaves the
+        // old tokens valid is not a password change: the case this exists for
+        // is an account whose credentials leaked, and setting a new password
+        // from the panel is the only recovery an office has — there is no
+        // self-serve reset. A resident token lives 30 days
+        // (SANCTUM_RESIDENT_EXPIRATION), so without this the copy taken
+        // beforehand kept working for a month after the reset, and the account
+        // stayed compromised while the panel said it had been dealt with.
+        //
+        // Nothing is spared here, unlike the admin path, which keeps the
+        // caller's own token so an admin changing their own password is not
+        // logged out mid-click. This route is is.admin-only and the caller is
+        // always a User while the target is always a Resident, so the caller
+        // can never be revoking their own session.
+        if ($passwordChanged) {
+            $resident->tokens()->delete();
+        }
 
         return response()->json($resident);
     }

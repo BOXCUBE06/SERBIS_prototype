@@ -131,6 +131,88 @@ void main() {
 
       expect(message, 'The given data was invalid.');
     });
+
+    test('keeps every field error keyed by field name', () async {
+      // The banner takes the first message; a screen that wants to mark the
+      // input that was rejected needs to know which field it belongs to.
+      final api = await signedInService();
+
+      ApiException? caught;
+
+      await withResponse(
+        (_) => json(422, <String, dynamic>{
+          'message': 'The given data was invalid.',
+          'errors': <String, dynamic>{
+            'email_address': <String>['The email address has already been taken.'],
+            'quantity': 'Only 2 are available.',
+          },
+        }),
+        () async {
+          try {
+            await api.me();
+          } on ApiException catch (e) {
+            caught = e;
+          }
+        },
+      );
+
+      expect(caught!.fieldErrors, <String, String>{
+        'email_address': 'The email address has already been taken.',
+        'quantity': 'Only 2 are available.',
+      });
+    });
+
+    /// The exact body AuthController::assertCurrentPassword() produces. Pinned
+    /// here because the two halves live in different codebases: the profile
+    /// sheet reads `fieldErrors['current_password']` to put the rejection under
+    /// the password input, and nothing else would notice if the backend renamed
+    /// the key.
+    test('parses the PATCH /me current_password rejection', () async {
+      const sentence =
+          'Enter your current password to change the email address or phone number on this account.';
+
+      final api = await signedInService();
+
+      ApiException? caught;
+
+      await withResponse(
+        (_) => json(422, <String, dynamic>{
+          'message': sentence,
+          'errors': <String, dynamic>{
+            'current_password': <String>[sentence],
+          },
+        }),
+        () async {
+          try {
+            await api.me();
+          } on ApiException catch (e) {
+            caught = e;
+          }
+        },
+      );
+
+      expect(caught!.fieldErrors['current_password'], sentence);
+      expect(caught!.message, sentence);
+    });
+
+    test('a failure with no errors map carries no field errors', () async {
+      final api = await signedInService();
+
+      ApiException? caught;
+
+      await withResponse(
+        (_) => json(500, <String, dynamic>{'message': 'Server error.'}),
+        () async {
+          try {
+            await api.me();
+          } on ApiException catch (e) {
+            caught = e;
+          }
+        },
+      );
+
+      expect(caught!.fieldErrors, isEmpty);
+    });
   });
 
   group('server messages', () {

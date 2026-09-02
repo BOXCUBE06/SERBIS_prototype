@@ -3,9 +3,10 @@
 // and they had already drifted. Only the SOS sheet listed MDRRMO's second duty
 // line and the PNP/BFP mobiles; the other two silently showed less.
 //
-// These tests assert the same thing three times on purpose: every surface
-// renders every number in `kHotlines`. Re-hardcoding a subset anywhere fails
-// the surface that did it, which is the regression that actually happened.
+// The SOS sheet itself is gone now (removed app-wide). These tests assert the
+// remaining two surfaces render every number in `kHotlines` — re-hardcoding a
+// subset anywhere fails the surface that did it, which is the regression that
+// actually happened.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +17,6 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/sos_button.dart';
 
 class _FakeApi extends ApiService {
   @override
@@ -24,7 +24,8 @@ class _FakeApi extends ApiService {
       <Map<String, dynamic>>[];
 
   @override
-  Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async =>
+  Future<List<Map<String, dynamic>>> getServices(
+          {String locale = 'en'}) async =>
       <Map<String, dynamic>>[];
 
   @override
@@ -54,27 +55,27 @@ void main() {
     expect(kHotlines, isNotEmpty);
     for (final hotline in kHotlines) {
       expect(hotline.numbers, isNotEmpty, reason: '${hotline.label} has none');
-      expect(hotline.numbersLine, contains(hotline.numbers.first));
+      expect(hotline.numbersLine, contains(hotline.numbers.first.number));
     }
   });
 
-  test('MDRRMO keeps both duty lines', () {
-    // The one contact whose second number existed on a single surface. Losing
-    // it again is the exact drift this task was filed for.
-    final mdrrmo = kHotlines.firstWhere((h) => h.label == 'MDRRMO');
-    expect(mdrrmo.numbers.length, greaterThanOrEqualTo(2));
+  test('the Echague Rescue Hotline keeps all four carrier lines', () {
+    // The one contact whose numbers cannot be dialed interchangeably — a
+    // resident on Smart cannot use the Globe line. Losing one silently is
+    // the exact drift this file was written to catch.
+    final rescue =
+        kHotlines.firstWhere((h) => h.label == 'Echague Rescue Hotline');
+    expect(rescue.numbers.length, 4);
+    expect(rescue.numbers.map((n) => n.label),
+        containsAll(['Landline', 'Globe', 'Smart', 'Sun']));
   });
 
-  testWidgets('the SOS sheet lists every hotline in full', (tester) async {
-    await _pump(tester, const SosSheet());
-
-    for (final hotline in kHotlines) {
-      expect(find.text(hotline.label), findsOneWidget);
-      expect(find.text(hotline.numbersLine), findsOneWidget);
-    }
+  test('PDRRMO keeps both numbers', () {
+    final pdrrmo = kHotlines.firstWhere((h) => h.label == 'PDRRMO');
+    expect(pdrrmo.numbers.length, 2);
   });
 
-  testWidgets('the Library hotline card lists every hotline in full',
+  testWidgets('the Library hotline card lists every number as its own row',
       (tester) async {
     await _pump(
       tester,
@@ -86,8 +87,12 @@ void main() {
     );
 
     for (final hotline in kHotlines) {
-      expect(find.text(hotline.labelFor(filipino: false)), findsOneWidget);
-      expect(find.text(hotline.numbersLine), findsOneWidget);
+      expect(find.text(hotline.label), findsOneWidget);
+      for (final n in hotline.numbers) {
+        final text = n.label == null ? n.number : '${n.label} · ${n.number}';
+        expect(find.text(text), findsOneWidget,
+            reason: '${hotline.label}: $text');
+      }
     }
   });
 
@@ -114,7 +119,8 @@ void main() {
 
     for (final hotline in kHotlines) {
       expect(
-        find.text('${hotline.labelFor(filipino: false)} — ${hotline.numbersLine}'),
+        find.text(
+            '${hotline.labelFor(filipino: false)} — ${hotline.numbersLine}'),
         findsOneWidget,
       );
     }

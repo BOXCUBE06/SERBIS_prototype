@@ -443,11 +443,11 @@
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>
-            <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address }}</div></v-col>
+            <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Contact number</div><div class="field-value">{{ selected.patient_contact_number }}</div></v-col>
-            <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis }}</div></v-col>
-            <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin }}</div></v-col>
-            <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination }}</div></v-col>
+            <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin || 'N/A' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selected.vehicle || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
           </v-row>
@@ -477,6 +477,9 @@
           </v-row>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end border-t">
+          <v-btn variant="outlined" class="px-6 text-none font-weight-bold" height="44" prepend-icon="mdi-printer-outline" @click="printTrip(selected)">
+            Print
+          </v-btn>
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" @click="openTripLog(selected)">
             {{ tripLogAction(selected) }}
           </v-btn>
@@ -870,6 +873,20 @@ const openBooking = (requestId) => {
   detail.value.open = false
   activeTab.value = 'bookings'
   nextTick(() => bookingsQueueRef.value?.selectRequestById(requestId))
+}
+
+const printTrip = async (record) => {
+  try {
+    const res = await fetch(`${API_BASE}/conduction-requests/${record.conduction_request_id}/print`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+    if (!res.ok) throw new Error('Failed to load print view')
+    const html = await res.text()
+    const blob = new Blob([html], { type: 'text/html' })
+    window.open(URL.createObjectURL(blob), '_blank')
+  } catch (e) {
+    notify(e.message || 'Failed to print', 'error')
+  }
 }
 
 const addPerson = (field) => { createDialog.value.form[field].push('') }

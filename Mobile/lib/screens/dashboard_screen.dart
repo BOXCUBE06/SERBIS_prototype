@@ -4,6 +4,7 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
+import 'borrow_equipment_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final AppState appState;
@@ -180,17 +181,28 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _QuickTypeCard(
-                      type: ServiceType.ambulance,
-                      filipino: f,
+                      icon: ServiceType.ambulance.icon,
+                      bg: ServiceType.ambulance.bg,
+                      fg: ServiceType.ambulance.fg,
+                      title: ServiceType.ambulance.titleFor(f),
+                      subtitle: ServiceType.ambulance.subtitleFor(f),
                       onTap: () => onOpenService(ServiceType.ambulance),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _QuickTypeCard(
-                      type: ServiceType.relief,
-                      filipino: f,
-                      onTap: () => onOpenService(ServiceType.relief),
+                      icon: Icons.inventory_2_outlined,
+                      bg: AppColors.green50,
+                      fg: AppColors.green700,
+                      title: 'Borrow Equipment',
+                      subtitle: 'Wheelchairs, stretchers & more',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                BorrowEquipmentScreen(appState: appState)),
+                      ),
                     ),
                   ),
                 ],
@@ -292,11 +304,21 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _QuickTypeCard extends StatelessWidget {
-  final ServiceType type;
-  final bool filipino;
+  final IconData icon;
+  final Color bg;
+  final Color fg;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
-  const _QuickTypeCard({required this.type, required this.filipino, required this.onTap});
+  const _QuickTypeCard({
+    required this.icon,
+    required this.bg,
+    required this.fg,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -313,11 +335,14 @@ class _QuickTypeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconBadge(icon: type.icon, bg: type.bg, fg: type.fg),
+            IconBadge(icon: icon, bg: bg, fg: fg),
             const SizedBox(height: 10),
-            Text(type.titleFor(filipino), style: AppText.display(size: 12.5, weight: FontWeight.w600), maxLines: 2),
+            Text(title,
+                style: AppText.display(size: 12.5, weight: FontWeight.w600),
+                maxLines: 2),
             const SizedBox(height: 2),
-            Text(type.subtitleFor(filipino), style: AppText.body(size: 11, color: AppColors.inkMuted)),
+            Text(subtitle,
+                style: AppText.body(size: 11, color: AppColors.inkMuted)),
           ],
         ),
       ),

@@ -67,6 +67,18 @@ class ServiceActiveStatusTest extends TestCase
             'description' => 'Retired service.',
             'is_active' => false,
         ]);
+
+        // Not used by any request in this file — every test here files
+        // against $this->activeService or $this->inactiveService, neither of
+        // which slugifies to 'ambulance-medical-response'. Exists only so
+        // ServiceRequestController::ambulanceServiceId() resolves a real id
+        // instead of null, which store()/adminStore() now refuse to build
+        // validation rules against at all, regardless of which service the
+        // request targets.
+        Service::create([
+            'service_name' => 'Ambulance/Medical Response',
+            'description' => 'Emergency medical response and ambulance services.',
+        ]);
     }
 
     public function test_a_new_service_defaults_active(): void

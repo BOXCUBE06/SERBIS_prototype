@@ -228,6 +228,18 @@ const Map<String, (String, String)> _strings = {
   'profile.saved': ('Profile updated.', 'Na-update ang profile.'),
   'profile.no_changes': ('Nothing to save.', 'Walang isasave.'),
   'profile.required': ('Required', 'Kailangan'),
+  'profile.password_current': ('Current password', 'Kasalukuyang password'),
+  'profile.password_required': (
+    'Enter your current password to save this change.',
+    'Ilagay ang iyong kasalukuyang password para ma-save ito.',
+  ),
+  // Shown only once the email or mobile number has actually been edited, so it
+  // explains a field that has just appeared rather than one that was always
+  // there.
+  'profile.password_why': (
+    'Your login codes are sent to your email and mobile number, so changing either one needs your password.',
+    'Ang iyong mga login code ay ipinapadala sa iyong email at numero, kaya kailangan ng password para mapalitan ang alinman sa mga ito.',
+  ),
   'profile.email_invalid': ('Enter a valid email address.', 'Maglagay ng wastong email address.'),
   'profile.phone_invalid': (
     'Enter a valid mobile number.',

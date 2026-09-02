@@ -23,7 +23,13 @@ class LibraryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final filipino = appState.language == AppLanguage.filipino;
 
-    return ListView(
+    // First Aid, Disaster Preparedness and the hotline card are all compiled
+    // into the app — nothing to refresh there. MDRRMO Documents
+    // (_PublishedMaterials) is the one section this screen ever fetches over
+    // the network, so that is the only thing a pull refetches.
+    return RefreshIndicator(
+      onRefresh: appState.loadMaterials,
+      child: ListView(
       padding: EdgeInsets.zero,
       children: [
         AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
@@ -55,12 +61,7 @@ class LibraryScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                for (final hotline in kHotlines)
-                  _hotlineRow(
-                    context,
-                    hotline.labelFor(filipino: filipino),
-                    hotline.numbersLine,
-                  ),
+                for (final hotline in kHotlines) _hotlineRow(hotline),
               ],
             ),
           ),
@@ -105,35 +106,49 @@ class LibraryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 110),
       ],
+      ),
     );
   }
 
-  Widget _hotlineRow(BuildContext context, String label, String number) {
+  // Contact name once, then every number that reaches it as its own tappable
+  // row — a contact with several lines (the rescue hotline: landline, Globe,
+  // Smart, Sun) is not one action, it is "pick the one that reaches you and
+  // dial that one", so each number gets its own tap target and its own
+  // real `tel:` call rather than one row calling whichever was first.
+  Widget _hotlineRow(Hotline hotline) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(hotline.label,
+              style: AppText.display(size: 12.5, weight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          for (final n in hotline.numbers) _hotlineNumberRow(n),
+        ],
+      ),
+    );
+  }
+
+  Widget _hotlineNumberRow(HotlineNumber n) {
     return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => showAppSnackBar(context, 'Calling $label · $number'),
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => callHotlineNumber(n.number),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        // Two deliberate lines rather than label-and-number on one: most of
-        // these contacts have two numbers now, and a single line put a ~190px
-        // number string opposite the label and wrapped it on any narrow phone.
+        padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: AppText.display(size: 12.5, weight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text(
-                    number,
-                    style: AppText.display(size: 12.5, weight: FontWeight.w700, color: AppColors.green700),
-                  ),
-                ],
+              child: Text(
+                n.label == null ? n.number : '${n.label} · ${n.number}',
+                style: AppText.display(
+                    size: 12.5,
+                    weight: FontWeight.w700,
+                    color: AppColors.green700),
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.call_rounded, size: 13, color: AppColors.green700),
+            const Icon(Icons.call_rounded, size: 13, color: AppColors.green700),
           ],
         ),
       ),

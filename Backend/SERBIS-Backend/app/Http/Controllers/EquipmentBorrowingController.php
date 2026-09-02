@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
+use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class EquipmentBorrowingController extends Controller
 {
+    use ScopesToOwner;
+
     /**
      * Which status each status may move to.
      *
@@ -32,13 +35,16 @@ class EquipmentBorrowingController extends Controller
 
     public function index(Request $request)
     {
-        $user = $request->user();
-
         // Added 'resident.barangay'
         $query = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->orderBy('created_at', 'desc');
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        // Scopes to the caller for a resident, and refuses anything that is not
+        // active staff. This used to be a bare `instanceof Resident` check with
+        // no else, so a deactivated admin — or a tbl_user row with some other
+        // role — was handed every borrowing in the system, each carrying the
+        // borrower's name, barangay, phone number and email.
+        if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
+            return $refusal;
         }
 
         return response()->json($query->get());
@@ -94,13 +100,11 @@ class EquipmentBorrowingController extends Controller
 
     public function show(Request $request, $id)
     {
-        $user = $request->user();
-
         // Added 'resident.barangay'
         $query = EquipmentBorrowing::with(['resident.barangay', 'equipment']);
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
+            return $refusal;
         }
 
         $borrowing = $query->find($id);
@@ -123,7 +127,22 @@ class EquipmentBorrowingController extends Controller
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
             // Both optional: a status change on its own is still a valid call,
             // and only two of the five transitions carry either of these.
-            'due_date' => 'sometimes|nullable|date',
+            //
+            // Bounded in both directions, which it was not at all. A loan is
+            // due back after it is lent, so a date already past is a typo, not
+            // an instruction — and a year is far beyond the panel's own
+            // seven-day default (DEFAULT_LOAN_DAYS, EquipmentBorrowingView.vue)
+            // while still catching the mis-keyed century.
+            //
+            // Safe against the overdue case specifically: the panel sends
+            // `due_date` only when approving, or when releasing a row that
+            // never got one. Marking an overdue item Returned or Denied sends
+            // the status alone, so closing one out is untouched by the lower
+            // bound. `today` resolves in app.timezone (UTC) while the office
+            // reads Manila, which can admit yesterday-in-Manila for eight
+            // hours — the rule is here to reject 2019 and 9999, not to police
+            // a day boundary.
+            'due_date' => 'sometimes|nullable|date|after_or_equal:today|before_or_equal:+1 year',
             'denial_reason' => 'sometimes|nullable|string|max:255',
         ]);
 

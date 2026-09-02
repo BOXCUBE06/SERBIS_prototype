@@ -2,6 +2,8 @@
 library serbis.screens.auth.register;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../models/phone_number.dart';
 import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
@@ -50,7 +52,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   static final RegExp _upper = RegExp(r'[A-Z]');
   static final RegExp _lower = RegExp(r'[a-z]');
   static final RegExp _digit = RegExp(r'[0-9]');
-  static final RegExp _phone = RegExp(r'^[0-9+][0-9 \-]{6,19}$');
+
+  /// What may be typed into the number field. The validator is what decides
+  /// whether it is a real one — this only keeps the letters and punctuation
+  /// out, so a resident cannot compose something the server was always going
+  /// to refuse.
+  static final _phoneInput =
+      FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'));
 
   @override
   void initState() {
@@ -223,10 +231,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _phoneCtrl,
                       keyboard: TextInputType.phone,
                       prefixIcon: Icons.phone_outlined,
+                      maxLength: PhoneNumber.maxLength,
+                      inputFormatters: [_phoneInput],
                       validator: (v) {
                         final val = (v ?? '').trim();
                         if (val.isEmpty) return 'Enter your mobile number';
-                        if (!_phone.hasMatch(val)) {
+                        // The server's own rule — see PhoneNumber. This field
+                        // used to accept anything vaguely numeric and hand the
+                        // resident a 422 they could not have predicted.
+                        if (!PhoneNumber.isValid(val)) {
                           return 'Enter a valid mobile number';
                         }
                         return null;

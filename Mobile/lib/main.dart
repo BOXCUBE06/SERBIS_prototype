@@ -21,7 +21,6 @@ import 'state/account_store.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
-import 'widgets/sos_button.dart';
 
 void main() {
   // A build with no `--dart-define=API_BASE_URL` has nowhere to send its calls.
@@ -97,7 +96,11 @@ class SerbisApp extends StatelessWidget {
 }
 
 class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
+  /// Overridable so a test can restore a session against a fake service
+  /// instead of the real network and secure storage.
+  final ApiService? api;
+
+  const AuthGate({super.key, this.api});
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -106,7 +109,7 @@ class AuthGate extends StatefulWidget {
 enum _AuthView { login, register, verifyEmail, verifyLogin }
 
 class _AuthGateState extends State<AuthGate> {
-  final ApiService _api = ApiService();
+  late final ApiService _api = widget.api ?? ApiService();
   late final UserStore _userStore = UserStore(_api);
 
   bool _ready = false;
@@ -158,13 +161,31 @@ class _AuthGateState extends State<AuthGate> {
         AppLog.warn('session', 'restore from stored token',
             reason: e.isUnauthorized ? 'token rejected' : 'server unreachable');
 
+        // isNetwork, not merely !isUnauthorized: ApiService._send() wraps
+        // every transport failure (no signal, DNS, a timeout, the server
+        // unreachable) into an ApiException with no status code, so this
+        // catches exactly those — and nothing else. A real error response
+        // (500, say) still carries a status: the server answered, which is a
+        // different fact than "lost signal", and is not this app's cue to
+        // boot a resident into a profile that may already be stale.
+        if (e.isNetwork) {
+          final cached = await _userStore.cachedUser();
+          if (cached != null) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _currentUser = cached;
+              _ready = true;
+            });
+            return;
+          }
+        }
+
         if (!mounted) {
           return;
         }
 
-        // A rejected token has already been cleared by ApiService. If the server
-        // was merely unreachable the token is left alone, so logging in again
-        // once there is a connection will work.
         _loginInfoMessage = e.isUnauthorized
             ? 'Your session expired. Please log in again.'
             : e.message;
@@ -552,8 +573,6 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           ],
         ),
       ),
-      floatingActionButton: const SosFab(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _BottomNav(index: _index, onTap: _goTo),
     );
   }

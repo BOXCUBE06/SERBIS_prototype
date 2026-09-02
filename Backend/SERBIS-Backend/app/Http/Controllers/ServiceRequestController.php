@@ -10,6 +10,7 @@ use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
 use App\Services\PhilSms;
 use App\Traits\ResolvesUploadDisks;
+use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ use Illuminate\Validation\ValidationException;
 class ServiceRequestController extends Controller
 {
     use ResolvesUploadDisks;
+    use ScopesToOwner;
 
     public function __construct(private readonly AmbulanceAvailability $availability)
     {
@@ -37,6 +39,28 @@ class ServiceRequestController extends Controller
 
     /** How soon a resident may book. Anything closer is an emergency, not a schedule. */
     private const MINIMUM_LEAD_TIME_HOURS = 1;
+
+    /**
+     * How far ahead a booking may be made. The other end of
+     * MINIMUM_LEAD_TIME_HOURS, and it was missing entirely — `nullable|date`
+     * accepted the year 3000, and AmbulanceAvailability would have carried
+     * that unit as booked for every window in between, forever.
+     *
+     * A year is far past anything the office schedules (a dialysis run is
+     * booked days out, not seasons) while still being a date a person could
+     * plausibly mean. Expressed as a strtotime expression because that is what
+     * Laravel's date-comparison rules take.
+     */
+    private const BOOKING_HORIZON = '+1 year';
+
+    /**
+     * Names one intake list may carry. Mirrors
+     * ConductionRequestController::MAX_PEOPLE_PER_ROLE, and for the same
+     * reason: `tbl_service_request_relatives.position` is an
+     * `unsignedTinyInteger`, and copyRelativesToTrip() carries these names
+     * onto the trip's own tinyint-backed table as well.
+     */
+    private const MAX_RELATIVES = 20;
 
     /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
     private const DEFAULT_BOOKING_HOURS = 2;
@@ -145,6 +169,19 @@ class ServiceRequestController extends Controller
     {
         $ambulanceServiceId = $this->ambulanceServiceId();
 
+        // Interpolated straight into required_if/required_unless below — a
+        // null here casts to '' in the rule string, which required_unless
+        // never matches. That degrades silently: description becomes
+        // required for every request (ambulance included) and
+        // patient_name/destination stop being required for none. Fail loudly
+        // instead — this is a seeding/config problem, not a validation one.
+        if ($ambulanceServiceId === null) {
+            throw new \RuntimeException(
+                'No service found with code "' . self::AMBULANCE_SERVICE_CODE . '" — '
+                . 'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
+            );
+        }
+
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
             // Ambulance is exempt because the server composes it below from the
@@ -161,7 +198,7 @@ class ServiceRequestController extends Controller
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
-            'scheduled_at' => 'nullable|date',
+            'scheduled_at' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
             // Structured ambulance intake, mirroring adminStore()'s columns —
             // but deliberately looser about what is required. The counter form
             // demands five, because a staffer has the requester in front of
@@ -171,7 +208,11 @@ class ServiceRequestController extends Controller
             // actionable at all are required here — who is going, and where.
             'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'patient_age' => 'nullable|integer|min:0|max:150',
+            // min:0 stays — a neonate transport is a real ambulance case and 0
+            // is the honest reading. 150 was not defensible: the oldest
+            // verified human lived to 122. Mirrored in adminStore() and in
+            // ConductionRequestController::store().
+            'patient_age' => 'nullable|integer|min:0|max:120',
             'patient_sex' => 'nullable|in:male,female',
             'patient_address' => 'nullable|string|max:255',
             // The number for this patient, when it is not the account holder's.
@@ -185,7 +226,7 @@ class ServiceRequestController extends Controller
             // Who is coming with the patient, named at intake rather than at
             // dispatch. Optional on every service: nobody is required to bring
             // anyone, and a non-ambulance request simply never sends them.
-            'patient_relatives' => 'nullable|array',
+            'patient_relatives' => 'nullable|array|max:'.self::MAX_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
@@ -541,52 +582,6 @@ class ServiceRequestController extends Controller
     }
 
     /**
-     * Decides who may read a private file, scoping the query in place for a
-     * resident. Returns null to proceed, or the response to send instead.
-     *
-     * The routes that stream a government ID scan or a site photo sit OUTSIDE
-     * the `is.admin` group on purpose — staff read any resident's file while a
-     * resident reads only their own, and a middleware that refuses non-admins
-     * outright cannot express that. The cost is that the two checks `is.admin`
-     * performs do not run, so they have to run here instead:
-     *
-     *  - `isAdmin()`, because `tbl_user.role` is an unconstrained varchar and
-     *    an `instanceof User` test alone would let a row with any other role
-     *    read every ID scan in the system.
-     *  - `isDeactivated()`, because deactivating an account through the panel
-     *    revokes its tokens but a direct database edit does not — the exact
-     *    case IsAdmin's own comment names. Without this the closed account
-     *    keeps reading ID scans for the rest of its token's 8-hour life.
-     */
-    private function guardPrivateFile(Request $request, $query): ?\Illuminate\Http\JsonResponse
-    {
-        $user = $request->user();
-
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
-
-            return null;
-        }
-
-        // 404, not 403: to anything that is not a recognised staff account this
-        // must look the same as a request that does not exist, matching the
-        // non-owner answer below.
-        if (! $user instanceof \App\Models\User || ! $user->isAdmin()) {
-            return response()->json(['message' => 'Service request not found'], 404);
-        }
-
-        // Named rather than folded into the line above, and worded exactly as
-        // IsAdmin words it: the holder of this token was staff, and telling
-        // them the account is closed is not a disclosure — they already knew
-        // these records exist.
-        if ($user->isDeactivated()) {
-            return response()->json(['message' => 'This account has been deactivated.'], 403);
-        }
-
-        return null;
-    }
-
-    /**
      * Staff-filed requests for a walk-in — someone at the office counter
      * rather than the mobile app. Kept separate from store() rather than
      * branching that method on caller type: store() stays exactly what a
@@ -603,6 +598,15 @@ class ServiceRequestController extends Controller
         // fixed one across environments the way its code is.
         $ambulanceServiceId = $this->ambulanceServiceId();
 
+        // Same failure mode as store(): a null here silently degrades the
+        // rules below instead of erroring. Fail loudly.
+        if ($ambulanceServiceId === null) {
+            throw new \RuntimeException(
+                'No service found with code "' . self::AMBULANCE_SERVICE_CODE . '" — '
+                . 'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
+            );
+        }
+
         $validated = $request->validate([
             'resident_id' => 'nullable|integer|exists:tbl_residents,resident_id',
             // Required only when there is no account to pull them from.
@@ -618,7 +622,8 @@ class ServiceRequestController extends Controller
             // be unknown at intake and ConductionRequestController's own
             // columns are nullable for the same reason.
             'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'patient_age' => 'nullable|integer|min:0|max:150',
+            // Same ceiling as store() — see the note there.
+            'patient_age' => 'nullable|integer|min:0|max:120',
             'patient_sex' => 'nullable|in:male,female',
             'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             // Optional on both paths: null means the patient is reachable on
@@ -632,11 +637,11 @@ class ServiceRequestController extends Controller
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
             // Same "absent means as soon as possible" contract as store() — a
             // walk-in ambulance request can be booked for a future slot too.
-            'scheduled_at' => 'nullable|date',
+            'scheduled_at' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
             // Same optional intake list as store(). Collected at the counter
             // now rather than waited for until dispatch, when the trip record
             // that used to be their only home is finally created.
-            'patient_relatives' => 'nullable|array',
+            'patient_relatives' => 'nullable|array|max:'.self::MAX_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
@@ -790,8 +795,13 @@ class ServiceRequestController extends Controller
         // Added 'resident.barangay'
         $query = ServiceRequest::with(['resident.barangay', 'service', 'admin']);
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        // Scopes to the caller for a resident, and refuses anything that is not
+        // active staff. This used to be a bare `instanceof Resident` check with
+        // no else, so a token that was neither — a deactivated admin, or a
+        // tbl_user row with some other role — read every resident's request,
+        // internal_notes and patient details included.
+        if ($refusal = $this->scopeToOwner($request, $query, 'Service request not found')) {
+            return $refusal;
         }
 
         $serviceRequest = $query->find($id);
@@ -818,7 +828,7 @@ class ServiceRequestController extends Controller
     {
         $query = ServiceRequest::query();
 
-        if ($refusal = $this->guardPrivateFile($request, $query)) {
+        if ($refusal = $this->scopeToOwner($request, $query, 'Service request not found')) {
             return $refusal;
         }
 
@@ -856,12 +866,13 @@ class ServiceRequestController extends Controller
     // This route writes exactly one value.
     public function cancel(Request $request, $id)
     {
-        $user = $request->user();
-
         $query = ServiceRequest::query();
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        // Same guard as show(), and this one is a write: without the staff
+        // branch, any token that was not a resident's could cancel any
+        // resident's Pending or Booked request and release its unit.
+        if ($refusal = $this->scopeToOwner($request, $query, 'Service request not found')) {
+            return $refusal;
         }
 
         $serviceRequest = $query->find($id);
@@ -886,7 +897,13 @@ class ServiceRequestController extends Controller
         // changed their mind" — the office may already be staging for it. Only
         // Booked requests carry a scheduled_at, so Pending is never touched by
         // this check.
+        //
+        // Scoped to isFuture(): a scheduled_at already in the past is not "too
+        // near" to cancel, it has already happened. Without the guard, gte()
+        // stays true forever once the cutoff window passes, so a booking left
+        // unresolved past its own schedule could never be cancelled again.
         if ($serviceRequest->scheduled_at
+            && $serviceRequest->scheduled_at->isFuture()
             && now()->gte($serviceRequest->scheduled_at->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
         ) {
             return response()->json([
@@ -1318,11 +1335,11 @@ class ServiceRequestController extends Controller
             'patient_name' => $patientName,
             'patient_age' => $serviceRequest->patient_age,
             'patient_sex' => $serviceRequest->patient_sex,
-            'patient_address' => $serviceRequest->patient_address ?: 'Address not specified',
+            'patient_address' => $serviceRequest->patient_address ?: null,
             'patient_contact_number' => $contactNumber,
-            'medical_diagnosis' => $serviceRequest->condition_notes ?: 'Not described',
-            'origin' => $serviceRequest->pickup_location ?: 'Address not specified',
-            'destination' => $serviceRequest->destination ?: 'destination not specified',
+            'medical_diagnosis' => $serviceRequest->condition_notes ?: null,
+            'origin' => $serviceRequest->pickup_location ?: null,
+            'destination' => $serviceRequest->destination ?: null,
             'vehicle' => $vehicle
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,
@@ -1369,8 +1386,10 @@ class ServiceRequestController extends Controller
         $validated = $request->validate([
             'vehicle_id' => 'required|integer|exists:tbl_vehicles,vehicle_id',
             // Staff-adjustable; defaults to +2h below when absent. Same Manila
-            // parse as everywhere else a human types a time into this system.
-            'scheduled_end' => 'nullable|date',
+            // parse as everywhere else a human types a time into this system,
+            // and the same horizon store() puts on scheduled_at — this is the
+            // column that decides how long the unit is held.
+            'scheduled_end' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
         ]);
 
         $scheduledEnd = !empty($validated['scheduled_end'])
@@ -1463,8 +1482,12 @@ class ServiceRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'scheduled_at' => 'required|date',
-            'scheduled_end' => 'required|date',
+            // Bounded here as well as in store(): this method takes its own
+            // dates and never passes through resolveScheduledAt(), so a
+            // booking moved to the year 3000 would otherwise be accepted by
+            // the one path that exists to move bookings.
+            'scheduled_at' => 'required|date|before_or_equal:'.self::BOOKING_HORIZON,
+            'scheduled_end' => 'required|date|before_or_equal:'.self::BOOKING_HORIZON,
             // TracksHistory logs the scheduled_at/scheduled_end change on its
             // own, but the *reason* only reaches that log because remarks moves
             // in the same update — so it is not optional here, unlike update().

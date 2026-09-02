@@ -113,6 +113,23 @@ class ServiceRequestCancelTest extends TestCase
         $this->assertSame('Booked', $request->fresh()->status);
     }
 
+    public function test_a_past_due_booking_cancels_normally(): void
+    {
+        // A booking whose scheduled_at has already passed without ever being
+        // dispatched — e.g. a resident who never got the crew's call. gte()
+        // against the cutoff stays true forever once the window is behind it,
+        // so this used to return the same "too close to cancel" refusal as a
+        // booking still approaching its slot.
+        $request = $this->bookedRequest(Carbon::now('UTC')->subDays(5));
+
+        $this->actingAs($this->resident)
+            ->patchJson("/api/service-requests/{$request->getKey()}/cancel")
+            ->assertOk()
+            ->assertJsonPath('status', 'Cancelled');
+
+        $this->assertSame('Cancelled', $request->fresh()->status);
+    }
+
     public function test_after_dispatch_is_rejected(): void
     {
         $request = $this->bookedRequest(Carbon::now('UTC')->addDays(2), $this->vehicle);

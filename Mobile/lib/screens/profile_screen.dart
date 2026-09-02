@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import '../data/safety_files.dart';
+import '../models/phone_number.dart';
 import '../state/account_store.dart';
 import '../state/api_service.dart';
 import '../state/material_cache.dart';
@@ -984,18 +985,56 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       TextEditingController(text: widget.user.phone);
   late final TextEditingController _email =
       TextEditingController(text: widget.user.email);
+  final TextEditingController _password = TextEditingController();
 
   final Map<String, String> _errors = {};
   String? _formError;
   bool _saving = false;
 
+  /// Whether the email or mobile number differs from what is on file. The
+  /// endpoint requires the account password to move either — they are where a
+  /// login code is delivered — so this decides both whether the password field
+  /// is shown and whether it is required.
+  bool _contactChanged = false;
+
+  bool _passwordHidden = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Watched rather than checked at save time, so the field appears at the
+    // moment it becomes required instead of after a rejected save.
+    _phone.addListener(_syncContactChanged);
+    _email.addListener(_syncContactChanged);
+  }
+
+  void _syncContactChanged() {
+    final changed = _phone.text.trim() != widget.user.phone ||
+        _email.text.trim() != widget.user.email;
+
+    // Only on the transition. This runs on every keystroke in either field, and
+    // an unconditional setState would rebuild the sheet for each one.
+    if (changed == _contactChanged) return;
+
+    setState(() {
+      _contactChanged = changed;
+      // Undoing the edit takes the requirement away with it. Without this a
+      // "Required" would be left behind on a field that is no longer rendered,
+      // and _validate() would go on reading it.
+      if (!changed) _errors.remove('password');
+    });
+  }
+
   @override
   void dispose() {
+    _phone.removeListener(_syncContactChanged);
+    _email.removeListener(_syncContactChanged);
     _first.dispose();
     _middle.dispose();
     _last.dispose();
     _phone.dispose();
     _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -1013,9 +1052,11 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     final phone = _phone.text.trim();
     if (phone.isEmpty) {
       errors['phone'] = _tr('profile.required');
-    } else if (phone.length != 11 || !phone.startsWith('09')) {
-      // The field is digits-only and capped at 11 by AppTextField.phone, so the
-      // only reachable failures are "too short" and "does not start 09".
+    } else if (!PhoneNumber.isValid(phone)) {
+      // The server's own rule — see PhoneNumber. This was a hand-rolled
+      // "length 11 and starts 09", which is a strict subset: it refused the
+      // `+639…` shape the server accepts and registration allows, so a
+      // resident who signed up with one could not save their own profile.
       errors['phone'] = _tr('profile.phone_invalid');
     }
 
@@ -1024,6 +1065,12 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       errors['email'] = _tr('profile.required');
     } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       errors['email'] = _tr('profile.email_invalid');
+    }
+
+    // Not trimmed, unlike every field above: a space is a legitimate password
+    // character, and trimming here would reject a correct one.
+    if (_contactChanged && _password.text.isEmpty) {
+      errors['password'] = _tr('profile.password_required');
     }
 
     setState(() {
@@ -1076,6 +1123,9 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
         lastName: changes['last'],
         phoneNumber: changes['phone'],
         email: changes['email'],
+        // Sent only when it is actually needed. Passing it on every save would
+        // put the resident's password on the wire for a surname correction.
+        currentPassword: _contactChanged ? _password.text : null,
       );
 
       if (!mounted) return;
@@ -1088,7 +1138,23 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       // The server's message is shown as-is. A 422 here is a real rejection the
       // resident has to act on — a duplicate email is the common one — and the
       // field-level checks above cannot know about it.
-      setState(() => _formError = e.message);
+      //
+      // A rejected password is put under the password field instead of in the
+      // banner, so the resident's eye lands on the input they have to fix. Only
+      // when that field is on screen: a `current_password` error while the
+      // field is hidden would otherwise be shown nowhere at all.
+      final passwordError = e.fieldErrors['current_password'];
+
+      setState(() {
+        if (passwordError != null && _contactChanged) {
+          _errors['password'] = passwordError;
+          // Not also in the banner — the same sentence twice reads as two
+          // separate problems.
+          _formError = null;
+        } else {
+          _formError = e.message;
+        }
+      });
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1154,6 +1220,47 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               errorText: _errors['email'],
               enabled: !_saving,
             ),
+            // Appears the moment either contact field is edited, directly under
+            // the two that triggered it, and disappears again if the edit is
+            // undone.
+            if (_contactChanged) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.shield_outlined,
+                      size: 15, color: AppColors.inkFaint),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      _tr('profile.password_why'),
+                      style: AppText.body(
+                          size: 12, color: AppColors.inkMuted, height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              AppTextField(
+                label: _tr('profile.password_current'),
+                hint: '',
+                controller: _password,
+                obscure: _passwordHidden,
+                errorText: _errors['password'],
+                enabled: !_saving,
+                suffixIcon: IconButton(
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() => _passwordHidden = !_passwordHidden),
+                  icon: Icon(
+                    _passwordHidden
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    size: 18,
+                    color: AppColors.inkFaint,
+                  ),
+                ),
+              ),
+            ],
             _ReadOnlyField(
               label: _tr('profile.barangay'),
               value: widget.barangay,

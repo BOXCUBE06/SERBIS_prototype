@@ -6,6 +6,7 @@ use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -132,6 +133,57 @@ class ValidationLengthLimitsTest extends TestCase
             'total_quantity' => 5,
             'status' => 'Available',
         ])->assertStatus(422)->assertJsonValidationErrors('item_name');
+    }
+
+    /**
+     * Both vehicle string rules were missed by the 2026-08-31 pass, which
+     * recorded /vehicles as length-bounded when neither rule carried a `max:`.
+     * Same 1406-instead-of-422 defect as every case above.
+     */
+    public function test_vehicle_unit_identifier_over_255_chars_gets_422_not_500(): void
+    {
+        $this->actingAsAdmin()->postJson('/api/vehicles', [
+            'unit_identifier' => str_repeat('v', 300),
+            'type' => 'Ambulance',
+            'status' => 'Available',
+        ])->assertStatus(422)->assertJsonValidationErrors('unit_identifier');
+    }
+
+    public function test_vehicle_specification_over_255_chars_gets_422_not_500(): void
+    {
+        $this->actingAsAdmin()->postJson('/api/vehicles', [
+            'unit_identifier' => 'AMB-001',
+            'type' => 'Ambulance',
+            'specification' => str_repeat('s', 300),
+            'status' => 'Available',
+        ])->assertStatus(422)->assertJsonValidationErrors('specification');
+    }
+
+    /**
+     * `unit_identifier` had no `string` rule at all, only `required|unique`, so
+     * an array went straight to the unique lookup. Distinct from the length
+     * case: the fix for one does not imply the other.
+     */
+    public function test_vehicle_unit_identifier_rejects_a_non_string(): void
+    {
+        $this->actingAsAdmin()->postJson('/api/vehicles', [
+            'unit_identifier' => ['AMB-001'],
+            'type' => 'Ambulance',
+            'status' => 'Available',
+        ])->assertStatus(422)->assertJsonValidationErrors('unit_identifier');
+    }
+
+    public function test_updating_a_vehicle_with_an_over_length_unit_identifier_gets_422(): void
+    {
+        $vehicle = Vehicle::create([
+            'unit_identifier' => 'AMB-002',
+            'type' => 'Ambulance',
+            'status' => 'Available',
+        ]);
+
+        $this->actingAsAdmin()->putJson("/api/vehicles/{$vehicle->vehicle_id}", [
+            'unit_identifier' => str_repeat('v', 300),
+        ])->assertStatus(422)->assertJsonValidationErrors('unit_identifier');
     }
 
     // --- Finding 1: text columns ---------------------------------------------

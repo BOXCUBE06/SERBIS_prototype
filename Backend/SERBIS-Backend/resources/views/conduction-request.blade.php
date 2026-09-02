@@ -1,36 +1,11 @@
 {{--
     MDRRMO Conduction Request Form — printable letterhead.
 
-    SEAL ASSETS — not committed yet. The two slots below are already sized and
-    positioned; dropping the images in changes nothing about where the text
-    sits, because the side columns are fixed-width and the centre column is
-    what the type is centred in.
-
-        public/img/seal-echague.png         → LEFT slot
-            The municipal seal ("Bayan ng Echague, Isabela"), pairing with the
-            MUNICIPALITY OF ECHAGUE line it sits beside.
-
-        public/img/logo-echague-rescue.png  → RIGHT slot
-            The issuing unit's own logo, pairing with the Echague Rescue EMS
-            line.
-
-        public/img/seal-philippines.png     → not placed
-            Kept in the naming scheme because the national seal is the usual
-            third mark on an LGU letterhead. Some offices run national left /
-            municipal right and move the unit logo into the body. If that is
-            wanted here, swap the LEFT slot's filename and give the unit logo
-            its own row rather than widening this one — three marks across a
-            single band crowds the type at this width.
-
-    Already in the repo and possibly the same artwork:
-    Web/serbis-admin-vue/src/assets/mdrrmo_logo.jpg is the MDRRMO Echague seal,
-    carrying the municipal coat-of-arms as its own background. It is a JPEG
-    with a white ground, so it needs a transparent PNG export before it sits
-    cleanly on the page.
-
-    To fill a slot, put the <img> inside the existing .seal div and give it
-    width:100%;height:100%;object-fit:contain — the div is the reserved box,
-    the image never decides the layout.
+    The letterhead is type only. An earlier draft reserved two 28mm boxes for
+    seal images that were never produced, which printed as empty space either
+    side of the heading. The boxes are gone rather than left waiting: the type
+    is centred on the page by text-align, so it sits in the same place it
+    always did and now has the full measure to wrap in.
 --}}
 <!DOCTYPE html>
 <html lang="en">
@@ -39,17 +14,16 @@
     <title>Conduction Request Form</title>
     <style>
         /* A4 rather than Letter: the office prints on A4, and a fixed page
-           size keeps the seal boxes at their true millimetre dimensions
-           instead of scaling with the viewport. */
+           size keeps every millimetre dimension in this sheet true instead of
+           scaling with the viewport. */
         @page {
             size: A4;
             margin: 18mm 16mm;
         }
 
         html {
-            /* Screen preview only. @page owns the real printed margins, and a
-               page-sized sheet on screen is what makes the reserved seal
-               space readable as reserved rather than as a gap. */
+            /* Screen preview only. @page owns the real printed margins; this
+               is what makes the white sheet read as a sheet on screen. */
             background: #f4f4f5;
         }
 
@@ -68,29 +42,6 @@
             /* 12pt base, the size the paper form is typed at. */
             font-size: 12pt;
             line-height: 1.35;
-        }
-
-        /* Three columns: a fixed seal box, the type, a fixed seal box. The
-           side columns are equal, so the centre column is centred on the page
-           whether or not either image exists — which is the whole point of
-           reserving them now. */
-        .letterhead {
-            display: grid;
-            grid-template-columns: 28mm 1fr 28mm;
-            column-gap: 8mm;
-            align-items: center;
-        }
-
-        /* The reserved space. Deliberately empty: no border, no background,
-           no placeholder text. 28mm is the conventional letterhead seal
-           diameter (a shade over one inch).
-
-           The height is fixed so the row cannot grow when an image lands in
-           it. The centred type below runs taller than 28mm, so the row is
-           governed by the text and adding a seal moves nothing. */
-        .seal {
-            width: 28mm;
-            height: 28mm;
         }
 
         .titles {
@@ -315,9 +266,7 @@
     </style>
 </head>
 <body>
-    <header class="letterhead">
-        <div class="seal" aria-hidden="true"></div>
-
+    <header>
         <div class="titles">
             <p class="republic">Republic of the Philippines</p>
             <p class="province">Province of Isabela</p>
@@ -325,8 +274,6 @@
             <p class="unit">Echague Rescue Emergency Medical Services</p>
             <p class="form-title">CONDUCTION REQUEST FORM</p>
         </div>
-
-        <div class="seal" aria-hidden="true"></div>
     </header>
 
     @php
@@ -360,6 +307,7 @@
 
         $patientName    = $val($request?->patient_name    ?: $trip->patient_name);
         $patientAge     = $val($request?->patient_age     ?: $trip->patient_age);
+        $patientAddress = $val($request?->patient_address ?: $trip->patient_address);
         $patientSex     = $val($request?->patient_sex     ?: $trip->patient_sex);
         $patientContact = $val($request?->patient_contact_number ?: $trip->patient_contact_number);
         $diagnosis      = $val($request?->condition_notes ?: $trip->medical_diagnosis);
@@ -406,6 +354,13 @@
             <div class="field w-sex">
                 <span class="label">Sex</span>
                 <span class="rule">{{ $patientSex ? ucfirst($patientSex) : '' }}</span>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="field">
+                <span class="label">Patient Address</span>
+                <span class="rule">{{ $patientAddress }}</span>
             </div>
         </div>
 
@@ -552,4 +507,5 @@
         </div>
     </footer>
 </body>
+<script>window.print()</script>
 </html>
