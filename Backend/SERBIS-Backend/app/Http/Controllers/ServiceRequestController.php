@@ -1002,12 +1002,12 @@ class ServiceRequestController extends Controller
                 if (!$trip->arrived_destination_at) {
                     $missing[] = 'arrival time';
                 }
-                if ($trip->odometer_start === null) {
-                    $missing[] = 'odometer at departure';
-                }
-                if ($trip->odometer_end === null) {
-                    $missing[] = 'odometer on return';
-                }
+                // Odometer readings are deliberately NOT required here. They
+                // are often not to hand when the trip is closed out, and
+                // holding a finished trip open for them meant the status said
+                // 'Responding' for a crew already back at the office.
+                // ConductionRequestController still enforces
+                // odometer_end >= odometer_start whenever both are entered.
                 if (!$trip->drivers()->exists()) {
                     $missing[] = 'a driver';
                 }
