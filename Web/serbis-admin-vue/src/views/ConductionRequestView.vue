@@ -103,6 +103,7 @@
             v-model="statusFilter"
             :items="statusOptions"
             label="Trip status"
+            attach
             prepend-inner-icon="mdi-map-marker-path"
             variant="outlined"
             density="compact"
@@ -632,8 +633,8 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Patient', key: 'patient', width: '24%' },
-  { title: 'From → To', key: 'trip', width: '28%' },
   { title: 'Status', key: 'trip_status', align: 'center', width: '17%' },
+  { title: 'From → To', key: 'trip', width: '28%' },
   { title: 'Filed', key: 'created_at', width: '17%' },
 ]
 
