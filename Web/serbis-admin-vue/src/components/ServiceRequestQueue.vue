@@ -566,6 +566,12 @@
                   <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
                     No trip record found for this request.
                   </div>
+                  <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
+                    This request resolved with no trip record on file — likely older data.
+                  </div>
+                  <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
+                    Closed before a trip was ever started.
+                  </div>
                   <div v-else class="text-body-2">
                     No trip record yet — one is created automatically once this request is dispatched.
                   </div>
@@ -1602,9 +1608,15 @@ const tripDriverNames = computed(() =>
 // it's a model $appends, not conditionally selected. Only 'Completed' means
 // the record is actually done; missing entirely, still open, or never
 // started are all the same "needs attention" bucket the warning color is for.
-const tripRecordAlertType = computed(() =>
-  respondingTrip.value?.trip_status === 'Completed' ? 'success' : 'warning'
-)
+// Only Responding-or-Resolved-with-nothing-on-file is an actual problem —
+// not-yet-dispatched and closed-before-dispatch are the request working
+// exactly as expected, not something to flag.
+const tripRecordAlertType = computed(() => {
+  if (respondingTrip.value) {
+    return respondingTrip.value.trip_status === 'Completed' ? 'success' : 'warning'
+  }
+  return ['Responding', 'Resolved'].includes(selectedRequest.value?.status) ? 'warning' : 'info'
+})
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
 // photo of the scene. Both live on the private disk and both are served only by
