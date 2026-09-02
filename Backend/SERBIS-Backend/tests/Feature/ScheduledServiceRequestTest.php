@@ -64,11 +64,19 @@ class ScheduledServiceRequestTest extends TestCase
         $this->actingAs($this->resident);
     }
 
+    /**
+     * `description` is deliberately absent: store() composes it server-side for
+     * an ambulance request and ignores whatever a client sends. patient_name
+     * and destination are the two fields store() requires for this service —
+     * the other six structured columns stay optional there, unlike the walk-in
+     * counter form, so a resident on a phone can file without them.
+     */
     private function payload(array $overrides = []): array
     {
         return array_merge([
             'service_id' => $this->service->service_id,
-            'description' => 'Needs a scheduled ambulance for a hospital transfer.',
+            'patient_name' => 'Maria Santos',
+            'destination' => 'Echague District Hospital',
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
         ], $overrides);
     }

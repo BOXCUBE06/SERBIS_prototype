@@ -30,6 +30,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
+import 'package:serbis/models/service_forms.dart';
 import 'package:serbis/screens/services_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
@@ -101,6 +102,12 @@ class FakeApi extends ApiService {
   /// one. Asserting on the widget tree would prove nothing about what was sent.
   String? lastDescription;
 
+  /// Non-null only for an ambulance request, and the thing to assert on for
+  /// one: the client stopped sending `description` for that service, so
+  /// [lastDescription] there is only the optimistic row's own copy, not what
+  /// went on the wire.
+  AmbulanceIntake? lastIntake;
+
   /// Set to a completer-backed future to hold a submit open mid-flight.
   Future<void>? submitGate;
 
@@ -157,11 +164,13 @@ class FakeApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     DateTime? scheduledAt,
+    AmbulanceIntake? intake,
   }) async {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
     lastSitePhotoName = sitePhotoFileName;
     lastDescription = description;
+    lastIntake = intake;
 
     if (submitGate != null) {
       await submitGate;
@@ -208,14 +217,13 @@ Future<void> _pump(
   // that the submit button never builds, which would make it unfindable for a
   // reason that has nothing to do with the code under test.
   //
-  // 5600, not the original 4800: the ambulance form grew a schedule picker
-  // (AmbulanceScheduleField), and 4800 was tuned tightly enough that the new
-  // field pushed Submit below the fold on exactly the tests that skip
-  // attaching a file first. ensureVisible() ought to scroll to it regardless
-  // of height, but this screen was deliberately sized to avoid depending on
-  // that in the first place — keep it that way rather than debug why only
-  // some tests needed the scroll to actually work.
-  tester.view.physicalSize = const Size(1080, 5600);
+  // 8000, not 5600: the ambulance form grew from four inputs to nine plus a
+  // relatives repeater, and 5600 was already tuned tightly enough that the
+  // earlier schedule picker had pushed Submit below the fold. ensureVisible()
+  // ought to scroll to it regardless of height, but this screen was
+  // deliberately sized to avoid depending on that in the first place — keep it
+  // that way rather than debug why only some tests need the scroll to work.
+  tester.view.physicalSize = const Size(1080, 8000);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 
@@ -259,6 +267,24 @@ Future<void> _tapUpload(WidgetTester tester, String label) async {
 Finder _patientNameField() {
   final field = find.byWidgetPredicate((w) => w is AppTextField && w.label == 'Patient name');
   return find.descendant(of: field, matching: find.byType(TextField));
+}
+
+/// Fills the two fields the ambulance form refuses to submit without, and
+/// nothing else — the other seven are optional by design, so a test that only
+/// needs a submit to go through should not have to fill them.
+///
+/// Mirrors the server's own required set for this service
+/// (ServiceRequestController::store): patient_name and destination.
+Future<void> _fillRequiredAmbulanceFields(WidgetTester tester) async {
+  for (final entry in const {'Patient name': 'Maria Santos', 'To': 'Echague District Hospital'}.entries) {
+    final field = find.descendant(
+      of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
+      matching: find.byType(TextField),
+    );
+    await tester.ensureVisible(field);
+    await tester.enterText(field, entry.value);
+  }
+  await tester.pump();
 }
 
 /// Attaches a valid ID through the real picker path, which is also what covers
@@ -485,12 +511,13 @@ void main() {
     testWidgets('an ambulance request goes through without asking for a number',
         (tester) async {
       // This used to be refused until the resident typed a callback number.
-      // The number is on the account from registration, so the field and the
-      // guard are both gone and the attachment is the only thing left to
-      // supply.
+      // The number is on the account from registration, so that guard is gone;
+      // the patient name and destination are what the form asks for now, and
+      // the number field it does render arrives already filled.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
 
+      await _fillRequiredAmbulanceFields(tester);
       await _attachValidId(tester);
       await _submit(tester);
 
@@ -498,17 +525,83 @@ void main() {
       expect(find.byType(ConfirmationSheet), findsOneWidget);
     });
 
-    testWidgets("the account's number reaches the dispatcher in the description",
+    testWidgets('an ambulance request with no patient name is refused with a reason',
         (tester) async {
-      // Removing the field must not remove the number. The resident never
-      // typed 09171234567 anywhere in this test -- it is on `_testUser`.
+      // The client-side half of the server's own required_if rule, so the
+      // resident is told which field is missing instead of meeting a 422 the
+      // app would surface as a generic failure.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
 
       await _attachValidId(tester);
       await _submit(tester);
 
-      expect(api.lastDescription, contains('Contact: 09171234567'));
+      expect(find.textContaining('the patient name'), findsOneWidget);
+      expect(api.submitCount, 0, reason: 'nothing may reach the server');
+    });
+
+    testWidgets("the account's number reaches the dispatcher as a real field",
+        (tester) async {
+      // Was an assertion on `lastDescription`. The client no longer composes a
+      // description for an ambulance request -- the server does, from these
+      // fields -- so asserting on the prose would be asserting on a string
+      // that never leaves the device. The number still has to arrive; it just
+      // arrives as patient_contact_number now.
+      //
+      // The resident never typed 09171234567 anywhere in this test: it is on
+      // `_testUser` and reaches the wire by prefilling the contact field.
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      await _fillRequiredAmbulanceFields(tester);
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(api.lastIntake?.patientContactNumber, '09171234567');
+      expect(api.lastIntake?.toFields()['patient_contact_number'], '09171234567');
+    });
+
+    testWidgets("the account's address prefills the patient address",
+        (tester) async {
+      // Same shape as the number above: never typed here, carried by
+      // `_testUser`, and editable once it is on screen.
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      await _fillRequiredAmbulanceFields(tester);
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(api.lastIntake?.patientAddress, _testUser.address);
+    });
+
+    testWidgets('an ambulance request sends the structured fields, not a description',
+        (tester) async {
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      await _fillRequiredAmbulanceFields(tester);
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      final fields = api.lastIntake!.toFields();
+      expect(fields['patient_name'], 'Maria Santos');
+      expect(fields['destination'], 'Echague District Hospital');
+      // The one key the server refuses to take from a client for this service.
+      expect(fields.containsKey('description'), isFalse);
+    });
+
+    testWidgets('a non-ambulance request still sends a description and no intake',
+        (tester) async {
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.road);
+
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(api.lastIntake, isNull);
+      expect(api.lastDescription, isNotNull);
+      expect(api.lastDescription, contains('Road Clearing'));
     });
 
     testWidgets('a road request carries no contact line at all', (tester) async {

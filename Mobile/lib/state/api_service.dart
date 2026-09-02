@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/service_forms.dart' show AmbulanceIntake;
 import 'api_exception.dart';
 import 'app_log.dart';
 import 'verification_delivery.dart';
@@ -644,6 +645,7 @@ class ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     DateTime? scheduledAt,
+    AmbulanceIntake? intake,
   }) {
     final uri = Uri.parse('$baseUrl/service-requests');
     final request = http.MultipartRequest('POST', uri);
@@ -654,7 +656,28 @@ class ApiService {
     });
 
     request.fields['service_id'] = serviceId.toString();
-    request.fields['description'] = description;
+
+    if (intake != null) {
+      // No `description` for an ambulance request. The server composes it from
+      // exactly these fields and ignores whatever a client sends, so attaching
+      // one would put a second composer on the wire — the two would drift, and
+      // the resident's Track screen would disagree with the dispatcher's panel
+      // about the same request.
+      request.fields.addAll(intake.toFields());
+
+      // Indexed keys, not a repeated bare `patient_relatives[]`: `fields` is a
+      // Map and cannot hold a duplicate name, and sending them as file parts
+      // would land them in $request->file() where the `patient_relatives.*`
+      // rule never looks. `patient_relatives[0]` is what PHP parses back into
+      // the array that rule validates. Blank slots are already dropped by
+      // AmbulanceIntake.from, so nothing empty reaches here.
+      for (var i = 0; i < intake.relatives.length; i++) {
+        request.fields['patient_relatives[$i]'] = intake.relatives[i];
+      }
+    } else {
+      request.fields['description'] = description;
+    }
+
     if (requiredVehicleType != null && requiredVehicleType.isNotEmpty) {
       request.fields['required_vehicle_type'] = requiredVehicleType;
     }
@@ -703,6 +726,7 @@ class ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     DateTime? scheduledAt,
+    AmbulanceIntake? intake,
   }) async {
     final request = buildSubmitRequest(
       serviceId: serviceId,
@@ -713,6 +737,7 @@ class ApiService {
       sitePhotoBytes: sitePhotoBytes,
       sitePhotoFileName: sitePhotoFileName,
       scheduledAt: scheduledAt,
+      intake: intake,
     );
 
     http.Response response;

@@ -19,8 +19,12 @@ use Tests\TestCase;
  * terminal status with zero rows in tbl_conduction_requests. This is the
  * bridge — PUT /api/service-requests/{id} now creates a linked stub the
  * moment an ambulance request goes Responding, and refuses Resolved until
- * that trip has at minimum an arrival time, both odometer readings and a
- * driver.
+ * that trip has at minimum an arrival time and a driver.
+ *
+ * Odometer readings are NOT part of that set: they are frequently not to
+ * hand when a trip is closed out, and requiring them left finished trips
+ * sitting at 'Responding'. ConductionRequestControllerTest still covers the
+ * ordering rule that applies whenever both readings are entered.
  *
  * Uses the real service name so its code slugifies to
  * `ambulance-medical-response` — ServiceRequestDispatchTest's fixture
@@ -199,7 +203,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $this->assertSame('Responding', $request->fresh()->status);
     }
 
-    public function test_resolving_is_refused_until_arrival_odometer_and_a_driver_are_recorded(): void
+    public function test_resolving_is_refused_until_arrival_and_a_driver_are_recorded(): void
     {
         $request = $this->ambulanceRequest();
 
@@ -217,30 +221,27 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $response->assertStatus(422)->assertJsonValidationErrors('status');
         $message = $response->json('errors.status.0');
         $this->assertStringContainsString('arrival time', $message);
-        $this->assertStringContainsString('odometer at departure', $message);
-        $this->assertStringContainsString('odometer on return', $message);
         $this->assertStringContainsString('a driver', $message);
+        // The two readings are no longer part of the requirement set, so they
+        // must not be named as missing either.
+        $this->assertStringNotContainsString('odometer', $message);
         $this->assertSame('Responding', $request->fresh()->status);
 
         // Filled in one piece at a time, same as a real trip: still refused
-        // until every one of the four is present.
+        // until both of the two are present.
         $this->patchJson("/api/conduction-requests/{$trip->conduction_request_id}/trip-log", [
             'departed_office_at' => now()->subMinutes(30)->toDateTimeLocalString(),
             'arrived_destination_at' => now()->toDateTimeLocalString(),
         ])->assertOk();
 
-        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
-            'status' => 'Resolved',
-        ])->assertStatus(422);
-
-        $this->patchJson("/api/conduction-requests/{$trip->conduction_request_id}/trip-log", [
-            'odometer_start' => 1000,
-            'odometer_end' => 1050,
-        ])->assertOk();
-
-        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+        $response = $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Resolved',
         ])->assertStatus(422)->assertJsonValidationErrors('status');
+
+        // Arrival satisfied, so only the driver is outstanding.
+        $message = $response->json('errors.status.0');
+        $this->assertStringNotContainsString('arrival time', $message);
+        $this->assertStringContainsString('a driver', $message);
 
         \App\Models\ConductionRequestPerson::create([
             'conduction_request_id' => $trip->conduction_request_id,
@@ -249,12 +250,118 @@ class AmbulanceDispatchBridgeTest extends TestCase
             'position' => 0,
         ]);
 
+        // Never had an odometer reading written, and resolves anyway.
+        $this->assertNull($trip->fresh()->odometer_start);
+        $this->assertNull($trip->fresh()->odometer_end);
+
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Resolved',
             'vehicle_id' => $this->vehicle->vehicle_id,
         ])->assertOk()->assertJsonPath('status', 'Resolved');
 
         $this->assertSame('Available', $this->vehicle->fresh()->status);
+    }
+
+    /**
+     * A dispatched trip that never arrives — patient already left, crew
+     * recalled mid-route, transport refused — has no arrived_destination_at
+     * to give, but the gate now accepts no_arrival_reason as the alternative.
+     * The driver requirement is unconditional either way.
+     *
+     * No endpoint writes no_arrival_reason yet (tripLog() does not accept it)
+     * — set directly on the model here, which is honest to what exists today.
+     */
+    public function test_a_stated_no_arrival_reason_satisfies_the_gate_in_place_of_arrival(): void
+    {
+        $request = $this->ambulanceRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+
+        $trip = ConductionRequest::first();
+
+        // Neither arrival nor a reason yet — still blocked, message now names
+        // both options.
+        $response = $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+        ])->assertStatus(422)->assertJsonValidationErrors('status');
+        $message = $response->json('errors.status.0');
+        $this->assertStringContainsString('arrival time (or a reason it never arrived)', $message);
+        $this->assertStringContainsString('a driver', $message);
+
+        $trip->update(['no_arrival_reason' => 'Patient already transported by family before crew arrived.']);
+        $this->assertNull($trip->fresh()->arrived_destination_at);
+
+        // Reason alone, no driver yet — arrival requirement satisfied, driver still missing.
+        $response = $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+        ])->assertStatus(422)->assertJsonValidationErrors('status');
+        $message = $response->json('errors.status.0');
+        $this->assertStringNotContainsString('arrival time', $message);
+        $this->assertStringContainsString('a driver', $message);
+
+        \App\Models\ConductionRequestPerson::create([
+            'conduction_request_id' => $trip->conduction_request_id,
+            'role' => 'driver',
+            'name' => 'Rico Santos',
+            'position' => 0,
+        ]);
+
+        // Reason + driver, still no real arrival timestamp — resolves anyway.
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk()->assertJsonPath('status', 'Resolved');
+
+        $this->assertSame('Available', $this->vehicle->fresh()->status);
+    }
+
+    public function test_a_trip_with_odometer_readings_still_resolves(): void
+    {
+        // Removing the requirement must not turn the readings into something
+        // that blocks: a trip that does carry both resolves exactly as before.
+        $request = $this->ambulanceRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+
+        $trip = ConductionRequest::first();
+
+        $this->patchJson("/api/conduction-requests/{$trip->conduction_request_id}/trip-log", [
+            'departed_office_at' => now()->subMinutes(30)->toDateTimeLocalString(),
+            'arrived_destination_at' => now()->toDateTimeLocalString(),
+            'odometer_start' => 1000,
+            'odometer_end' => 1050,
+            'drivers' => ['Rico Santos'],
+        ])->assertOk();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk()->assertJsonPath('status', 'Resolved');
+    }
+
+    public function test_a_return_reading_below_the_departure_reading_is_still_rejected(): void
+    {
+        // ConductionRequestController's own ordering rule is untouched by the
+        // resolve gate change and still applies whenever both are entered.
+        $request = $this->ambulanceRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+
+        $trip = ConductionRequest::first();
+
+        $this->patchJson("/api/conduction-requests/{$trip->conduction_request_id}/trip-log", [
+            'odometer_start' => 10000,
+            'odometer_end' => 9000,
+        ])->assertStatus(422)->assertJsonValidationErrors(['odometer_end']);
     }
 
     public function test_a_non_ambulance_request_is_never_gated(): void

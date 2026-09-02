@@ -103,6 +103,7 @@
             v-model="statusFilter"
             :items="statusOptions"
             label="Trip status"
+            attach
             prepend-inner-icon="mdi-map-marker-path"
             variant="outlined"
             density="compact"
@@ -188,8 +189,8 @@
             </template>
 
             <template v-slot:item.trip_status="{ item }">
-              <span class="status-pill status-pill--sm" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
-                {{ sharedStatusLabel(item.trip_status) }}
+              <span class="status-pill status-pill--sm" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
+                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
               </span>
             </template>
 
@@ -232,8 +233,8 @@
                 </div>
                 <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
               </div>
-              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
-                {{ sharedStatusLabel(item.trip_status) }}
+              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
+                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
               </span>
             </div>
           </div>
@@ -400,8 +401,8 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <span class="status-pill" :class="statusPillClass(sharedStatusLabel(selected.trip_status))">
-              {{ sharedStatusLabel(selected.trip_status) }}
+            <span class="status-pill" :class="outcomePillClass(sharedStatusLabel(selected.trip_status), selected.no_arrival_reason)">
+              {{ outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason) }}
             </span>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
@@ -467,6 +468,7 @@
           <v-row>
             <v-col cols="6"><div class="field-label">Departed office</div><div class="field-value">{{ fmtDateTime(selected.departed_office_at) || '—' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Arrived at destination</div><div class="field-value">{{ fmtDateTime(selected.arrived_destination_at) || '—' }}</div></v-col>
+            <v-col cols="12" v-if="selected.no_arrival_reason"><div class="field-label">No-arrival reason</div><div class="field-value">{{ selected.no_arrival_reason }}</div></v-col>
             <v-col cols="6"><div class="field-label">Departed destination</div><div class="field-value">{{ fmtDateTime(selected.departed_destination_at) || '—' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Returned to office</div><div class="field-value">{{ fmtDateTime(selected.returned_office_at) || '—' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Odometer start</div><div class="field-value">{{ selected.odometer_start ?? '—' }}</div></v-col>
@@ -496,6 +498,17 @@
             </v-col>
             <v-col cols="12" sm="6">
               <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
+            </v-col>
+            <v-col cols="12">
+              <v-textarea
+                v-model="tripLog.form.no_arrival_reason"
+                label="No-arrival reason"
+                hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
+                persistent-hint
+                variant="outlined"
+                density="comfortable"
+                rows="2"
+              ></v-textarea>
             </v-col>
             <v-col cols="12" sm="6">
               <DateTimePickerField v-model="tripLog.form.departed_destination_at" type="datetime-local" label="Departed destination" variant="outlined" density="comfortable"></DateTimePickerField>
@@ -567,7 +580,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
-import { sharedStatusLabel, statusPillClass } from '@/composables/adminUi'
+import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
@@ -585,12 +598,13 @@ const isWide = lgAndUp
 const ALL_STATUS = 'All'
 // Filtering still compares the raw trip_status value (matchesStatus below is
 // unchanged) -- only the label shown in the dropdown and on every badge
-// moves to the shared vocabulary (adminUi.ts's sharedStatusLabel), so the
-// underlying value stays exactly what the API sends.
+// moves to tripStatusLabel() (adminUi.ts), so the underlying value stays
+// exactly what the API sends. Pill color still comes from sharedStatusLabel()
+// separately -- the two only disagree on the 'Not dispatched' text.
 const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
 const statusOptions = [
   { title: ALL_STATUS, value: ALL_STATUS },
-  ...RAW_TRIP_STATUSES.map((s) => ({ title: sharedStatusLabel(s), value: s })),
+  ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
 ]
 
 const personnelGroups = [
@@ -619,8 +633,8 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Patient', key: 'patient', width: '24%' },
-  { title: 'From → To', key: 'trip', width: '28%' },
   { title: 'Status', key: 'trip_status', align: 'center', width: '17%' },
+  { title: 'From → To', key: 'trip', width: '28%' },
   { title: 'Filed', key: 'created_at', width: '17%' },
 ]
 
@@ -730,16 +744,13 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
 })))
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
-// at selection time. plate_no now sources from the fleet unit's own record
-// the same way, now that tbl_vehicles actually tracks one — still just a
-// starting value in an editable field, not locked, since a real plate can
-// go stale (reassigned, repainted unit) faster than the fleet record gets
-// updated to match.
+// at selection time. plate_no is deliberately NOT prefilled from the unit:
+// tbl_vehicles no longer carries a plate column, so this trip's own plate_no
+// is free text that someone types when they know it.
 const onSelectFleetVehicle = (vehicleId) => {
   const form = createDialog.value.form
   const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
   form.vehicle = vehicle ? `${vehicle.unit_identifier}${vehicle.specification ? ` (${vehicle.specification})` : ''}` : ''
-  form.plate_no = vehicle?.plate_no || ''
   // A new pick clears any conflict the previous one raised — it may not
   // apply to this unit at all.
   createDialog.value.conflict = null
@@ -913,7 +924,7 @@ const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.ro
 
 // Trip log dialog
 const emptyTripLogForm = () => ({
-  departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
+  departed_office_at: '', arrived_destination_at: '', no_arrival_reason: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
   // All three PEOPLE_FIELDS roles — see ConductionRequestController::
   // tripLog(). A stub created by C5's bridge (openTripRecord below) always
@@ -948,6 +959,7 @@ const openTripLog = (record) => {
     form: {
       departed_office_at: toInputValue(record.departed_office_at),
       arrived_destination_at: toInputValue(record.arrived_destination_at),
+      no_arrival_reason: record.no_arrival_reason || '',
       departed_destination_at: toInputValue(record.departed_destination_at),
       returned_office_at: toInputValue(record.returned_office_at),
       odometer_start: record.odometer_start,
@@ -1007,6 +1019,7 @@ const submitTripLog = async () => {
     const body = {
       departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
       arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,
+      no_arrival_reason: form.no_arrival_reason || null,
       departed_destination_at: form.departed_destination_at ? form.departed_destination_at.replace('T', ' ') + ':00' : null,
       returned_office_at: form.returned_office_at ? form.returned_office_at.replace('T', ' ') + ':00' : null,
       odometer_start: form.odometer_start === '' ? null : form.odometer_start,
@@ -1165,12 +1178,20 @@ onMounted(fetchData)
   background: rgba(var(--v-theme-error), 0.14);
   color: rgb(var(--v-theme-error-strong));
 }
+/* A sixth outcome, neither success nor failure — the five semantic hues are
+   already spoken for (see .pill-booked above), so this is a literal neutral
+   slate rather than reusing warning/error and implying "wrong" or "pending". */
+.pill-resolved-no-arrival {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
 .v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
 .v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
 .v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
 .v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
 .v-theme--dark .pill-disapproved,
 .v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
+.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
 /* VDataTableFooter has no prop to drop just the items-per-page selector —

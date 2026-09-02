@@ -266,7 +266,7 @@
                     <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
                 </div>
-                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(item.status)">{{ item.status || 'Pending' }}</span>
+                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)">{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
               </div>
 
               <!-- itemsPerPage is sized off windowHeight so a full page fills
@@ -328,8 +328,8 @@
                   <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
                 </div>
               </div>
-              <span class="status-pill" :class="statusPillClass(selectedRequest.status)">
-                {{ selectedRequest.status || 'Pending' }}
+              <span class="status-pill" :class="outcomePillClass(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)">
+                {{ outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason) }}
               </span>
             </div>
 
@@ -552,6 +552,9 @@
                       {{ tripDriverNames || 'No driver recorded yet' }}
                       <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
                     </div>
+                    <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
+                      <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
+                    </div>
                     <div class="text-caption text-medium-emphasis mb-2">
                       Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
                     </div>
@@ -562,6 +565,12 @@
                   </template>
                   <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
                     No trip record found for this request.
+                  </div>
+                  <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
+                    This request resolved with no trip record on file — likely older data.
+                  </div>
+                  <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
+                    Closed before a trip was ever started.
                   </div>
                   <div v-else class="text-body-2">
                     No trip record yet — one is created automatically once this request is dispatched.
@@ -661,7 +670,10 @@
                 </span>
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
-                <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="updateStatus('Resolved')">
+                <!-- Confirmed, not immediate: resolving stamps a terminal
+                     status the panel offers no way back from, and this used
+                     to be one click with nothing between it and the request. -->
+                <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="openResolveConfirm">
                   Mark as Resolved
                 </v-btn>
               </template>
@@ -869,6 +881,46 @@
             :loading="loading || bulkLoading"
             @click="confirmReason"
           >{{ reasonCopy.confirm }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Resolve confirmation. Same shape as the panel's delete confirms
+         (EquipmentInventoryView, ServicesConfigView, VehiclesView): a short
+         v-dialog, the consequence spelled out in the body, Cancel beside a
+         filled confirm. Not folded into reasonDialog above — that one exists
+         to collect a reason string, and this collects nothing. It is a
+         speed bump, and the only thing it has to do is not be one click. -->
+    <v-dialog v-model="resolveDialog.open" max-width="440">
+      <v-card rounded="lg">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          Mark this request as resolved?
+        </v-card-title>
+        <v-card-text class="px-5 pt-2 text-body-2 text-medium-emphasis">
+          <p class="mb-3">
+            Resolving <strong class="text-high-emphasis">{{ resolveDialog.label }}</strong> closes it permanently.
+            The status cannot be changed back from this panel.
+          </p>
+          <p class="mb-0">
+            The trip log stays editable — return timestamps and odometer readings
+            can still be filled in after this. It is the status that is permanent,
+            not the record.
+          </p>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" height="44" :disabled="loading" @click="resolveDialog.open = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="success"
+            variant="flat"
+            class="px-6 text-none font-weight-bold"
+            height="44"
+            :loading="loading"
+            @click="confirmResolve"
+          >
+            Resolve permanently
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1131,20 +1183,41 @@
               label="Condition" variant="outlined" density="comfortable" rows="2" class="mb-2"
               :rules="[required]"
             ></v-textarea>
-          </template>
 
-          <!-- Same reasoning as the service picker above: a unit type other
-               than Ambulance has no meaning on this board. -->
-          <v-select
-            v-if="scope !== 'ambulance'"
-            v-model="createDialog.form.required_vehicle_type"
-            :items="vehicleTypeOptions"
-            label="Required vehicle type (optional)"
-            variant="outlined"
-            density="comfortable"
-            clearable
-            class="mb-2"
-          ></v-select>
+            <!-- Who is travelling with the patient, asked here rather than at
+                 dispatch. The trip record these used to live on does not
+                 exist until the request reaches Responding, so anyone named
+                 at the counter had nowhere to be written down until now.
+                 Optional throughout: nobody has to bring anyone. -->
+            <div class="mb-2">
+              <div class="d-flex align-center justify-space-between mb-1">
+                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Patient / Relatives</span>
+                <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addRelative">
+                  Add relative
+                </v-btn>
+              </div>
+              <div
+                v-for="(_n, idx) in createDialog.form.patient_relatives"
+                :key="idx"
+                class="d-flex align-center gap-2 mb-2"
+              >
+                <v-text-field
+                  v-model="createDialog.form.patient_relatives[idx]"
+                  :label="`Relative ${idx + 1}`"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                ></v-text-field>
+                <v-btn
+                  icon="mdi-close"
+                  variant="text"
+                  size="small"
+                  :aria-label="`Remove relative ${idx + 1}`"
+                  @click="removeRelative(idx)"
+                ></v-btn>
+              </div>
+            </div>
+          </template>
 
           <template v-if="scope === 'ambulance'">
             <v-divider class="mb-4"></v-divider>
@@ -1187,27 +1260,6 @@
               </div>
             </template>
           </template>
-
-          <v-file-input
-            v-model="createDialog.form.valid_id"
-            label="Valid ID (optional — already checked in person)"
-            variant="outlined"
-            density="comfortable"
-            accept="image/jpeg,image/png"
-            prepend-icon=""
-            prepend-inner-icon="mdi-card-account-details-outline"
-            class="mb-2"
-          ></v-file-input>
-
-          <v-file-input
-            v-model="createDialog.form.site_photo"
-            label="Site photo (optional)"
-            variant="outlined"
-            density="comfortable"
-            accept="image/jpeg,image/png"
-            prepend-icon=""
-            prepend-inner-icon="mdi-camera-outline"
-          ></v-file-input>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
@@ -1231,7 +1283,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { statusPillClass, isBookingOverdue } from '@/composables/adminUi'
+import { outcomeLabel, outcomePillClass, isBookingOverdue } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
@@ -1343,9 +1395,10 @@ const emptyCreateForm = () => ({
   pickup_location: '',
   destination: '',
   condition_notes: '',
-  required_vehicle_type: null,
-  valid_id: null,
-  site_photo: null,
+  // One blank slot, matching the trip log form's own repeater: "Add relative"
+  // covers the case that needs more, and starting at two pads the common
+  // one-relative trip with a field nobody fills.
+  patient_relatives: [''],
   scheduled_at: '',
 })
 const emptyWalkInAvailability = () => ({ checking: false, checked: false, freeCount: 0 })
@@ -1382,6 +1435,18 @@ const openCreateDialog = () => {
     form: { ...emptyCreateForm(), service_id: props.scope === 'ambulance' ? ambulanceServiceId.value : null },
   }
   walkInAvailability.value = emptyWalkInAvailability()
+}
+
+// emptyCreateForm() builds a fresh array literal on every call, so each open
+// gets its own — the shallow spread above never shares one between dialogs.
+const addRelative = () => { createDialog.value.form.patient_relatives.push('') }
+const removeRelative = (idx) => {
+  const list = createDialog.value.form.patient_relatives
+  list.splice(idx, 1)
+  // Never leave the group with no field at all: an empty repeater reads as a
+  // broken section rather than an optional one, and "Add relative" becomes
+  // the only way back to a state the form started in.
+  if (list.length === 0) list.push('')
 }
 
 // Matches ServiceRequestController::MINIMUM_LEAD_TIME_HOURS — sized here only
@@ -1424,6 +1489,37 @@ const checkWalkInAvailability = async () => {
 // empty reason.
 const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
 const reasonDialog = ref(emptyReason())
+
+// Resolve is terminal and the panel offers no way back, so it gets a
+// confirmation rather than firing on the click. `label` is captured at open
+// time purely so the dialog can name the request in its own copy; the resolve
+// itself still reads selectedRequest, exactly as the bare click did.
+const resolveDialog = ref({ open: false, label: '' })
+
+const openResolveConfirm = () => {
+  const req = selectedRequest.value
+  if (!req) return
+  const who = requesterName(req)
+  resolveDialog.value = {
+    open: true,
+    label: who && !who.startsWith('Unknown') ? `${who}'s request` : 'this request',
+  }
+}
+
+const confirmResolve = async () => {
+  await updateStatus('Resolved')
+  // updateStatus never throws — it catches and reports through apiError — so
+  // that is the only honest success signal here. Checking the request's own
+  // status instead would misread the case where resolving succeeds and the
+  // row then leaves the active filter, leaving selectedRequest null.
+  //
+  // Left open on failure so the resolve gate's refusal ("Cannot resolve —
+  // missing arrival time, a driver.") is read against the dialog that
+  // explains what the click was for, rather than over a closed one.
+  if (!apiError.value) {
+    resolveDialog.value.open = false
+  }
+}
 
 // Disapprove's reason is required at the API regardless of who asked — it is
 // the audit record of why, even for a walk-in with no account to read it. So
@@ -1512,9 +1608,15 @@ const tripDriverNames = computed(() =>
 // it's a model $appends, not conditionally selected. Only 'Completed' means
 // the record is actually done; missing entirely, still open, or never
 // started are all the same "needs attention" bucket the warning color is for.
-const tripRecordAlertType = computed(() =>
-  respondingTrip.value?.trip_status === 'Completed' ? 'success' : 'warning'
-)
+// Only Responding-or-Resolved-with-nothing-on-file is an actual problem —
+// not-yet-dispatched and closed-before-dispatch are the request working
+// exactly as expected, not something to flag.
+const tripRecordAlertType = computed(() => {
+  if (respondingTrip.value) {
+    return respondingTrip.value.trip_status === 'Completed' ? 'success' : 'warning'
+  }
+  return ['Responding', 'Resolved'].includes(selectedRequest.value?.status) ? 'warning' : 'info'
+})
 
 // Two attachments hang off a request now: the resident's ID and, optionally, a
 // photo of the scene. Both live on the private disk and both are served only by
@@ -1674,12 +1776,8 @@ const residentOptions = computed(() => residents.value
 // requests always file from the ambulance board instead, so it never belongs
 // in this list.
 const serviceOptions = computed(() => services.value
-  .filter(s => s.code !== AMBULANCE_SERVICE_CODE)
+  .filter(s => s.code !== AMBULANCE_SERVICE_CODE && s.is_active !== false)
   .map(s => ({ title: s.service_name, value: s.service_id })))
-
-// Pulled from the fleet already on screen rather than hardcoded, so a vehicle
-// type added in Fleet Management shows up here without a second edit.
-const vehicleTypeOptions = computed(() => [...new Set(vehicles.value.map(v => v.type).filter(Boolean))])
 
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
@@ -2248,10 +2346,6 @@ const dayViewSegmentLabel = (window) => {
     : `${hourLabel(start)} ${period(start)}–${hourLabel(end)} ${period(end)}`
 }
 
-// v-file-input's v-model is always an array in this Vuetify version, single
-// file or not.
-const singleFile = (v) => (Array.isArray(v) ? v[0] : v) || null
-
 const submitWalkIn = async () => {
   const form = createDialog.value.form
   const isResident = createDialog.value.requesterType === 'resident'
@@ -2307,17 +2401,18 @@ const submitWalkIn = async () => {
       body.append('pickup_location', form.pickup_location.trim())
       body.append('destination', form.destination.trim())
       body.append('condition_notes', form.condition_notes.trim())
+      // Blank slots are dropped here as well as server-side: an untouched
+      // repeater must not post an empty name the backend then has to filter.
+      form.patient_relatives
+        .map(n => (n || '').trim())
+        .filter(n => n !== '')
+        .forEach(n => body.append('patient_relatives[]', n))
     } else {
       body.append('description', form.description.trim())
     }
-    if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
     if (props.scope === 'ambulance' && createDialog.value.scheduleForLater && form.scheduled_at) {
       body.append('scheduled_at', form.scheduled_at.replace('T', ' ') + ':00')
     }
-    const validIdFile = singleFile(form.valid_id)
-    if (validIdFile) body.append('valid_id', validIdFile)
-    const sitePhotoFile = singleFile(form.site_photo)
-    if (sitePhotoFile) body.append('site_photo', sitePhotoFile)
 
     // No 'Content-Type' — the browser sets the multipart boundary itself, and
     // overriding it with the JSON header used elsewhere in this file would
@@ -2633,6 +2728,13 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   background: rgba(var(--v-theme-error), 0.14);
   color: rgb(var(--v-theme-error-strong));
 }
+/* A sixth outcome, neither success nor failure — the five semantic hues are
+   already spoken for (see .pill-booked above), so this is a literal neutral
+   slate rather than reusing warning/error and implying "wrong" or "pending". */
+.pill-resolved-no-arrival {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
 /* The dark tokens are already bright enough to use as text, but they need the
    lighter 10% tint the measurements were taken against — 14% of a bright token
    over #131B2E lifts the background far enough to eat the margin. Keep each
@@ -2643,6 +2745,7 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
 .v-theme--dark .pill-disapproved,
 .v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
+.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
 
 /* Ambulance Day View. Booked segments reuse .pill-booked's exact violet — the
    same status already means "Booked" everywhere else on this page, so the

@@ -10,12 +10,16 @@ use App\Traits\TracksHistory;
 use RuntimeException;
 
 #[Table('tbl_services', key: 'service_id')]
-#[Fillable(['service_name', 'description'])]
+#[Fillable(['service_name', 'description', 'is_active'])]
 class Service extends Model
 {
     use HasFactory, TracksHistory;
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     /**
      * `code` is the service's stable identifier and is deliberately absent from

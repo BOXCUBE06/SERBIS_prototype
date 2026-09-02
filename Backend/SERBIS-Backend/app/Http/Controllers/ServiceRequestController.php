@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConductionRequest;
+use App\Models\ConductionRequestPerson;
+use App\Models\ServiceRequestRelative;
 use App\Models\Vehicle;
 use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
@@ -61,6 +64,34 @@ class ServiceRequestController extends Controller
     public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
     /**
+     * update()'s whole state machine: for each target status, the statuses a
+     * request may move FROM to reach it. Anything not listed here as a source
+     * — including any of the three terminal statuses above, which is why none
+     * of them appear on the right of any entry — is refused. Before this
+     * existed update() only checked the target against STATUSES, so all 30
+     * from/to pairs were reachable: a Resolved request could be reopened, a
+     * Cancelled one dispatched, a Disapproved one resolved, and a Booked
+     * request could reach Responding without ever going through approve() —
+     * skipping its availability re-check, leaving approved_at NULL and
+     * approvalMessage() never sent.
+     *
+     * 'Cancelled' is deliberately absent as a key: cancel() is the only route
+     * that ever writes it, and it does so on the model directly rather than
+     * through this method, so update() has nothing to allow it into.
+     *
+     * Setting a request to the status it is already at is not a transition —
+     * see the same-status short-circuit in update() below, checked before
+     * this map — so a resend of the current status (a vehicle swap on an
+     * already-Responding request, say) is never looked up here at all.
+     */
+    private const ALLOWED_TRANSITIONS = [
+        'Booked' => ['Pending'],
+        'Responding' => ['Pending', 'Booked'],
+        'Resolved' => ['Responding'],
+        'Disapproved' => ['Pending', 'Booked'],
+    ];
+
+    /**
      * Same literal the Vue panel keys off (ServiceRequestQueue.vue's
      * AMBULANCE_SERVICE_CODE) — duplicated rather than shared for the same
      * reason as OFFICE_TIMEZONE above: a fixed service identifier, not
@@ -112,9 +143,15 @@ class ServiceRequestController extends Controller
 
     public function store(Request $request)
     {
+        $ambulanceServiceId = $this->ambulanceServiceId();
+
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string|max:5000',
+            // Ambulance is exempt because the server composes it below from the
+            // structured fields, exactly as adminStore() does — whatever a
+            // client sends under this key for an ambulance request is ignored
+            // rather than trusted. Every other service still types it by hand.
+            'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
             'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
             // Optional second upload: a photo of the site, for the road-clearing
             // form. Not required, because most requests are filed in conditions
@@ -125,9 +162,76 @@ class ServiceRequestController extends Controller
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
             'scheduled_at' => 'nullable|date',
+            // Structured ambulance intake, mirroring adminStore()'s columns —
+            // but deliberately looser about what is required. The counter form
+            // demands five, because a staffer has the requester in front of
+            // them and can ask. A resident filing on a phone often cannot: the
+            // address and the diagnosis are what admin verification confirms
+            // by phone afterwards. Only the two facts that make the request
+            // actionable at all are required here — who is going, and where.
+            'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'patient_age' => 'nullable|integer|min:0|max:150',
+            'patient_sex' => 'nullable|in:male,female',
+            'patient_address' => 'nullable|string|max:255',
+            // The number for this patient, when it is not the account holder's.
+            // Left null when they are the same person; the trip record falls
+            // back to the account number, as it always did.
+            'patient_contact_number' => 'nullable|string|max:32',
+            // Blank is expected, not exceptional — it defaults to the
+            // resident's registered barangay below.
+            'pickup_location' => 'nullable|string|max:255',
+            'condition_notes' => 'nullable|string|max:5000',
+            // Who is coming with the patient, named at intake rather than at
+            // dispatch. Optional on every service: nobody is required to bring
+            // anyone, and a non-ambulance request simply never sends them.
+            'patient_relatives' => 'nullable|array',
+            'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
+        // Disabling, not deleting, is how a service goes away (the intake
+        // form logic is hardcoded against tbl_services.code, so a delete
+        // would silently break it — see the is_active migration). A
+        // filing-time gate only: update()/approve()/etc. never re-check
+        // this, so a request already filed against a service that gets
+        // disabled afterward is untouched.
+        $service = \App\Models\Service::find($validated['service_id']);
+        if ($service && !$service->is_active) {
+            throw ValidationException::withMessages([
+                'service_id' => 'This service is no longer accepting new requests.',
+            ]);
+        }
+
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
+
+        $isAmbulance = $ambulanceServiceId !== null
+            && (int) $validated['service_id'] === $ambulanceServiceId;
+
+        $resident = $request->user();
+
+        if ($isAmbulance) {
+            // Where the ambulance is going *to* is required; where it starts
+            // from is not, because for a resident filing from home the answer
+            // is almost always the address already on their account. Filled
+            // before the description is composed so both agree.
+            //
+            // The account's "registered address" is the barangay and nothing
+            // finer — tbl_residents carries barangay_id and no street or purok
+            // column — so this is a starting point a dispatcher still has to
+            // narrow by phone, not a doorstep. It is better than the
+            // 'Address not specified' placeholder it replaces, and worse than
+            // what the resident could have typed.
+            if (trim((string) ($validated['pickup_location'] ?? '')) === '') {
+                $validated['pickup_location'] = $this->registeredAddress($resident);
+            }
+
+            $description = self::composeAmbulanceDescription(
+                $validated,
+                $validated['patient_contact_number'] ?? ($resident->phone_number ?? '')
+            );
+        } else {
+            $description = $validated['description'] ?? null;
+        }
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -159,7 +263,7 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -208,7 +312,18 @@ class ServiceRequestController extends Controller
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $validated['service_id'],
-                    'description' => $validated['description'],
+                    'description' => $description,
+                    // Ambulance-only, same as adminStore()'s row: nothing reads
+                    // these off a non-ambulance request, and writing them there
+                    // would put a patient's details on a road-clearing report.
+                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
+                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
+                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
+                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
+                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
+                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
+                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
+                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     // A scheduled booking is approved capacity, not a request
@@ -222,6 +337,8 @@ class ServiceRequestController extends Controller
                     'vehicle_id' => $vehicleId,
                     'scheduled_at' => $scheduledAt,
                 ]);
+
+                $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
                 if ($vehicle) {
                     $vehicle->update(['status' => 'Dispatched']);
@@ -243,7 +360,125 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest, 201);
+        return response()->json($serviceRequest->load('relatives'), 201);
+    }
+
+    /**
+     * The one composer for an ambulance request's `description`, shared by
+     * store() and adminStore().
+     *
+     * Same shape AmbulanceFormData.metaLines() writes on the mobile side
+     * (service_forms.dart) — Patient:/pickup → destination/Condition:/Contact:,
+     * one per line — kept for the request detail panel's own "Description"
+     * display and the CSV export. The admin panel's detail view prefers the
+     * structured columns and only falls back to this text when patient_name is
+     * absent (ServiceRequestQueue.vue), and nothing reads it back apart: the
+     * one parser that ever existed was the 2026_08_31 backfill, which has run.
+     *
+     * Extracted rather than duplicated. Both intake paths have to produce
+     * byte-identical text or the same request reads differently depending on
+     * whether it was filed at the counter or on a phone, and a second copy of
+     * this is how that starts.
+     *
+     * @param array<string, mixed> $validated
+     */
+    private static function composeAmbulanceDescription(array $validated, ?string $contactNumber): string
+    {
+        $contactNumber = trim((string) $contactNumber);
+
+        return implode("\n", [
+            'Patient: '.($validated['patient_name'] ?? 'Not specified'),
+            ($validated['pickup_location'] ?? 'Address not specified')
+                .' → '.($validated['destination'] ?? 'destination not specified'),
+            'Condition: '.($validated['condition_notes'] ?? 'Not described'),
+            'Contact: '.($contactNumber !== '' ? $contactNumber : 'See resident profile'),
+        ]);
+    }
+
+    /**
+     * The address a resident is registered at, for defaulting a blank pickup.
+     *
+     * This is the barangay name and nothing finer: tbl_residents has a
+     * barangay_id and no street, purok or house-number column, so this is the
+     * most precise "registered address" the schema can answer with. Returns
+     * null rather than a placeholder when even that is missing, so the caller's
+     * own 'Address not specified' stays the single place that decides what an
+     * unknown address reads as.
+     */
+    private function registeredAddress(?\App\Models\Resident $resident): ?string
+    {
+        $barangay = $resident?->barangay?->barangay_name;
+
+        return trim((string) $barangay) !== '' ? trim($barangay) : null;
+    }
+
+    /**
+     * Writes the intake relative list, shared by store() and adminStore().
+     *
+     * Blank slots are filtered here rather than by a validation rule, the
+     * same way ConductionRequestController does it: a form that renders two
+     * name fields and has one filled must not 422 over the empty one.
+     */
+    private function storeRelatives(ServiceRequest $serviceRequest, array $names): void
+    {
+        $position = 0;
+
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+
+            if ($name === '') {
+                continue;
+            }
+
+            ServiceRequestRelative::create([
+                'service_request_id' => $serviceRequest->request_id,
+                'name' => $name,
+                'position' => $position++,
+            ]);
+        }
+    }
+
+    /**
+     * Copies a request's intake relatives onto a freshly created trip record
+     * as role='relative' rows.
+     *
+     * The one place this is written, deliberately. There are two paths that
+     * create a trip against a booking — createConductionStub() below for the
+     * automatic Booked→Responding flip, and ConductionRequestController::
+     * store() for a manually filed one — and docs/dispatch-audit.md already
+     * names that split as the drift hazard that left the two halves of the
+     * dispatch bridge disagreeing. A second copy of this loop is exactly how
+     * relatives would end up reaching one path and not the other.
+     *
+     * Appends rather than replaces: a manually filed trip may already carry
+     * relatives someone typed into the create dialog, and those are a later,
+     * better-informed statement than the intake list. Positions continue past
+     * whatever is already there so the trip form renders one ordered list.
+     *
+     * Intentionally does NOT delete the intake rows. They are what the
+     * requester said at intake; the people table is what the crew logged.
+     * Both are worth keeping, and only the first survives if the trip record
+     * is ever deleted.
+     */
+    public static function copyRelativesToTrip(ServiceRequest $serviceRequest, ConductionRequest $trip): void
+    {
+        $relatives = $serviceRequest->relatives()->orderBy('position')->get();
+
+        if ($relatives->isEmpty()) {
+            return;
+        }
+
+        $position = (int) $trip->people()->where('role', 'relative')->max('position');
+        $hasExisting = $trip->people()->where('role', 'relative')->exists();
+
+        foreach ($relatives as $relative) {
+            ConductionRequestPerson::create([
+                'conduction_request_id' => $trip->conduction_request_id,
+                'role' => 'relative',
+                'name' => $relative->name,
+                'position' => $hasExisting ? ++$position : $position++,
+            ]);
+        }
     }
 
     /**
@@ -386,6 +621,9 @@ class ServiceRequestController extends Controller
             'patient_age' => 'nullable|integer|min:0|max:150',
             'patient_sex' => 'nullable|in:male,female',
             'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            // Optional on both paths: null means the patient is reachable on
+            // the number that filed the request, which is the common case.
+            'patient_contact_number' => 'nullable|string|max:32',
             'pickup_location' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             'condition_notes' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
@@ -395,7 +633,25 @@ class ServiceRequestController extends Controller
             // Same "absent means as soon as possible" contract as store() — a
             // walk-in ambulance request can be booked for a future slot too.
             'scheduled_at' => 'nullable|date',
+            // Same optional intake list as store(). Collected at the counter
+            // now rather than waited for until dispatch, when the trip record
+            // that used to be their only home is finally created.
+            'patient_relatives' => 'nullable|array',
+            'patient_relatives.*' => 'nullable|string|max:255',
         ]);
+
+        // Disabling, not deleting, is how a service goes away (the intake
+        // form logic is hardcoded against tbl_services.code, so a delete
+        // would silently break it — see the is_active migration). A
+        // filing-time gate only: update()/approve()/etc. never re-check
+        // this, so a request already filed against a service that gets
+        // disabled afterward is untouched.
+        $service = \App\Models\Service::find($validated['service_id']);
+        if ($service && !$service->is_active) {
+            throw ValidationException::withMessages([
+                'service_id' => 'This service is no longer accepting new requests.',
+            ]);
+        }
 
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 
@@ -408,24 +664,18 @@ class ServiceRequestController extends Controller
         $walkInContact = $residentId ? null : ($validated['walk_in_contact_number'] ?? null);
         $ownerSegment = $residentId ?: 'walk-in';
 
-        // Same shape AmbulanceFormData.metaLines() writes on the mobile side
-        // (service_forms.dart) — Patient:/pickup → destination/Condition:/
-        // Contact:, one per line — kept for the request detail panel's own
-        // "Description" display, and for parity with an app submission. No
-        // longer read back apart by anything: ConductionRequestView.vue's
-        // dispatch pre-fill reads these columns directly.
         $isAmbulance = $ambulanceServiceId !== null && (int) $validated['service_id'] === $ambulanceServiceId;
         $description = $validated['description'] ?? null;
         if ($isAmbulance) {
-            $contactNumber = $residentId
-                ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
-                : ($walkInContact ?? '');
-            $description = implode("\n", [
-                'Patient: '.($validated['patient_name'] ?? 'Not specified'),
-                ($validated['pickup_location'] ?? 'Address not specified').' → '.($validated['destination'] ?? 'destination not specified'),
-                'Condition: '.($validated['condition_notes'] ?? 'Not described'),
-                'Contact: '.(trim($contactNumber) !== '' ? trim($contactNumber) : 'See resident profile'),
-            ]);
+            // Same precedence store() uses: the patient's own number when one
+            // was given, otherwise whoever filed the request.
+            $description = self::composeAmbulanceDescription(
+                $validated,
+                $validated['patient_contact_number']
+                    ?? ($residentId
+                        ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
+                        : ($walkInContact ?? ''))
+            );
         }
 
         $filePath = null;
@@ -496,6 +746,7 @@ class ServiceRequestController extends Controller
                     'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
                     'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
                     'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
+                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
                     'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
                     'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
                     'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
@@ -506,6 +757,8 @@ class ServiceRequestController extends Controller
                     'vehicle_id' => $vehicleId,
                     'scheduled_at' => $scheduledAt,
                 ]);
+
+                $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
                 if ($vehicle) {
                     $vehicle->update(['status' => 'Dispatched']);
@@ -527,7 +780,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['resident.barangay', 'service']), 201);
+        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives']), 201);
     }
 
     public function show(Request $request, $id)
@@ -902,6 +1155,42 @@ class ServiceRequestController extends Controller
         $ambulanceServiceId = $this->ambulanceServiceId();
         $isAmbulanceRequest = $ambulanceServiceId !== null && $serviceRequest->service_id === $ambulanceServiceId;
 
+        // The transition matrix. A resend of the current status (every PUT
+        // this panel makes carries one, whether or not the operator actually
+        // changed it — see updateStatus() and saveInternalNote() on the Vue
+        // side) is a no-op, not a transition, so it is exempted before the
+        // map is even consulted: that is what keeps a vehicle swap on an
+        // already-Responding request, or a second identical Disapprove,
+        // working exactly as before. An actual change of status is checked
+        // against ALLOWED_TRANSITIONS; nothing about it being the value
+        // already stored allows a status change any table below would allow.
+        if (array_key_exists('status', $validated) && $validated['status'] !== $serviceRequest->status) {
+            $allowedFrom = self::ALLOWED_TRANSITIONS[$validated['status']] ?? [];
+
+            if (!in_array($serviceRequest->status, $allowedFrom, true)) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot move from {$serviceRequest->status} to {$validated['status']}.",
+                ]);
+            }
+        }
+
+        // Second-order guard, ambulance only: Booked -> Responding is legal
+        // by the matrix above — the non-ambulance instant-approval path and
+        // the manual "Dispatch" button both need it — but for an ambulance
+        // booking specifically it must still have gone through approve()
+        // first. approve() re-checks unit availability under a lock this
+        // method never takes, stamps approved_at, and sends the approval
+        // SMS; reaching Responding straight from Booked skipped all three.
+        if ($isAmbulanceRequest
+            && $serviceRequest->status === 'Booked'
+            && ($validated['status'] ?? null) === 'Responding'
+            && !$serviceRequest->approved_at
+        ) {
+            throw ValidationException::withMessages([
+                'status' => 'This booking must be approved before it can be dispatched.',
+            ]);
+        }
+
         // The bridge's other half (docs/dispatch-audit.md finding 1): the
         // instant path could always reach Resolved with zero rows in
         // tbl_conduction_requests. Checked before the transaction below so a
@@ -913,15 +1202,20 @@ class ServiceRequestController extends Controller
             if (!$trip) {
                 $missing[] = 'a trip record — approve the dispatch again to create one';
             } else {
-                if (!$trip->arrived_destination_at) {
-                    $missing[] = 'arrival time';
+                // Either satisfies the arrival requirement: a real arrival, or
+                // a stated reason the trip never got there (patient already
+                // left, crew recalled mid-route, transport refused). The
+                // driver requirement below is unconditional either way — a
+                // crew went out regardless of how the trip ended.
+                if (!$trip->arrived_destination_at && !$trip->no_arrival_reason) {
+                    $missing[] = 'arrival time (or a reason it never arrived)';
                 }
-                if ($trip->odometer_start === null) {
-                    $missing[] = 'odometer at departure';
-                }
-                if ($trip->odometer_end === null) {
-                    $missing[] = 'odometer on return';
-                }
+                // Odometer readings are deliberately NOT required here. They
+                // are often not to hand when the trip is closed out, and
+                // holding a finished trip open for them meant the status said
+                // 'Responding' for a crew already back at the office.
+                // ConductionRequestController still enforces
+                // odometer_end >= odometer_start whenever both are entered.
                 if (!$trip->drivers()->exists()) {
                     $missing[] = 'a driver';
                 }
@@ -938,6 +1232,7 @@ class ServiceRequestController extends Controller
         // the case this endpoint notifies for (the panel's older, unscheduled
         // Pending -> Disapproved flow is not "a booking" and stays silent).
         $wasBookingRejection = $serviceRequest->scheduled_at !== null
+            && $serviceRequest->status !== 'Disapproved'
             && ($validated['status'] ?? null) === 'Disapproved';
 
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
@@ -982,13 +1277,17 @@ class ServiceRequestController extends Controller
      * field is still filled in later, by hand, while the crew is actually
      * out.
      *
-     * patient_age/patient_sex and the free-text vehicle/plate_no snapshot are
+     * patient_age/patient_sex and the free-text vehicle snapshot are
      * nullable, so they were silently left off this stub even though the
      * request already had the first two and the fleet record already had the
-     * last two — the trip's own detail view then showed N/A for all four on
-     * every auto-dispatched trip. vehicle/plate_no mirror onSelectFleetVehicle
-     * in ConductionRequestView.vue exactly, so a stub reads the same as a
+     * last one — the trip's own detail view then showed N/A for all three on
+     * every auto-dispatched trip. `vehicle` mirrors onSelectFleetVehicle in
+     * ConductionRequestView.vue exactly, so a stub reads the same as a
      * manually-created trip for the same unit.
+     *
+     * plate_no is NOT filled here. tbl_vehicles carries no plate column any
+     * more, so the trip's own plate_no is free text again — typed on the trip
+     * form when someone knows it, left null when nobody does.
      */
     private function createConductionStub(ServiceRequest $serviceRequest): void
     {
@@ -1000,13 +1299,19 @@ class ServiceRequestController extends Controller
                 : $serviceRequest->walk_in_name)
             ?: 'Not specified';
 
-        $contactNumber = $serviceRequest->resident?->phone_number
+        // The patient's own number wins when intake captured one — a head of
+        // the family files for whoever in the household is actually
+        // travelling, so the account number is the fallback, not the answer.
+        // The derivation below is unchanged and still covers every row filed
+        // before this column existed.
+        $contactNumber = $serviceRequest->patient_contact_number
+            ?: $serviceRequest->resident?->phone_number
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
 
         $vehicle = $serviceRequest->vehicle;
 
-        \App\Models\ConductionRequest::create([
+        $trip = ConductionRequest::create([
             'service_request_id' => $serviceRequest->request_id,
             'vehicle_id' => $serviceRequest->vehicle_id,
             'departed_office_at' => now(),
@@ -1021,8 +1326,13 @@ class ServiceRequestController extends Controller
             'vehicle' => $vehicle
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,
-            'plate_no' => $vehicle?->plate_no,
         ]);
+
+        // Whoever the requester named at intake becomes the trip's starting
+        // relative list. A stub is created with no people at all otherwise,
+        // and until relatives were collected at intake there was nowhere for
+        // them to have come from.
+        self::copyRelativesToTrip($serviceRequest, $trip);
     }
 
     /**
@@ -1073,6 +1383,13 @@ class ServiceRequestController extends Controller
             ]);
         }
 
+        // Captured before the transaction overwrites it: a first approval and
+        // a re-approval that only swaps the assigned unit both reach this
+        // point, and only the first one is worth a billed SMS to the
+        // resident — PhilSMS has no sandbox and charges per segment, and a
+        // re-approval was re-sending the identical "approved" text every time.
+        $wasAlreadyApproved = $serviceRequest->approved_at !== null;
+
         DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
             // decides who the window's last free unit goes to.
@@ -1111,13 +1428,16 @@ class ServiceRequestController extends Controller
             $serviceRequest->update([
                 'vehicle_id' => $vehicle->vehicle_id,
                 'scheduled_end' => $scheduledEnd,
-                'approved_at' => now(),
+                'approved_at' => $serviceRequest->approved_at ?? now(),
                 'processed_by' => $request->user()->getKey(),
             ]);
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
-        $this->notifyResident($fresh, $this->approvalMessage($fresh));
+
+        if (!$wasAlreadyApproved) {
+            $this->notifyResident($fresh, $this->approvalMessage($fresh));
+        }
 
         return response()->json($fresh);
     }

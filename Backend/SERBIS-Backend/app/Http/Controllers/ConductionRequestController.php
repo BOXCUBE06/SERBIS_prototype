@@ -182,8 +182,23 @@ class ConductionRequestController extends Controller
             if (!empty($validated['service_request_id'])) {
                 $serviceRequest = ServiceRequest::find($validated['service_request_id']);
 
-                if ($serviceRequest && $serviceRequest->status === 'Booked') {
-                    $serviceRequest->update(['status' => 'Responding']);
+                if ($serviceRequest) {
+                    // The other half of the dispatch bridge's relative copy.
+                    // ServiceRequestController::createConductionStub() does
+                    // this for the automatic Booked → Responding flip; this
+                    // is the manually filed trip against the same booking,
+                    // and it owns the same obligation. Shared method, not a
+                    // second copy of the loop — the two-path split is what
+                    // docs/dispatch-audit.md flagged as the drift hazard.
+                    //
+                    // Runs regardless of status, unlike the flip below: a
+                    // trip filed against a booking already moved out of
+                    // Booked still needs the relatives it was filed for.
+                    ServiceRequestController::copyRelativesToTrip($serviceRequest, $conductionRequest);
+
+                    if ($serviceRequest->status === 'Booked') {
+                        $serviceRequest->update(['status' => 'Responding']);
+                    }
                 }
             }
 
@@ -222,6 +237,7 @@ class ConductionRequestController extends Controller
         $validated = $request->validate([
             'departed_office_at' => 'sometimes|nullable|date',
             'arrived_destination_at' => 'sometimes|nullable|date',
+            'no_arrival_reason' => 'sometimes|nullable|string|max:500',
             'departed_destination_at' => 'sometimes|nullable|date',
             'returned_office_at' => 'sometimes|nullable|date',
             'odometer_start' => 'sometimes|nullable|integer|min:0',

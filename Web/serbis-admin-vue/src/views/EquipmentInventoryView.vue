@@ -239,7 +239,7 @@ const totalAvailable = computed(() => equipments.value.reduce((a, e) => a + (e.a
 const needsAttention = computed(() => equipments.value.filter((e) => stockState(e) !== 'available').length)
 
 const metricTiles = computed(() => [
-  { key: 'cat', title: 'Categories', value: equipments.value.length, icon: 'mdi-toolbox-outline', color: 'primary' },
+  { key: 'cat', title: 'Items', value: equipments.value.length, icon: 'mdi-toolbox-outline', color: 'primary' },
   { key: 'owned', title: 'Total Owned', value: totalOwned.value, icon: 'mdi-package-variant-closed', color: 'primary' },
   { key: 'avail', title: 'Available', value: totalAvailable.value, icon: 'mdi-check-all', color: 'primary' },
   { key: 'attn', title: 'Low / Depleted', value: needsAttention.value, icon: 'mdi-alert-octagon-outline', color: 'error', filter: 'Needs attention' },

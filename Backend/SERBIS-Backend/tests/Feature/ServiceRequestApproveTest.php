@@ -207,6 +207,42 @@ class ServiceRequestApproveTest extends TestCase
         });
     }
 
+    /**
+     * approve() can be called again on an already-Booked request — swapping
+     * the assigned unit before dispatch is legitimate — but PhilSMS has no
+     * sandbox and bills per segment, so the identical "approved" text going
+     * out a second time for the same booking is not. Gated on approved_at
+     * already being set before this call, not on the call itself.
+     */
+    public function test_re_approving_to_swap_the_unit_sends_no_second_sms(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+        $request = $this->bookedRequest($target);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->amb01->vehicle_id,
+        ])->assertOk();
+
+        $firstApprovedAt = $request->fresh()->approved_at;
+        $this->assertNotNull($firstApprovedAt);
+        Http::assertSentCount(1);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->amb02->vehicle_id,
+        ])->assertOk()->assertJsonPath('vehicle_id', $this->amb02->vehicle_id);
+
+        // The swap itself still happened...
+        $this->assertSame($this->amb02->vehicle_id, $request->fresh()->vehicle_id);
+        $this->assertSame('Available', $this->amb01->fresh()->status);
+        // ...approved_at records the original approval, not the swap...
+        $this->assertTrue($firstApprovedAt->equalTo($request->fresh()->approved_at));
+        // ...and no second SMS went out for it — the gate is on approved_at
+        // already being set before the call, not on the call itself.
+        Http::assertSentCount(1);
+    }
+
     public function test_a_send_failure_does_not_affect_the_approval_itself(): void
     {
         // No fake registered — preventStrayRequests() throws the moment

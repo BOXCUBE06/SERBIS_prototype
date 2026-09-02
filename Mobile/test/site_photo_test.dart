@@ -6,6 +6,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
+import 'package:serbis/models/service_forms.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 
@@ -35,6 +36,7 @@ class _RecordingApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     DateTime? scheduledAt,
+    AmbulanceIntake? intake,
   }) async {
     this.validIdFileBytes = validIdFileBytes;
     this.sitePhotoBytes = sitePhotoBytes;

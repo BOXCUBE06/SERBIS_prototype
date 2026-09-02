@@ -126,4 +126,34 @@ class ServiceRequestRejectTest extends TestCase
 
         $this->assertSame('Disapproved', $this->request->fresh()->status);
     }
+
+    /**
+     * $wasBookingRejection used to key off scheduled_at + target status alone,
+     * with no check that status actually changed — a same-status resend of
+     * Disapproved (the matrix's own no-op allowance) re-sent the identical
+     * rejection SMS every time. PhilSMS bills per segment with no sandbox, so
+     * that was an unpriced duplicate charge on every resend, same class of bug
+     * as the approve() one.
+     */
+    public function test_resending_disapproved_sends_no_second_sms(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+
+        $this->putJson("/api/service-requests/{$this->request->getKey()}", [
+            'status' => 'Disapproved',
+            'remarks' => 'No unit free for the requested window.',
+        ])->assertOk();
+
+        Http::assertSentCount(1);
+
+        // Same status, a different remark — the panel resends the current
+        // status on every PUT (see ServiceRequestQueue.vue's updateStatus()).
+        $this->putJson("/api/service-requests/{$this->request->getKey()}", [
+            'status' => 'Disapproved',
+            'remarks' => 'Duplicate submission, closing out.',
+        ])->assertOk();
+
+        $this->assertSame('Duplicate submission, closing out.', $this->request->fresh()->remarks);
+        Http::assertSentCount(1);
+    }
 }
