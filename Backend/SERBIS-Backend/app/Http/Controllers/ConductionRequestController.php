@@ -237,6 +237,7 @@ class ConductionRequestController extends Controller
         $validated = $request->validate([
             'departed_office_at' => 'sometimes|nullable|date',
             'arrived_destination_at' => 'sometimes|nullable|date',
+            'no_arrival_reason' => 'sometimes|nullable|string|max:500',
             'departed_destination_at' => 'sometimes|nullable|date',
             'returned_office_at' => 'sometimes|nullable|date',
             'odometer_start' => 'sometimes|nullable|integer|min:0',

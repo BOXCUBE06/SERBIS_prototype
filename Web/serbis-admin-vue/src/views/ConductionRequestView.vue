@@ -189,7 +189,7 @@
 
             <template v-slot:item.trip_status="{ item }">
               <span class="status-pill status-pill--sm" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
-                {{ sharedStatusLabel(item.trip_status) }}
+                {{ tripStatusLabel(item.trip_status) }}
               </span>
             </template>
 
@@ -233,7 +233,7 @@
                 <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
               </div>
               <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="statusPillClass(sharedStatusLabel(item.trip_status))">
-                {{ sharedStatusLabel(item.trip_status) }}
+                {{ tripStatusLabel(item.trip_status) }}
               </span>
             </div>
           </div>
@@ -401,7 +401,7 @@
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
             <span class="status-pill" :class="statusPillClass(sharedStatusLabel(selected.trip_status))">
-              {{ sharedStatusLabel(selected.trip_status) }}
+              {{ tripStatusLabel(selected.trip_status) }}
             </span>
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
@@ -467,6 +467,7 @@
           <v-row>
             <v-col cols="6"><div class="field-label">Departed office</div><div class="field-value">{{ fmtDateTime(selected.departed_office_at) || '—' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Arrived at destination</div><div class="field-value">{{ fmtDateTime(selected.arrived_destination_at) || '—' }}</div></v-col>
+            <v-col cols="12" v-if="selected.no_arrival_reason"><div class="field-label">No-arrival reason</div><div class="field-value">{{ selected.no_arrival_reason }}</div></v-col>
             <v-col cols="6"><div class="field-label">Departed destination</div><div class="field-value">{{ fmtDateTime(selected.departed_destination_at) || '—' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Returned to office</div><div class="field-value">{{ fmtDateTime(selected.returned_office_at) || '—' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Odometer start</div><div class="field-value">{{ selected.odometer_start ?? '—' }}</div></v-col>
@@ -496,6 +497,17 @@
             </v-col>
             <v-col cols="12" sm="6">
               <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
+            </v-col>
+            <v-col cols="12">
+              <v-textarea
+                v-model="tripLog.form.no_arrival_reason"
+                label="No-arrival reason"
+                hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
+                persistent-hint
+                variant="outlined"
+                density="comfortable"
+                rows="2"
+              ></v-textarea>
             </v-col>
             <v-col cols="12" sm="6">
               <DateTimePickerField v-model="tripLog.form.departed_destination_at" type="datetime-local" label="Departed destination" variant="outlined" density="comfortable"></DateTimePickerField>
@@ -567,7 +579,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
-import { sharedStatusLabel, statusPillClass } from '@/composables/adminUi'
+import { sharedStatusLabel, tripStatusLabel, statusPillClass } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
@@ -585,12 +597,13 @@ const isWide = lgAndUp
 const ALL_STATUS = 'All'
 // Filtering still compares the raw trip_status value (matchesStatus below is
 // unchanged) -- only the label shown in the dropdown and on every badge
-// moves to the shared vocabulary (adminUi.ts's sharedStatusLabel), so the
-// underlying value stays exactly what the API sends.
+// moves to tripStatusLabel() (adminUi.ts), so the underlying value stays
+// exactly what the API sends. Pill color still comes from sharedStatusLabel()
+// separately -- the two only disagree on the 'Not dispatched' text.
 const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
 const statusOptions = [
   { title: ALL_STATUS, value: ALL_STATUS },
-  ...RAW_TRIP_STATUSES.map((s) => ({ title: sharedStatusLabel(s), value: s })),
+  ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
 ]
 
 const personnelGroups = [
@@ -910,7 +923,7 @@ const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.ro
 
 // Trip log dialog
 const emptyTripLogForm = () => ({
-  departed_office_at: '', arrived_destination_at: '', departed_destination_at: '', returned_office_at: '',
+  departed_office_at: '', arrived_destination_at: '', no_arrival_reason: '', departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
   // All three PEOPLE_FIELDS roles — see ConductionRequestController::
   // tripLog(). A stub created by C5's bridge (openTripRecord below) always
@@ -945,6 +958,7 @@ const openTripLog = (record) => {
     form: {
       departed_office_at: toInputValue(record.departed_office_at),
       arrived_destination_at: toInputValue(record.arrived_destination_at),
+      no_arrival_reason: record.no_arrival_reason || '',
       departed_destination_at: toInputValue(record.departed_destination_at),
       returned_office_at: toInputValue(record.returned_office_at),
       odometer_start: record.odometer_start,
@@ -1004,6 +1018,7 @@ const submitTripLog = async () => {
     const body = {
       departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
       arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,
+      no_arrival_reason: form.no_arrival_reason || null,
       departed_destination_at: form.departed_destination_at ? form.departed_destination_at.replace('T', ' ') + ':00' : null,
       returned_office_at: form.returned_office_at ? form.returned_office_at.replace('T', ' ') + ':00' : null,
       odometer_start: form.odometer_start === '' ? null : form.odometer_start,

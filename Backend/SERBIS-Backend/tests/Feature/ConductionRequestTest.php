@@ -448,6 +448,26 @@ class ConductionRequestTest extends TestCase
     }
 
     /**
+     * The Responding -> Resolved gate (ServiceRequestController::update())
+     * accepts no_arrival_reason as an alternative to arrived_destination_at.
+     * This is what actually lets staff write one.
+     */
+    public function test_trip_log_accepts_a_no_arrival_reason(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'no_arrival_reason' => 'Patient already transported by family before crew arrived.',
+        ])->assertOk();
+
+        $this->assertSame(
+            'Patient already transported by family before crew arrived.',
+            $conductionRequest->fresh()->no_arrival_reason
+        );
+        $this->assertNull($conductionRequest->fresh()->arrived_destination_at);
+    }
+
+    /**
      * C5's bridge (ServiceRequestController::createConductionStub) creates a
      * trip record with no personnel at all — a driver is only ever known
      * once the crew is assigned, not at approval time. This is the one
