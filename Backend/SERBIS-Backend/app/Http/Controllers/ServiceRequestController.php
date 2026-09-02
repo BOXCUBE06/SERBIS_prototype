@@ -908,7 +908,13 @@ class ServiceRequestController extends Controller
         // changed their mind" — the office may already be staging for it. Only
         // Booked requests carry a scheduled_at, so Pending is never touched by
         // this check.
+        //
+        // Scoped to isFuture(): a scheduled_at already in the past is not "too
+        // near" to cancel, it has already happened. Without the guard, gte()
+        // stays true forever once the cutoff window passes, so a booking left
+        // unresolved past its own schedule could never be cancelled again.
         if ($serviceRequest->scheduled_at
+            && $serviceRequest->scheduled_at->isFuture()
             && now()->gte($serviceRequest->scheduled_at->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
         ) {
             return response()->json([
