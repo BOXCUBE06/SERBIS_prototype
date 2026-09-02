@@ -1,3 +1,4 @@
+
 library serbis.main;
 
 import 'dart:async';
@@ -52,8 +53,7 @@ class _MisconfiguredApp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.build_circle_outlined,
-                    color: Colors.white, size: 56),
+                Icon(Icons.build_circle_outlined, color: Colors.white, size: 56),
                 SizedBox(height: 16),
                 Text(
                   'This build has no API address',
@@ -70,8 +70,7 @@ class _MisconfiguredApp extends StatelessWidget {
                   'server. Rebuild with:\n\n'
                   'flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api',
                   textAlign: TextAlign.center,
-                  style:
-                      TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                  style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
                 ),
               ],
             ),
@@ -591,10 +590,7 @@ class _BottomNav extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(active ? filled : outline,
-                        size: 22,
-                        color:
-                            active ? AppColors.green700 : AppColors.inkFaint),
+                    Icon(active ? filled : outline, size: 22, color: active ? AppColors.green700 : AppColors.inkFaint),
                     const SizedBox(height: 4),
                     Text(
                       label,
