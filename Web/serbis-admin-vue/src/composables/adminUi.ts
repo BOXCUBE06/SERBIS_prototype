@@ -117,9 +117,29 @@ const TRIP_STATUS_TO_SHARED_STATUS: Record<string, string> = {
   'Completed': 'Resolved',
 }
 
-/** A raw trip_status value, in the shared Bookings-tab vocabulary. */
+/** A raw trip_status value, in the shared Bookings-tab vocabulary — used for pill color only, see tripStatusLabel() below for the text actually shown. */
 export function sharedStatusLabel(tripStatus: string): string {
   return TRIP_STATUS_TO_SHARED_STATUS[tripStatus] || tripStatus
+}
+
+/**
+ * 'Not dispatched' shares sharedStatusLabel()'s color with Bookings' own
+ * 'Booked' pill, but the two are not the same fact: a Booked *request* has
+ * not been approved or assigned a unit yet, while a 'Not dispatched' *trip*
+ * already has both — a vehicle is attached, it just has not left the office.
+ * Reusing the word "Booked" for both read as the same status repeated on
+ * two tabs rather than two different moments in the same trip's life, so
+ * this keeps the shared color but gives that one case its own text. 'In
+ * transit'/'Completed' keep the shared words — those genuinely are the same
+ * moment as Bookings' Responding/Resolved, not a false match.
+ */
+const TRIP_STATUS_DISPLAY_LABEL: Record<string, string> = {
+  'Not dispatched': 'Awaiting departure',
+}
+
+/** The text to show for a raw trip_status value — distinct from sharedStatusLabel() where the two would otherwise collide. */
+export function tripStatusLabel(tripStatus: string): string {
+  return TRIP_STATUS_DISPLAY_LABEL[tripStatus] || sharedStatusLabel(tripStatus)
 }
 
 /**
