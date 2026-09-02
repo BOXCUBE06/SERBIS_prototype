@@ -10,6 +10,7 @@ use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
 use App\Services\PhilSms;
 use App\Traits\ResolvesUploadDisks;
+use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ use Illuminate\Validation\ValidationException;
 class ServiceRequestController extends Controller
 {
     use ResolvesUploadDisks;
+    use ScopesToOwner;
 
     public function __construct(private readonly AmbulanceAvailability $availability)
     {
@@ -554,52 +556,6 @@ class ServiceRequestController extends Controller
     }
 
     /**
-     * Decides who may read a private file, scoping the query in place for a
-     * resident. Returns null to proceed, or the response to send instead.
-     *
-     * The routes that stream a government ID scan or a site photo sit OUTSIDE
-     * the `is.admin` group on purpose — staff read any resident's file while a
-     * resident reads only their own, and a middleware that refuses non-admins
-     * outright cannot express that. The cost is that the two checks `is.admin`
-     * performs do not run, so they have to run here instead:
-     *
-     *  - `isAdmin()`, because `tbl_user.role` is an unconstrained varchar and
-     *    an `instanceof User` test alone would let a row with any other role
-     *    read every ID scan in the system.
-     *  - `isDeactivated()`, because deactivating an account through the panel
-     *    revokes its tokens but a direct database edit does not — the exact
-     *    case IsAdmin's own comment names. Without this the closed account
-     *    keeps reading ID scans for the rest of its token's 8-hour life.
-     */
-    private function guardPrivateFile(Request $request, $query): ?\Illuminate\Http\JsonResponse
-    {
-        $user = $request->user();
-
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
-
-            return null;
-        }
-
-        // 404, not 403: to anything that is not a recognised staff account this
-        // must look the same as a request that does not exist, matching the
-        // non-owner answer below.
-        if (! $user instanceof \App\Models\User || ! $user->isAdmin()) {
-            return response()->json(['message' => 'Service request not found'], 404);
-        }
-
-        // Named rather than folded into the line above, and worded exactly as
-        // IsAdmin words it: the holder of this token was staff, and telling
-        // them the account is closed is not a disclosure — they already knew
-        // these records exist.
-        if ($user->isDeactivated()) {
-            return response()->json(['message' => 'This account has been deactivated.'], 403);
-        }
-
-        return null;
-    }
-
-    /**
      * Staff-filed requests for a walk-in — someone at the office counter
      * rather than the mobile app. Kept separate from store() rather than
      * branching that method on caller type: store() stays exactly what a
@@ -812,8 +768,13 @@ class ServiceRequestController extends Controller
         // Added 'resident.barangay'
         $query = ServiceRequest::with(['resident.barangay', 'service', 'admin']);
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        // Scopes to the caller for a resident, and refuses anything that is not
+        // active staff. This used to be a bare `instanceof Resident` check with
+        // no else, so a token that was neither — a deactivated admin, or a
+        // tbl_user row with some other role — read every resident's request,
+        // internal_notes and patient details included.
+        if ($refusal = $this->scopeToOwner($request, $query, 'Service request not found')) {
+            return $refusal;
         }
 
         $serviceRequest = $query->find($id);
@@ -840,7 +801,7 @@ class ServiceRequestController extends Controller
     {
         $query = ServiceRequest::query();
 
-        if ($refusal = $this->guardPrivateFile($request, $query)) {
+        if ($refusal = $this->scopeToOwner($request, $query, 'Service request not found')) {
             return $refusal;
         }
 
@@ -878,12 +839,13 @@ class ServiceRequestController extends Controller
     // This route writes exactly one value.
     public function cancel(Request $request, $id)
     {
-        $user = $request->user();
-
         $query = ServiceRequest::query();
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        // Same guard as show(), and this one is a write: without the staff
+        // branch, any token that was not a resident's could cancel any
+        // resident's Pending or Booked request and release its unit.
+        if ($refusal = $this->scopeToOwner($request, $query, 'Service request not found')) {
+            return $refusal;
         }
 
         $serviceRequest = $query->find($id);

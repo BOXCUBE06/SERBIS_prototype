@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
+use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class EquipmentBorrowingController extends Controller
 {
+    use ScopesToOwner;
+
     /**
      * Which status each status may move to.
      *
@@ -32,13 +35,16 @@ class EquipmentBorrowingController extends Controller
 
     public function index(Request $request)
     {
-        $user = $request->user();
-
         // Added 'resident.barangay'
         $query = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->orderBy('created_at', 'desc');
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        // Scopes to the caller for a resident, and refuses anything that is not
+        // active staff. This used to be a bare `instanceof Resident` check with
+        // no else, so a deactivated admin — or a tbl_user row with some other
+        // role — was handed every borrowing in the system, each carrying the
+        // borrower's name, barangay, phone number and email.
+        if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
+            return $refusal;
         }
 
         return response()->json($query->get());
@@ -94,13 +100,11 @@ class EquipmentBorrowingController extends Controller
 
     public function show(Request $request, $id)
     {
-        $user = $request->user();
-
         // Added 'resident.barangay'
         $query = EquipmentBorrowing::with(['resident.barangay', 'equipment']);
 
-        if ($user instanceof \App\Models\Resident) {
-            $query->where('resident_id', $user->getKey());
+        if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
+            return $refusal;
         }
 
         $borrowing = $query->find($id);
