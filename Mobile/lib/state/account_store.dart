@@ -2,6 +2,7 @@
 library serbis.state.user_store;
 
 import 'api_service.dart';
+import 'user_cache.dart';
 
 class AppUser {
   final String id;
@@ -116,10 +117,28 @@ class BarangayOption {
 
 class UserStore {
   final ApiService _api;
+  final UserCache _userCache;
 
-  UserStore(this._api);
+  UserStore(this._api, {UserCache? userCache}) : _userCache = userCache ?? UserCache();
 
   bool get hasSession => _api.isLoggedIn;
+
+  /// The last profile a server actually returned, read straight off disk —
+  /// for `_AuthGateState._restoreSession` to boot into when the network is
+  /// the thing that failed, not the token.
+  Future<AppUser?> cachedUser() => _userCache.load();
+
+  /// Every place above returns a fresh `AppUser`, this is also its only
+  /// opportunity to become tomorrow's offline launch.
+  ///
+  /// The write is not awaited, mirroring `AppState.loadRequests`'s own
+  /// `_requestCache.save`: the screen already has what it asked for, and a
+  /// slow or unavailable disk write must not hold up login, `/me`, or a
+  /// profile save waiting on it.
+  Future<AppUser> _remember(Map<String, dynamic> json) async {
+    _userCache.save(json);
+    return AppUser.fromJson(json);
+  }
 
   Future<RegisterOutcome> register({
     required String firstName,
@@ -149,7 +168,7 @@ class UserStore {
     required String code,
   }) async {
     final json = await _api.verifyEmail(email: email, code: code);
-    return AppUser.fromJson(json);
+    return _remember(json);
   }
 
   Future<VerificationDelivery?> resendVerificationCode({
@@ -165,7 +184,7 @@ class UserStore {
 
   /// Rebuilds the profile from a stored token on relaunch.
   Future<AppUser> currentUser() async {
-    return AppUser.fromJson(await _api.me());
+    return _remember(await _api.me());
   }
 
   Future<AppUser> login({
@@ -173,7 +192,7 @@ class UserStore {
     required String password,
   }) async {
     final json = await _api.residentLogin(email: email, password: password);
-    return AppUser.fromJson(json);
+    return _remember(json);
   }
 
   /// Second half of login: the code sent on the `mfa_required` refusal.
@@ -184,7 +203,7 @@ class UserStore {
     required String code,
   }) async {
     final json = await _api.verifyLoginCode(challengeId: challengeId, code: code);
-    return AppUser.fromJson(json);
+    return _remember(json);
   }
 
   Future<VerificationDelivery?> resendLoginCode({
@@ -211,7 +230,7 @@ class UserStore {
       email: email,
       smsOptIn: smsOptIn,
     );
-    return AppUser.fromJson(json);
+    return _remember(json);
   }
 
   /// Uploads a new profile photo and returns the refreshed profile.
@@ -220,16 +239,25 @@ class UserStore {
     required String fileName,
   }) async {
     final json = await _api.uploadProfilePhoto(bytes: bytes, fileName: fileName);
-    return AppUser.fromJson(json);
+    return _remember(json);
   }
 
   Future<AppUser> removeProfilePhoto() async {
-    return AppUser.fromJson(await _api.deleteProfilePhoto());
+    return _remember(await _api.deleteProfilePhoto());
   }
 
   /// Image bytes for the avatar, or null when there is nothing stored.
   Future<List<int>?> profilePhoto(String residentId) =>
       _api.fetchProfilePhoto(residentId);
 
-  Future<void> logout() => _api.logout();
+  /// The cache clears even if the server call fails — a resident who asked
+  /// to log out on a shared phone must not leave their profile behind
+  /// because the request that revoked the token also happened to time out.
+  Future<void> logout() async {
+    try {
+      await _api.logout();
+    } finally {
+      await _userCache.clear();
+    }
+  }
 }
