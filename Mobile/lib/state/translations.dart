@@ -156,6 +156,7 @@ const Map<String, (String, String)> _strings = {
   'form_section.patient': ('Patient', 'Pasyente'),
   'form_section.trip': ('Trip details', 'Detalye ng Byahe'),
   'form_section.condition': ('Condition', 'Kondisyon'),
+  'form_section.relatives': ('Patient / Relatives', 'Pasyente / Kamag-anak'),
   'form_section.location': ('Location', 'Lokasyon'),
   'form_section.description': ('Description', 'Paglalarawan'),
   'form_section.household': ('Household', 'Sambahayan'),

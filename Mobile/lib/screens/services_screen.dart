@@ -142,6 +142,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       _forms.putIfAbsent(kind, () => switch (kind) {
             ServiceFormKind.ambulance => AmbulanceFormData(
                 contactNumber: widget.user.phone,
+                // `AppUser.address` is the barangay relation, not a street —
+                // tbl_residents carries no address column. A starting point
+                // the resident is expected to narrow, not a doorstep.
+                accountAddress: widget.user.address,
               ),
             ServiceFormKind.road => RoadFormData(),
             ServiceFormKind.relief => ReliefFormData(
@@ -244,6 +248,26 @@ class _ServicesScreenState extends State<ServicesScreen> {
     // submit when the resident left the number blank; the number now comes off
     // the account, where `phone_number` is required at registration and NOT
     // NULL, so there is nothing left to be blank.
+
+    // The same two the server requires for an ambulance request, and only
+    // those — refused here so the resident is told which field is missing
+    // instead of reading a 422 the app would surface as a generic failure.
+    // Everything else on this form is optional on purpose: a resident filing
+    // in an emergency may not have the address or the diagnosis, and admin
+    // verification confirms those by phone.
+    if (form is AmbulanceFormData) {
+      final missing = <String>[
+        if (form.patient.text.trim().isEmpty) 'the patient name',
+        if (form.destination.text.trim().isEmpty) 'where the ambulance should go',
+      ];
+
+      if (missing.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please fill in ${missing.join(' and ')}.')),
+        );
+        return;
+      }
+    }
 
     final metaLines = form.metaLines(
       serviceName: service.name,
