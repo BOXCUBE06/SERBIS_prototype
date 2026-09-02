@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\TracksHistory;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'patient_name', 'patient_age', 'patient_sex', 'patient_address', 'pickup_location', 'destination', 'condition_notes', 'valid_id', 'site_photo', 'status', 'remarks', 'internal_notes', 'vehicle_id', 'scheduled_at', 'scheduled_end', 'approved_at'])]
+#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'patient_name', 'patient_age', 'patient_sex', 'patient_address', 'patient_contact_number', 'pickup_location', 'destination', 'condition_notes', 'valid_id', 'site_photo', 'status', 'remarks', 'internal_notes', 'vehicle_id', 'scheduled_at', 'scheduled_end', 'approved_at'])]
 #[Hidden(['valid_id', 'site_photo'])]
 #[Appends(['has_valid_id', 'has_site_photo'])]
 class ServiceRequest extends Model

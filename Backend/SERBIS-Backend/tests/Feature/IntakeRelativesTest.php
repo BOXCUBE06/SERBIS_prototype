@@ -127,7 +127,10 @@ class IntakeRelativesTest extends TestCase
     {
         $response = $this->actingAs($this->resident)->postJson('/api/service-requests', [
             'service_id' => $this->ambulance->getKey(),
-            'description' => 'Chest pains, needs transport',
+            // The two fields store() requires for an ambulance request;
+            // `description` is composed server-side from them.
+            'patient_name' => 'Juan Dela Cruz',
+            'destination' => 'Echague District Hospital',
             // create(), not image(): image() needs the GD extension, which is
             // not installed here. Same workaround as ResidentPhotoTest.
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),

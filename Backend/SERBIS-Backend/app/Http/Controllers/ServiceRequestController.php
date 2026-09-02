@@ -115,9 +115,15 @@ class ServiceRequestController extends Controller
 
     public function store(Request $request)
     {
+        $ambulanceServiceId = $this->ambulanceServiceId();
+
         $validated = $request->validate([
             'service_id' => 'required|exists:tbl_services,service_id',
-            'description' => 'required|string|max:5000',
+            // Ambulance is exempt because the server composes it below from the
+            // structured fields, exactly as adminStore() does — whatever a
+            // client sends under this key for an ambulance request is ignored
+            // rather than trusted. Every other service still types it by hand.
+            'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
             'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
             // Optional second upload: a photo of the site, for the road-clearing
             // form. Not required, because most requests are filed in conditions
@@ -128,6 +134,26 @@ class ServiceRequestController extends Controller
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
             'scheduled_at' => 'nullable|date',
+            // Structured ambulance intake, mirroring adminStore()'s columns —
+            // but deliberately looser about what is required. The counter form
+            // demands five, because a staffer has the requester in front of
+            // them and can ask. A resident filing on a phone often cannot: the
+            // address and the diagnosis are what admin verification confirms
+            // by phone afterwards. Only the two facts that make the request
+            // actionable at all are required here — who is going, and where.
+            'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'patient_age' => 'nullable|integer|min:0|max:150',
+            'patient_sex' => 'nullable|in:male,female',
+            'patient_address' => 'nullable|string|max:255',
+            // The number for this patient, when it is not the account holder's.
+            // Left null when they are the same person; the trip record falls
+            // back to the account number, as it always did.
+            'patient_contact_number' => 'nullable|string|max:32',
+            // Blank is expected, not exceptional — it defaults to the
+            // resident's registered barangay below.
+            'pickup_location' => 'nullable|string|max:255',
+            'condition_notes' => 'nullable|string|max:5000',
             // Who is coming with the patient, named at intake rather than at
             // dispatch. Optional on every service: nobody is required to bring
             // anyone, and a non-ambulance request simply never sends them.
@@ -136,6 +162,35 @@ class ServiceRequestController extends Controller
         ]);
 
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
+
+        $isAmbulance = $ambulanceServiceId !== null
+            && (int) $validated['service_id'] === $ambulanceServiceId;
+
+        $resident = $request->user();
+
+        if ($isAmbulance) {
+            // Where the ambulance is going *to* is required; where it starts
+            // from is not, because for a resident filing from home the answer
+            // is almost always the address already on their account. Filled
+            // before the description is composed so both agree.
+            //
+            // The account's "registered address" is the barangay and nothing
+            // finer — tbl_residents carries barangay_id and no street or purok
+            // column — so this is a starting point a dispatcher still has to
+            // narrow by phone, not a doorstep. It is better than the
+            // 'Address not specified' placeholder it replaces, and worse than
+            // what the resident could have typed.
+            if (trim((string) ($validated['pickup_location'] ?? '')) === '') {
+                $validated['pickup_location'] = $this->registeredAddress($resident);
+            }
+
+            $description = self::composeAmbulanceDescription(
+                $validated,
+                $validated['patient_contact_number'] ?? ($resident->phone_number ?? '')
+            );
+        } else {
+            $description = $validated['description'] ?? null;
+        }
 
         $filePath = null;
         if ($request->hasFile('valid_id')) {
@@ -167,7 +222,7 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -216,7 +271,18 @@ class ServiceRequestController extends Controller
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $validated['service_id'],
-                    'description' => $validated['description'],
+                    'description' => $description,
+                    // Ambulance-only, same as adminStore()'s row: nothing reads
+                    // these off a non-ambulance request, and writing them there
+                    // would put a patient's details on a road-clearing report.
+                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
+                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
+                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
+                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
+                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
+                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
+                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
+                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     // A scheduled booking is approved capacity, not a request
@@ -254,6 +320,55 @@ class ServiceRequestController extends Controller
         }
 
         return response()->json($serviceRequest->load('relatives'), 201);
+    }
+
+    /**
+     * The one composer for an ambulance request's `description`, shared by
+     * store() and adminStore().
+     *
+     * Same shape AmbulanceFormData.metaLines() writes on the mobile side
+     * (service_forms.dart) — Patient:/pickup → destination/Condition:/Contact:,
+     * one per line — kept for the request detail panel's own "Description"
+     * display and the CSV export. The admin panel's detail view prefers the
+     * structured columns and only falls back to this text when patient_name is
+     * absent (ServiceRequestQueue.vue), and nothing reads it back apart: the
+     * one parser that ever existed was the 2026_08_31 backfill, which has run.
+     *
+     * Extracted rather than duplicated. Both intake paths have to produce
+     * byte-identical text or the same request reads differently depending on
+     * whether it was filed at the counter or on a phone, and a second copy of
+     * this is how that starts.
+     *
+     * @param array<string, mixed> $validated
+     */
+    private static function composeAmbulanceDescription(array $validated, ?string $contactNumber): string
+    {
+        $contactNumber = trim((string) $contactNumber);
+
+        return implode("\n", [
+            'Patient: '.($validated['patient_name'] ?? 'Not specified'),
+            ($validated['pickup_location'] ?? 'Address not specified')
+                .' → '.($validated['destination'] ?? 'destination not specified'),
+            'Condition: '.($validated['condition_notes'] ?? 'Not described'),
+            'Contact: '.($contactNumber !== '' ? $contactNumber : 'See resident profile'),
+        ]);
+    }
+
+    /**
+     * The address a resident is registered at, for defaulting a blank pickup.
+     *
+     * This is the barangay name and nothing finer: tbl_residents has a
+     * barangay_id and no street, purok or house-number column, so this is the
+     * most precise "registered address" the schema can answer with. Returns
+     * null rather than a placeholder when even that is missing, so the caller's
+     * own 'Address not specified' stays the single place that decides what an
+     * unknown address reads as.
+     */
+    private function registeredAddress(?\App\Models\Resident $resident): ?string
+    {
+        $barangay = $resident?->barangay?->barangay_name;
+
+        return trim((string) $barangay) !== '' ? trim($barangay) : null;
     }
 
     /**
@@ -465,6 +580,9 @@ class ServiceRequestController extends Controller
             'patient_age' => 'nullable|integer|min:0|max:150',
             'patient_sex' => 'nullable|in:male,female',
             'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            // Optional on both paths: null means the patient is reachable on
+            // the number that filed the request, which is the common case.
+            'patient_contact_number' => 'nullable|string|max:32',
             'pickup_location' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             'condition_notes' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
@@ -492,24 +610,18 @@ class ServiceRequestController extends Controller
         $walkInContact = $residentId ? null : ($validated['walk_in_contact_number'] ?? null);
         $ownerSegment = $residentId ?: 'walk-in';
 
-        // Same shape AmbulanceFormData.metaLines() writes on the mobile side
-        // (service_forms.dart) — Patient:/pickup → destination/Condition:/
-        // Contact:, one per line — kept for the request detail panel's own
-        // "Description" display, and for parity with an app submission. No
-        // longer read back apart by anything: ConductionRequestView.vue's
-        // dispatch pre-fill reads these columns directly.
         $isAmbulance = $ambulanceServiceId !== null && (int) $validated['service_id'] === $ambulanceServiceId;
         $description = $validated['description'] ?? null;
         if ($isAmbulance) {
-            $contactNumber = $residentId
-                ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
-                : ($walkInContact ?? '');
-            $description = implode("\n", [
-                'Patient: '.($validated['patient_name'] ?? 'Not specified'),
-                ($validated['pickup_location'] ?? 'Address not specified').' → '.($validated['destination'] ?? 'destination not specified'),
-                'Condition: '.($validated['condition_notes'] ?? 'Not described'),
-                'Contact: '.(trim($contactNumber) !== '' ? trim($contactNumber) : 'See resident profile'),
-            ]);
+            // Same precedence store() uses: the patient's own number when one
+            // was given, otherwise whoever filed the request.
+            $description = self::composeAmbulanceDescription(
+                $validated,
+                $validated['patient_contact_number']
+                    ?? ($residentId
+                        ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
+                        : ($walkInContact ?? ''))
+            );
         }
 
         $filePath = null;
@@ -580,6 +692,7 @@ class ServiceRequestController extends Controller
                     'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
                     'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
                     'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
+                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
                     'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
                     'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
                     'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
@@ -1090,7 +1203,13 @@ class ServiceRequestController extends Controller
                 : $serviceRequest->walk_in_name)
             ?: 'Not specified';
 
-        $contactNumber = $serviceRequest->resident?->phone_number
+        // The patient's own number wins when intake captured one — a head of
+        // the family files for whoever in the household is actually
+        // travelling, so the account number is the fallback, not the answer.
+        // The derivation below is unchanged and still covers every row filed
+        // before this column existed.
+        $contactNumber = $serviceRequest->patient_contact_number
+            ?: $serviceRequest->resident?->phone_number
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
 
