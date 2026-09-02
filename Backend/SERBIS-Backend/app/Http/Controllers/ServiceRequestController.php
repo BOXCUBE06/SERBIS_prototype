@@ -1351,6 +1351,13 @@ class ServiceRequestController extends Controller
             ]);
         }
 
+        // Captured before the transaction overwrites it: a first approval and
+        // a re-approval that only swaps the assigned unit both reach this
+        // point, and only the first one is worth a billed SMS to the
+        // resident — PhilSMS has no sandbox and charges per segment, and a
+        // re-approval was re-sending the identical "approved" text every time.
+        $wasAlreadyApproved = $serviceRequest->approved_at !== null;
+
         DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
             // decides who the window's last free unit goes to.
@@ -1395,7 +1402,10 @@ class ServiceRequestController extends Controller
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
-        $this->notifyResident($fresh, $this->approvalMessage($fresh));
+
+        if (!$wasAlreadyApproved) {
+            $this->notifyResident($fresh, $this->approvalMessage($fresh));
+        }
 
         return response()->json($fresh);
     }
