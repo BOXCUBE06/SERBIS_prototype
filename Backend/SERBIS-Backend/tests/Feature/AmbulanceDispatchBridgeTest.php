@@ -262,6 +262,62 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $this->assertSame('Available', $this->vehicle->fresh()->status);
     }
 
+    /**
+     * A dispatched trip that never arrives — patient already left, crew
+     * recalled mid-route, transport refused — has no arrived_destination_at
+     * to give, but the gate now accepts no_arrival_reason as the alternative.
+     * The driver requirement is unconditional either way.
+     *
+     * No endpoint writes no_arrival_reason yet (tripLog() does not accept it)
+     * — set directly on the model here, which is honest to what exists today.
+     */
+    public function test_a_stated_no_arrival_reason_satisfies_the_gate_in_place_of_arrival(): void
+    {
+        $request = $this->ambulanceRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+
+        $trip = ConductionRequest::first();
+
+        // Neither arrival nor a reason yet — still blocked, message now names
+        // both options.
+        $response = $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+        ])->assertStatus(422)->assertJsonValidationErrors('status');
+        $message = $response->json('errors.status.0');
+        $this->assertStringContainsString('arrival time (or a reason it never arrived)', $message);
+        $this->assertStringContainsString('a driver', $message);
+
+        $trip->update(['no_arrival_reason' => 'Patient already transported by family before crew arrived.']);
+        $this->assertNull($trip->fresh()->arrived_destination_at);
+
+        // Reason alone, no driver yet — arrival requirement satisfied, driver still missing.
+        $response = $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+        ])->assertStatus(422)->assertJsonValidationErrors('status');
+        $message = $response->json('errors.status.0');
+        $this->assertStringNotContainsString('arrival time', $message);
+        $this->assertStringContainsString('a driver', $message);
+
+        \App\Models\ConductionRequestPerson::create([
+            'conduction_request_id' => $trip->conduction_request_id,
+            'role' => 'driver',
+            'name' => 'Rico Santos',
+            'position' => 0,
+        ]);
+
+        // Reason + driver, still no real arrival timestamp — resolves anyway.
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Resolved',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk()->assertJsonPath('status', 'Resolved');
+
+        $this->assertSame('Available', $this->vehicle->fresh()->status);
+    }
+
     public function test_a_trip_with_odometer_readings_still_resolves(): void
     {
         // Removing the requirement must not turn the readings into something

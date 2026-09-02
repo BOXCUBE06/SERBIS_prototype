@@ -30,6 +30,7 @@ class ConductionRequest extends Model
         'destination',
         'departed_office_at',
         'arrived_destination_at',
+        'no_arrival_reason',
         'departed_destination_at',
         'returned_office_at',
         'odometer_start',

@@ -1176,8 +1176,13 @@ class ServiceRequestController extends Controller
             if (!$trip) {
                 $missing[] = 'a trip record — approve the dispatch again to create one';
             } else {
-                if (!$trip->arrived_destination_at) {
-                    $missing[] = 'arrival time';
+                // Either satisfies the arrival requirement: a real arrival, or
+                // a stated reason the trip never got there (patient already
+                // left, crew recalled mid-route, transport refused). The
+                // driver requirement below is unconditional either way — a
+                // crew went out regardless of how the trip ended.
+                if (!$trip->arrived_destination_at && !$trip->no_arrival_reason) {
+                    $missing[] = 'arrival time (or a reason it never arrived)';
                 }
                 // Odometer readings are deliberately NOT required here. They
                 // are often not to hand when the trip is closed out, and
