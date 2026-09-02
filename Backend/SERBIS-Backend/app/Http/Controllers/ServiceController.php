@@ -11,7 +11,16 @@ class ServiceController extends Controller
 {
     public function index(Request $request)
     {
-        $services = Service::all();
+        $user = $request->user();
+
+        // Same shared-endpoint-different-audience split as
+        // ServiceRequestController::index() — mobile residents only ever see
+        // what they can actually file against; the admin panel's Manage
+        // Services page needs every row, disabled ones included, or a
+        // disabled service could never be re-enabled from there.
+        $services = ($user instanceof \App\Models\User && $user->isAdmin())
+            ? Service::all()
+            : Service::where('is_active', true)->get();
 
         return ServiceResource::collection($services);
     }
@@ -50,6 +59,7 @@ class ServiceController extends Controller
         $validated = $request->validate([
             'service_name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string|max:5000',
+            'is_active' => 'sometimes|required|boolean',
         ]);
 
         $service->update($validated);

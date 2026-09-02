@@ -189,6 +189,19 @@ class ServiceRequestController extends Controller
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
+        // Disabling, not deleting, is how a service goes away (the intake
+        // form logic is hardcoded against tbl_services.code, so a delete
+        // would silently break it — see the is_active migration). A
+        // filing-time gate only: update()/approve()/etc. never re-check
+        // this, so a request already filed against a service that gets
+        // disabled afterward is untouched.
+        $service = \App\Models\Service::find($validated['service_id']);
+        if ($service && !$service->is_active) {
+            throw ValidationException::withMessages([
+                'service_id' => 'This service is no longer accepting new requests.',
+            ]);
+        }
+
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 
         $isAmbulance = $ambulanceServiceId !== null
@@ -626,6 +639,19 @@ class ServiceRequestController extends Controller
             'patient_relatives' => 'nullable|array',
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
+
+        // Disabling, not deleting, is how a service goes away (the intake
+        // form logic is hardcoded against tbl_services.code, so a delete
+        // would silently break it — see the is_active migration). A
+        // filing-time gate only: update()/approve()/etc. never re-check
+        // this, so a request already filed against a service that gets
+        // disabled afterward is untouched.
+        $service = \App\Models\Service::find($validated['service_id']);
+        if ($service && !$service->is_active) {
+            throw ValidationException::withMessages([
+                'service_id' => 'This service is no longer accepting new requests.',
+            ]);
+        }
 
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 

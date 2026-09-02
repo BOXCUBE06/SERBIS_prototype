@@ -11,16 +11,6 @@
               What residents can request from the MDRRMO, and how each one appears in the app
             </div>
           </div>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            height="52"
-            class="px-6 text-none font-weight-bold text-body-1 btn-soft-shadow"
-            @click="openAdd"
-          >
-            <v-icon start size="22">mdi-plus</v-icon> Add Service
-          </v-btn>
         </div>
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
@@ -110,7 +100,7 @@
             <div class="text-body-1 text-medium-emphasis mb-5">
               {{ services.length
                 ? 'Try a different keyword, or clear the filters to see the full list.'
-                : 'Add the first service so residents have something to request.' }}
+                : 'Services are set up in the database directly — none exist yet.' }}
             </div>
             <v-btn
               v-if="services.length"
@@ -122,17 +112,6 @@
               @click="clearFilters"
             >
               Clear filters
-            </v-btn>
-            <v-btn
-              v-else
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              height="48"
-              class="px-6 text-none font-weight-bold"
-              @click="openAdd"
-            >
-              <v-icon start size="22">mdi-plus</v-icon> Add Service
             </v-btn>
           </div>
 
@@ -157,21 +136,22 @@
             <template v-slot:item.service_name="{ item }">
               <div class="d-flex align-center gap-3 py-2">
                 <div class="icon-wrapper" :class="`iconbg-${category(item).key}`">
-                  <v-icon :color="category(item).color" size="22">{{ serviceIcon(item.service_name) }}</v-icon>
+                  <v-icon :color="item.is_active ? category(item).color : undefined" size="22">{{ serviceIcon(item.service_name) }}</v-icon>
                 </div>
-                <span class="text-body-1 font-weight-bold text-high-emphasis">{{ item.service_name }}</span>
+                <span class="text-body-1 font-weight-bold" :class="item.is_active ? 'text-high-emphasis' : 'text-disabled'">{{ item.service_name }}</span>
+                <v-chip v-if="!item.is_active" size="x-small" variant="flat" color="error" class="text-none font-weight-bold">Inactive</v-chip>
               </div>
             </template>
 
             <template v-slot:item.description="{ item }">
-              <span v-if="item.description" class="text-body-2 text-medium-emphasis description-cell">
+              <span v-if="item.description" class="text-body-2 description-cell" :class="item.is_active ? 'text-medium-emphasis' : 'text-disabled'">
                 {{ item.description }}
               </span>
               <span v-else class="text-body-2 text-disabled font-italic">No description</span>
             </template>
 
             <template v-slot:item.category="{ item }">
-              <span class="category-pill" :class="`pill-${category(item).key}`">
+              <span class="category-pill" :class="[`pill-${category(item).key}`, { 'text-disabled': !item.is_active }]">
                 <v-icon size="14" class="mr-1">{{ category(item).icon }}</v-icon>
                 {{ category(item).label }}
               </span>
@@ -196,14 +176,16 @@
                 </v-btn>
                 <v-btn
                   variant="tonal"
-                  color="error"
+                  :color="item.is_active ? 'error' : 'success'"
                   size="default"
                   height="40"
                   rounded="lg"
                   class="text-none font-weight-bold px-4"
-                  @click="askDelete(item)"
+                  :loading="togglingId === (item.service_id || item.id)"
+                  @click="toggleActive(item)"
                 >
-                  <v-icon start size="18">mdi-delete-outline</v-icon> Delete
+                  <v-icon start size="18">{{ item.is_active ? 'mdi-eye-off-outline' : 'mdi-eye-check-outline' }}</v-icon>
+                  {{ item.is_active ? 'Disable' : 'Enable' }}
                 </v-btn>
               </div>
             </template>
@@ -218,7 +200,7 @@
       <v-card rounded="xl" class="pa-2">
         <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
           <span class="text-h6 font-weight-bold text-high-emphasis">
-            {{ modal.editing ? 'Edit service' : 'Add service' }}
+            Edit service
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
@@ -271,35 +253,7 @@
             :loading="modal.loading"
             @click="saveService"
           >
-            {{ modal.editing ? 'Save changes' : 'Add service' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Delete confirm -->
-    <v-dialog v-model="deleteDialog.show" max-width="460">
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Delete service?</v-card-title>
-        <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
-          <strong class="text-high-emphasis">{{ deleteDialog.item?.service_name }}</strong>
-          will be removed from the list and residents will no longer be able to request it.
-          Existing requests are kept. This cannot be undone.
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">
-            Cancel
-          </v-btn>
-          <v-btn
-            color="error"
-            variant="flat"
-            rounded="lg"
-            height="48"
-            class="px-6 text-none font-weight-bold"
-            :loading="deleteDialog.loading"
-            @click="confirmDelete"
-          >
-            Delete
+            Save changes
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -358,10 +312,10 @@ const page = ref(1)
 const initialLoad = ref(true)
 const apiError = ref('')
 
-const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null })
+const modal = ref({ show: false, loading: false, error: '', targetId: null })
 const form = ref({ service_name: '', description: '' })
 const touched = ref({ name: false })
-const deleteDialog = ref({ show: false, item: null, loading: false })
+const togglingId = ref(null)
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
@@ -442,16 +396,10 @@ const fetchServices = async () => {
   }
 }
 
-const openAdd = () => {
-  form.value = { service_name: '', description: '' }
-  touched.value = { name: false }
-  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
-}
-
 const openEdit = (item) => {
   form.value = { service_name: item.service_name || '', description: item.description || '' }
   touched.value = { name: false }
-  modal.value = { show: true, editing: true, loading: false, error: '', targetId: item.service_id || item.id }
+  modal.value = { show: true, loading: false, error: '', targetId: item.service_id || item.id }
 }
 
 const closeModal = () => { modal.value.show = false }
@@ -464,14 +412,13 @@ const saveService = async () => {
   }
   modal.value.loading = true
   modal.value.error = ''
-  const editing = modal.value.editing
   const payload = {
     service_name: form.value.service_name.trim(),
     description: form.value.description.trim() || null,
   }
   try {
-    const res = await fetch(editing ? `${API}/${modal.value.targetId}` : API, {
-      method: editing ? 'PUT' : 'POST',
+    const res = await fetch(`${API}/${modal.value.targetId}`, {
+      method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(payload),
     })
@@ -482,7 +429,7 @@ const saveService = async () => {
     }
     await fetchServices()
     modal.value.show = false
-    notify(editing ? 'Service updated' : 'Service added')
+    notify('Service updated')
   } catch (error) {
     modal.value.error = error.message
   } finally {
@@ -490,21 +437,23 @@ const saveService = async () => {
   }
 }
 
-const askDelete = (item) => { deleteDialog.value = { show: true, item, loading: false } }
-
-const confirmDelete = async () => {
-  const item = deleteDialog.value.item
-  deleteDialog.value.loading = true
+const toggleActive = async (item) => {
+  const id = item.service_id || item.id
+  togglingId.value = id
   try {
-    const res = await fetch(`${API}/${item.service_id || item.id}`, { method: 'DELETE', headers: getHeaders() })
-    if (!res.ok) throw new Error('Delete failed')
+    const res = await fetch(`${API}/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ is_active: !item.is_active }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.message || 'Failed to update the service')
     await fetchServices()
-    deleteDialog.value.show = false
-    notify('Service deleted')
+    notify(item.is_active ? 'Service disabled' : 'Service enabled')
   } catch (error) {
     notify(error.message, 'error')
   } finally {
-    deleteDialog.value.loading = false
+    togglingId.value = null
   }
 }
 

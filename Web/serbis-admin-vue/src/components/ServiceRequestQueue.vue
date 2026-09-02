@@ -1776,7 +1776,7 @@ const residentOptions = computed(() => residents.value
 // requests always file from the ambulance board instead, so it never belongs
 // in this list.
 const serviceOptions = computed(() => services.value
-  .filter(s => s.code !== AMBULANCE_SERVICE_CODE)
+  .filter(s => s.code !== AMBULANCE_SERVICE_CODE && s.is_active !== false)
   .map(s => ({ title: s.service_name, value: s.service_id })))
 
 const selectedVehicle = computed(() =>
