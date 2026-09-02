@@ -1210,19 +1210,6 @@
             </div>
           </template>
 
-          <!-- Same reasoning as the service picker above: a unit type other
-               than Ambulance has no meaning on this board. -->
-          <v-select
-            v-if="scope !== 'ambulance'"
-            v-model="createDialog.form.required_vehicle_type"
-            :items="vehicleTypeOptions"
-            label="Required vehicle type (optional)"
-            variant="outlined"
-            density="comfortable"
-            clearable
-            class="mb-2"
-          ></v-select>
-
           <template v-if="scope === 'ambulance'">
             <v-divider class="mb-4"></v-divider>
             <v-switch
@@ -1264,27 +1251,6 @@
               </div>
             </template>
           </template>
-
-          <v-file-input
-            v-model="createDialog.form.valid_id"
-            label="Valid ID (optional — already checked in person)"
-            variant="outlined"
-            density="comfortable"
-            accept="image/jpeg,image/png"
-            prepend-icon=""
-            prepend-inner-icon="mdi-card-account-details-outline"
-            class="mb-2"
-          ></v-file-input>
-
-          <v-file-input
-            v-model="createDialog.form.site_photo"
-            label="Site photo (optional)"
-            variant="outlined"
-            density="comfortable"
-            accept="image/jpeg,image/png"
-            prepend-icon=""
-            prepend-inner-icon="mdi-camera-outline"
-          ></v-file-input>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
@@ -1424,9 +1390,6 @@ const emptyCreateForm = () => ({
   // covers the case that needs more, and starting at two pads the common
   // one-relative trip with a field nobody fills.
   patient_relatives: [''],
-  required_vehicle_type: null,
-  valid_id: null,
-  site_photo: null,
   scheduled_at: '',
 })
 const emptyWalkInAvailability = () => ({ checking: false, checked: false, freeCount: 0 })
@@ -1800,10 +1763,6 @@ const residentOptions = computed(() => residents.value
 const serviceOptions = computed(() => services.value
   .filter(s => s.code !== AMBULANCE_SERVICE_CODE)
   .map(s => ({ title: s.service_name, value: s.service_id })))
-
-// Pulled from the fleet already on screen rather than hardcoded, so a vehicle
-// type added in Fleet Management shows up here without a second edit.
-const vehicleTypeOptions = computed(() => [...new Set(vehicles.value.map(v => v.type).filter(Boolean))])
 
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
@@ -2372,10 +2331,6 @@ const dayViewSegmentLabel = (window) => {
     : `${hourLabel(start)} ${period(start)}–${hourLabel(end)} ${period(end)}`
 }
 
-// v-file-input's v-model is always an array in this Vuetify version, single
-// file or not.
-const singleFile = (v) => (Array.isArray(v) ? v[0] : v) || null
-
 const submitWalkIn = async () => {
   const form = createDialog.value.form
   const isResident = createDialog.value.requesterType === 'resident'
@@ -2440,14 +2395,9 @@ const submitWalkIn = async () => {
     } else {
       body.append('description', form.description.trim())
     }
-    if (form.required_vehicle_type) body.append('required_vehicle_type', form.required_vehicle_type)
     if (props.scope === 'ambulance' && createDialog.value.scheduleForLater && form.scheduled_at) {
       body.append('scheduled_at', form.scheduled_at.replace('T', ' ') + ':00')
     }
-    const validIdFile = singleFile(form.valid_id)
-    if (validIdFile) body.append('valid_id', validIdFile)
-    const sitePhotoFile = singleFile(form.site_photo)
-    if (sitePhotoFile) body.append('site_photo', sitePhotoFile)
 
     // No 'Content-Type' — the browser sets the multipart boundary itself, and
     // overriding it with the JSON header used elsewhere in this file would
