@@ -37,9 +37,7 @@ class HomeScreen extends StatelessWidget {
       // controller and losing `primary`.
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        AppHeader(
-            onNotificationsTap: onOpenNotifications,
-            onProfileTap: onOpenProfile),
+        AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
         const SizedBox(height: 22),
 
         // ── Active Service Request ──
@@ -50,8 +48,7 @@ class HomeScreen extends StatelessWidget {
             children: [
               SectionHeader(
                 title: tr(f, 'home.active_request'),
-                actionLabel:
-                    activeRequest == null ? null : tr(f, 'common.view_all'),
+                actionLabel: activeRequest == null ? null : tr(f, 'common.view_all'),
                 onAction: onOpenTrack,
               ),
               if (activeRequest == null)
@@ -72,15 +69,11 @@ class HomeScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(tr(f, 'home.no_active_title'),
-                                    style: AppText.display(size: 14.5)),
+                                Text(tr(f, 'home.no_active_title'), style: AppText.display(size: 14.5)),
                                 const SizedBox(height: 2),
                                 Text(
                                   tr(f, 'home.no_active_desc'),
-                                  style: AppText.body(
-                                      size: 12,
-                                      color: AppColors.inkMuted,
-                                      height: 1.5),
+                                  style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
                                 ),
                               ],
                             ),
@@ -88,9 +81,7 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      AppButton(
-                          label: tr(f, 'home.submit_a_request'),
-                          onPressed: onOpenServices),
+                      AppButton(label: tr(f, 'home.submit_a_request'), onPressed: onOpenServices),
                     ],
                   ),
                 )
@@ -113,17 +104,13 @@ class HomeScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(activeRequest.displayTitle(f),
-                                    style: AppText.display(size: 14.5)),
+                                Text(activeRequest.displayTitle(f), style: AppText.display(size: 14.5)),
                                 const SizedBox(height: 2),
                                 Text(
                                     activeRequest.refNo.isEmpty
-                                        ? (f
-                                            ? 'Naghihintay ng reference number'
-                                            : 'Reference number pending')
+                                        ? (f ? 'Naghihintay ng reference number' : 'Reference number pending')
                                         : 'Ref #${activeRequest.refNo}',
-                                    style: AppText.body(
-                                        size: 11.5, color: AppColors.inkMuted)),
+                                    style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
                               ],
                             ),
                           ),
@@ -136,12 +123,9 @@ class HomeScreen extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              const Icon(Icons.place_outlined,
-                                  size: 14, color: AppColors.inkFaint),
+                              const Icon(Icons.place_outlined, size: 14, color: AppColors.inkFaint),
                               const SizedBox(width: 8),
-                              Expanded(
-                                  child:
-                                      Text(m, style: AppText.body(size: 12.5))),
+                              Expanded(child: Text(m, style: AppText.body(size: 12.5))),
                             ],
                           ),
                         ),
@@ -150,23 +134,16 @@ class HomeScreen extends StatelessWidget {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(11),
-                        decoration: BoxDecoration(
-                            color: AppColors.paper,
-                            borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                         child: Text(
-                          activeRequest.note ??
-                              _statusMessage(f, activeRequest.status),
-                          style: AppText.body(
-                              size: 12, color: AppColors.inkMuted, height: 1.6),
+                          activeRequest.note ?? _statusMessage(f, activeRequest.status),
+                          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6),
                         ),
                       ),
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Expanded(
-                              child: AppButton(
-                                  label: tr(f, 'common.view_details'),
-                                  onPressed: onOpenTrack)),
+                          Expanded(child: AppButton(label: tr(f, 'common.view_details'), onPressed: onOpenTrack)),
                           if (activeRequest.cancellable) ...[
                             const SizedBox(width: 10),
                             Expanded(
@@ -176,8 +153,7 @@ class HomeScreen extends StatelessWidget {
                                 onPressed: () => showCancelDialog(
                                   context,
                                   activeRequest.refNo,
-                                  () =>
-                                      appState.cancelRequest(activeRequest.id),
+                                  () => appState.cancelRequest(activeRequest.id),
                                   filipino: f,
                                 ),
                               ),
@@ -399,45 +375,34 @@ class _AnnouncementTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          border: Border.all(color: AppColors.line),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            IconBadge(
-                icon: icon,
-                bg: iconBg,
-                fg: iconFg,
-                size: 36,
-                iconSize: 17,
-                radius: 10),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // The NEW badge that used to sit here was hardcoded true, so it
-                  // never came off. A flag that is always on is not information.
-                  Text(title,
-                      style:
-                          AppText.display(size: 13, weight: FontWeight.w600)),
-                  const SizedBox(height: 3),
-                  Text(time,
-                      style: AppText.body(size: 11, color: AppColors.inkFaint)),
-                  const SizedBox(height: 4),
-                  Text(desc,
-                      style: AppText.body(
-                          size: 12, color: AppColors.inkMuted, height: 1.5)),
-                ],
-              ),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 36, iconSize: 17, radius: 10),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The NEW badge that used to sit here was hardcoded true, so it
+                // never came off. A flag that is always on is not information.
+                Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
+                const SizedBox(height: 3),
+                Text(time, style: AppText.body(size: 11, color: AppColors.inkFaint)),
+                const SizedBox(height: 4),
+                Text(desc, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5)),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
       ),
     );
   }
@@ -454,8 +419,7 @@ class _AnnouncementNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child:
-          Text(text, style: AppText.body(size: 12, color: AppColors.inkMuted)),
+      child: Text(text, style: AppText.body(size: 12, color: AppColors.inkMuted)),
     );
   }
 }
