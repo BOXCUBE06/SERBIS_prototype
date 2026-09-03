@@ -319,9 +319,6 @@
                   @update:model-value="onSelectFleetVehicle"
                 ></v-select>
               </v-col>
-              <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.plate_no" label="Plate no." variant="outlined" density="comfortable"></v-text-field>
-              </v-col>
               <!-- Fallback only, shown while no fleet unit is picked above —
                    see the comment on onSelectFleetVehicle. Not the default:
                    the picker is, since it is what the double-booking guard
@@ -747,9 +744,8 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
 })))
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
-// at selection time. plate_no is deliberately NOT prefilled from the unit:
-// tbl_vehicles no longer carries a plate column, so this trip's own plate_no
-// is free text that someone types when they know it.
+// at selection time. There is no plate to derive here any more — the input was
+// removed and tbl_vehicles carries no plate column; see emptyCreateForm.
 const onSelectFleetVehicle = (vehicleId) => {
   const form = createDialog.value.form
   const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
@@ -766,7 +762,14 @@ const emptyCreateForm = () => ({
   // leaves both null, exactly as before this feature existed.
   service_request_id: null, vehicle_id: null, override_reason: '',
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
-  patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
+  // No plate_no. The input was removed 2026-09-03: tbl_vehicles has had no
+  // plate column since 2026_09_02_100000 dropped the one added the day before,
+  // so nothing could prefill it, and tripLog() does not validate plate_no — a
+  // blank or mistyped plate could never be corrected afterwards. Every
+  // auto-dispatched trip already had it null, since createConductionStub() does
+  // not set it either. The column stays and the detail view still shows what
+  // historical rows recorded.
+  patient_contact_number: '', vehicle: '', medical_diagnosis: '',
   origin: '', destination: '',
   // One blank slot each, not two — "Add {label}" already covers the case
   // that needs more, and starting at two padded the common one-driver,
