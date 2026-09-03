@@ -407,6 +407,56 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Withdraws a borrow request. Returns `true` only once the server has
+  /// accepted it, so the caller never announces a cancellation that did not
+  /// happen. Same optimistic-then-roll-back shape as [cancelRequest].
+  ///
+  /// Keyed on the server's `borrow_id`: a row still in flight has a null id
+  /// and no record on the server to cancel yet.
+  Future<bool> cancelBorrowRequest(int? id) async {
+    if (id == null) {
+      lastError = 'This request is still being sent. Please wait a moment and try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final index = borrowRequests.indexWhere((item) => item.id == id);
+    if (index == -1) {
+      return false;
+    }
+
+    final current = borrowRequests[index];
+    // Mirrors CANCELLABLE_FROM on the backend. A row that is already Released,
+    // Returned, Denied or Cancelled has nothing left to withdraw, and the
+    // route would answer 422.
+    if (!current.status.isCancellable) {
+      return false;
+    }
+
+    borrowRequests[index] = current.copyWith(status: BorrowStatus.cancelled);
+    notifyListeners();
+
+    try {
+      await _api.cancelBorrowRequest(id);
+      // The optimistic row is what the cache would otherwise keep serving as
+      // Pending until the next fetch — see loadBorrowRequests, which writes
+      // the cache on every successful load.
+      _borrowCache.save(borrowRequests, _borrowRequestsFetchedAt ?? DateTime.now());
+      return true;
+    } catch (e) {
+      // Put the row back: the office still has the request open, and showing
+      // it as cancelled would strand the resident with no way to undo.
+      final restoreAt = borrowRequests.indexWhere((item) => item.id == id);
+      if (restoreAt != -1) {
+        borrowRequests[restoreAt] = current;
+      }
+      AppLog.error(_borrowLogArea, 'cancel borrow request $id', error: e,
+          reason: 'rolled back, still open');
+      _fail(e);
+      return false;
+    }
+  }
+
   /// The blasts MDRRMO sent this resident.
   ///
   /// Never routed to `lastError`: this runs on launch, on resume and on every

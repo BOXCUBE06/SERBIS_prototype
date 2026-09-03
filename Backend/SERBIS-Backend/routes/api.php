@@ -70,6 +70,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('ambulance-availability', [AmbulanceAvailabilityController::class, 'index']);
     // Owner-scoped cancel. The general update() stays admin-only below.
     Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel']);
+    // Owner-scoped, same shape as the service-request cancel above. Registered
+    // before the apiResource so the literal segment is never read as an {id}.
+    Route::patch('borrowings/{id}/cancel', [EquipmentBorrowingController::class, 'cancel']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
     
     // Mobile endpoint to fetch published materials

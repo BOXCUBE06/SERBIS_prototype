@@ -270,4 +270,48 @@ class OwnershipScopeTest extends TestCase
 
         $this->getJson("/api/borrowings/{$this->borrowing->borrow_id}")->assertStatus(404);
     }
+
+    // ---- PATCH /api/borrowings/{id}/cancel ---------------------------------
+    //
+    // The fifth route on this guard, and the second one that writes. The
+    // status rules themselves live in EquipmentBorrowingCancelTest; what is
+    // pinned here is only who gets past scopeToOwner, because an unscoped
+    // version of this route would let any non-resident token close any
+    // resident's request.
+
+    public function test_the_owner_cancels_their_own_borrowing(): void
+    {
+        Sanctum::actingAs($this->owner);
+
+        $this->patchJson("/api/borrowings/{$this->borrowing->borrow_id}/cancel")
+            ->assertOk()
+            ->assertJsonPath('status', 'Cancelled');
+    }
+
+    public function test_another_resident_cannot_cancel_a_borrowing_that_is_not_theirs(): void
+    {
+        Sanctum::actingAs($this->stranger);
+
+        $this->patchJson("/api/borrowings/{$this->borrowing->borrow_id}/cancel")->assertStatus(404);
+
+        $this->assertSame('Pending', $this->borrowing->fresh()->status);
+    }
+
+    public function test_a_deactivated_admin_cannot_cancel_a_borrowing(): void
+    {
+        Sanctum::actingAs($this->deactivatedAdmin('closed-borrow-cancel@test.local'));
+
+        $this->patchJson("/api/borrowings/{$this->borrowing->borrow_id}/cancel")->assertStatus(403);
+
+        $this->assertSame('Pending', $this->borrowing->fresh()->status);
+    }
+
+    public function test_a_user_row_that_is_not_an_admin_cannot_cancel_a_borrowing(): void
+    {
+        Sanctum::actingAs($this->admin('viewer-borrow-cancel@test.local', ['role' => 'viewer']));
+
+        $this->patchJson("/api/borrowings/{$this->borrowing->borrow_id}/cancel")->assertStatus(404);
+
+        $this->assertSame('Pending', $this->borrowing->fresh()->status);
+    }
 }

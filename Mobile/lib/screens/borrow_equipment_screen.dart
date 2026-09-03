@@ -4,15 +4,16 @@ import 'package:flutter/material.dart';
 import '../models/borrow_models.dart';
 import '../models/request_models.dart' show formatTimelineTime;
 import '../state/request_store.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/shared_widgets.dart';
 
 /// Browse the equipment MDRRMO lends out and file a loan request, or check the
-/// status of ones already filed. There is no resident-facing cancel: the
-/// backend only exposes `update`/`destroy` on `borrowings` to `is.admin`, so
-/// once filed a request is read-only from here until MDRRMO acts on it.
+/// status of ones already filed. A request that is still Pending or Approved
+/// can be withdrawn from here — everything else on the record stays with
+/// MDRRMO, since `borrowings` exposes `update`/`destroy` to `is.admin` only.
 class BorrowEquipmentScreen extends StatefulWidget {
   final AppState appState;
 
@@ -176,7 +177,11 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
             StaleDataNote(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
           ..._myRequests.map((r) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _BorrowRequestCard(request: r, filipino: f),
+                child: _BorrowRequestCard(
+                  request: r,
+                  filipino: f,
+                  onCancel: () => widget.appState.cancelBorrowRequest(r.id),
+                ),
               )),
         ],
       ),
@@ -281,7 +286,15 @@ class _BorrowRequestCard extends StatelessWidget {
   final BorrowRequest request;
   final bool filipino;
 
-  const _BorrowRequestCard({required this.request, required this.filipino});
+  /// Resolves to `true` only once MDRRMO has accepted the withdrawal — the
+  /// dialog waits for it before saying anything happened.
+  final Future<bool> Function() onCancel;
+
+  const _BorrowRequestCard({
+    required this.request,
+    required this.filipino,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +367,19 @@ class _BorrowRequestCard extends StatelessWidget {
                   style: AppText.body(size: 12, color: AppColors.inkMuted),
                 ),
               ],
+            ),
+          ],
+          // An id-less row is still in flight, so MDRRMO has nothing to cancel
+          // yet — the button waits rather than offering an action the store
+          // would have to refuse. The backend re-checks the status either way.
+          if (request.id != null && request.status.isCancellable) ...[
+            const SizedBox(height: 12),
+            AppButton(
+              label: tr(filipino, 'common.cancel_request'),
+              style: AppButtonStyle.ghostRed,
+              // No ref number on a borrowing — the dialog drops the suffix and
+              // reads "Cancel request?" on its own.
+              onPressed: () => showCancelDialog(context, '', onCancel, filipino: filipino),
             ),
           ],
         ],

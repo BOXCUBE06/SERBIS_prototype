@@ -21,9 +21,17 @@ class EquipmentBorrowingController extends Controller
      * backwards into Released, which re-ran the stock deduction for an item
      * already back on the shelf and dropped the count for good.
      *
-     * Returned and Denied are terminal: an item that came back has nothing left
-     * to decide, and a refusal is answered by filing a new request rather than
-     * by reviving the old one.
+     * Returned, Denied and Cancelled are terminal: an item that came back has
+     * nothing left to decide, a refusal is answered by filing a new request
+     * rather than by reviving the old one, and a request the resident withdrew
+     * is not MDRRMO's to revive at all.
+     *
+     * Cancelled is a key here but appears in no list, which is deliberate:
+     * update()'s `in:` rule does not accept the word, so staff cannot put a
+     * record into it from the panel. cancel() is its only writer, and it works
+     * off CANCELLABLE_FROM below. The key still has to exist so that a record
+     * already Cancelled is refused every move by the check in update() with
+     * the same message as any other illegal transition.
      */
     private const TRANSITIONS = [
         'Pending' => ['Approved', 'Denied'],
@@ -31,7 +39,23 @@ class EquipmentBorrowingController extends Controller
         'Released' => ['Returned'],
         'Returned' => [],
         'Denied' => [],
+        'Cancelled' => [],
     ];
+
+    /**
+     * Which statuses the resident may withdraw their own request from.
+     *
+     * The line is at Released because that is when the item is physically in
+     * the resident's hands — the same place ServiceRequestController::cancel()
+     * draws it at Responding. It is NOT a stock line: available_quantity moves
+     * in exactly two places, both in update() (decrement on Released from
+     * Approved, increment on Returned from Released), and store()'s own check
+     * is a satisfiability check, not a reservation. So neither Pending nor
+     * Approved has reserved anything, and cancelling one returns nothing to
+     * the shelf. Do not add stock handling to cancel() on the assumption that
+     * it does.
+     */
+    private const CANCELLABLE_FROM = ['Pending', 'Approved'];
 
     public function index(Request $request)
     {
@@ -112,6 +136,48 @@ class EquipmentBorrowingController extends Controller
         if (!$borrowing) {
             return response()->json(['message' => 'Borrowing record not found'], 404);
         }
+
+        return response()->json($borrowing);
+    }
+
+    /**
+     * PATCH /borrowings/{id}/cancel — the resident withdraws their own request.
+     *
+     * Sits outside the is.admin group, so it takes the same scopeToOwner()
+     * guard the reads take. Without the staff branch that guard supplies, any
+     * token that was not a resident's could cancel any resident's request; with
+     * it, a non-owner resident is scoped out of the query and gets the same 404
+     * a missing record gets, so the response never confirms the record exists.
+     *
+     * No transaction and no lock: this writes one column on one row and touches
+     * no stock at all — see CANCELLABLE_FROM for why cancelling returns nothing
+     * to the shelf.
+     */
+    public function cancel(Request $request, $id)
+    {
+        $query = EquipmentBorrowing::query();
+
+        if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
+            return $refusal;
+        }
+
+        $borrowing = $query->find($id);
+
+        if (! $borrowing) {
+            return response()->json(['message' => 'Borrowing record not found'], 404);
+        }
+
+        // 422 rather than a silent no-op: a resident who taps Cancel on a row
+        // the office has already released is owed the reason, and the app
+        // reads this message straight onto the screen.
+        if (! in_array($borrowing->status, self::CANCELLABLE_FROM, true)) {
+            return response()->json([
+                'message' => 'Only a pending or approved request can be cancelled. Call the office instead.',
+            ], 422);
+        }
+
+        $borrowing->status = 'Cancelled';
+        $borrowing->save();
 
         return response()->json($borrowing);
     }

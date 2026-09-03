@@ -15,9 +15,19 @@ class _FakeApi extends ApiService {
   Map<String, dynamic>? submitResult;
   Object? submitError;
   Object? loadError;
+  Object? cancelError;
   int getBorrowingsCalls = 0;
   int submitCalls = 0;
+  int cancelCalls = 0;
+  int? lastCancelledId;
   String? lastPurpose;
+
+  @override
+  Future<void> cancelBorrowRequest(int borrowId) async {
+    cancelCalls++;
+    lastCancelledId = borrowId;
+    if (cancelError != null) throw cancelError!;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getEquipments() async {
@@ -220,6 +230,87 @@ void main() {
 
       expect(state.borrowIsOffline, isTrue);
       expect(state.isOffline, isFalse);
+    });
+  });
+
+  group('cancelBorrowRequest', () {
+    BorrowRequest row(int id, BorrowStatus status) => BorrowRequest(
+          id: id,
+          equipmentId: 3,
+          quantity: 1,
+          status: status,
+        );
+
+    test('marks the row cancelled and tells the server which one', () async {
+      final api = _FakeApi();
+      final state = AppState(api);
+      state.borrowRequests.add(row(11, BorrowStatus.pending));
+
+      final ok = await state.cancelBorrowRequest(11);
+
+      expect(ok, isTrue);
+      expect(api.lastCancelledId, 11);
+      expect(state.borrowRequests.single.status, BorrowStatus.cancelled);
+    });
+
+    test('an Approved request can still be withdrawn', () async {
+      // The line is at Released, not at Pending — an approved loan the
+      // resident no longer needs is exactly the case this route exists for.
+      final api = _FakeApi();
+      final state = AppState(api);
+      state.borrowRequests.add(row(12, BorrowStatus.approved));
+
+      expect(await state.cancelBorrowRequest(12), isTrue);
+      expect(state.borrowRequests.single.status, BorrowStatus.cancelled);
+    });
+
+    test('a refusal puts the row back the way it was', () async {
+      // Without the rollback the resident is left looking at a cancelled row
+      // that MDRRMO still has open, with no way to undo it.
+      final api = _FakeApi()..cancelError = const ApiException(
+        'Only a pending or approved request can be cancelled. Call the office instead.',
+      );
+      final state = AppState(api);
+      state.borrowRequests.add(row(13, BorrowStatus.approved));
+
+      final ok = await state.cancelBorrowRequest(13);
+
+      expect(ok, isFalse);
+      expect(state.borrowRequests.single.status, BorrowStatus.approved);
+      expect(state.takeError(),
+          'Only a pending or approved request can be cancelled. Call the office instead.');
+    });
+
+    test('a row past Released is refused without calling the server', () async {
+      final api = _FakeApi();
+      final state = AppState(api);
+      state.borrowRequests
+        ..add(row(14, BorrowStatus.released))
+        ..add(row(15, BorrowStatus.returned))
+        ..add(row(16, BorrowStatus.denied))
+        ..add(row(17, BorrowStatus.cancelled));
+
+      for (final id in [14, 15, 16, 17]) {
+        expect(await state.cancelBorrowRequest(id), isFalse, reason: 'id $id');
+      }
+
+      expect(api.cancelCalls, 0);
+    });
+
+    test('a row still in flight is refused with an answer, not silently', () async {
+      // No server id means no record to cancel yet. Returning false alone
+      // would leave the tap looking like it did nothing.
+      final api = _FakeApi();
+      final state = AppState(api);
+      state.borrowRequests.add(const BorrowRequest(
+        equipmentId: 3,
+        quantity: 1,
+        status: BorrowStatus.pending,
+      ));
+
+      expect(await state.cancelBorrowRequest(null), isFalse);
+      expect(api.cancelCalls, 0);
+      expect(state.takeError(), isNotNull);
     });
   });
 }

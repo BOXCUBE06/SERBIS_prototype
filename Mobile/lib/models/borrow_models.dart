@@ -31,11 +31,17 @@ class Equipment {
   }
 }
 
-/// Mirrors the backend's five-value state machine exactly (`Pending` ->
+/// Mirrors the backend's state machine exactly (`Pending` ->
 /// `Approved`/`Denied`, `Approved` -> `Released`/`Denied`, `Released` ->
-/// `Returned`). The resident never moves a row through this — only reads it.
-enum BorrowStatus { pending, approved, released, returned, denied }
+/// `Returned`). The resident moves a row through exactly one of these edges —
+/// Pending or Approved to `Cancelled`, via PATCH /borrowings/{id}/cancel — and
+/// only reads the rest.
+enum BorrowStatus { pending, approved, released, returned, denied, cancelled }
 
+/// `cancelled` has to be a real case rather than something the UI infers.
+/// Everything unknown falls to `pending` below, so a row the server calls
+/// 'Cancelled' would otherwise read as still open on this screen and offer its
+/// own Cancel button a second time.
 BorrowStatus borrowStatusFromText(String statusText) {
   switch (statusText) {
     case 'Approved':
@@ -46,6 +52,8 @@ BorrowStatus borrowStatusFromText(String statusText) {
       return BorrowStatus.returned;
     case 'Denied':
       return BorrowStatus.denied;
+    case 'Cancelled':
+      return BorrowStatus.cancelled;
     default:
       return BorrowStatus.pending;
   }
@@ -64,6 +72,8 @@ extension BorrowStatusX on BorrowStatus {
         return 'Returned';
       case BorrowStatus.denied:
         return 'Not approved';
+      case BorrowStatus.cancelled:
+        return 'Cancelled by you';
     }
   }
 
@@ -79,6 +89,10 @@ extension BorrowStatusX on BorrowStatus {
         return AppColors.green50;
       case BorrowStatus.denied:
         return AppColors.red50;
+      // Neutral, not red: the resident withdrew this themselves, so it is not
+      // a refusal and must not read like one beside a Denied row.
+      case BorrowStatus.cancelled:
+        return AppColors.grey50;
     }
   }
 
@@ -94,15 +108,27 @@ extension BorrowStatusX on BorrowStatus {
         return AppColors.green700;
       case BorrowStatus.denied:
         return AppColors.red600;
+      case BorrowStatus.cancelled:
+        return AppColors.inkMuted;
     }
   }
 
-  bool get isTerminal => this == BorrowStatus.returned || this == BorrowStatus.denied;
+  bool get isTerminal =>
+      this == BorrowStatus.returned ||
+      this == BorrowStatus.denied ||
+      this == BorrowStatus.cancelled;
+
+  /// Mirrors EquipmentBorrowingController::CANCELLABLE_FROM. The backend is
+  /// still the authority — this only decides whether the button is drawn, and
+  /// a 422 from the route is handled either way.
+  bool get isCancellable =>
+      this == BorrowStatus.pending || this == BorrowStatus.approved;
 }
 
-/// A resident's own equipment loan. There is no resident-facing cancel route
-/// on the backend — `borrowings` only exposes `update`/`destroy` to
-/// `is.admin` — so unlike [ServiceRequest] this is read-only after filing.
+/// A resident's own equipment loan. Read-only after filing apart from one
+/// move: PATCH /borrowings/{id}/cancel withdraws a request that is still
+/// Pending or Approved, the same line [ServiceRequest] draws at Responding.
+/// Everything else on the record still belongs to `is.admin`.
 class BorrowRequest {
   final int? id;
   final int equipmentId;
