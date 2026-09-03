@@ -11,18 +11,33 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * Quality-check finding 5 (2026-08-05), decided 2026-08-08: `residentLogin`
- * does NOT check `status`, and that is deliberate.
+ * Which resident statuses may sign in.
  *
- * This file exists because the finding keeps coming back. The asymmetry with
- * `adminLogin`, which does refuse a deactivated account, reads like something
- * nobody got round to — so the intended behaviour is pinned here as an
- * assertion rather than left as a comment somebody can talk themselves out of.
- * The reasoning is at the decision point in AuthController::residentLogin.
+ * HISTORY, because this file was written to stop the question coming back and
+ * then the answer changed. Quality-check finding 5 (2026-08-05) asked why
+ * `residentLogin` has no `status` check when `adminLogin` does. On 2026-08-08
+ * that was answered deliberately — leave it open — and this file pinned that
+ * as assertions, ending: "If the product decision is ever reversed, these
+ * tests SHOULD fail. Rewrite them, do not delete them."
  *
- * If the product decision is ever reversed, these tests SHOULD fail. Rewrite
- * them, do not delete them, and mirror User::isDeactivated() rather than
- * testing for 'Active' — hand-written recovery rows leave the column null.
+ * REVERSED 2026-09-03. The admin panel's "Deactivate account" button did not
+ * deactivate anything a person would recognise: the resident stayed signed in,
+ * kept filing requests, and only dropped out of SMS blasts.
+ *
+ * Rewritten rather than deleted, as instructed — and note which tests did NOT
+ * change. 'Inactive' and unrecognised values still sign in, and those cases
+ * are now the regression guard rather than the point: the reversal gates one
+ * named value, 'Deactivated', and a fail-closed `!== 'Active'` check would
+ * have locked out every self-registered account and every miscased row, with
+ * no self-serve way back in.
+ *
+ * "Mirror User::isDeactivated()" was the other instruction, and it is a trap
+ * taken literally: that method compares against 'inactive', which is the
+ * ADMIN vocabulary for a closed account. For a resident 'Inactive' means
+ * awaiting activation. Resident::isDeactivated() mirrors its shape — case
+ * folded, one named value, not fail-closed — and not its value.
+ *
+ * What deactivation then costs the resident is ResidentDeactivationTest.
  */
 class ResidentLoginStatusTest extends TestCase
 {
@@ -90,6 +105,36 @@ class ResidentLoginStatusTest extends TestCase
         ]);
     }
 
+    public function test_a_deactivated_resident_is_refused(): void
+    {
+        $resident = $this->resident('Deactivated');
+
+        $this->login($resident)
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'account_deactivated');
+    }
+
+    /**
+     * The column is an unconstrained varchar and the admin CRUD is not its only
+     * possible writer — a database edit can store any casing. The refusal folds
+     * case for the same reason User::isDeactivated() does.
+     */
+    public function test_a_deactivated_resident_is_refused_whatever_the_casing(): void
+    {
+        foreach (['deactivated', 'DEACTIVATED', 'DeActivated'] as $status) {
+            $resident = $this->resident($status);
+
+            $this->login($resident)
+                ->assertStatus(403)
+                ->assertJsonPath('code', 'account_deactivated');
+        }
+    }
+
+    /**
+     * Unchanged by the 2026-09-03 reversal, and now the guard against it being
+     * over-applied: a self-registered account waiting for an admin is the one
+     * that most needs to get in, not the one to lock out.
+     */
     public function test_an_inactive_resident_can_still_sign_in(): void
     {
         $resident = $this->resident('Inactive');

@@ -888,6 +888,51 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // 2026-08-05 quality-check finding 5 asked why residentLogin has no
+        // `status` check when adminLogin has one. On 2026-08-08 that was
+        // answered deliberately — leave it open — and this comment said so at
+        // length, from just below the verification branch:
+        //
+        //     "There is deliberately NO `status` check here, unlike adminLogin
+        //      above. [...] An `Inactive` resident can log in and file service
+        //      requests. The only thing activation gates is who receives an
+        //      SMS blast. That is the intended behaviour for now."
+        //
+        // REVERSED 2026-09-03, for something that argument never addressed: the
+        // admin panel has a "Deactivate account" button, and it did nothing a
+        // person would call deactivation. The resident stayed signed in, kept
+        // filing requests, and merely stopped receiving text blasts. Staff were
+        // told the account was closed when it was not. The gap was in the
+        // promise, not in the reasoning.
+        //
+        // What the 2026-08-08 reasoning got right is kept, and it is exactly
+        // why this tests one named value instead of `!== 'Active'`:
+        //
+        //  - The column is an unconstrained varchar, so 'active' in the wrong
+        //    case or 'pending' are both storable. A fail-closed check would
+        //    lock those rows out, and there is no self-serve way back in.
+        //  - 'Inactive' still signs in. It means "self-registered, awaiting
+        //    activation", not "closed" — the account an admin has yet to get
+        //    to, which is the worst one to lock out.
+        //  - There is still no self-serve reactivation, so this really does
+        //    make the office the only way back. That is now the intent rather
+        //    than the objection: it is what the button is for.
+        //
+        // Placed here, above the verification branch, and not where the old
+        // comment sat below it. That branch calls issueSignupCode(), and
+        // PhilSMS bills every send with no sandbox, so gating afterwards would
+        // let repeated logins against a closed account cost real money.
+        //
+        // STILL OUTSTANDING, mobile side: the login screen needs a branch for
+        // this `code`, or the resident sees a generic failure and retries
+        // forever.
+        if ($resident && $resident->isDeactivated()) {
+            return response()->json([
+                'message' => 'This account has been deactivated. Please visit the MDRRMO office.',
+                'code' => 'account_deactivated',
+            ], 403);
+        }
+
         // Only an abandoned registration reaches this. Verification happens as
         // the last step of signing up, so a resident who finished it never sees
         // this refusal — and one who closed the app halfway can resume from the
@@ -922,34 +967,10 @@ class AuthController extends Controller
             ] + $this->signupDeliveryPayload($entry), 403);
         }
 
-        // There is deliberately NO `status` check here, unlike adminLogin above.
-        // This is quality-check finding 5 (2026-08-05), and it was decided on
-        // 2026-08-08 to leave it open rather than fixed. Recorded here because
-        // the asymmetry with adminLogin reads like an oversight and has now
-        // been re-raised more than once.
-        //
-        // An `Inactive` resident can log in and file service requests. The only
-        // thing activation gates is who receives an SMS blast. That is the
-        // intended behaviour for now:
-        //
-        //  - There is no self-serve activation or reactivation flow anywhere.
-        //    Blocking the login makes the MDRRMO office the only way back in,
-        //    for an app whose whole purpose is the hour when nobody can reach
-        //    the office.
-        //  - `tbl_residents.status` is a plain varchar, NOT NULL but with no
-        //    default and nothing constraining its values. Every insert has to
-        //    name a status, and nothing stops one naming 'pending' or 'active'
-        //    in the wrong case. A fail-closed `=== 'Active'` test would lock
-        //    out every such row. (This differs from tbl_user.status, which
-        //    defaults to 'Active' — do not carry the reasoning across.)
-        //  - Filing a request is not the risk. A request is triaged by a human
-        //    before a unit moves, so an unactivated account costs the office a
-        //    dispatch decision it was already making, not an automatic response.
-        //
-        // If this is ever closed, mirror isDeactivated() rather than testing
-        // for 'Active', and give the mobile login screen a 403 branch first —
-        // without one the resident sees a generic failure and retries forever.
-        // The onboarding copy implying a gate should change at the same time.
+        // The `status` gate this comment used to argue against now exists, above
+        // the verification branch — see there for the 2026-08-08 decision and
+        // the 2026-09-03 reversal. It refuses 'Deactivated' only; 'Inactive'
+        // still reaches this line, by design.
 
         // Password proven and the account is a real one. A token is not issued
         // yet — a code goes to the resident's phone (or mail, same fallback

@@ -71,6 +71,31 @@ class Resident extends Authenticatable
 
     public const RESEND_COOLDOWN_SECONDS = 60;
 
+    /**
+     * Mirrors User::isDeactivated() in shape and deliberately not in value.
+     *
+     * `tbl_user.status` uses 'Inactive' for the closed state. `tbl_residents`
+     * does not: here 'Inactive' is a self-registered account waiting for an
+     * admin to switch it on, and 'Deactivated' is the one an admin turned off.
+     * Comparing against 'inactive' — the obvious way to "mirror" the admin
+     * method — would refuse every new sign-up. The two vocabularies overlap in
+     * spelling and not in meaning; do not merge them.
+     *
+     * Not fail-closed, for the same reason the admin method is not: the column
+     * is a plain varchar with no default and no constraint, so a row can say
+     * 'active' in the wrong case or 'pending'. A `!== 'Active'` test would lock
+     * those out with no self-serve way back in. Deactivation is an action
+     * someone took; the absence of a recognised status is not.
+     *
+     * Lowercased because this reads whatever is stored. The write paths do not
+     * need it — ResidentController validates `in:Active,Inactive,Deactivated`,
+     * so the case is already exact there.
+     */
+    public function isDeactivated(): bool
+    {
+        return strtolower((string) $this->status) === 'deactivated';
+    }
+
     public function hasVerifiedEmail(): bool
     {
         return $this->email_verified_at !== null;
