@@ -777,6 +777,24 @@ const applyServerErrors = async (res) => {
   return data.message || 'Request failed'
 }
 
+// The plain-message counterpart to applyServerErrors above, for the actions with
+// no form behind them — the list's status toggle and the delete dialog. Both
+// were already calling this name; it had never been written, so every failure on
+// either path surfaced as "errorFrom is not defined" rather than the server's
+// reason.
+//
+// Deliberately NOT applyServerErrors: that one populates fieldErrors for inputs
+// that are on screen, and neither caller has any. The message here is
+// load-bearing rather than decorative — destroy() answers 422 with "Cannot
+// delete — N service request(s) still reference this resident", which is the
+// entire explanation for a refused delete.
+const errorFrom = async (res) => {
+  const data = await res.json().catch(() => ({}))
+  // The status code is in the fallback because a bare "Request failed" gives an
+  // operator nothing to act on or report.
+  return data.message || `Request failed (${res.status})`
+}
+
 const saveUser = async () => {
   modalError.value = ''
   clearFieldErrors()
