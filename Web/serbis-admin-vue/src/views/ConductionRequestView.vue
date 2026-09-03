@@ -319,9 +319,6 @@
                   @update:model-value="onSelectFleetVehicle"
                 ></v-select>
               </v-col>
-              <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.plate_no" label="Plate no." variant="outlined" density="comfortable"></v-text-field>
-              </v-col>
               <!-- Fallback only, shown while no fleet unit is picked above —
                    see the comment on onSelectFleetVehicle. Not the default:
                    the picker is, since it is what the double-booking guard
@@ -747,9 +744,8 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
 })))
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
-// at selection time. plate_no is deliberately NOT prefilled from the unit:
-// tbl_vehicles no longer carries a plate column, so this trip's own plate_no
-// is free text that someone types when they know it.
+// at selection time. There is no plate to derive here any more — the input was
+// removed and tbl_vehicles carries no plate column; see emptyCreateForm.
 const onSelectFleetVehicle = (vehicleId) => {
   const form = createDialog.value.form
   const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
@@ -766,7 +762,14 @@ const emptyCreateForm = () => ({
   // leaves both null, exactly as before this feature existed.
   service_request_id: null, vehicle_id: null, override_reason: '',
   patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
-  patient_contact_number: '', vehicle: '', medical_diagnosis: '', plate_no: '',
+  // No plate_no. The input was removed 2026-09-03: tbl_vehicles has had no
+  // plate column since 2026_09_02_100000 dropped the one added the day before,
+  // so nothing could prefill it, and tripLog() does not validate plate_no — a
+  // blank or mistyped plate could never be corrected afterwards. Every
+  // auto-dispatched trip already had it null, since createConductionStub() does
+  // not set it either. The column stays and the detail view still shows what
+  // historical rows recorded.
+  patient_contact_number: '', vehicle: '', medical_diagnosis: '',
   origin: '', destination: '',
   // One blank slot each, not two — "Add {label}" already covers the case
   // that needs more, and starting at two padded the common one-driver,
@@ -788,15 +791,48 @@ const createForm = ref(null)
 // form same as any other new request.
 // C6: one prefill implementation, reached two ways — the Dispatch button
 // below and the create dialog's own "Link to approved service request"
-// autocomplete. Structural, not parsed out of prose: the contact number is
-// the booking's own resident/walk-in contact, whichever it was filed under.
+// autocomplete. Structural, not parsed out of prose.
 const applyBooking = (booking, form = createDialog.value.form) => {
-  form.patient_name = booking.patient_name || ''
+  // Mirrors ServiceRequestController::createConductionStub() field for field.
+  // The two dispatch paths write the same trip from the same booking, and every
+  // field one fills and the other does not is a trip that reads differently
+  // depending on which button was pressed — the drift docs/dispatch-audit.md
+  // flagged. The two exceptions are named where they occur below.
+  //
+  // The stub's own last-resort literals ('Not specified', 'See resident
+  // profile') are deliberately NOT carried across. There they are written
+  // straight to a NOT NULL column with nobody left to ask; here the field is
+  // about to be shown to a staff member who can read the paper form, and
+  // seeding an editable input with placeholder prose gets it submitted verbatim.
+  // Blank is the honest starting point for a person; a literal is the honest
+  // fallback for a column.
+  const fromAccount = booking.resident
+    ? `${booking.resident.first_name ?? ''} ${booking.resident.last_name ?? ''}`.trim()
+    : (booking.walk_in_name || '')
+
+  form.patient_name = booking.patient_name || fromAccount || ''
+  // `??`, not `||`: an age of 0 is a real value on this form. Neonate transport
+  // is why the server's rule is min:0, and `||` would blank it.
+  form.patient_age = booking.patient_age ?? null
+  form.patient_sex = booking.patient_sex ?? null
   form.patient_address = booking.patient_address || ''
   form.origin = booking.pickup_location || ''
   form.destination = booking.destination || ''
   form.medical_diagnosis = booking.condition_notes || ''
-  form.patient_contact_number = booking.resident?.phone_number || booking.walk_in_contact_number || ''
+  // Order matters and matches the stub: the patient's own number first. A head
+  // of the family files for whoever in the household is actually travelling, so
+  // the account number is the fallback, not the answer. This prefill previously
+  // skipped booking.patient_contact_number entirely and opened at the filer's
+  // number.
+  form.patient_contact_number = booking.patient_contact_number
+    || booking.resident?.phone_number
+    || booking.walk_in_contact_number
+    || ''
+  // patient_relatives is deliberately NOT prefilled, and must not be added.
+  // ConductionRequestController::store() writes the submitted patient_relatives
+  // AND then calls ServiceRequestController::copyRelativesToTrip(), which
+  // APPENDS the booking's relatives rather than replacing them. Prefilling here
+  // would file every relative twice — once from this form, once from the copy.
   form.service_request_id = booking.request_id
   form.vehicle_id = booking.vehicle_id ?? null
   // Best-effort: the fleet list this reads may not have loaded yet (see
