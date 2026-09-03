@@ -23,28 +23,7 @@ class SmsController extends Controller
             'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
         ]);
 
-        // Resident ids come back alongside the numbers now: the vendor only needs
-        // the number, but tbl_recipients records who was included, and that is
-        // not derivable afterwards — the filters below (Active, has a number)
-        // mean barangay membership is a different set.
-        $residents = Resident::whereIn('barangay_id', $validated['barangays'])
-            ->where('status', 'Active')
-            // The resident's own choice, set from the mobile app via PATCH /me.
-            // Compared against the column rather than the model's boolean cast
-            // because this runs as SQL; the column is NOT NULL with a default of
-            // 1, so there is no third state to account for.
-            ->where('sms_opt_in', true)
-            ->whereNotNull('phone_number')
-            ->where('phone_number', '!=', '')
-            ->get(['resident_id', 'barangay_id', 'phone_number']);
-
-        // A number the vendor will reject is not a recipient. Dropping those here
-        // rather than inside the send keeps tbl_recipients honest: it records who
-        // the message actually went to, and a resident whose number cannot be
-        // dialled did not receive it.
-        $residents = $residents->filter(
-            fn ($resident) => PhilSms::normalize($resident->phone_number) !== ''
-        )->values();
+        $residents = $this->resolveRecipients($validated['barangays']);
 
         // Never call a billed endpoint with nothing to send.
         if ($residents->isEmpty()) {
@@ -94,6 +73,118 @@ class SmsController extends Controller
             'sent'    => 0,
             'failed'  => count($recipients),
         ], 500);
+    }
+
+    /**
+     * The recipient count the Text Blast page shows before the Send button.
+     *
+     * Deliberately runs the identical resolution the send runs — see
+     * resolveRecipients() — rather than a cheaper SELECT COUNT(*). A count that
+     * disagrees with the send is worse than no count: it is quoted to the desk
+     * as the size of a blast that has not happened yet.
+     */
+    public function recipientCount(Request $request)
+    {
+        $validated = $request->validate([
+            'barangays'   => 'required|array|min:1',
+            'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
+        ]);
+
+        return response()->json([
+            'count' => $this->resolveRecipients($validated['barangays'])->count(),
+        ]);
+    }
+
+    /**
+     * Remaining SMS credit, for the Text Blast page's header.
+     *
+     * Always 200, including on every failure path. The balance is decoration on
+     * a page whose actual job is sending: a 500 here would surface as a red
+     * alert on a form that works fine, and an unreachable vendor dashboard is
+     * not a reason to hold back an advisory. Callers branch on `available`,
+     * never on the status code.
+     *
+     * `data` is passed through untouched. PhilSMS documents it only as "sms unit
+     * with all details", so this endpoint refuses to reshape a body whose shape
+     * is not actually pinned down.
+     */
+    public function balance(PhilSms $philSms)
+    {
+        if (! PhilSms::configured()) {
+            return response()->json([
+                'available' => false,
+                'message'   => 'No PhilSMS token is configured on this server.',
+            ]);
+        }
+
+        try {
+            $response = $philSms->balance();
+        } catch (\Throwable $e) {
+            Log::warning('PhilSMS balance lookup failed', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'available' => false,
+                'message'   => 'Could not reach PhilSMS to read the credit balance.',
+            ]);
+        }
+
+        // A 200 carrying status "error" is a refusal, not a balance — the same
+        // trap PhilSms::accepted() exists for on the send path.
+        if (! PhilSms::accepted($response)) {
+            Log::warning('PhilSMS balance refused', [
+                'status'   => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            return response()->json([
+                'available' => false,
+                'message'   => $response->json('message') ?? 'PhilSMS refused the balance request.',
+            ]);
+        }
+
+        return response()->json([
+            'available' => true,
+            'data'      => $response->json('data'),
+        ]);
+    }
+
+    /**
+     * The single definition of "who receives a blast to these barangays", shared
+     * by the send and by the page's pre-send preview.
+     *
+     * Extracted rather than copied because the last filter is PHP, not SQL. A
+     * preview written as a ->count() would count residents whose stored number
+     * PhilSms::normalize() rejects, and so quote a number the send would never
+     * match. Anything added here has to stay in one place for the two to keep
+     * agreeing.
+     *
+     * Resident ids come back alongside the numbers: the vendor only needs the
+     * number, but tbl_recipients records who was included, and that is not
+     * derivable afterwards — the filters here mean barangay membership is a
+     * different set.
+     *
+     * @param  array<int, int>  $barangayIds
+     */
+    private function resolveRecipients(array $barangayIds)
+    {
+        $residents = Resident::whereIn('barangay_id', $barangayIds)
+            ->where('status', 'Active')
+            // The resident's own choice, set from the mobile app via PATCH /me.
+            // Compared against the column rather than the model's boolean cast
+            // because this runs as SQL; the column is NOT NULL with a default of
+            // 1, so there is no third state to account for.
+            ->where('sms_opt_in', true)
+            ->whereNotNull('phone_number')
+            ->where('phone_number', '!=', '')
+            ->get(['resident_id', 'barangay_id', 'phone_number']);
+
+        // A number the vendor will reject is not a recipient. Dropping those here
+        // rather than inside the send keeps tbl_recipients honest: it records who
+        // the message actually went to, and a resident whose number cannot be
+        // dialled did not receive it.
+        return $residents->filter(
+            fn ($resident) => PhilSms::normalize($resident->phone_number) !== ''
+        )->values();
     }
 
     /**

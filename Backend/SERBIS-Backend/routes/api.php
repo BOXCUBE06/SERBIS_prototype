@@ -98,6 +98,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/logs/sms', [SmsController::class, 'history']);
         
         Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:3,60');
+        // Read-only and unbilled, so nothing like the blast's 3/hour — but it is
+        // still an outbound vendor call on every visit to the page, not free.
+        Route::get('/sms/balance', [SmsController::class, 'balance'])->middleware('throttle:30,1');
+        // Fires on every change to the barangay picker, so it is allowed to run
+        // far more often than the send it previews. Touches only the local
+        // database; no vendor call, nothing billed.
+        Route::get('/sms/recipient-count', [SmsController::class, 'recipientCount'])->middleware('throttle:120,1');
         Route::apiResource('vehicles', VehicleController::class);
         Route::apiResource('residents', ResidentController::class);
         // MDRRMO staff accounts (audit #29). Every admin may manage every other

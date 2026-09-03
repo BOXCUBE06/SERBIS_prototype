@@ -17,6 +17,10 @@ class PhilSms
 {
     private const ENDPOINT = 'https://dashboard.philsms.com/api/v3/sms/send';
 
+    // The same host as the send endpoint above rather than the app.philsms.com
+    // the public docs use, so one vendor DNS or host change moves both together.
+    private const BALANCE_ENDPOINT = 'https://dashboard.philsms.com/api/v3/balance';
+
     // The three shapes normalize() accepts below, spelled out so a validation
     // rule can require a real mobile number at the point of entry instead of
     // accepting anything and failing silently later. 2026-08-31: the user
@@ -63,6 +67,25 @@ class PhilSms
             'type'      => 'plain',
             'message'   => $message,
         ]);
+    }
+
+    /**
+     * Remaining SMS credit.
+     *
+     * The one read-only, unbilled call in this class — but it goes to the same
+     * host as the billed ones, so it gets the same timeouts. A hung balance
+     * lookup would otherwise sit on a request the admin panel is waiting on,
+     * for a number that is only ever decoration.
+     */
+    public function balance(): Response
+    {
+        return Http::withHeaders([
+            'Authorization' => 'Bearer '.config('services.philsms.token'),
+            'Accept'        => 'application/json',
+        ])
+            ->timeout(6)
+            ->connectTimeout(3)
+            ->get(self::BALANCE_ENDPOINT);
     }
 
     /**
