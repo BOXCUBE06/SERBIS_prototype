@@ -690,4 +690,91 @@ class ConductionRequestTest extends TestCase
             ->assertJsonCount(1)
             ->assertJsonPath('0.people.0.role', 'driver');
     }
+
+    // ---- The no-arrival timeline -------------------------------------------
+    //
+    // no_arrival_reason (2026-09-02) records a trip that never reached its
+    // destination: patient already transported, crew recalled, transport
+    // refused. The checkpoint ordering guard predated it and contradicted it —
+    // with arrival blank it refused departed_destination_at, and refusing that
+    // refused returned_office_at, so a crew that turned back and drove home
+    // could not record either. These four pin the shape that replaced it.
+
+    private function tripLog(ConductionRequest $trip, array $body): \Illuminate\Testing\TestResponse
+    {
+        return $this->patchJson(
+            "/api/conduction-requests/{$trip->conduction_request_id}/trip-log",
+            $body,
+        );
+    }
+
+    /**
+     * The bug this was all for. A trip that never arrived still went out and
+     * still came back, and the log has to be able to say so.
+     */
+    public function test_a_trip_that_never_arrived_can_still_record_its_return(): void
+    {
+        $trip = ConductionRequest::create($this->payload());
+
+        $this->tripLog($trip, [
+            'departed_office_at' => '2026-09-03 08:00:00',
+            'no_arrival_reason' => 'Patient already transported by family before crew arrived.',
+            'returned_office_at' => '2026-09-03 09:30:00',
+        ])->assertOk();
+
+        $fresh = $trip->fresh();
+
+        $this->assertNotNull($fresh->returned_office_at);
+        $this->assertNull($fresh->arrived_destination_at, 'The trip never arrived; nothing should have invented an arrival.');
+        $this->assertNull($fresh->departed_destination_at);
+    }
+
+    /** A trip either arrived or it did not. Both is not a state anyone can act on. */
+    public function test_an_arrival_and_a_no_arrival_reason_cannot_both_be_set(): void
+    {
+        $trip = ConductionRequest::create($this->payload());
+
+        $this->tripLog($trip, [
+            'departed_office_at' => '2026-09-03 08:00:00',
+            'arrived_destination_at' => '2026-09-03 08:40:00',
+            'no_arrival_reason' => 'Patient already transported by family before crew arrived.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('no_arrival_reason');
+    }
+
+    /**
+     * There is no departure from a destination the crew never reached. Refused
+     * outright rather than ordered around, because the field is meaningless on
+     * this kind of trip rather than merely out of sequence.
+     */
+    public function test_departed_destination_is_refused_when_the_trip_never_arrived(): void
+    {
+        $trip = ConductionRequest::create($this->payload());
+
+        $this->tripLog($trip, [
+            'departed_office_at' => '2026-09-03 08:00:00',
+            'no_arrival_reason' => 'Crew recalled mid-route.',
+            'departed_destination_at' => '2026-09-03 09:00:00',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('departed_destination_at');
+    }
+
+    /**
+     * The guard this change loosens is still a guard. With no reason recorded
+     * the full four-step sequence applies exactly as before — otherwise the fix
+     * would have quietly opened every gap the ordering check exists to catch.
+     */
+    public function test_the_full_sequence_still_applies_when_no_reason_is_recorded(): void
+    {
+        $trip = ConductionRequest::create($this->payload());
+
+        $this->tripLog($trip, [
+            'departed_office_at' => '2026-09-03 08:00:00',
+            'departed_destination_at' => '2026-09-03 09:00:00',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('departed_destination_at');
+    }
 }

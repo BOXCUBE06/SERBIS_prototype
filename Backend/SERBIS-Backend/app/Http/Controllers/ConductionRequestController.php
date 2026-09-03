@@ -361,6 +361,49 @@ class ConductionRequestController extends Controller
             ]);
         }
 
+        // A trip either arrived or it did not. Both set is not a state anyone
+        // can act on: the resolve gate in ServiceRequestController::update()
+        // takes either as satisfying the arrival requirement, so a row with
+        // both passes for the wrong reason, and the printed conduction form
+        // shows an arrival time beside a reason it never arrived.
+        $arrived = $effective('arrived_destination_at');
+        $noArrival = $effective('no_arrival_reason');
+
+        if ($arrived !== null && filled($noArrival)) {
+            throw ValidationException::withMessages([
+                'no_arrival_reason' => 'This trip has an arrival time recorded. A trip either arrived or it did not — clear the arrival time, or clear this reason.',
+            ]);
+        }
+
+        // There is no departure from a destination the crew never reached.
+        // no_arrival_reason exists for the cases where the vehicle turned back
+        // — patient already left, crew recalled mid-route, transport refused —
+        // and in every one of them this field describes something that did not
+        // happen. It prints on the signed conduction form, where it reads as a
+        // data-entry error rather than a turnaround.
+        if (filled($noArrival) && $effective('departed_destination_at') !== null) {
+            throw ValidationException::withMessages([
+                'departed_destination_at' => 'This trip never arrived, so there is no departure from the destination to record. Clear the reason if it did arrive.',
+            ]);
+        }
+
+        // The checkpoints this trip is actually expected to have.
+        //
+        // A trip that never arrived runs office -> back to office, and holding
+        // it to the full four-step sequence is what made both remaining
+        // checkpoints unreachable: with arrival blank, the adjacency check
+        // below refused departed_destination_at, and refusing that refused
+        // returned_office_at in turn. The crew came home and the log could not
+        // say so. The two fields dropped from the sequence here are the two the
+        // guards above have already refused outright, so nothing is skipped
+        // that could still be present.
+        $sequence = filled($noArrival)
+            ? [
+                'departed_office_at' => 'Departed office',
+                'returned_office_at' => 'Returned to office',
+            ]
+            : self::TRIP_SEQUENCE;
+
         // A later checkpoint filled in while an earlier one is still blank
         // leaves a record the panel cannot describe: `trip_status` reads
         // 'Completed' off `returned_office_at` while the detail view still
@@ -369,7 +412,7 @@ class ConductionRequestController extends Controller
         // filled, so it cannot catch a gap on its own.
         $previousField = null;
         $previousLabel = null;
-        foreach (self::TRIP_SEQUENCE as $field => $label) {
+        foreach ($sequence as $field => $label) {
             if ($effective($field) !== null && $previousField !== null && $effective($previousField) === null) {
                 throw ValidationException::withMessages([
                     $field => "{$label} cannot be recorded while {$previousLabel} is still blank.",
@@ -381,7 +424,7 @@ class ConductionRequestController extends Controller
         }
 
         $checkpoints = [];
-        foreach (self::TRIP_SEQUENCE as $field => $label) {
+        foreach ($sequence as $field => $label) {
             $value = $effective($field);
             if ($value !== null) {
                 $checkpoints[] = ['field' => $field, 'label' => $label, 'at' => \Carbon\Carbon::parse($value)];
