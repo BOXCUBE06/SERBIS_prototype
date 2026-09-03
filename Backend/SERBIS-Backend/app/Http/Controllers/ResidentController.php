@@ -121,6 +121,23 @@ class ResidentController extends Controller
         // null would lock the resident out of their own account.
         $passwordChanged = !empty($validated['password']);
 
+        // Deactivating has to end the session too, or the button is only half
+        // true: a resident token lives 30 days (SANCTUM_RESIDENT_EXPIRATION), so
+        // without this the phone already signed in kept working for a month
+        // after the account was closed. Login now refuses them, which leaves the
+        // live token as the only remaining way in.
+        //
+        // Compared exactly rather than through Resident::isDeactivated(): the
+        // rule above is `in:Active,Inactive,Deactivated`, so the case of the
+        // incoming value is already guaranteed here. The model helper exists for
+        // read paths, which see whatever happens to be stored.
+        //
+        // Keyed on the new value rather than on a transition. Saving Deactivated
+        // twice costs one redundant delete of nothing; missing a token because
+        // the row was already Deactivated costs a live session on a closed
+        // account.
+        $deactivating = $validated['status'] === 'Deactivated';
+
         if ($passwordChanged) {
             $changes['password'] = bcrypt($validated['password']);
         }
@@ -141,7 +158,7 @@ class ResidentController extends Controller
         // logged out mid-click. This route is is.admin-only and the caller is
         // always a User while the target is always a Resident, so the caller
         // can never be revoking their own session.
-        if ($passwordChanged) {
+        if ($passwordChanged || $deactivating) {
             $resident->tokens()->delete();
         }
 

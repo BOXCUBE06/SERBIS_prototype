@@ -6,6 +6,7 @@ use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\ServiceRequestRelative;
 use App\Models\Vehicle;
+use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Services\AmbulanceAvailability;
 use App\Services\PhilSms;
@@ -249,6 +250,21 @@ class ServiceRequestController extends Controller
             && (int) $validated['service_id'] === $ambulanceServiceId;
 
         $resident = $request->user();
+
+        // A closed account cannot file. Checked before the uploads further down
+        // so a refused request leaves nothing on disk to clean up.
+        //
+        // Mostly a backstop rather than the path the app takes: deactivating
+        // from the panel revokes the resident's tokens (ResidentController::
+        // update), so the phone gets a 401 and signs out before it can reach
+        // this. What it does cover is a status changed straight on the column
+        // by a database edit, which leaves live tokens untouched.
+        if ($resident instanceof Resident && $resident->isDeactivated()) {
+            return response()->json([
+                'message' => 'This account has been deactivated and cannot file new requests. Please visit the MDRRMO office.',
+                'code' => 'account_deactivated',
+            ], 403);
+        }
 
         if ($isAmbulance) {
             // Where the ambulance is going *to* is required; where it starts
@@ -661,6 +677,22 @@ class ServiceRequestController extends Controller
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 
         $residentId = $validated['resident_id'] ?? null;
+
+        // The same rule at the counter, but a 422 on the field rather than a
+        // 403: the caller here is a staff member whose own account is fine, and
+        // the problem is the resident they picked. Walk-ins are unaffected —
+        // they carry no resident_id — so a deactivated resident standing at the
+        // counter can still be served by filing under walk_in_name. That is the
+        // deliberate escape hatch, not an oversight.
+        if ($residentId) {
+            $selected = Resident::find($residentId);
+
+            if ($selected && $selected->isDeactivated()) {
+                throw ValidationException::withMessages([
+                    'resident_id' => 'This resident account has been deactivated. File as a walk-in, or reactivate the account first.',
+                ]);
+            }
+        }
         // Walk-in fields are dropped rather than merely left unvalidated when a
         // resident is picked — a mistyped name left over from switching the
         // form's mode must not sit next to a linked account pretending to be

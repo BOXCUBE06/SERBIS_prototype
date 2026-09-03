@@ -346,8 +346,29 @@ const toggleAllBarangays = () => {
 let countTimer = null
 let countRequestId = 0
 
-const fetchRecipientCount = async () => {
-  const ids = [...selectedBarangays.value]
+// The count depends on the barangay selection and on nothing else. Reducing
+// that selection to a stable string is what stops the refetching: Vuetify
+// replaces the array on every interaction, so watching the array fires on a new
+// reference holding identical ids, and each of those fires starts a fresh
+// debounce that ends in a request for a selection already counted. Debouncing
+// cannot help — it collapses one burst, and the problem is burst after burst.
+//
+// Sorted numerically because the select appends in click order, and [2,1] is
+// the same blast as [1,2].
+const selectionKey = (ids) => [...ids].map(Number).sort((a, b) => a - b).join(',')
+
+const currentSelectionKey = computed(() => selectionKey(selectedBarangays.value))
+
+// Keyed by selectionKey, and deliberately not expired on a timer. The roll only
+// moves when staff add or deactivate a resident, which is rare next to how often
+// one selection is revisited while composing a single message — and the send
+// recomputes server-side through resolveRecipients() regardless, so a stale
+// preview can mislead an expectation but can never cause a wrong send. Lives for
+// the life of the page; a reload is the refresh.
+const countCache = new Map()
+
+const fetchRecipientCount = async (key) => {
+  const ids = key.split(',')
   const requestId = ++countRequestId
 
   recipientCountError.value = ''
@@ -357,6 +378,19 @@ const fetchRecipientCount = async () => {
     ids.forEach(id => params.append('barangays[]', id))
 
     const res = await fetch(`${API_BASE}/sms/recipient-count?${params}`, { headers: getHeaders() })
+
+    // Throttling is not the count failing, it is this page having asked too
+    // often, and it clears by itself. Handled before the body is read because
+    // Laravel answers with its own "Too Many Attempts.", which tells an operator
+    // nothing they can act on. Not cached: there is no count here to remember.
+    if (res.status === 429) {
+      if (requestId !== countRequestId) return
+
+      recipientCount.value = null
+      recipientCountError.value = 'Recipient count paused briefly — reselect to refresh'
+      return
+    }
+
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || 'Failed to count recipients')
 
@@ -365,6 +399,9 @@ const fetchRecipientCount = async () => {
     if (requestId !== countRequestId) return
 
     recipientCount.value = data.count
+    // Cached on success only. A failed or throttled attempt must stay retryable
+    // rather than be remembered as an answer.
+    countCache.set(key, data.count)
   } catch (error) {
     if (requestId !== countRequestId) return
 
@@ -377,13 +414,14 @@ const fetchRecipientCount = async () => {
   }
 }
 
-// Debounced because "Select all barangays" replaces the array once per
-// barangay: without it a full-municipality pick queues a request per barangay
-// and displays whichever happened to land last.
-watch(selectedBarangays, (ids) => {
+// Watches the key, not the array, so it never fires for a selection whose
+// contents did not change — which is what was driving the 429. `deep` is gone
+// with it: a plain string needs no traversal, and the array was only ever
+// replaced, never mutated in place.
+watch(currentSelectionKey, (key) => {
   clearTimeout(countTimer)
 
-  if (ids.length === 0) {
+  if (key === '') {
     // Abandon anything still in flight, or its answer arrives after the
     // selection was cleared and prints a count for nobody.
     countRequestId++
@@ -393,9 +431,23 @@ watch(selectedBarangays, (ids) => {
     return
   }
 
+  // Already counted. No request, no debounce, and no "Counting…" flicker for a
+  // number that is on hand. The id bump abandons anything in flight so a late
+  // reply cannot overwrite the cached value with an older one.
+  if (countCache.has(key)) {
+    countRequestId++
+    recipientCount.value = countCache.get(key)
+    recipientCountError.value = ''
+    recipientCountLoading.value = false
+    return
+  }
+
   recipientCountLoading.value = true
-  countTimer = setTimeout(fetchRecipientCount, 300)
-}, { deep: true })
+  // 600ms, up from 300. This only ever delays the first look at a selection —
+  // every repeat is a cache hit — so the extra wait costs nothing on the common
+  // path and buys room on the slow one.
+  countTimer = setTimeout(() => fetchRecipientCount(key), 600)
+})
 const fetchBarangays = async () => {
   barangaysLoading.value = true
   try {

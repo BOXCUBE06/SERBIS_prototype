@@ -56,6 +56,12 @@ class ApiException implements Exception {
   /// as a form error.
   bool get isMfaRequired => code == 'mfa_required';
 
+  /// The account was closed by MDRRMO. The password was correct — this is a
+  /// refusal of the account, not of the credentials, so a screen must not
+  /// present it as a retryable form error. There is no self-serve way back:
+  /// reactivation happens at the office.
+  bool get isAccountDeactivated => code == 'account_deactivated';
+
   /// The token was rejected. Distinct from a failed login, which the auth
   /// endpoints report as a plain message instead.
   bool get isUnauthorized => statusCode == 401;
