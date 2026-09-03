@@ -50,8 +50,29 @@ class _LoginScreenState extends State<LoginScreen> {
   bool    _loading   = false;
   String? _formError;
 
+  /// Set when the server refuses the account itself rather than the
+  /// credentials. Kept apart from [_formError] because the two need opposite
+  /// affordances: a wrong password is worth retrying, a closed account is not.
+  /// While this holds, "Log in" is disabled.
+  String? _blockedMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    // Clears the block when the email changes — a different account may be
+    // perfectly fine, and without this the screen is a dead end needing an app
+    // restart. Editing the password alone does not clear it: the password was
+    // never the problem.
+    _emailCtrl.addListener(_clearBlockOnEmailChange);
+  }
+
+  void _clearBlockOnEmailChange() {
+    if (_blockedMessage != null) setState(() => _blockedMessage = null);
+  }
+
   @override
   void dispose() {
+    _emailCtrl.removeListener(_clearBlockOnEmailChange);
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
@@ -86,6 +107,15 @@ class _LoginScreenState extends State<LoginScreen> {
       // when the server sends mfa_required — the server never omits it.
       if (e.isMfaRequired && e.challengeId != null) {
         widget.onMfaRequired(_emailCtrl.text.trim(), e.challengeId!, e.delivery);
+        return;
+      }
+      // A closed account. Deliberately NOT routed to _formError: the password
+      // was right, so retyping it produces the same 403 forever, and an error
+      // above a live "Log in" button reads as an invitation to try again. The
+      // server's own message is shown because it names the only thing that
+      // actually helps — going to the office. Nothing in the app can fix this.
+      if (e.isAccountDeactivated) {
+        setState(() => _blockedMessage = e.message);
         return;
       }
       // Already resident-readable: "Invalid resident credentials." on a bad
@@ -185,6 +215,33 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (v) =>
                           (v ?? '').isEmpty ? 'Enter your password' : null,
                     ),
+                    if (_blockedMessage != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.red600.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.red600.withValues(alpha: 0.35)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.block_rounded,
+                                size: 18, color: AppColors.red600),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(_blockedMessage!,
+                                  style: AppText.body(
+                                      size: 13,
+                                      color: AppColors.red600,
+                                      height: 1.45)),
+                            ),
+                          ],
+                        ),
+                      ),
                     if (_formError != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -224,7 +281,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     AppButton(
                         label: 'Log in',
                         loading: _loading,
-                        onPressed: _submit),
+                        // Null disables it — AppButton already treats a null
+                        // onPressed as disabled, the same path `loading` uses.
+                        // This is what removes the retry rather than merely
+                        // discouraging it.
+                        onPressed: _blockedMessage == null ? _submit : null),
                     const SizedBox(height: 18),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
