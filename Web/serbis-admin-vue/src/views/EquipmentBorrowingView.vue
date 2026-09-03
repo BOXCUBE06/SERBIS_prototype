@@ -59,9 +59,10 @@
         rounded="lg"
         class="filter-field"
       ></v-select>
-      <!-- History only: Returned and Denied were only ever visible per-row, in
-           the Outcome column's chip — there was no way to filter to just one
-           of them. -->
+      <!-- History only: the terminal outcomes were only ever visible per-row,
+           in the Outcome column's chip — there was no way to filter to just
+           one of them. Cancelled joins Returned and Denied here on its own,
+           since the list is derived from the terminal columns. -->
       <v-select
         v-if="activeTab === 'history'"
         v-model="outcomeFilter"
@@ -167,8 +168,8 @@
           <span class="stat-value text-high-emphasis">{{ overdueCount }}</span>
           <span class="stat-label text-medium-emphasis">Overdue</span>
         </button>
-        <!-- Returned/Denied never appear in this table — they're terminal, so
-             they only ever live in History. Same "hide when zero" rule
+        <!-- Returned/Denied/Cancelled never appear in this table — they're
+             terminal, so they only live in History. Same "hide when zero" rule
              Service Requests uses for its own status tabs: shown only when
              there's something behind it, and a click jumps straight to the
              filtered History view rather than pretending to filter this table. -->
@@ -386,7 +387,7 @@
             <template v-else>
               <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests yet</div>
               <div class="text-caption text-medium-emphasis">
-                Returned and denied requests are kept here once they leave the pipeline.
+                Returned, denied and cancelled requests are kept here once they leave the pipeline.
               </div>
             </template>
           </div>
@@ -440,6 +441,16 @@
                 type="error" variant="tonal" class="mb-4" density="compact"
                 :title="'Request denied'"
               >{{ selectedRecord?.denial_reason || 'No reason was recorded.' }}</v-alert>
+
+              <!-- Info, not error: the office refused nothing here. Saying
+                   stock was untouched out loud because the obvious guess is
+                   that a cancelled request handed something back — it did
+                   not, since nothing is deducted before Released. -->
+              <v-alert
+                v-else-if="selectedRecord?.status === 'Cancelled'"
+                type="info" variant="tonal" class="mb-4" density="compact"
+                :title="'Withdrawn by the resident'"
+              >The resident cancelled this request from the mobile app before the item was released. No stock was reserved or returned.</v-alert>
 
               <v-alert
                 v-else-if="isOverdue(selectedRecord)"
@@ -497,8 +508,11 @@
           </v-row>
         </v-card-text>
 
+        <!-- Terminal-list check, not the two words it used to name: a
+             Cancelled record matches none of the branches inside, so the old
+             version rendered this footer empty. -->
         <v-card-actions
-          v-if="selectedRecord && selectedRecord.status !== 'Returned' && selectedRecord.status !== 'Denied'"
+          v-if="selectedRecord && !terminalStatuses.includes(selectedRecord.status)"
           class="pa-6 d-flex justify-end subtle-surface border-t gap-3"
         >
           <template v-if="selectedRecord.status === 'Pending'">
@@ -609,6 +623,11 @@ const columns = [
   { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
   { status: 'Returned', label: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline', terminal: true },
   { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true },
+  // The resident withdrew it themselves (PATCH /borrowings/{id}/cancel), so it
+  // is not a refusal and must not sit in the red the way Denied does. Slate
+  // 600, 7.4:1 with white text as a badge. Terminal here too: nothing in this
+  // panel can move a cancelled request, and the backend refuses every attempt.
+  { status: 'Cancelled', label: 'Cancelled', accent: '#475569', icon: 'mdi-cancel', terminal: true },
 ]
 
 // The "no filter" sentinel for each select. Named rather than repeated as a

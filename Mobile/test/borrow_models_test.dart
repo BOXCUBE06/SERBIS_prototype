@@ -35,20 +35,41 @@ void main() {
       expect(borrowStatusFromText('Released'), BorrowStatus.released);
       expect(borrowStatusFromText('Returned'), BorrowStatus.returned);
       expect(borrowStatusFromText('Denied'), BorrowStatus.denied);
+      expect(borrowStatusFromText('Cancelled'), BorrowStatus.cancelled);
     });
 
     test('an unrecognised word falls through to pending, not a crash', () {
       expect(borrowStatusFromText('SomethingNew'), BorrowStatus.pending);
     });
+
+    test('Cancelled does not fall through to pending', () {
+      // The default branch is why the enum case had to exist: without it a
+      // withdrawn request would read as open, and the card would offer its
+      // own Cancel button on a row that is already cancelled.
+      expect(borrowStatusFromText('Cancelled'), isNot(BorrowStatus.pending));
+      expect(BorrowStatus.cancelled.isCancellable, isFalse);
+    });
   });
 
   group('BorrowStatusX.isTerminal', () {
-    test('only Returned and Denied are terminal', () {
+    test('only Returned, Denied and Cancelled are terminal', () {
       expect(BorrowStatus.pending.isTerminal, isFalse);
       expect(BorrowStatus.approved.isTerminal, isFalse);
       expect(BorrowStatus.released.isTerminal, isFalse);
       expect(BorrowStatus.returned.isTerminal, isTrue);
       expect(BorrowStatus.denied.isTerminal, isTrue);
+      expect(BorrowStatus.cancelled.isTerminal, isTrue);
+    });
+  });
+
+  group('BorrowStatusX.isCancellable', () {
+    test('mirrors CANCELLABLE_FROM: Pending and Approved only', () {
+      expect(BorrowStatus.pending.isCancellable, isTrue);
+      expect(BorrowStatus.approved.isCancellable, isTrue);
+      expect(BorrowStatus.released.isCancellable, isFalse);
+      expect(BorrowStatus.returned.isCancellable, isFalse);
+      expect(BorrowStatus.denied.isCancellable, isFalse);
+      expect(BorrowStatus.cancelled.isCancellable, isFalse);
     });
   });
 

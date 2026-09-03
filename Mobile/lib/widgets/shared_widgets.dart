@@ -128,13 +128,42 @@ class AppHeader extends StatelessWidget {
 /// short line, not a page. It names the office, because the trust question a
 /// resident has about an app asking for their address and a photo of their ID
 /// is "who is this".
+///
+/// Both languages are printed, rather than one chosen. The language toggle
+/// lives on AppState, which does not exist until a resident is logged in —
+/// these two screens are the only ones in the app with no locale to read, and
+/// wiring a second toggle onto them to translate one card would be the larger
+/// change. A barangay hall notice is bilingual for the same reason.
+///
+/// The wording follows the brief: SERBIS is a **coordination system**, not an
+/// emergency line. The previous copy called it "the disaster and emergency
+/// service line", which promised a dispatcher on the other end of the button
+/// and is not what this system is.
 class ServicePurposeNote extends StatelessWidget {
   const ServicePurposeNote({super.key});
 
+  static const _lead = 'Ang SERBIS ay isang coordination system kasama ang '
+      'MDRRMO Echague.';
+  static const _leadEnglish =
+      'SERBIS is a coordination system run with the Echague MDRRMO.';
+
+  /// (icon, Filipino, English) — Filipino first on the row, matching the lead.
   static const _capabilities = [
-    (Icons.local_hospital_rounded, 'Emergency and public service requests'),
-    (Icons.sms_rounded, 'Text alerts for your barangay'),
-    (Icons.menu_book_rounded, 'Disaster preparedness guides'),
+    (
+      Icons.assignment_outlined,
+      'Humiling ng serbisyo sa MDRRMO',
+      'Request a service from the MDRRMO',
+    ),
+    (
+      Icons.menu_book_rounded,
+      'Mga gabay pangkaligtasan, offline',
+      'Safety guides, available offline',
+    ),
+    (
+      Icons.sms_rounded,
+      'Tumanggap ng SMS announcements mula sa MDRRMO',
+      'Receive SMS announcements from the MDRRMO',
+    ),
   ];
 
   @override
@@ -150,27 +179,47 @@ class ServicePurposeNote extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'SERBIS is the disaster and emergency service line of the '
-            'Echague MDRRMO.',
+            _lead,
             style: AppText.body(
                 size: 12.5, color: AppColors.green900, height: 1.45),
           ),
+          const SizedBox(height: 3),
+          Text(
+            _leadEnglish,
+            style: AppText.body(
+                size: 11.5, color: AppColors.inkMuted, height: 1.4),
+          ),
           const SizedBox(height: 10),
-          for (final (icon, label) in _capabilities)
+          for (final (icon, filipino, english) in _capabilities)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, size: 15, color: AppColors.green700),
+                  // Nudged down by the line's own leading so it sits with the
+                  // first line of a label that wraps to two.
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Icon(icon, size: 15, color: AppColors.green700),
+                  ),
                   const SizedBox(width: 8),
-                  // Expanded, not a bare Text: "Emergency and public service
-                  // requests" wraps at 360 and an unbounded Row overflows.
+                  // Expanded, not a bare Text: the longest label wraps at 360
+                  // and an unbounded Row overflows.
                   Expanded(
-                    child: Text(
-                      label,
-                      style: AppText.body(
-                          size: 12, color: AppColors.inkMuted, height: 1.35),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          filipino,
+                          style: AppText.body(
+                              size: 12, color: AppColors.ink, height: 1.35),
+                        ),
+                        Text(
+                          english,
+                          style: AppText.body(
+                              size: 11, color: AppColors.inkFaint, height: 1.35),
+                        ),
+                      ],
                     ),
                   ),
                 ],

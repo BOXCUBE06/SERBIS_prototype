@@ -104,7 +104,7 @@ void main() {
     });
 
     testWidgets('road obstruction', (tester) async {
-      final form = RoadFormData();
+      final form = StructuredFormData.road();
       addTearDown(form.dispose);
       await _pump(tester, form);
 
@@ -119,11 +119,11 @@ void main() {
         expect(description, contains(value), reason: 'dropped: $value');
       }
       // The dropdown is a field too, and its default is a real answer.
-      expect(description, contains(RoadFormData.obstructionTypes.first));
+      expect(description, contains(kObstructionTypes.first));
     });
 
     testWidgets('relief', (tester) async {
-      final form = ReliefFormData();
+      final form = StructuredFormData.relief();
       addTearDown(form.dispose);
       await _pump(tester, form);
 
@@ -137,11 +137,11 @@ void main() {
       for (final value in typed) {
         expect(description, contains(value), reason: 'dropped: $value');
       }
-      expect(description, contains(ReliefFormData.assistanceTypes.first));
+      expect(description, contains(kAssistanceTypes.first));
     });
 
     testWidgets('generic', (tester) async {
-      final form = GenericFormData();
+      final form = StructuredFormData.generic();
       addTearDown(form.dispose);
       await _pump(tester, form);
 
@@ -190,9 +190,9 @@ void main() {
     });
 
     test('whitespace is not a value', () {
-      final form = GenericFormData();
+      final form = StructuredFormData.generic();
       addTearDown(form.dispose);
-      form.details.text = '   ';
+      form.field('details').text = '   ';
 
       expect(
         form.metaLines(serviceName: 'Inquiry', submittedLabel: 'x'),
@@ -332,8 +332,8 @@ void main() {
   group('the contact number a dispatcher needs', () {
     test('comes off the account, on every form that carries one', () {
       final ambulance = AmbulanceFormData(contactNumber: '09171234567');
-      final relief = ReliefFormData(contactNumber: '09171234567');
-      final generic = GenericFormData(contactNumber: '09171234567');
+      final relief = StructuredFormData.relief(contactNumber: '09171234567');
+      final generic = StructuredFormData.generic(contactNumber: '09171234567');
       addTearDown(() {
         ambulance.dispose();
         relief.dispose();
@@ -352,7 +352,7 @@ void main() {
     test('a road report still carries no number at all', () {
       // Reported about a place, not about the reporter. Adding one here would
       // be a change of meaning, not a fix.
-      final road = RoadFormData();
+      final road = StructuredFormData.road();
       addTearDown(road.dispose);
 
       expect(
@@ -379,7 +379,7 @@ void main() {
   group('the form widget', () {
     testWidgets('a dropdown change lands on the model and is reported',
         (tester) async {
-      final form = RoadFormData();
+      final form = StructuredFormData.road();
       addTearDown(form.dispose);
       var changes = 0;
 
@@ -399,7 +399,7 @@ void main() {
       await tester.tap(find.text('Landslide debris').last);
       await tester.pumpAndSettle();
 
-      expect(form.obstruction, 'Landslide debris');
+      expect(form.choice('obstruction'), 'Landslide debris');
       // Without the callback the screen never rebuilds and the dropdown reads
       // as though nothing was picked.
       expect(changes, 1);
@@ -424,9 +424,9 @@ void main() {
     // the account's number, so it still asks nobody to retype anything — see
     // the test below.
     final forms = <String, ServiceFormData Function()>{
-      'the road form': RoadFormData.new,
-      'the relief form': ReliefFormData.new,
-      'the generic form': GenericFormData.new,
+      'the road form': StructuredFormData.road,
+      'the relief form': StructuredFormData.relief,
+      'the generic form': StructuredFormData.generic,
     };
 
     for (final entry in forms.entries) {

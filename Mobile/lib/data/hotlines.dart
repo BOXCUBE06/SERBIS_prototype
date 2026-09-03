@@ -21,6 +21,11 @@ typedef HotlineNumber = ({String? label, String number});
 ///
 /// The SOS sheet itself is gone (removed app-wide) — this now feeds the
 /// Library's hotline card and the Services safety notice.
+///
+/// There is no "summarise these onto one line" helper any more. Both surfaces
+/// render one number per row: the joined `Label — n1 · n2 · n3` form the
+/// safety notice used wrapped into an unreadable paragraph, and a resident
+/// cannot tap a number that is part of a sentence.
 class Hotline {
   final String label;
   final String labelFil;
@@ -45,13 +50,6 @@ class Hotline {
 
   String labelFor({required bool filipino}) => filipino ? labelFil : label;
 
-  /// e.g. `Landline (078) 324-5410 · Globe 0917-626-2352`. For the static
-  /// summary line (Services' safety notice) only — the interactive surface
-  /// (Library) renders each number as its own tappable row instead, since a
-  /// resident there needs to dial one specific line, not read a summary.
-  String get numbersLine => numbers
-      .map((n) => n.label == null ? n.number : '${n.label} ${n.number}')
-      .join(' · ');
 }
 
 /// Dials a hotline number directly. One number at a time — a contact with

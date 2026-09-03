@@ -914,4 +914,11 @@ class ApiService {
       'purpose': purpose,
     });
   }
+
+  /// Withdraws a borrow request the resident filed. Same shape as
+  /// [cancelRequest]: a resident-scoped route that sets the status itself, so
+  /// there is no body, and the controller refuses anything past Approved.
+  Future<void> cancelBorrowRequest(int borrowId) async {
+    await _patch('/borrowings/$borrowId/cancel');
+  }
 }

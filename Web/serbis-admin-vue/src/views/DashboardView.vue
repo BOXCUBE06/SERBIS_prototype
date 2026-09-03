@@ -410,7 +410,7 @@ const fetchDashboardData = async () => {
 
 // The feed merges two models that use two different status vocabularies:
 //   ServiceRequest     — Pending, Responding, Resolved, Cancelled, Disapproved
-//   EquipmentBorrowing — Pending, Approved, Released, Returned, Denied
+//   EquipmentBorrowing — Pending, Approved, Released, Returned, Denied, Cancelled
 // Only six of those nine were listed, and the one error branch tested for
 // 'Rejected', which neither model writes. Every refused item — Denied,
 // Disapproved, Cancelled — fell through to grey and read as an unknown state,

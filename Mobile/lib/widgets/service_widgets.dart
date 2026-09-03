@@ -95,6 +95,19 @@ class AttachmentUploadField extends StatelessWidget {
 /// "Non-life-threatening use only", with the hotlines to call instead. The
 /// numbers come from `data/hotlines.dart` — M28 removed the three disagreeing
 /// copies, of which one lived in this notice.
+///
+/// One organisation per line, and one number per line under it. This used to
+/// print each contact as `Label — n1 · n2 · n3 · n4` on a single `Text`, which
+/// wrapped into an unbroken red paragraph: the Echague Rescue Hotline alone is
+/// four carrier lines, so the block a resident had to read mid-emergency ran
+/// four wrapped lines with no boundary between one office's number and the
+/// next one's.
+///
+/// The numbers dial, the same as the Library card's — the notice tells a
+/// resident to call instead of filing, and printing an unreachable number
+/// under that instruction is the one thing it must not do. Each number is its
+/// own tap target for the reason the Library rows are: a resident on Smart
+/// cannot use the Globe line, so "call this contact" is not one action.
 class SafetyNotice extends StatelessWidget {
   final bool filipino;
 
@@ -128,9 +141,8 @@ class SafetyNotice extends StatelessWidget {
                   tr(f, 'services.notice_body'),
                   style: AppText.body(size: 12, color: const Color(0xFF7A3527), height: 1.6),
                 ),
-                const SizedBox(height: 8),
-                for (final hotline in kHotlines)
-                  _hotlineLine('${hotline.labelFor(filipino: f)} — ${hotline.numbersLine}'),
+                const SizedBox(height: 10),
+                for (final hotline in kHotlines) _hotlineBlock(hotline, f),
               ],
             ),
           ),
@@ -139,9 +151,48 @@ class SafetyNotice extends StatelessWidget {
     );
   }
 
-  Widget _hotlineLine(String text) => Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(text, style: AppText.display(size: 12, weight: FontWeight.w700, color: AppColors.red600)),
+  /// The organisation once, then its numbers under it — never joined onto one
+  /// line, which is what turned five contacts into a paragraph.
+  Widget _hotlineBlock(Hotline hotline, bool f) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              hotline.labelFor(filipino: f),
+              style: AppText.display(
+                  size: 12, weight: FontWeight.w700, color: const Color(0xFF7A3527)),
+            ),
+            for (final number in hotline.numbers) _hotlineNumberRow(number),
+          ],
+        ),
+      );
+
+  /// `Landline · (078) 324-5410` where the contact has more than one carrier
+  /// reaching the same desk, the bare number where it does not — a resident
+  /// cannot pick between four unlabeled numbers, and every other contact's
+  /// numbers are interchangeable.
+  Widget _hotlineNumberRow(HotlineNumber number) => InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => callHotlineNumber(number.number),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  number.label == null
+                      ? number.number
+                      : '${number.label} · ${number.number}',
+                  style: AppText.display(
+                      size: 12.5, weight: FontWeight.w700, color: AppColors.red600),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.call_rounded, size: 13, color: AppColors.red600),
+            ],
+          ),
+        ),
       );
 }
 
