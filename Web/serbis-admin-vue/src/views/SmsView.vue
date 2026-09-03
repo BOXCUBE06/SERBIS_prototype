@@ -77,6 +77,25 @@
                 </v-select>
               </div>
 
+              <div class="mb-6">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Message Template</div>
+                <v-select
+                  v-model="selectedTemplate"
+                  :items="templates"
+                  item-title="label"
+                  item-value="label"
+                  placeholder="Start from a template (optional)"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  color="error"
+                  bg-color="grey-lighten-5"
+                  clearable
+                  class="font-weight-medium"
+                  @update:model-value="applyTemplate"
+                ></v-select>
+              </div>
+
               <div class="mb-2">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Message Content</div>
                 <v-textarea
@@ -97,6 +116,67 @@
                 ></v-textarea>
               </div>
 
+              <!-- What this blast costs, stated before the button rather than
+                   discovered on the bill. The two numbers are estimates of
+                   different kinds: the recipient count is exact for the moment
+                   it was fetched, but the roll can change before Send; the
+                   segment count is derived from the GSM 03.38 tables because
+                   PhilSMS has no sandbox to confirm it against. -->
+              <div class="mt-6 pa-4 rounded-lg bg-grey-lighten-5 border">
+                <div class="d-flex align-center justify-space-between flex-wrap gap-3">
+                  <div class="d-flex align-center gap-2">
+                    <v-icon size="20" class="text-medium-emphasis">mdi-account-group-outline</v-icon>
+                    <span class="text-body-2 font-weight-medium">
+                      <template v-if="selectedBarangays.length === 0">
+                        <span class="text-medium-emphasis">Pick a barangay to see how many residents this reaches</span>
+                      </template>
+                      <template v-else-if="recipientCountLoading">
+                        <span class="text-medium-emphasis">Counting recipients…</span>
+                      </template>
+                      <template v-else-if="recipientCountError">
+                        <span class="text-warning">{{ recipientCountError }}</span>
+                      </template>
+                      <template v-else>
+                        <strong>{{ recipientCount }}</strong>
+                        {{ recipientCount === 1 ? 'recipient' : 'recipients' }}
+                      </template>
+                    </span>
+                  </div>
+
+                  <div class="d-flex align-center gap-2">
+                    <v-icon size="20" class="text-medium-emphasis">mdi-message-text-outline</v-icon>
+                    <span class="text-body-2 font-weight-medium">
+                      <strong>{{ sms.segments }}</strong>
+                      {{ sms.segments === 1 ? 'segment' : 'segments' }}
+                      <span class="text-medium-emphasis">· {{ sms.units }}/{{ sms.capacity }} {{ sms.encoding }}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div v-if="billedUnits !== null" class="text-caption text-medium-emphasis mt-3">
+                  About {{ billedUnits.toLocaleString() }} SMS {{ billedUnits === 1 ? 'unit' : 'units' }} for this blast
+                  ({{ recipientCount.toLocaleString() }} × {{ sms.segments }}).
+                </div>
+
+                <!-- The whole reason this panel exists. A 160-character message
+                     is one segment in GSM-7 and three in UCS-2, and the field
+                     counter cannot tell them apart — so the warning has to name
+                     the character that moved it, not just report the total. -->
+                <v-alert
+                  v-if="sms.offendingCharacters.length"
+                  type="warning"
+                  variant="tonal"
+                  density="compact"
+                  rounded="lg"
+                  class="mt-3"
+                >
+                  <span class="text-body-2">
+                    This message has left the GSM-7 alphabet, so one segment now holds 70 characters instead of 160.
+                    Caused by {{ offendingSummary }}.
+                    Swapping {{ sms.offendingCharacters.length === 1 ? 'it for its' : 'them for their' }} plain-ASCII equivalent brings the cost back down.
+                  </span>
+                </v-alert>
+              </div>
               <div class="pt-6 mt-4 border-t">
                 <v-btn 
                   color="#0f4c3a" 
@@ -127,8 +207,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { describeSms, nameCharacter } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
 
 const message = ref('')
@@ -143,6 +224,71 @@ const alert = ref({
   type: 'success',
   message: ''
 })
+
+// Starting text, not a fill-in form. There are deliberately no [AREA]-style
+// tokens: a token that survives editing goes out to a real handset with the
+// blank still in it. Each draft stops mid-sentence instead, so an unfinished
+// message reads as unfinished to the person about to press Send.
+//
+// Bodies run 113 / 112 / 119 / 29 characters against the 160-character
+// single-segment budget, leaving room to finish the sentence without the blast
+// quietly billing a second segment. All four are pure GSM-7 — no curly
+// punctuation, no dashes that are not hyphens — so pasting one in does not
+// halve the budget before a word has been typed.
+const templates = [
+  {
+    label: 'Weather warning',
+    body: 'MDRRMO Echague weather advisory: heavy rain and strong winds expected today. Residents in low-lying areas should ',
+  },
+  {
+    label: 'Early warning',
+    body: 'MDRRMO Echague early warning: conditions are worsening. Prepare a go-bag and be ready to evacuate when told to. ',
+  },
+  {
+    label: 'Heat index warning',
+    body: 'MDRRMO Echague heat advisory: heat index is dangerously high today. Avoid outdoor work 10AM-3PM and drink water often. ',
+  },
+  {
+    label: 'Announcement',
+    body: 'MDRRMO Echague announcement: ',
+  },
+]
+
+const selectedTemplate = ref(null)
+
+const applyTemplate = (label) => {
+  if (!label) return
+
+  const chosen = templates.find(t => t.label === label)
+  if (!chosen) return
+
+  // Only ask when there is work to lose. Picking a template into an empty box
+  // is the normal first action on this page and must not cost a dialog.
+  if (message.value.trim() && !confirm('Replace the message you have typed with the template text?')) {
+    selectedTemplate.value = null
+    return
+  }
+
+  message.value = chosen.body
+}
+
+// What the message actually bills, rather than what it counts. See
+// composables/smsSegments.ts — one curly quote pasted out of Word moves the
+// whole message to UCS-2 and cuts a segment from 160 characters to 70.
+const sms = computed(() => describeSms(message.value))
+
+const offendingSummary = computed(() =>
+  sms.value.offendingCharacters.map(nameCharacter).join(', '))
+
+const recipientCount = ref(null)
+const recipientCountLoading = ref(false)
+const recipientCountError = ref('')
+
+const billedUnits = computed(() =>
+  recipientCount.value === null || sms.value.segments === 0
+    ? null
+    : recipientCount.value * sms.value.segments)
+
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${getToken()}`,
@@ -169,6 +315,65 @@ const toggleAllBarangays = () => {
     : barangays.value.map(b => b.barangay_id)
 }
 
+// Deliberately asks the server rather than counting client-side. The set is
+// not derivable from anything this page holds: it turns on status, on the
+// resident's own sms_opt_in, and on whether PhilSms::normalize() accepts the
+// stored number — the last of which is PHP, not SQL. SmsController resolves
+// the preview through the identical code path the send uses, so the number
+// shown here is the number that will be billed.
+let countTimer = null
+let countRequestId = 0
+
+const fetchRecipientCount = async () => {
+  const ids = [...selectedBarangays.value]
+  const requestId = ++countRequestId
+
+  recipientCountError.value = ''
+
+  try {
+    const params = new URLSearchParams()
+    ids.forEach(id => params.append('barangays[]', id))
+
+    const res = await fetch(`${API_BASE}/sms/recipient-count?${params}`, { headers: getHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Failed to count recipients')
+
+    // A slower earlier request must not overwrite a newer answer — ticking
+    // through the barangay list fires several of these in a row.
+    if (requestId !== countRequestId) return
+
+    recipientCount.value = data.count
+  } catch (error) {
+    if (requestId !== countRequestId) return
+
+    // Deliberately not the page-level alert: failing to preview a count is not
+    // a reason to redden a form that still sends perfectly well.
+    recipientCount.value = null
+    recipientCountError.value = 'Could not count recipients'
+  } finally {
+    if (requestId === countRequestId) recipientCountLoading.value = false
+  }
+}
+
+// Debounced because "Select all barangays" replaces the array once per
+// barangay: without it a full-municipality pick queues a request per barangay
+// and displays whichever happened to land last.
+watch(selectedBarangays, (ids) => {
+  clearTimeout(countTimer)
+
+  if (ids.length === 0) {
+    // Abandon anything still in flight, or its answer arrives after the
+    // selection was cleared and prints a count for nobody.
+    countRequestId++
+    recipientCount.value = null
+    recipientCountError.value = ''
+    recipientCountLoading.value = false
+    return
+  }
+
+  recipientCountLoading.value = true
+  countTimer = setTimeout(fetchRecipientCount, 300)
+}, { deep: true })
 const fetchBarangays = async () => {
   barangaysLoading.value = true
   try {
@@ -204,7 +409,13 @@ const sendSmsBlast = async () => {
         .map(b => b.barangay_name)
         .join(', ')}?`
 
-  if (!confirm(confirmMessage)) return
+  // The scale is the point of the confirmation, so it names what is about to
+  // be spent as well as who it reaches.
+  const costLine = billedUnits.value === null
+    ? ''
+    : `\n\n${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
+
+  if (!confirm(confirmMessage + costLine)) return
 
   loading.value = true
   alert.value.show = false
@@ -230,6 +441,7 @@ const sendSmsBlast = async () => {
     }
 
     message.value = ''
+    selectedTemplate.value = null
     selectedBarangays.value = []
     if (form.value) form.value.resetValidation()
     
@@ -246,6 +458,7 @@ const sendSmsBlast = async () => {
 </script>
 
 <style scoped>
+.gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
