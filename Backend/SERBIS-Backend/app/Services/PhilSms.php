@@ -17,6 +17,31 @@ class PhilSms
 {
     private const ENDPOINT = 'https://dashboard.philsms.com/api/v3/sms/send';
 
+    /**
+     * One OTP or notification to one handset, on a path a phone is waiting on.
+     * Must stay well under the mobile client's own 15s per-request timeout
+     * (api_service.dart:203) — this is one leg of that request, not the whole
+     * thing, and it needs headroom left for bcrypt, cache, JSON and real
+     * network latency on top. Three of this class's four callers are that path.
+     */
+    private const DEFAULT_TIMEOUT = 6;
+
+    /**
+     * An admin text blast, which no phone is waiting on.
+     *
+     * Production timed out at 6002ms with 0 bytes received (cURL 28) on a
+     * multi-recipient send from a free-tier instance. PhilSMS had processed and
+     * billed it; we had simply stopped listening. Raising this does not make a
+     * timeout impossible — SmsController handles that case explicitly — it makes
+     * it rare enough to be an incident rather than a routine cost.
+     *
+     * 20 and not more: php.ini-production leaves max_execution_time at 30 (the
+     * Dockerfile overrides upload sizes and opcache, not that), and a script
+     * kill at 30s is a fatal that no caller's catch can intercept. This leaves
+     * ten seconds for resolveRecipients() and recordBlast()'s writes.
+     */
+    public const BLAST_TIMEOUT = 20;
+
     // The same host as the send endpoint above rather than the app.philsms.com
     // the public docs use, so one vendor DNS or host change moves both together.
     private const BALANCE_ENDPOINT = 'https://dashboard.philsms.com/api/v3/balance';
@@ -33,7 +58,7 @@ class PhilSms
     /**
      * @param  array<int, string>  $numbers
      */
-    public function send(array $numbers, string $message): Response
+    public function send(array $numbers, string $message, int $timeout = self::DEFAULT_TIMEOUT): Response
     {
         // PhilSMS takes many recipients as one comma-separated string, not as a
         // list of objects the way the previous vendor did.
@@ -59,7 +84,9 @@ class PhilSms
             // whole thing, so it needs headroom left for bcrypt/cache/JSON
             // overhead and real network latency on top, or the phone can still
             // give up first even after the backend answers correctly.
-            ->timeout(6)
+            ->timeout($timeout)
+            // Not scaled with $timeout: DNS and the TCP handshake do not take
+            // longer because there are more recipients in the body.
             ->connectTimeout(3)
             ->post(self::ENDPOINT, [
             'recipient' => $recipients,

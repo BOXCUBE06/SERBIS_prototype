@@ -87,7 +87,11 @@
                          would have rendered orange — a failed blast and a
                          delivered one looking alike is the one distinction this
                          table exists to make. -->
-                    <v-chip :color="item.status === 'Sent' ? 'green' : 'red'" size="small" variant="tonal" class="font-weight-bold">
+                    <!-- Three values now. 'Unconfirmed' is amber and not red:
+                         the vendor never answered, which is not the same as
+                         nothing having been sent, and colouring it as a failure
+                         is what would prompt a duplicate blast. -->
+                    <v-chip :color="item.status === 'Sent' ? 'green' : (item.status === 'Unconfirmed' ? 'amber-darken-2' : 'red')" size="small" variant="tonal" class="font-weight-bold">
                       {{ item.status }}
                     </v-chip>
                   </template>

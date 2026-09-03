@@ -344,12 +344,38 @@
 
               <v-col cols="12">
                 <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-2">Account Status</div>
-                <!-- "Pending" is offered so that editing a self-registered resident
-                     round-trips: without it the group renders with nothing selected
-                     for the one status an admin most often opens. -->
+                <!-- Active and Deactivated only. 'Inactive' — shown elsewhere as
+                     "Pending" — is still a real stored value and still what
+                     AuthController::register() writes for a self-registered
+                     resident. It is simply not something staff set by hand: they
+                     activate or deactivate.
+
+                     A Pending resident therefore opens this dialog with no radio
+                     selected, and that is intended. formData.status keeps the
+                     stored 'Inactive' (a radio group writes to its v-model only
+                     on selection, never on absence), saveUser spreads it into the
+                     payload unchanged, and update() still accepts it — the rule
+                     is in:Active,Inactive,Deactivated. Saving other fields leaves
+                     the status alone; only clicking a radio changes it.
+
+                     The banner says so, because an empty radio group reads as a
+                     form that has lost a value rather than one deliberately not
+                     offering it. -->
+                <v-alert
+                  v-if="modal.isEditing && formData.status === RESIDENT_STATUS.pending"
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                  rounded="lg"
+                  class="mb-3"
+                >
+                  <span class="text-body-2">
+                    This account is <strong>Pending</strong> — self-registered and not yet activated.
+                    Saving leaves it pending; choose Active to activate it.
+                  </span>
+                </v-alert>
                 <v-radio-group v-model="formData.status" inline hide-details color="#0f4c3a">
                   <v-radio label="Active" :value="RESIDENT_STATUS.active"></v-radio>
-                  <v-radio label="Pending" :value="RESIDENT_STATUS.pending"></v-radio>
                   <v-radio label="Deactivated" :value="RESIDENT_STATUS.deactivated"></v-radio>
                 </v-radio-group>
               </v-col>
@@ -775,6 +801,24 @@ const applyServerErrors = async (res) => {
       : `${count} fields need attention — see below.`
   }
   return data.message || 'Request failed'
+}
+
+// The plain-message counterpart to applyServerErrors above, for the actions with
+// no form behind them — the list's status toggle and the delete dialog. Both
+// were already calling this name; it had never been written, so every failure on
+// either path surfaced as "errorFrom is not defined" rather than the server's
+// reason.
+//
+// Deliberately NOT applyServerErrors: that one populates fieldErrors for inputs
+// that are on screen, and neither caller has any. The message here is
+// load-bearing rather than decorative — destroy() answers 422 with "Cannot
+// delete — N service request(s) still reference this resident", which is the
+// entire explanation for a refused delete.
+const errorFrom = async (res) => {
+  const data = await res.json().catch(() => ({}))
+  // The status code is in the fallback because a bare "Request failed" gives an
+  // operator nothing to act on or report.
+  return data.message || `Request failed (${res.status})`
 }
 
 const saveUser = async () => {
