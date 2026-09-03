@@ -15,6 +15,28 @@
                    "every resident" would overstate who actually receives this. -->
               <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">One message to the active, opted-in residents of the barangays you pick</div>
             </div>
+
+            <!-- Pushed right, and deliberately quiet. The balance is context for
+                 a decision, not a call to action — and it must never read as a
+                 blocker, because a failed lookup does not stop a send.
+
+                 Both fields are printed exactly as PhilSMS sent them. The peso
+                 figure arrives carrying its own currency symbol and the expiry
+                 in a format no Date constructor reads twice the same way, so
+                 neither is parsed or reformatted here. -->
+            <div class="ml-auto text-right flex-shrink-0">
+              <!-- Each line is nowrap and the block refuses to shrink: at this
+                   card width the expiry is long enough to wrap mid-phrase into
+                   "expires 21st / Aug 27", which reads as two separate facts. -->
+              <template v-if="balance.available">
+                <div class="text-h6 font-weight-bold text-high-emphasis" style="white-space: nowrap;">{{ balance.remaining }}</div>
+                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">SMS credit</div>
+                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">expires {{ balance.expiresOn }}</div>
+              </template>
+              <div v-else-if="balance.checked" class="text-caption text-medium-emphasis" style="max-width: 180px;">
+                {{ balance.message }}
+              </div>
+            </div>
           </div>
 
           <v-card-text class="pa-8">
@@ -392,7 +414,39 @@ const fetchBarangays = async () => {
   }
 }
 
-onMounted(fetchBarangays)
+// Account-level rather than per-message, so it is read once on mount and never
+// again while the page is open.
+//
+// PhilSMS returns a peso balance, not a unit count — there is no "messages
+// remaining" figure to display, and the page must not imply one. Converting
+// pesos to segments would need a per-segment rate hardcoded here, which is a
+// confident wrong number next to Send the first time the vendor reprices.
+const balance = ref({ available: false, checked: false, remaining: '', expiresOn: '', message: '' })
+
+const fetchBalance = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/sms/balance`, { headers: getHeaders() })
+    const data = await res.json()
+
+    balance.value = {
+      available: !!data.available,
+      checked: true,
+      remaining: data.data?.remaining_balance ?? '',
+      expiresOn: data.data?.expired_on ?? '',
+      message: data.message ?? 'SMS credit unavailable',
+    }
+  } catch (error) {
+    // Swallowed on purpose. GET /sms/balance already answers 200 on every
+    // failure path it knows about, so this catches only a dead network — and a
+    // missing balance is not a reason to redden a form that still sends.
+    balance.value = { available: false, checked: true, remaining: '', expiresOn: '', message: 'SMS credit unavailable' }
+  }
+}
+
+onMounted(() => {
+  fetchBarangays()
+  fetchBalance()
+})
 
 const sendSmsBlast = async () => {
   const { valid } = await form.value.validate()

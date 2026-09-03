@@ -96,6 +96,59 @@ class SmsController extends Controller
     }
 
     /**
+     * Remaining SMS credit, for the Text Blast page's header.
+     *
+     * Always 200, including on every failure path. The balance is decoration on
+     * a page whose actual job is sending: a 500 here would surface as a red
+     * alert on a form that works fine, and an unreachable vendor dashboard is
+     * not a reason to hold back an advisory. Callers branch on `available`,
+     * never on the status code.
+     *
+     * `data` is passed through untouched. PhilSMS documents it only as "sms unit
+     * with all details", so this endpoint refuses to reshape a body whose shape
+     * is not actually pinned down.
+     */
+    public function balance(PhilSms $philSms)
+    {
+        if (! PhilSms::configured()) {
+            return response()->json([
+                'available' => false,
+                'message'   => 'No PhilSMS token is configured on this server.',
+            ]);
+        }
+
+        try {
+            $response = $philSms->balance();
+        } catch (\Throwable $e) {
+            Log::warning('PhilSMS balance lookup failed', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'available' => false,
+                'message'   => 'Could not reach PhilSMS to read the credit balance.',
+            ]);
+        }
+
+        // A 200 carrying status "error" is a refusal, not a balance — the same
+        // trap PhilSms::accepted() exists for on the send path.
+        if (! PhilSms::accepted($response)) {
+            Log::warning('PhilSMS balance refused', [
+                'status'   => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            return response()->json([
+                'available' => false,
+                'message'   => $response->json('message') ?? 'PhilSMS refused the balance request.',
+            ]);
+        }
+
+        return response()->json([
+            'available' => true,
+            'data'      => $response->json('data'),
+        ]);
+    }
+
+    /**
      * The single definition of "who receives a blast to these barangays", shared
      * by the send and by the page's pre-send preview.
      *
