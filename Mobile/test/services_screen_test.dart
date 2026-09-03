@@ -335,6 +335,16 @@ void main() {
 
   group('loading the catalogue', () {
     testWidgets('shows a spinner until the services arrive', (tester) async {
+      // Same tall surface `_pump` uses, for the same reason. This test builds
+      // the screen inline rather than through the helper, so it was left on
+      // the default 800x600 — and the screen is a lazy ListView with the
+      // safety notice above the picker, so once that notice grew to one row
+      // per hotline number the spinner sat past the build extent and was
+      // never constructed. Nothing to do with the loading state itself.
+      tester.view.physicalSize = const Size(1080, 8000);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
       final gate = Completer<void>();
       final state = AppState(FakeApi()..servicesGate = gate.future);
       await tester.pumpWidget(MaterialApp(
