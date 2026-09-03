@@ -303,16 +303,52 @@ void main() {
 
       expect(find.byType(ServicePurposeNote), findsOneWidget);
       expect(
-        find.textContaining('disaster and emergency service line'),
+        find.textContaining('coordination system'),
+        findsWidgets,
+      );
+      expect(find.textContaining('MDRRMO Echague'), findsOneWidget);
+    });
+
+    testWidgets('the card is printed in both languages', (tester) async {
+      // The language toggle lives on AppState, which does not exist before
+      // login, so neither auth screen has a locale to read. Both languages are
+      // printed rather than one guessed at.
+      await _pumpLogin(tester);
+
+      expect(
+        find.text('Ang SERBIS ay isang coordination system kasama ang MDRRMO Echague.'),
         findsOneWidget,
       );
-      expect(find.textContaining('Echague MDRRMO'), findsOneWidget);
+      expect(
+        find.text('SERBIS is a coordination system run with the Echague MDRRMO.'),
+        findsOneWidget,
+      );
+      expect(find.text('Humiling ng serbisyo sa MDRRMO'), findsOneWidget);
+      expect(find.text('Mga gabay pangkaligtasan, offline'), findsOneWidget);
+      expect(
+        find.text('Tumanggap ng SMS announcements mula sa MDRRMO'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the card does not call SERBIS an emergency line', (tester) async {
+      // SERBIS coordinates requests with the office; it does not put a
+      // dispatcher on the other end of the button. The old copy said
+      // "the disaster and emergency service line", which promised one.
+      await _pumpLogin(tester);
+
+      expect(find.textContaining('emergency service line'), findsNothing);
+      expect(find.textContaining('Emergency'), findsNothing);
     });
 
     testWidgets('the register screen says the same thing', (tester) async {
       await _pumpRegister(tester);
 
       expect(find.byType(ServicePurposeNote), findsOneWidget);
+      expect(
+        find.text('Ang SERBIS ay isang coordination system kasama ang MDRRMO Echague.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('registering no longer promises a verification step that does not exist',
