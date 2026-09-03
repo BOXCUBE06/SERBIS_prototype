@@ -540,11 +540,18 @@ const sendSmsBlast = async () => {
 
     if (!res.ok) throw new Error(data.message || 'Failed to send blast')
 
-    alert.value = {
-      show: true,
-      type: 'success',
-      message: `Success: ${data.sent} messages dispatched. ${data.failed} failed.`
-    }
+    // A 202 with `unconfirmed` means the vendor never answered, so res.ok is
+    // true but the send is not confirmed. Branching on it matters more than it
+    // looks: without this the server's "do NOT send it again" is discarded and
+    // the box reads "Success: 0 messages dispatched", which is worse than the
+    // error it replaced.
+    alert.value = data.unconfirmed
+      ? { show: true, type: 'warning', message: data.message }
+      : {
+          show: true,
+          type: 'success',
+          message: `Success: ${data.sent} messages dispatched. ${data.failed} failed.`
+        }
 
     message.value = ''
     selectedTemplate.value = null

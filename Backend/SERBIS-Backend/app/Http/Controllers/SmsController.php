@@ -7,6 +7,7 @@ use App\Models\Resident;
 use App\Models\SmsLog;
 use App\Services\PhilSms;
 use App\Traits\PaginatesLists;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -39,19 +40,56 @@ class SmsController extends Controller
             ->values()
             ->all();
 
-        $response = $philSms->send($recipients, $validated['message']);
+        try {
+            $response = $philSms->send($recipients, $validated['message'], PhilSms::BLAST_TIMEOUT);
+        } catch (ConnectionException $e) {
+            // The request left and the reply never came back. cURL 28 with zero
+            // bytes received means PhilSMS almost certainly accepted, processed
+            // and billed it — we stopped listening; the send did not stop.
+            //
+            // Recorded rather than rolled back, and deliberately NOT as
+            // 'Failed'. Rolling back leaves no trace of a blast that reached
+            // real handsets, and a 'Failed' row invites someone to send it
+            // again and pay again — which is the exact behaviour this exists to
+            // prevent.
+            Log::warning('PhilSMS send timed out — delivery unconfirmed', [
+                'recipients' => count($recipients),
+                'error'      => $e->getMessage(),
+            ]);
+
+            $this->recordBlast(
+                $request->user()->admin_id,
+                $residents,
+                $validated['message'],
+                'Unconfirmed',
+                // No response, so no job id. Nothing to reconcile this against
+                // later except the vendor's own dashboard.
+                null,
+            );
+
+            // 202, not 200 and not 5xx. We cannot confirm delivery, so this is
+            // not success; but a 5xx is what staff are currently retrying.
+            return response()->json([
+                'message'     => 'PhilSMS did not answer in time, but the message was most likely sent and billed. Do NOT send it again — check the PhilSMS dashboard, or ask a recipient, before resending.',
+                'unconfirmed' => true,
+                'sent'        => 0,
+                'failed'      => 0,
+                'recipients'  => count($recipients),
+            ], 202);
+        }
 
         $succeeded = PhilSms::accepted($response);
 
         // Recorded either way. A failed blast is the more important of the two to
         // have written down — it is the one somebody will ask about afterwards —
-        // and the advisory feed reads only the sent ones, so a failure cannot
-        // masquerade as a warning that went out.
+        // and the advisory feed withholds only Failed rows, so a blast that
+        // never left cannot masquerade as a warning that went out. (Unconfirmed
+        // is a third case and is shown; see advisories().)
         $this->recordBlast(
             $request->user()->admin_id,
             $residents,
             $validated['message'],
-            $succeeded,
+            $succeeded ? 'Sent' : 'Failed',
             $response->json('data.uid') ?? $response->json('job_id') ?? $response->json('id'),
         );
 
@@ -204,7 +242,12 @@ class SmsController extends Controller
         }
 
         $advisories = SmsLog::query()
-            ->where('status', 'Sent')
+            // 'Unconfirmed' included on purpose. It means PhilSMS never
+            // answered, not that nothing was sent — the handset most likely has
+            // the message, and a feed that omits it would contradict the phone
+            // the resident is holding. Only 'Failed' is withheld, which is the
+            // case where nothing went out at all.
+            ->whereIn('status', ['Sent', 'Unconfirmed'])
             ->whereHas('recipients', fn ($query) => $query->where('resident_id', $user->getKey()))
             ->with('barangay:barangay_id,barangay_name')
             ->latest()
@@ -327,11 +370,9 @@ class SmsController extends Controller
         int $senderId,
         $residents,
         string $message,
-        bool $succeeded,
+        string $status,
         ?string $apiJobId,
     ): void {
-        $status = $succeeded ? 'Sent' : 'Failed';
-
         DB::transaction(function () use ($senderId, $residents, $message, $status, $apiJobId) {
             foreach ($residents->groupBy('barangay_id') as $barangayId => $group) {
                 $log = SmsLog::create([
