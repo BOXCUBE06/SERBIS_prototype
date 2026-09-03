@@ -97,9 +97,20 @@ Route::middleware('auth:sanctum')->group(function () {
         // was written; the route simply never existed.
         Route::get('/logs/sms', [SmsController::class, 'history']);
         
-        Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:3,60');
-        // Read-only and unbilled, so nothing like the blast's 3/hour — but it is
-        // still an outbound vendor call on every visit to the page, not free.
+        // TEMPORARY — REMOVED FOR THE DEMO. RESTORE `->middleware('throttle:3,60')`
+        // AFTERWARDS.
+        //
+        // This is the only endpoint in the application that spends money. PhilSMS
+        // bills per message and has no sandbox, and one call here sends to every
+        // active, opted-in resident of every barangay selected — so a repeated
+        // submit costs real pesos and reaches real handsets.
+        //
+        // Nothing else bounds it. The confirmation dialog and the disabled button
+        // are client-side only and do not survive a second tab, a reload
+        // mid-request, or the token being replayed by hand.
+        Route::post('/sms/blast', [SmsController::class, 'sendBlast']);
+        // Read-only and unbilled — but it is still an outbound vendor call on
+        // every visit to the page, not free.
         Route::get('/sms/balance', [SmsController::class, 'balance'])->middleware('throttle:30,1');
         // Fires on every change to the barangay picker, so it is allowed to run
         // far more often than the send it previews. Touches only the local
