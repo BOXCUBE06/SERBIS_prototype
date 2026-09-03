@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-/// The four guided request forms, one class each.
+/// The four guided request forms: [AmbulanceFormData], and the road, relief
+/// and generic forms, which are one [StructuredFormData] over three field
+/// lists.
 ///
 /// These used to be a `Map<String, TextEditingController>` keyed by strings
 /// like `'amb_patient'`, filled by `_ctrl('amb_patient')` on the way in and
@@ -10,9 +12,11 @@ import 'package:flutter/widgets.dart';
 /// what M2 was — five fields typed in by residents and dropped before the
 /// request was sent.
 ///
-/// Here every field is a named property. A field that is rendered but left out
-/// of [metaLines] is now visible in one screenful of code, and a rename that
-/// misses one side does not compile.
+/// Here every field is declared once and carries its own output line — a named
+/// property on the ambulance form, a [ServiceFormField] on the other three. A
+/// field that is rendered but left out of the description is visible in one
+/// screenful of code either way, and a rename that misses one side does not
+/// compile.
 sealed class ServiceFormData {
   /// The lines that become the request's description, in the order the
   /// dispatcher reads them. [serviceName] leads; [submittedLabel] closes.
@@ -260,62 +264,279 @@ class AmbulanceFormData extends ServiceFormData {
   }
 }
 
-class RoadFormData extends ServiceFormData {
-  static const obstructionTypes = [
-    'Fallen tree / branches',
-    'Flooding / silt',
-    'Landslide debris',
-    'Other',
-  ];
+/// One input on a structured form, together with the line it contributes to
+/// the description.
+///
+/// Both halves are declared in one place on purpose. The whole reason the
+/// forms stopped being a map of string keys (M27) was that a field could be
+/// rendered, typed into and never read on the way out with nothing to flag it;
+/// a field that carries its own output line cannot be collected and dropped,
+/// because there is no second list for it to fall out of.
+class ServiceFormField {
+  const ServiceFormField.text({
+    required this.key,
+    required this.label,
+    required this.hint,
+    required this.metaFallback,
+    this.lines = 1,
+    this.keyboard = TextInputType.text,
+    this.metaPrefix,
+  }) : options = const [];
 
-  final TextEditingController location = TextEditingController();
-  final TextEditingController description = TextEditingController();
-  String obstruction = obstructionTypes.first;
+  /// A closed list, so it always has an answer — there is no fallback because
+  /// there is no blank state to fall back from.
+  const ServiceFormField.choice({
+    required this.key,
+    required this.label,
+    required this.options,
+    required this.metaPrefix,
+  })  : hint = '',
+        lines = 1,
+        keyboard = TextInputType.text,
+        metaFallback = '';
 
-  /// A road obstruction is reported about a place, not about the reporter, so
-  /// this form has never carried a number and still does not.
-  @override
-  List<String> metaLines({
-    required String serviceName,
-    required String submittedLabel,
-  }) =>
-      [
-        serviceName,
-        _or(location, 'Location not specified'),
-        'Obstruction: $obstruction',
-        'Description: ${_or(description, 'No description provided')}',
-        'Submitted $submittedLabel',
-      ];
+  /// Stable id, and the key the controller is stored under — so a renamed
+  /// field breaks in one place rather than drifting apart between the widget
+  /// and the description.
+  final String key;
 
-  @override
-  void dispose() {
-    location.dispose();
-    description.dispose();
-  }
+  final String label;
+  final String hint;
+  final int lines;
+  final TextInputType keyboard;
+
+  /// Empty for a free-text field, the choices for a dropdown.
+  final List<String> options;
+
+  /// e.g. `'Household size: '`. Null for the fields a dispatcher reads bare,
+  /// like the relief address and the generic details.
+  final String? metaPrefix;
+
+  /// What the line says when the resident left the field empty. Never blank: a
+  /// gap in the block reads as a field that was never asked for.
+  final String metaFallback;
+
+  bool get isChoice => options.isNotEmpty;
 }
 
-class ReliefFormData extends ServiceFormData {
-  static const assistanceTypes = [
-    'Food packs',
-    'Hygiene kits',
-    'Drinking water',
-    'Temporary shelter materials',
-    'Other',
-  ];
+/// A labelled group of fields, matching one `FormSection` on screen.
+class ServiceFormSection {
+  const ServiceFormSection({required this.labelKey, required this.fields});
+
+  /// A `translations.dart` key. The section headings are the one part of these
+  /// forms the resident reads in their own language.
+  final String labelKey;
+
+  final List<ServiceFormField> fields;
+}
+
+/// What one service's form is made of.
+class ServiceFormSpec {
+  const ServiceFormSpec({required this.sections, required this.carriesContact});
+
+  final List<ServiceFormSection> sections;
+
+  /// Whether the description ends with the account's callback number. False
+  /// for a road report, which is about a place and not about the reporter.
+  final bool carriesContact;
+
+  Iterable<ServiceFormField> get fields =>
+      sections.expand((section) => section.fields);
+}
+
+const kObstructionTypes = [
+  'Fallen tree / branches',
+  'Flooding / silt',
+  'Landslide debris',
+  'Other',
+];
+
+const kAssistanceTypes = [
+  'Food packs',
+  'Hygiene kits',
+  'Drinking water',
+  'Temporary shelter materials',
+  'Other',
+];
+
+const _roadSpec = ServiceFormSpec(
+  carriesContact: false,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.location',
+      fields: [
+        ServiceFormField.text(
+          key: 'location',
+          label: 'Location / road name',
+          hint: 'e.g. Brgy. Malasin – Provincial Road',
+          metaFallback: 'Location not specified',
+        ),
+        ServiceFormField.choice(
+          key: 'obstruction',
+          label: 'Obstruction type',
+          options: kObstructionTypes,
+          metaPrefix: 'Obstruction: ',
+        ),
+      ],
+    ),
+    ServiceFormSection(
+      labelKey: 'form_section.description',
+      fields: [
+        ServiceFormField.text(
+          key: 'description',
+          label: 'Description',
+          hint: "Describe the obstruction and how it's affecting access",
+          lines: 3,
+          metaPrefix: 'Description: ',
+          metaFallback: 'No description provided',
+        ),
+      ],
+    ),
+  ],
+);
+
+const _reliefSpec = ServiceFormSpec(
+  carriesContact: true,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.household',
+      fields: [
+        ServiceFormField.text(
+          key: 'household_head',
+          label: 'Household head name',
+          hint: 'Full name',
+          metaPrefix: 'Household head: ',
+          metaFallback: 'Not specified',
+        ),
+        ServiceFormField.text(
+          key: 'address',
+          label: 'Address',
+          hint: 'Purok / street, barangay',
+          metaFallback: 'Address not specified',
+        ),
+        // The number that decides how many food packs are loaded. Its own
+        // field with its own line out, rather than something an operator has
+        // to find inside a sentence — see service_forms_shape_test.dart.
+        ServiceFormField.text(
+          key: 'household_size',
+          label: 'Household size',
+          hint: 'e.g. 5',
+          keyboard: TextInputType.number,
+          metaPrefix: 'Household size: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+    ServiceFormSection(
+      labelKey: 'form_section.assistance',
+      fields: [
+        ServiceFormField.choice(
+          key: 'assistance',
+          label: 'Type of assistance needed',
+          options: kAssistanceTypes,
+          metaPrefix: 'Assistance: ',
+        ),
+      ],
+    ),
+  ],
+);
+
+const _genericSpec = ServiceFormSpec(
+  carriesContact: true,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.details',
+      fields: [
+        ServiceFormField.text(
+          key: 'details',
+          label: 'Details',
+          hint: 'Describe what you need and where',
+          lines: 4,
+          metaFallback: 'No details provided',
+        ),
+      ],
+    ),
+  ],
+);
+
+/// The road, relief and generic forms, which were three classes differing only
+/// in their field list.
+///
+/// Each carried its own controllers, its own `metaLines` and its own
+/// `dispose`, and `ServiceFormFields` carried a near-identical `Column` for
+/// each — so adding a field meant editing two files in three places, and
+/// nothing told you when you had edited only one of them.
+///
+/// The collapse is of the scaffolding only. Every field the three forms
+/// collected is still a field, and `metaLines` emits the same block of text
+/// character for character: `service_forms_shape_test.dart` pins all six
+/// filled-and-blank cases and was written and run against the three separate
+/// classes before they were merged. The ambulance form stays its own class —
+/// its fields go to real columns on `tbl_service_request` through
+/// [AmbulanceIntakeFields], not into the description at all.
+final class StructuredFormData extends ServiceFormData {
+  StructuredFormData._(
+    this.spec, {
+    this.contactNumber = '',
+    Map<String, String> prefill = const {},
+  }) {
+    for (final field in spec.fields) {
+      if (field.isChoice) {
+        _choices[field.key] = field.options.first;
+      } else {
+        _controllers[field.key] =
+            TextEditingController(text: prefill[field.key] ?? '');
+      }
+    }
+  }
+
+  static StructuredFormData road() => StructuredFormData._(_roadSpec);
 
   /// The household head is the account holder by definition — the app is
-  /// distributed one account per household — so this one is prefilled for the
+  /// distributed one account per household — so the name is prefilled for the
   /// same reason the patient name is, with more confidence.
-  ReliefFormData({String headName = '', this.contactNumber = ''}) {
-    head.text = headName;
-  }
+  static StructuredFormData relief({
+    String headName = '',
+    String contactNumber = '',
+  }) =>
+      StructuredFormData._(
+        _reliefSpec,
+        contactNumber: contactNumber,
+        prefill: {'household_head': headName},
+      );
 
+  static StructuredFormData generic({String contactNumber = ''}) =>
+      StructuredFormData._(_genericSpec, contactNumber: contactNumber);
+
+  final ServiceFormSpec spec;
   final String contactNumber;
 
-  final TextEditingController head = TextEditingController();
-  final TextEditingController address = TextEditingController();
-  final TextEditingController householdSize = TextEditingController();
-  String assistance = assistanceTypes.first;
+  final Map<String, TextEditingController> _controllers = {};
+  final Map<String, String> _choices = {};
+
+  /// Throws rather than creating one on demand, which is the failure the old
+  /// `_ctrl(key)` map had: a typo produced an empty controller that rendered
+  /// and submitted nothing, and nothing anywhere said so.
+  TextEditingController field(String key) {
+    final controller = _controllers[key];
+    if (controller == null) {
+      throw ArgumentError.value(key, 'key', 'not a text field on this form');
+    }
+    return controller;
+  }
+
+  String choice(String key) {
+    final value = _choices[key];
+    if (value == null) {
+      throw ArgumentError.value(key, 'key', 'not a dropdown on this form');
+    }
+    return value;
+  }
+
+  void select(String key, String value) {
+    choice(key);
+    _choices[key] = value;
+  }
 
   @override
   List<String> metaLines({
@@ -324,43 +545,23 @@ class ReliefFormData extends ServiceFormData {
   }) =>
       [
         serviceName,
-        'Household head: ${_or(head, 'Not specified')}',
-        _or(address, 'Address not specified'),
-        'Household size: ${_or(householdSize, 'Not specified')}',
-        'Assistance: $assistance',
-        'Contact: ${_contactLine(contactNumber)}',
+        for (final field in spec.fields) _lineFor(field),
+        if (spec.carriesContact) 'Contact: ${_contactLine(contactNumber)}',
         'Submitted $submittedLabel',
       ];
 
-  @override
-  void dispose() {
-    head.dispose();
-    address.dispose();
-    householdSize.dispose();
+  String _lineFor(ServiceFormField field) {
+    final value = field.isChoice
+        ? _choices[field.key]!
+        : _or(_controllers[field.key]!, field.metaFallback);
+
+    return field.metaPrefix == null ? value : '${field.metaPrefix}$value';
   }
-}
-
-class GenericFormData extends ServiceFormData {
-  GenericFormData({this.contactNumber = ''});
-
-  final String contactNumber;
-
-  final TextEditingController details = TextEditingController();
-
-  @override
-  List<String> metaLines({
-    required String serviceName,
-    required String submittedLabel,
-  }) =>
-      [
-        serviceName,
-        _or(details, 'No details provided'),
-        'Contact: ${_contactLine(contactNumber)}',
-        'Submitted $submittedLabel',
-      ];
 
   @override
   void dispose() {
-    details.dispose();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
   }
 }

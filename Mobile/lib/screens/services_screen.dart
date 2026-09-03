@@ -147,13 +147,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 // the resident is expected to narrow, not a doorstep.
                 accountAddress: widget.user.address,
               ),
-            ServiceFormKind.road => RoadFormData(),
-            ServiceFormKind.relief => ReliefFormData(
+            ServiceFormKind.road => StructuredFormData.road(),
+            ServiceFormKind.relief => StructuredFormData.relief(
                 headName: widget.user.fullName,
                 contactNumber: widget.user.phone,
               ),
             ServiceFormKind.generic =>
-              GenericFormData(contactNumber: widget.user.phone),
+              StructuredFormData.generic(contactNumber: widget.user.phone),
           });
 
   @override
