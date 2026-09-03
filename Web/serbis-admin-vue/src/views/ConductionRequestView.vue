@@ -511,7 +511,21 @@
               ></v-textarea>
             </v-col>
             <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.departed_destination_at" type="datetime-local" label="Departed destination" variant="outlined" density="comfortable"></DateTimePickerField>
+              <!-- Disabled rather than left typeable and refused afterwards. A
+                   trip that never arrived has no departure from a destination
+                   it never reached, and a 422 explaining that after the fact is
+                   worse than a field that cannot be filled in the first place.
+                   The hint says why, so the control does not just look broken. -->
+              <DateTimePickerField
+                v-model="tripLog.form.departed_destination_at"
+                type="datetime-local"
+                label="Departed destination"
+                variant="outlined"
+                density="comfortable"
+                :disabled="hasNoArrivalReason"
+                :hint="hasNoArrivalReason ? 'Not applicable — this trip never reached its destination.' : undefined"
+                :persistent-hint="hasNoArrivalReason"
+              ></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
               <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
@@ -1026,6 +1040,13 @@ const openTripLog = (record) => {
   }
 }
 
+// Drives the Departed destination field's disabled state. Reads the form rather
+// than the saved record: the field must go dead as soon as staff type a reason,
+// not only after the log has been saved with one.
+const hasNoArrivalReason = computed(
+  () => (tripLog.value.form.no_arrival_reason || '').trim() !== '',
+)
+
 const CHECKPOINTS = [
   ['departed_office_at', 'Departed office'],
   ['arrived_destination_at', 'Arrived at destination'],
@@ -1041,7 +1062,27 @@ const validateTripLog = (form) => {
   if (start !== null && start !== '' && end !== null && end !== '' && Number(end) < Number(start)) {
     return 'Odometer reading on return must be at or after the reading at departure.'
   }
-  const checkpoints = CHECKPOINTS
+  // Same two refusals the server added with the reduced sequence below. Checked
+  // here first for the same reason the rest of this function exists — a mistake
+  // belongs next to the field, not after a round trip.
+  const noArrival = (form.no_arrival_reason || '').trim() !== ''
+
+  if (noArrival && form.arrived_destination_at) {
+    return 'This trip has an arrival time recorded. A trip either arrived or it did not — clear the arrival time, or clear the no-arrival reason.'
+  }
+  if (noArrival && form.departed_destination_at) {
+    return 'This trip never arrived, so there is no departure from the destination to record. Clear the reason if it did arrive.'
+  }
+
+  // A trip that never arrived runs office -> back to office. Without this the
+  // client refused the very checkpoints the server now accepts, so the crew's
+  // return still could not be recorded — the block would simply have moved from
+  // the API to the form.
+  const sequence = noArrival
+    ? CHECKPOINTS.filter(([field]) => field === 'departed_office_at' || field === 'returned_office_at')
+    : CHECKPOINTS
+
+  const checkpoints = sequence
     .map(([field, label]) => ({ field, label, at: form[field] ? new Date(form[field]) : null }))
   for (let i = 1; i < checkpoints.length; i++) {
     if (checkpoints[i].at && !checkpoints[i - 1].at) {
