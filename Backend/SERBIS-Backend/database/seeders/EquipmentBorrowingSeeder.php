@@ -66,8 +66,43 @@ class EquipmentBorrowingSeeder extends Seeder
             ];
         }
 
-        DB::table('tbl_equipment_borrowing')->insert($rows);
+        // A raw insert never goes through EquipmentBorrowingController::update(),
+        // so a 'Released' row seeded here — units genuinely out — never
+        // decremented the equipment it borrowed. That mismatch is exactly what
+        // let a later, real Released->Returned transition push
+        // available_quantity past total_quantity: nothing had ever subtracted
+        // for the release in the first place, so the return's increment had no
+        // matching withdrawal to restore. Reconciled here so seeded data starts
+        // consistent — a 'Returned' row nets to zero (released then returned)
+        // and needs no adjustment; only 'Released' currently holds stock out.
+        $releasedByEquipment = collect($rows)
+            ->where('status', 'Released')
+            ->groupBy('equipment_id')
+            ->map(fn ($group) => collect($group)->sum('quantity'));
+
+        DB::transaction(function () use ($rows, $releasedByEquipment) {
+            DB::table('tbl_equipment_borrowing')->insert($rows);
+
+            foreach ($releasedByEquipment as $equipmentId => $releasedQty) {
+                DB::table('tbl_equipments')
+                    ->where('equipment_id', $equipmentId)
+                    ->update([
+                        // Clamped at 0 rather than trusted to stay positive —
+                        // this seeder should never itself become a source of
+                        // the same kind of unchecked-arithmetic corruption it
+                        // was written to stop compounding.
+                        'available_quantity' => DB::raw("GREATEST(0, available_quantity - {$releasedQty})"),
+                    ]);
+            }
+        });
 
         $this->command?->info('EquipmentBorrowingSeeder: created ' . count($rows) . ' borrowings.');
+
+        if ($releasedByEquipment->isNotEmpty()) {
+            $this->command?->info(
+                'EquipmentBorrowingSeeder: decremented available_quantity for '
+                . $releasedByEquipment->count() . ' equipment row(s) to match seeded Released loans.'
+            );
+        }
     }
 }
