@@ -83,7 +83,31 @@ class EquipmentController extends Controller
                 Rule::unique('tbl_equipments')->ignore($equipment->equipment_id, 'equipment_id')
             ],
             'total_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY,
-            'available_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY.'|lte:total_quantity',
+            'available_quantity' => [
+                'sometimes',
+                'required',
+                'integer',
+                'min:0',
+                'max:'.self::MAX_QUANTITY,
+                // lte:total_quantity compares only against another field in
+                // THIS request. A solo available_quantity edit — adjusting
+                // stock without touching the total — carries no
+                // total_quantity at all, and Laravel's own lte semantics
+                // treat a missing comparison field as failing every value,
+                // not as skipping the rule: this endpoint could never accept
+                // a solo available_quantity edit, for any value including 0.
+                // Compares against the request's total_quantity when one was
+                // sent (unchanged), the stored value otherwise.
+                function ($attribute, $value, $fail) use ($request, $equipment) {
+                    $total = $request->has('total_quantity')
+                        ? (int) $request->input('total_quantity')
+                        : (int) $equipment->total_quantity;
+
+                    if ($value > $total) {
+                        $fail("The available quantity field must be less than or equal to {$total}.");
+                    }
+                },
+            ],
             'status' => 'sometimes|required|in:Available,Unavailable',
         ]);
 
