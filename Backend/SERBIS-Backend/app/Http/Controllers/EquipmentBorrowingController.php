@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -247,7 +248,47 @@ class EquipmentBorrowingController extends Controller
             // Handle stock addition when returning
             if ($newStatus === 'Returned' && $oldStatus === 'Released') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
-                $equipment->increment('available_quantity', $borrowing->quantity);
+
+                // increment() alone has no upper bound: a borrowing whose
+                // Released side never actually decremented stock (a seeded
+                // row, a manual fix, a double-processed record) returns into
+                // a total that never moved, pushing available_quantity past
+                // total_quantity with nothing to say so — this is exactly
+                // how the Oxygen Tank row (45 total, 46 available) got that
+                // way. Clamped here rather than trusted.
+                $requested = $equipment->available_quantity + $borrowing->quantity;
+                $clampedTo = min($requested, $equipment->total_quantity);
+
+                // Logged explicitly rather than left to TracksHistory: a
+                // fully-clamped return (available_quantity already at
+                // total, nothing to add) leaves the column unchanged, and
+                // TracksHistory's own "no dirty attributes, don't log" rule
+                // (logAction, action 'updated') would silently drop that a
+                // clamp was even attempted.
+                if ($clampedTo < $requested) {
+                    DB::table('tbl_system_logs')->insert([
+                        'admin_id' => Auth::user() instanceof \App\Models\User ? Auth::id() : null,
+                        'resident_id' => Auth::user() instanceof \App\Models\Resident ? Auth::id() : null,
+                        'action_type' => 'stock_clamped',
+                        'auditable_type' => Equipment::class,
+                        'auditable_id' => $equipment->getKey(),
+                        'old_values' => json_encode([
+                            'borrow_id' => $borrowing->getKey(),
+                            'available_quantity' => $equipment->available_quantity,
+                            'total_quantity' => $equipment->total_quantity,
+                            'return_quantity' => $borrowing->quantity,
+                            'would_have_been' => $requested,
+                        ]),
+                        'new_values' => json_encode(['available_quantity' => $clampedTo]),
+                        'ip_address' => request()->ip(),
+                        'user_agent' => request()->userAgent(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                $equipment->available_quantity = $clampedTo;
+                $equipment->save();
                 $borrowing->returned_at = now();
             }
 
