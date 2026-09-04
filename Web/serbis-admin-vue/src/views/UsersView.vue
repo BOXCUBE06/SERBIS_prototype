@@ -256,7 +256,7 @@
               :hidden-by-filter="selectionHidden"
               @close="closeDetail"
               @edit="openExistingEditModal"
-              @toggle-status="toggleStatus"
+              @toggle-status="askToggleStatus"
               @delete="askDelete"
               @clear-filters="clearFilters"
             />
@@ -430,6 +430,29 @@
       </v-card>
     </v-dialog>
 
+    <!-- Deactivate confirm -->
+    <v-dialog v-model="statusDialog.show" max-width="460">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Deactivate this account?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          <strong class="text-high-emphasis">{{ statusDialog.item ? fullName(statusDialog.item) : '' }}</strong>
+          will lose access to sign in and file requests, and will stop receiving MDRRMO text blasts.
+          It can be reactivated later.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="warning" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            :loading="statusDialog.loading" @click="confirmDeactivate"
+          >
+            Deactivate account
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
     </v-snackbar>
@@ -520,6 +543,7 @@ const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All' })
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
+const statusDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 const statusToggleLoading = ref(false)
 
@@ -543,7 +567,7 @@ const closeDetail = () => { selectedResident.value = null }
 // longer there.
 const onEscape = (event) => {
   if (event.key !== 'Escape') return
-  if (modal.value.isOpen || deleteDialog.value.show) return
+  if (modal.value.isOpen || deleteDialog.value.show || statusDialog.value.show) return
   if (selectedResident.value) closeDetail()
 }
 
@@ -556,7 +580,7 @@ const onEscape = (event) => {
 // is excluded too, or picking a status would shut the panel behind it.
 const onDocumentClick = (event) => {
   if (!selectedResident.value) return
-  if (modal.value.isOpen || deleteDialog.value.show) return
+  if (modal.value.isOpen || deleteDialog.value.show || statusDialog.value.show) return
   const target = event.target
   if (!(target instanceof Element)) return
   if (target.closest('.detail-rail')) return
@@ -851,6 +875,26 @@ const saveUser = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// Deactivating cuts the account's sign-in and SMS/app access, so it gets the
+// same one-more-step confirm Staff Accounts already has for "Close account".
+// Activating (Pending or Deactivated -> Active) is the safe direction and
+// still fires immediately, matching Staff's own asymmetry: Reactivate there
+// has no confirm dialog either.
+const askToggleStatus = (item) => {
+  if (item.status === RESIDENT_STATUS.active) {
+    statusDialog.value = { show: true, item, loading: false }
+    return
+  }
+  toggleStatus(item)
+}
+
+const confirmDeactivate = async () => {
+  const item = statusDialog.value.item
+  statusDialog.value.loading = true
+  await toggleStatus(item)
+  statusDialog.value = { show: false, item: null, loading: false }
 }
 
 const toggleStatus = async (item) => {
