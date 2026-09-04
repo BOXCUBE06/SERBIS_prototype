@@ -321,6 +321,18 @@
               </v-col>
 
               <v-col cols="12" md="6" v-if="!modal.isEditing">
+                <!-- Vuetify swaps the hint for the error message via an
+                     animated slide (VMessages' leaveAbsolute transition), so
+                     for ~275ms both are in the DOM at once, the leaving hint
+                     positioned absolutely over the entering error. That's
+                     invisible for a one-line hint fading into a one-line
+                     error, but this field's hint wraps to two lines, so the
+                     overlap reads as a smear of red-and-grey text (finding
+                     #5, docs/ui-audit/findings.md). No public prop reaches
+                     that transition from v-text-field, so it's killed here
+                     with plain CSS instead: with no transition duration, Vue
+                     removes the leaving message immediately rather than
+                     animating it out on top of the incoming one. -->
                 <v-text-field
                   v-model="formData.password"
                   label="Password *"
@@ -334,6 +346,7 @@
                   density="comfortable"
                   rounded="lg"
                   autocomplete="new-password"
+                  class="password-field-instant-messages"
                   @click:append-inner="showPassword = !showPassword"
                 ></v-text-field>
               </v-col>
@@ -966,6 +979,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* See the comment on the Password field itself: kills the hint/error
+   crossfade so the leaving message is removed instantly instead of
+   animating on top of the entering one. */
+.password-field-instant-messages :deep(.v-messages__message) {
+  transition: none !important;
+}
+
 /* Table and profile rail side by side. The table is the flexible half and
    carries `min-width: 0`, without which a flex child refuses to shrink below
    its content and the rail would push it off the page instead of compressing
