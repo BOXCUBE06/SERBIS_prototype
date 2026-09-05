@@ -198,11 +198,13 @@
           <v-btn icon="mdi-close" variant="text" size="small" @click="formDialog.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
-          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ formDialog.error }}</v-alert>
-          <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-          <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
-          <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-          <v-select v-model="form.status" :items="STATUSES" label="Status *" variant="outlined" density="comfortable" rounded="lg"></v-select>
+          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
+          <v-form ref="formRef">
+            <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" :rules="[requiredRule('Unit identifier')]" :error-messages="fieldErrors.unit_identifier" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+            <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" :rules="[requiredRule('Type')]" :error-messages="fieldErrors.type" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
+            <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" :error-messages="fieldErrors.specification" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+            <v-select v-model="form.status" :items="STATUSES" label="Status *" :rules="[requiredRule('Status')]" :error-messages="fieldErrors.status" variant="outlined" density="comfortable" rounded="lg"></v-select>
+          </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
           <v-btn variant="text" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
@@ -260,6 +262,37 @@ const formDialog = ref({ show: false, editing: false, loading: false, error: '' 
 const deleteDialog = ref({ show: false, vehicle: null, loading: false })
 const form = ref({ unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' })
 const snackbar = ref({ show: false, text: '', color: 'success' })
+
+// Template ref for the Add/Edit <v-form> — named formRef, not form, because
+// `form` above is already the reactive object the fields are bound to.
+const formRef = ref(null)
+
+const requiredRule = (label) => (v) =>
+  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+
+// Server-side errors, keyed by field, so a 422 lands on the input it belongs
+// to instead of being concatenated into the banner above the form.
+const fieldErrors = ref({})
+const clearFieldErrors = () => { fieldErrors.value = {} }
+
+// Laravel answers `{errors: {field: [msg]}}`. Split it: known fields go to
+// their input, anything unrecognised stays in the banner so nothing is
+// silently swallowed. Mirrors UsersView's applyServerErrors.
+const applyServerErrors = async (res) => {
+  const data = await res.json().catch(() => ({}))
+  if (data.errors && typeof data.errors === 'object') {
+    const mapped = {}
+    const leftovers = []
+    for (const [key, messages] of Object.entries(data.errors)) {
+      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      if (key in form.value) mapped[key] = text
+      else leftovers.push(text)
+    }
+    fieldErrors.value = mapped
+    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+  }
+  return data.message || 'Save failed'
+}
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
@@ -353,6 +386,8 @@ const executeStatusChange = async () => {
 const openAdd = () => {
   form.value = { unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' }
   formDialog.value = { show: true, editing: false, loading: false, error: '' }
+  clearFieldErrors()
+  formRef.value?.resetValidation()
 }
 const openEdit = (vehicle) => {
   form.value = {
@@ -363,15 +398,23 @@ const openEdit = (vehicle) => {
     status: vehicle.status,
   }
   formDialog.value = { show: true, editing: true, loading: false, error: '' }
+  clearFieldErrors()
+  formRef.value?.resetValidation()
 }
 
 const saveVehicle = async () => {
-  if (!form.value.unit_identifier.trim() || !form.value.type || !form.value.status) {
-    formDialog.value.error = 'Unit identifier, type and status are required.'
+  formDialog.value.error = ''
+  clearFieldErrors()
+
+  // Validate before spending a round trip. Vuetify focuses the first invalid
+  // field itself once the rules are attached.
+  const { valid } = await formRef.value.validate()
+  if (!valid) {
+    formDialog.value.error = 'Please correct the highlighted fields.'
     return
   }
+
   formDialog.value.loading = true
-  formDialog.value.error = ''
   const editing = formDialog.value.editing
   const url = editing ? `${API}/${form.value.vehicle_id}` : API
   const payload = {
@@ -382,11 +425,7 @@ const saveVehicle = async () => {
   }
   try {
     const res = await fetch(url, { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
-      throw new Error(msg)
-    }
+    if (!res.ok) throw new Error(await applyServerErrors(res))
     await fetchVehicles()
     formDialog.value.show = false
     notify(editing ? 'Unit updated' : 'Unit added')

@@ -31,8 +31,8 @@ Decision: converge every affected form on pattern (b) — banner + per-field err
 
 Rollout, one commit per surface, verified live each time:
 
-- [x] Generalize the transition fix; document this target pattern (this commit).
-- [ ] Vehicles
+- [x] Generalize the transition fix; document this target pattern.
+- [x] Vehicles (this commit).
 - [ ] Staff Accounts
 - [ ] Residents — reconciled to the amended (generic) banner; its per-field errors already match the target and are untouched.
 - [ ] Text Blast (SMS) — drops the pre-gated `:disabled="!isValid"` button for validate-on-click, joining the banner + per-field pattern used everywhere else. Requires confirming no path can still submit an incomplete blast.
