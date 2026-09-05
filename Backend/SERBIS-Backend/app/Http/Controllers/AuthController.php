@@ -10,6 +10,7 @@ use App\Services\PhilSms;
 use App\Services\Totp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -1016,11 +1017,24 @@ class AuthController extends Controller
 
         $resident = Resident::find($challenge['id']);
 
-        if (!$resident || !Hash::check((string) $request->code, $challenge['code_hash'] ?? '')) {
+        if (!$resident) {
             return response()->json([
                 'message' => 'That code is not right, or it has expired. Ask for a new one.',
                 'code' => 'invalid_code',
             ], 422);
+        }
+
+        $bypassed = $this->otpBypassMatches((string) $request->code);
+
+        if (! $bypassed && ! Hash::check((string) $request->code, $challenge['code_hash'] ?? '')) {
+            return response()->json([
+                'message' => 'That code is not right, or it has expired. Ask for a new one.',
+                'code' => 'invalid_code',
+            ], 422);
+        }
+
+        if ($bypassed) {
+            $this->logOtpBypassUse($resident);
         }
 
         Cache::forget("mfa:challenge:{$request->challenge_id}");
@@ -1030,6 +1044,56 @@ class AuthController extends Controller
             'role' => 'resident',
             'user' => $resident->load('barangay'),
         ], 200);
+    }
+
+    /**
+     * Test-only shortcut for the mobile login OTP, so an automated client
+     * (Playwright, CI) can finish resident login without reading the SMS or
+     * email a real code goes to.
+     *
+     * Two conditions both have to hold, checked here rather than trusted from
+     * the boot-time guard alone (AppServiceProvider::assertOtpBypassIsUnsetInProduction):
+     * the config value must be non-empty, AND the running environment must
+     * not be production. The second check is deliberately redundant with the
+     * boot guard — a config value cached before an environment change, or a
+     * future refactor that drops the boot guard, must not silently reopen
+     * this in production.
+     *
+     * hash_equals rather than === : the bypass code is short and fixed, so a
+     * timing side-channel on it is unlikely to matter in practice, but there
+     * is no reason to compare a secret any other way.
+     */
+    private function otpBypassMatches(string $code): bool
+    {
+        $bypass = (string) config('serbis.otp_bypass_code', '');
+
+        return $bypass !== ''
+            && ! app()->environment('production')
+            && hash_equals($bypass, $code);
+    }
+
+    /**
+     * Every bypass use is written to tbl_system_logs, same shape TracksHistory
+     * uses, so a real login that skipped OTP delivery is never invisible in
+     * the audit trail even though it went through the resident's own model
+     * events unchanged (issuing a token isn't a model write, so
+     * TracksHistory has nothing to hook here on its own).
+     */
+    private function logOtpBypassUse(Resident $resident): void
+    {
+        DB::table('tbl_system_logs')->insert([
+            'admin_id' => null,
+            'resident_id' => $resident->getKey(),
+            'action_type' => 'otp_bypass_used',
+            'auditable_type' => Resident::class,
+            'auditable_id' => $resident->getKey(),
+            'old_values' => null,
+            'new_values' => null,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**

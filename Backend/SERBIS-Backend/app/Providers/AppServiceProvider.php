@@ -25,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         self::assertDebugIsOffInProduction();
+        self::assertOtpBypassIsUnsetInProduction();
 
         // Auth throttling for /admin/login, /resident/login.
         //
@@ -120,6 +121,39 @@ class AppServiceProvider extends ServiceProvider
             .'Debug mode exposes stack traces, file paths and SQL — including '
             .'query bindings — to anyone who can reach this API. '
             .'Set APP_DEBUG=false in the .env on this server, then run '
+            .'`php artisan config:clear` (or `config:cache`) and start again.'
+        );
+    }
+
+    /**
+     * Refuse to run a production deployment with the test-only OTP bypass
+     * configured (config/serbis.php, AuthController::otpBypassMatches()).
+     *
+     * That method already refuses the bypass on its own by checking
+     * app()->environment() at request time — this guard exists so a
+     * misconfigured production server fails loudly at boot instead of
+     * depending on that request-time check never being changed or bypassed
+     * by a future edit. Same shape as assertDebugIsOffInProduction() above,
+     * for the same reason: quietly clearing the config would leave the
+     * variable still set in the .env on the server, so the next person to
+     * read it learns the wrong thing about what is running.
+     */
+    public static function assertOtpBypassIsUnsetInProduction(): void
+    {
+        if (! app()->environment('production')) {
+            return;
+        }
+
+        if ((string) config('serbis.otp_bypass_code', '') === '') {
+            return;
+        }
+
+        throw new RuntimeException(
+            'REFUSING TO START: SERBIS_OTP_BYPASS_CODE is set while APP_ENV is '
+            .'production. This bypass exists only so local development and CI '
+            .'test automation (Playwright) can skip real OTP delivery, and must '
+            .'never be reachable in production. '
+            .'Unset SERBIS_OTP_BYPASS_CODE in the .env on this server, then run '
             .'`php artisan config:clear` (or `config:cache`) and start again.'
         );
     }
