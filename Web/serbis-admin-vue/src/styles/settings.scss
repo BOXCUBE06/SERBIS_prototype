@@ -8,3 +8,21 @@
 // @use 'vuetify/settings' with (
 //   $color-pack: false
 // );
+
+// Vuetify's VMessages animates the swap between a field's hint and its
+// error message with an absolutely-positioned leave transition
+// (`leaveAbsolute`), so for ~275ms both messages sit in the DOM at once,
+// the leaving one positioned on top of the entering one. Invisible for a
+// one-line hint fading into a one-line error; not invisible the moment
+// either wraps to more than one line, where the two smear into illegible
+// overlapping text (first found on Residents' Password field, finding #5
+// / #2 in docs/ui-audit/findings.md — that fix was originally scoped to
+// just that one field via a local class, then generalized here once
+// finding #2's per-field-error rollout meant every form's fields could
+// hit the same window). No public prop on v-text-field, v-select, or any
+// other input reaches this transition, so it's killed globally: with no
+// transition duration, Vue removes the leaving message on the next tick
+// instead of animating it out over the incoming one.
+.v-messages__message {
+  transition: none !important;
+}

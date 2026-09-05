@@ -22,6 +22,23 @@ System-wide findings (one row, every affected route listed) come first, then per
 | 12 | Resident Requests vs. Equipment Borrowing | Empty search-result state | light | polish | Searching to zero results is handled two different ways. Equipment Borrowing clears the whole content area and shows one centered empty state (icon, "No requests match", a "Clear all filters" button). Resident Requests clears only the left-hand list to "No requests match…" — the right-hand detail panel keeps showing whichever request was selected before the search, fully populated with its own live Disapprove / Approve & Dispatch buttons still enabled. | The stale detail panel is still actionable during a state that visually says "nothing matches" — an admin could act on a request that's no longer part of the filtered set in front of them, and there's no one-click way to clear the search (only the field's own × icon), unlike Borrowing's explicit "Clear all filters". | Either clear/disable the detail panel when the list empties from a filter, or make clear the two panels are independent; add a "Clear filters" affordance to match Borrowing's. | `resident-requests--empty--1920x1080.png`, `equipment-borrowing--empty--1920x1080.png` |
 | 13 | Login | Forgot-password affordance | light | polish (confirm intent) | There is no forgot/reset-password link, button, or any other affordance on the login screen at all — confirmed against the rendered page, not just the absence of a route. | This matches a code comment stating the omission is deliberate ("a forgotten password is a DB operation, not a self-serve flow"), so this is flagged for product sign-off rather than as a defect: is a resident-facing-style "contact your administrator" line worth adding here, the way Staff Accounts' own list explains the equivalent gap in-context ("Forgotten passwords are reset here, not by email…")? | If confirmed intentional, no code change — consider one line of copy for discoverability, matching Staff Accounts' existing pattern. | `login--1920x1080--light.png`, `login--1920x1080--dark.png` |
 
+## Finding #2 remediation — target pattern
+
+Decision: converge every affected form on pattern (b) — banner + per-field errors, the Residents baseline — with two amendments:
+
+- **Generic banner, no field list.** The banner text becomes "Please correct the highlighted fields" everywhere, naming no fields — the per-field inline messages already carry that detail, so the banner isn't restating it. This also changes Residents itself, whose current banner names the missing fields.
+- **Generalized hint/error transition fix.** Finding #5's fix (killing `VMessages`' hint-to-error crossfade so a wrapped hint can't overlap an incoming error) was originally scoped to Residents' Password field alone, via a local class. It is promoted to a global rule in `src/styles/settings.scss` covering any field with both a hint and an error, since the per-field-error rollout below puts every form's fields through the same hint/error swap this fix addresses — not just the one field it was found on.
+
+Rollout, one commit per surface, verified live each time:
+
+- [x] Generalize the transition fix; document this target pattern (this commit).
+- [ ] Vehicles
+- [ ] Staff Accounts
+- [ ] Residents — reconciled to the amended (generic) banner; its per-field errors already match the target and are untouched.
+- [ ] Text Blast (SMS) — drops the pre-gated `:disabled="!isValid"` button for validate-on-click, joining the banner + per-field pattern used everywhere else. Requires confirming no path can still submit an incomplete blast.
+
+**Resource Management and Manage Services are out of scope for this rollout.** Their `modal.value.error = '...'` source is byte-identical to Vehicles'/Staff's (pattern (a)), but neither route's blank-submit state was captured in the audit pass (see "Dropped during verification" below), so they aren't confirmed to actually match (a) in the running app. Capture their blank-submit state first; once confirmed, they can follow the same sequence as Vehicles/Staff above.
+
 ## Dropped during verification
 
 Per the capture rules, a finding that can't be grounded in an actual screenshot was cut rather than kept on source-reading alone:
