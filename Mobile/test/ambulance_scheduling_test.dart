@@ -404,4 +404,16 @@ void main() {
       expect(confirmation, 'Aug 1, 2026, 3:04 PM');
     });
   });
+
+  group('formatDueDate', () {
+    test('names the month and keeps the year, with no clock', () {
+      expect(formatDueDate(DateTime(2026, 9, 12, 15, 4)), 'Sep 12, 2026');
+    });
+
+    // The borrow screen used to hand-assemble 9/12/2026, which a reader has
+    // to know is M/D and not D/M. A named month cannot be misread.
+    test('is unambiguous on a day the two orders would swap', () {
+      expect(formatDueDate(DateTime(2026, 3, 4)), 'Mar 4, 2026');
+    });
+  });
 }
