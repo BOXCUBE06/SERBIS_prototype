@@ -41,6 +41,12 @@
              a send fakes the host; PhilSMS has no sandbox. -->
         <env name="PHILSMS_TOKEN" value="testing-token"/>
         <env name="PHILSMS_SENDER_ID" value="PhilSMS"/>
+        <!-- Pinned false regardless of the developer's own .env (which may set
+             this true for local E2E runs): most of this suite asserts against a
+             real, Http::fake()'d send, and SERBIS_SMS_FAKE short-circuits
+             PhilSms::send() before it ever reaches Http. SmsFakeTest is the only
+             file that turns it on, and it does so per-test via config(). -->
+        <env name="SERBIS_SMS_FAKE" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
