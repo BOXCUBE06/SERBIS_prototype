@@ -34,8 +34,10 @@ Rollout, one commit per surface, verified live each time:
 - [x] Generalize the transition fix; document this target pattern.
 - [x] Vehicles.
 - [x] Staff Accounts.
-- [x] Residents (this commit) — reconciled to the amended (generic) banner; its per-field errors already matched the target and were untouched.
-- [ ] Text Blast (SMS) — drops the pre-gated `:disabled="!isValid"` button for validate-on-click, joining the banner + per-field pattern used everywhere else. Requires confirming no path can still submit an incomplete blast.
+- [x] Residents — reconciled to the amended (generic) banner; its per-field errors already matched the target and were untouched.
+- [x] Text Blast (SMS) (this commit) — dropped the pre-gated `:disabled="!isValid"` button for validate-on-click, joining the banner + per-field pattern. `form.value.validate()` was always the real submission gate; confirmed live that removing the disabled binding does not open a path to submit an incomplete blast.
+
+Finding #2's rollout is complete.
 
 **Resource Management and Manage Services are out of scope for this rollout.** Their `modal.value.error = '...'` source is byte-identical to Vehicles'/Staff's (pattern (a)), but neither route's blank-submit state was captured in the audit pass (see "Dropped during verification" below), so they aren't confirmed to actually match (a) in the running app. Capture their blank-submit state first; once confirmed, they can follow the same sequence as Vehicles/Staff above.
 
