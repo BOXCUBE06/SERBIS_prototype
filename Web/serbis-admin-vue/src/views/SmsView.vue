@@ -74,6 +74,7 @@
                   bg-color="grey-lighten-5"
                   class="font-weight-medium"
                   :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
+                  :error-messages="fieldErrors.barangays"
                 >
                   <!-- The old duplicate panel had a Select All and the rewrite
                        that swapped a hardcoded list for real GET /barangays rows
@@ -135,6 +136,7 @@
                     v => !!v || 'A message is required.',
                     v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
                   ]"
+                  :error-messages="fieldErrors.message"
                 ></v-textarea>
               </div>
 
@@ -207,9 +209,8 @@
                   class="text-none font-weight-bold text-white w-100" 
                   size="x-large"
                   height="64"
-                  type="submit" 
+                  type="submit"
                   :loading="loading"
-                  :disabled="!isValid"
                   elevation="2"
                 >
                   <v-icon start size="24" class="mr-2">mdi-send</v-icon>
@@ -318,11 +319,28 @@ const getHeaders = () => ({
   'Accept': 'application/json'
 })
 
-const isValid = computed(() => {
-  return message.value.length > 0
-    && message.value.length <= 160
-    && selectedBarangays.value.length > 0
-})
+// Server-side errors, keyed by field, so a 422 lands on the input it belongs
+// to instead of being concatenated into the banner above the form. Mirrors
+// VehiclesView's/StaffView's applyServerErrors.
+const fieldErrors = ref({ message: '', barangays: '' })
+const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '' } }
+
+const applyServerErrors = (data) => {
+  if (data?.errors && typeof data.errors === 'object') {
+    const mapped = { message: '', barangays: '' }
+    const leftovers = []
+    for (const [key, messages] of Object.entries(data.errors)) {
+      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      // barangays.* validation failures report as "barangays.0", not "barangays".
+      if (key === 'message') mapped.message = text
+      else if (key === 'barangays' || key.startsWith('barangays.')) mapped.barangays = text
+      else leftovers.push(text)
+    }
+    fieldErrors.value = mapped
+    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+  }
+  return data?.message || 'Failed to send blast'
+}
 
 // Guarded on barangays.length > 0 so an empty list (still loading, or the
 // request failed) does not report "all selected" when nothing is.
@@ -501,8 +519,13 @@ onMounted(() => {
 })
 
 const sendSmsBlast = async () => {
+  clearFieldErrors()
+
   const { valid } = await form.value.validate()
-  if (!valid) return
+  if (!valid) {
+    alert.value = { show: true, type: 'error', message: 'Please correct the highlighted fields.' }
+    return
+  }
 
   // Selecting every barangay is one tap now, and the blast is billed per real
   // send — so the confirmation names the scale instead of listing every
@@ -538,7 +561,7 @@ const sendSmsBlast = async () => {
 
     const data = await res.json()
 
-    if (!res.ok) throw new Error(data.message || 'Failed to send blast')
+    if (!res.ok) throw new Error(applyServerErrors(data))
 
     // A 202 with `unconfirmed` means the vendor never answered, so res.ok is
     // true but the send is not confirmed. Branching on it matters more than it
@@ -556,6 +579,7 @@ const sendSmsBlast = async () => {
     message.value = ''
     selectedTemplate.value = null
     selectedBarangays.value = []
+    clearFieldErrors()
     if (form.value) form.value.resetValidation()
     
   } catch (error) {
