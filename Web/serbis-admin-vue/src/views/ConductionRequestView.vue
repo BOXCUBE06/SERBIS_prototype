@@ -688,8 +688,9 @@ const fetchData = async () => {
     items.value = data
     loadError.value = ''
   } catch (error) {
+    // Full-pane loadError card below is the only notification here — a
+    // snackbar on top of it duplicated the same message (ui-audit finding #3).
     loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load ambulance trip records', 'error')
   } finally {
     initialLoad.value = false
     reloading.value = false

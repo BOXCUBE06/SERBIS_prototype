@@ -984,9 +984,9 @@ const fetchData = async () => {
     loadError.value = ''
   } catch (error) {
     console.error('Failed to fetch borrowings:', error)
-    // Kept on the page, not only in a snackbar that clears itself after 3.5s.
+    // Full-pane loadError card below is the only notification here — a
+    // snackbar on top of it duplicated the same message (ui-audit finding #3).
     loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load borrowings', 'error')
   } finally {
     initialLoad.value = false
     reloading.value = false
