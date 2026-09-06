@@ -208,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     AuthTextField(
                       label: 'Password',
-                      hint: 'Enter your password',
+                      hint: '',
                       controller: _passCtrl,
                       obscure: true,
                       prefixIcon: Icons.lock_outline_rounded,
