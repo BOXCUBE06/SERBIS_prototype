@@ -822,11 +822,7 @@ const applyServerErrors = async (res) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
-    const count = Object.keys(mapped).length
-    if (leftovers.length) return leftovers.join(' ')
-    return count === 1
-      ? 'One field needs attention — see below.'
-      : `${count} fields need attention — see below.`
+    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Request failed'
 }
@@ -857,7 +853,7 @@ const saveUser = async () => {
   // field itself once the rules are attached.
   const { valid } = await form.value.validate()
   if (!valid) {
-    modalError.value = 'Some details are missing or need fixing — see the fields marked below.'
+    modalError.value = 'Please correct the highlighted fields.'
     return
   }
 
