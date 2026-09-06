@@ -139,67 +139,74 @@
             rounded="lg" class="mb-4" role="alert"
           >{{ modal.error }}</v-alert>
 
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.first_name" label="First name *" variant="outlined"
-                density="comfortable" rounded="lg" autocomplete="given-name"
-              ></v-text-field>
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.last_name" label="Last name *" variant="outlined"
-                density="comfortable" rounded="lg" autocomplete="family-name"
-              ></v-text-field>
-            </v-col>
-          </v-row>
+          <v-form ref="formRef">
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-text-field
+                  v-model="form.first_name" label="First name *" variant="outlined"
+                  density="comfortable" rounded="lg" autocomplete="given-name"
+                  :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-text-field
+                  v-model="form.last_name" label="Last name *" variant="outlined"
+                  density="comfortable" rounded="lg" autocomplete="family-name"
+                  :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name"
+                ></v-text-field>
+              </v-col>
+            </v-row>
 
-          <v-text-field
-            v-model="form.email_address" label="Email address *" type="email" variant="outlined"
-            density="comfortable" rounded="lg" autocomplete="email" class="mb-1"
-          ></v-text-field>
+            <v-text-field
+              v-model="form.email_address" label="Email address *" type="email" variant="outlined"
+              density="comfortable" rounded="lg" autocomplete="email" class="mb-1"
+              :rules="[requiredRule('Email address')]" :error-messages="fieldErrors.email_address"
+            ></v-text-field>
 
-          <div class="text-caption text-medium-emphasis mb-3">
-            {{ modal.editing
-              ? 'Leave both password fields blank to keep the current password.'
-              : 'At least 8 characters, with upper and lower case and a number.' }}
-          </div>
+            <div class="text-caption text-medium-emphasis mb-3">
+              {{ modal.editing
+                ? 'Leave both password fields blank to keep the current password.'
+                : 'At least 8 characters, with upper and lower case and a number.' }}
+            </div>
 
-          <v-text-field
-            v-model="form.password"
-            :label="modal.editing ? 'New password' : 'Password *'"
-            :type="showPassword ? 'text' : 'password'"
-            variant="outlined" density="comfortable" rounded="lg" autocomplete="new-password"
-            class="mb-3"
-          >
-            <template #append-inner>
-              <v-btn
-                :icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                :aria-label="showPassword ? 'Hide password' : 'Show password'"
-                :aria-pressed="showPassword"
-                variant="text" density="comfortable" size="small"
-                @click="showPassword = !showPassword"
-              ></v-btn>
-            </template>
-          </v-text-field>
+            <v-text-field
+              v-model="form.password"
+              :label="modal.editing ? 'New password' : 'Password *'"
+              :type="showPassword ? 'text' : 'password'"
+              variant="outlined" density="comfortable" rounded="lg" autocomplete="new-password"
+              class="mb-3"
+              :rules="[passwordRequiredRule]" :error-messages="fieldErrors.password"
+            >
+              <template #append-inner>
+                <v-btn
+                  :icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+                  :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                  :aria-pressed="showPassword"
+                  variant="text" density="comfortable" size="small"
+                  @click="showPassword = !showPassword"
+                ></v-btn>
+              </template>
+            </v-text-field>
 
-          <v-text-field
-            v-model="form.password_confirmation"
-            :label="modal.editing ? 'Confirm new password' : 'Confirm password *'"
-            :type="showPassword ? 'text' : 'password'"
-            variant="outlined" density="comfortable" rounded="lg" autocomplete="new-password"
-          ></v-text-field>
+            <v-text-field
+              v-model="form.password_confirmation"
+              :label="modal.editing ? 'Confirm new password' : 'Confirm password *'"
+              :type="showPassword ? 'text' : 'password'"
+              variant="outlined" density="comfortable" rounded="lg" autocomplete="new-password"
+              :rules="[passwordConfirmRule]" :error-messages="fieldErrors.password_confirmation"
+            ></v-text-field>
 
-          <!-- Changing a password ends that account's other sessions. Saying so
-               before the click, because for the person being edited it looks
-               like being logged out at random. -->
-          <div v-if="willChangePassword" class="notice subtle-surface mt-3">
-            <v-icon size="16" class="mr-1 text-medium-emphasis" aria-hidden="true">mdi-logout-variant</v-icon>
-            <span v-if="modal.editing && modal.targetId === myId">
-              Your other devices will be signed out. This one stays signed in.
-            </span>
-            <span v-else>Signs this account out everywhere it is currently signed in.</span>
-          </div>
+            <!-- Changing a password ends that account's other sessions. Saying so
+                 before the click, because for the person being edited it looks
+                 like being logged out at random. -->
+            <div v-if="willChangePassword" class="notice subtle-surface mt-3">
+              <v-icon size="16" class="mr-1 text-medium-emphasis" aria-hidden="true">mdi-logout-variant</v-icon>
+              <span v-if="modal.editing && modal.targetId === myId">
+                Your other devices will be signed out. This one stays signed in.
+              </span>
+              <span v-else>Signs this account out everywhere it is currently signed in.</span>
+            </div>
+          </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
           <v-btn variant="text" rounded="lg" class="text-none" :disabled="modal.loading" @click="modal.show = false">
@@ -275,6 +282,26 @@ const form = ref({ first_name: '', last_name: '', email_address: '', password: '
 const closeDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
+// Template ref for the Add/Edit <v-form> -- named formRef, not form, because
+// `form` above is already the reactive object the fields are bound to.
+const formRef = ref(null)
+
+const requiredRule = (label) => (v) =>
+  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+
+// A password is required only when creating an account; editing may leave
+// both password fields blank to keep the current one.
+const passwordRequiredRule = (v) =>
+  modal.value.editing || (v && String(v).trim() !== '') || 'A password is required for a new account.'
+
+const passwordConfirmRule = (v) =>
+  String(v || '') === String(form.value.password || '') || 'The two passwords do not match.'
+
+// Server-side errors, keyed by field, so a 422 lands on the input it belongs
+// to instead of being concatenated into the banner above the form.
+const fieldErrors = ref({})
+const clearFieldErrors = () => { fieldErrors.value = {} }
+
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Name', key: 'name', sortable: false },
@@ -312,6 +339,24 @@ const messageFrom = (data, fallback) => {
   return data?.message || fallback
 }
 
+// Laravel answers `{errors: {field: [msg]}}`. Split it: known fields go to
+// their input, anything unrecognised stays in the banner so nothing is
+// silently swallowed. Mirrors VehiclesView's applyServerErrors.
+const applyServerErrors = (data) => {
+  if (data?.errors && typeof data.errors === 'object') {
+    const mapped = {}
+    const leftovers = []
+    for (const [key, messages] of Object.entries(data.errors)) {
+      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      if (key in form.value) mapped[key] = text
+      else leftovers.push(text)
+    }
+    fieldErrors.value = mapped
+    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+  }
+  return data?.message || 'Save failed'
+}
+
 const fetchAdmins = async () => {
   apiError.value = ''
   try {
@@ -346,6 +391,8 @@ const openAdd = () => {
   form.value = { first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' }
   showPassword.value = false
   modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
+  clearFieldErrors()
+  formRef.value?.resetValidation()
 }
 
 const openEdit = (item) => {
@@ -358,24 +405,20 @@ const openEdit = (item) => {
   }
   showPassword.value = false
   modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item) }
+  clearFieldErrors()
+  formRef.value?.resetValidation()
 }
 
 const save = async () => {
   const editing = modal.value.editing
   modal.value.error = ''
+  clearFieldErrors()
 
-  if (!form.value.first_name.trim() || !form.value.last_name.trim() || !form.value.email_address.trim()) {
-    modal.value.error = 'Name and email address are required.'
-    return
-  }
-  if (!editing && !form.value.password) {
-    modal.value.error = 'A password is required for a new account.'
-    return
-  }
-  // Caught here as well as on the server so a mistyped confirmation costs no
-  // round trip.
-  if (form.value.password !== form.value.password_confirmation) {
-    modal.value.error = 'The two passwords do not match.'
+  // Validate before spending a round trip. Vuetify focuses the first invalid
+  // field itself once the rules are attached.
+  const { valid } = await formRef.value.validate()
+  if (!valid) {
+    modal.value.error = 'Please correct the highlighted fields.'
     return
   }
 
@@ -397,7 +440,7 @@ const save = async () => {
       body: JSON.stringify(payload),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(messageFrom(data, 'Save failed'))
+    if (!res.ok) throw new Error(applyServerErrors(data))
 
     await fetchAdmins()
     modal.value.show = false
