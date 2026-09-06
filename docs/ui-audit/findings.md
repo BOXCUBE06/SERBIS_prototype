@@ -41,6 +41,8 @@ Finding #2's rollout is complete.
 
 **Resource Management and Manage Services are out of scope for this rollout.** Their `modal.value.error = '...'` source is byte-identical to Vehicles'/Staff's (pattern (a)), but neither route's blank-submit state was captured in the audit pass (see "Dropped during verification" below), so they aren't confirmed to actually match (a) in the running app. Capture their blank-submit state first; once confirmed, they can follow the same sequence as Vehicles/Staff above.
 
+| 14 | Text Blast (SMS) | Barangay multi-select — post-send validation reset | light | polish | After a successful blast send, the barangay field resets, but its "Select at least one barangay" error message briefly persists on screen before clearing — a `resetValidation()`-vs-reactive-`:rules` timing artifact: the rules re-evaluate against the field's momentarily-empty state before the reset call clears the displayed error. | Cosmetic and self-correcting (clears within a frame or two), but a staff member who sends a blast and glances at the form immediately after sees a validation error on a form that just succeeded. | Sequence the reset so `resetValidation()` (or clearing the error state explicitly) runs after the field's model is repopulated/cleared, not before, or suppress `:rules` evaluation during the reset tick. | none — timing artifact, not capturable in a still frame; found via live DOM probing during finding #2's Text Blast verification, 2026-09-06 session (see [[serbis-status]] fifty-fifth session) |
+
 ## Dropped during verification
 
 Per the capture rules, a finding that can't be grounded in an actual screenshot was cut rather than kept on source-reading alone:
