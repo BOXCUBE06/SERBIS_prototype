@@ -426,7 +426,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       onTap: _pickValidId,
                     ),
                     AttachmentUploadField(
-                      label: 'Landmark (optional)',
+                      label: 'Site photo (optional)',
                       hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
                       fileName: _sitePhotoFile?.name,
                       onTap: _pickSitePhoto,

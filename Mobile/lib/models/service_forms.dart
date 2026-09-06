@@ -404,7 +404,7 @@ const _reliefSpec = ServiceFormSpec(
         ServiceFormField.text(
           key: 'household_head',
           label: 'Household head name',
-          hint: 'Full name',
+          hint: 'e.g. Juan Dela Cruz',
           metaPrefix: 'Household head: ',
           metaFallback: 'Not specified',
         ),

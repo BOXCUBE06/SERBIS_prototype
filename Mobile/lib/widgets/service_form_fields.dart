@@ -83,7 +83,7 @@ class ServiceFormFields extends StatelessWidget {
               children: [
                 AppTextField(
                   label: 'From',
-                  hint: 'Where the ambulance should pick up',
+                  hint: 'e.g. Purok 3, Brgy. Malasin',
                   controller: form.pickup,
                 ),
                 AppTextField(
@@ -117,7 +117,7 @@ class ServiceFormFields extends StatelessWidget {
                       Expanded(
                         child: AppTextField(
                           label: 'Relative ${i + 1}',
-                          hint: 'Full name',
+                          hint: 'e.g. Juan Dela Cruz',
                           controller: form.relatives[i],
                         ),
                       ),

@@ -296,7 +296,7 @@ Future<void> _attachValidId(WidgetTester tester, {String name = 'id.jpg'}) async
 
 Future<void> _attachSitePhoto(WidgetTester tester, {String name = 'scene.jpg'}) async {
   picker.result = _picked(name);
-  await _tapUpload(tester, 'Landmark (optional)');
+  await _tapUpload(tester, 'Site photo (optional)');
 }
 
 /// Opens the service dropdown and returns once the menu is on screen.
