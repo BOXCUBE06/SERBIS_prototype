@@ -281,32 +281,32 @@
             <h3 class="section-title">Patient</h3>
             <v-row dense>
               <v-col cols="12" sm="8">
-                <v-text-field v-model="createDialog.form.patient_name" label="Patient name" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_name" label="Patient name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
-                <v-text-field v-model="createDialog.form.patient_age" label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
                 <v-select v-model="createDialog.form.patient_sex" :items="sexOptions" label="Sex" variant="outlined" density="comfortable" clearable></v-select>
               </v-col>
               <v-col cols="12" sm="8">
-                <v-text-field v-model="createDialog.form.patient_address" label="Patient address" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_address" label="Patient address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="4">
-                <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12">
-                <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+                <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
               </v-col>
             </v-row>
 
             <h3 class="section-title">Trip</h3>
             <v-row dense>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.origin" label="From:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.origin" label="From:" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.destination" label="To:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.destination" label="To:" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-select
@@ -327,6 +327,7 @@
                 <v-text-field
                   v-model="createDialog.form.vehicle"
                   label="Vehicle name (not in the fleet — e.g. mutual aid)"
+                  placeholder="Alicia MDRRMO Ambulance"
                   variant="outlined"
                   density="comfortable"
                 ></v-text-field>
@@ -345,6 +346,7 @@
               v-if="createDialog.conflict"
               v-model="createDialog.form.override_reason"
               label="Reason to file anyway (required)"
+              placeholder="Why this unit is being sent despite the conflict"
               variant="outlined"
               density="comfortable"
               rows="2"
@@ -376,6 +378,7 @@
                 <v-text-field
                   v-model="createDialog.form[group.field][idx]"
                   :label="`${group.singular} ${idx + 1}`"
+                  placeholder="Full name"
                   variant="outlined"
                   density="compact"
                   hide-details
@@ -539,13 +542,13 @@
               <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" variant="outlined" density="comfortable"></v-text-field>
+              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" variant="outlined" density="comfortable"></v-text-field>
+              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="tripLog.form.others" label="Others" variant="outlined" density="comfortable" rows="2"></v-textarea>
+              <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
             </v-col>
           </v-row>
 
@@ -578,6 +581,7 @@
               <v-text-field
                 v-model="tripLog.form[group.field][idx]"
                 :label="`${group.singular} ${idx + 1}`"
+                placeholder="Full name"
                 variant="outlined"
                 density="compact"
                 hide-details

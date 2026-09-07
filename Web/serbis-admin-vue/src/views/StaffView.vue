@@ -143,14 +143,14 @@
             <v-row>
               <v-col cols="12" md="6">
                 <v-text-field
-                  v-model="form.first_name" label="First name *" variant="outlined"
+                  v-model="form.first_name" label="First name *" placeholder="Juan" variant="outlined"
                   density="comfortable" rounded="lg" autocomplete="given-name"
                   :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field
-                  v-model="form.last_name" label="Last name *" variant="outlined"
+                  v-model="form.last_name" label="Last name *" placeholder="Dela Cruz" variant="outlined"
                   density="comfortable" rounded="lg" autocomplete="family-name"
                   :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name"
                 ></v-text-field>
@@ -158,7 +158,7 @@
             </v-row>
 
             <v-text-field
-              v-model="form.email_address" label="Email address *" type="email" variant="outlined"
+              v-model="form.email_address" label="Email address *" placeholder="juan.delacruz@echague.gov.ph" type="email" variant="outlined"
               density="comfortable" rounded="lg" autocomplete="email" class="mb-1"
               :rules="[requiredRule('Email address')]" :error-messages="fieldErrors.email_address"
             ></v-text-field>
@@ -172,6 +172,7 @@
             <v-text-field
               v-model="form.password"
               :label="modal.editing ? 'New password' : 'Password *'"
+              :placeholder="modal.editing ? 'Leave blank to keep the current password' : 'At least 8 characters'"
               :type="showPassword ? 'text' : 'password'"
               variant="outlined" density="comfortable" rounded="lg" autocomplete="new-password"
               class="mb-3"
@@ -191,6 +192,7 @@
             <v-text-field
               v-model="form.password_confirmation"
               :label="modal.editing ? 'Confirm new password' : 'Confirm password *'"
+              :placeholder="modal.editing ? 'Leave blank to keep the current password' : 'Type the password again'"
               :type="showPassword ? 'text' : 'password'"
               variant="outlined" density="comfortable" rounded="lg" autocomplete="new-password"
               :rules="[passwordConfirmRule]" :error-messages="fieldErrors.password_confirmation"
