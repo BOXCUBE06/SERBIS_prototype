@@ -8,7 +8,9 @@ use App\Models\SmsLog;
 use App\Services\PhilSms;
 use App\Traits\PaginatesLists;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -216,6 +218,25 @@ class SmsController extends Controller
      * @param  array<int, int>  $barangayIds
      */
     /**
+     * How many wrong passwords this gate accepts, and for how long.
+     *
+     * Five matches the tight tier of the 'login' limiter in AppServiceProvider,
+     * so the number a password check allows is the same one everywhere in this
+     * application. The window is fifteen minutes rather than login's one,
+     * because the two endpoints are used at completely different rates: an
+     * office signs in repeatedly through a day, but sends a blast rarely, so a
+     * long decay costs a legitimate sender nothing and leaves an online guess
+     * at twenty tries an hour — useless against the 8-character mixed-case
+     * password this application already requires.
+     *
+     * Only FAILURES are counted, and a success clears the tally, so an admin
+     * sending several blasts in a row is never throttled by this. The route
+     * itself is deliberately not throttled — that would cap legitimate sends.
+     */
+    private const PASSWORD_ATTEMPTS = 5;
+    private const PASSWORD_DECAY_SECONDS = 900;
+
+    /**
      * Proves the caller knows the password of the account they are sending as,
      * rather than merely holding a token issued for it.
      *
@@ -231,14 +252,41 @@ class SmsController extends Controller
         $admin = $request->user();
         $password = (string) $request->input('password', '');
 
-        // One message for a missing password and a wrong one. The caller
-        // already holds a token for this account, so separating them discloses
-        // nothing and gains nothing.
-        if (! $admin || ! Hash::check($password, (string) $admin->password)) {
+        if (! $admin) {
             throw ValidationException::withMessages([
                 'password' => 'Enter your password to send this blast.',
             ]);
         }
+
+        // Keyed on the account, not the IP: this route is behind auth:sanctum,
+        // so there is always an account to key on, and an office on one CGNAT
+        // address must not be able to lock its colleagues out of sending.
+        $key = 'sms-blast-password:'.$admin->admin_id;
+
+        // Checked BEFORE the hash comparison, so once the limit is reached even
+        // the correct password is refused until the window passes. A gate that
+        // let a correct guess through on the sixth try would not be a limit.
+        if (RateLimiter::tooManyAttempts($key, self::PASSWORD_ATTEMPTS)) {
+            throw new ThrottleRequestsException(
+                'Too many incorrect passwords. Try again in '
+                .ceil(RateLimiter::availableIn($key) / 60).' minute(s).'
+            );
+        }
+
+        // One message for a missing password and a wrong one. The caller
+        // already holds a token for this account, so separating them discloses
+        // nothing and gains nothing.
+        if (! Hash::check($password, (string) $admin->password)) {
+            RateLimiter::hit($key, self::PASSWORD_DECAY_SECONDS);
+
+            throw ValidationException::withMessages([
+                'password' => 'Enter your password to send this blast.',
+            ]);
+        }
+
+        // Cleared on the way through, so a typo followed by the right password
+        // leaves nothing behind to count against the next legitimate blast.
+        RateLimiter::clear($key);
     }
 
     private function resolveRecipients(array $barangayIds)

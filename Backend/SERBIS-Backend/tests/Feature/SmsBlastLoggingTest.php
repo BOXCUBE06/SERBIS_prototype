@@ -227,4 +227,106 @@ class SmsBlastLoggingTest extends TestCase
         Http::assertNothingSent();
         $this->assertSame(0, SmsLog::count());
     }
+
+    public function test_repeated_wrong_passwords_are_throttled_and_then_block_the_correct_one(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Guessing.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertStatus(422);
+        }
+
+        // Sixth wrong password is refused by the limiter, not the hash check.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Guessing.',
+            'password' => 'wrong-6',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(429);
+
+        // The point of checking the limit before the comparison: inside the
+        // window even the real password does not get through.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Correct password, still locked out.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(429);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_the_throttle_is_per_account_and_does_not_lock_out_another_admin(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        for ($attempt = 1; $attempt <= 6; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Guessing.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ]);
+        }
+
+        $other = User::create([
+            'first_name' => 'Second',
+            'last_name' => 'Admin',
+            'email_address' => 'second@test.local',
+            'password' => Hash::make('password123'),
+            'role' => 'Admin',
+        ]);
+
+        $this->actingAs($other)->postJson('/api/sms/blast', [
+            'message' => 'A colleague sending normally.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+    }
+
+    public function test_a_correct_password_clears_the_tally_so_ordinary_sending_is_never_throttled(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        // Four typos — one short of the limit.
+        for ($attempt = 1; $attempt <= 4; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Typo.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertStatus(422);
+        }
+
+        // The right password, which sends and resets the tally to zero.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Got it right.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+
+        // Four more typos. Without the reset these would be attempts five
+        // through eight and the last of them would be refused as 429.
+        for ($attempt = 5; $attempt <= 8; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Typo again.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertStatus(422);
+        }
+
+        // And the tally being clear means the right password still works.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Still able to send.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+    }
 }
