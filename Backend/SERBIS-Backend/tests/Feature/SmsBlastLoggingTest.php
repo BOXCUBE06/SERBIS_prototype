@@ -66,6 +66,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $response = $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id, $this->barangayB->barangay_id],
         ]);
 
@@ -102,6 +103,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Test advisory.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertOk()->assertJson(['sent' => 1]);
 
@@ -116,6 +118,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'This one never went out.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertStatus(500);
 
@@ -135,6 +138,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertOk();
 
@@ -157,8 +161,68 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Nobody to send this to.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertStatus(422);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_a_blast_without_the_senders_password_is_refused_before_the_vendor_is_called(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Should never leave.',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+
+        // The point of the gate: nothing billed, nothing recorded.
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_a_blast_with_the_wrong_password_is_refused_before_the_vendor_is_called(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Should never leave.',
+            'password' => 'not-the-password',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_another_admins_password_does_not_authorise_this_senders_blast(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        User::create([
+            'first_name' => 'Second',
+            'last_name' => 'Admin',
+            'email_address' => 'second@test.local',
+            'password' => Hash::make('a-different-password'),
+            'role' => 'Admin',
+        ]);
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Should never leave.',
+            'password' => 'a-different-password',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
 
         Http::assertNothingSent();
         $this->assertSame(0, SmsLog::count());

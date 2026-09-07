@@ -64,6 +64,7 @@ class SmsHistoryTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => $message,
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }

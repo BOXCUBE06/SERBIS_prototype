@@ -226,6 +226,50 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Replaces a native confirm(). The scale and the cost still read the
+         same; what is new is the password, which the server re-checks against
+         the signed-in account before it spends anything. -->
+    <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
+      <v-card rounded="lg">
+        <v-card-title class="text-h6 font-weight-bold pt-5 px-6">Confirm this blast</v-card-title>
+        <v-card-text class="px-6">
+          <p class="text-body-1 mb-3">{{ confirmDialog.summary }}</p>
+          <p v-if="confirmDialog.cost" class="text-body-2 text-medium-emphasis mb-4">{{ confirmDialog.cost }}</p>
+          <v-text-field
+            v-model="confirmDialog.password"
+            label="Your password"
+            placeholder="Re-enter your account password"
+            type="password"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            autocomplete="current-password"
+            :error-messages="fieldErrors.password"
+            :disabled="loading"
+            @keyup.enter="confirmSend"
+          ></v-text-field>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
+          <v-btn
+            variant="text"
+            class="text-none font-weight-bold"
+            height="44"
+            :disabled="loading"
+            @click="cancelSend"
+          >Cancel</v-btn>
+          <v-btn
+            color="#0f4c3a"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold text-white px-6"
+            height="44"
+            :loading="loading"
+            @click="confirmSend"
+          >Send Blast</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -247,6 +291,10 @@ const alert = ref({
   type: 'success',
   message: ''
 })
+
+// The send confirmation. `password` lives only as long as the dialog is open —
+// cleared on cancel, on a successful send, and on any failure that closes it.
+const confirmDialog = ref({ open: false, summary: '', cost: '', password: '' })
 
 // Starting text, not a fill-in form. There are deliberately no [AREA]-style
 // tokens: a token that survives editing goes out to a real handset with the
@@ -322,18 +370,19 @@ const getHeaders = () => ({
 // Server-side errors, keyed by field, so a 422 lands on the input it belongs
 // to instead of being concatenated into the banner above the form. Mirrors
 // VehiclesView's/StaffView's applyServerErrors.
-const fieldErrors = ref({ message: '', barangays: '' })
-const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '' } }
+const fieldErrors = ref({ message: '', barangays: '', password: '' })
+const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '', password: '' } }
 
 const applyServerErrors = (data) => {
   if (data?.errors && typeof data.errors === 'object') {
-    const mapped = { message: '', barangays: '' }
+    const mapped = { message: '', barangays: '', password: '' }
     const leftovers = []
     for (const [key, messages] of Object.entries(data.errors)) {
       const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
       // barangays.* validation failures report as "barangays.0", not "barangays".
       if (key === 'message') mapped.message = text
       else if (key === 'barangays' || key.startsWith('barangays.')) mapped.barangays = text
+      else if (key === 'password') mapped.password = text
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
@@ -542,10 +591,22 @@ const sendSmsBlast = async () => {
   // be spent as well as who it reaches.
   const costLine = billedUnits.value === null
     ? ''
-    : `\n\n${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
+    : `${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
 
-  if (!confirm(confirmMessage + costLine)) return
+  confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, password: '' }
+}
 
+const cancelSend = () => {
+  confirmDialog.value.open = false
+  confirmDialog.value.password = ''
+  fieldErrors.value.password = ''
+}
+
+// The dialog stays open on a rejected password so the wrong one can be
+// corrected in place, and the send is retried against the same message and
+// barangay selection rather than composed again.
+const confirmSend = async () => {
+  fieldErrors.value.password = ''
   loading.value = true
   alert.value.show = false
 
@@ -555,13 +616,17 @@ const sendSmsBlast = async () => {
       headers: getHeaders(),
       body: JSON.stringify({
         message: message.value,
-        barangays: selectedBarangays.value
+        barangays: selectedBarangays.value,
+        password: confirmDialog.value.password
       })
     })
 
     const data = await res.json()
 
     if (!res.ok) throw new Error(applyServerErrors(data))
+
+    // Sent. The password is dropped here rather than held for a second blast.
+    confirmDialog.value = { open: false, summary: '', cost: '', password: '' }
 
     // A 202 with `unconfirmed` means the vendor never answered, so res.ok is
     // true but the send is not confirmed. Branching on it matters more than it
@@ -587,6 +652,14 @@ const sendSmsBlast = async () => {
       show: true,
       type: 'error',
       message: error.message
+    }
+
+    // A rejected password keeps the dialog open to be retyped. Any other
+    // failure closes it, because the alert explaining that failure renders on
+    // the page behind this overlay and would otherwise not be readable.
+    if (!fieldErrors.value.password) {
+      confirmDialog.value.open = false
+      confirmDialog.value.password = ''
     }
   } finally {
     loading.value = false

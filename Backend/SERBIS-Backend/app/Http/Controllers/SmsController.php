@@ -10,7 +10,9 @@ use App\Traits\PaginatesLists;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class SmsController extends Controller
 {
@@ -22,7 +24,17 @@ class SmsController extends Controller
             'message'     => 'required|string|max:160',
             'barangays'   => 'required|array|min:1',
             'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
+            'password'    => 'required|string',
         ]);
+
+        // Before anything is resolved or sent. This endpoint is the only one in
+        // the application that spends money, and until now the sole thing
+        // standing in front of it was a client-side dialog — see the route
+        // definition, which notes that dialog does not survive a second tab, a
+        // reload mid-request, or a token replayed by hand. Re-entering the
+        // password proves the sender is the account holder at this moment,
+        // rather than whoever is holding a token issued eight hours ago.
+        $this->assertCurrentPassword($request);
 
         $residents = $this->resolveRecipients($validated['barangays']);
 
@@ -203,6 +215,32 @@ class SmsController extends Controller
      *
      * @param  array<int, int>  $barangayIds
      */
+    /**
+     * Proves the caller knows the password of the account they are sending as,
+     * rather than merely holding a token issued for it.
+     *
+     * Checked with Hash::check against the row, not with Laravel's
+     * `current_password` rule: that rule resolves the user from the default
+     * auth guard, which is `web`, while this request authenticates through
+     * `auth:sanctum` — so it would compare against a null user and reject a
+     * correct password. AuthController::assertCurrentPassword checks the same
+     * way, for the same reason.
+     */
+    private function assertCurrentPassword(Request $request): void
+    {
+        $admin = $request->user();
+        $password = (string) $request->input('password', '');
+
+        // One message for a missing password and a wrong one. The caller
+        // already holds a token for this account, so separating them discloses
+        // nothing and gains nothing.
+        if (! $admin || ! Hash::check($password, (string) $admin->password)) {
+            throw ValidationException::withMessages([
+                'password' => 'Enter your password to send this blast.',
+            ]);
+        }
+    }
+
     private function resolveRecipients(array $barangayIds)
     {
         $residents = Resident::whereIn('barangay_id', $barangayIds)

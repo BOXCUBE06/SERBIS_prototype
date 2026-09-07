@@ -82,6 +82,7 @@ class SmsBlastTimeoutTest extends TestCase
 
         return $this->postJson('/api/sms/blast', [
             'message' => 'MDRRMO Echague weather advisory: heavy rain expected.',
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }

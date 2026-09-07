@@ -158,6 +158,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertOk()->assertJson(['sent' => 1, 'failed' => 0]);
 
@@ -183,6 +184,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertOk();
 
@@ -202,6 +204,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Nobody wants this one.',
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertStatus(422);
 
