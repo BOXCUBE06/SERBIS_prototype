@@ -65,6 +65,31 @@ class InfoMaterialController extends Controller
         return response()->json($material, 201);
     }
 
+    /**
+     * Marks a material as checked by MDRRMO, or takes that mark back.
+     *
+     * One endpoint for both directions rather than separate verify/unverify
+     * routes: the panel holds a toggle, and a toggle that can only be switched
+     * on is a mark nobody can correct after a mistaken click.
+     */
+    public function verify(Request $request, $id)
+    {
+        $material = InfoMaterial::find($id);
+
+        if (! $material) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'verified' => 'required|boolean',
+        ]);
+
+        $material->verified = $validated['verified'];
+        $material->save();
+
+        return response()->json($material);
+    }
+
     public function destroy($id)
 {
     $material = InfoMaterial::find($id);

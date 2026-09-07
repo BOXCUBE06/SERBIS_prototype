@@ -93,6 +93,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Info Materials Administrative CRUD Routes
         Route::get('/admin/info-materials', [InfoMaterialController::class, 'index']);
         Route::post('/admin/info-materials', [InfoMaterialController::class, 'store']);
+        // Admin-only, unlike the read above: residents see the flag, only the
+        // office sets it.
+        Route::patch('/admin/info-materials/{id}/verify', [InfoMaterialController::class, 'verify']);
         Route::delete('/admin/info-materials/{id}', [InfoMaterialController::class, 'destroy']);
 
         Route::get('/logs/system', [SystemLogController::class, 'index']);

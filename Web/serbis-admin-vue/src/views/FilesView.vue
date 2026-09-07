@@ -207,6 +207,22 @@
                 <span class="text-body-2 text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
               </template>
 
+              <!-- Switch rather than a button pair: this is one state with two
+                   directions, and a mistaken click has to be undoable. -->
+              <template v-slot:item.verified="{ item }">
+                <v-switch
+                  :model-value="item.verified"
+                  :loading="verifying === item.files_id"
+                  :disabled="verifying === item.files_id"
+                  :aria-label="`Mark ${item.title} as verified`"
+                  color="success"
+                  density="compact"
+                  hide-details
+                  inset
+                  @update:model-value="value => setVerified(item, value)"
+                ></v-switch>
+              </template>
+
               <template v-slot:item.actions="{ item }">
                 <div class="d-flex justify-end align-center gap-1">
                   <v-btn
@@ -349,10 +365,11 @@ const rowNumber = useRowNumbers(visibleFiles, 'files_id')
 
 const materialHeaders = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'File', key: 'title', width: '38%' },
-  { title: 'Type', key: 'file_type', width: '15%' },
-  { title: 'Size', key: 'file_size', width: '11%' },
-  { title: 'Uploaded', key: 'created_at', width: '15%' },
+  { title: 'File', key: 'title', width: '32%' },
+  { title: 'Type', key: 'file_type', width: '12%' },
+  { title: 'Size', key: 'file_size', width: '9%' },
+  { title: 'Uploaded', key: 'created_at', width: '13%' },
+  { title: 'Verified', key: 'verified', width: '13%' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '21%' },
 ]
 
@@ -480,6 +497,37 @@ const publish = () => {
   }
   xhr.onerror = () => { uploading.value = false; apiError.value = 'Network error during upload' }
   xhr.send(payload)
+}
+
+// --- Verified flag ---
+// Holds the files_id being written so only that row's switch shows the wait,
+// rather than the whole table going busy for a one-row change.
+const verifying = ref(null)
+
+const setVerified = async (item, value) => {
+  verifying.value = item.files_id
+  const previous = item.verified
+
+  // Flipped up front so the switch does not sit on its old position while the
+  // request is in flight; put back if the write fails.
+  item.verified = value
+
+  try {
+    const res = await fetch(`${API}/${item.files_id}/verify`, {
+      method: 'PATCH',
+      // Content-Type spelled out here: getHeaders() leaves it off on purpose
+      // for the FormData upload, and without it this JSON body never parses.
+      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ verified: value }),
+    })
+    if (!res.ok) throw new Error('Could not update the verified mark')
+    notify(value ? 'Material marked verified' : 'Verified mark removed')
+  } catch (error) {
+    item.verified = previous
+    notify(error.message || 'Could not update the verified mark', 'error')
+  } finally {
+    verifying.value = null
+  }
 }
 
 // --- Delete flow ---
