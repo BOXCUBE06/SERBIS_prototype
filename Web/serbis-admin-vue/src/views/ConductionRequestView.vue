@@ -356,7 +356,15 @@
             <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
               <div class="d-flex align-center justify-space-between mb-1">
                 <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-                <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addPerson(group.field)">
+                <v-btn
+                  variant="text"
+                  size="small"
+                  density="compact"
+                  class="text-none"
+                  prepend-icon="mdi-plus"
+                  :disabled="createDialog.form[group.field].length >= group.max"
+                  @click="addPerson(group.field)"
+                >
                   Add {{ group.singular }}
                 </v-btn>
               </div>
@@ -550,7 +558,15 @@
           <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
             <div class="d-flex align-center justify-space-between mb-1">
               <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-              <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addTripPerson(group.field)">
+              <v-btn
+                variant="text"
+                size="small"
+                density="compact"
+                class="text-none"
+                prepend-icon="mdi-plus"
+                :disabled="tripLog.form[group.field].length >= group.max"
+                @click="addTripPerson(group.field)"
+              >
                 Add {{ group.singular }}
               </v-btn>
             </div>
@@ -621,10 +637,14 @@ const statusOptions = [
   ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
 ]
 
+// `max` mirrors ConductionRequestController's per-role limits — passengers cap
+// at 2, the other two at MAX_PEOPLE_PER_ROLE. This only stops the Add button;
+// the server-side rule is the actual gate, and a request that gets past this
+// still fails validation there.
 const personnelGroups = [
-  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver' },
-  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger' },
-  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative' },
+  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', max: 20 },
+  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', max: 2 },
+  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', max: 20 },
 ]
 
 const sexOptions = [

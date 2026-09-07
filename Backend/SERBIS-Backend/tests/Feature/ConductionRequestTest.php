@@ -424,6 +424,38 @@ class ConductionRequestTest extends TestCase
             ->assertJsonValidationErrors(['patient_name']);
     }
 
+    public function test_authorized_passengers_are_capped_at_two(): void
+    {
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'authorized_passengers' => ['Maria Santos', 'Ana Reyes'],
+        ]))->assertStatus(201);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'authorized_passengers' => ['Maria Santos', 'Ana Reyes', 'Jose Cruz'],
+        ]))->assertStatus(422)
+            ->assertJsonValidationErrors(['authorized_passengers']);
+    }
+
+    public function test_the_passenger_cap_does_not_narrow_the_other_two_roles(): void
+    {
+        // Drivers and relatives keep MAX_PEOPLE_PER_ROLE. Three of each would
+        // fail if the passenger limit had been applied to all three.
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'drivers' => ['Pedro Santos', 'Luis Ramos', 'Ben Aquino'],
+            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz', 'Mario Cruz'],
+        ]))->assertStatus(201);
+    }
+
+    public function test_the_passenger_cap_also_holds_on_the_trip_log(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'authorized_passengers' => ['Maria Santos', 'Ana Reyes', 'Jose Cruz'],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['authorized_passengers']);
+    }
+
     public function test_trip_log_can_be_filled_in_over_separate_calls(): void
     {
         $conductionRequest = ConductionRequest::create($this->payload());

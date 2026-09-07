@@ -65,6 +65,19 @@ class ConductionRequestController extends Controller
      */
     private const MAX_PEOPLE_PER_ROLE = 20;
 
+    /**
+     * Authorized passengers are capped harder than the other two roles: the
+     * ambulance carries at most two people riding under that role, which is
+     * the operational rule, not a column limit.
+     *
+     * Only this role is narrowed. Drivers keep MAX_PEOPLE_PER_ROLE, and
+     * relatives must keep it because copyRelativesToTrip() appends a booking's
+     * intake relatives onto a trip that may already hold typed names — that
+     * append writes rows directly and never passes through this validation, so
+     * narrowing the relative limit here would not bound it anyway.
+     */
+    private const MAX_AUTHORIZED_PASSENGERS = 2;
+
     /** The trip log's four checkpoints, in the order they actually happen. */
     private const TRIP_SEQUENCE = [
         'departed_office_at' => 'Departed office',
@@ -117,7 +130,7 @@ class ConductionRequestController extends Controller
             // MAX_PEOPLE_PER_ROLE for what the 256th name does to `position`.
             'drivers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
-            'authorized_passengers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            'authorized_passengers' => 'nullable|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
             'authorized_passengers.*' => 'nullable|string|max:255',
             'patient_relatives' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'patient_relatives.*' => 'nullable|string|max:255',
@@ -305,7 +318,7 @@ class ConductionRequestController extends Controller
             // bridge path never is.
             'drivers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
-            'authorized_passengers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            'authorized_passengers' => 'sometimes|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
             'authorized_passengers.*' => 'nullable|string|max:255',
             'patient_relatives' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'patient_relatives.*' => 'nullable|string|max:255',
