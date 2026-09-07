@@ -105,6 +105,7 @@
                 <v-text-field
                   v-model="stagedTitle"
                   label="Title shown to residents *"
+                  placeholder="Flood evacuation map — Barangay San Isidro"
                   variant="outlined"
                   density="compact"
                   hide-details
