@@ -142,16 +142,17 @@
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert v-if="modal.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ modal.error }}</v-alert>
-          <v-text-field v-model="form.item_name" label="Item name *" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+          <v-text-field v-model="form.item_name" label="Item name *" placeholder="Folding stretcher" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
           <v-row>
             <v-col cols="12" md="6">
-              <v-text-field v-model.number="form.total_quantity" label="Total owned *" type="number" min="1" variant="outlined" density="comfortable" rounded="lg"></v-text-field>
+              <v-text-field v-model.number="form.total_quantity" label="Total owned *" placeholder="12" type="number" min="1" variant="outlined" density="comfortable" rounded="lg"></v-text-field>
             </v-col>
             <v-col cols="12" md="6">
               <v-text-field
                 v-if="modal.editing"
                 v-model.number="form.available_quantity"
                 label="Available now *"
+                placeholder="9"
                 type="number" min="0" :max="form.total_quantity"
                 variant="outlined" density="comfortable" rounded="lg"
               ></v-text-field>
