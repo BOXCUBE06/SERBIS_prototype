@@ -98,6 +98,14 @@ class EquipmentBorrowingController extends Controller
             // no street address, so an unanswered delivery is a run nobody can
             // actually make.
             'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
+            // `sometimes` for the same reason as fulfillment_method above: an
+            // older client that says nothing meant a resident borrowing for
+            // themselves, which is what the column's default writes.
+            'borrower_type' => 'sometimes|in:Resident,Organization',
+            // Required for an organisation because there is nowhere else to get
+            // it from — the account behind the request is a person, and their
+            // name is not the group's. Capped at the column width.
+            'organization_name' => 'required_if:borrower_type,Organization|nullable|string|max:150',
         ]);
 
         // The rules above bound the shape and never the amount, so a resident
@@ -124,6 +132,7 @@ class EquipmentBorrowingController extends Controller
         }
 
         $method = $validated['fulfillment_method'] ?? 'Pickup';
+        $borrowerType = $validated['borrower_type'] ?? 'Resident';
 
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
@@ -136,6 +145,12 @@ class EquipmentBorrowingController extends Controller
             // survive as a delivery instruction on a request nobody is
             // delivering.
             'delivery_address' => $method === 'Delivery' ? ($validated['delivery_address'] ?? null) : null,
+            'borrower_type' => $borrowerType,
+            // Dropped on a Resident request for the same reason the address is
+            // dropped on a Pickup: an organisation name typed into the form and
+            // then switched away from must not survive as a claim that this
+            // loan was institutional.
+            'organization_name' => $borrowerType === 'Organization' ? ($validated['organization_name'] ?? null) : null,
             'status' => 'Pending',
         ]);
 

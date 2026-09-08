@@ -20,6 +20,8 @@ class EquipmentBorrowing extends Model
         'purpose',
         'fulfillment_method',
         'delivery_address',
+        'borrower_type',
+        'organization_name',
         'due_date',
         'status',
         'denial_reason',

@@ -431,6 +431,18 @@
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
                 <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedRecord?.resident?.barangay?.barangay_name || 'N/A' }}</div>
               </div>
+              <!-- The account holder above stays the contact either way — the
+                   request was filed from their account and resident_id is
+                   required. This says who the item is FOR, which is the part
+                   that separates an institutional loan from a personal one. -->
+              <div class="mb-3">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Borrowing For</div>
+                <div
+                  class="font-weight-medium text-body-1"
+                  :class="unnamedOrganization(selectedRecord) ? 'text-error font-italic' : 'text-high-emphasis'"
+                >{{ borrowingForLabel(selectedRecord) }}</div>
+                <div v-if="isOrganization(selectedRecord)" class="text-caption text-medium-emphasis">Organization</div>
+              </div>
             </v-col>
 
             <v-col cols="12" md="7" class="pa-6 bg-surface">
@@ -914,6 +926,20 @@ const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.qu
 // Anything that is not explicitly a delivery is a pickup, which is also what
 // every request filed before the column existed was.
 const isDelivery = (item) => item?.fulfillment_method === 'Delivery'
+
+// Same shape as isDelivery: anything not explicitly an organisation is a
+// resident borrowing for themselves, which every pre-column row was.
+const isOrganization = (item) => item?.borrower_type === 'Organization'
+
+// store() makes the name required for an organisation, so this is a data-drift
+// guard rather than an expected state — but a record that claims to be
+// institutional and cannot say which institution is worth flagging in red
+// rather than rendering as a blank line.
+const unnamedOrganization = (item) => isOrganization(item) && !item?.organization_name
+const borrowingForLabel = (item) => {
+  if (!isOrganization(item)) return 'Head of the family'
+  return item?.organization_name || 'No organization was recorded — ask the borrower.'
+}
 const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
 const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
 
