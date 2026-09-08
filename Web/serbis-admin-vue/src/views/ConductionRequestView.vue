@@ -514,6 +514,7 @@
               <v-textarea
                 v-model="tripLog.form.no_arrival_reason"
                 label="No-arrival reason"
+                placeholder="e.g. Patient had already been taken by a relative"
                 hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
                 persistent-hint
                 variant="outlined"

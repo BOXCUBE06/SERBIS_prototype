@@ -683,6 +683,7 @@
             v-else-if="actionDialog.mode === 'deny'"
             v-model="actionDialog.reason"
             label="Reason for denial"
+            placeholder="e.g. All units are committed to the flood drill that week"
             hint="The resident is shown this. Say what would make a future request succeed."
             persistent-hint
             variant="outlined"

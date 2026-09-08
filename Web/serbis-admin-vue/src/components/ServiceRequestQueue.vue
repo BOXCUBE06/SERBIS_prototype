@@ -587,6 +587,7 @@
                    on a Resolved request, not just a Pending one. -->
               <v-textarea
                 v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
+                placeholder="e.g. Called twice, no answer — retrying after lunch"
                 hint="Never shown to the requester — for staff reading this request later."
                 persistent-hint
               ></v-textarea>
@@ -854,6 +855,7 @@
             v-if="reasonCopy.showField"
             v-model="reasonDialog.reason"
             :label="reasonCopy.label"
+            :placeholder="reasonCopy.placeholder"
             :hint="reasonCopy.hint"
             persistent-hint
             variant="outlined"
@@ -954,6 +956,7 @@
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
             label="Reason for the change"
+            placeholder="e.g. Unit committed to an earlier transport"
             hint="Required — this is what the Head of the Family sees, and what the log records."
             persistent-hint
             variant="outlined"
@@ -1086,6 +1089,7 @@
             <v-text-field
               v-model="createDialog.form.walk_in_name"
               label="Full name"
+              placeholder="e.g. Juan Dela Cruz"
               variant="outlined"
               density="comfortable"
               class="mb-2"
@@ -1094,6 +1098,7 @@
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
               label="Contact number"
+              placeholder="e.g. 09171234567"
               variant="outlined"
               density="comfortable"
               class="mb-2"
@@ -1119,6 +1124,7 @@
             v-if="scope !== 'ambulance'"
             v-model="createDialog.form.description"
             label="Description"
+            placeholder="e.g. Fallen tree blocking the road at Purok 3"
             variant="outlined"
             density="comfortable"
             rows="3"
@@ -1139,14 +1145,14 @@
               <v-col cols="12" sm="8">
                 <v-text-field
                   v-model="createDialog.form.patient_name"
-                  label="Patient name" variant="outlined" density="comfortable" class="mb-2"
+                  label="Patient name" placeholder="e.g. Maria Santos" variant="outlined" density="comfortable" class="mb-2"
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
                 <v-text-field
                   v-model="createDialog.form.patient_age"
-                  label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
+                  label="Age" placeholder="e.g. 54" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
                 ></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
@@ -1159,28 +1165,28 @@
             </v-row>
             <v-text-field
               v-model="createDialog.form.patient_address"
-              label="Patient address" variant="outlined" density="comfortable" class="mb-2"
+              label="Patient address" placeholder="e.g. Purok 2, San Fabian" variant="outlined" density="comfortable" class="mb-2"
               :rules="[required]"
             ></v-text-field>
             <v-row dense>
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.pickup_location"
-                  label="Pickup location" variant="outlined" density="comfortable" class="mb-2"
+                  label="Pickup location" placeholder="e.g. Barangay Hall, San Fabian" variant="outlined" density="comfortable" class="mb-2"
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.destination"
-                  label="Destination" variant="outlined" density="comfortable" class="mb-2"
+                  label="Destination" placeholder="e.g. Echague District Hospital" variant="outlined" density="comfortable" class="mb-2"
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
             </v-row>
             <v-textarea
               v-model="createDialog.form.condition_notes"
-              label="Condition" variant="outlined" density="comfortable" rows="2" class="mb-2"
+              label="Condition" placeholder="e.g. Chest pains since morning, conscious and breathing" variant="outlined" density="comfortable" rows="2" class="mb-2"
               :rules="[required]"
             ></v-textarea>
 
@@ -1204,6 +1210,7 @@
                 <v-text-field
                   v-model="createDialog.form.patient_relatives[idx]"
                   :label="`Relative ${idx + 1}`"
+                  placeholder="e.g. Ana Santos"
                   variant="outlined"
                   density="compact"
                   hide-details
@@ -1538,6 +1545,7 @@ const reasonCopy = computed(() => {
         title: 'Approve and dispatch',
         body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
         label: 'Note for the Head of the Family (optional)',
+        placeholder: 'e.g. Wait by the barangay hall, the unit is on its way',
         hint: appHint,
         showField: hasAccount,
         confirm: 'Approve & dispatch',
@@ -1547,6 +1555,7 @@ const reasonCopy = computed(() => {
         title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
         body: 'Every selected request is declined with this same reason.',
         label: 'Reason for declining',
+        placeholder: 'e.g. No unit free for the requested window',
         hint: 'Shown to any Head of the Family in the selection with a linked account; kept as an internal record for a walk-in with none.',
         showField: true,
         confirm: 'Disapprove all',
@@ -1556,6 +1565,7 @@ const reasonCopy = computed(() => {
         title: 'Disapprove this request',
         body: who ? `${who} asked for ${what}.` : `A request for ${what}.`,
         label: 'Reason for declining',
+        placeholder: 'e.g. No unit free for the requested window — file again for tomorrow',
         hint: hasAccount ? appHint : noAppHint,
         showField: true,
         confirm: 'Disapprove request',
