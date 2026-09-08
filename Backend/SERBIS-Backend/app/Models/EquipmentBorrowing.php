@@ -5,9 +5,18 @@
 namespace App\Models;
 
 use App\Traits\TracksHistory;
+use Illuminate\Database\Eloquent\Attributes\Appends;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+// The two handover columns hold storage paths on the private disk, written
+// only by POST /borrowings/{id}/photo. A path handed to a client is a path a
+// client can ask for, so they are hidden for the same reason `valid_id` and
+// `site_photo` are on ServiceRequest: clients get a boolean and fetch the image
+// itself from GET /borrowings/{id}/photo/{stage}, which checks ownership first.
+#[Hidden(['release_photo_path', 'return_photo_path'])]
+#[Appends(['has_release_photo', 'has_return_photo'])]
 class EquipmentBorrowing extends Model
 {
     use TracksHistory;
@@ -45,6 +54,21 @@ class EquipmentBorrowing extends Model
     ];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
+
+    /**
+     * Whether staff photographed the item as it left the building. Both the
+     * panel and the app key off these rather than the paths — see the note
+     * above the class.
+     */
+    public function getHasReleasePhotoAttribute(): bool
+    {
+        return ! empty($this->release_photo_path);
+    }
+
+    public function getHasReturnPhotoAttribute(): bool
+    {
+        return ! empty($this->return_photo_path);
+    }
 
     public function resident(): BelongsTo
     {

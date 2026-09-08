@@ -375,8 +375,8 @@ void main() {
   group('handover photos', () {
     Map<String, dynamic> borrowRow({
       String status = 'Returned',
-      String? releasePath,
-      String? returnPath,
+      bool hasRelease = false,
+      bool hasReturn = false,
     }) =>
         <String, dynamic>{
           'borrow_id': 5,
@@ -385,8 +385,8 @@ void main() {
           'status': status,
           'created_at': DateTime.now().toIso8601String(),
           'equipment': <String, dynamic>{'item_name': 'Megaphone'},
-          if (releasePath != null) 'release_photo_path': releasePath,
-          if (returnPath != null) 'return_photo_path': returnPath,
+          'has_release_photo': hasRelease,
+          'has_return_photo': hasReturn,
         };
 
     Future<void> openMine(WidgetTester tester, _FakeApi api) async {
@@ -412,10 +412,7 @@ void main() {
     testWidgets('both stages are shown and each is fetched once', (tester) async {
       final api = _FakeApi(
         equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
-        borrowRows: [borrowRow(
-          releasePath: 'borrowing-photos/5/release.jpg',
-          returnPath: 'borrowing-photos/5/return.jpg',
-        )],
+        borrowRows: [borrowRow(hasRelease: true, hasReturn: true)],
       )..photos = <String, List<int>>{'release': _onePixelPng, 'return': _onePixelPng};
       await openMine(tester, api);
 
@@ -429,10 +426,7 @@ void main() {
     testWidgets('a release-only loan asks for that stage alone', (tester) async {
       final api = _FakeApi(
         equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
-        borrowRows: [borrowRow(
-          status: 'Released',
-          releasePath: 'borrowing-photos/5/release.jpg',
-        )],
+        borrowRows: [borrowRow(status: 'Released', hasRelease: true)],
       )..photos = <String, List<int>>{'release': _onePixelPng};
       await openMine(tester, api);
 
@@ -446,7 +440,7 @@ void main() {
       // The tile has to survive that inside a list item.
       final api = _FakeApi(
         equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
-        borrowRows: [borrowRow(releasePath: 'borrowing-photos/5/release.jpg')],
+        borrowRows: [borrowRow(hasRelease: true)],
       );
       await openMine(tester, api);
 

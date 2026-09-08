@@ -163,11 +163,11 @@ class BorrowRequest {
   /// `GET /borrowings` (which does eager-load it).
   final String? equipmentName;
 
-  /// Whether staff photographed the item at handover. Read off the presence of
-  /// `release_photo_path` / `return_photo_path`, which is what the admin panel
-  /// keys on too — the paths themselves point at a private disk and are never
-  /// fetched directly; the bytes come from GET /borrowings/{id}/photo/{stage}.
-  /// A loan with no photo is a normal, complete record.
+  /// Whether staff photographed the item at handover. `has_release_photo` and
+  /// `has_return_photo` are appended by the model; the path columns behind them
+  /// are hidden, since a private-disk path is not something a client is handed.
+  /// The bytes come from GET /borrowings/{id}/photo/{stage}. A loan with no
+  /// photo is a normal, complete record.
   final bool hasReleasePhoto;
   final bool hasReturnPhoto;
 
@@ -254,8 +254,8 @@ class BorrowRequest {
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
       equipmentName: equipmentName,
-      hasReleasePhoto: _isNonEmptyString(json['release_photo_path']),
-      hasReturnPhoto: _isNonEmptyString(json['return_photo_path']),
+      hasReleasePhoto: json['has_release_photo'] == true,
+      hasReturnPhoto: json['has_return_photo'] == true,
     );
   }
 }
@@ -329,8 +329,6 @@ DateTime? _parseDate(dynamic value) {
   if (y == null || m == null || d == null) return null;
   return DateTime(y, m, d);
 }
-
-bool _isNonEmptyString(dynamic value) => value is String && value.isNotEmpty;
 
 DateTime? _parseInstant(dynamic value) {
   if (value is! String || value.isEmpty) return null;

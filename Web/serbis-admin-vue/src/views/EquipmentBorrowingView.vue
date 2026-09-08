@@ -1236,7 +1236,9 @@ const createHandoverPhoto = (stage) => {
     release()
     state.for = id
     state.error = ''
-    if (!id || !record?.[`${stage}_photo_path`]) return
+    // The path columns are hidden on the model — a private-disk path is not
+    // something a client is handed — so this keys off the appended boolean.
+    if (!id || !record?.[`has_${stage}_photo`]) return
 
     state.loading = true
     try {
@@ -1300,7 +1302,7 @@ const uploadHandoverPhoto = async (record, stage, file) => {
     // Patch the open record in place so the photo appears without closing the
     // panel, then force a re-fetch of the blob by clearing the cached id.
     if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
-      selectedRecord.value[`${stage}_photo_path`] = updated[`${stage}_photo_path`]
+      selectedRecord.value[`has_${stage}_photo`] = updated[`has_${stage}_photo`]
       const holder = stage === 'release' ? releasePhoto : returnPhoto
       holder.state.for = null
       await holder.load(selectedRecord.value)

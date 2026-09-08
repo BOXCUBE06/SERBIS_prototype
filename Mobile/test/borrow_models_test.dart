@@ -243,36 +243,49 @@ void main() {
   });
 
   group('BorrowRequest handover photos', () {
-    test('the flags follow the path columns, not the status', () {
-      final photographed = BorrowRequest.fromJson({
-        'borrow_id': 9,
-        'equipment_id': 3,
-        'quantity': 1,
-        'status': 'Returned',
-        'release_photo_path': 'borrowing-photos/9/release.jpg',
-        'return_photo_path': 'borrowing-photos/9/return.jpg',
-      });
-      expect(photographed.hasReleasePhoto, isTrue);
-      expect(photographed.hasReturnPhoto, isTrue);
+    // The four combinations the server can send. The pair is not one flag: a
+    // loan can be photographed on release and never on return.
+    test('the flags read the appended booleans, in every combination', () {
+      Map<String, dynamic> row(bool? release, bool? ret) => <String, dynamic>{
+            'borrow_id': 9,
+            'equipment_id': 3,
+            'quantity': 1,
+            'status': 'Returned',
+            if (release != null) 'has_release_photo': release,
+            if (ret != null) 'has_return_photo': ret,
+          };
 
-      // A returned loan nobody photographed is a normal, complete record.
-      final unphotographed = BorrowRequest.fromJson({
-        'borrow_id': 9,
-        'equipment_id': 3,
-        'quantity': 1,
-        'status': 'Returned',
-      });
-      expect(unphotographed.hasReleasePhoto, isFalse);
-      expect(unphotographed.hasReturnPhoto, isFalse);
+      final neither = BorrowRequest.fromJson(row(false, false));
+      expect(neither.hasReleasePhoto, isFalse);
+      expect(neither.hasReturnPhoto, isFalse);
+
+      final releaseOnly = BorrowRequest.fromJson(row(true, false));
+      expect(releaseOnly.hasReleasePhoto, isTrue);
+      expect(releaseOnly.hasReturnPhoto, isFalse);
+
+      final returnOnly = BorrowRequest.fromJson(row(false, true));
+      expect(returnOnly.hasReleasePhoto, isFalse);
+      expect(returnOnly.hasReturnPhoto, isTrue);
+
+      final both = BorrowRequest.fromJson(row(true, true));
+      expect(both.hasReleasePhoto, isTrue);
+      expect(both.hasReturnPhoto, isTrue);
+
+      // A row cached before these keys existed carries neither.
+      final absent = BorrowRequest.fromJson(row(null, null));
+      expect(absent.hasReleasePhoto, isFalse);
+      expect(absent.hasReturnPhoto, isFalse);
     });
 
-    test('an empty path is no photo', () {
+    test('the storage path is not what the flag reads', () {
+      // The model hides `release_photo_path`, so it never arrives. If it ever
+      // did, it is not the thing this client trusts.
       final request = BorrowRequest.fromJson({
         'borrow_id': 9,
         'equipment_id': 3,
         'quantity': 1,
         'status': 'Released',
-        'release_photo_path': '',
+        'release_photo_path': 'borrowing-photos/9/release.jpg',
       });
       expect(request.hasReleasePhoto, isFalse);
     });
@@ -283,7 +296,7 @@ void main() {
         'equipment_id': 3,
         'quantity': 1,
         'status': 'Released',
-        'release_photo_path': 'borrowing-photos/9/release.jpg',
+        'has_release_photo': true,
       });
 
       final restored = BorrowRequestCache.fromCacheJson(request.toCacheJson())!;
@@ -297,7 +310,7 @@ void main() {
         'equipment_id': 3,
         'quantity': 1,
         'status': 'Released',
-        'release_photo_path': 'borrowing-photos/9/release.jpg',
+        'has_release_photo': true,
       });
 
       expect(request.copyWith(status: BorrowStatus.cancelled).hasReleasePhoto, isTrue);
