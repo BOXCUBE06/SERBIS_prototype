@@ -48,6 +48,11 @@ class _FakeApi extends ApiService {
   int? lastQuantity;
   String? lastPurpose;
 
+  /// The last body's item source and the four fields added for #1 and #9.
+  /// Held as a raw map as well, so a test can assert a key is *absent* rather
+  /// than only that its value was null.
+  Map<String, dynamic> lastBody = <String, dynamic>{};
+
   /// Holds the catalogue fetch open so the loading frame is observable rather
   /// than a race the fake usually wins.
   Completer<void>? equipmentGate;
@@ -67,17 +72,37 @@ class _FakeApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitBorrowRequest({
-    required int equipmentId,
+    int? equipmentId,
+    String? otherEquipmentText,
     required int quantity,
     required String purpose,
+    String fulfillmentMethod = 'Pickup',
+    String? deliveryAddress,
+    String borrowerType = 'Resident',
+    String? organizationName,
   }) async {
     submitCalls++;
     lastQuantity = quantity;
     lastPurpose = purpose;
+    // Mirrors ApiService's own body construction, so a test asserting on a
+    // missing key is asserting about what would actually go over the wire.
+    lastBody = <String, dynamic>{
+      if (equipmentId != null)
+        'equipment_id': equipmentId
+      else
+        'other_equipment_text': otherEquipmentText,
+      'quantity': quantity,
+      'purpose': purpose,
+      'fulfillment_method': fulfillmentMethod,
+      if (fulfillmentMethod == 'Delivery') 'delivery_address': deliveryAddress,
+      'borrower_type': borrowerType,
+      if (borrowerType == 'Organization') 'organization_name': organizationName,
+    };
     if (submitError != null) throw submitError!;
     return <String, dynamic>{
       'borrow_id': 77,
       'equipment_id': equipmentId,
+      'other_equipment_text': otherEquipmentText,
       'quantity': quantity,
       'purpose': purpose,
       'status': 'Pending',
@@ -156,8 +181,10 @@ void main() {
       expect(find.text('2 available'), findsOneWidget);
 
       // Both cards draw a Borrow button; only the in-stock one is enabled.
+      // Matched by label rather than by type: the free-text card at the end of
+      // the list draws an OutlinedButton too, and it is not a Borrow button.
       final buttons = tester
-          .widgetList<OutlinedButton>(find.byType(OutlinedButton))
+          .widgetList<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Borrow'))
           .toList();
       expect(buttons, hasLength(2));
       expect(buttons.where((b) => b.onPressed == null), hasLength(1));
@@ -325,6 +352,210 @@ void main() {
 
       expect(find.textContaining('Megaphone × 3'), findsOneWidget);
       expect(find.text('No borrow requests yet'), findsNothing);
+    });
+  });
+
+  // #1, #9 and #10. Each of the three added a field the resident could not
+  // reach before, and two of the three are conditional — the branch worth
+  // pinning is not that the field works but that it is absent from the body
+  // when the toggle is on its default, since the server drops those columns
+  // and a stray value would be a delivery nobody makes.
+  group('the borrow sheet', () {
+    /// The sheet is taller than the test viewport once both toggles are on it,
+    /// so a bare tap() silently misses and the assertion after it fails for
+    /// the wrong reason. Scroll the target into view first, every time.
+    Future<void> tapVisible(WidgetTester tester, Finder target) async {
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> openSheet(WidgetTester tester, {bool other = false}) async {
+      await tapVisible(tester, find.text(other ? 'Request' : 'Borrow').first);
+    }
+
+    Future<void> submit(WidgetTester tester) async {
+      await tapVisible(tester, find.text('Request this item'));
+    }
+
+    Future<void> fill(WidgetTester tester, Finder field, String text) async {
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      await tester.enterText(field, text);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a plain request is a Pickup by a Resident for a catalogued item', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await submit(tester);
+
+      expect(api.lastBody['equipment_id'], 1);
+      expect(api.lastBody.containsKey('other_equipment_text'), isFalse);
+      expect(api.lastBody['fulfillment_method'], 'Pickup');
+      expect(api.lastBody['borrower_type'], 'Resident');
+      // The two conditional fields are the point: defaults must send nothing.
+      expect(api.lastBody.containsKey('delivery_address'), isFalse);
+      expect(api.lastBody.containsKey('organization_name'), isFalse);
+    });
+
+    testWidgets('the delivery address appears only for Delivery', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      expect(find.text('Delivery address'), findsNothing);
+
+      await tapVisible(tester, find.text('Delivery'));
+      expect(find.text('Delivery address'), findsOneWidget);
+
+      await tapVisible(tester, find.text('Pickup'));
+      expect(find.text('Delivery address'), findsNothing);
+    });
+
+    testWidgets('a Delivery with no address is refused before it is sent', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await tapVisible(tester, find.text('Delivery'));
+      await submit(tester);
+
+      expect(find.text('Where should MDRRMO deliver it?'), findsOneWidget);
+      expect(api.submitCalls, 0);
+
+      await fill(tester, find.byType(TextField).last, '12 Mabini St, San Fabian');
+      await submit(tester);
+
+      expect(api.submitCalls, 1);
+      expect(api.lastBody['fulfillment_method'], 'Delivery');
+      expect(api.lastBody['delivery_address'], '12 Mabini St, San Fabian');
+    });
+
+    testWidgets('an address typed and then switched away from is not sent', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await tapVisible(tester, find.text('Delivery'));
+      await fill(tester, find.byType(TextField).last, '12 Mabini St');
+      await tapVisible(tester, find.text('Pickup'));
+      await submit(tester);
+
+      expect(api.lastBody['fulfillment_method'], 'Pickup');
+      expect(api.lastBody.containsKey('delivery_address'), isFalse);
+    });
+
+    testWidgets('the organization name appears only for an organization', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      expect(find.text('Organization name'), findsNothing);
+
+      await tapVisible(tester, find.text('An organization'));
+      expect(find.text('Organization name'), findsOneWidget);
+
+      await tapVisible(tester, find.text('Myself'));
+      expect(find.text('Organization name'), findsNothing);
+    });
+
+    testWidgets('an organization with no name is refused before it is sent', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await tapVisible(tester, find.text('An organization'));
+      await submit(tester);
+
+      expect(find.text('Name the organization you are borrowing for.'), findsOneWidget);
+      expect(api.submitCalls, 0);
+
+      await fill(tester, find.byType(TextField).last, 'San Fabian BDRRMC');
+      await submit(tester);
+
+      expect(api.submitCalls, 1);
+      expect(api.lastBody['borrower_type'], 'Organization');
+      expect(api.lastBody['organization_name'], 'San Fabian BDRRMC');
+    });
+
+    testWidgets('an organization name typed and then switched away from is not sent', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await tapVisible(tester, find.text('An organization'));
+      await fill(tester, find.byType(TextField).last, 'San Fabian BDRRMC');
+      await tapVisible(tester, find.text('Myself'));
+      await submit(tester);
+
+      expect(api.lastBody['borrower_type'], 'Resident');
+      expect(api.lastBody.containsKey('organization_name'), isFalse);
+    });
+
+    testWidgets('an uncatalogued request names the item and sends no equipment_id', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester, other: true);
+      expect(find.text('What do you need?'), findsOneWidget);
+
+      await fill(tester, find.byType(TextField).first, 'Portable generator');
+      await fill(tester, find.byType(TextField).at(1), 'Evacuation centre power');
+      await submit(tester);
+
+      expect(api.lastBody['other_equipment_text'], 'Portable generator');
+      // Never both and never neither: the table's CHECK constraint answers a
+      // body carrying the pair with a 500, not a 422.
+      expect(api.lastBody.containsKey('equipment_id'), isFalse);
+    });
+
+    testWidgets('an uncatalogued request with no item name is refused before it is sent', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester, other: true);
+      await fill(tester, find.byType(TextField).at(1), 'Evacuation centre power');
+      await submit(tester);
+
+      expect(find.text('Name the item you need.'), findsOneWidget);
+      expect(api.submitCalls, 0);
+    });
+
+    testWidgets('a catalogued request never offers the free-text item field', (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+
+      expect(find.text('What do you need?'), findsNothing);
+      expect(find.text('Wheelchair'), findsWidgets);
+    });
+
+    testWidgets('the empty catalogue still offers the free-text path', (tester) async {
+      await tester.pumpWidget(_host(AppState(_FakeApi(equipmentRows: []))));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nothing available right now'), findsOneWidget);
+      expect(find.text('Need something else?'), findsOneWidget);
     });
   });
 }

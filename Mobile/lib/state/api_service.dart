@@ -903,15 +903,40 @@ class ApiService {
   /// Files a new equipment loan. The server assigns `resident_id` from the
   /// token and `status: 'Pending'` itself — nothing here can put a request in
   /// any other state or on any other resident's account.
+  /// [equipmentId] names a catalogued item, [otherEquipmentText] one the
+  /// inventory does not list. Exactly one is sent, never both and never
+  /// neither — `tbl_equipment_borrowing` has a CHECK constraint on that, so a
+  /// body carrying both is a 500 rather than a 422.
   Future<Map<String, dynamic>> submitBorrowRequest({
-    required int equipmentId,
+    int? equipmentId,
+    String? otherEquipmentText,
     required int quantity,
     required String purpose,
+    String fulfillmentMethod = 'Pickup',
+    String? deliveryAddress,
+    String borrowerType = 'Resident',
+    String? organizationName,
   }) async {
+    assert(
+      (equipmentId == null) != (otherEquipmentText == null),
+      'submitBorrowRequest takes exactly one item source',
+    );
+
     return _post('/borrowings', {
-      'equipment_id': equipmentId,
+      // if/else rather than two conditional keys: this shape cannot emit both
+      // sides, which is the combination the CHECK constraint rejects.
+      if (equipmentId != null)
+        'equipment_id': equipmentId
+      else
+        'other_equipment_text': otherEquipmentText,
       'quantity': quantity,
       'purpose': purpose,
+      'fulfillment_method': fulfillmentMethod,
+      // Omitted rather than sent null on a pickup: the server drops the column
+      // anyway, and `required_if` only reads it when the method is Delivery.
+      if (fulfillmentMethod == 'Delivery') 'delivery_address': deliveryAddress,
+      'borrower_type': borrowerType,
+      if (borrowerType == 'Organization') 'organization_name': organizationName,
     });
   }
 
