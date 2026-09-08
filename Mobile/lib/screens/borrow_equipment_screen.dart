@@ -311,7 +311,7 @@ class _BorrowRequestCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${request.equipmentName ?? 'Equipment'} × ${request.quantity}',
+                      '${request.itemLabel} × ${request.quantity}',
                       style: AppText.display(size: 14.5),
                     ),
                     const SizedBox(height: 2),

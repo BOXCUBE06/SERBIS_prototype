@@ -229,13 +229,18 @@
 
           <template v-slot:item.equipment="{ item }">
             <div class="min-w-0">
-              <v-tooltip :text="item.equipment?.item_name || 'Unknown'" location="top">
+              <v-tooltip :text="itemName(item)" location="top">
                 <template v-slot:activator="{ props }">
                   <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
-                    {{ item.equipment?.item_name || 'Unknown' }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+                    {{ itemName(item) }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
                   </div>
                 </template>
               </v-tooltip>
+              <!-- Says why there is no stock figure beside this row, rather
+                   than leaving a blank where every other row has one. -->
+              <div v-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic">
+                Not in the inventory
+              </div>
               <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
                 Only {{ item.equipment?.available_quantity ?? 0 }} in stock
               </div>
@@ -362,7 +367,7 @@
         </template>
 
         <template v-slot:item.equipment="{ item }">
-          {{ item.equipment?.item_name || 'Unknown' }}
+          {{ itemName(item) }}
           <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
         </template>
 
@@ -473,8 +478,16 @@
               <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Equipment Requested</h3>
               <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
                 <div>
-                  <div class="text-h5 font-weight-black text-high-emphasis">{{ selectedRecord?.equipment?.item_name }}</div>
-                  <div class="text-subtitle-2 font-weight-medium text-medium-emphasis mt-1">
+                  <div class="text-h5 font-weight-black text-high-emphasis">{{ itemName(selectedRecord) }}</div>
+                  <!-- An uncatalogued item has no stock row to quote, and the
+                       backend refuses to release one until staff add it to the
+                       inventory and attach it. Saying so here is what makes
+                       that 422 predictable instead of a surprise at the point
+                       of release. -->
+                  <div v-if="isUncatalogued(selectedRecord)" class="text-subtitle-2 font-weight-medium text-warning mt-1">
+                    Not in the inventory — add this item to the equipment list and attach it before releasing.
+                  </div>
+                  <div v-else class="text-subtitle-2 font-weight-medium text-medium-emphasis mt-1">
                     Current Stock Available:
                     <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-primary' : 'text-error'">
                       {{ selectedRecord?.equipment?.available_quantity }}
@@ -768,7 +781,11 @@ const matchesSearch = (b) => {
   const q = (search.value || '').trim().toLowerCase()
   if (!q) return true
   const name = `${b.resident?.first_name || ''} ${b.resident?.last_name || ''}`.toLowerCase()
-  const item = (b.equipment?.item_name || '').toLowerCase()
+  // Both item sources, not just the catalogued one — typing what a resident
+  // wrote in the free-text box has to find their request. Read off the fields
+  // rather than through itemName(), whose 'Unknown' fallback would otherwise
+  // make every uncatalogued row a hit for the word "unknown".
+  const item = `${b.equipment?.item_name || ''} ${b.other_equipment_text || ''}`.toLowerCase()
   const purpose = (b.purpose || '').toLowerCase()
   return name.includes(q) || item.includes(q) || purpose.includes(q)
 }
@@ -919,9 +936,22 @@ const resultSummary = computed(() => {
 const initials = (r) => computeInitials(r)
 // Names a record for an accessible label: who and what, which is what tells
 // two otherwise identical "Approve" buttons apart.
+// A borrowing names its item one of two ways and never both: an equipment row
+// the office has catalogued, or free text for something it has not. The table
+// enforces exactly-one with a CHECK constraint, so `equipment` being absent is
+// a normal state here and not a loading failure.
+const isUncatalogued = (item) => !item?.equipment_id
+const itemName = (item) =>
+  item?.equipment?.item_name || item?.other_equipment_text || 'Unknown'
+
 const cardLabel = (item) =>
-  `${item.equipment?.item_name || 'equipment'} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
-const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.quantity
+  `${itemName(item) === 'Unknown' ? 'equipment' : itemName(item)} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
+
+// An uncatalogued item has no stock figure at all, so it is never short. The
+// old `?? 0` read a missing equipment row as zero available, which would have
+// flagged every one of these red for a shortage that is not a shortage.
+const shortStock = (item) =>
+  !isUncatalogued(item) && (item.equipment?.available_quantity ?? 0) < item.quantity
 
 // Anything that is not explicitly a delivery is a pickup, which is also what
 // every request filed before the column existed was.
@@ -936,9 +966,21 @@ const isOrganization = (item) => item?.borrower_type === 'Organization'
 // institutional and cannot say which institution is worth flagging in red
 // rather than rendering as a blank line.
 const unnamedOrganization = (item) => isOrganization(item) && !item?.organization_name
+
+// Symmetric on purpose: a name on both sides. This line separates an
+// individual loan from an institutional one, so it names who or what the item
+// is for — not the account holder's role. "Head of the family" would assert a
+// household position the schema does not record and that is simply wrong for a
+// borrower who is not one; the seven strings that phrase belongs to are all
+// generic headings, never a value beside one named record.
 const borrowingForLabel = (item) => {
-  if (!isOrganization(item)) return 'Head of the family'
-  return item?.organization_name || 'No organization was recorded — ask the borrower.'
+  if (isOrganization(item)) {
+    return item?.organization_name || 'No organization was recorded — ask the borrower.'
+  }
+  // Falls back rather than rendering a bare space: `resident` is eager-loaded
+  // on both show() and index(), but a resident deleted mid-session leaves the
+  // relation null and this line would otherwise read as empty.
+  return `${item?.resident?.first_name || ''} ${item?.resident?.last_name || ''}`.trim() || 'Unknown borrower'
 }
 const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
 const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
@@ -1131,7 +1173,7 @@ const requestAction = (record, newStatus) => {
 const actionCopy = computed(() => {
   const record = actionDialog.value.record
   const who = `${record?.resident?.first_name || ''} ${record?.resident?.last_name || ''}`.trim() || 'this resident'
-  const what = record?.equipment?.item_name || 'the equipment'
+  const what = record?.equipment?.item_name || record?.other_equipment_text || 'the equipment'
   switch (actionDialog.value.mode) {
     case 'deny':
       return { title: 'Deny this request', body: `${who} asked for ${what}.`, confirm: 'Deny request' }

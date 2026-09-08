@@ -172,5 +172,73 @@ void main() {
       expect(BorrowRequestCache.fromCacheJson('not a map'), isNull);
       expect(BorrowRequestCache.fromCacheJson(null), isNull);
     });
+
+    test('an uncatalogued row survives the cache with its text intact', () {
+      final request = BorrowRequest(
+        id: 12,
+        otherEquipmentText: 'Chainsaw with a 20-inch bar',
+        quantity: 1,
+        purpose: 'Clearing a fallen acacia',
+        status: BorrowStatus.pending,
+      );
+
+      final restored = BorrowRequestCache.fromCacheJson(request.toCacheJson())!;
+
+      expect(restored.equipmentId, isNull);
+      expect(restored.otherEquipmentText, 'Chainsaw with a 20-inch bar');
+      expect(restored.itemLabel, 'Chainsaw with a 20-inch bar');
+    });
+  });
+
+  group('BorrowRequest item source', () {
+    test('a null equipment_id reads as null, not as zero', () {
+      // It used to fall back to 0, which now reads as a real inventory row
+      // that cannot exist.
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': null,
+        'other_equipment_text': 'Chainsaw with a 20-inch bar',
+        'quantity': 1,
+        'status': 'Pending',
+      });
+
+      expect(request.equipmentId, isNull);
+      expect(request.otherEquipmentText, 'Chainsaw with a 20-inch bar');
+    });
+
+    test('itemLabel prefers the catalogue name over the free text', () {
+      // The server's CHECK constraint makes both-set impossible, so this is
+      // about precedence being stated rather than incidental.
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'equipment': {'item_name': 'Wheelchair'},
+        'other_equipment_text': 'ignored',
+        'quantity': 1,
+        'status': 'Pending',
+      });
+
+      expect(request.itemLabel, 'Wheelchair');
+    });
+
+    test('itemLabel falls back to the free text, then to the generic word', () {
+      final uncatalogued = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'other_equipment_text': 'Chainsaw with a 20-inch bar',
+        'quantity': 1,
+        'status': 'Pending',
+      });
+      expect(uncatalogued.itemLabel, 'Chainsaw with a 20-inch bar');
+
+      // POST's 201 returns the row with no `equipment` relation embedded, so a
+      // freshly filed catalogued request has neither name until the next GET.
+      final unresolved = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Pending',
+      });
+      expect(unresolved.itemLabel, 'Equipment');
+    });
   });
 }

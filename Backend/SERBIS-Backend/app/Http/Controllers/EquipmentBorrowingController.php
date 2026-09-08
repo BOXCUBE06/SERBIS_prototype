@@ -78,7 +78,15 @@ class EquipmentBorrowingController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'equipment_id' => 'required|exists:tbl_equipments,equipment_id',
+            // Exactly one of these two names the item, which the CHECK
+            // constraint on the table enforces underneath. `required_without`
+            // on both sides catches a request that names neither;
+            // `prohibits` catches one that names both, which would be a
+            // request that disagrees with itself about what is being borrowed.
+            // These rules are the readable 422; the constraint is the floor
+            // under a seeder or a tinker session that never reaches them.
+            'equipment_id' => 'required_without:other_equipment_text|nullable|exists:tbl_equipments,equipment_id',
+            'other_equipment_text' => 'required_without:equipment_id|nullable|string|max:255|prohibits:equipment_id',
             'quantity' => 'required|integer|min:1',
             // Required on the way in, nullable in the column: rows filed
             // before the column existed have no purpose, but a new request
@@ -118,17 +126,28 @@ class EquipmentBorrowingController extends Controller
         // and the second one fails at release time. Reserving on Pending would
         // let anyone empty the inventory with requests nobody ever approves.
         // For the same reason no lock is taken — there is no write to race with.
-        $equipment = Equipment::find($validated['equipment_id']);
+        //
+        // Skipped entirely when the request names free text instead of a
+        // catalogued item: there is no stock figure to check against, because
+        // the whole point of `other_equipment_text` is that MDRRMO has not
+        // catalogued the thing. An uncatalogued request is bounded at release
+        // time instead, by update() refusing to release one at all until staff
+        // have attached a real equipment row — see the guard there.
+        $equipmentId = $validated['equipment_id'] ?? null;
 
-        if (! $equipment || $equipment->available_quantity < $validated['quantity']) {
-            $available = $equipment?->available_quantity ?? 0;
+        if ($equipmentId !== null) {
+            $equipment = Equipment::find($equipmentId);
 
-            // Raised as a field error rather than a bare message so a client can
-            // put it on the quantity input. `update()` answers with a plain
-            // message because its 422 is about the record, not about one field.
-            throw ValidationException::withMessages([
-                'quantity' => "Only {$available} of this item are available to borrow.",
-            ]);
+            if (! $equipment || $equipment->available_quantity < $validated['quantity']) {
+                $available = $equipment?->available_quantity ?? 0;
+
+                // Raised as a field error rather than a bare message so a client can
+                // put it on the quantity input. `update()` answers with a plain
+                // message because its 422 is about the record, not about one field.
+                throw ValidationException::withMessages([
+                    'quantity' => "Only {$available} of this item are available to borrow.",
+                ]);
+            }
         }
 
         $method = $validated['fulfillment_method'] ?? 'Pickup';
@@ -136,7 +155,13 @@ class EquipmentBorrowingController extends Controller
 
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
-            'equipment_id' => $validated['equipment_id'],
+            // Exactly one of the next two is non-null, which the validation
+            // above and the table's CHECK constraint both guarantee. Written
+            // as an explicit either/or rather than passing both straight
+            // through, so an empty string surviving from a client cannot land
+            // as a second item source and trip the constraint with a 500.
+            'equipment_id' => $equipmentId,
+            'other_equipment_text' => $equipmentId === null ? $validated['other_equipment_text'] : null,
             'quantity' => $validated['quantity'],
             'purpose' => $validated['purpose'],
             'fulfillment_method' => $method,
@@ -263,6 +288,26 @@ class EquipmentBorrowingController extends Controller
             ], 422);
         }
 
+        // An uncatalogued request has no equipment row, so there is no stock to
+        // deduct and nothing to hand over that the inventory knows about.
+        // Releasing one would leave the office having lent a physical item with
+        // no record of what left the building.
+        //
+        // Refused explicitly rather than skipped: releasing with the deduction
+        // quietly not happening is the same bug class as the double-deduction
+        // this branch was written to fix, and staff would have no way to tell
+        // the release had been half-processed. Approve and deny stay open — the
+        // office can still consider the request; they just have to catalogue
+        // the item before it goes out. Checked before the transaction opens, so
+        // it costs no lock.
+        if ($newStatus === 'Released' && $borrowing->equipment_id === null) {
+            return response()->json([
+                'message' => 'This request is for an item that is not in the inventory ('
+                    . $borrowing->other_equipment_text
+                    . '). Add it to the equipment list and attach it to this request before releasing.',
+            ], 422);
+        }
+
         DB::beginTransaction();
 
         try {
@@ -280,6 +325,12 @@ class EquipmentBorrowingController extends Controller
             }
 
             // Handle stock addition when returning
+            //
+            // Needs no null-equipment guard of its own, unlike the release
+            // branch above: Returned is reachable only from Released, and the
+            // check before this transaction refuses to release a record whose
+            // equipment_id is null. So anything arriving here has already been
+            // proved to have an equipment row.
             if ($newStatus === 'Returned' && $oldStatus === 'Released') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
 

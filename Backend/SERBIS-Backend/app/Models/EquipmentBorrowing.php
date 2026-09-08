@@ -16,6 +16,7 @@ class EquipmentBorrowing extends Model
     protected $fillable = [
         'resident_id',
         'equipment_id',
+        'other_equipment_text',
         'quantity',
         'purpose',
         'fulfillment_method',
