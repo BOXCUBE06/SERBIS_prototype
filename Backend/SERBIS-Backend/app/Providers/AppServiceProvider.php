@@ -78,6 +78,17 @@ class AppServiceProvider extends ServiceProvider
         // one login attempt as precisely as an email identifies one account, and
         // the challenge's own 5-attempt cap (AuthController::consumeMfaChallengeAttempt)
         // is still the real brake — this is defence in depth, same as 'login' is.
+        // POST /sms/blast, the only endpoint that spends money. Named rather than
+        // an inline throttle:3,60 - see the ->by() note under 'register' above: an
+        // inline limit reuses ThrottleRequests' route signature, which is the same
+        // signature the api group's own throttleApi('60,1') already counts on, so
+        // every request would increment one shared bucket twice and three sends an
+        // hour became closer to one. Keyed on the account for the reason
+        // SmsController::assertCurrentPassword is: an office on one CGNAT address
+        // must not be able to spend a colleague's allowance.
+        RateLimiter::for('sms-blast', function (Request $request) {
+            return Limit::perHour(3)->by('admin:'.$request->user()->admin_id);
+        });
         RateLimiter::for('mfa', function (Request $request) {
             $challenge = Str::lower((string) $request->input('challenge_id'));
 

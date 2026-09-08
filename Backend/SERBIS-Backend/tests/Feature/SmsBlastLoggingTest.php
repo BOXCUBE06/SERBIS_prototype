@@ -8,6 +8,7 @@ use App\Models\Resident;
 use App\Models\SmsLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -232,6 +233,10 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_repeated_wrong_passwords_are_throttled_and_then_block_the_correct_one(): void
     {
+        // Isolated from the route throttle: proving the password limiter costs more
+        // than three sends an hour, and the two guards are independent.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
         Http::fake();
 
         $this->resident($this->barangayA, 'Active', '09171111111');
@@ -265,6 +270,10 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_the_throttle_is_per_account_and_does_not_lock_out_another_admin(): void
     {
+        // Isolated from the route throttle: proving the password limiter costs more
+        // than three sends an hour, and the two guards are independent.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
         Http::fake();
 
         $this->resident($this->barangayA, 'Active', '09171111111');
@@ -294,6 +303,10 @@ class SmsBlastLoggingTest extends TestCase
 
     public function test_a_correct_password_clears_the_tally_so_ordinary_sending_is_never_throttled(): void
     {
+        // Isolated from the route throttle: proving the password limiter costs more
+        // than three sends an hour, and the two guards are independent.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
         Http::fake();
 
         $this->resident($this->barangayA, 'Active', '09171111111');
@@ -330,5 +343,30 @@ class SmsBlastLoggingTest extends TestCase
             'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertOk();
+    }
+
+    public function test_a_fourth_blast_within_the_hour_is_refused_by_the_route_throttle(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        for ($sent = 1; $sent <= 3; $sent++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => "Advisory {$sent}.",
+                'password' => 'password123',
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertOk();
+        }
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'One too many.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(429);
+
+        // The money, not the status code: the fourth call must never reach the
+        // vendor, so the log stays at the three that were allowed through.
+        $this->assertSame(3, SmsLog::count());
     }
 }
