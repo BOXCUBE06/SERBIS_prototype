@@ -725,6 +725,7 @@ import { useRoute } from 'vue-router'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
+import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 
@@ -754,7 +755,10 @@ const ALL_BARANGAYS = 'All barangays'
 const ALL_STATUS = 'All'
 const ALL_OUTCOMES = 'All'
 
-const borrowings = ref([])
+// Module-level state, not this component's: ProcurementReferenceView reads the
+// same rows, and `GET /borrowings` returns the whole table unpaginated — two
+// copies of that is twice the heaviest read in the panel for the same data.
+const { rows: borrowings, loadError, initialLoad, reloading, load } = useBorrowingsList()
 const activeTab = ref('board')
 const search = ref('')
 const itemFilter = ref(ALL_ITEMS)
@@ -762,17 +766,14 @@ const barangayFilter = ref(ALL_BARANGAYS)
 const statusFilter = ref(ALL_STATUS)
 const outcomeFilter = ref(ALL_OUTCOMES)
 const overdueOnly = ref(false)
-const initialLoad = ref(true)
 
 // Dashboard KPI cards deep-link here with ?status=... / ?overdue=1 — honor
 // them once on arrival so the operator lands on the filtered view.
 if (columns.some((c) => c.status === route.query.status)) statusFilter.value = route.query.status
 if (route.query.overdue === '1') overdueOnly.value = true
 const loading = ref(false)
-const reloading = ref(false)
 const processingId = ref(null)
 const apiError = ref('')
-const loadError = ref('')
 const liveMessage = ref('')
 const modal = ref({ isOpen: false })
 const selectedRecord = ref(null)
@@ -1130,32 +1131,14 @@ const getHeaders = () => ({
   Accept: 'application/json',
 })
 
-// A non-2xx used to fall straight through: `res.json()` on an error body assigns
-// whatever came back to `borrowings`, so a 401 or a 500 rendered as an empty
-// board rather than as a failure.
-const fetchData = async () => {
-  reloading.value = true
-  try {
-    const res = await fetch(`${API_BASE}/borrowings`, { headers: getHeaders() })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
-    const data = await res.json()
-    const rows = data.data || data
-    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
-    borrowings.value = rows
-    loadError.value = ''
-  } catch (error) {
-    console.error('Failed to fetch borrowings:', error)
-    // Full-pane loadError card below is the only notification here — a
-    // snackbar on top of it duplicated the same message (ui-audit finding #3).
-    loadError.value = error.message || 'Could not reach the server'
-  } finally {
-    initialLoad.value = false
-    reloading.value = false
-  }
-}
+// The request, the non-2xx handling and the error text all live in
+// `useBorrowingsList` now. Wrapped rather than bound straight to `load`,
+// because this is also a @click handler and a click event would arrive where
+// the loader takes its options.
+//
+// The full-pane loadError card below is the only notification for a failure —
+// a snackbar on top of it duplicated the same message (ui-audit finding #3).
+const fetchData = () => load()
 
 // Failures here are non-fatal to the page — the filters just fall back to
 // showing only "All items"/"All barangays" until they load, same as any

@@ -133,6 +133,9 @@ const mainMenu = [
   { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
   { to: '/vehicles', icon: 'mdi-ambulance', title: 'Vehicles' },
   { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Resource Management' },
+  // Below Resource Management on purpose: it is the list of what the catalogue
+  // above does not carry, and it is read next to it, not next to the board.
+  { to: '/procurement', icon: 'mdi-clipboard-list-outline', title: 'Procurement Reference' },
   { to: '/sms', icon: 'mdi-message-text-fast-outline', title: 'Text Blast (SMS)' }
 ]
 
