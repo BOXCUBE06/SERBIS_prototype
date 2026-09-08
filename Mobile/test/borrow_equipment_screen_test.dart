@@ -22,6 +22,7 @@
 // throwing, and a test that sits until timeout here means that, not slowness.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +69,18 @@ class _FakeApi extends ApiService {
   @override
   Future<List<Map<String, dynamic>>> getBorrowings() async {
     return borrowRows ?? <Map<String, dynamic>>[];
+  }
+
+  /// Bytes per stage, and the stages actually asked for. A stage missing from
+  /// the map answers null, which is what the real call does for a loan nobody
+  /// photographed.
+  Map<String, List<int>> photos = <String, List<int>>{};
+  List<String> photoStagesFetched = <String>[];
+
+  @override
+  Future<List<int>?> fetchHandoverPhoto(int borrowId, String stage) async {
+    photoStagesFetched.add(stage);
+    return photos[stage];
   }
 
   @override
@@ -355,6 +368,94 @@ void main() {
     });
   });
 
+  // The handover photographs. Staff take them at the counter and the endpoint
+  // has been owner-scoped since it was written — the resident could always
+  // read their own back, this app simply never asked. Display only: uploading
+  // is behind `is.admin` and nothing here can add or replace one.
+  group('handover photos', () {
+    Map<String, dynamic> borrowRow({
+      String status = 'Returned',
+      String? releasePath,
+      String? returnPath,
+    }) =>
+        <String, dynamic>{
+          'borrow_id': 5,
+          'equipment_id': 1,
+          'quantity': 1,
+          'status': status,
+          'created_at': DateTime.now().toIso8601String(),
+          'equipment': <String, dynamic>{'item_name': 'Megaphone'},
+          if (releasePath != null) 'release_photo_path': releasePath,
+          if (returnPath != null) 'return_photo_path': returnPath,
+        };
+
+    Future<void> openMine(WidgetTester tester, _FakeApi api) async {
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('My Requests (1)'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a loan nobody photographed draws no photo section', (tester) async {
+      final api = _FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
+        borrowRows: [borrowRow()],
+      );
+      await openMine(tester, api);
+
+      expect(find.text('Handover photos'), findsNothing);
+      // Nothing to fetch, so nothing is fetched: the bytes are heavier than
+      // the whole list and must never be pulled speculatively.
+      expect(api.photoStagesFetched, isEmpty);
+    });
+
+    testWidgets('both stages are shown and each is fetched once', (tester) async {
+      final api = _FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
+        borrowRows: [borrowRow(
+          releasePath: 'borrowing-photos/5/release.jpg',
+          returnPath: 'borrowing-photos/5/return.jpg',
+        )],
+      )..photos = <String, List<int>>{'release': _onePixelPng, 'return': _onePixelPng};
+      await openMine(tester, api);
+
+      expect(find.text('Handover photos'), findsOneWidget);
+      expect(find.text('Released'), findsOneWidget);
+      expect(find.text('Returned'), findsWidgets);
+      expect(api.photoStagesFetched, <String>['release', 'return']);
+      expect(find.byType(Image), findsNWidgets(2));
+    });
+
+    testWidgets('a release-only loan asks for that stage alone', (tester) async {
+      final api = _FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
+        borrowRows: [borrowRow(
+          status: 'Released',
+          releasePath: 'borrowing-photos/5/release.jpg',
+        )],
+      )..photos = <String, List<int>>{'release': _onePixelPng};
+      await openMine(tester, api);
+
+      expect(find.text('Released'), findsOneWidget);
+      expect(api.photoStagesFetched, <String>['release']);
+    });
+
+    testWidgets('a photo the server will not serve leaves a placeholder, not a crash',
+        (tester) async {
+      // fetchHandoverPhoto answers null on a 404 or a dead connection alike.
+      // The tile has to survive that inside a list item.
+      final api = _FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
+        borrowRows: [borrowRow(releasePath: 'borrowing-photos/5/release.jpg')],
+      );
+      await openMine(tester, api);
+
+      expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
+      expect(find.byType(Image), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   // #1, #9 and #10. Each of the three added a field the resident could not
   // reach before, and two of the three are conditional — the branch worth
   // pinning is not that the field works but that it is absent from the body
@@ -559,3 +660,10 @@ void main() {
     });
   });
 }
+
+/// A real 1x1 PNG. Image.memory decodes whatever it is handed, and a tile
+/// asserting on find.byType(Image) is only meaningful if the bytes are ones a
+/// codec would accept.
+final List<int> _onePixelPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+);

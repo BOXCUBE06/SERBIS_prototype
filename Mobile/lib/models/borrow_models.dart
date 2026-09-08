@@ -163,6 +163,14 @@ class BorrowRequest {
   /// `GET /borrowings` (which does eager-load it).
   final String? equipmentName;
 
+  /// Whether staff photographed the item at handover. Read off the presence of
+  /// `release_photo_path` / `return_photo_path`, which is what the admin panel
+  /// keys on too — the paths themselves point at a private disk and are never
+  /// fetched directly; the bytes come from GET /borrowings/{id}/photo/{stage}.
+  /// A loan with no photo is a normal, complete record.
+  final bool hasReleasePhoto;
+  final bool hasReturnPhoto;
+
   /// What to print on the card. Prefers the catalogue name, falls back to what
   /// the resident wrote, and only then to the generic word — so an
   /// uncatalogued request shows the item the resident actually asked for
@@ -182,6 +190,8 @@ class BorrowRequest {
     this.releasedAt,
     this.returnedAt,
     this.equipmentName,
+    this.hasReleasePhoto = false,
+    this.hasReturnPhoto = false,
   });
 
   BorrowRequest copyWith({
@@ -206,6 +216,8 @@ class BorrowRequest {
       releasedAt: releasedAt ?? this.releasedAt,
       returnedAt: returnedAt ?? this.returnedAt,
       equipmentName: equipmentName ?? this.equipmentName,
+      hasReleasePhoto: hasReleasePhoto,
+      hasReturnPhoto: hasReturnPhoto,
     );
   }
 
@@ -242,6 +254,8 @@ class BorrowRequest {
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
       equipmentName: equipmentName,
+      hasReleasePhoto: _isNonEmptyString(json['release_photo_path']),
+      hasReturnPhoto: _isNonEmptyString(json['return_photo_path']),
     );
   }
 }
@@ -266,6 +280,8 @@ extension BorrowRequestCache on BorrowRequest {
         'released_at': releasedAt?.toIso8601String(),
         'returned_at': returnedAt?.toIso8601String(),
         'equipment_name': equipmentName,
+        'has_release_photo': hasReleasePhoto,
+        'has_return_photo': hasReturnPhoto,
       };
 
   /// Rebuilds a cached row, or null for an entry this version cannot read. A
@@ -293,6 +309,8 @@ extension BorrowRequestCache on BorrowRequest {
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
       equipmentName: json['equipment_name'] as String?,
+      hasReleasePhoto: json['has_release_photo'] == true,
+      hasReturnPhoto: json['has_return_photo'] == true,
     );
   }
 }
@@ -311,6 +329,8 @@ DateTime? _parseDate(dynamic value) {
   if (y == null || m == null || d == null) return null;
   return DateTime(y, m, d);
 }
+
+bool _isNonEmptyString(dynamic value) => value is String && value.isNotEmpty;
 
 DateTime? _parseInstant(dynamic value) {
   if (value is! String || value.isEmpty) return null;

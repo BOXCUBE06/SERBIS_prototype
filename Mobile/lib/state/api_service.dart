@@ -946,4 +946,47 @@ class ApiService {
   Future<void> cancelBorrowRequest(int borrowId) async {
     await _patch('/borrowings/$borrowId/cancel');
   }
+
+  /// The handover photo staff took at release or return, or null when there is
+  /// none. [stage] is 'release' or 'return'.
+  ///
+  /// Read-only from this side: uploading sits behind `is.admin`, and the photo
+  /// is taken by whoever is standing at the counter. The borrower reads it back
+  /// for the reason EquipmentBorrowingController::photo() gives — evidence only
+  /// one side can see is not evidence.
+  ///
+  /// Bytes rather than a URL, for the same reason as [fetchProfilePhoto]: the
+  /// route is behind `auth:sanctum` and an `<img src>` on the web build carries
+  /// no Authorization header.
+  Future<List<int>?> fetchHandoverPhoto(int borrowId, String stage) async {
+    final uri = Uri.parse('$baseUrl/borrowings/$borrowId/photo/$stage');
+    const endpoint = 'GET /borrowings/{id}/photo/{stage}';
+
+    http.Response response;
+    try {
+      response = await http
+          .get(uri, headers: {
+            'Accept': '*/*',
+            if (_token != null) 'Authorization': 'Bearer $_token',
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (error) {
+      AppLog.error(_logArea, endpoint, error: error, reason: 'no response');
+      return null;
+    }
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+
+    // 404 is the ordinary answer for a loan nobody photographed — the office
+    // releases equipment in conditions where stopping to photograph it is the
+    // wrong advice. Not an error, and never an exception either way: a missing
+    // photo must not take the card down with it.
+    if (response.statusCode != 404) {
+      AppLog.warn(_logArea, endpoint, reason: 'status ${response.statusCode}');
+    }
+
+    return null;
+  }
 }

@@ -241,4 +241,66 @@ void main() {
       expect(unresolved.itemLabel, 'Equipment');
     });
   });
+
+  group('BorrowRequest handover photos', () {
+    test('the flags follow the path columns, not the status', () {
+      final photographed = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Returned',
+        'release_photo_path': 'borrowing-photos/9/release.jpg',
+        'return_photo_path': 'borrowing-photos/9/return.jpg',
+      });
+      expect(photographed.hasReleasePhoto, isTrue);
+      expect(photographed.hasReturnPhoto, isTrue);
+
+      // A returned loan nobody photographed is a normal, complete record.
+      final unphotographed = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Returned',
+      });
+      expect(unphotographed.hasReleasePhoto, isFalse);
+      expect(unphotographed.hasReturnPhoto, isFalse);
+    });
+
+    test('an empty path is no photo', () {
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Released',
+        'release_photo_path': '',
+      });
+      expect(request.hasReleasePhoto, isFalse);
+    });
+
+    test('the flags survive the cache', () {
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Released',
+        'release_photo_path': 'borrowing-photos/9/release.jpg',
+      });
+
+      final restored = BorrowRequestCache.fromCacheJson(request.toCacheJson())!;
+      expect(restored.hasReleasePhoto, isTrue);
+      expect(restored.hasReturnPhoto, isFalse);
+    });
+
+    test('a cancel keeps the flags on the row it rewrites', () {
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Released',
+        'release_photo_path': 'borrowing-photos/9/release.jpg',
+      });
+
+      expect(request.copyWith(status: BorrowStatus.cancelled).hasReleasePhoto, isTrue);
+    });
+  });
 }

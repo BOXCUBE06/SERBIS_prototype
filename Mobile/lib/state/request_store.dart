@@ -472,6 +472,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Bytes of the handover photo staff took at [stage] ('release' or
+  /// 'return'), or null when there is none. Not cached and not held on the
+  /// row: a photograph is heavier than the whole borrow list and is only ever
+  /// looked at when the card is on screen.
+  Future<List<int>?> borrowPhoto(int borrowId, String stage) =>
+      _api.fetchHandoverPhoto(borrowId, stage);
+
   /// The blasts MDRRMO sent this resident.
   ///
   /// Never routed to `lastError`: this runs on launch, on resume and on every

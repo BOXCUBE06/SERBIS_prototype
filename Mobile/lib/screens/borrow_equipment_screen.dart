@@ -1,5 +1,7 @@
 library serbis.screens.borrow_equipment;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../models/borrow_models.dart';
 import '../models/request_models.dart' show formatDueDate, formatTimelineTime;
@@ -196,6 +198,7 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
                   request: r,
                   filipino: f,
                   onCancel: () => widget.appState.cancelBorrowRequest(r.id),
+                  loadPhoto: (stage) => widget.appState.borrowPhoto(r.id!, stage),
                 ),
               )),
         ],
@@ -358,10 +361,15 @@ class _BorrowRequestCard extends StatelessWidget {
   /// dialog waits for it before saying anything happened.
   final Future<bool> Function() onCancel;
 
+  /// Bytes for one handover stage, or null when the fetch found nothing. Only
+  /// called for a stage the row says exists.
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
   const _BorrowRequestCard({
     required this.request,
     required this.filipino,
     required this.onCancel,
+    required this.loadPhoto,
   });
 
   @override
@@ -437,6 +445,19 @@ class _BorrowRequestCard extends StatelessWidget {
               ],
             ),
           ],
+          // Staff photograph the item at the counter; the resident only reads
+          // it back. A row with neither photo draws nothing at all — most
+          // loans have none, and an empty "Handover photos" heading would read
+          // as something missing rather than something never taken.
+          if (request.id != null &&
+              (request.hasReleasePhoto || request.hasReturnPhoto)) ...[
+            const SizedBox(height: 12),
+            _HandoverPhotos(
+              hasRelease: request.hasReleasePhoto,
+              hasReturn: request.hasReturnPhoto,
+              loadPhoto: loadPhoto,
+            ),
+          ],
           // An id-less row is still in flight, so MDRRMO has nothing to cancel
           // yet — the button waits rather than offering an action the store
           // would have to refuse. The backend re-checks the status either way.
@@ -453,6 +474,170 @@ class _BorrowRequestCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The photographs staff took when the item changed hands. Display only —
+/// POST /borrowings/{id}/photo is behind `is.admin`, and this app has no way
+/// to add or replace one.
+class _HandoverPhotos extends StatelessWidget {
+  final bool hasRelease;
+  final bool hasReturn;
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
+  const _HandoverPhotos({
+    required this.hasRelease,
+    required this.hasReturn,
+    required this.loadPhoto,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Handover photos',
+          style: AppText.display(size: 12, color: AppColors.inkMuted),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (hasRelease)
+              _HandoverThumbnail(
+                label: 'Released',
+                stage: 'release',
+                loadPhoto: loadPhoto,
+              ),
+            if (hasRelease && hasReturn) const SizedBox(width: 10),
+            if (hasReturn)
+              _HandoverThumbnail(
+                label: 'Returned',
+                stage: 'return',
+                loadPhoto: loadPhoto,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One stage's photograph. Fetched once when the card is built and held here:
+/// the bytes are heavier than the borrow list itself, so they are never cached
+/// to disk and never kept on the row.
+class _HandoverThumbnail extends StatefulWidget {
+  final String label;
+  final String stage;
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
+  const _HandoverThumbnail({
+    required this.label,
+    required this.stage,
+    required this.loadPhoto,
+  });
+
+  @override
+  State<_HandoverThumbnail> createState() => _HandoverThumbnailState();
+}
+
+class _HandoverThumbnailState extends State<_HandoverThumbnail> {
+  Uint8List? _bytes;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    // fetchHandoverPhoto swallows its own failures and answers null, so a
+    // photo the server cannot serve leaves the tile in its "not available"
+    // state instead of throwing inside a list item.
+    final bytes = await widget.loadPhoto(widget.stage);
+    if (!mounted) return;
+    setState(() {
+      _bytes = bytes == null ? null : Uint8List.fromList(bytes);
+      _loading = false;
+    });
+  }
+
+  void _openFullSize() {
+    final bytes = _bytes;
+    if (bytes == null) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: Center(child: Image.memory(bytes, fit: BoxFit.contain)),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: _openFullSize,
+          child: Container(
+            width: 76,
+            height: 76,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AppColors.grey50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: _tile(),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          widget.label,
+          style: AppText.body(size: 11, color: AppColors.inkMuted),
+        ),
+      ],
+    );
+  }
+
+  Widget _tile() {
+    if (_loading) {
+      return const Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final bytes = _bytes;
+    if (bytes == null) {
+      return const Center(
+        child: Icon(Icons.image_not_supported_outlined,
+            size: 20, color: AppColors.inkFaint),
+      );
+    }
+
+    return Image.memory(bytes, fit: BoxFit.cover, width: 76, height: 76);
   }
 }
 
