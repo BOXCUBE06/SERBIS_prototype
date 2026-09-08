@@ -401,7 +401,9 @@
     </v-card>
 
     <!-- Detail modal (full record + fallback actions) -->
-    <v-dialog v-model="modal.isOpen" max-width="900" persistent transition="dialog-fade-transition">
+    <!-- Not persistent: this reads a record. The one input on it, the handover
+         photo picker, uploads on pick, so there is no unsaved state to lose. -->
+    <v-dialog v-model="modal.isOpen" max-width="900" transition="dialog-fade-transition">
       <v-card rounded="lg" elevation="4">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
@@ -663,10 +665,16 @@
 
     <!-- One dialog for the three transitions that need something from the
          operator before they fire. -->
-    <v-dialog v-model="actionDialog.open" max-width="440" @after-leave="clearActionDialog">
+    <!-- persistent: holds a due date and, on a denial, the reason the resident
+         is shown. -->
+    <v-dialog v-model="actionDialog.open" max-width="440" persistent @after-leave="clearActionDialog">
       <v-card rounded="lg">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          {{ actionCopy.title }}
+        <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          <span>{{ actionCopy.title }}</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading" @click="actionDialog.open = false"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ actionCopy.body }}</div>

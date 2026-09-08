@@ -232,7 +232,13 @@
          the signed-in account before it spends anything. -->
     <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
       <v-card rounded="lg">
-        <v-card-title class="text-h6 font-weight-bold pt-5 px-6">Confirm this blast</v-card-title>
+        <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
+          <span>Confirm this blast</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading" @click="cancelSend"
+          ></v-btn>
+        </v-card-title>
         <v-card-text class="px-6">
           <p class="text-body-1 mb-3">{{ confirmDialog.summary }}</p>
           <p v-if="confirmDialog.cost" class="text-body-2 text-medium-emphasis mb-4">{{ confirmDialog.cost }}</p>

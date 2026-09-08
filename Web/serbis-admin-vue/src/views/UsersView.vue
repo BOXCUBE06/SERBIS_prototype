@@ -569,9 +569,17 @@ const closeDetail = () => { selectedResident.value = null }
 // the key: pressing Esc in the edit form closed the profile *behind* the form —
 // and that form is `persistent`, so it stayed open over a panel that was no
 // longer there.
+//
+// Derived from what is actually on screen rather than from a list of this
+// file's dialogs by name: the list was three long and a fourth dialog would
+// not have been in it. Vuetify puts `.v-dialog.v-overlay--active` on every open
+// dialog, and only on dialogs — a snackbar, a tooltip or a select's menu does
+// not match, so those keep behaving as they did.
+const aDialogIsOpen = () => !!document.querySelector('.v-dialog.v-overlay--active')
+
 const onEscape = (event) => {
   if (event.key !== 'Escape') return
-  if (modal.value.isOpen || deleteDialog.value.show || statusDialog.value.show) return
+  if (aDialogIsOpen()) return
   if (selectedResident.value) closeDetail()
 }
 
@@ -584,7 +592,7 @@ const onEscape = (event) => {
 // is excluded too, or picking a status would shut the panel behind it.
 const onDocumentClick = (event) => {
   if (!selectedResident.value) return
-  if (modal.value.isOpen || deleteDialog.value.show || statusDialog.value.show) return
+  if (aDialogIsOpen()) return
   const target = event.target
   if (!(target instanceof Element)) return
   if (target.closest('.detail-rail')) return

@@ -844,10 +844,16 @@
          is its own explanation. Bulk decline gets one reason for the whole
          selection, which is the only thing it could ever have written -- it used
          to resend each row's existing remarks, so it captured nothing at all. -->
-    <v-dialog v-model="reasonDialog.open" max-width="440" @after-leave="clearReason">
+    <!-- persistent: the field below is the text a Head of the Family is shown,
+         and a stray click on the scrim used to discard it with no warning. -->
+    <v-dialog v-model="reasonDialog.open" max-width="440" persistent @after-leave="clearReason">
       <v-card rounded="lg">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          {{ reasonCopy.title }}
+        <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          <span>{{ reasonCopy.title }}</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading || bulkLoading" @click="reasonDialog.open = false"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
@@ -931,10 +937,17 @@
          reasonDialog above: that one collects one reason string for a status
          flip, this collects two datetimes plus a reason, and remarks here is
          required unconditionally, not gated on `kind`. -->
-    <v-dialog v-model="rescheduleDialog.open" max-width="440">
+    <!-- persistent for two reasons: it holds a typed reason, and both date
+         fields open a teleported menu — clicking a date in it registers as a
+         click outside the dialog, which used to close it mid-edit. -->
+    <v-dialog v-model="rescheduleDialog.open" max-width="440" persistent>
       <v-card rounded="lg">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          Reschedule booking
+        <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          <span>Reschedule booking</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading" @click="rescheduleDialog.open = false"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <DateTimePickerField
