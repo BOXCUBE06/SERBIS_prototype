@@ -394,9 +394,22 @@ class _MaterialRow extends StatelessWidget {
                         style: AppText.display(size: 13, weight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        meta,
-                        style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              meta,
+                              style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                            ),
+                          ),
+                          // Only drawn when true. There is no "unverified"
+                          // badge: absence is not a warning about the file, it
+                          // is MDRRMO not having got to it yet.
+                          if (material.verified) ...[
+                            const SizedBox(width: 6),
+                            _VerifiedBadge(filipino: filipino),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -422,6 +435,33 @@ class _MaterialRow extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "MDRRMO has checked this", on the row rather than behind a tap: a resident
+/// deciding whether to act on an advisory is deciding it here.
+class _VerifiedBadge extends StatelessWidget {
+  final bool filipino;
+
+  const _VerifiedBadge({required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(30)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.verified_rounded, size: 11, color: AppColors.green700),
+          const SizedBox(width: 3),
+          Text(
+            filipino ? 'Beripikado' : 'Verified',
+            style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
+          ),
+        ],
       ),
     );
   }

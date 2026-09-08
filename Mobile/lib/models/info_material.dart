@@ -22,6 +22,11 @@ class InfoMaterial {
   /// invented one is exactly the placeholder this replaced.
   final DateTime? publishedAt;
 
+  /// Whether MDRRMO has checked this material and stands behind it. Defaults
+  /// to false everywhere, including for a row the server sent without the key:
+  /// claiming a review that did not happen is the one wrong answer here.
+  final bool verified;
+
   const InfoMaterial({
     required this.id,
     required this.title,
@@ -29,6 +34,7 @@ class InfoMaterial {
     required this.sizeBytes,
     required this.url,
     this.publishedAt,
+    this.verified = false,
   });
 
   factory InfoMaterial.fromJson(Map<String, dynamic> json) {
@@ -41,6 +47,9 @@ class InfoMaterial {
       // Laravel serialises UTC; without toLocal() a material published this
       // morning reads as yesterday evening in the Philippines.
       publishedAt: _dateOf(json['created_at']),
+      // The column is cast to bool server-side, but an older build of the API
+      // sends no key at all and 0/1 is still what a raw driver would give.
+      verified: json['verified'] == true || json['verified'] == 1,
     );
   }
 
