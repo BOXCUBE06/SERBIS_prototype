@@ -4,9 +4,13 @@ Read-only survey of `Backend/SERBIS-Backend/app` and `Web/serbis-admin-vue/src`,
 at `6ffe2e7` on branch `update-admin-vue`, 2026-09-08. `Mobile/` was excluded on
 request; migrations and tests were read but not assessed for cleanup.
 
-Nothing in §2 through §5 has been acted on. Phase 2 covered only unused imports,
-commented-out code, Pint, and the safe half of eslint `--fix`; §6 records exactly what
-that came to.
+Phase 2 covered only unused imports, commented-out code, Pint, and the safe half of
+eslint `--fix`; §6 records exactly what that came to.
+
+**Corrected 2026-09-08, after acting on part of §5.** Three findings below were wrong
+as first written and are rewritten in place: B3 was not a live bug, B5 overstated what
+was missing, and B6's reading of `no-array-sort` was simply incorrect. Each says so at
+its own heading. Nothing else in §2 through §5 has been acted on.
 
 ---
 
@@ -105,8 +109,8 @@ migration as D1.
 `EquipmentBorrowingView.vue:1056` and `:1072`, `LogsView.vue:241`, against
 `adminUi.ts:78` `fmtDate()` / `:88` `fmtDateTime()`. The copies differ in their empty
 value: the composable returns an em dash, `ConductionRequestView` returns `''`, and
-`ServiceRequestQueue` returns the string `"Invalid Date"` because it has no null guard
-at all. That last one is a visible defect, not just duplication — see B3.
+`ServiceRequestQueue` had no null guard at all. That last one was a latent hazard
+rather than a visible defect, and is closed as of `4fb79e0` — see B3.
 
 ### D4 — resident-only 403 guard, four copies · **safe to extract**
 
@@ -178,7 +182,7 @@ lines. That is a namespace plus four imports. Listed only so it is not re-report
 
 | File | Lines | What it does | Is the size a problem? |
 | --- | --- | --- | --- |
-| `components/ServiceRequestQueue.vue` | 2826 | The shared queue component, rendered in two different modes (`ambulance` → Bookings tab, `other` → Resident Requests) | **Yes.** This is the one file where size is a real risk. Two products in one component, with mode branches throughout, plus CSV export, description parsing and a create form. It is also where the duplicated formatters with no null guard live (B3) |
+| `components/ServiceRequestQueue.vue` | 2826 | The shared queue component, rendered in two different modes (`ambulance` → Bookings tab, `other` → Resident Requests) | **Yes.** This is the one file where size is a real risk. Two products in one component, with mode branches throughout, plus CSV export, description parsing and a create form. It is also where the unguarded duplicate formatters lived until `4fb79e0` (B3) |
 | `views/EquipmentBorrowingView.vue` | 1581 | Borrowing queue, approve/deny/release/return dialogs, handover photos, borrower-type and other-item fields | Borderline. Grew ~300 lines in the batch just pulled. Watch it rather than split it now |
 | `views/ConductionRequestView.vue` | 1349 | Two tabs — bookings (delegates to `ServiceRequestQueue`) and the hand-filled trip log | No. Mostly template |
 | `views/UsersView.vue` | 1207 | Head-of-family list, detail panel, status transitions, photo/valid-ID viewing | No. Long view, one subject |
@@ -239,7 +243,10 @@ plenty; none of them are worth the line.
 
 ---
 
-## 5. Suspected bugs — **not fixed**
+## 5. Suspected bugs
+
+B1, B2 and B4 are open and untouched. B3 and B5 have since been acted on and their
+entries record what was actually true; B6 is corrected.
 
 ### B1 — `EquipmentBorrowingController::update()` swallows the failure that matters most
 
@@ -270,20 +277,26 @@ Reachability is low: `equipment_id === null` is refused before the transaction, 
 `EquipmentController::destroy` refuses to delete equipment with a Pending/Approved/
 Released borrowing. Low severity, real mechanism.
 
-### B3 — `ServiceRequestQueue` renders the literal string `"Invalid Date"`
+### B3 — `ServiceRequestQueue`'s unguarded date formatters — **CORRECTED: not a bug**
 
-`Web/serbis-admin-vue/src/components/ServiceRequestQueue.vue:1949-1950`
+**As first written this entry was wrong.** It said a null "puts `Invalid Date` in a
+table cell" and called it the highest-value fix in the report. Nothing reached those
+formatters with a null. Every call site is either behind a `v-if` on the value
+(`:263`, `:377`, `:553`) or passes `created_at`, which is never null. No operator ever
+saw `Invalid Date`, and no screenshot or report of one exists.
 
-```js
-const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString(...)
-const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(...)
-```
+What was true: `formatDate` and `formatDateTime` at
+`Web/serbis-admin-vue/src/components/ServiceRequestQueue.vue:1949-1950` were the only
+copies in the panel with no guard, where `adminUi.ts:78` returns an em dash and
+`ConductionRequestView.vue:685` returns `''`. A guard was added in `4fb79e0`.
 
-No null guard. Every other copy of these in the panel has one — `adminUi.ts:78` returns
-an em dash and its docblock says why ("these land directly in table cells"),
-`ConductionRequestView.vue:685` returns `''`. Passing `null` or an unparseable value
-here puts `Invalid Date` in a table cell. This is the highest-value single fix in the
-report and the smallest.
+**That commit closed a hazard; it did not fix a visible defect.** It should not be
+written up later as a bug that was found in production and fixed — the value of it is
+that the next call site added to this component cannot open the hole, not that anything
+was broken.
+
+`formatTime` on the next line still has the same gap. Its one call site is `v-if`'d on
+`scheduled_end`, so it is in exactly the position these two were.
 
 ### B4 — `InfoMaterialController::verify()` validates after the lookup
 
@@ -293,25 +306,52 @@ report and the smallest.
 a *valid* id and no body still validates correctly. Inconsistent with every other
 controller here. Cosmetic unless a client branches on the status code.
 
-### B5 — `/sms/blast` has no server-side rate limit
+### B5 — `/sms/blast`'s missing route throttle — **CORRECTED: overstated, now fixed**
 
-`Backend/SERBIS-Backend/routes/api.php:112`. Known and documented in the route file and
-in `docs/session-note-2026-09-08.md`; restated here because it is the only finding in
-this report that costs money. The password re-check added in `f6b51dc`
-(`SmsController::assertCurrentPassword`) throttles the *password check*, not the send —
-a caller who knows the password can still post the endpoint in a loop. Must be restored
-before this branch merges to `main`.
+**The heading as first written — "has no server-side rate limit" — was too broad.**
+One already existed. `f6b51dc` added `SmsController::assertCurrentPassword`, a
+per-account limiter at 5 attempts per 15 minutes, keyed on `admin_id` and checked
+before the hash comparison so the correct password is refused too once the window is
+spent.
+
+What was actually missing was the second, separate guard: the route-level limit
+`cdb3f37` removed for a demo. The two bound different things — the password limiter
+stops guessing, the route limit stops repeated *legitimate* sends — and only the first
+was in place.
+
+Restored in `66a952d`, but **not in the form the route comment asked for**, because
+that form never worked. `->middleware('throttle:3,60')` builds its cache key from
+`ThrottleRequests`' route signature, which is the same signature the api group's own
+`throttleApi('60,1')` in `bootstrap/app.php` already counts on. Two middleware, one
+bucket: every request incremented it twice, so the limit of 3 was reached on the second
+send rather than the fourth. Restoring the original line verbatim would have restored
+that bug along with it.
+
+It is a named `sms-blast` limiter now, alongside `login`/`register`/`mfa` in
+`AppServiceProvider`, keyed on the account at 3 per hour. `AppServiceProvider`'s
+`register` limiter already documented this exact collision in its `->by()` comment; the
+blast route had it too and nothing caught it because no test covered the limit. One
+now does, and it fails if the middleware is taken off again.
 
 ### B6 — eslint errors that describe real behaviour, not style
 
 Reported by `npm run lint`. None of the three below is `--fix`-able, so all three
 survive Phase 2:
 
-- `unicorn/no-array-sort` × 11 (`ServiceRequestQueue.vue:1773,1865`,
-  `DashboardView.vue:446,497,522`, `EquipmentBorrowingView.vue:837,844,915,932`,
-  `SmsView.vue:425`, `UsersView.vue:643`). `Array#sort()` mutates in place. In a Vue
-  `computed` over a `ref`'d array that reorders the source, which can feed back into
-  reactivity. Each site needs reading; `toSorted()` is not a blind substitution.
+- `unicorn/no-array-sort` × 11 — **CORRECTED: this entry was wrong.** It said
+  `Array#sort()` mutates in place and warned that a `computed` over a `ref`'d array
+  could reorder its source and feed back into reactivity. **No site does that.** All
+  eleven already sort a throwaway array: `[...list]` or `[...ids]` at
+  `DashboardView.vue:446,497`, `SmsView.vue:425`, `UsersView.vue:643` and
+  `EquipmentBorrowingView.vue:837,844`; a `.map()` or `.filter()` result, which is
+  always a new array, at `ServiceRequestQueue.vue:1773,1865`,
+  `DashboardView.vue:522` and `EquipmentBorrowingView.vue:915,932`.
+
+  The rule is not a mutation check. It flags **every** `.sort()` call regardless of
+  receiver — `[...x].sort()` is reported just the same, which is why six of these
+  eleven are flagged despite the spread being right there. The only thing that
+  silences it is `toSorted()`, and switching is a style decision, not a correctness
+  one. Nothing here needs fixing.
 - `unicorn/no-array-callback-reference` × 3 (`ServiceRequestQueue.vue:1929`,
   `DashboardView.vue:645`, `SmsView.vue:352`). `.map(csvCell)` passes `index` and the
   array as extra arguments. Only a bug if the callback takes a second parameter —
@@ -380,4 +420,7 @@ assumed: brute-forced over every string up to length 7 drawn from `{a, b, @, ., 
 
 `npm run type-check` and `npm run build` both pass on the result.
 
-Everything in §2 through §5 was left alone.
+Phase 2 itself left §2 through §5 alone. Two findings were acted on afterwards, in
+their own commits and outside this batch: B3 in `4fb79e0` and B5 in `66a952d`. Both
+entries are rewritten above to say what was actually true rather than what this
+report first claimed.
