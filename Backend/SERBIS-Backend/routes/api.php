@@ -141,7 +141,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // and a file needs multipart, so folding it in would make every status
         // change carry a multipart encoder for a field it never sends.
         Route::post('borrowings/{id}/photo', [EquipmentBorrowingController::class, 'uploadPhoto']);
-        Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update', 'destroy']);
+        // update() only. `destroy` was in this list with no destroy() on the
+        // controller behind it, so DELETE /borrowings/{id} was a live 500, and
+        // it is not implemented rather than fixed: a borrowing is a ledger row
+        // — it moved stock, it may carry handover photographs, and it is the
+        // only record of who held an item and when. The endings it needs
+        // already exist and all of them keep the row (Denied, Cancelled,
+        // Returned), so nothing in the panel or the app has ever called this.
+        Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update']);
 
         // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and
         // tracked entirely by staff — there is no resident-facing route, the
