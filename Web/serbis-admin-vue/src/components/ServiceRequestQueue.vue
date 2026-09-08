@@ -1946,8 +1946,10 @@ const toggleSelect = (item) => {
   else selectedIds.add(id)
 }
 
-const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+// Empty rather than adminUi's em dash: exportCsv() feeds these too, and a dash
+// would land in the spreadsheet as a literal cell value.
+const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 // scheduled_end shares a day with scheduled_at on every booking this renders
 // for, so only the time carries new information.
 const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, { timeStyle: 'short' })
