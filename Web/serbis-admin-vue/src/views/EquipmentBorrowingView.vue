@@ -595,6 +595,25 @@
                         :disabled="!!photoUploading"
                         @update:model-value="(picked) => uploadHandoverPhoto(selectedRecord, stage, Array.isArray(picked) ? picked[0] : picked)"
                       ></v-file-input>
+
+                      <!-- Only while the record is still in the stage this
+                           photo belongs to. Past that the server refuses
+                           (PHOTO_STAGES.removable_in), so drawing the button
+                           would be offering an action that always fails —
+                           replacing is what is left. -->
+                      <v-btn
+                        v-if="canRemovePhoto(selectedRecord, stage)"
+                        variant="text"
+                        color="error"
+                        size="small"
+                        rounded="lg"
+                        class="text-none mt-2"
+                        :loading="photoRemoving === stage"
+                        :disabled="!!photoUploading || !!photoRemoving"
+                        @click="askRemovePhoto(stage)"
+                      >
+                        <v-icon start size="18">mdi-delete-outline</v-icon> Remove photo
+                      </v-btn>
                     </v-card>
                   </v-col>
                 </v-row>
@@ -704,6 +723,24 @@
             :loading="loading"
             @click="confirmAction"
           >{{ actionCopy.confirm }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Removal is permanent and the file goes with the row, so it is asked
+         for rather than assumed — the same treatment the record delete gets. -->
+    <v-dialog v-model="removePhotoDialog.open" max-width="440">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Remove this photo?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          The
+          <strong class="text-high-emphasis">{{ removePhotoDialog.stage === 'release' ? 'at release' : 'at return' }}</strong>
+          photo is deleted from storage and cannot be recovered. Staff can take a new one while this
+          borrowing is still {{ removePhotoDialog.stage === 'release' ? 'Released' : 'Returned' }}.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="!!photoRemoving" @click="removePhotoDialog.open = false">Cancel</v-btn>
+          <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="!!photoRemoving" @click="confirmRemovePhoto">Remove</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1259,6 +1296,64 @@ const photoStages = (record) => {
 }
 
 const photoUploading = ref('')
+const photoRemoving = ref('')
+const removePhotoDialog = ref({ open: false, stage: '' })
+
+// Mirrors PHOTO_STAGES.removable_in on the server, which is deliberately
+// narrower than the window for adding one: the wrong file can be taken back off
+// at the counter, but a photo on a record that has moved on is part of a
+// finished handover. A stage with no photo has nothing to remove.
+const canRemovePhoto = (record, stage) => {
+  if (!record || !record[`has_${stage}_photo`]) return false
+  return stage === 'release' ? record.status === 'Released' : record.status === 'Returned'
+}
+
+const askRemovePhoto = (stage) => {
+  removePhotoDialog.value = { open: true, stage }
+}
+
+const confirmRemovePhoto = async () => {
+  const record = selectedRecord.value
+  const stage = removePhotoDialog.value.stage
+  if (!record || !stage) return
+
+  const id = record.borrow_id || record.id
+  photoRemoving.value = stage
+  apiError.value = ''
+
+  try {
+    const res = await fetch(`${API_BASE}/borrowings/${id}/photo/${stage}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || 'Failed to remove the photo')
+    }
+
+    const updated = await res.json()
+
+    // Same in-place patch the upload does, so the card redraws without closing
+    // the panel: clear the cached blob's record id or the loader would keep
+    // serving the image it already fetched.
+    if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
+      selectedRecord.value[`has_${stage}_photo`] = updated[`has_${stage}_photo`]
+      const holder = stage === 'release' ? releasePhoto : returnPhoto
+      holder.release()
+      holder.state.for = null
+      await holder.load(selectedRecord.value)
+    }
+
+    await fetchData()
+    notify('Handover photo removed')
+    removePhotoDialog.value = { open: false, stage: '' }
+  } catch (error) {
+    apiError.value = error.message
+    notify(error.message, 'error')
+  } finally {
+    photoRemoving.value = ''
+  }
+}
 
 const uploadHandoverPhoto = async (record, stage, file) => {
   if (!file) return

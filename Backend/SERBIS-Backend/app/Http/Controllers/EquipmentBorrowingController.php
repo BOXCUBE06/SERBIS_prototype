@@ -33,10 +33,27 @@ class EquipmentBorrowingController extends Controller
      * Deliberately NOT open on Pending or Approved. Nothing has changed hands
      * yet, so a photo filed against either would be evidence of a handover
      * that has not happened — the exact claim a dispute would turn on.
+     *
+     * `removable_in` is narrower than `statuses`, and the difference is the
+     * point: a photo may be deleted only while the borrowing is still in the
+     * stage that photo belongs to. Staff who attached the wrong file can fix it
+     * at the counter; once the item has moved on — a release photo on a record
+     * that is now Returned — the picture is part of the trail of a finished
+     * handover and only replacement is left. Note the asymmetry with upload:
+     * a release photo may still be ADDED after the item is back (a late record
+     * is not a false one), but not removed then.
      */
     private const PHOTO_STAGES = [
-        'release' => ['column' => 'release_photo_path', 'statuses' => ['Released', 'Returned']],
-        'return' => ['column' => 'return_photo_path', 'statuses' => ['Returned']],
+        'release' => [
+            'column' => 'release_photo_path',
+            'statuses' => ['Released', 'Returned'],
+            'removable_in' => ['Released'],
+        ],
+        'return' => [
+            'column' => 'return_photo_path',
+            'statuses' => ['Returned'],
+            'removable_in' => ['Returned'],
+        ],
     ];
 
     /**
@@ -514,6 +531,58 @@ class EquipmentBorrowingController extends Controller
         if ($previous && $previous !== $path) {
             Storage::disk(self::privateDisk())->delete($previous);
         }
+
+        return response()->json($borrowing);
+    }
+
+    /**
+     * DELETE /borrowings/{id}/photo/{stage} — takes one back off the record.
+     *
+     * Admin-only, like the upload. This exists for the wrong-file mistake —
+     * the photo of the previous borrower's item, the accidental shot of the
+     * counter — and for nothing else, which is why the window is narrower than
+     * the one for adding: see `removable_in` on PHOTO_STAGES. Once the record
+     * has moved past the stage, the photo is part of a finished handover, and
+     * a dispute is exactly when someone would want it gone.
+     *
+     * The row is written before the file is deleted, for the same reason
+     * uploadPhoto() deletes the old file last: a record pointing at a file that
+     * is not there is worse than a file with no record pointing at it.
+     */
+    public function destroyPhoto(Request $request, $id, string $stage)
+    {
+        if (! array_key_exists($stage, self::PHOTO_STAGES)) {
+            return response()->json(['message' => 'Borrowing record not found'], 404);
+        }
+
+        $borrowing = EquipmentBorrowing::find($id);
+
+        if (! $borrowing) {
+            return response()->json(['message' => 'Borrowing record not found'], 404);
+        }
+
+        $config = self::PHOTO_STAGES[$stage];
+        $path = $borrowing->{$config['column']};
+
+        if (! $path) {
+            return response()->json(['message' => 'There is no '.$stage.' photo on this borrowing.'], 404);
+        }
+
+        if (! in_array($borrowing->status, $config['removable_in'], true)) {
+            $allowed = implode(' or ', $config['removable_in']);
+
+            return response()->json([
+                'message' => "A {$stage} photo can only be removed while the borrowing is {$allowed}."
+                    ." This one is {$borrowing->status}, so the photo can be replaced but not deleted.",
+            ], 422);
+        }
+
+        // Direct assignment, not fill(): these columns are outside $fillable so
+        // that a path is written by this class and by nothing else.
+        $borrowing->{$config['column']} = null;
+        $borrowing->save();
+
+        Storage::disk(self::privateDisk())->delete($path);
 
         return response()->json($borrowing);
     }

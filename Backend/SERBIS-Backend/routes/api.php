@@ -141,6 +141,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // and a file needs multipart, so folding it in would make every status
         // change carry a multipart encoder for a field it never sends.
         Route::post('borrowings/{id}/photo', [EquipmentBorrowingController::class, 'uploadPhoto']);
+        // Removal is admin-only and stage-gated more tightly than the upload —
+        // see PHOTO_STAGES. The matching GET sits outside this group, because
+        // the borrower reads their own photos back.
+        Route::delete('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'destroyPhoto']);
         // update() only. `destroy` was in this list with no destroy() on the
         // controller behind it, so DELETE /borrowings/{id} was a live 500, and
         // it is not implemented rather than fixed: a borrowing is a ledger row

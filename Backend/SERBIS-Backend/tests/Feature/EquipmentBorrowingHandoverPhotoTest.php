@@ -15,11 +15,17 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * POST /api/borrowings/{id}/photo and GET /api/borrowings/{id}/photo/{stage}.
+ * POST, GET and DELETE on /api/borrowings/{id}/photo.
  *
  * The three things worth pinning: the photo lands on the PRIVATE disk and is
  * never reachable by URL, staff write it and the borrower can only read it,
  * and a missing photo blocks nothing at all.
+ *
+ * Removal has its own section at the bottom. Its window is narrower than the
+ * one for adding — a photo goes only while the borrowing is still in the stage
+ * that photo belongs to — so the asymmetry is asserted, not just the happy
+ * path: a release photo can still be ADDED to a Returned borrowing and can no
+ * longer be DELETED from one.
  */
 class EquipmentBorrowingHandoverPhotoTest extends TestCase
 {
@@ -346,5 +352,138 @@ class EquipmentBorrowingHandoverPhotoTest extends TestCase
         ])->assertOk();
 
         $this->assertNull($borrowing->fresh()->release_photo_path);
+    }
+
+    // --------------------------------------------------------------- removal
+
+    /**
+     * Puts a real file on the fake disk through the endpoint itself, so the
+     * removal tests below start from the same state the office would be in.
+     */
+    private function withPhoto(EquipmentBorrowing $borrowing, string $stage): string
+    {
+        $this->postJson("/api/borrowings/{$borrowing->borrow_id}/photo", [
+            'stage' => $stage,
+            'photo' => UploadedFile::fake()->create('boat.jpg', 100, 'image/jpeg'),
+        ])->assertOk();
+
+        $column = $stage === 'release' ? 'release_photo_path' : 'return_photo_path';
+        $path = $borrowing->fresh()->{$column};
+
+        $this->assertNotNull($path);
+        Storage::disk('local')->assertExists($path);
+
+        return $path;
+    }
+
+    public function test_a_release_photo_can_be_removed_while_the_item_is_still_out(): void
+    {
+        $borrowing = $this->borrowing('Released');
+
+        Sanctum::actingAs($this->admin);
+        $path = $this->withPhoto($borrowing, 'release');
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/release")
+            ->assertOk()
+            ->assertJsonPath('has_release_photo', false);
+
+        $this->assertNull($borrowing->fresh()->release_photo_path);
+        // The file, not only the column: a row cleared with the image left on
+        // the private disk is the leak this endpoint would otherwise create.
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_a_return_photo_can_be_removed_while_the_record_is_returned(): void
+    {
+        $borrowing = $this->borrowing('Returned');
+
+        Sanctum::actingAs($this->admin);
+        $path = $this->withPhoto($borrowing, 'return');
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/return")
+            ->assertOk()
+            ->assertJsonPath('has_return_photo', false);
+
+        $this->assertNull($borrowing->fresh()->return_photo_path);
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_a_release_photo_cannot_be_removed_once_the_item_is_back(): void
+    {
+        // The asymmetry with upload, asserted directly: this same borrowing
+        // would accept a release photo (see
+        // test_a_release_photo_can_still_be_added_after_the_item_is_back) and
+        // refuses to give this one up.
+        $borrowing = $this->borrowing('Released');
+
+        Sanctum::actingAs($this->admin);
+        $path = $this->withPhoto($borrowing, 'release');
+
+        $borrowing->update(['status' => 'Returned']);
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/release")
+            ->assertStatus(422)
+            ->assertJsonPath('message', fn ($message) => str_contains($message, 'Released'));
+
+        $this->assertSame($path, $borrowing->fresh()->release_photo_path);
+        Storage::disk('local')->assertExists($path);
+    }
+
+    public function test_a_terminal_record_keeps_its_photos(): void
+    {
+        // Denied and Cancelled cannot hold a photo in the first place, so the
+        // case that matters is a finished loan: nothing may be erased from it.
+        $borrowing = $this->borrowing('Returned');
+
+        Sanctum::actingAs($this->admin);
+        $release = $this->withPhoto($borrowing, 'release');
+        $return = $this->withPhoto($borrowing, 'return');
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/release")
+            ->assertStatus(422);
+
+        $borrowing->refresh();
+        $this->assertSame($release, $borrowing->release_photo_path);
+        $this->assertNotNull($borrowing->return_photo_path);
+        Storage::disk('local')->assertExists($release);
+        Storage::disk('local')->assertExists($return);
+    }
+
+    public function test_removing_a_stage_that_has_no_photo_is_a_404(): void
+    {
+        $borrowing = $this->borrowing('Released');
+
+        Sanctum::actingAs($this->admin);
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/release")
+            ->assertStatus(404);
+    }
+
+    public function test_an_unknown_stage_on_removal_is_a_404(): void
+    {
+        $borrowing = $this->borrowing('Released');
+
+        Sanctum::actingAs($this->admin);
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/handover")
+            ->assertStatus(404);
+    }
+
+    public function test_a_resident_cannot_remove_a_photo_from_their_own_borrowing(): void
+    {
+        $borrowing = $this->borrowing('Released');
+
+        Sanctum::actingAs($this->admin);
+        $path = $this->withPhoto($borrowing, 'release');
+
+        // Read is wider than write here, and removal is the far end of write:
+        // the borrower can see this photo and must not be able to delete it.
+        Sanctum::actingAs($this->resident);
+
+        $this->deleteJson("/api/borrowings/{$borrowing->borrow_id}/photo/release")
+            ->assertStatus(403);
+
+        $this->assertSame($path, $borrowing->fresh()->release_photo_path);
+        Storage::disk('local')->assertExists($path);
     }
 }
