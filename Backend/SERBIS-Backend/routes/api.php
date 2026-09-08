@@ -73,6 +73,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Owner-scoped, same shape as the service-request cancel above. Registered
     // before the apiResource so the literal segment is never read as an {id}.
     Route::patch('borrowings/{id}/cancel', [EquipmentBorrowingController::class, 'cancel']);
+    // Read is wider than write: the upload sits in the admin group below,
+    // because staff take the photo, but the borrower can read their own back —
+    // evidence only one side of a dispute can see is not evidence.
+    // scopeToOwner() inside does the narrowing. Registered before the
+    // apiResource for the same reason cancel is.
+    Route::get('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'photo']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
     
     // Mobile endpoint to fetch published materials
@@ -140,6 +146,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // under a lock, which update()/syncFleet() were never built to do.
         Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
         Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
+        // Its own route rather than a field on update(): update() takes JSON
+        // and a file needs multipart, so folding it in would make every status
+        // change carry a multipart encoder for a field it never sends.
+        Route::post('borrowings/{id}/photo', [EquipmentBorrowingController::class, 'uploadPhoto']);
         Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update', 'destroy']);
 
         // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and

@@ -4,15 +4,38 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
+use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class EquipmentBorrowingController extends Controller
 {
+    use ResolvesUploadDisks;
     use ScopesToOwner;
+
+    /**
+     * Which column each handover stage writes, and which statuses it may be
+     * photographed in.
+     *
+     * A release photo is a record of what left the building, so it means
+     * nothing before the item has left: Released is when that happened, and
+     * Returned is still allowed because staff photographing after the fact is
+     * a late record, not a false one. A return photo is only meaningful once
+     * the item is back.
+     *
+     * Deliberately NOT open on Pending or Approved. Nothing has changed hands
+     * yet, so a photo filed against either would be evidence of a handover
+     * that has not happened — the exact claim a dispute would turn on.
+     */
+    private const PHOTO_STAGES = [
+        'release' => ['column' => 'release_photo_path', 'statuses' => ['Released', 'Returned']],
+        'return' => ['column' => 'return_photo_path', 'statuses' => ['Returned']],
+    ];
 
     /**
      * Which status each status may move to.
@@ -405,5 +428,126 @@ class EquipmentBorrowingController extends Controller
             DB::rollBack();
             return response()->json(['message' => 'Failed to process borrowing update'], 500);
         }
+    }
+
+    /**
+     * POST /borrowings/{id}/photo — what the item looked like at handover.
+     *
+     * Its own route rather than a field on update(), because update() takes
+     * JSON and a file needs multipart. Folding it in would have meant every
+     * status change carrying a multipart encoder for a field it never sends.
+     *
+     * Admin-only, via the route group: releasing and returning are counter
+     * actions, and the photograph is taken by whoever is standing at the
+     * counter. The resident can read it back — see photo() — but never write
+     * it, or the evidence would be supplied by one side of any dispute it
+     * exists to settle.
+     *
+     * Never blocks anything. The status has already moved by the time this is
+     * called, and a borrowing with no photo is a normal, complete record. The
+     * office releases equipment in conditions where stopping to photograph it
+     * is the wrong advice; a hard requirement would be answered with a photo
+     * of the floor.
+     */
+    public function uploadPhoto(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'stage' => 'required|in:release,return',
+            // Matches site_photo on tbl_service_request: images only, 4MB. No
+            // pdf and no doc — this is a photograph of an object, and every
+            // other accepted type would only widen what can be written to
+            // disk. `mimes` checks the file's guessed type, not the name the
+            // client sent.
+            'photo' => 'required|file|mimes:jpg,jpeg,png|max:4096',
+        ]);
+
+        $borrowing = EquipmentBorrowing::find($id);
+
+        if (! $borrowing) {
+            return response()->json(['message' => 'Borrowing record not found'], 404);
+        }
+
+        $stage = self::PHOTO_STAGES[$validated['stage']];
+
+        if (! in_array($borrowing->status, $stage['statuses'], true)) {
+            $allowed = implode(' or ', $stage['statuses']);
+
+            return response()->json([
+                'message' => "A {$validated['stage']} photo can only be added to a borrowing that is {$allowed}."
+                    . " This one is {$borrowing->status}.",
+            ], 422);
+        }
+
+        $file = $request->file('photo');
+
+        // Private disk, same as valid_id and site_photo. A handover photo shows
+        // a named resident's item and often their doorway, and it is evidence
+        // in a dispute between them and the office — a guessable public URL is
+        // the mistake this codebase has already paid for once. Foldered by
+        // borrow_id and named with a uuid, so a client filename never reaches
+        // the filesystem.
+        $path = $file->storeAs(
+            'borrowing-photos/'.$borrowing->getKey(),
+            (string) Str::uuid().'.'.$file->extension(),
+            self::privateDisk()
+        );
+
+        // One photo per stage, so a re-upload replaces. The old file is deleted
+        // after the new path is safely on the row rather than before: losing
+        // the write would otherwise leave the record pointing at a file that
+        // has already been removed.
+        $previous = $borrowing->{$stage['column']};
+
+        // Assigned directly rather than through fill(). These two columns are
+        // NOT in $fillable on purpose — a filesystem path is written by this
+        // method and by nothing else, and leaving it mass-assignable would let
+        // any future update() splat point a record at an arbitrary file on the
+        // private disk, which is where government ID scans live.
+        $borrowing->{$stage['column']} = $path;
+        $borrowing->save();
+
+        if ($previous && $previous !== $path) {
+            Storage::disk(self::privateDisk())->delete($previous);
+        }
+
+        return response()->json($borrowing);
+    }
+
+    /**
+     * GET /borrowings/{id}/photo/{stage} — reads one back.
+     *
+     * Read is wider than write. Staff need it to settle a dispute; the
+     * borrower needs it for the same reason, and evidence only one side can
+     * see is not evidence. scopeToOwner() gives exactly that: staff see every
+     * record, a resident sees their own, and a non-owner gets the same 404 a
+     * missing record gets so the response never confirms it exists.
+     */
+    public function photo(Request $request, $id, string $stage)
+    {
+        if (! array_key_exists($stage, self::PHOTO_STAGES)) {
+            return response()->json(['message' => 'Borrowing record not found'], 404);
+        }
+
+        $query = EquipmentBorrowing::query();
+
+        if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
+            return $refusal;
+        }
+
+        $borrowing = $query->find($id);
+        // $stage is checked against the constant above before it reaches this
+        // line, so the dynamic property is always one of two literals and
+        // carries no injection surface.
+        $column = self::PHOTO_STAGES[$stage]['column'];
+
+        if (! $borrowing || ! $borrowing->{$column}) {
+            return response()->json(['message' => 'Borrowing record not found'], 404);
+        }
+
+        if (! Storage::disk(self::privateDisk())->exists($borrowing->{$column})) {
+            return response()->json(['message' => 'Handover photo file not found'], 404);
+        }
+
+        return Storage::disk(self::privateDisk())->response($borrowing->{$column});
     }
 }

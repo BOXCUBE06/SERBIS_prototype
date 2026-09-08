@@ -532,6 +532,74 @@
                 </div>
               </v-card>
 
+              <!-- Only shown once something has changed hands. Before that the
+                   backend refuses the upload, so offering it would be a button
+                   that always fails. -->
+              <template v-if="photoStages(selectedRecord).length > 0">
+                <h3 class="text-subtitle-1 font-weight-bold mb-1 text-high-emphasis text-uppercase">Condition Photos</h3>
+                <div class="text-caption text-medium-emphasis mb-4">
+                  Optional. A record of what the item looked like at handover — nothing here blocks a release or a return.
+                </div>
+                <v-row class="mb-6">
+                  <v-col
+                    v-for="stage in photoStages(selectedRecord)"
+                    :key="stage"
+                    cols="12"
+                    sm="6"
+                  >
+                    <v-card variant="outlined" border class="pa-4 rounded-lg subtle-surface h-100">
+                      <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
+                        {{ stage === 'release' ? 'At release' : 'At return' }}
+                      </div>
+
+                      <v-img
+                        v-if="photoState(stage).url"
+                        :src="photoState(stage).url"
+                        :alt="`Condition of ${itemName(selectedRecord)} at ${stage}`"
+                        height="160"
+                        cover
+                        class="rounded mb-3"
+                      ></v-img>
+
+                      <v-skeleton-loader
+                        v-else-if="photoState(stage).loading"
+                        type="image"
+                        height="160"
+                        class="mb-3"
+                      ></v-skeleton-loader>
+
+                      <v-alert
+                        v-else-if="photoState(stage).error"
+                        type="error"
+                        variant="tonal"
+                        density="compact"
+                        class="mb-3"
+                      >{{ photoState(stage).error }}</v-alert>
+
+                      <div v-else class="text-body-2 text-medium-emphasis font-italic mb-3">
+                        No photo was taken.
+                      </div>
+
+                      <!-- Uploads on pick rather than holding the file for a
+                           later submit: there is nothing else on this card to
+                           submit it with. -->
+                      <v-file-input
+                        :label="photoState(stage).url ? 'Replace photo' : 'Add photo'"
+                        accept="image/jpeg,image/png"
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-icon=""
+                        prepend-inner-icon="mdi-camera-outline"
+                        :loading="photoUploading === stage"
+                        :disabled="!!photoUploading"
+                        @update:model-value="(picked) => uploadHandoverPhoto(selectedRecord, stage, Array.isArray(picked) ? picked[0] : picked)"
+                      ></v-file-input>
+                    </v-card>
+                  </v-col>
+                </v-row>
+              </template>
+
               <v-row class="mb-4">
                 <v-col cols="6">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
@@ -652,7 +720,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
@@ -1115,6 +1183,10 @@ const openDetail = (item) => {
   apiError.value = ''
   selectedRecord.value = item
   modal.value.isOpen = true
+  // Not awaited: the panel opens immediately and each photo fills in when it
+  // arrives, the same way the service-request attachments do.
+  releasePhoto.load(item)
+  returnPhoto.load(item)
 }
 
 // `@click:row` alone is mouse-only — a `<tr>` handler is unreachable by
@@ -1140,10 +1212,126 @@ const rowProps = ({ item }) => ({
   onKeydown: (e) => onRowKeydown(e, item),
 })
 
+// ---------------------------------------------------------------- handover photos
+//
+// Both photos live on the private disk and are served only by an authenticated
+// route, so neither can be addressed by plain URL from an image tag — the
+// request has to carry the bearer token. Fetched as a blob with the same
+// headers every other call uses, exactly like the valid-ID and site-photo
+// attachments on ServiceRequestQueue. One factory rather than two hand-written
+// copies -- the copy is where "revoke the previous object URL" gets forgotten
+// and the tab leaks a blob per record opened.
+const createHandoverPhoto = (stage) => {
+  const state = reactive({ url: '', loading: false, error: '', for: null })
+
+  const release = () => {
+    if (state.url) URL.revokeObjectURL(state.url)
+    state.url = ''
+  }
+
+  const load = async (record) => {
+    const id = record ? (record.borrow_id || record.id) : null
+    if (id === state.for) return
+
+    release()
+    state.for = id
+    state.error = ''
+    if (!id || !record?.[`${stage}_photo_path`]) return
+
+    state.loading = true
+    try {
+      const res = await fetch(`${API_BASE}/borrowings/${id}/photo/${stage}`, { headers: getHeaders() })
+      if (!res.ok) throw new Error('Could not load the handover photo.')
+      const blob = await res.blob()
+      // The operator moved on while this was in flight; the blob belongs to a
+      // record that is no longer on screen.
+      if (state.for !== id) return
+      state.url = URL.createObjectURL(blob)
+    } catch (error) {
+      if (state.for === id) state.error = error.message
+    } finally {
+      if (state.for === id) state.loading = false
+    }
+  }
+
+  return { state, load, release }
+}
+
+const releasePhoto = createHandoverPhoto('release')
+const returnPhoto = createHandoverPhoto('return')
+const photoState = (stage) => (stage === 'release' ? releasePhoto.state : returnPhoto.state)
+
+// Which stage the record can be photographed in right now, mirroring
+// PHOTO_STAGES in EquipmentBorrowingController. Kept as one source here so the
+// button and the backend cannot drift into offering an upload the server then
+// refuses.
+const photoStages = (record) => {
+  const stages = []
+  if (record?.status === 'Released' || record?.status === 'Returned') stages.push('release')
+  if (record?.status === 'Returned') stages.push('return')
+  return stages
+}
+
+const photoUploading = ref('')
+
+const uploadHandoverPhoto = async (record, stage, file) => {
+  if (!file) return
+  const id = record.borrow_id || record.id
+  photoUploading.value = stage
+  apiError.value = ''
+  try {
+    const payload = new FormData()
+    payload.append('stage', stage)
+    payload.append('photo', file)
+
+    // getHeaders() sets Content-Type: application/json, which would stop the
+    // browser writing the multipart boundary and make the body unparseable.
+    // Authorization only, and let fetch set the type.
+    const res = await fetch(`${API_BASE}/borrowings/${id}/photo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}`, Accept: 'application/json' },
+      body: payload,
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || 'Failed to upload the photo')
+    }
+    const updated = await res.json()
+    // Patch the open record in place so the photo appears without closing the
+    // panel, then force a re-fetch of the blob by clearing the cached id.
+    if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
+      selectedRecord.value[`${stage}_photo_path`] = updated[`${stage}_photo_path`]
+      const holder = stage === 'release' ? releasePhoto : returnPhoto
+      holder.state.for = null
+      await holder.load(selectedRecord.value)
+    }
+    await fetchData()
+    notify('Handover photo saved')
+  } catch (error) {
+    apiError.value = error.message
+    notify(error.message, 'error')
+  } finally {
+    photoUploading.value = ''
+  }
+}
+
 const closeModal = () => {
   modal.value.isOpen = false
   selectedRecord.value = null
+  releasePhoto.release()
+  returnPhoto.release()
+  // Cleared as well as released: `for` is what load() checks to skip a refetch,
+  // so leaving it set would show the next record's panel with no photo.
+  releasePhoto.state.for = null
+  returnPhoto.state.for = null
 }
+
+// A blob URL outlives the component unless it is revoked by hand, and leaving
+// the panel by route change never calls closeModal().
+onUnmounted(() => {
+  releasePhoto.release()
+  returnPhoto.release()
+})
 
 // Default fortnight-minus-a-week: a week is the office's usual loan and the
 // operator can move it in the dialog. It is a default, never a silent write —
