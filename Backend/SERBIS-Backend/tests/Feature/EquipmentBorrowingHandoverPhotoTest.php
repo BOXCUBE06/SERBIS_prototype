@@ -26,8 +26,11 @@ class EquipmentBorrowingHandoverPhotoTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private Resident $otherResident;
+
     private User $admin;
+
     private Equipment $equipment;
 
     protected function setUp(): void

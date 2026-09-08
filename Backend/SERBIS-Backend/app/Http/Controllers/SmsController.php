@@ -10,10 +10,10 @@ use App\Traits\PaginatesLists;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 class SmsController extends Controller
@@ -23,10 +23,10 @@ class SmsController extends Controller
     public function sendBlast(Request $request, PhilSms $philSms)
     {
         $validated = $request->validate([
-            'message'     => 'required|string|max:160',
-            'barangays'   => 'required|array|min:1',
+            'message' => 'required|string|max:160',
+            'barangays' => 'required|array|min:1',
             'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
-            'password'    => 'required|string',
+            'password' => 'required|string',
         ]);
 
         // Before anything is resolved or sent. This endpoint is the only one in
@@ -44,8 +44,8 @@ class SmsController extends Controller
         if ($residents->isEmpty()) {
             return response()->json([
                 'message' => 'No residents in the selected barangays are active, opted in to SMS and have a reachable phone number.',
-                'sent'    => 0,
-                'failed'  => 0,
+                'sent' => 0,
+                'failed' => 0,
             ], 422);
         }
 
@@ -68,7 +68,7 @@ class SmsController extends Controller
             // prevent.
             Log::warning('PhilSMS send timed out — delivery unconfirmed', [
                 'recipients' => count($recipients),
-                'error'      => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             $this->recordBlast(
@@ -84,11 +84,11 @@ class SmsController extends Controller
             // 202, not 200 and not 5xx. We cannot confirm delivery, so this is
             // not success; but a 5xx is what staff are currently retrying.
             return response()->json([
-                'message'     => 'PhilSMS did not answer in time, but the message was most likely sent and billed. Do NOT send it again — check the PhilSMS dashboard, or ask a recipient, before resending.',
+                'message' => 'PhilSMS did not answer in time, but the message was most likely sent and billed. Do NOT send it again — check the PhilSMS dashboard, or ask a recipient, before resending.',
                 'unconfirmed' => true,
-                'sent'        => 0,
-                'failed'      => 0,
-                'recipients'  => count($recipients),
+                'sent' => 0,
+                'failed' => 0,
+                'recipients' => count($recipients),
             ], 202);
         }
 
@@ -110,20 +110,20 @@ class SmsController extends Controller
         if ($succeeded) {
             return response()->json([
                 'message' => 'Text blast completed.',
-                'sent'    => count($recipients),
-                'failed'  => 0,
+                'sent' => count($recipients),
+                'failed' => 0,
             ]);
         }
 
         Log::error('PhilSMS send failed', [
-            'status'   => $response->status(),
+            'status' => $response->status(),
             'response' => $response->body(),
         ]);
 
         return response()->json([
             'message' => 'Failed to send blast.',
-            'sent'    => 0,
-            'failed'  => count($recipients),
+            'sent' => 0,
+            'failed' => count($recipients),
         ], 500);
     }
 
@@ -138,7 +138,7 @@ class SmsController extends Controller
     public function recipientCount(Request $request)
     {
         $validated = $request->validate([
-            'barangays'   => 'required|array|min:1',
+            'barangays' => 'required|array|min:1',
             'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
         ]);
 
@@ -165,7 +165,7 @@ class SmsController extends Controller
         if (! PhilSms::configured()) {
             return response()->json([
                 'available' => false,
-                'message'   => 'No PhilSMS token is configured on this server.',
+                'message' => 'No PhilSMS token is configured on this server.',
             ]);
         }
 
@@ -176,7 +176,7 @@ class SmsController extends Controller
 
             return response()->json([
                 'available' => false,
-                'message'   => 'Could not reach PhilSMS to read the credit balance.',
+                'message' => 'Could not reach PhilSMS to read the credit balance.',
             ]);
         }
 
@@ -184,19 +184,19 @@ class SmsController extends Controller
         // trap PhilSms::accepted() exists for on the send path.
         if (! PhilSms::accepted($response)) {
             Log::warning('PhilSMS balance refused', [
-                'status'   => $response->status(),
+                'status' => $response->status(),
                 'response' => $response->body(),
             ]);
 
             return response()->json([
                 'available' => false,
-                'message'   => $response->json('message') ?? 'PhilSMS refused the balance request.',
+                'message' => $response->json('message') ?? 'PhilSMS refused the balance request.',
             ]);
         }
 
         return response()->json([
             'available' => true,
-            'data'      => $response->json('data'),
+            'data' => $response->json('data'),
         ]);
     }
 
@@ -234,6 +234,7 @@ class SmsController extends Controller
      * itself is deliberately not throttled — that would cap legitimate sends.
      */
     private const PASSWORD_ATTEMPTS = 5;
+
     private const PASSWORD_DECAY_SECONDS = 900;
 
     /**
@@ -380,9 +381,9 @@ class SmsController extends Controller
         $logs = $query->paginate($this->resolvePerPage($request));
 
         $mapped = collect($logs->items())->map(fn (SmsLog $log) => [
-            'sms_log_id'      => $log->sms_log_id,
-            'created_at'      => $log->created_at,
-            'user'            => [
+            'sms_log_id' => $log->sms_log_id,
+            'created_at' => $log->created_at,
+            'user' => [
                 // A blast outlives the admin who sent it: tbl_user rows can be
                 // removed, and a history row with a blank sender is worse than
                 // one that says so.
@@ -390,19 +391,19 @@ class SmsController extends Controller
                     ? $log->sender->first_name.' '.$log->sender->last_name
                     : 'Unknown sender',
             ],
-            'barangay'        => $log->barangay?->barangay_name ?? 'Unknown barangay',
-            'message'         => $log->message_body,
+            'barangay' => $log->barangay?->barangay_name ?? 'Unknown barangay',
+            'message' => $log->message_body,
             'recipient_count' => $log->recipients_count,
             // 'Sent' or 'Failed'. Failed rows are shown here on purpose — this is
             // the record somebody consults after a blast did not arrive. Only the
             // resident-facing advisory feed filters them out.
-            'status'          => $log->status,
+            'status' => $log->status,
         ]);
 
         return response()->json([
             'success' => true,
-            'data'    => $mapped,
-            'meta'    => $this->paginationMeta($logs),
+            'data' => $mapped,
+            'meta' => $this->paginationMeta($logs),
         ]);
     }
 
@@ -437,13 +438,13 @@ class SmsController extends Controller
 
         $query->where(function ($q) use ($term) {
             $q->where('message_body', 'like', $term)
-              ->orWhere('status', 'like', $term)
-              ->orWhereHas('barangay', fn ($b) => $b->where('barangay_name', 'like', $term))
-              ->orWhereHas('sender', function ($sender) use ($term) {
-                  $sender->where('first_name', 'like', $term)
-                         ->orWhere('last_name', 'like', $term)
-                         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$term]);
-              });
+                ->orWhere('status', 'like', $term)
+                ->orWhereHas('barangay', fn ($b) => $b->where('barangay_name', 'like', $term))
+                ->orWhereHas('sender', function ($sender) use ($term) {
+                    $sender->where('first_name', 'like', $term)
+                        ->orWhere('last_name', 'like', $term)
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$term]);
+                });
         });
     }
 
@@ -462,20 +463,20 @@ class SmsController extends Controller
         DB::transaction(function () use ($senderId, $residents, $message, $status, $apiJobId) {
             foreach ($residents->groupBy('barangay_id') as $barangayId => $group) {
                 $log = SmsLog::create([
-                    'sender_id'      => $senderId,
+                    'sender_id' => $senderId,
                     'target_area_id' => $barangayId,
-                    'api_job_id'     => $apiJobId,
-                    'message_body'   => $message,
-                    'status'         => $status,
+                    'api_job_id' => $apiJobId,
+                    'message_body' => $message,
+                    'status' => $status,
                 ]);
 
                 Recipient::insert(
                     $group->map(fn ($resident) => [
-                        'sms_log_id'  => $log->sms_log_id,
+                        'sms_log_id' => $log->sms_log_id,
                         'resident_id' => $resident->resident_id,
-                        'status'      => $status,
-                        'created_at'  => now(),
-                        'updated_at'  => now(),
+                        'status' => $status,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ])->all(),
                 );
             }

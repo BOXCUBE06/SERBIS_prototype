@@ -38,7 +38,7 @@ class VehicleController extends Controller
     {
         $vehicle = Vehicle::find($id);
 
-        if (!$vehicle) {
+        if (! $vehicle) {
             return response()->json(['message' => 'Vehicle not found'], 404);
         }
 
@@ -48,7 +48,7 @@ class VehicleController extends Controller
     public function update(Request $request, $id)
     {
         $vehicle = Vehicle::find($id);
-        if (!$vehicle) {
+        if (! $vehicle) {
             return response()->json(['message' => 'Vehicle not found'], 404);
         }
 
@@ -58,7 +58,7 @@ class VehicleController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('tbl_vehicles')->ignore($vehicle->vehicle_id, 'vehicle_id')
+                Rule::unique('tbl_vehicles')->ignore($vehicle->vehicle_id, 'vehicle_id'),
             ],
             'type' => 'sometimes|required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
             'specification' => 'nullable|string|max:255',
@@ -97,7 +97,7 @@ class VehicleController extends Controller
     public function destroy($id)
     {
         $vehicle = Vehicle::find($id);
-        if (!$vehicle) {
+        if (! $vehicle) {
             return response()->json(['message' => 'Vehicle not found'], 404);
         }
 

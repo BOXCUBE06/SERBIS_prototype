@@ -23,8 +23,11 @@ class ServiceRequestCancelTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private Resident $otherResident;
+
     private Service $service;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void

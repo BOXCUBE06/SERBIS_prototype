@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SystemLog extends Model
 {
     protected $table = 'tbl_system_logs';
+
     protected $primaryKey = 'log_id';
 
     protected $fillable = [
@@ -19,7 +20,7 @@ class SystemLog extends Model
         'old_values',
         'new_values',
         'ip_address',
-        'user_agent'
+        'user_agent',
     ];
 
     protected $casts = [
@@ -29,11 +30,11 @@ class SystemLog extends Model
 
     public function admin(): BelongsTo
     {
-       return $this->belongsTo(User::class, 'admin_id', 'admin_id');
+        return $this->belongsTo(User::class, 'admin_id', 'admin_id');
     }
 
     public function resident(): BelongsTo
     {
-       return $this->belongsTo(Resident::class, 'resident_id', 'resident_id');
+        return $this->belongsTo(Resident::class, 'resident_id', 'resident_id');
     }
 }

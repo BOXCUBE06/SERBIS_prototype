@@ -28,7 +28,9 @@ class EquipmentBorrowingDueDateTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Equipment $equipment;
 
     protected function setUp(): void

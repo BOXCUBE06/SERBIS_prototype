@@ -1,22 +1,22 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AmbulanceAvailabilityController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\ConductionRequestController;
-use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\EquipmentBorrowingController;
+use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\SmsController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\VehicleController;
-use App\Http\Controllers\InfoMaterialController;
-use App\Http\Controllers\AnalyticsController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
 Route::post('/resident/login', [AuthController::class, 'residentLogin'])->middleware('throttle:login');
@@ -80,7 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // apiResource for the same reason cancel is.
     Route::get('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'photo']);
     Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
-    
+
     // Mobile endpoint to fetch published materials
     Route::get('info-materials', [InfoMaterialController::class, 'index']);
 
@@ -94,7 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Walk-in requests, filed by staff at the counter — separate from the
         // resident-facing POST /service-requests above.
         Route::post('/admin/service-requests', [ServiceRequestController::class, 'adminStore']);
-        Route::get('/admin/dashboard', [\App\Http\Controllers\AnalyticsController::class, 'index']);
+        Route::get('/admin/dashboard', [AnalyticsController::class, 'index']);
 
         // Info Materials Administrative CRUD Routes
         Route::get('/admin/info-materials', [InfoMaterialController::class, 'index']);
@@ -108,7 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // The Logs page's second tab. It had been fetching this since the page
         // was written; the route simply never existed.
         Route::get('/logs/sms', [SmsController::class, 'history']);
-        
+
         // TEMPORARY — REMOVED FOR THE DEMO. RESTORE `->middleware('throttle:3,60')`
         // AFTERWARDS.
         //
@@ -139,7 +139,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Admin-only write access for shared resources
         Route::apiResource('barangays', BarangayController::class)->except(['index', 'show']);
-        Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);    
+        Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);
         Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
         // Their own routes, not update(): both re-check ambulance availability

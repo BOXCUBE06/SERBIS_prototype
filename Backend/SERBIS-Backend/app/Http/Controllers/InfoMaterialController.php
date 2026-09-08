@@ -21,6 +21,7 @@ class InfoMaterialController extends Controller
             // before; on object storage it is the bucket's URL, which asset()
             // could never produce.
             $item->full_url = Storage::disk(self::publicDisk())->url(self::relativePath($item->file_path));
+
             return $item;
         });
 
@@ -91,20 +92,20 @@ class InfoMaterialController extends Controller
     }
 
     public function destroy($id)
-{
-    $material = InfoMaterial::find($id);
+    {
+        $material = InfoMaterial::find($id);
 
-    if (!$material) {
-        return response()->json(['message' => 'File not found'], 404);
+        if (! $material) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+
+        Storage::disk(self::publicDisk())->delete(self::relativePath($material->file_path));
+
+        // Delete the DB record
+        $material->delete();
+
+        return response()->json(['message' => 'File deleted successfully']);
     }
-
-    Storage::disk(self::publicDisk())->delete(self::relativePath($material->file_path));
-
-    // Delete the DB record
-    $material->delete();
-
-    return response()->json(['message' => 'File deleted successfully']);
-}
 
     // Rows created before the path shape changed are stored as "storage/<path>",
     // which is a URL fragment rather than a disk path. Strip it so both shapes

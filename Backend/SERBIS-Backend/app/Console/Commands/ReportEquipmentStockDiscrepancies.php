@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Equipment;
+use App\Models\Resident;
+use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -125,8 +127,8 @@ class ReportEquipmentStockDiscrepancies extends Command
                 }
 
                 DB::table('tbl_system_logs')->insert([
-                    'admin_id' => Auth::user() instanceof \App\Models\User ? Auth::id() : null,
-                    'resident_id' => Auth::user() instanceof \App\Models\Resident ? Auth::id() : null,
+                    'admin_id' => Auth::user() instanceof User ? Auth::id() : null,
+                    'resident_id' => Auth::user() instanceof Resident ? Auth::id() : null,
                     'action_type' => 'stock_corrected',
                     'auditable_type' => Equipment::class,
                     'auditable_id' => $current->getKey(),

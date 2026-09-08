@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class BarangaySeeder extends Seeder
 {
@@ -41,11 +41,11 @@ class BarangaySeeder extends Seeder
         DB::table('tbl_barangay')->insert(
             array_map(fn (string $name) => [
                 'barangay_name' => $name,
-                'created_at'    => $now,
-                'updated_at'    => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
             ], self::BARANGAYS)
         );
 
-        $this->command?->info('BarangaySeeder: created ' . count(self::BARANGAYS) . ' barangays.');
+        $this->command?->info('BarangaySeeder: created '.count(self::BARANGAYS).' barangays.');
     }
 }

@@ -24,6 +24,7 @@ class ScheduledServiceRequestTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private Service $service;
 
     /** @var array<int, Vehicle> */

@@ -3,9 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Service;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class ServiceRequestSeeder extends Seeder
 {
@@ -17,7 +17,7 @@ class ServiceRequestSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'ServiceRequestSeeder skipped: refuses to seed simulated requests outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -58,7 +58,7 @@ class ServiceRequestSeeder extends Seeder
                 'service_id' => $serviceIds[array_rand($serviceIds)],
                 'vehicle_id' => null,
                 'processed_by' => null,
-                'description' => 'Simulated dashboard test data ' . $i,
+                'description' => 'Simulated dashboard test data '.$i,
                 'valid_id' => null,
                 'status' => $status,
                 'remarks' => $status === 'Resolved' ? 'Resolved by response team.' : null,
@@ -70,4 +70,3 @@ class ServiceRequestSeeder extends Seeder
         DB::table('tbl_service_request')->insert($records);
     }
 }
-

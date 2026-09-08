@@ -8,6 +8,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\Service;
+use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,8 +37,11 @@ class InputBoundsTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangay;
+
     private Resident $resident;
+
     private Service $ambulance;
 
     protected function setUp(): void
@@ -262,7 +266,7 @@ class InputBoundsTest extends TestCase
             'status' => 'Available',
         ]);
 
-        $booking = \App\Models\ServiceRequest::create([
+        $booking = ServiceRequest::create([
             'resident_id' => $this->resident->resident_id,
             'service_id' => $this->ambulance->service_id,
             'description' => 'Booked',

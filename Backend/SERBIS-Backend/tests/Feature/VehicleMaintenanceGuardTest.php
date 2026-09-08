@@ -23,8 +23,11 @@ class VehicleMaintenanceGuardTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void

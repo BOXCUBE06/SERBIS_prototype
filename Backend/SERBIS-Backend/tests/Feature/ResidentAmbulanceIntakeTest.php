@@ -37,8 +37,11 @@ class ResidentAmbulanceIntakeTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private Service $ambulance;
+
     private Service $roadClearing;
+
     private User $admin;
 
     protected function setUp(): void

@@ -28,9 +28,7 @@ class AmbulanceAvailabilityController extends Controller
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
-    public function __construct(private readonly AmbulanceAvailability $availability)
-    {
-    }
+    public function __construct(private readonly AmbulanceAvailability $availability) {}
 
     public function index(Request $request)
     {

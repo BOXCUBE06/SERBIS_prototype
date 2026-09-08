@@ -29,9 +29,13 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $ambulance;
+
     private Service $nonAmbulance;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void

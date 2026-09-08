@@ -21,19 +21,21 @@ class AmbulanceAvailabilityTest extends TestCase
     use RefreshDatabase;
 
     private AmbulanceAvailability $availability;
+
     private Service $service;
 
     /** The four seeded Ambulance units, keyed by unit_identifier. */
     private array $units = [];
 
     private Carbon $windowStart;
+
     private Carbon $windowEnd;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->availability = new AmbulanceAvailability();
+        $this->availability = new AmbulanceAvailability;
 
         $this->service = Service::create([
             'service_name' => 'Ambulance/Medical Response',

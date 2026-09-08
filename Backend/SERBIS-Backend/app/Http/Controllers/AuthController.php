@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Mail\ResidentLoginCode;
 use App\Mail\ResidentVerificationCode;
-use App\Models\User; // Represents Admins/Staff
 use App\Models\Resident;
+use App\Models\User; // Represents Admins/Staff
 use App\Services\PhilSms;
 use App\Services\Totp;
 use Illuminate\Http\Request;
@@ -65,16 +65,16 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $validated = $request->validate([
-            'first_name'    => 'required|string|max:255',
-            'middle_name'   => 'nullable|string|max:255',
-            'last_name'     => 'required|string|max:255',
-            'barangay_id'   => 'required|integer|exists:tbl_barangay,barangay_id',
-            'phone_number'  => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
+            'first_name' => 'required|string|max:255',
+            'middle_name' => 'nullable|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             // Still checked against the table, but the table now only holds
             // accounts that finished verifying, so this refuses a real account
             // and never an abandoned attempt.
             'email_address' => 'required|email|unique:tbl_residents,email_address',
-            'password'      => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+            'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ]);
 
         // Every column is assigned explicitly rather than splatting $validated, so
@@ -83,21 +83,21 @@ class AuthController extends Controller
         // and which must never be client-settable.
         $entry = $this->issueSignupCode([
             'attributes' => [
-                'barangay_id'   => $validated['barangay_id'],
-                'first_name'    => $validated['first_name'],
-                'middle_name'   => $validated['middle_name'] ?? null,
-                'last_name'     => $validated['last_name'],
-                'phone_number'  => $validated['phone_number'],
+                'barangay_id' => $validated['barangay_id'],
+                'first_name' => $validated['first_name'],
+                'middle_name' => $validated['middle_name'] ?? null,
+                'last_name' => $validated['last_name'],
+                'phone_number' => $validated['phone_number'],
                 'email_address' => $validated['email_address'],
                 // Hashed here rather than at insert time: the plain password must
                 // not sit in the cache store for the life of the pending sign-up.
-                'password'      => Hash::make($validated['password']),
+                'password' => Hash::make($validated['password']),
                 // Starts Inactive on purpose. SmsController only blasts residents
                 // with status 'Active', and PhilSMS bills per real send with no
                 // sandbox, so a self-registered account must not opt an unverified
                 // phone number into paid SMS until an admin activates it from the
                 // Users view.
-                'status'        => 'Inactive',
+                'status' => 'Inactive',
             ],
             // Set only when an existing unverified row is being finished off —
             // see adoptUnverifiedResident(). A fresh sign-up has no row yet.
@@ -146,7 +146,7 @@ class AuthController extends Controller
             ], 422);
         }
 
-        if (!is_array($entry)) {
+        if (! is_array($entry)) {
             // An unverified row with no code in flight is a sign-up written
             // before this flow moved into the cache, whose code has since
             // lapsed. It is told what an expired code is told, because that is
@@ -163,7 +163,7 @@ class AuthController extends Controller
                 ], 404);
         }
 
-        if (!$this->signupCodeMatches($entry, (string) $request->code)) {
+        if (! $this->signupCodeMatches($entry, (string) $request->code)) {
             if (! $this->spendSignupAttempt($email, $entry)) {
                 return response()->json([
                     'message' => 'Too many wrong codes. Ask for a new one.',
@@ -181,7 +181,7 @@ class AuthController extends Controller
 
         $resident = $this->completeSignup($entry, $resident);
 
-        if (!$resident) {
+        if (! $resident) {
             return response()->json([
                 'message' => 'We could not find a sign-up for that email address. It may have expired — please register again.',
                 'code' => 'not_found',
@@ -223,7 +223,7 @@ class AuthController extends Controller
         // leave a resident who mistyped their own address waiting for a message
         // that is never coming.
         if ($entry === null) {
-            if (!$resident) {
+            if (! $resident) {
                 return response()->json([
                     'message' => 'We could not find a sign-up for that email address. It may have expired — please register again.',
                     'code' => 'not_found',
@@ -302,8 +302,8 @@ class AuthController extends Controller
     {
         return [
             'attributes' => [
-                'first_name'    => $resident->first_name,
-                'phone_number'  => $resident->phone_number,
+                'first_name' => $resident->first_name,
+                'phone_number' => $resident->phone_number,
                 'email_address' => $resident->email_address,
             ],
             'resident_id' => $resident->resident_id,
@@ -384,7 +384,7 @@ class AuthController extends Controller
      */
     private function textSignupCode(string $phone, string $code): bool
     {
-        if (!$this->smsIsUsable($phone)) {
+        if (! $this->smsIsUsable($phone)) {
             return false;
         }
 
@@ -467,7 +467,7 @@ class AuthController extends Controller
     {
         $expiresAt = $entry['expires_at'] ?? null;
 
-        if (!is_int($expiresAt) || $expiresAt <= now()->getTimestamp()) {
+        if (! is_int($expiresAt) || $expiresAt <= now()->getTimestamp()) {
             return false;
         }
 
@@ -479,7 +479,7 @@ class AuthController extends Controller
     {
         $sentAt = $entry['sent_at'] ?? null;
 
-        if (!is_int($sentAt)) {
+        if (! is_int($sentAt)) {
             return 0;
         }
 
@@ -500,7 +500,7 @@ class AuthController extends Controller
         if ($entry['resident_id'] ?? null) {
             $resident ??= Resident::find($entry['resident_id']);
 
-            if (!$resident) {
+            if (! $resident) {
                 return null;
             }
 
@@ -512,7 +512,7 @@ class AuthController extends Controller
         // forceFill, not create(): `email_verified_at` is deliberately absent
         // from the model's Fillable so no request payload can ever reach it.
         // `password` in the entry is already hashed.
-        $new = new Resident();
+        $new = new Resident;
         $new->forceFill($entry['attributes'] + ['email_verified_at' => now()])->save();
 
         return $new;
@@ -578,10 +578,10 @@ class AuthController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name'    => 'sometimes|required|string|max:255',
-            'middle_name'   => 'nullable|string|max:255',
-            'last_name'     => 'sometimes|required|string|max:255',
-            'phone_number'  => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
+            'first_name' => 'sometimes|required|string|max:255',
+            'middle_name' => 'nullable|string|max:255',
+            'last_name' => 'sometimes|required|string|max:255',
+            'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             'email_address' => [
                 'sometimes',
                 'required',
@@ -591,7 +591,7 @@ class AuthController extends Controller
             // The resident's own notification preference. Writable here — unlike
             // the four columns below — because it decides only what this account
             // receives, and there is nobody else who should be deciding it.
-            'sms_opt_in'    => 'sometimes|required|boolean',
+            'sms_opt_in' => 'sometimes|required|boolean',
             // Not a column. Proof of knowledge, required below only when this
             // call actually moves one of the two contacts a login code is sent
             // to. Left out of the assignment loop for the same reason every
@@ -721,9 +721,9 @@ class AuthController extends Controller
 
         $admin = User::where('email_address', $request->email_address)->first();
 
-        if (!$admin || !Hash::check($request->password, $admin->password)) {
+        if (! $admin || ! Hash::check($request->password, $admin->password)) {
             return response()->json([
-                'message' => 'Unauthorized. MDRRMO Admin access only.'
+                'message' => 'Unauthorized. MDRRMO Admin access only.',
             ], 401);
         }
 
@@ -735,7 +735,7 @@ class AuthController extends Controller
         // the row cannot be deleted while the audit trail points at it.
         if ($admin->isDeactivated()) {
             return response()->json([
-                'message' => 'This account has been deactivated. Contact another MDRRMO admin.'
+                'message' => 'This account has been deactivated. Contact another MDRRMO admin.',
             ], 403);
         }
 
@@ -782,7 +782,7 @@ class AuthController extends Controller
 
         $admin = User::find($challenge['id']);
 
-        if (!$admin || !app(Totp::class)->verify($admin->admin_id, (string) $request->code)) {
+        if (! $admin || ! app(Totp::class)->verify($admin->admin_id, (string) $request->code)) {
             return response()->json([
                 'message' => 'That code is not right. Check your authenticator app and try again.',
                 'code' => 'invalid_code',
@@ -849,7 +849,7 @@ class AuthController extends Controller
     {
         $challenge = Cache::get("mfa:challenge:{$challengeId}");
 
-        if (!is_array($challenge) || ($challenge['type'] ?? null) !== $type) {
+        if (! is_array($challenge) || ($challenge['type'] ?? null) !== $type) {
             return null;
         }
 
@@ -883,9 +883,9 @@ class AuthController extends Controller
         $pending = $resident ? null : $this->pendingSignup($email);
         $hash = $resident->password ?? ($pending['attributes']['password'] ?? null);
 
-        if ($hash === null || !Hash::check($request->password, (string) $hash)) {
+        if ($hash === null || ! Hash::check($request->password, (string) $hash)) {
             return response()->json([
-                'message' => 'Invalid resident credentials.'
+                'message' => 'Invalid resident credentials.',
             ], 401);
         }
 
@@ -941,7 +941,7 @@ class AuthController extends Controller
         //
         // Checked after the password on purpose: answering before it would turn
         // this route into an oracle for which addresses have accounts.
-        if ($pending || !$resident->hasVerifiedEmail()) {
+        if ($pending || ! $resident->hasVerifiedEmail()) {
             // The client answers this by opening the code screen, so a code has
             // to be in flight by the time it gets there. Without this the
             // resident waited on a message nobody had sent and only got one by
@@ -1017,7 +1017,7 @@ class AuthController extends Controller
 
         $resident = Resident::find($challenge['id']);
 
-        if (!$resident) {
+        if (! $resident) {
             return response()->json([
                 'message' => 'That code is not right, or it has expired. Ask for a new one.',
                 'code' => 'invalid_code',
@@ -1109,7 +1109,7 @@ class AuthController extends Controller
 
         $challenge = Cache::get("mfa:challenge:{$request->challenge_id}");
 
-        if (!is_array($challenge) || ($challenge['type'] ?? null) !== 'resident') {
+        if (! is_array($challenge) || ($challenge['type'] ?? null) !== 'resident') {
             return response()->json([
                 'message' => 'That login attempt has expired. Please log in again.',
                 'code' => 'mfa_challenge_expired',
@@ -1128,7 +1128,7 @@ class AuthController extends Controller
 
         $resident = Resident::find($challenge['id']);
 
-        if (!$resident) {
+        if (! $resident) {
             return response()->json([
                 'message' => 'That login attempt has expired. Please log in again.',
                 'code' => 'mfa_challenge_expired',
@@ -1200,7 +1200,7 @@ class AuthController extends Controller
                 // against either way.
                 Log::warning('Login OTP SMS threw, treating as delivered', [
                     'resident_id' => $resident->resident_id,
-                    'error'       => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
 
                 return ['channel' => 'sms', 'challenge_id' => $challengeId];
@@ -1227,7 +1227,7 @@ class AuthController extends Controller
     {
         $sentAt = is_array($challenge) ? ($challenge['sent_at'] ?? null) : null;
 
-        if (!is_int($sentAt)) {
+        if (! is_int($sentAt)) {
             return 0;
         }
 
@@ -1253,7 +1253,7 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
-            'message' => 'Successfully logged out'
+            'message' => 'Successfully logged out',
         ]);
     }
 }

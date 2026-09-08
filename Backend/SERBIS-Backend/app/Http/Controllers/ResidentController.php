@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Resident;
+use App\Models\User;
 use App\Services\PhilSms;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class ResidentController extends Controller
     public function index()
     {
         $residents = Resident::with('barangay')->get();
+
         return response()->json($residents);
     }
 
@@ -53,17 +55,17 @@ class ResidentController extends Controller
         // /api/register. 'status' is deliberately here: this is the admin CRUD,
         // and activating a resident is the admin's job.
         $resident = Resident::create([
-            'barangay_id'   => $validated['barangay_id'],
-            'first_name'    => $validated['first_name'],
-            'middle_name'   => $validated['middle_name'] ?? null,
-            'last_name'     => $validated['last_name'],
-            'phone_number'  => $validated['phone_number'],
+            'barangay_id' => $validated['barangay_id'],
+            'first_name' => $validated['first_name'],
+            'middle_name' => $validated['middle_name'] ?? null,
+            'last_name' => $validated['last_name'],
+            'phone_number' => $validated['phone_number'],
             'email_address' => $validated['email_address'],
-            'password'      => bcrypt($validated['password']),
+            'password' => bcrypt($validated['password']),
             // No 'photo'. It is the resident's own face, uploaded from the
             // mobile app by POST /api/me/photo; an admin creating the account
             // has no file to attach and no business naming one.
-            'status'        => $validated['status'],
+            'status' => $validated['status'],
         ]);
 
         return response()->json($resident, 201);
@@ -73,7 +75,7 @@ class ResidentController extends Controller
     {
         $resident = Resident::with('barangay')->find($id);
 
-        if (!$resident) {
+        if (! $resident) {
             return response()->json(['message' => 'Resident not found'], 404);
         }
 
@@ -84,7 +86,7 @@ class ResidentController extends Controller
     {
         $resident = Resident::find($id);
 
-        if (!$resident) {
+        if (! $resident) {
             return response()->json(['message' => 'Resident not found'], 404);
         }
 
@@ -93,7 +95,7 @@ class ResidentController extends Controller
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
-            'email_address' => 'required|email|unique:tbl_residents,email_address,' . $id . ',resident_id',
+            'email_address' => 'required|email|unique:tbl_residents,email_address,'.$id.',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
             // Same three values as store(). Both admin write paths reach this
             // method — the list's status toggle and the edit form's radio —
@@ -108,18 +110,18 @@ class ResidentController extends Controller
         // contain, so adding a rule here was one line away from making a new
         // column writable.
         $changes = [
-            'first_name'    => $validated['first_name'],
-            'middle_name'   => $validated['middle_name'] ?? null,
-            'last_name'     => $validated['last_name'],
-            'phone_number'  => $validated['phone_number'],
+            'first_name' => $validated['first_name'],
+            'middle_name' => $validated['middle_name'] ?? null,
+            'last_name' => $validated['last_name'],
+            'phone_number' => $validated['phone_number'],
             'email_address' => $validated['email_address'],
-            'barangay_id'   => $validated['barangay_id'],
-            'status'        => $validated['status'],
+            'barangay_id' => $validated['barangay_id'],
+            'status' => $validated['status'],
         ];
 
         // An omitted or blank password leaves the stored hash alone; assigning
         // null would lock the resident out of their own account.
-        $passwordChanged = !empty($validated['password']);
+        $passwordChanged = ! empty($validated['password']);
 
         // Deactivating has to end the session too, or the button is only half
         // true: a resident token lives 30 days (SANCTUM_RESIDENT_EXPIRATION), so
@@ -169,7 +171,7 @@ class ResidentController extends Controller
     {
         $resident = Resident::find($id);
 
-        if (!$resident) {
+        if (! $resident) {
             return response()->json(['message' => 'Resident not found'], 404);
         }
 
@@ -290,7 +292,7 @@ class ResidentController extends Controller
             // ServiceRequestController::guardPrivateFile for the same guard and
             // the full reasoning. `role` is an unconstrained varchar, and a
             // deactivation applied by direct database edit revokes no tokens.
-            if (! $user instanceof \App\Models\User || ! $user->isAdmin()) {
+            if (! $user instanceof User || ! $user->isAdmin()) {
                 return response()->json(['message' => 'Resident not found'], 404);
             }
 

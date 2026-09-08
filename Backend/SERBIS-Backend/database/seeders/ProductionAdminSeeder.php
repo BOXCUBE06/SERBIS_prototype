@@ -32,7 +32,7 @@ class ProductionAdminSeeder extends Seeder
         if (! is_string($password) || $password === '') {
             $this->command?->error(
                 'ProductionAdminSeeder skipped: ADMIN_SEED_PASSWORD is not set. '
-                . 'Set it in the host dashboard and re-run, or the panel will have no account to log into.'
+                .'Set it in the host dashboard and re-run, or the panel will have no account to log into.'
             );
 
             return;
@@ -40,7 +40,7 @@ class ProductionAdminSeeder extends Seeder
 
         if (DB::table('tbl_user')->where('email_address', self::ADMIN_EMAIL)->exists()) {
             $this->command?->info(
-                'ProductionAdminSeeder skipped: ' . self::ADMIN_EMAIL . ' already exists; password left untouched.'
+                'ProductionAdminSeeder skipped: '.self::ADMIN_EMAIL.' already exists; password left untouched.'
             );
 
             return;
@@ -52,16 +52,16 @@ class ProductionAdminSeeder extends Seeder
         // value User::isAdmin() compares against. Lowercase 'admin' reads as a
         // resident to every admin-scoped query — see ServiceRequestController.
         DB::table('tbl_user')->insert([
-            'first_name'    => 'Jilmar',
-            'last_name'     => 'Ferrer',
-            'role'          => 'Admin',
-            'status'        => 'Active',
+            'first_name' => 'Jilmar',
+            'last_name' => 'Ferrer',
+            'role' => 'Admin',
+            'status' => 'Active',
             'email_address' => self::ADMIN_EMAIL,
-            'password'      => Hash::make($password),
-            'created_at'    => $now,
-            'updated_at'    => $now,
+            'password' => Hash::make($password),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
-        $this->command?->info('ProductionAdminSeeder: created ' . self::ADMIN_EMAIL . '.');
+        $this->command?->info('ProductionAdminSeeder: created '.self::ADMIN_EMAIL.'.');
     }
 }

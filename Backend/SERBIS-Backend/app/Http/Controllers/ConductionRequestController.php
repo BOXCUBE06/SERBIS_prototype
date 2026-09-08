@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\ServiceRequest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -149,7 +150,7 @@ class ConductionRequestController extends Controller
         // now closes the button-side hole; this closes it at the one place
         // every caller (button, and the create dialog's own booking search)
         // actually goes through.
-        if (!empty($validated['service_request_id'])) {
+        if (! empty($validated['service_request_id'])) {
             $existingTrip = ConductionRequest::where('service_request_id', $validated['service_request_id'])->first();
 
             if ($existingTrip) {
@@ -169,7 +170,7 @@ class ConductionRequestController extends Controller
         // makes that impossible gets worked around outside the system).
         // "Open" matches ConductionRequest::getTripStatusAttribute()'s own
         // 'In transit' definition, not a new one: departed, not yet back.
-        $conflict = !empty($validated['vehicle_id'])
+        $conflict = ! empty($validated['vehicle_id'])
             ? ConductionRequest::where('vehicle_id', $validated['vehicle_id'])
                 ->whereNotNull('departed_office_at')
                 ->whereNull('returned_office_at')
@@ -229,7 +230,7 @@ class ConductionRequestController extends Controller
             // forever — which is also why "Mark as Resolved" (gated on
             // status === 'Responding') was unreachable for a manually
             // dispatched booking.
-            if (!empty($validated['service_request_id'])) {
+            if (! empty($validated['service_request_id'])) {
                 $serviceRequest = ServiceRequest::find($validated['service_request_id']);
 
                 if ($serviceRequest) {
@@ -262,7 +263,7 @@ class ConductionRequestController extends Controller
     {
         $conductionRequest = ConductionRequest::with(['people', 'serviceRequest'])->find($id);
 
-        if (!$conductionRequest) {
+        if (! $conductionRequest) {
             return response()->json(['message' => 'Conduction request not found'], 404);
         }
 
@@ -279,7 +280,7 @@ class ConductionRequestController extends Controller
     {
         $conductionRequest = ConductionRequest::with(['people', 'serviceRequest.relatives'])->find($id);
 
-        if (!$conductionRequest) {
+        if (! $conductionRequest) {
             abort(404, 'Conduction request not found');
         }
 
@@ -297,7 +298,7 @@ class ConductionRequestController extends Controller
     {
         $conductionRequest = ConductionRequest::find($id);
 
-        if (!$conductionRequest) {
+        if (! $conductionRequest) {
             return response()->json(['message' => 'Conduction request not found'], 404);
         }
 
@@ -343,14 +344,14 @@ class ConductionRequestController extends Controller
             if (array_key_exists($field, $validated) && $validated[$field] !== null) {
                 $raw = (string) $validated[$field];
 
-                if (!self::carriesExplicitOffset($raw)) {
+                if (! self::carriesExplicitOffset($raw)) {
                     Log::info('Conduction checkpoint received with no UTC offset — read as Asia/Manila.', [
                         'conduction_request_id' => $conductionRequest->conduction_request_id,
                         'field' => $field,
                     ]);
                 }
 
-                $validated[$field] = \Carbon\Carbon::parse(
+                $validated[$field] = Carbon::parse(
                     $raw,
                     self::OFFICE_TIMEZONE
                 )->utc();
@@ -440,7 +441,7 @@ class ConductionRequestController extends Controller
         foreach ($sequence as $field => $label) {
             $value = $effective($field);
             if ($value !== null) {
-                $checkpoints[] = ['field' => $field, 'label' => $label, 'at' => \Carbon\Carbon::parse($value)];
+                $checkpoints[] = ['field' => $field, 'label' => $label, 'at' => Carbon::parse($value)];
             }
         }
 
@@ -459,7 +460,7 @@ class ConductionRequestController extends Controller
         // reports a checkpoint but says nothing about passengers must not
         // wipe passengers already on record.
         foreach (self::PEOPLE_FIELDS as $field => $role) {
-            if (!array_key_exists($field, $validated)) {
+            if (! array_key_exists($field, $validated)) {
                 continue;
             }
 

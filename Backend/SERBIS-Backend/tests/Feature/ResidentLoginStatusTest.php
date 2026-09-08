@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -86,7 +87,7 @@ class ResidentLoginStatusTest extends TestCase
      * file are about `status`, which is decided before the MFA challenge is
      * even issued, so this just gets them past the code prompt.
      */
-    private function login(Resident $resident): \Illuminate\Testing\TestResponse
+    private function login(Resident $resident): TestResponse
     {
         $first = $this->postJson('/api/resident/login', [
             'email_address' => $resident->email_address,

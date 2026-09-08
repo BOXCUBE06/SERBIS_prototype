@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Barangay;
 use App\Models\InfoMaterial;
 use App\Models\Resident;
 use App\Models\User;
@@ -86,7 +87,7 @@ class InfoMaterialVerifiedTest extends TestCase
         $this->material(['verified' => true]);
 
         $resident = Resident::create([
-            'barangay_id' => \App\Models\Barangay::create(['barangay_name' => 'San Fabian'])->barangay_id,
+            'barangay_id' => Barangay::create(['barangay_name' => 'San Fabian'])->barangay_id,
             'first_name' => 'Test',
             'last_name' => 'Resident',
             'phone_number' => '09171111111',
@@ -105,7 +106,7 @@ class InfoMaterialVerifiedTest extends TestCase
         $material = $this->material();
 
         $resident = Resident::create([
-            'barangay_id' => \App\Models\Barangay::create(['barangay_name' => 'San Miguel'])->barangay_id,
+            'barangay_id' => Barangay::create(['barangay_name' => 'San Miguel'])->barangay_id,
             'first_name' => 'Test',
             'last_name' => 'Resident',
             'phone_number' => '09172222222',

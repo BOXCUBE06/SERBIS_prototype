@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
+use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -36,8 +37,11 @@ class AmbulanceDispatchBridgeTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $ambulance;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void
@@ -244,7 +248,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $this->assertStringNotContainsString('arrival time', $message);
         $this->assertStringContainsString('a driver', $message);
 
-        \App\Models\ConductionRequestPerson::create([
+        ConductionRequestPerson::create([
             'conduction_request_id' => $trip->conduction_request_id,
             'role' => 'driver',
             'name' => 'Rico Santos',
@@ -303,7 +307,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $this->assertStringNotContainsString('arrival time', $message);
         $this->assertStringContainsString('a driver', $message);
 
-        \App\Models\ConductionRequestPerson::create([
+        ConductionRequestPerson::create([
             'conduction_request_id' => $trip->conduction_request_id,
             'role' => 'driver',
             'name' => 'Rico Santos',

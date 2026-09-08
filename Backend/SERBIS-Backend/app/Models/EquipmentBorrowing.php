@@ -1,16 +1,19 @@
 <?php
 
 // App\Models\EquipmentBorrowing.php
+
 namespace App\Models;
 
+use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Traits\TracksHistory;
 
 class EquipmentBorrowing extends Model
 {
     use TracksHistory;
+
     protected $table = 'tbl_equipment_borrowing';
+
     protected $primaryKey = 'borrow_id';
 
     protected $fillable = [
@@ -27,7 +30,7 @@ class EquipmentBorrowing extends Model
         'status',
         'denial_reason',
         'released_at',
-        'returned_at'
+        'returned_at',
     ];
 
     /**

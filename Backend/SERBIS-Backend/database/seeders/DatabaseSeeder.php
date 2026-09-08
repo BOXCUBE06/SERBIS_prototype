@@ -15,11 +15,11 @@ class DatabaseSeeder extends Seeder
             ServiceSeeder::class,
             EquipmentSeeder::class,
             VehicleSeeder::class,
-            
+
             // 2. Dependent Tables (Require Foreign Keys)
             ResidentSeeder::class, // Requires tbl_barangay
             InfoMaterialSeeder::class, // Requires tbl_user (uploader_id)
-            
+
             // 3. Relational/Analytics Tables
             ServiceRequestSeeder::class,
             AmbulanceBookingSeeder::class,

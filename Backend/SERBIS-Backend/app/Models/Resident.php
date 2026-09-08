@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\TracksHistory; // 1. Import the trait
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Traits\TracksHistory; // 1. Import the trait
 
 // `photo` is absent from Fillable and present in Hidden on purpose. It used to
 // be a mass-assignable free-form string that the admin panel rendered straight

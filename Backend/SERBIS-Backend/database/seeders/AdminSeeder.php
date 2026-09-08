@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Carbon\Carbon;
 
 class AdminSeeder extends Seeder
 {
@@ -18,7 +18,7 @@ class AdminSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'AdminSeeder skipped: refuses to seed a default admin outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -28,7 +28,7 @@ class AdminSeeder extends Seeder
         // seed run on a populated database.
         if (DB::table('tbl_user')->where('email_address', self::ADMIN_EMAIL)->exists()) {
             $this->command?->info(
-                'AdminSeeder skipped: ' . self::ADMIN_EMAIL . ' already exists; password left untouched.'
+                'AdminSeeder skipped: '.self::ADMIN_EMAIL.' already exists; password left untouched.'
             );
 
             return;
@@ -37,15 +37,15 @@ class AdminSeeder extends Seeder
         $now = Carbon::now();
 
         DB::table('tbl_user')->insert([
-            'first_name'    => 'SERBIS',
-            'last_name'     => 'Administrator',
-            'role'          => 'Admin',
+            'first_name' => 'SERBIS',
+            'last_name' => 'Administrator',
+            'role' => 'Admin',
             'email_address' => self::ADMIN_EMAIL,
-            'password'      => Hash::make('password123'),
-            'created_at'    => $now,
-            'updated_at'    => $now,
+            'password' => Hash::make('password123'),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
 
-        $this->command?->info('AdminSeeder: created ' . self::ADMIN_EMAIL . ' with the default password.');
+        $this->command?->info('AdminSeeder: created '.self::ADMIN_EMAIL.' with the default password.');
     }
 }

@@ -27,9 +27,13 @@ class ServiceRequestApproveTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Vehicle $amb01;
+
     private Vehicle $amb02;
 
     protected function setUp(): void

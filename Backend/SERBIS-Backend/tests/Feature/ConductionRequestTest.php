@@ -3,14 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\ConductionRequest;
+use App\Models\ConductionRequestPerson;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Models\Vehicle;
+use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -520,7 +524,7 @@ class ConductionRequestTest extends TestCase
     public function test_trip_log_replaces_drivers_rather_than_appending(): void
     {
         $conductionRequest = ConductionRequest::create($this->payload());
-        \App\Models\ConductionRequestPerson::create([
+        ConductionRequestPerson::create([
             'conduction_request_id' => $conductionRequest->conduction_request_id,
             'role' => 'driver', 'name' => 'Pedro Santos', 'position' => 0,
         ]);
@@ -539,7 +543,7 @@ class ConductionRequestTest extends TestCase
     public function test_trip_log_without_a_drivers_key_leaves_existing_drivers_alone(): void
     {
         $conductionRequest = ConductionRequest::create($this->payload());
-        \App\Models\ConductionRequestPerson::create([
+        ConductionRequestPerson::create([
             'conduction_request_id' => $conductionRequest->conduction_request_id,
             'role' => 'driver', 'name' => 'Pedro Santos', 'position' => 0,
         ]);
@@ -560,7 +564,7 @@ class ConductionRequestTest extends TestCase
      */
     public function test_a_naive_checkpoint_is_logged_and_read_as_manila(): void
     {
-        \Illuminate\Support\Facades\Log::spy();
+        Log::spy();
 
         $conductionRequest = ConductionRequest::create($this->payload());
 
@@ -568,7 +572,7 @@ class ConductionRequestTest extends TestCase
             'departed_office_at' => '2026-08-18 08:00:00',
         ])->assertStatus(200);
 
-        \Illuminate\Support\Facades\Log::shouldHaveReceived('info')->once()->withArgs(
+        Log::shouldHaveReceived('info')->once()->withArgs(
             fn (string $message, array $context) => str_contains($message, 'no UTC offset')
                 && $context['field'] === 'departed_office_at'
                 && $context['conduction_request_id'] === $conductionRequest->conduction_request_id
@@ -577,14 +581,14 @@ class ConductionRequestTest extends TestCase
         // 8 AM Manila is midnight UTC.
         $this->assertTrue(
             $conductionRequest->fresh()->departed_office_at->utc()->equalTo(
-                \Carbon\Carbon::parse('2026-08-18 00:00:00', 'UTC')
+                Carbon::parse('2026-08-18 00:00:00', 'UTC')
             )
         );
     }
 
     public function test_an_offset_carrying_checkpoint_is_not_logged_and_is_honoured_as_sent(): void
     {
-        \Illuminate\Support\Facades\Log::spy();
+        Log::spy();
 
         $conductionRequest = ConductionRequest::create($this->payload());
 
@@ -593,11 +597,11 @@ class ConductionRequestTest extends TestCase
             'departed_office_at' => '2026-08-18T00:00:00.000000Z',
         ])->assertStatus(200);
 
-        \Illuminate\Support\Facades\Log::shouldNotHaveReceived('info');
+        Log::shouldNotHaveReceived('info');
 
         $this->assertTrue(
             $conductionRequest->fresh()->departed_office_at->utc()->equalTo(
-                \Carbon\Carbon::parse('2026-08-18 00:00:00', 'UTC')
+                Carbon::parse('2026-08-18 00:00:00', 'UTC')
             )
         );
     }
@@ -732,7 +736,7 @@ class ConductionRequestTest extends TestCase
     // refused returned_office_at, so a crew that turned back and drove home
     // could not record either. These four pin the shape that replaced it.
 
-    private function tripLog(ConductionRequest $trip, array $body): \Illuminate\Testing\TestResponse
+    private function tripLog(ConductionRequest $trip, array $body): TestResponse
     {
         return $this->patchJson(
             "/api/conduction-requests/{$trip->conduction_request_id}/trip-log",

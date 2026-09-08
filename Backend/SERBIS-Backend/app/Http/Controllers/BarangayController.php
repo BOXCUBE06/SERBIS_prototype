@@ -61,7 +61,7 @@ class BarangayController extends Controller
     public function destroy($id)
     {
         $barangay = Barangay::findOrFail($id);
-        
+
         $barangay->delete();
 
         return response()->json(['message' => 'Barangay deleted successfully']);

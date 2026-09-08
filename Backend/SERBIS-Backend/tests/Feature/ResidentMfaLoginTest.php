@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ResidentLoginCode;
 use App\Models\Barangay;
 use App\Models\Resident;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -190,7 +191,7 @@ class ResidentMfaLoginTest extends TestCase
         ]);
         $firstCode = $this->lastCodeTexted();
 
-        $this->travel(\App\Models\Resident::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+        $this->travel(Resident::RESEND_COOLDOWN_SECONDS + 1)->seconds();
 
         $this->postJson('/api/resident/login/resend', [
             'challenge_id' => $first->json('challenge_id'),
@@ -221,7 +222,7 @@ class ResidentMfaLoginTest extends TestCase
         ]);
 
         $response->assertStatus(403)->assertJsonPath('channel', 'email');
-        Mail::assertSent(\App\Mail\ResidentLoginCode::class);
+        Mail::assertSent(ResidentLoginCode::class);
     }
 
     public function test_an_unknown_challenge_id_is_rejected(): void

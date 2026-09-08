@@ -1,16 +1,18 @@
 <?php
 
 // App\Models\Equipment.php
+
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use App\Traits\TracksHistory;
+use Illuminate\Database\Eloquent\Model;
 
 class Equipment extends Model
 {
     use TracksHistory;
 
     protected $table = 'tbl_equipments';
+
     protected $primaryKey = 'equipment_id';
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
@@ -19,6 +21,6 @@ class Equipment extends Model
         'item_name',
         'total_quantity',
         'available_quantity',
-        'status'
+        'status',
     ];
 }

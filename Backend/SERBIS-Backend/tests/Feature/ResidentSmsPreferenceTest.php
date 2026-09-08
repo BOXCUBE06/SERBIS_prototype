@@ -26,6 +26,7 @@ class ResidentSmsPreferenceTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangay;
 
     protected function setUp(): void

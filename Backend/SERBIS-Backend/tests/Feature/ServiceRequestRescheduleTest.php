@@ -27,8 +27,11 @@ class ServiceRequestRescheduleTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Vehicle $amb01;
 
     protected function setUp(): void

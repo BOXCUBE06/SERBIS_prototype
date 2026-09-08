@@ -41,9 +41,13 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Service $ambulance;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void

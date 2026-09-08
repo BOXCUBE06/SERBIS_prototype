@@ -25,8 +25,11 @@ class AmbulanceAvailabilityEndpointTest extends TestCase
     use RefreshDatabase;
 
     private Service $service;
+
     private Vehicle $vehicle;
+
     private Resident $resident;
+
     private User $admin;
 
     protected function setUp(): void

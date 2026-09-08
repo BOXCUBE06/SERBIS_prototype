@@ -46,6 +46,6 @@ trait CompletesAdminMfa
     {
         $secret = app(Totp::class)->secretFor($admin->admin_id);
 
-        return (new Google2FA())->getCurrentOtp($secret);
+        return (new Google2FA)->getCurrentOtp($secret);
     }
 }

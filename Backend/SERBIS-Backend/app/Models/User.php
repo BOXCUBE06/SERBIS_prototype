@@ -2,14 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Traits\TracksHistory;
-
 
 #[Fillable(['first_name', 'last_name', 'role', 'status', 'email_address', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -61,6 +60,7 @@ class User extends Authenticatable
     }
 
     protected $table = 'tbl_user';
+
     protected $primaryKey = 'admin_id';
 
     /**

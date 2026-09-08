@@ -32,7 +32,7 @@ class AmbulanceBookingSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'AmbulanceBookingSeeder skipped: refuses to seed simulated bookings outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -51,7 +51,7 @@ class AmbulanceBookingSeeder extends Seeder
         if (! $service || $units->count() < 4) {
             $this->command?->warn(
                 'AmbulanceBookingSeeder skipped: needs the Ambulance/Medical Response service and 4 Ambulance '
-                . 'units — run ServiceSeeder and VehicleSeeder first.'
+                .'units — run ServiceSeeder and VehicleSeeder first.'
             );
 
             return;

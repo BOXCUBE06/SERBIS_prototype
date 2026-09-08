@@ -29,7 +29,9 @@ class EquipmentBorrowingOtherItemTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private User $admin;
+
     private Equipment $equipment;
 
     protected function setUp(): void

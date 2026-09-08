@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
+use App\Models\Resident;
+use App\Models\User;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
@@ -216,7 +218,7 @@ class EquipmentBorrowingController extends Controller
 
         $borrowing = $query->find($id);
 
-        if (!$borrowing) {
+        if (! $borrowing) {
             return response()->json(['message' => 'Borrowing record not found'], 404);
         }
 
@@ -268,7 +270,7 @@ class EquipmentBorrowingController extends Controller
     public function update(Request $request, $id)
     {
         $borrowing = EquipmentBorrowing::find($id);
-        if (!$borrowing) {
+        if (! $borrowing) {
             return response()->json(['message' => 'Borrowing record not found'], 404);
         }
 
@@ -326,8 +328,8 @@ class EquipmentBorrowingController extends Controller
         if ($newStatus === 'Released' && $borrowing->equipment_id === null) {
             return response()->json([
                 'message' => 'This request is for an item that is not in the inventory ('
-                    . $borrowing->other_equipment_text
-                    . '). Add it to the equipment list and attach it to this request before releasing.',
+                    .$borrowing->other_equipment_text
+                    .'). Add it to the equipment list and attach it to this request before releasing.',
             ], 422);
         }
 
@@ -341,6 +343,7 @@ class EquipmentBorrowingController extends Controller
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
                 if ($equipment->available_quantity < $borrowing->quantity) {
                     DB::rollBack();
+
                     return response()->json(['message' => 'Not enough equipment available to release.'], 422);
                 }
                 $equipment->decrement('available_quantity', $borrowing->quantity);
@@ -375,8 +378,8 @@ class EquipmentBorrowingController extends Controller
                 // clamp was even attempted.
                 if ($clampedTo < $requested) {
                     DB::table('tbl_system_logs')->insert([
-                        'admin_id' => Auth::user() instanceof \App\Models\User ? Auth::id() : null,
-                        'resident_id' => Auth::user() instanceof \App\Models\Resident ? Auth::id() : null,
+                        'admin_id' => Auth::user() instanceof User ? Auth::id() : null,
+                        'resident_id' => Auth::user() instanceof Resident ? Auth::id() : null,
                         'action_type' => 'stock_clamped',
                         'auditable_type' => Equipment::class,
                         'auditable_id' => $equipment->getKey(),
@@ -422,10 +425,12 @@ class EquipmentBorrowingController extends Controller
             $borrowing->save();
 
             DB::commit();
+
             return response()->json($borrowing);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['message' => 'Failed to process borrowing update'], 500);
         }
     }
@@ -474,7 +479,7 @@ class EquipmentBorrowingController extends Controller
 
             return response()->json([
                 'message' => "A {$validated['stage']} photo can only be added to a borrowing that is {$allowed}."
-                    . " This one is {$borrowing->status}.",
+                    ." This one is {$borrowing->status}.",
             ], 422);
         }
 

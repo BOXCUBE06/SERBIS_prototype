@@ -26,6 +26,7 @@ class WalkInServiceRequestTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Service $service;
 
     protected function setUp(): void

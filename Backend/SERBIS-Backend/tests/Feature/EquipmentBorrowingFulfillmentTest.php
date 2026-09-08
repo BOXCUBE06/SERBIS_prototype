@@ -22,6 +22,7 @@ class EquipmentBorrowingFulfillmentTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private Equipment $equipment;
 
     protected function setUp(): void

@@ -24,7 +24,9 @@ class WalkInAmbulanceIntakeTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Service $ambulance;
+
     private Barangay $barangay;
 
     protected function setUp(): void

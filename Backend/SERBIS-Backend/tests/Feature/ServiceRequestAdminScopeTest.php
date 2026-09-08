@@ -44,8 +44,11 @@ class ServiceRequestAdminScopeTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $collidingResident;
+
     private Resident $otherResident;
+
     private Service $service;
 
     protected function setUp(): void

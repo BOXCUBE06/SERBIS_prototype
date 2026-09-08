@@ -84,13 +84,13 @@ trait PaginatesLists
     {
         return [
             'current_page' => $paginator->currentPage(),
-            'last_page'    => $paginator->lastPage(),
-            'per_page'     => $paginator->perPage(),
-            'total'        => $paginator->total(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
             // Null on an empty page rather than 0, so "showing 0 to 0" is not
             // rendered as a range that sounds like it contains something.
-            'from'         => $paginator->firstItem(),
-            'to'           => $paginator->lastItem(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

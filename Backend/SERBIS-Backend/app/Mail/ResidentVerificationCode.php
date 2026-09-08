@@ -26,8 +26,7 @@ class ResidentVerificationCode extends Mailable
     public function __construct(
         public string $firstName,
         public string $code,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

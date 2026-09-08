@@ -25,7 +25,7 @@ class InfoMaterialSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'InfoMaterialSeeder skipped: refuses to seed materials outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -51,7 +51,7 @@ class InfoMaterialSeeder extends Seeder
         $materials = [
             [
                 'title' => 'Flood Preparedness Checklist',
-                'file'  => 'seed-flood-preparedness-checklist.pdf',
+                'file' => 'seed-flood-preparedness-checklist.pdf',
                 'bytes' => $this->pdf('Flood Preparedness Checklist', [
                     'Before the flood',
                     '- Keep a go-bag with water, food, medicine and IDs.',
@@ -70,7 +70,7 @@ class InfoMaterialSeeder extends Seeder
             ],
             [
                 'title' => 'Earthquake Drill Guide',
-                'file'  => 'seed-earthquake-drill-guide.pdf',
+                'file' => 'seed-earthquake-drill-guide.pdf',
                 'bytes' => $this->pdf('Earthquake Drill Guide', [
                     'Duck, Cover and Hold',
                     '- Drop to the floor before the shaking drops you.',
@@ -89,7 +89,7 @@ class InfoMaterialSeeder extends Seeder
             ],
             [
                 'title' => 'Evacuation Center Map',
-                'file'  => 'seed-evacuation-center-map.png',
+                'file' => 'seed-evacuation-center-map.png',
                 'bytes' => $this->png(),
             ],
         ];
@@ -97,7 +97,7 @@ class InfoMaterialSeeder extends Seeder
         $now = now();
 
         foreach ($materials as $material) {
-            $path = 'info_materials/' . $material['file'];
+            $path = 'info_materials/'.$material['file'];
 
             // Same disk and same 'storage/' prefix InfoMaterialController@store uses,
             // so seeded rows and uploaded rows are indistinguishable to a client.
@@ -107,17 +107,17 @@ class InfoMaterialSeeder extends Seeder
 
             DB::table('tbl_info_materials')->insert([
                 'uploader_id' => $uploaderId,
-                'title'       => $material['title'],
-                'file_path'   => 'storage/' . $path,
-                'file_type'   => pathinfo($material['file'], PATHINFO_EXTENSION),
-                'file_size'   => strlen($material['bytes']),
-                'created_at'  => $now,
-                'updated_at'  => $now,
+                'title' => $material['title'],
+                'file_path' => 'storage/'.$path,
+                'file_type' => pathinfo($material['file'], PATHINFO_EXTENSION),
+                'file_size' => strlen($material['bytes']),
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
         }
 
         $this->command?->info(
-            'InfoMaterialSeeder: created ' . count($materials) . ' materials on the public disk.'
+            'InfoMaterialSeeder: created '.count($materials).' materials on the public disk.'
         );
     }
 
@@ -128,20 +128,20 @@ class InfoMaterialSeeder extends Seeder
      */
     private function pdf(string $title, array $lines): string
     {
-        $content = "BT\n/F1 18 Tf\n72 720 Td\n(" . $this->escape($title) . ") Tj\n/F1 11 Tf\n";
+        $content = "BT\n/F1 18 Tf\n72 720 Td\n(".$this->escape($title).") Tj\n/F1 11 Tf\n";
 
         foreach ($lines as $line) {
-            $content .= "0 -22 Td\n(" . $this->escape($line) . ") Tj\n";
+            $content .= "0 -22 Td\n(".$this->escape($line).") Tj\n";
         }
 
-        $content .= "ET";
+        $content .= 'ET';
 
         $objects = [
             '<</Type/Catalog/Pages 2 0 R>>',
             '<</Type/Pages/Kids[3 0 R]/Count 1>>',
             '<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]'
-                . '/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>',
-            '<</Length ' . strlen($content) . ">>\nstream\n" . $content . "\nendstream",
+                .'/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>',
+            '<</Length '.strlen($content).">>\nstream\n".$content."\nendstream",
             '<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>',
         ];
 
@@ -150,19 +150,19 @@ class InfoMaterialSeeder extends Seeder
 
         foreach ($objects as $index => $object) {
             $offsets[] = strlen($pdf);
-            $pdf .= ($index + 1) . " 0 obj\n" . $object . "\nendobj\n";
+            $pdf .= ($index + 1)." 0 obj\n".$object."\nendobj\n";
         }
 
         $xrefOffset = strlen($pdf);
         $size = count($objects) + 1;
 
-        $pdf .= "xref\n0 " . $size . "\n0000000000 65535 f \n";
+        $pdf .= "xref\n0 ".$size."\n0000000000 65535 f \n";
 
         foreach ($offsets as $offset) {
             $pdf .= sprintf("%010d 00000 n \n", $offset);
         }
 
-        $pdf .= "trailer\n<</Size " . $size . "/Root 1 0 R>>\nstartxref\n" . $xrefOffset . "\n%%EOF\n";
+        $pdf .= "trailer\n<</Size ".$size."/Root 1 0 R>>\nstartxref\n".$xrefOffset."\n%%EOF\n";
 
         return $pdf;
     }
@@ -184,7 +184,7 @@ class InfoMaterialSeeder extends Seeder
     {
         return base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAPElEQVR42u3NMQEAAAgDoJvc0BvB'
-            . 'HwaglVzOhAkTJkyYMGHChAkTJkyYMGHChAkTJkyYMGHChAkT9m0LmMgBAaJPGuIAAAAASUVORK5CYII='
+            .'HwaglVzOhAkTJkyYMGHChAkTJkyYMGHChAkTJkyYMGHChAkT9m0LmMgBAaJPGuIAAAAASUVORK5CYII='
         );
     }
 }

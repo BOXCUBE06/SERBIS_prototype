@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Vehicle;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Vehicle;
 
 class VehicleSeeder extends Seeder
 {
@@ -27,15 +27,15 @@ class VehicleSeeder extends Seeder
             ['unit_identifier' => 'AMB-02', 'type' => 'Ambulance', 'specification' => 'TYPE I', 'status' => 'Available'],
             ['unit_identifier' => 'AMB-03', 'type' => 'Ambulance', 'specification' => 'PTU', 'status' => 'Available'],
             ['unit_identifier' => 'AMB-04', 'type' => 'Ambulance', 'specification' => 'PTU', 'status' => 'Available'],
-            
+
             // Rescue Vehicles (2)
             ['unit_identifier' => 'RES-01', 'type' => 'Rescue Vehicle', 'specification' => 'Pickup', 'status' => 'Available'],
             ['unit_identifier' => 'RES-02', 'type' => 'Rescue Vehicle', 'specification' => 'Pickup', 'status' => 'Available'],
-            
+
             // Fire Trucks (2)
             ['unit_identifier' => 'FTR-01', 'type' => 'Fire Truck', 'specification' => null, 'status' => 'Available'],
             ['unit_identifier' => 'FTR-02', 'type' => 'Fire Truck', 'specification' => null, 'status' => 'Available'],
-            
+
             // Boats (6)
             ['unit_identifier' => 'BOT-01', 'type' => 'Boat', 'specification' => 'Portable Boat', 'status' => 'Available'],
             ['unit_identifier' => 'BOT-02', 'type' => 'Boat', 'specification' => 'Portable Boat', 'status' => 'Available'],

@@ -25,7 +25,9 @@ class AnalyticsDashboardTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
 
     protected function setUp(): void

@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class EquipmentBorrowingSeeder extends Seeder
 {
@@ -27,7 +27,7 @@ class EquipmentBorrowingSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'EquipmentBorrowingSeeder skipped: refuses to seed outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -54,15 +54,15 @@ class EquipmentBorrowingSeeder extends Seeder
             $at = fn (?int $hours) => $hours === null ? null : Carbon::now()->subHours($hours);
 
             $rows[] = [
-                'resident_id'  => $residentIds[$s['resident'] % count($residentIds)],
+                'resident_id' => $residentIds[$s['resident'] % count($residentIds)],
                 'equipment_id' => $equipmentIds[$s['equipment'] % count($equipmentIds)],
-                'quantity'     => $s['quantity'],
-                'purpose'      => $s['purpose'],
-                'status'       => $s['status'],
-                'released_at'  => $at($s['released']),
-                'returned_at'  => $at($s['returned']),
-                'created_at'   => $at($s['created']),
-                'updated_at'   => $at($s['updated']),
+                'quantity' => $s['quantity'],
+                'purpose' => $s['purpose'],
+                'status' => $s['status'],
+                'released_at' => $at($s['released']),
+                'returned_at' => $at($s['returned']),
+                'created_at' => $at($s['created']),
+                'updated_at' => $at($s['updated']),
             ];
         }
 
@@ -96,12 +96,12 @@ class EquipmentBorrowingSeeder extends Seeder
             }
         });
 
-        $this->command?->info('EquipmentBorrowingSeeder: created ' . count($rows) . ' borrowings.');
+        $this->command?->info('EquipmentBorrowingSeeder: created '.count($rows).' borrowings.');
 
         if ($releasedByEquipment->isNotEmpty()) {
             $this->command?->info(
                 'EquipmentBorrowingSeeder: decremented available_quantity for '
-                . $releasedByEquipment->count() . ' equipment row(s) to match seeded Released loans.'
+                .$releasedByEquipment->count().' equipment row(s) to match seeded Released loans.'
             );
         }
     }

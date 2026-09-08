@@ -22,7 +22,9 @@ class SmsBlastLoggingTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangayA;
+
     private Barangay $barangayB;
 
     protected function setUp(): void

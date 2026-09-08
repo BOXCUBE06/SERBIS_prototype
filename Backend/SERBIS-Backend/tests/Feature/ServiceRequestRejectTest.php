@@ -26,6 +26,7 @@ class ServiceRequestRejectTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private ServiceRequest $request;
 
     protected function setUp(): void
