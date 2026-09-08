@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Android 13+ (API 33) makes this a runtime permission. Declaring it is
+         what lets the system prompt appear at all; without the declaration the
+         request resolves as denied, the app still registers with FCM, and every
+         notification is dropped with nothing on screen to say so. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="SERBIS"
         android:name="${applicationName}"

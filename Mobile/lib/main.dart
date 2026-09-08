@@ -16,6 +16,7 @@ import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'state/api_service.dart';
 import 'state/app_log.dart';
+import 'state/push_messaging.dart';
 import 'state/request_store.dart';
 import 'state/account_store.dart';
 import 'theme/app_theme.dart';
@@ -33,6 +34,11 @@ void main() {
   }
 
   runApp(const SerbisApp());
+
+  // Deliberately after runApp and deliberately not awaited: registering with
+  // FCM takes a network round trip, and nothing on screen depends on it. It
+  // handles its own failures — see initPushMessaging.
+  unawaited(initPushMessaging());
 }
 
 /// Shown instead of the app when the build is missing its API base URL. Not

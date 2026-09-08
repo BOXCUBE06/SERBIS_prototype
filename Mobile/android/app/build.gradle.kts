@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // google-services.json is NOT in the repository — it carries the Firebase
+    // project's own identifiers and is supplied per environment. Without it
+    // this plugin fails the build at :app:processDebugGoogleServices.
+    id("com.google.gms.google-services")
 }
 
 android {
