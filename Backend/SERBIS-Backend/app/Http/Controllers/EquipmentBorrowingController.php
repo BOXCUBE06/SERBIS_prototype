@@ -87,6 +87,17 @@ class EquipmentBorrowingController extends Controller
             // run ahead of this, so a box of spaces fails `required` here
             // rather than storing as a blank reason.
             'purpose' => 'required|string|max:255',
+            // `sometimes` rather than `required`: a client that says nothing
+            // about fulfilment means the only thing it could have meant before
+            // this existed, which is a pickup. The column's own default writes
+            // that, so an older mobile build keeps working unchanged rather
+            // than having every request rejected until it is updated.
+            'fulfillment_method' => 'sometimes|in:Pickup,Delivery',
+            // Only meaningful for a delivery, and required for one: there is
+            // nowhere else to get it from. tbl_residents holds a barangay and
+            // no street address, so an unanswered delivery is a run nobody can
+            // actually make.
+            'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
         ]);
 
         // The rules above bound the shape and never the amount, so a resident
@@ -112,11 +123,19 @@ class EquipmentBorrowingController extends Controller
             ]);
         }
 
+        $method = $validated['fulfillment_method'] ?? 'Pickup';
+
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
             'equipment_id' => $validated['equipment_id'],
             'quantity' => $validated['quantity'],
             'purpose' => $validated['purpose'],
+            'fulfillment_method' => $method,
+            // Dropped rather than stored when the method is Pickup, so an
+            // address typed into the form and then switched away from cannot
+            // survive as a delivery instruction on a request nobody is
+            // delivering.
+            'delivery_address' => $method === 'Delivery' ? ($validated['delivery_address'] ?? null) : null,
             'status' => 'Pending',
         ]);
 

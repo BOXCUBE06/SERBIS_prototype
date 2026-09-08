@@ -483,6 +483,30 @@
                 >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
               </v-card>
 
+              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Handover</h3>
+              <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
+                <div class="d-flex align-center gap-2">
+                  <v-icon
+                    size="20"
+                    :color="isDelivery(selectedRecord) ? 'primary' : 'medium-emphasis'"
+                  >{{ isDelivery(selectedRecord) ? 'mdi-truck-outline' : 'mdi-storefront-outline' }}</v-icon>
+                  <span class="text-body-1 font-weight-bold text-high-emphasis">
+                    {{ isDelivery(selectedRecord) ? 'Deliver to the borrower' : 'Collect from the MDRRMO office' }}
+                  </span>
+                </div>
+                <!-- Only a delivery has an address, and a delivery without one
+                     is a run nobody can make — so this says so rather than
+                     rendering an empty line. -->
+                <div v-if="isDelivery(selectedRecord)" class="mt-3">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Delivery address</div>
+                  <div
+                    class="text-body-1"
+                    :class="selectedRecord?.delivery_address ? 'text-high-emphasis' : 'text-error font-italic'"
+                    style="white-space: pre-wrap;"
+                  >{{ selectedRecord?.delivery_address || 'No address was recorded — ask the borrower before dispatching.' }}</div>
+                </div>
+              </v-card>
+
               <v-row class="mb-4">
                 <v-col cols="6">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
@@ -886,6 +910,10 @@ const initials = (r) => computeInitials(r)
 const cardLabel = (item) =>
   `${item.equipment?.item_name || 'equipment'} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
 const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.quantity
+
+// Anything that is not explicitly a delivery is a pickup, which is also what
+// every request filed before the column existed was.
+const isDelivery = (item) => item?.fulfillment_method === 'Delivery'
 const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
 const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
 
