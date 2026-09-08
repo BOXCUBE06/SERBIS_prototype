@@ -79,7 +79,7 @@
 
     <!-- Active filters, each removable on its own, plus a clear-all. -->
     <div v-if="!initialLoad && !loadError" class="filter-active d-flex align-center flex-wrap gap-2">
-      <template v-if="activeFilters.length">
+      <template v-if="activeFilters.length > 0">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
         <v-chip
           v-for="f in activeFilters"
@@ -307,9 +307,9 @@
           <template v-slot:no-data>
             <div class="text-center py-12">
               <v-icon size="40" class="text-medium-emphasis mb-2">
-                {{ activeFilters.length ? 'mdi-filter-remove-outline' : 'mdi-inbox-outline' }}
+                {{ activeFilters.length > 0 ? 'mdi-filter-remove-outline' : 'mdi-inbox-outline' }}
               </v-icon>
-              <template v-if="activeFilters.length">
+              <template v-if="activeFilters.length > 0">
                 <div class="text-body-2 font-weight-bold text-high-emphasis">No requests match</div>
                 <v-btn variant="outlined" size="small" class="text-none font-weight-bold mt-3" @click="clearAllFilters">
                   Clear all filters
@@ -378,9 +378,9 @@
         <template v-slot:no-data>
           <div class="text-center py-12">
             <v-icon size="40" class="text-medium-emphasis mb-2">
-              {{ activeFilters.length ? 'mdi-filter-remove-outline' : 'mdi-archive-outline' }}
+              {{ activeFilters.length > 0 ? 'mdi-filter-remove-outline' : 'mdi-archive-outline' }}
             </v-icon>
-            <template v-if="activeFilters.length">
+            <template v-if="activeFilters.length > 0">
               <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests match</div>
               <div class="text-caption text-medium-emphasis mb-3">
                 {{ totalHistory }} record{{ totalHistory === 1 ? '' : 's' }} are hidden by the filters above.
@@ -1092,7 +1092,7 @@ const dueDelta = (item) => {
   if (!due) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  return Math.round((due - today) / 86400000)
+  return Math.round((due - today) / 86_400_000)
 }
 
 // A returned or denied record cannot be overdue, however far past its date it
@@ -1119,7 +1119,7 @@ const dueLabel = (item) => {
 const agingLabel = (item) => {
   const released = item.status === 'Released'
   const anchor = (released && item.released_at) || item.created_at
-  const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
+  const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86_400_000)
   if (days <= 0) return released ? 'Out today' : 'Today'
   return `${days}d ${released ? 'out' : 'waiting'}`
 }

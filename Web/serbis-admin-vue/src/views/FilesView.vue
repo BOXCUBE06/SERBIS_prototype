@@ -146,13 +146,13 @@
           </v-card>
 
           <!-- Empty state -->
-          <div v-else-if="!visibleFiles.length" class="empty-state subtle-surface">
+          <div v-else-if="visibleFiles.length === 0" class="empty-state subtle-surface">
             <v-icon size="48" class="text-medium-emphasis mb-3">mdi-file-hidden</v-icon>
             <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-              {{ files.length ? 'No materials match your filter' : 'No materials published yet' }}
+              {{ files.length > 0 ? 'No materials match your filter' : 'No materials published yet' }}
             </div>
             <div class="text-body-2 text-medium-emphasis">
-              {{ files.length ? 'Try a different search or type.' : 'Upload the first document residents will see.' }}
+              {{ files.length > 0 ? 'Try a different search or type.' : 'Upload the first document residents will see.' }}
             </div>
           </div>
 
@@ -389,15 +389,15 @@ const typeLabel = (ext) => typeLabels[category(ext)]
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes'
   const k = 1024
-  const dm = decimals < 0 ? 0 : decimals
+  const dm = Math.max(decimals, 0)
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
 const relativeDate = (iso) => {
   const then = new Date(iso)
-  const days = Math.floor((Date.now() - then.getTime()) / 86400000)
+  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000)
   if (days <= 0) return 'Today'
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days} days ago`
@@ -481,10 +481,10 @@ const publish = () => {
   xhr.open('POST', API)
   Object.entries(getHeaders()).forEach(([k, v]) => xhr.setRequestHeader(k, v))
 
-  xhr.upload.onprogress = (evt) => {
+  xhr.upload.addEventListener('progress', (evt) => {
     if (evt.lengthComputable) progress.value = Math.round((evt.loaded / evt.total) * 100)
-  }
-  xhr.onload = async () => {
+  })
+  xhr.addEventListener('load', async () => {
     uploading.value = false
     if (xhr.status >= 200 && xhr.status < 300) {
       clearStaged()
@@ -495,7 +495,7 @@ const publish = () => {
       try { msg = JSON.parse(xhr.responseText).message || msg } catch { /* keep default */ }
       apiError.value = msg
     }
-  }
+  })
   xhr.onerror = () => { uploading.value = false; apiError.value = 'Network error during upload' }
   xhr.send(payload)
 }

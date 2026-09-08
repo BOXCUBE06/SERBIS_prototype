@@ -208,7 +208,7 @@
         </v-card>
 
         <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden flex-grow-1 d-flex flex-column" style="min-height: 0;">
-          <div v-if="!filteredItems.length" class="text-center py-12 px-6">
+          <div v-if="filteredItems.length === 0" class="text-center py-12 px-6">
             <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
             <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
           </div>
@@ -464,7 +464,7 @@
 
           <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
             <div class="field-label">{{ group.label }}</div>
-            <div v-if="peopleByRole(group.role).length" class="field-value">
+            <div v-if="peopleByRole(group.role).length > 0" class="field-value">
               {{ peopleByRole(group.role).map(p => p.name).join(', ') }}
             </div>
             <div v-else class="text-caption text-medium-emphasis">None recorded</div>
@@ -754,7 +754,7 @@ const fetchBookings = async () => {
 // an instant approval already has its own stub the moment it exists, so
 // there is nothing left here for a search to find.
 const linkableBookings = computed(() => bookings.value.filter(r =>
-  r.status === 'Booked' && r.vehicle_id && !(r.conduction_requests || []).length
+  r.status === 'Booked' && r.vehicle_id && (r.conduction_requests || []).length === 0
 ))
 const bookingLabel = (r) => {
   const who = r.resident ? `${r.resident.first_name} ${r.resident.last_name}` : (r.walk_in_name || 'Walk-in')
@@ -959,8 +959,8 @@ const printTrip = async (record) => {
     const html = await res.text()
     const blob = new Blob([html], { type: 'text/html' })
     window.open(URL.createObjectURL(blob), '_blank')
-  } catch (e) {
-    notify(e.message || 'Failed to print', 'error')
+  } catch (error) {
+    notify(error.message || 'Failed to print', 'error')
   }
 }
 
@@ -1059,7 +1059,7 @@ const openTripLog = (record) => {
       others: record.others || '',
       ...Object.fromEntries(personnelGroups.map(({ field, role }) => {
         const names = (record.people || []).filter(p => p.role === role).map(p => p.name)
-        return [field, names.length ? names : ['']]
+        return [field, names.length > 0 ? names : ['']]
       })),
     },
   }

@@ -92,18 +92,18 @@
           </div>
 
           <!-- Empty -->
-          <div v-else-if="!filteredServices.length" class="empty-state">
+          <div v-else-if="filteredServices.length === 0" class="empty-state">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-clipboard-list-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ services.length ? 'No services match your search' : 'No services configured yet' }}
+              {{ services.length > 0 ? 'No services match your search' : 'No services configured yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
-              {{ services.length
+              {{ services.length > 0
                 ? 'Try a different keyword, or clear the filters to see the full list.'
                 : 'Services are set up in the database directly — none exist yet.' }}
             </div>
             <v-btn
-              v-if="services.length"
+              v-if="services.length > 0"
               variant="flat"
               color="primary"
               rounded="lg"

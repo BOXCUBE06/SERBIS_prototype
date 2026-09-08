@@ -17,7 +17,7 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
         <!-- Readiness overview -->
-        <v-card v-if="!loading && vehicles.length" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
+        <v-card v-if="!loading && vehicles.length > 0" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
           <div class="d-flex flex-wrap align-center justify-space-between gap-6">
             <div class="readiness-headline">
               <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Fleet Readiness</div>
@@ -50,7 +50,7 @@
         </v-card>
 
         <!-- Controls -->
-        <div v-if="!loading && vehicles.length" class="d-flex flex-wrap align-center gap-3 mb-6">
+        <div v-if="!loading && vehicles.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -83,13 +83,13 @@
         </template>
 
         <!-- Empty -->
-        <div v-else-if="!filteredVehicles.length" class="empty-state group-card">
+        <div v-else-if="filteredVehicles.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-truck-remove-outline</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ vehicles.length ? 'No units match your filters' : 'No units in the fleet yet' }}
+            {{ vehicles.length > 0 ? 'No units match your filters' : 'No units in the fleet yet' }}
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
+            {{ vehicles.length > 0 ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
           </div>
         </div>
 
@@ -289,7 +289,7 @@ const applyServerErrors = async (res) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
-    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Save failed'
 }
@@ -309,7 +309,7 @@ const counts = computed(() => {
   for (const v of vehicles.value) c[v.status] = (c[v.status] || 0) + 1
   return c
 })
-const pct = (s) => vehicles.value.length ? `${(counts.value[s] / vehicles.value.length) * 100}%` : '0%'
+const pct = (s) => vehicles.value.length > 0 ? `${(counts.value[s] / vehicles.value.length) * 100}%` : '0%'
 
 const typeOptions = computed(() => ['All', ...VEHICLE_TYPES.filter((t) => vehicles.value.some((v) => v.type === t))])
 

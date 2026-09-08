@@ -354,7 +354,7 @@ const applyServerErrors = (data) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
-    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data?.message || 'Save failed'
 }

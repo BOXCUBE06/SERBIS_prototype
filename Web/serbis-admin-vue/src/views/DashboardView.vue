@@ -22,7 +22,7 @@
             <v-list density="compact" class="pa-0">
               <v-list-subheader class="font-weight-bold text-uppercase py-2">System Logs</v-list-subheader>
               <v-divider></v-divider>
-              <template v-if="systemLogs.length">
+              <template v-if="systemLogs.length > 0">
                 <v-list-item v-for="(log, i) in systemLogs.slice(0, 5)" :key="'log-'+i" class="py-3 border-b">
                   <template v-slot:prepend>
                     <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
@@ -194,7 +194,7 @@
             </div>
           </v-card-item>
           <v-card-text class="pt-2">
-            <div v-if="!topZones.length" class="text-center text-caption text-medium-emphasis py-8">
+            <div v-if="topZones.length === 0" class="text-center text-caption text-medium-emphasis py-8">
               No zone activity yet
             </div>
             <div v-else>
@@ -244,7 +244,7 @@
           <v-card-text class="pt-2">
             <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
 
-            <div v-else-if="!filteredFeed.length" class="text-center text-caption text-medium-emphasis py-8">
+            <div v-else-if="filteredFeed.length === 0" class="text-center text-caption text-medium-emphasis py-8">
               No activity {{ periodLabelFor(feedPeriod).toLowerCase() }}
             </div>
 
@@ -290,7 +290,7 @@
           </div>
           <v-card-text class="pt-0">
             <v-sheet height="320" color="transparent">
-              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
+              <Bar v-if="chartDataRaw && volumeChartData.labels.length > 0" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
               <div v-else-if="chartDataRaw" class="text-caption text-medium-emphasis text-center py-8">No data yet</div>
               <div class="d-flex align-center justify-center h-100" v-else>
                 <v-progress-circular indeterminate color="primary"></v-progress-circular>
@@ -440,7 +440,7 @@ const getHeatColor = (percentage) => {
 // Top 5 zones ranked by request volume, percentage relative to the busiest zone
 const topZones = computed(() => {
   const list = mapDataByPeriod.value[zonesPeriod.value] || []
-  if (!list.length) return []
+  if (list.length === 0) return []
   const max = Math.max(...list.map(b => b.requests))
   return [...list]
     .sort((a, b) => b.requests - a.requests)
@@ -453,7 +453,7 @@ const heroTotal = computed(() => {
   if (!chartDataRaw.value) return 0
   if (heroPeriod.value === 'today') {
     const series = chartDataRaw.value.bar.week
-    return series.data[series.data.length - 1] || 0
+    return series.data.at(-1) || 0
   }
   const series = chartDataRaw.value.bar[heroPeriod.value]
   return series.data.reduce((a, b) => a + b, 0)

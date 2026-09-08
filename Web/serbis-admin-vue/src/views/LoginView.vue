@@ -334,7 +334,7 @@ const handleLogin = async () => {
       // that was never the problem.
       errorMessage.value = data.message || 'This account is no longer active. Contact an MDRRMO admin.'
     } else if (response.status === 429) {
-      const retryAfter = parseInt(response.headers.get('Retry-After'), 10)
+      const retryAfter = Number.parseInt(response.headers.get('Retry-After'), 10)
       const wait = Number.isNaN(retryAfter) ? 60 : retryAfter
       startLockout(wait)
       errorMessage.value = `Too many sign-in attempts. Wait ${wait} seconds, then try again.`
@@ -349,7 +349,7 @@ const handleLogin = async () => {
     } else {
       errorMessage.value = 'Something went wrong. Please try again later.'
     }
-  } catch (error) {
+  } catch {
     errorMessage.value = 'Network error. Please check your connection.'
   } finally {
     loading.value = false
@@ -397,7 +397,7 @@ const handleMfaSubmit = async () => {
     } else {
       mfaError.value = 'Something went wrong. Please try again.'
     }
-  } catch (error) {
+  } catch {
     mfaError.value = 'Network error. Please check your connection.'
   } finally {
     mfaLoading.value = false

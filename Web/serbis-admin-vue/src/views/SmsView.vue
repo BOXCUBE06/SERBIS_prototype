@@ -187,7 +187,7 @@
                      counter cannot tell them apart — so the warning has to name
                      the character that moved it, not just report the total. -->
                 <v-alert
-                  v-if="sms.offendingCharacters.length"
+                  v-if="sms.offendingCharacters.length > 0"
                   type="warning"
                   variant="tonal"
                   density="compact"
@@ -386,7 +386,7 @@ const applyServerErrors = (data) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
-    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data?.message || 'Failed to send blast'
 }
@@ -469,7 +469,7 @@ const fetchRecipientCount = async (key) => {
     // Cached on success only. A failed or throttled attempt must stay retryable
     // rather than be remembered as an answer.
     countCache.set(key, data.count)
-  } catch (error) {
+  } catch {
     if (requestId !== countRequestId) return
 
     // Deliberately not the page-level alert: failing to preview a count is not
@@ -554,7 +554,7 @@ const fetchBalance = async () => {
       expiresOn: data.data?.expired_on ?? '',
       message: data.message ?? 'SMS credit unavailable',
     }
-  } catch (error) {
+  } catch {
     // Swallowed on purpose. GET /sms/balance already answers 200 on every
     // failure path it knows about, so this catches only a dead network — and a
     // missing balance is not a reason to redden a form that still sends.

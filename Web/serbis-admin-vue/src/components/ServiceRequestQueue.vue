@@ -81,12 +81,12 @@
           variant="text"
           class="text-none font-weight-bold px-6"
           height="40"
-          :disabled="!filteredAndSortedRequests.length"
+          :disabled="filteredAndSortedRequests.length === 0"
           @click="exportCsv"
         >
           <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ filteredAndSortedRequests.length ? 'Export' : 'Nothing to export' }}
-          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
+          {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
+          <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
         </v-btn>
         </div>
       </div>
@@ -202,7 +202,7 @@
           <div class="flex-grow-1 overflow-y-auto">
             <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
 
-            <div v-else-if="!pagedRequests.length" class="text-center text-caption text-medium-emphasis py-10">
+            <div v-else-if="pagedRequests.length === 0" class="text-center text-caption text-medium-emphasis py-10">
               {{ emptyListMessage }}
             </div>
 
@@ -433,7 +433,7 @@
                      every break collapsed to a space and the whole thing read
                      as one run-on sentence. -->
                 <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <template v-if="descriptionLines.length">
+                  <template v-if="descriptionLines.length > 0">
                     <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
                   </template>
                   <template v-else>No description provided by the Head of the Family.</template>
@@ -451,7 +451,7 @@
                    reads as a broken image rather than a small one. Fixed
                    180x140 tiles, filled with `cover`, and the full picture is
                    a click away. -->
-              <div class="detail-group" v-if="attachments.length">
+              <div class="detail-group" v-if="attachments.length > 0">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
 
                 <!-- A flex row is a block box, so it stretches to the full
@@ -1012,7 +1012,7 @@
             <v-skeleton-loader v-for="n in 4" :key="n" type="list-item-two-line" class="mb-3"></v-skeleton-loader>
           </div>
 
-          <template v-else-if="dayView.units.length">
+          <template v-else-if="dayView.units.length > 0">
             <!-- Hour scale, shared by every track below it. -->
             <div class="day-view-scale">
               <span v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-scale-label" :style="{ left: mark.left }">{{ mark.label }}</span>
@@ -1694,7 +1694,7 @@ const requesterName = (item) =>
 const requesterInitials = (item) => {
   if (item?.resident) return `${item.resident.first_name?.charAt(0) || ''}${item.resident.last_name?.charAt(0) || ''}`
   const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
-  return parts.length ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
+  return parts.length > 0 ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
 }
 const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_contact_number || 'N/A'
 const requesterBarangay = (item) => {
@@ -1843,12 +1843,12 @@ const descriptionLines = computed(() => {
   // Only from the end. The resident's own words sit in the middle of the block
   // and can legitimately begin with either word -- matching anywhere would eat
   // a sentence that happens to start "Contact the barangay hall first".
-  while (kept.length && META_TAIL.test(kept[kept.length - 1])) kept.pop()
+  while (kept.length > 0 && META_TAIL.test(kept.at(-1))) kept.pop()
 
   // A form submitted with nothing typed into it reduces to exactly the meta
   // lines, and stripping all of them would leave a blank card where there was
   // text a moment ago. Show what there is rather than nothing.
-  return kept.length ? kept : lines
+  return kept.length > 0 ? kept : lines
 })
 
 const filteredAndSortedRequests = computed(() => {
@@ -1907,7 +1907,7 @@ const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
 const exportCsv = () => {
   const rows = filteredAndSortedRequests.value
-  if (!rows.length) return
+  if (rows.length === 0) return
 
   const header = ['Request ID', 'Head of the Family', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
   const body = rows.map(r => [
@@ -2000,7 +2000,7 @@ const fetchData = async () => {
     residents.value = resData.data || resData
     services.value = svcData.data || svcData
 
-    if (!selectedRequest.value && requests.value.length) {
+    if (!selectedRequest.value && requests.value.length > 0) {
       selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
     } else if (selectedRequest.value) {
       // Keep the panel in sync with the freshly-fetched copy of the selected request
@@ -2314,8 +2314,8 @@ const dayViewSegmentStyle = (window) => {
   const dayStart = new Date(y, m - 1, d)
   const minutesInDay = 24 * 60
 
-  const startMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_at) - dayStart) / 60000))
-  const endMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_end) - dayStart) / 60000))
+  const startMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_at) - dayStart) / 60_000))
+  const endMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_end) - dayStart) / 60_000))
 
   return {
     left: `${(startMin / minutesInDay) * 100}%`,
@@ -2456,7 +2456,7 @@ const bulkDisapprove = async (reason) => {
     selectedIds.clear()
     await fetchData()
     reasonDialog.value.open = false
-  } catch (error) {
+  } catch {
     apiError.value = 'Failed to update one or more requests'
     reasonDialog.value.error = 'Failed to update one or more requests'
   } finally {

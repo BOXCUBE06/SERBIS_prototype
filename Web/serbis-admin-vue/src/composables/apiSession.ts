@@ -33,7 +33,7 @@ export function installSessionExpiryHandler(router: Router): void {
 
     if (response.status !== 401) return response
 
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url)
 
     if (!url.startsWith(API_BASE)) return response
     if (CREDENTIAL_ROUTES.some((route) => url.startsWith(`${API_BASE}${route}`))) return response

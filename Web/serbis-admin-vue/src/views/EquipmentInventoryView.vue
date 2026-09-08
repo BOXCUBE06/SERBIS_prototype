@@ -17,7 +17,7 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
         <!-- Metric tiles -->
-        <v-row v-if="!initialLoad && equipments.length" class="mb-2">
+        <v-row v-if="!initialLoad && equipments.length > 0" class="mb-2">
           <v-col v-for="m in metricTiles" :key="m.key" cols="6" md="3">
             <button type="button" class="metric-tile group-card" :class="{ 'metric-tile--active': m.filter && statusFilter === m.filter }" @click="m.filter && (statusFilter = statusFilter === m.filter ? 'All' : m.filter)">
               <div class="metric-icon" :style="{ background: `rgba(var(--v-theme-${m.color}), 0.12)` }">
@@ -32,7 +32,7 @@
         </v-row>
 
         <!-- Controls -->
-        <div v-if="!initialLoad && equipments.length" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
+        <div v-if="!initialLoad && equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -55,13 +55,13 @@
         </v-card>
 
         <!-- Empty -->
-        <div v-else-if="!filteredEquipments.length" class="empty-state group-card">
+        <div v-else-if="filteredEquipments.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-package-variant</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ equipments.length ? 'No items match your filters' : 'No equipment yet' }}
+            {{ equipments.length > 0 ? 'No items match your filters' : 'No equipment yet' }}
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            {{ equipments.length ? 'Clear the search or filter to see all items.' : 'Add the first resource category to get started.' }}
+            {{ equipments.length > 0 ? 'Clear the search or filter to see all items.' : 'Add the first resource category to get started.' }}
           </div>
         </div>
 

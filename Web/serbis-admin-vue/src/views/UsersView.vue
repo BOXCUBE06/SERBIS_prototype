@@ -115,18 +115,18 @@
           </div>
 
           <!-- Empty -->
-          <div v-else-if="!filteredAndSortedResidents.length" class="empty-state flex-grow-1">
+          <div v-else-if="filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
+              {{ residents.length > 0 ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
-              {{ residents.length
+              {{ residents.length > 0
                 ? 'Try a different keyword, status, or barangay.'
                 : 'Add the first head of the family account to get started.' }}
             </div>
             <v-btn
-              v-if="residents.length"
+              v-if="residents.length > 0"
               color="primary"
               variant="flat"
               rounded="lg"
@@ -790,7 +790,7 @@ const requiredRule = (label) => (v) =>
   (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
 
 const emailRule = (v) =>
-  !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
+  !v || /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
 
 // Deliberately loose: 09xx, +639xx and landlines all reach residents here, and
 // a strict pattern would refuse numbers the office actually holds.
@@ -822,7 +822,7 @@ const applyServerErrors = async (res) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
-    return leftovers.length ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Request failed'
 }
