@@ -1010,9 +1010,9 @@ class ServiceRequestController extends Controller
             // Only Available is promoted. A unit already Dispatched to this same
             // request stays as it is — every PUT re-sends the current vehicle_id
             // (see the docblock above), so this is the common case, not an edge
-            // one, and must stay a silent no-op. One under Maintenance is also a
-            // silent no-op, deliberately — see
-            // test_a_vehicle_under_maintenance_is_not_pressed_into_service.
+            // one, and must stay a silent no-op. A unit under Maintenance no
+            // longer reaches here at all: update() rejects it before the
+            // transaction opens (ServiceRequestVehicleGuardTest).
             if ($vehicle && $vehicle->status === 'Available') {
                 $vehicle->update(['status' => 'Dispatched']);
             } elseif ($vehicle && $vehicle->status === 'Dispatched' && $incomingVehicleId !== $currentVehicleId) {
@@ -1273,6 +1273,54 @@ class ServiceRequestController extends Controller
             if ($missing) {
                 throw ValidationException::withMessages([
                     'status' => 'Cannot resolve — missing '.implode(', ', $missing).'.',
+                ]);
+            }
+        }
+
+        // The picker's two rules, which until now lived only in the panel
+        // (ServiceRequestQueue.vue's availableVehicles): a unit must be
+        // Available, and its type must match the board — an ambulance request
+        // takes an Ambulance and nothing else, every other request takes
+        // anything but an Ambulance. These rules validated nothing beyond
+        // exists:tbl_vehicles, so a direct API call could put a Fire Truck on
+        // an ambulance booking or a unit under Maintenance on any request.
+        //
+        // Two exemptions, both of them the common case rather than an edge:
+        // the unit already attached to this request (every PUT re-sends the
+        // current vehicle_id — see syncFleet's docblock — and that unit is
+        // Dispatched, not Available), and a move to a terminal status, where
+        // the vehicle is being handed back rather than claimed.
+        $incomingVehicleId = isset($validated['vehicle_id']) ? (int) $validated['vehicle_id'] : null;
+
+        $movingToTerminal = in_array(
+            $validated['status'] ?? $serviceRequest->status,
+            self::TERMINAL_STATUSES,
+            true,
+        );
+
+        if ($incomingVehicleId
+            && $incomingVehicleId !== $serviceRequest->vehicle_id
+            && ! $movingToTerminal
+        ) {
+            $incomingVehicle = Vehicle::where('vehicle_id', $incomingVehicleId)->first();
+
+            if ($isAmbulanceRequest !== ($incomingVehicle->type === 'Ambulance')) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => $isAmbulanceRequest
+                        ? 'That unit is not an Ambulance.'
+                        : 'An Ambulance is only assigned to an ambulance request.',
+                ]);
+            }
+
+            if ($incomingVehicle->status === 'Maintenance') {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is under Maintenance and cannot be assigned.',
+                ]);
+            }
+
+            if ($incomingVehicle->status !== 'Available') {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => $incomingVehicle->unit_identifier.' is no longer available — pick another unit.',
                 ]);
             }
         }
