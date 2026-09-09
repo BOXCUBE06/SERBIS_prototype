@@ -47,7 +47,7 @@
                   :page="systemPage"
                   :loading="loading"
                   hover
-                  class="bg-transparent"
+                  class="bg-transparent logs-table"
                   @update:options="onSystemOptions"
                 >
                   <template v-slot:item.rowNumber="{ index }">
@@ -62,6 +62,9 @@
                   <template v-slot:item.created_at="{ item }">
                     {{ formatDate(item.created_at) }}
                   </template>
+                  <template v-slot:item.description="{ item }">
+                    <span class="cell-truncate" :title="item.description">{{ item.description }}</span>
+                  </template>
                 </v-data-table-server>
               </v-window-item>
 
@@ -74,11 +77,15 @@
                   :page="smsPage"
                   :loading="loading"
                   hover
-                  class="bg-transparent"
+                  class="bg-transparent logs-table"
                   @update:options="onSmsOptions"
                 >
                   <template v-slot:item.rowNumber="{ index }">
                     <span class="row-number text-medium-emphasis">{{ smsRowNumber(index) }}</span>
+                  </template>
+
+                  <template v-slot:item.message="{ item }">
+                    <span class="cell-truncate" :title="item.message">{{ item.message }}</span>
                   </template>
 
                   <template v-slot:item.status="{ item }">
@@ -266,5 +273,16 @@ onMounted(() => {
   font-size: 0.95rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Fixed layout holds both tables to the header widths declared in
+   systemHeaders/smsHeaders; without it, Description and Message Content
+   wrap freely and every row is a different height. */
+.logs-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 760px; }
+.cell-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

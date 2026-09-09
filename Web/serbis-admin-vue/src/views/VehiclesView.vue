@@ -528,7 +528,9 @@ onMounted(fetchVehicles)
   100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0); }
 }
 
-/* Fleet list */
+/* Fleet list. Fixed layout keeps the five columns stable regardless of unit-
+   identifier length. */
+.fleet-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
 .fleet-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;

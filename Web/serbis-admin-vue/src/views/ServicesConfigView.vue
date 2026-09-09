@@ -295,8 +295,8 @@ const headers = [
   // it needs only the slot's own index, which is already relative to the
   // current sorted+paginated page.
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Service', key: 'service_name', minWidth: '260px' },
-  { title: 'Description', key: 'description', sortable: false, minWidth: '280px' },
+  { title: 'Service', key: 'service_name', width: '26%' },
+  { title: 'Description', key: 'description', sortable: false, width: '28%' },
   { title: 'Category', key: 'category', value: (item) => categoryOf(item).label, width: '170px' },
   { title: 'Date added', key: 'created_at', width: '150px' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '230px' },
@@ -485,7 +485,11 @@ onMounted(fetchServices)
 }
 
 /* Table — larger type and taller rows than Vuetify's default, so a long
-   list stays readable at arm's length. */
+   list stays readable at arm's length. Fixed layout keeps the six columns
+   at their declared widths; the two `minWidth`-only columns (Service,
+   Description) became explicit percentages because fixed layout only
+   reads `width` to size a column. */
+.services-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 980px; }
 .services-table :deep(th) {
   background: rgba(var(--v-theme-on-surface), 0.04) !important;
   font-size: 0.9rem !important;

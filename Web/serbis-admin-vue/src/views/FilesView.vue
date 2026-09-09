@@ -593,7 +593,9 @@ onMounted(fetchFiles)
 
 .staging-card { border: 1px solid rgba(var(--v-theme-primary), 0.4); }
 
-/* Materials table */
+/* Materials table. Fixed layout keeps the seven columns stable regardless
+   of file-title length. */
+.materials-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 700px; }
 .materials-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;

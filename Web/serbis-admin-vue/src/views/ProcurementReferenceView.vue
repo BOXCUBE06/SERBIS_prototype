@@ -95,15 +95,15 @@
             item-value="borrow_id"
             :items-per-page="10"
             density="comfortable"
-            class="text-body-2"
+            class="text-body-2 procurement-table"
           >
             <template v-slot:item.number="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.other_equipment_text="{ item }">
-              <div class="font-weight-bold text-high-emphasis">{{ item.other_equipment_text }}</div>
-              <div v-if="item.purpose" class="text-caption text-medium-emphasis cell-truncate">{{ item.purpose }}</div>
+              <div class="font-weight-bold text-high-emphasis cell-truncate" :title="item.other_equipment_text">{{ item.other_equipment_text }}</div>
+              <div v-if="item.purpose" class="text-caption text-medium-emphasis cell-truncate" :title="item.purpose">{{ item.purpose }}</div>
             </template>
 
             <template v-slot:item.quantity="{ item }">
@@ -226,9 +226,9 @@ const rowNumber = useRowNumbers(filtered, 'borrow_id')
 
 const headers = [
   { title: '#', key: 'number', sortable: false, width: 64 },
-  { title: 'Item requested', key: 'other_equipment_text' },
+  { title: 'Item requested', key: 'other_equipment_text', width: '32%' },
   { title: 'Qty', key: 'quantity', width: 90 },
-  { title: 'Requested by', key: 'resident', sortable: false },
+  { title: 'Requested by', key: 'resident', sortable: false, width: '24%' },
   { title: 'Date filed', key: 'created_at', width: 150 },
   { title: 'Request status', key: 'status', width: 170 },
 ]
@@ -266,6 +266,11 @@ onMounted(() => load({ ifEmpty: true }))
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Fixed layout keeps the six columns at their declared widths; the
+   resident-typed equipment name is the one field here with no length
+   limit at the source. */
+.procurement-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 760px; }
 
 .row-number {
   font-variant-numeric: tabular-nums;

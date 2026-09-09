@@ -363,12 +363,16 @@
         </template>
 
         <template v-slot:item.barangay="{ item }">
-          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || 'N/A'">
+            {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          </span>
         </template>
 
         <template v-slot:item.equipment="{ item }">
-          {{ itemName(item) }}
-          <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+          <span class="cell-truncate" :title="itemName(item)">
+            {{ itemName(item) }}
+            <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+          </span>
         </template>
 
         <template v-slot:item.created_at="{ item }">

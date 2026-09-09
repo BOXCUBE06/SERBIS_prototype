@@ -306,7 +306,7 @@ const clearFieldErrors = () => { fieldErrors.value = {} }
 
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Name', key: 'name', sortable: false },
+  { title: 'Name', key: 'name', sortable: false, width: '55%' },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '220px' },
 ]
@@ -559,4 +559,9 @@ onMounted(() => {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* `elegant-table` names a pattern this table doesn't otherwise carry — see
+   the commit message for the naming decision. Fixed layout keeps the four
+   columns stable regardless of name/email length. */
+.elegant-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 520px; }
 </style>

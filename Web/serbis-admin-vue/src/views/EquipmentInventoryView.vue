@@ -407,7 +407,9 @@ onMounted(fetchEquipments)
 .metric-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
 .metric-number { font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
 
-/* Inventory list */
+/* Inventory list. Fixed layout keeps the six columns stable at their
+   declared widths regardless of item-name length. */
+.inventory-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
 .inventory-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;
