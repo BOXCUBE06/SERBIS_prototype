@@ -3,21 +3,20 @@
     <v-row>
       <v-col cols="12">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="page-title text-high-emphasis">Procurement Reference</h2>
-            <div class="page-subtitle text-medium-emphasis">
-              Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC
-            </div>
-          </div>
-          <v-btn
-            variant="tonal" rounded="lg" height="48" class="px-6 text-none font-weight-bold"
-            :loading="reloading" @click="refresh"
-          >
-            <v-icon start size="20">mdi-refresh</v-icon> Refresh
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Procurement Reference"
+          subtitle="Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn
+              variant="tonal" rounded="lg" height="48" class="px-6 text-none font-weight-bold"
+              :loading="reloading" @click="refresh"
+            >
+              <v-icon start size="20">mdi-refresh</v-icon> Refresh
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert
           v-if="loadError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg" role="alert"
@@ -148,6 +147,7 @@ import { fmtDate } from '@/composables/adminUi'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 import { useRowNumbers } from '@/composables/rowNumber'
+import PageHeader from '@/components/PageHeader.vue'
 
 /**
  * The MDRRMC procurement reference: every borrow request that named an item the

@@ -2,24 +2,25 @@
   <v-container fluid class="fill-height align-start pa-8 bg-background">
     <v-row>
       <v-col cols="12">
-        <div class="d-flex justify-space-between align-center mb-6">
-          <div>
-            <h2 class="page-title text-high-emphasis">Activity Logs</h2>
-            <div class="page-subtitle text-medium-emphasis">Who did what in this panel, and every text blast that was sent</div>
-          </div>
-          
-          <v-text-field
-            v-model="search"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search logs..."
-            variant="solo"
-            density="compact"
-            hide-details
-            rounded="lg"
-            class="elevation-1"
-            style="max-width: 300px;"
-          ></v-text-field>
-        </div>
+        <PageHeader
+          title="Activity Logs"
+          subtitle="Who did what in this panel, and every text blast that was sent"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              placeholder="Search logs..."
+              variant="solo"
+              density="compact"
+              hide-details
+              rounded="lg"
+              class="elevation-1"
+              style="width: 300px; max-width: 100%;"
+            ></v-text-field>
+          </template>
+        </PageHeader>
 
         <v-card elevation="0" border rounded="xl" class="bg-surface">
           <v-tabs v-model="activeTab" color="primary" class="border-b px-4">
@@ -121,6 +122,7 @@ import { ref, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const activeTab = ref('system')
 const search = ref('')

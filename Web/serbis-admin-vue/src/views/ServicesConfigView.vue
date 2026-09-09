@@ -3,15 +3,11 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="page-title text-high-emphasis">Manage Services</h2>
-            <div class="page-subtitle text-medium-emphasis">
-              What residents can request from the MDRRMO, and how each one appears in the app
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Manage Services"
+          subtitle="What residents can request from the MDRRMO, and how each one appears in the app"
+          class="mb-6"
+        />
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
           {{ apiError }}
@@ -270,6 +266,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/services`
 
@@ -468,15 +465,6 @@ onMounted(fetchServices)
 .search-field { width: 340px; max-width: 100%; }
 .filter-field { width: 220px; max-width: 100%; }
 
-.btn-soft-shadow {
-  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.btn-soft-shadow:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important;
-}
-
 .table-card {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
@@ -563,8 +551,5 @@ onMounted(fetchServices)
   text-align: center; padding: 72px 16px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .btn-soft-shadow { transition: none; }
-  .btn-soft-shadow:hover { transform: none; }
-}
+
 </style>

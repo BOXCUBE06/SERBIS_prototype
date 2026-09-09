@@ -5,26 +5,23 @@
       <div class="residents-main">
         <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
 
-          <div class="residents-toolbar px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
-            <div>
-              <h2 class="page-title text-high-emphasis">Residents</h2>
-              <!-- Says "of" only when something is being hidden. The permanent
-                   "N of N" read as a standing accusation that a filter was on.
-                   ("residents" here is deliberate and ruled on; the heading
-                   above it is the page/nav title.) -->
-              <div class="page-subtitle text-medium-emphasis">
-                <template v-if="filteredAndSortedResidents.length === residents.length">
-                  <strong class="text-high-emphasis">{{ residents.length }}</strong>
-                  {{ residents.length === 1 ? 'resident' : 'residents' }}
-                </template>
-                <template v-else>
-                  <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
-                  of {{ residents.length }} residents
-                </template>
-              </div>
-            </div>
+          <PageHeader title="Residents" class="residents-toolbar px-6 py-3 border-b flex-shrink-0">
+            <!-- Says "of" only when something is being hidden. The permanent
+                 "N of N" read as a standing accusation that a filter was on.
+                 ("residents" here is deliberate and ruled on; the heading
+                 above it is the page/nav title.) -->
+            <template v-slot:subtitle>
+              <template v-if="filteredAndSortedResidents.length === residents.length">
+                <strong class="text-high-emphasis">{{ residents.length }}</strong>
+                {{ residents.length === 1 ? 'resident' : 'residents' }}
+              </template>
+              <template v-else>
+                <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
+                of {{ residents.length }} residents
+              </template>
+            </template>
 
-            <div class="d-flex flex-wrap gap-3 align-center">
+            <template v-slot:actions>
               <v-text-field
                 v-model="search"
                 prepend-inner-icon="mdi-magnify"
@@ -59,8 +56,8 @@
               >
                 <v-icon start>mdi-plus</v-icon> Add Head of the Family
               </v-btn>
-            </div>
-          </div>
+            </template>
+          </PageHeader>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
                all without sight: the selected barangay was carried by colour
@@ -496,6 +493,7 @@ import {
 } from '@/composables/residentStatus'
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 const { mdAndUp } = useDisplay()
 

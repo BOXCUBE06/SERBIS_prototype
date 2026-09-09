@@ -24,12 +24,13 @@
            that page's title and waste a whole row's height on redundant
            "Ambulance Bookings" text the page-header's own title already
            covers (layout redesign follow-up). -->
-      <div v-if="standalone" class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
-        <div>
-          <h2 class="page-title text-high-emphasis">{{ scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests' }}</h2>
-          <div class="page-subtitle text-medium-emphasis">{{ requestCounts.All }} {{ scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays' }}</div>
-        </div>
-        <div class="d-flex align-center gap-3">
+      <PageHeader
+        v-if="standalone"
+        :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
+        :subtitle="`${requestCounts.All} ${scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays'}`"
+        class="mb-3"
+      >
+        <template v-slot:actions>
         <!-- The adviser's ask: someone who shows up at the office in person
              rather than through the app, with or without an account. A
              separate button rather than folding this into the export/filter
@@ -88,8 +89,8 @@
           {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
           <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
         </v-btn>
-        </div>
-      </div>
+        </template>
+      </PageHeader>
 
       <!-- Split view: list + detail panel.
            Side by side on a desk, which is where this screen is used. Below the
@@ -1306,6 +1307,7 @@ import { getToken } from '@/composables/authToken'
 import { outcomeLabel, outcomePillClass, isBookingOverdue } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
 // Bookings tab on the Ambulance Dispatch Requests page. 'other': every

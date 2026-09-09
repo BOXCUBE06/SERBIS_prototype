@@ -1,14 +1,12 @@
 <template>
   <v-container fluid class="pa-6 dashboard-bg">
 
-    <!-- Toolbar -->
-    <div class="d-flex justify-space-between align-center flex-wrap gap-4 mb-6">
-      <div>
-        <h2 class="page-title text-high-emphasis">Dashboard</h2>
-        <div class="page-subtitle text-medium-emphasis">Request volume, barangay spread and fleet status. Each card sets its own period.</div>
-      </div>
-
-      <div class="d-flex align-center gap-4 flex-wrap">
+    <PageHeader
+      title="Dashboard"
+      subtitle="Request volume, barangay spread and fleet status. Each card sets its own period."
+      class="mb-6"
+    >
+      <template v-slot:actions>
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
@@ -42,8 +40,8 @@
         </v-menu>
 
         <v-avatar color="primary" size="44" class="cursor-pointer font-weight-bold text-white">J</v-avatar>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- KPI strip: every headline number in one scannable row, independent of
          the trend card's height. Cramming these into a sidebar next to the
@@ -308,6 +306,7 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import PageHeader from '@/components/PageHeader.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { statusAccent } from '@/composables/borrowingStatus'
 import {

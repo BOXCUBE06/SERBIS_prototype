@@ -105,23 +105,35 @@
 .v-theme--dark .pill-cancelled,
 .v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
 
-/* Page header — the title/subtitle row every view opens with. Was drawn
- * three different ways: text-h4/text-h5 for the title (8 views vs. 4),
- * font-weight-bold/font-weight-black (9 vs. 3), text-subtitle-1/
- * text-subtitle-2/text-body-2 for the subtitle (4 vs. 7 vs. 1), and two
- * views (ConductionRequestView, EquipmentBorrowingView) already had a class
- * named `.page-header` — locally scoped, two different values (16px and
- * 28px margin), neither reaching the other ten views. The values below are
- * exactly what `text-h4 font-weight-bold` + `text-subtitle-2` already
- * compute to live (VehiclesView, measured 2026-09-09) — the single most
- * common existing pairing, four views already matched it exactly, so this
- * is a no-op there and a fix everywhere else.
+/* Page header typography — used by components/PageHeader.vue, which now
+ * owns the header ROW (title, subtitle, trailing actions, one flex/gap
+ * rule) for every route; see that file for what it deliberately leaves to
+ * each page (outer margin, action-button styling). This pair used to be a
+ * straight copy of whatever `text-h4 font-weight-bold` + `text-subtitle-2`
+ * computed to live (24px / 16px, a 1.5 ratio) — copying a Vuetify utility
+ * pairing isn't the same as choosing a scale, and Impeccable's Operate-mode
+ * guidance (SKILL.md, loaded 2026-09-09) is explicit that product UI wants
+ * a tighter step ratio, ~1.125-1.2, than a marketing surface: more type
+ * elements are on screen at once here, and loose contrast between them
+ * reads as noise, not hierarchy.
  *
- * Layout (flex/gap/margin) is deliberately NOT part of this — each page's
- * header row keeps its own wrapper markup and spacing; ConductionRequestView
- * in particular needs `flex-shrink: 0` in a height-locked flex column that
- * has nothing to do with how the title looks. Only the text scale is
- * shared here, which is what was actually inconsistent. */
+ * Re-derived instead from the app's own real, already-distinct sizes,
+ * measured live rather than assumed (this build's text-h3/text-h6 both
+ * collapse to one shared 18.72px dialog/section-title tier; text-caption/
+ * text-body-1/text-body-2/text-subtitle-2 all collapse to plain 16px body
+ * text — Vuetify's utility scale is thinner here than its class names
+ * suggest, which is exactly why these are hand-authored px values rather
+ * than utility classes):
+ *   .page-title    24px — one step above the existing ~18.72px section-
+ *                  title tier, so a page's own identity still reads as the
+ *                  biggest thing on it without shouting. Unchanged from
+ *                  the previous pass.
+ *   .page-subtitle 14px — one step below the app's 16px body text, not
+ *                  equal to it. Tightened from 16px: a page subtitle (or
+ *                  the "N of M" counter line it doubles as, see below) is
+ *                  secondary information and reads better denser, and
+ *                  16px was never a real design decision, just what a
+ *                  Vuetify utility happened to fall back to. */
 .page-title {
   font-size: 24px;
   font-weight: 700;
@@ -129,16 +141,35 @@
   letter-spacing: -0.48px;
 }
 .page-subtitle {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 24px;
+  line-height: 20px;
+}
+
+/* The primary create-action button's hover lift — "Add Unit", "Add
+ * Equipment", "Add staff account". Was byte-identical in VehiclesView,
+ * EquipmentInventoryView and StaffView, plus a fourth, unused copy in
+ * ServicesConfigView (which has no create button to put it on) that carried
+ * a `prefers-reduced-motion` guard the three *used* copies didn't. Kept
+ * that guard here rather than dropping it with the other three duplicates —
+ * it was the one part of the dead copy worth keeping. */
+.btn-soft-shadow {
+  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-soft-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-soft-shadow { transition: none; }
+  .btn-soft-shadow:hover { transform: none; }
 }
 
 /* .page-subtitle doubles as the filter/counter row's summary line ("N of M",
- * "N active requests") — checked live first: text-caption, text-body-1 and
- * text-body-2 (the three classes these summaries used, one per view) all
- * compute to the exact same 16px/400/24px in this build, identical to
- * text-subtitle-2. There was no actual size drift to fix between them, only
- * three class names for one already-identical result — reusing .page-subtitle
- * here is a zero-visual-change rename, not a new size decision, and it means
- * a real future typography change only has to be made once. */
+ * "N active requests") — three views (EquipmentBorrowingView,
+ * ProcurementReferenceView, ServicesConfigView) each had their own class
+ * for this (text-caption/text-body-2/text-body-1) that, checked live, all
+ * computed to the same fallback 16px anyway. Now genuinely one definition:
+ * they get the tightened 14px along with every page subtitle, not a
+ * fourth separate size. */

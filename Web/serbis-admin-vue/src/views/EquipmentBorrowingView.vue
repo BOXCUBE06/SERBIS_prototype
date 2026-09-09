@@ -1,12 +1,14 @@
 <template>
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
-    <!-- Header -->
-    <div class="page-header">
-      <h2 class="page-title text-high-emphasis">Equipment Borrowing</h2>
-      <div class="page-subtitle text-medium-emphasis">
-        Move each request through the pipeline — approve, release, then confirm its return
-      </div>
-    </div>
+    <!-- 28px, not the mb-6/24px most other headers use: this page's own
+         documented vertical-rhythm system marks it the "region break"
+         before the tabs, distinct from the tighter intra-group gaps further
+         down (see the comment above .page-tabs below). -->
+    <PageHeader
+      title="Equipment Borrowing"
+      subtitle="Move each request through the pipeline — approve, release, then confirm its return"
+      style="margin-bottom: 28px;"
+    />
 
     <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">
       <v-tab value="board" class="text-none font-weight-bold">
@@ -778,6 +780,7 @@ import { useRowNumbers } from '@/composables/rowNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -1532,8 +1535,8 @@ onMounted(() => {
    the selects and the chips showing what those selects did are one thought
    split across two rows. 28px is the region break. The status strip sits 16px
    above the table because it counts the rows in it; it is a caption for that
-   table, not a band of its own. */
-.page-header { margin-bottom: 28px; }
+   table, not a band of its own. The header's own 28px now lives inline on
+   the PageHeader tag in the template, next to the comment explaining it. */
 .page-tabs { margin-bottom: 24px; }
 .filter-active { margin-bottom: 28px; }
 .status-strip { margin-bottom: 16px; }

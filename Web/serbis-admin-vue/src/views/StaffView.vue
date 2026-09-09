@@ -3,22 +3,21 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="page-title text-high-emphasis">Staff Accounts</h2>
-            <div class="page-subtitle text-medium-emphasis">
-              Who can sign in to this panel. Every admin can manage every other.
-            </div>
-          </div>
-          <v-btn
-            color="primary" variant="flat" rounded="lg" height="48"
-            class="px-6 text-none font-weight-bold btn-soft-shadow"
-            @click="openAdd"
-          >
-            <v-icon start size="20">mdi-account-plus-outline</v-icon> Add staff account
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Staff Accounts"
+          subtitle="Who can sign in to this panel. Every admin can manage every other."
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn
+              color="primary" variant="flat" rounded="lg" height="48"
+              class="px-6 text-none font-weight-bold btn-soft-shadow"
+              @click="openAdd"
+            >
+              <v-icon start size="20">mdi-account-plus-outline</v-icon> Add staff account
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert
           v-if="apiError" type="error" variant="tonal" class="mb-6"
@@ -267,6 +266,7 @@ import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/admins`
 
@@ -504,9 +504,6 @@ onMounted(() => {
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));

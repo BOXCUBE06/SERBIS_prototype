@@ -7,10 +7,7 @@
           <!-- Header -->
           <v-row class="mb-6" align="center" justify="space-between">
             <v-col cols="12" md="5">
-              <h2 class="page-title text-high-emphasis">Documents</h2>
-              <div class="page-subtitle text-medium-emphasis">
-                {{ files.length }} published · residents receive these on the mobile app
-              </div>
+              <PageHeader title="Documents" :subtitle="`${files.length} published · residents receive these on the mobile app`" />
             </v-col>
 
             <v-col cols="12" md="7" class="d-flex justify-end align-center gap-4 flex-wrap">
@@ -280,6 +277,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/admin/info-materials`
 

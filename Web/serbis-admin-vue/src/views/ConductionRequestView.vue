@@ -16,59 +16,62 @@
          see ServiceRequestQueue.vue's own defineExpose — since it still
          owns that state privately (the same reason "Open Booking" already
          reaches in via a ref rather than duplicating state here). -->
-    <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3" style="flex-shrink: 0;">
-      <div>
-        <h2 class="page-title text-high-emphasis">Ambulance Dispatch Requests</h2>
-        <div class="page-subtitle text-medium-emphasis">
-          MDRRMO Conduction Request Form — Echague Rescue EMS
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'bookings'" class="d-flex align-center gap-3">
+    <!-- 16px, not the mb-6/24px most other headers use: this row sits directly
+         above the tab bar, not a card with its own breathing room, and 24px
+         read as oversized once the action buttons moved inline with the
+         title (layout redesign follow-up, kept through the PageHeader
+         extraction). -->
+    <PageHeader
+      title="Ambulance Dispatch Requests"
+      subtitle="MDRRMO Conduction Request Form — Echague Rescue EMS"
+      style="flex-shrink: 0; margin-bottom: 16px;"
+    >
+      <template v-slot:actions>
+        <template v-if="activeTab === 'bookings'">
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="text-none font-weight-bold px-6 text-white"
+            height="40"
+            @click="bookingsQueueRef?.openCreateDialog()"
+          >
+            <v-icon start size="small">mdi-account-plus-outline</v-icon>
+            Log Service Request
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            class="text-none font-weight-bold px-6"
+            height="40"
+            @click="bookingsQueueRef?.openDayView()"
+          >
+            <v-icon start size="small">mdi-calendar-clock</v-icon>
+            Ambulance Day View
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            class="text-none font-weight-bold px-6"
+            height="40"
+            :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
+            @click="bookingsQueueRef?.exportCsv()"
+          >
+            <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+            {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
+            <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
+          </v-btn>
+        </template>
         <v-btn
-          color="secondary"
+          v-else-if="activeTab === 'trip-logs'"
+          color="primary"
           variant="flat"
-          class="text-none font-weight-bold px-6 text-white"
-          height="40"
-          @click="bookingsQueueRef?.openCreateDialog()"
-        >
-          <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Service Request
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
-          @click="bookingsQueueRef?.openDayView()"
-        >
-          <v-icon start size="small">mdi-calendar-clock</v-icon>
-          Ambulance Day View
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="40"
-          :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
-          @click="bookingsQueueRef?.exportCsv()"
-        >
-          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
-          <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
-        </v-btn>
-      </div>
-
-      <v-btn
-        v-else-if="activeTab === 'trip-logs'"
-        color="primary"
-        variant="flat"
-        class="text-none font-weight-bold px-6"
-        height="44"
-        prepend-icon="mdi-plus"
-        @click="openCreate()"
-      >Ambulance Trip Record</v-btn>
-    </div>
+          height="44"
+          prepend-icon="mdi-plus"
+          @click="openCreate()"
+        >Ambulance Trip Record</v-btn>
+      </template>
+    </PageHeader>
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
          Ambulance/Medical Response — moved here from Resident Requests so
@@ -619,6 +622,7 @@ import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } fr
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
@@ -1178,11 +1182,6 @@ onMounted(fetchData)
 <style scoped>
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-/* 28px→16px: sized for a header that was just a title, sitting above a
-   completely separate button row further down. With the buttons inline in
-   this same row now, that gap to the tabs read as oversized (layout
-   redesign follow-up). */
-.page-header { margin-bottom: 16px; }
 
 /* v-window's own internal wrapper (.v-window__container, the flex row that
    holds every window-item side by side for the slide transition) sizes

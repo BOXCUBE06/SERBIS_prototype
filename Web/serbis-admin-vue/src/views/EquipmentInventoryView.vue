@@ -3,16 +3,17 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="page-title text-high-emphasis">Resource Management</h2>
-            <div class="page-subtitle text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
-          </div>
-          <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-            <v-icon start size="20">mdi-plus</v-icon> Add Equipment
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Resource Management"
+          subtitle="How much of each item is on hand, and how much is out on loan"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
+              <v-icon start size="20">mdi-plus</v-icon> Add Equipment
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
@@ -196,6 +197,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/equipments`
 
@@ -380,9 +382,6 @@ onMounted(fetchEquipments)
 .min-w-0 { min-width: 0; }
 .control-field { width: 260px; max-width: 100%; }
 .control-field-sm { width: 200px; max-width: 100%; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
