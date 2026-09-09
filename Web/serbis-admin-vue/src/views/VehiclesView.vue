@@ -6,8 +6,8 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Vehicles</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Which units are available and which are currently dispatched</div>
+            <h2 class="page-title text-high-emphasis">Vehicles</h2>
+            <div class="page-subtitle text-medium-emphasis">Which units are available and which are currently dispatched</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Unit
@@ -460,7 +460,6 @@ onMounted(fetchVehicles)
 
 <style scoped>
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
-.tracking-tight { letter-spacing: -0.02em; }
 .tracking-widest { letter-spacing: 0.12em; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }

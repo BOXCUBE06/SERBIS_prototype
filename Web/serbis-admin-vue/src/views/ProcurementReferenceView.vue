@@ -6,8 +6,8 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Procurement Reference</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">
+            <h2 class="page-title text-high-emphasis">Procurement Reference</h2>
+            <div class="page-subtitle text-medium-emphasis">
               Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC
             </div>
           </div>
@@ -71,7 +71,7 @@
             class="control-field-sm"
           ></v-select>
           <v-spacer></v-spacer>
-          <span class="text-body-2 text-medium-emphasis">{{ filtered.length }} of {{ rows.length }}</span>
+          <span class="page-subtitle text-medium-emphasis">{{ filtered.length }} of {{ rows.length }}</span>
         </div>
 
         <div v-if="initialLoad" class="d-flex justify-center py-16">
@@ -232,7 +232,6 @@ onMounted(() => load({ ifEmpty: true }))
 /* Same locally-scoped utilities the sibling views define — VehiclesView,
    EquipmentBorrowingView. There is no shared stylesheet for them. */
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
-.tracking-tight { letter-spacing: -0.02em; }
 .tracking-widest { letter-spacing: 0.12em; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }

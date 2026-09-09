@@ -6,8 +6,8 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Manage Services</h2>
-            <div class="text-subtitle-1 text-medium-emphasis">
+            <h2 class="page-title text-high-emphasis">Manage Services</h2>
+            <div class="page-subtitle text-medium-emphasis">
               What residents can request from the MDRRMO, and how each one appears in the app
             </div>
           </div>
@@ -52,7 +52,7 @@
 
               <v-spacer class="d-none d-lg-block"></v-spacer>
 
-              <div class="text-body-1 text-medium-emphasis">
+              <div class="page-subtitle text-medium-emphasis">
                 <strong class="text-high-emphasis">{{ filteredServices.length }}</strong>
                 of {{ services.length }} services
               </div>
@@ -461,7 +461,6 @@ onMounted(fetchServices)
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }

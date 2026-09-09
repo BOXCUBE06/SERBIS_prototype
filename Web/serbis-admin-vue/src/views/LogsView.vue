@@ -4,8 +4,8 @@
       <v-col cols="12">
         <div class="d-flex justify-space-between align-center mb-6">
           <div>
-            <h2 class="text-h4 font-weight-black text-high-emphasis">Activity Logs</h2>
-            <div class="text-subtitle-1 text-medium-emphasis">Who did what in this panel, and every text blast that was sent</div>
+            <h2 class="page-title text-high-emphasis">Activity Logs</h2>
+            <div class="page-subtitle text-medium-emphasis">Who did what in this panel, and every text blast that was sent</div>
           </div>
           
           <v-text-field

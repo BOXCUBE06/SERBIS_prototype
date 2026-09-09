@@ -18,8 +18,8 @@
          reaches in via a ref rather than duplicating state here). -->
     <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3" style="flex-shrink: 0;">
       <div>
-        <h2 class="text-h5 font-weight-bold text-high-emphasis">Ambulance Dispatch Requests</h2>
-        <div class="text-subtitle-2 text-medium-emphasis">
+        <h2 class="page-title text-high-emphasis">Ambulance Dispatch Requests</h2>
+        <div class="page-subtitle text-medium-emphasis">
           MDRRMO Conduction Request Form — Echague Rescue EMS
         </div>
       </div>

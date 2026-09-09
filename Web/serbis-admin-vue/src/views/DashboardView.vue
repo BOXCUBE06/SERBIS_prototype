@@ -4,8 +4,8 @@
     <!-- Toolbar -->
     <div class="d-flex justify-space-between align-center flex-wrap gap-4 mb-6">
       <div>
-        <h1 class="text-h4 font-weight-black mb-1">Dashboard</h1>
-        <div class="text-subtitle-1 text-medium-emphasis">Request volume, barangay spread and fleet status. Each card sets its own period.</div>
+        <h2 class="page-title text-high-emphasis">Dashboard</h2>
+        <div class="page-subtitle text-medium-emphasis">Request volume, barangay spread and fleet status. Each card sets its own period.</div>
       </div>
 
       <div class="d-flex align-center gap-4 flex-wrap">

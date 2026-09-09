@@ -7,12 +7,12 @@
 
           <div class="residents-toolbar px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
             <div>
-              <h2 class="text-h5 font-weight-bold text-high-emphasis">Residents</h2>
+              <h2 class="page-title text-high-emphasis">Residents</h2>
               <!-- Says "of" only when something is being hidden. The permanent
                    "N of N" read as a standing accusation that a filter was on.
                    ("residents" here is deliberate and ruled on; the heading
                    above it is the page/nav title.) -->
-              <div class="text-body-2 text-medium-emphasis">
+              <div class="page-subtitle text-medium-emphasis">
                 <template v-if="filteredAndSortedResidents.length === residents.length">
                   <strong class="text-high-emphasis">{{ residents.length }}</strong>
                   {{ residents.length === 1 ? 'resident' : 'residents' }}

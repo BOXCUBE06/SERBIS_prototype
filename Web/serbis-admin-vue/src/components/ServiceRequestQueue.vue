@@ -26,8 +26,8 @@
            covers (layout redesign follow-up). -->
       <div v-if="standalone" class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
         <div>
-          <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">{{ scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests' }}</h2>
-          <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} {{ scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays' }}</div>
+          <h2 class="page-title text-high-emphasis">{{ scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests' }}</h2>
+          <div class="page-subtitle text-medium-emphasis">{{ requestCounts.All }} {{ scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays' }}</div>
         </div>
         <div class="d-flex align-center gap-3">
         <!-- The adviser's ask: someone who shows up at the office in person

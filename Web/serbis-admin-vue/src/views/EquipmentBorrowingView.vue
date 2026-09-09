@@ -2,8 +2,8 @@
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
     <!-- Header -->
     <div class="page-header">
-      <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
-      <div class="text-subtitle-2 text-medium-emphasis">
+      <h2 class="page-title text-high-emphasis">Equipment Borrowing</h2>
+      <div class="page-subtitle text-medium-emphasis">
         Move each request through the pipeline — approve, release, then confirm its return
       </div>
     </div>
@@ -98,7 +98,7 @@
           @click="clearAllFilters"
         >Clear all</v-btn>
       </template>
-      <span class="text-caption text-medium-emphasis ml-auto" aria-live="polite">
+      <span class="page-subtitle text-medium-emphasis ml-auto" aria-live="polite">
         {{ resultSummary }}
       </span>
     </div>

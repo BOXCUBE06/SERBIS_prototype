@@ -6,8 +6,8 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Resource Management</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
+            <h2 class="page-title text-high-emphasis">Resource Management</h2>
+            <div class="page-subtitle text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
           </div>
           <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
             <v-icon start size="20">mdi-plus</v-icon> Add Equipment
@@ -374,7 +374,6 @@ onMounted(fetchEquipments)
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }

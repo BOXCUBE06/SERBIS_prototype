@@ -6,8 +6,8 @@
         <!-- Header -->
         <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
           <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Staff Accounts</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">
+            <h2 class="page-title text-high-emphasis">Staff Accounts</h2>
+            <div class="page-subtitle text-medium-emphasis">
               Who can sign in to this panel. Every admin can manage every other.
             </div>
           </div>
@@ -500,7 +500,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }

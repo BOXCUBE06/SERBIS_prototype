@@ -104,3 +104,41 @@
 .v-theme--dark .pill-disapproved { background-color: rgba(var(--v-theme-error), 0.10); }
 .v-theme--dark .pill-cancelled,
 .v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+
+/* Page header — the title/subtitle row every view opens with. Was drawn
+ * three different ways: text-h4/text-h5 for the title (8 views vs. 4),
+ * font-weight-bold/font-weight-black (9 vs. 3), text-subtitle-1/
+ * text-subtitle-2/text-body-2 for the subtitle (4 vs. 7 vs. 1), and two
+ * views (ConductionRequestView, EquipmentBorrowingView) already had a class
+ * named `.page-header` — locally scoped, two different values (16px and
+ * 28px margin), neither reaching the other ten views. The values below are
+ * exactly what `text-h4 font-weight-bold` + `text-subtitle-2` already
+ * compute to live (VehiclesView, measured 2026-09-09) — the single most
+ * common existing pairing, four views already matched it exactly, so this
+ * is a no-op there and a fix everywhere else.
+ *
+ * Layout (flex/gap/margin) is deliberately NOT part of this — each page's
+ * header row keeps its own wrapper markup and spacing; ConductionRequestView
+ * in particular needs `flex-shrink: 0` in a height-locked flex column that
+ * has nothing to do with how the title looks. Only the text scale is
+ * shared here, which is what was actually inconsistent. */
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 36px;
+  letter-spacing: -0.48px;
+}
+.page-subtitle {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+/* .page-subtitle doubles as the filter/counter row's summary line ("N of M",
+ * "N active requests") — checked live first: text-caption, text-body-1 and
+ * text-body-2 (the three classes these summaries used, one per view) all
+ * compute to the exact same 16px/400/24px in this build, identical to
+ * text-subtitle-2. There was no actual size drift to fix between them, only
+ * three class names for one already-identical result — reusing .page-subtitle
+ * here is a zero-visual-change rename, not a new size decision, and it means
+ * a real future typography change only has to be made once. */
