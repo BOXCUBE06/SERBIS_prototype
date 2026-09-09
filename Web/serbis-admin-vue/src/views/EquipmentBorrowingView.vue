@@ -1607,8 +1607,10 @@ onMounted(() => {
 .stat-tile .stat-value { font-size: 1.15rem; font-weight: 800; line-height: 1; }
 .stat-tile .stat-label { font-size: 0.8rem; font-weight: 600; }
 
-/* Table. Fixed layout keeps the truncating cells stable; matches the
-   elegant-table pattern used across User Management and Fleet Management.
+/* Table. Fixed layout keeps the truncating cells stable, the same fixed-
+   layout-plus-min-width fix used on every other data table in the app now
+   (User Management is the one exception with its own richer treatment,
+   not a pattern named "elegant-table" that this table is part of).
    The 720px min-width is load-bearing: without it, `width: 100%` on a fixed
    table lets a narrow wrapper crush every column instead of scrolling —
    "waiting" wraps to one letter per line rather than the table scrolling

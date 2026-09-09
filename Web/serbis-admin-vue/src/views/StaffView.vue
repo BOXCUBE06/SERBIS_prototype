@@ -49,7 +49,7 @@
             :items="admins"
             :items-per-page="10"
             item-value="admin_id"
-            class="elegant-table"
+            class="staff-table"
           >
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
@@ -560,8 +560,13 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* `elegant-table` names a pattern this table doesn't otherwise carry — see
-   the commit message for the naming decision. Fixed layout keeps the four
-   columns stable regardless of name/email length. */
-.elegant-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 520px; }
+/* Fixed layout keeps the four columns stable regardless of name/email
+   length. Was `.elegant-table` — the exact class name UsersView's table
+   carries, but Vue's scoped styles don't cross files, so it inherited
+   none of that table's CSS (dark-green header, 76px rows) and did
+   nothing here. "elegant-table" also isn't a shared pattern to opt into:
+   of the app's eight data tables, only UsersView carries that
+   treatment — the other seven (this one included) use the plain
+   uppercase-caps header below. Renamed to say what it actually is. */
+.staff-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 520px; }
 </style>
