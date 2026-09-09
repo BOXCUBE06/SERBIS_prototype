@@ -146,6 +146,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { fmtDate } from '@/composables/adminUi'
 import { useBorrowingsList } from '@/composables/borrowingsList'
+import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 import { useRowNumbers } from '@/composables/rowNumber'
 
 /**
@@ -163,17 +164,6 @@ import { useRowNumbers } from '@/composables/rowNumber'
  * independent fetch would double the panel's heaviest read for identical data.
  */
 
-// Same accents and icons as the borrowing board — the status words are the
-// same vocabulary and must not be drawn two different ways in one panel.
-const STATUS_META = [
-  { status: 'Pending', accent: '#B45309', icon: 'mdi-clock-outline' },
-  { status: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
-  { status: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
-  { status: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline' },
-  { status: 'Denied', accent: '#B91C1C', icon: 'mdi-close-circle-outline' },
-  { status: 'Cancelled', accent: '#475569', icon: 'mdi-cancel' },
-]
-
 const CLOSED_STATUSES = ['Returned', 'Denied', 'Cancelled']
 const ALL_STATUS = 'All'
 
@@ -182,10 +172,7 @@ const { rows: allBorrowings, loadError, initialLoad, reloading, load } = useBorr
 const search = ref('')
 const statusFilter = ref(ALL_STATUS)
 
-const statusOptions = [ALL_STATUS, ...STATUS_META.map((s) => s.status)]
-
-const statusAccent = (status) => STATUS_META.find((s) => s.status === status)?.accent || '#64748B'
-const statusIcon = (status) => STATUS_META.find((s) => s.status === status)?.icon || 'mdi-help-circle-outline'
+const statusOptions = [ALL_STATUS, ...BORROWING_STATUSES.map((s) => s.status)]
 
 // The whole definition of this page: a borrowing whose item is free text rather
 // than an inventory row. The backend's CHECK constraint guarantees exactly one

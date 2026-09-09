@@ -2699,78 +2699,7 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   min-width: 0;
 }
 
-/* Status pills — replacing two v-chips that could not be read.
-   v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
-   `background: currentColor`. The detail-panel chip also carried `.text-white`,
-   and the utilities layer beats the components layer, so it repainted the label
-   AND the underlay white: white on white, ~1.0:1. The list chips were legible
-   but failed AA on every status (warning 2.36:1, info 3.84:1, success 4.27:1,
-   error 4.03:1, all measured on their own tint over white).
-   Same shape as UsersView's .status-pill so the two pages agree. Text uses the
-   -strong tokens; the tint keeps the plain token. */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-/* The list row is a denser context than the detail header — one step smaller,
-   nothing else changes. */
-.status-pill--sm {
-  padding: 2px 8px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
-}
-.pill-pending {
-  background: rgba(var(--v-theme-warning), 0.14);
-  color: rgb(var(--v-theme-warning-strong));
-}
-/* Booked is the one status with no semantic token behind it -- the theme
-   carries five hues and all five are spoken for, and Booked has to be told
-   apart from Responding at a glance. Literal violet, measured the same way the
-   tokens in plugins/vuetify.ts were: #5B21B6 on rgba(#6D28D9, 0.14) over white
-   is 7.14:1, and #A78BFA on its own 10% tint over #131B2E is 5.42:1. Both
-   clear AA. Promote to a token pair if a second component ever needs it. */
-.pill-booked {
-  background: rgba(109, 40, 217, 0.14);
-  color: #5B21B6;
-}
-.pill-responding {
-  background: rgba(var(--v-theme-info), 0.14);
-  color: rgb(var(--v-theme-info-strong));
-}
-.pill-resolved {
-  background: rgba(var(--v-theme-success), 0.14);
-  color: rgb(var(--v-theme-success-strong));
-}
-.pill-disapproved,
-.pill-cancelled {
-  background: rgba(var(--v-theme-error), 0.14);
-  color: rgb(var(--v-theme-error-strong));
-}
-/* A sixth outcome, neither success nor failure — the five semantic hues are
-   already spoken for (see .pill-booked above), so this is a literal neutral
-   slate rather than reusing warning/error and implying "wrong" or "pending". */
-.pill-resolved-no-arrival {
-  background: rgba(100, 116, 139, 0.14);
-  color: #334155;
-}
-/* The dark tokens are already bright enough to use as text, but they need the
-   lighter 10% tint the measurements were taken against — 14% of a bright token
-   over #131B2E lifts the background far enough to eat the margin. Keep each
-   status on its own hue; only the alpha changes. */
-.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
-.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
-.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
-.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
-.v-theme--dark .pill-disapproved,
-.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
-.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ConductionRequestView.vue). */
 
 /* Ambulance Day View. Booked segments reuse .pill-booked's exact violet — the
    same status already means "Booked" everywhere else on this page, so the

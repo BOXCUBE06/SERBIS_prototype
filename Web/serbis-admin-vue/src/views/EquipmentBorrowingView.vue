@@ -778,25 +778,14 @@ import { useRowNumbers } from '@/composables/rowNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
 
-// Status colours: saturated 700-level ramp, each AA with white text as a
-// badge (measured, see EquipmentBorrowingView audit history). Semantic
-// (data-viz), not brand tokens — except Returned, which uses the system
-// primary green (success tracks primary).
-const columns = [
-  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline' },
-  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
-  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
-  { status: 'Returned', label: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline', terminal: true },
-  { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true },
-  // The resident withdrew it themselves (PATCH /borrowings/{id}/cancel), so it
-  // is not a refusal and must not sit in the red the way Denied does. Slate
-  // 600, 7.4:1 with white text as a badge. Terminal here too: nothing in this
-  // panel can move a cancelled request, and the backend refuses every attempt.
-  { status: 'Cancelled', label: 'Cancelled', accent: '#475569', icon: 'mdi-cancel', terminal: true },
-]
+// Status colours, icons and labels: one definition in borrowingStatus.ts,
+// shared with ProcurementReferenceView (same rows, read-only there). Used
+// to be two verbatim-identical arrays that only agreed by accident.
+const columns = BORROWING_STATUSES
 
 // The "no filter" sentinel for each select. Named rather than repeated as a
 // string literal: it is compared in four places and rendered in one.
@@ -1101,8 +1090,6 @@ const borrowingForLabel = (item) => {
   // relation null and this line would otherwise read as empty.
   return `${item?.resident?.first_name || ''} ${item?.resident?.last_name || ''}`.trim() || 'Unknown borrower'
 }
-const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
-const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
 
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 

@@ -1253,65 +1253,7 @@ onMounted(fetchData)
   background-color: rgba(var(--v-theme-primary), 0.06);
 }
 
-/* Mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly (same
-   values, not shared — scoped styles don't cross files here, same pattern
-   as .soft-card/.trip-row above) — item 5 of the layout redesign: a trip's
-   status now speaks the same badge language as a booking's, via
-   sharedStatusLabel() in adminUi.ts, so the two need the same CSS to render
-   identically, not just the same words. Only pill-booked/-responding/
-   -resolved are ever reachable from a trip_status here, but the full set is
-   kept for exact parity with the source. */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-.status-pill--sm {
-  padding: 2px 8px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
-}
-.pill-pending {
-  background: rgba(var(--v-theme-warning), 0.14);
-  color: rgb(var(--v-theme-warning-strong));
-}
-.pill-booked {
-  background: rgba(109, 40, 217, 0.14);
-  color: #5B21B6;
-}
-.pill-responding {
-  background: rgba(var(--v-theme-info), 0.14);
-  color: rgb(var(--v-theme-info-strong));
-}
-.pill-resolved {
-  background: rgba(var(--v-theme-success), 0.14);
-  color: rgb(var(--v-theme-success-strong));
-}
-.pill-disapproved,
-.pill-cancelled {
-  background: rgba(var(--v-theme-error), 0.14);
-  color: rgb(var(--v-theme-error-strong));
-}
-/* A sixth outcome, neither success nor failure — the five semantic hues are
-   already spoken for (see .pill-booked above), so this is a literal neutral
-   slate rather than reusing warning/error and implying "wrong" or "pending". */
-.pill-resolved-no-arrival {
-  background: rgba(100, 116, 139, 0.14);
-  color: #334155;
-}
-.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
-.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
-.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
-.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
-.v-theme--dark .pill-disapproved,
-.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
-.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ServiceRequestQueue.vue), including the sharedStatusLabel() mapping in adminUi.ts that lets a trip's status speak the same badge language as a booking's. */
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
 /* VDataTableFooter has no prop to drop just the items-per-page selector —

@@ -308,6 +308,8 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
+import { statusAccent } from '@/composables/borrowingStatus'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
   BarElement, LineElement, PointElement, Filler
@@ -409,24 +411,37 @@ const fetchDashboardData = async () => {
 }
 
 // The feed merges two models that use two different status vocabularies:
-//   ServiceRequest     — Pending, Responding, Resolved, Cancelled, Disapproved
+//   ServiceRequest     — Pending, Booked, Responding, Resolved, Disapproved, Cancelled
 //   EquipmentBorrowing — Pending, Approved, Released, Returned, Denied, Cancelled
-// Only six of those nine were listed, and the one error branch tested for
-// 'Rejected', which neither model writes. Every refused item — Denied,
-// Disapproved, Cancelled — fell through to grey and read as an unknown state,
-// so no red ever reached this feed.
+// Two real defects fixed here, both found while building the one-definition
+// status-color pass (docs/ui-audit and the request-lifecycle color audit):
+// 1. 'Booked' had no case at all and fell through to grey — a booked request
+//    read as an unknown state on the feed.
+// 2. 'Responding' was bucketed with 'approved'/'released' under 'primary'.
+//    Every other view colors Responding with `info`; only this switch
+//    disagreed. Same status, two colors, depending which screen you read it
+//    from.
+// Approved keeps its own color (borrowingStatus.ts) rather than sharing
+// Responding's `info` — the two never render in the same table, but a
+// shared color definition should still mean one thing per hue. Cancelled
+// uses the neutral slate both families settled on (adminUi.ts,
+// CANCELLED_COLOR) rather than Denied/Disapproved's red: checked both
+// ServiceRequestController.php:962 and EquipmentBorrowingController.php:281
+// before relying on this — in both models it's the resident withdrawing
+// their own request, never a staff refusal.
 const getStatusColor = (status) => {
   if (!status) return 'grey'
   switch (status.toLowerCase()) {
     case 'pending': return 'warning'
-    case 'approved':
-    case 'responding':
+    case 'booked': return BOOKED_COLOR
+    case 'responding': return 'info'
+    case 'approved': return statusAccent('Approved')
     case 'released': return 'primary'
     case 'resolved':
     case 'returned': return 'success'
-    case 'cancelled':
     case 'disapproved':
     case 'denied': return 'error'
+    case 'cancelled': return CANCELLED_COLOR
     default: return 'grey'
   }
 }

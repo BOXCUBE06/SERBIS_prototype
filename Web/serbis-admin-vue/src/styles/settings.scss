@@ -26,3 +26,81 @@
 .v-messages__message {
   transition: none !important;
 }
+
+/* ServiceRequest-family status pills — Pending/Booked/Responding/Resolved/
+ * Disapproved/Cancelled, plus the Resolved-with-no-arrival split. Used by
+ * ServiceRequestQueue.vue and ConductionRequestView.vue, which used to carry
+ * this exact block twice, each file's own comment admitting it was a copy
+ * ("mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly"). One
+ * definition here now; both files just use the classes.
+ *
+ * v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
+ * `background: currentColor`. Measured plain tonal chips failed AA on every
+ * status (warning 2.36:1, info 3.84:1, success 4.27:1, error 4.03:1, all on
+ * their own tint over white) — these pills use the tint for background and
+ * the paired `-strong` token for text instead.
+ */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+/* The list row is a denser context than the detail header — one step smaller,
+   nothing else changes. */
+.status-pill--sm {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.pill-pending {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
+/* Booked is the one status with no semantic token behind it -- the theme
+   carries five hues and all five are spoken for, and Booked has to be told
+   apart from Responding at a glance. Literal violet, measured the same way the
+   tokens in plugins/vuetify.ts were: #5B21B6 on rgba(#6D28D9, 0.14) over white
+   is 7.14:1, and #A78BFA on its own 10% tint over #131B2E is 5.42:1. Both
+   clear AA. Promote to a token pair if a second component ever needs it. */
+.pill-booked {
+  background: rgba(109, 40, 217, 0.14);
+  color: #5B21B6;
+}
+.pill-responding {
+  background: rgba(var(--v-theme-info), 0.14);
+  color: rgb(var(--v-theme-info-strong));
+}
+.pill-resolved {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success-strong));
+}
+.pill-disapproved {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error-strong));
+}
+/* Cancelled used to share Disapproved's red rule. Split out: checked both
+   ServiceRequestController.php:962 and EquipmentBorrowingController.php:281
+   before making this change, and a Cancelled request/booking in both models
+   is the resident withdrawing it themselves, never a staff refusal — the
+   same fact EquipmentBorrowingView's own Cancelled pill (a different, solid-
+   fill rendering, borrowingStatus.ts) already used to justify staying out of
+   the red. Sharing this slate rule with Resolved-no-arrival below rather
+   than inventing a third grey. */
+.pill-cancelled,
+.pill-resolved-no-arrival {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
+.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
+.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
+.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
+.v-theme--dark .pill-disapproved { background-color: rgba(var(--v-theme-error), 0.10); }
+.v-theme--dark .pill-cancelled,
+.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
