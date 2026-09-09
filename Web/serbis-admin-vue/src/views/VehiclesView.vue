@@ -560,9 +560,12 @@ onMounted(fetchVehicles)
   transition: filter 0.15s ease;
 }
 .status-pill:hover { filter: brightness(0.97); }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
-.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
+   error on their own tint measures under AA (see plugins/vuetify.ts for the
+   ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
+.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

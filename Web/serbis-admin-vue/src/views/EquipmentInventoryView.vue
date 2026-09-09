@@ -434,9 +434,12 @@ onMounted(fetchEquipments)
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
-.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
+   error on their own tint measures under AA (see plugins/vuetify.ts for the
+   ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
+.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .dot-available { background: rgb(var(--v-theme-primary)); }

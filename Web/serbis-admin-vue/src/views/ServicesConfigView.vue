@@ -551,10 +551,13 @@ onMounted(fetchServices)
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
-.pill-rescue { background: rgba(var(--v-theme-error), 0.14); color: rgb(var(--v-theme-error)); }
-.pill-medical { background: rgba(var(--v-theme-info), 0.14); color: rgb(var(--v-theme-info)); }
-.pill-relief { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-infrastructure { background: rgba(var(--v-theme-warning), 0.18); color: rgb(var(--v-theme-warning)); }
+/* Text uses the -strong tokens, not the plain ones: raw error/info/primary/
+   warning on their own tint measures under AA (see plugins/vuetify.ts for
+   the ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-rescue { background: rgba(var(--v-theme-error), 0.14); color: rgb(var(--v-theme-error-strong)); }
+.pill-medical { background: rgba(var(--v-theme-info), 0.14); color: rgb(var(--v-theme-info-strong)); }
+.pill-relief { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-infrastructure { background: rgba(var(--v-theme-warning), 0.18); color: rgb(var(--v-theme-warning-strong)); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
