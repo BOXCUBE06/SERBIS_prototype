@@ -153,9 +153,10 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
             'service_id' => $this->nonAmbulance->getKey(),
             'description' => 'Fallen tree scheduled for pickup',
             'status' => 'Booked',
-            'scheduled_at' => Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0),
         ]);
-        $this->assertNull($request->approved_at);
+        // No booking row at all for a non-ambulance request — approved_at
+        // has nowhere to live.
+        $this->assertNull($request->ambulanceBooking);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',

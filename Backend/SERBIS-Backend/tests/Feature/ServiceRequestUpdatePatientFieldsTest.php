@@ -9,7 +9,6 @@ use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -89,10 +88,12 @@ class ServiceRequestUpdatePatientFieldsTest extends TestCase
                 ->json('patient_name')
         );
 
-        // Not written onto the parent — the booking row is the only place
-        // this value lives now.
-        $this->assertNull(
-            DB::table('tbl_service_request')->where('request_id', $request->getKey())->value('patient_name')
+        // Not written onto the parent — tbl_service_request no longer has a
+        // patient_name column at all, so the booking row is the only place
+        // this value could live.
+        $this->assertSame(
+            'Juana Dela Cruz',
+            AmbulanceBooking::find($request->getKey())->patient_name
         );
     }
 

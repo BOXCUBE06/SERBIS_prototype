@@ -31,6 +31,11 @@ use Tests\TestCase;
  * rollback would otherwise have done: it tells the next RefreshDatabase test
  * class to migrate fresh for itself instead of trusting this class's
  * modified schema.
+ *
+ * setUp() also rolls back 2026_09_10_100000 by one step, right after the
+ * fresh migrate — that migration has since dropped the columns this one's
+ * backfill writes to, so testing this migration's up() at all needs them
+ * back first.
  */
 class AmbulanceBookingsMigrationTest extends TestCase
 {
@@ -45,6 +50,13 @@ class AmbulanceBookingsMigrationTest extends TestCase
         parent::setUp();
 
         $this->artisan('migrate:fresh');
+
+        // 2026_09_10_100000 (the last migration in this series) has since
+        // dropped the columns this migration's own backfill writes to — roll
+        // it back on its own (--step, never the full chain: see the class
+        // doc comment) so tbl_service_request has them again, matching the
+        // schema this migration actually runs against.
+        $this->artisan('migrate:rollback', ['--step' => 1]);
 
         $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
 
@@ -89,7 +101,11 @@ class AmbulanceBookingsMigrationTest extends TestCase
 
     public function test_it_backfills_every_ambulance_row_including_a_placeholder_with_null_patient_fields(): void
     {
-        $withPatient = ServiceRequest::create([
+        // forceCreate(), not create(): these 11 columns are no longer
+        // fillable on ServiceRequest (they don't exist on the table in the
+        // normal, fully-migrated state) — this simulates the raw legacy row
+        // the pre-drop schema, temporarily restored in setUp(), actually had.
+        $withPatient = ServiceRequest::forceCreate([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->ambulance->getKey(),
             'description' => 'Patient: Juan Dela Cruz',
@@ -161,7 +177,7 @@ class AmbulanceBookingsMigrationTest extends TestCase
 
     public function test_it_refuses_to_backfill_if_a_non_ambulance_row_carries_moved_column_data(): void
     {
-        ServiceRequest::create([
+        ServiceRequest::forceCreate([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->roadClearing->getKey(),
             'description' => 'Fallen tree.',
@@ -180,7 +196,7 @@ class AmbulanceBookingsMigrationTest extends TestCase
 
     public function test_down_drops_the_table_and_leaves_the_parent_untouched(): void
     {
-        $withPatient = ServiceRequest::create([
+        $withPatient = ServiceRequest::forceCreate([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->ambulance->getKey(),
             'description' => 'Patient: Juan Dela Cruz',

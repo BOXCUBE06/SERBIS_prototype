@@ -404,7 +404,6 @@ class ConductionRequestTest extends TestCase
             'service_id' => $service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
-            'scheduled_at' => '2026-09-01 09:00:00',
         ]);
 
         $conductionRequest = ConductionRequest::create($this->payload([
