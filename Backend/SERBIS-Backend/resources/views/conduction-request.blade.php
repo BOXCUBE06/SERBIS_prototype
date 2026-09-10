@@ -279,13 +279,14 @@
     @php
         /**
          * Expects $trip, an App\Models\ConductionRequest, ideally loaded with
-         * ['people', 'serviceRequest.relatives'].
+         * ['people', 'serviceRequest.relatives', 'serviceRequest.ambulanceBooking'].
          *
          * Field sources, in the order the form asks for them:
-         *   patient block, From/To, scheduled date  tbl_service_request
-         *   relatives                               tbl_service_request_relatives
-         *   drivers / authorized passengers         tbl_conduction_request_people
-         *   timestamps, odometers, others           tbl_conduction_requests
+         *   patient block, From/To                  tbl_ambulance_bookings
+         *   scheduled date                           tbl_service_request
+         *   relatives                                tbl_service_request_relatives
+         *   drivers / authorized passengers          tbl_conduction_request_people
+         *   timestamps, odometers, others            tbl_conduction_requests
          *
          * The booking is preferred and the trip's own columns are the
          * fallback, because a trip filed at the counter with no prior booking
@@ -293,6 +294,7 @@
          * own NOT NULL copies of the patient block precisely for that case.
          */
         $request = $trip->serviceRequest;
+        $booking = $request?->ambulanceBooking;
 
         /** Blank, never "N/A" — an empty rule is the space someone writes in. */
         $val = static fn ($value) => filled($value) ? $value : '';
@@ -305,14 +307,14 @@
                 : '';
         };
 
-        $patientName    = $val($request?->patient_name    ?: $trip->patient_name);
-        $patientAge     = $val($request?->patient_age     ?: $trip->patient_age);
-        $patientAddress = $val($request?->patient_address ?: $trip->patient_address);
-        $patientSex     = $val($request?->patient_sex     ?: $trip->patient_sex);
-        $patientContact = $val($request?->patient_contact_number ?: $trip->patient_contact_number);
-        $diagnosis      = $val($request?->condition_notes ?: $trip->medical_diagnosis);
-        $from           = $val($request?->pickup_location ?: $trip->origin);
-        $to             = $val($request?->destination     ?: $trip->destination);
+        $patientName    = $val($booking?->patient_name    ?: $trip->patient_name);
+        $patientAge     = $val($booking?->patient_age     ?: $trip->patient_age);
+        $patientAddress = $val($booking?->patient_address ?: $trip->patient_address);
+        $patientSex     = $val($booking?->patient_sex     ?: $trip->patient_sex);
+        $patientContact = $val($booking?->patient_contact_number ?: $trip->patient_contact_number);
+        $diagnosis      = $val($booking?->condition_notes ?: $trip->medical_diagnosis);
+        $from           = $val($booking?->pickup_location ?: $trip->origin);
+        $to             = $val($booking?->destination     ?: $trip->destination);
         $scheduled      = $when($request?->scheduled_at);
 
         /**

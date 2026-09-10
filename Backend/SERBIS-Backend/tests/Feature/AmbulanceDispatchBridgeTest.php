@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
@@ -91,6 +92,11 @@ class AmbulanceDispatchBridgeTest extends TestCase
         ], $overrides));
     }
 
+    private function bookingFor(ServiceRequest $request, array $attributes = []): AmbulanceBooking
+    {
+        return AmbulanceBooking::create(array_merge(['request_id' => $request->getKey()], $attributes));
+    }
+
     public function test_approving_an_ambulance_request_creates_a_linked_trip_record(): void
     {
         $request = $this->ambulanceRequest();
@@ -134,7 +140,9 @@ class AmbulanceDispatchBridgeTest extends TestCase
 
     public function test_the_stub_prefers_structured_columns_when_present(): void
     {
-        $request = $this->ambulanceRequest([
+        $request = $this->ambulanceRequest();
+
+        $this->bookingFor($request, [
             'patient_name' => 'Juan Dela Cruz',
             'patient_address' => 'Purok 2, San Fabian',
             'pickup_location' => 'Purok 2, San Fabian',

@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
+use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -38,6 +40,22 @@ class AmbulanceRequestContractTest extends TestCase
         'scheduled_at' => '2026-09-15T08:00:00.000000Z',
         'scheduled_end' => '2026-09-15T10:00:00.000000Z',
         'approved_at' => '2026-09-10T09:30:00.000000Z',
+    ];
+
+    /**
+     * The 8 patient/intake keys only, for actions that legitimately change
+     * scheduled_at/scheduled_end/approved_at (approve, reschedule) — those
+     * three are not what this subset is protecting.
+     */
+    private const AMBULANCE_PATIENT_ONLY_EXPECTED = [
+        'patient_name' => 'Juan Dela Cruz',
+        'patient_age' => 62,
+        'patient_sex' => 'male',
+        'patient_address' => 'Purok 2, San Fabian',
+        'patient_contact_number' => '09189999999',
+        'pickup_location' => 'Purok 2, San Fabian',
+        'destination' => 'Echague District Hospital',
+        'condition_notes' => 'Chest pains',
     ];
 
     /** Same keys, all null, for the non-ambulance request seeded below. */
@@ -102,6 +120,13 @@ class AmbulanceRequestContractTest extends TestCase
             'service_id' => $ambulance->getKey(),
             'description' => 'Patient: Juan Dela Cruz',
             'status' => 'Booked',
+            'scheduled_at' => Carbon::parse('2026-09-15 08:00:00'),
+            'scheduled_end' => Carbon::parse('2026-09-15 10:00:00'),
+            'approved_at' => Carbon::parse('2026-09-10 09:30:00'),
+        ])->fresh();
+
+        AmbulanceBooking::create([
+            'request_id' => $this->ambulanceRequest->getKey(),
             'patient_name' => 'Juan Dela Cruz',
             'patient_age' => 62,
             'patient_sex' => 'male',
@@ -110,10 +135,7 @@ class AmbulanceRequestContractTest extends TestCase
             'pickup_location' => 'Purok 2, San Fabian',
             'destination' => 'Echague District Hospital',
             'condition_notes' => 'Chest pains',
-            'scheduled_at' => Carbon::parse('2026-09-15 08:00:00'),
-            'scheduled_end' => Carbon::parse('2026-09-15 10:00:00'),
-            'approved_at' => Carbon::parse('2026-09-10 09:30:00'),
-        ])->fresh();
+        ]);
 
         $this->plainRequest = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
@@ -174,5 +196,64 @@ class AmbulanceRequestContractTest extends TestCase
         $this->assertCount(2, $rows);
         $this->assertFieldsMatch($this->findRow($rows, $this->ambulanceRequest->getKey()), self::AMBULANCE_EXPECTED);
         $this->assertFieldsMatch($this->findRow($rows, $this->plainRequest->getKey()), self::PLAIN_EXPECTED);
+    }
+
+    public function test_update_response_keeps_ambulance_fields_flat(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        // A field update() actually accepts, untouched by the 8 patient
+        // columns — the point is that they still come back correctly
+        // alongside it, not that this call changes them.
+        $row = $this->putJson("/api/service-requests/{$this->ambulanceRequest->getKey()}", [
+            'internal_notes' => 'Verified by phone',
+        ])->assertOk()->json();
+
+        $this->assertFieldsMatch($row, self::AMBULANCE_EXPECTED);
+    }
+
+    public function test_approve_response_keeps_ambulance_fields_flat(): void
+    {
+        $vehicle = Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'status' => 'Available']);
+
+        Sanctum::actingAs($this->admin);
+
+        $row = $this->patchJson("/api/service-requests/{$this->ambulanceRequest->getKey()}/approve", [
+            'vehicle_id' => $vehicle->vehicle_id,
+        ])->assertOk()->json();
+
+        // Scheduling fields are approve()'s own concern (vehicle_id claimed,
+        // scheduled_end computed) — only the patient/intake columns are this
+        // test's business.
+        $this->assertFieldsMatch($row, self::AMBULANCE_PATIENT_ONLY_EXPECTED);
+    }
+
+    public function test_reschedule_response_keeps_ambulance_fields_flat(): void
+    {
+        Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'status' => 'Available']);
+
+        Sanctum::actingAs($this->admin);
+
+        $row = $this->patchJson("/api/service-requests/{$this->ambulanceRequest->getKey()}/reschedule", [
+            'scheduled_at' => '2026-09-20 08:00:00',
+            'scheduled_end' => '2026-09-20 10:00:00',
+            'remarks' => 'Moved per resident request',
+        ])->assertOk()->json();
+
+        // scheduled_at/scheduled_end are exactly what this call moves —
+        // asserting them against the original booking would be wrong. The
+        // patient/intake columns are what must survive untouched.
+        $this->assertFieldsMatch($row, self::AMBULANCE_PATIENT_ONLY_EXPECTED);
+    }
+
+    public function test_cancel_response_keeps_ambulance_fields_flat(): void
+    {
+        Sanctum::actingAs($this->resident);
+
+        $row = $this->patchJson("/api/service-requests/{$this->ambulanceRequest->getKey()}/cancel")
+            ->assertOk()
+            ->json();
+
+        $this->assertFieldsMatch($row, self::AMBULANCE_EXPECTED);
     }
 }

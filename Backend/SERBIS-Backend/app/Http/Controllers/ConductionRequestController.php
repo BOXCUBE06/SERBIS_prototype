@@ -274,7 +274,8 @@ class ConductionRequestController extends Controller
      * Admin-only printable rendering of the paper form. Eager-loads what
      * conduction-request.blade.php expects (its own doc comment): people for
      * drivers/passengers/manually-typed relatives, serviceRequest.relatives
-     * for a bridged trip's intake-named relatives.
+     * for a bridged trip's intake-named relatives. serviceRequest's own
+     * ambulanceBooking comes along automatically — see ServiceRequest::$with.
      */
     public function print($id)
     {

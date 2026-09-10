@@ -194,6 +194,13 @@ class AmbulanceBookingsMigrationTest extends TestCase
         $migration->down();
 
         $this->assertFalse(Schema::hasTable('tbl_ambulance_bookings'));
-        $this->assertSame('Juan Dela Cruz', ServiceRequest::find($withPatient->getKey())->patient_name);
+        // Raw query, not Eloquent: ServiceRequest::$with always asks for
+        // ambulanceBooking now, and that table is gone at this point in the
+        // test on purpose — the migration's own concern is the parent
+        // column, read here independent of anything the model layer does.
+        $this->assertSame(
+            'Juan Dela Cruz',
+            DB::table('tbl_service_request')->where('request_id', $withPatient->getKey())->value('patient_name')
+        );
     }
 }

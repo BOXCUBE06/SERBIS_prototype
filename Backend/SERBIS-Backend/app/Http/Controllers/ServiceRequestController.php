@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
@@ -16,6 +17,7 @@ use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -123,6 +125,12 @@ class ServiceRequestController extends Controller
      * config that could drift.
      */
     private const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response';
+
+    /** The columns update() must route to AmbulanceBooking rather than write onto this row. */
+    private const PATIENT_FIELDS = [
+        'patient_name', 'patient_age', 'patient_sex', 'patient_address',
+        'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
+    ];
 
     /** Null if the service was seeded without a code column somehow, or does not exist. */
     private function ambulanceServiceId(): ?int
@@ -370,17 +378,6 @@ class ServiceRequestController extends Controller
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $validated['service_id'],
                     'description' => $description,
-                    // Ambulance-only, same as adminStore()'s row: nothing reads
-                    // these off a non-ambulance request, and writing them there
-                    // would put a patient's details on a road-clearing report.
-                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
-                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
-                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
-                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
-                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
-                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
-                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
-                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     // A scheduled booking is approved capacity, not a request
@@ -394,6 +391,23 @@ class ServiceRequestController extends Controller
                     'vehicle_id' => $vehicleId,
                     'scheduled_at' => $scheduledAt,
                 ]);
+
+                // Ambulance-only, same as adminStore()'s row: nothing reads
+                // these off a non-ambulance request, and writing them there
+                // would put a patient's details on a road-clearing report.
+                if ($isAmbulance) {
+                    AmbulanceBooking::create([
+                        'request_id' => $newServiceRequest->request_id,
+                        'patient_name' => $validated['patient_name'] ?? null,
+                        'patient_age' => $validated['patient_age'] ?? null,
+                        'patient_sex' => $validated['patient_sex'] ?? null,
+                        'patient_address' => $validated['patient_address'] ?? null,
+                        'patient_contact_number' => $validated['patient_contact_number'] ?? null,
+                        'pickup_location' => $validated['pickup_location'] ?? null,
+                        'destination' => $validated['destination'] ?? null,
+                        'condition_notes' => $validated['condition_notes'] ?? null,
+                    ]);
+                }
 
                 $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
@@ -417,7 +431,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest->load('relatives'), 201);
+        return response()->json($serviceRequest->load(['relatives', 'ambulanceBooking']), 201);
     }
 
     /**
@@ -776,17 +790,6 @@ class ServiceRequestController extends Controller
                     'walk_in_contact_number' => $walkInContact,
                     'service_id' => $validated['service_id'],
                     'description' => $description,
-                    // Ambulance-only. Null for every other service, same as
-                    // an app submission's row until the mobile app is on
-                    // this too — nothing reads these off a non-ambulance row.
-                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
-                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
-                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
-                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
-                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
-                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
-                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
-                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
@@ -794,6 +797,23 @@ class ServiceRequestController extends Controller
                     'vehicle_id' => $vehicleId,
                     'scheduled_at' => $scheduledAt,
                 ]);
+
+                // Ambulance-only. Null for every other service, same as an
+                // app submission's row until the mobile app is on this too —
+                // nothing reads these off a non-ambulance row.
+                if ($isAmbulance) {
+                    AmbulanceBooking::create([
+                        'request_id' => $newServiceRequest->request_id,
+                        'patient_name' => $validated['patient_name'] ?? null,
+                        'patient_age' => $validated['patient_age'] ?? null,
+                        'patient_sex' => $validated['patient_sex'] ?? null,
+                        'patient_address' => $validated['patient_address'] ?? null,
+                        'patient_contact_number' => $validated['patient_contact_number'] ?? null,
+                        'pickup_location' => $validated['pickup_location'] ?? null,
+                        'destination' => $validated['destination'] ?? null,
+                        'condition_notes' => $validated['condition_notes'] ?? null,
+                    ]);
+                }
 
                 $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
@@ -817,7 +837,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives']), 201);
+        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
     }
 
     public function show(Request $request, $id)
@@ -1199,6 +1219,18 @@ class ServiceRequestController extends Controller
             // Staff-only, never sent to PhilSMS and never returned to a resident
             // (see index()/show()) — so it carries no per-segment SMS cap.
             'internal_notes' => 'nullable|string|max:1000',
+            // Same types as store()/adminStore(). Routed to AmbulanceBooking
+            // below rather than written here — this table no longer carries
+            // them as of writing, and correcting a typo in a patient's name
+            // after intake should not require a specialised endpoint.
+            'patient_name' => 'sometimes|nullable|string|max:255',
+            'patient_age' => 'sometimes|nullable|integer|min:0|max:120',
+            'patient_sex' => 'sometimes|nullable|in:male,female',
+            'patient_address' => 'sometimes|nullable|string|max:255',
+            'patient_contact_number' => 'sometimes|nullable|string|max:32',
+            'pickup_location' => 'sometimes|nullable|string|max:255',
+            'destination' => 'sometimes|nullable|string|max:255',
+            'condition_notes' => 'sometimes|nullable|string|max:5000',
         ]);
 
         $ambulanceServiceId = $this->ambulanceServiceId();
@@ -1335,7 +1367,17 @@ class ServiceRequestController extends Controller
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
-            $serviceRequest->update($validated);
+            $bookingFields = Arr::only($validated, self::PATIENT_FIELDS);
+
+            $serviceRequest->update(Arr::except($validated, self::PATIENT_FIELDS));
+
+            // Same invariant as store()/adminStore(): only an ambulance
+            // request ever gets a booking row. A non-ambulance request
+            // sending one of these fields has it silently dropped, same as
+            // it always was.
+            if ($isAmbulanceRequest && $bookingFields) {
+                AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], $bookingFields);
+            }
 
             // The bridge itself: this is the one place the instant path ever
             // transitions to Responding, so it is the one place that can
@@ -1390,7 +1432,9 @@ class ServiceRequestController extends Controller
     {
         $serviceRequest->loadMissing(['resident', 'vehicle']);
 
-        $patientName = $serviceRequest->patient_name
+        $booking = $serviceRequest->ambulanceBooking;
+
+        $patientName = $booking?->patient_name
             ?: ($serviceRequest->resident
                 ? trim("{$serviceRequest->resident->first_name} {$serviceRequest->resident->last_name}")
                 : $serviceRequest->walk_in_name)
@@ -1401,7 +1445,7 @@ class ServiceRequestController extends Controller
         // travelling, so the account number is the fallback, not the answer.
         // The derivation below is unchanged and still covers every row filed
         // before this column existed.
-        $contactNumber = $serviceRequest->patient_contact_number
+        $contactNumber = $booking?->patient_contact_number
             ?: $serviceRequest->resident?->phone_number
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
@@ -1413,13 +1457,13 @@ class ServiceRequestController extends Controller
             'vehicle_id' => $serviceRequest->vehicle_id,
             'departed_office_at' => now(),
             'patient_name' => $patientName,
-            'patient_age' => $serviceRequest->patient_age,
-            'patient_sex' => $serviceRequest->patient_sex,
-            'patient_address' => $serviceRequest->patient_address ?: null,
+            'patient_age' => $booking?->patient_age,
+            'patient_sex' => $booking?->patient_sex,
+            'patient_address' => $booking?->patient_address ?: null,
             'patient_contact_number' => $contactNumber,
-            'medical_diagnosis' => $serviceRequest->condition_notes ?: null,
-            'origin' => $serviceRequest->pickup_location ?: null,
-            'destination' => $serviceRequest->destination ?: null,
+            'medical_diagnosis' => $booking?->condition_notes ?: null,
+            'origin' => $booking?->pickup_location ?: null,
+            'destination' => $booking?->destination ?: null,
             'vehicle' => $vehicle
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,

@@ -30,6 +30,49 @@ class ServiceRequest extends Model
     ];
 
     /**
+     * Always loaded, on every query this model builds — find(), get(), where(),
+     * fresh(), all of it — so no caller has to remember to ask for it and no
+     * endpoint can forget. toArray() below depends on this: it is what keeps
+     * a stray lazy-load (create()'d instances, or anything $with doesn't
+     * reach) as the exception rather than the only path.
+     */
+    protected $with = ['ambulanceBooking'];
+
+    /**
+     * Columns that now live on ambulanceBooking instead of this table. Kept
+     * flat in the API response regardless — a client must not see a
+     * different shape depending on which table happens to back a field.
+     */
+    private const BOOKING_FIELDS = [
+        'patient_name', 'patient_age', 'patient_sex', 'patient_address',
+        'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
+    ];
+
+    /**
+     * Flattens ambulanceBooking's columns back into this array — booking
+     * values when a booking row exists, null otherwise — and hides the
+     * nested `ambulance_booking` key so the shape a client sees never
+     * changes. Unconditional, not gated on relationLoaded(): a lazy load on
+     * $this->ambulanceBooking here is the safety net for the one place that
+     * does not go through $with (a just-create()'d instance), not something
+     * every call site has to get right.
+     */
+    public function toArray()
+    {
+        $array = parent::toArray();
+
+        $booking = $this->ambulanceBooking;
+
+        foreach (self::BOOKING_FIELDS as $field) {
+            $array[$field] = $booking?->{$field};
+        }
+
+        unset($array['ambulance_booking']);
+
+        return $array;
+    }
+
+    /**
      * The `valid_id` storage path is hidden so it never reaches a client; the image
      * is served only by GET /api/service-requests/{id}/valid-id. Clients use this
      * flag to decide whether to fetch it.
