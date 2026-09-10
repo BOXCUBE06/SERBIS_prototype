@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -101,9 +102,9 @@ class ScheduledServiceRequestTest extends TestCase
             ->assertJsonPath('vehicle_id', null);
 
         $created = ServiceRequest::findOrFail($response->json('request_id'));
-        $this->assertNotNull($created->scheduled_at);
-        $this->assertTrue($created->scheduled_at->utc()->equalTo($target));
-        $this->assertNull($created->scheduled_end);
+        $this->assertNotNull($created->ambulanceBooking->scheduled_at);
+        $this->assertTrue($created->ambulanceBooking->scheduled_at->utc()->equalTo($target));
+        $this->assertNull($created->ambulanceBooking->scheduled_end);
         $this->assertNull($created->vehicle_id);
     }
 
@@ -137,11 +138,15 @@ class ScheduledServiceRequestTest extends TestCase
 
         // Every unit already booked across the exact window this request will ask for.
         foreach ($this->units as $vehicle) {
-            ServiceRequest::create([
+            $existing = ServiceRequest::create([
                 'service_id' => $this->service->service_id,
                 'vehicle_id' => $vehicle->vehicle_id,
                 'description' => 'Existing booking',
                 'status' => 'Booked',
+            ]);
+
+            AmbulanceBooking::create([
+                'request_id' => $existing->getKey(),
                 'scheduled_at' => $target->copy(),
                 'scheduled_end' => $target->copy()->addHours(2),
             ]);

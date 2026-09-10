@@ -120,9 +120,6 @@ class AmbulanceRequestContractTest extends TestCase
             'service_id' => $ambulance->getKey(),
             'description' => 'Patient: Juan Dela Cruz',
             'status' => 'Booked',
-            'scheduled_at' => Carbon::parse('2026-09-15 08:00:00'),
-            'scheduled_end' => Carbon::parse('2026-09-15 10:00:00'),
-            'approved_at' => Carbon::parse('2026-09-10 09:30:00'),
         ])->fresh();
 
         AmbulanceBooking::create([
@@ -135,6 +132,9 @@ class AmbulanceRequestContractTest extends TestCase
             'pickup_location' => 'Purok 2, San Fabian',
             'destination' => 'Echague District Hospital',
             'condition_notes' => 'Chest pains',
+            'scheduled_at' => Carbon::parse('2026-09-15 08:00:00'),
+            'scheduled_end' => Carbon::parse('2026-09-15 10:00:00'),
+            'approved_at' => Carbon::parse('2026-09-10 09:30:00'),
         ]);
 
         $this->plainRequest = ServiceRequest::create([

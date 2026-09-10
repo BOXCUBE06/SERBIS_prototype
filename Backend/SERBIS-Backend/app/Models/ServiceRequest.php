@@ -46,6 +46,7 @@ class ServiceRequest extends Model
     private const BOOKING_FIELDS = [
         'patient_name', 'patient_age', 'patient_sex', 'patient_address',
         'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
+        'scheduled_at', 'scheduled_end', 'approved_at',
     ];
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -72,14 +73,17 @@ class VehicleMaintenanceGuardTest extends TestCase
 
     private function bookedRequest(Carbon $scheduledAt, string $status = 'Booked'): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => $status,
             'vehicle_id' => $this->vehicle->vehicle_id,
-            'scheduled_at' => $scheduledAt,
         ]);
+
+        AmbulanceBooking::create(['request_id' => $request->getKey(), 'scheduled_at' => $scheduledAt]);
+
+        return $request;
     }
 
     public function test_maintenance_is_refused_while_a_future_booking_holds_the_unit(): void

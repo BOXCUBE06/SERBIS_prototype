@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -78,14 +79,20 @@ class ServiceRequestRescheduleTest extends TestCase
 
     private function bookedRequest(?Carbon $scheduledAt = null, ?Vehicle $vehicle = null): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
             'vehicle_id' => $vehicle?->vehicle_id,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => $scheduledAt ?? Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0),
         ]);
+
+        return $request;
     }
 
     private function manilaString(Carbon $instant): string
@@ -108,8 +115,8 @@ class ServiceRequestRescheduleTest extends TestCase
         ])->assertOk();
 
         $fresh = $request->fresh();
-        $this->assertTrue($fresh->scheduled_at->utc()->equalTo($newStart));
-        $this->assertTrue($fresh->scheduled_end->utc()->equalTo($newEnd));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_end->utc()->equalTo($newEnd));
         $this->assertSame('Resident asked to move the pickup later.', $fresh->remarks);
     }
 
@@ -131,12 +138,16 @@ class ServiceRequestRescheduleTest extends TestCase
         $newEnd = $newStart->copy()->addHours(2);
 
         // The only Ambulance unit is already committed elsewhere for that window.
-        ServiceRequest::create([
+        $conflicting = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Another booking',
             'status' => 'Booked',
             'vehicle_id' => $this->amb01->vehicle_id,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $conflicting->getKey(),
             'scheduled_at' => $newStart->copy(),
             'scheduled_end' => $newEnd->copy(),
         ]);
@@ -147,7 +158,7 @@ class ServiceRequestRescheduleTest extends TestCase
             'remarks' => 'Trying to move it anyway.',
         ])->assertStatus(422);
 
-        $this->assertNotNull($request->fresh()->scheduled_at);
+        $this->assertNotNull($request->fresh()->ambulanceBooking->scheduled_at);
     }
 
     /**
@@ -162,7 +173,7 @@ class ServiceRequestRescheduleTest extends TestCase
 
         $originalStart = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
         $request = $this->bookedRequest($originalStart, $this->amb01);
-        $request->update(['scheduled_end' => $originalStart->copy()->addHours(2)]);
+        $request->ambulanceBooking->update(['scheduled_end' => $originalStart->copy()->addHours(2)]);
 
         // Overlaps the original window — without self-exclusion this would
         // wrongly read as "AMB-01 is busy" against its own old booking.
@@ -177,7 +188,7 @@ class ServiceRequestRescheduleTest extends TestCase
 
         $fresh = $request->fresh();
         $this->assertSame($this->amb01->vehicle_id, $fresh->vehicle_id);
-        $this->assertTrue($fresh->scheduled_at->utc()->equalTo($newStart));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
     }
 
     public function test_rescheduling_texts_the_resident_the_new_time_and_reason(): void
@@ -214,7 +225,7 @@ class ServiceRequestRescheduleTest extends TestCase
             'remarks' => 'Resident asked to move the pickup later.',
         ])->assertOk();
 
-        $this->assertTrue($request->fresh()->scheduled_at->utc()->equalTo($newStart));
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
     }
 
     /**

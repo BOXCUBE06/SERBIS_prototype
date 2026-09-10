@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
 use App\Models\Resident;
@@ -71,14 +72,20 @@ class ServiceRequestCancelTest extends TestCase
 
     private function bookedRequest(?Carbon $scheduledAt = null, ?Vehicle $vehicle = null): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
             'vehicle_id' => $vehicle?->vehicle_id,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => $scheduledAt ?? Carbon::now('UTC')->addDays(2),
         ]);
+
+        return $request;
     }
 
     public function test_owner_cancels_a_booked_request(): void

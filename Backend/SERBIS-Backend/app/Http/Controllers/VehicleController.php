@@ -72,11 +72,16 @@ class VehicleController extends Controller
         // flag: reassigning those bookings is a decision for a person, made
         // with the list below in hand, not a checkbox that skips past it.
         if (($validated['status'] ?? null) === 'Maintenance' && $vehicle->status !== 'Maintenance') {
-            $futureBookings = ServiceRequest::where('vehicle_id', $vehicle->vehicle_id)
-                ->where('status', 'Booked')
-                ->where('scheduled_at', '>', now())
-                ->orderBy('scheduled_at')
-                ->get(['request_id', 'scheduled_at']);
+            // Joined: scheduled_at now lives on tbl_ambulance_bookings.
+            // Selected under its plain name so it hydrates onto the model
+            // as the usual `scheduled_at` attribute, cast to Carbon as always.
+            $futureBookings = ServiceRequest::query()
+                ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
+                ->where('tbl_service_request.vehicle_id', $vehicle->vehicle_id)
+                ->where('tbl_service_request.status', 'Booked')
+                ->where('tbl_ambulance_bookings.scheduled_at', '>', now())
+                ->orderBy('tbl_ambulance_bookings.scheduled_at')
+                ->get(['tbl_service_request.request_id', 'tbl_ambulance_bookings.scheduled_at']);
 
             if ($futureBookings->isNotEmpty()) {
                 $names = $futureBookings
@@ -113,11 +118,15 @@ class VehicleController extends Controller
             ], 422);
         }
 
-        $futureRequests = ServiceRequest::where('vehicle_id', $vehicle->vehicle_id)
-            ->whereNotIn('status', ServiceRequestController::TERMINAL_STATUSES)
-            ->where('scheduled_at', '>', now())
-            ->orderBy('scheduled_at')
-            ->get(['request_id', 'scheduled_at']);
+        // Joined: scheduled_at now lives on tbl_ambulance_bookings. Same
+        // select-under-its-plain-name approach as the Maintenance guard above.
+        $futureRequests = ServiceRequest::query()
+            ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
+            ->where('tbl_service_request.vehicle_id', $vehicle->vehicle_id)
+            ->whereNotIn('tbl_service_request.status', ServiceRequestController::TERMINAL_STATUSES)
+            ->where('tbl_ambulance_bookings.scheduled_at', '>', now())
+            ->orderBy('tbl_ambulance_bookings.scheduled_at')
+            ->get(['tbl_service_request.request_id', 'tbl_ambulance_bookings.scheduled_at']);
 
         if ($futureRequests->isNotEmpty()) {
             $names = $futureRequests

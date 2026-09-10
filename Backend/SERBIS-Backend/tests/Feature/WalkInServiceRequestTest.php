@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -173,8 +174,14 @@ class WalkInServiceRequestTest extends TestCase
             ->assertJsonPath('status', 'Booked')
             ->assertJsonPath('vehicle_id', null);
 
+        // No booking row: $this->service deliberately is not the ambulance
+        // service (see setUp()'s comment), and AmbulanceBooking is only ever
+        // created for one. The lock/availability-check path that got this
+        // request to 'Booked' is not gated on that the same way — this test's
+        // only claim is that it still isn't, and that scheduled_at is not
+        // silently persisted anywhere for a service that cannot own a booking.
         $created = ServiceRequest::findOrFail($response->json('request_id'));
-        $this->assertTrue($created->scheduled_at->utc()->equalTo($target));
+        $this->assertNull($created->ambulanceBooking);
     }
 
     public function test_a_scheduled_walk_in_does_not_claim_a_unit_even_with_required_vehicle_type(): void
@@ -200,11 +207,15 @@ class WalkInServiceRequestTest extends TestCase
         $unit = Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available']);
         $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
 
-        ServiceRequest::create([
+        $existing = ServiceRequest::create([
             'service_id' => $this->service->service_id,
             'vehicle_id' => $unit->vehicle_id,
             'description' => 'Existing booking',
             'status' => 'Booked',
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $existing->getKey(),
             'scheduled_at' => $target->copy(),
             'scheduled_end' => $target->copy()->addHours(2),
         ]);

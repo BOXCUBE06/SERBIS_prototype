@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -87,13 +88,19 @@ class ServiceRequestApproveTest extends TestCase
 
     private function bookedRequest(?Carbon $scheduledAt = null): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => $scheduledAt ?? Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0),
         ]);
+
+        return $request;
     }
 
     public function test_approving_assigns_the_unit_and_keeps_status_booked(): void
@@ -112,9 +119,9 @@ class ServiceRequestApproveTest extends TestCase
 
         $fresh = $request->fresh();
         $this->assertSame($this->amb01->vehicle_id, $fresh->vehicle_id);
-        $this->assertNotNull($fresh->approved_at);
+        $this->assertNotNull($fresh->ambulanceBooking->approved_at);
         $this->assertSame($this->admin->getKey(), $fresh->processed_by);
-        $this->assertTrue($fresh->scheduled_end->utc()->equalTo($target->copy()->addHours(2)));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_end->utc()->equalTo($target->copy()->addHours(2)));
 
         // Approval reserves the window, not the vehicle physically leaving —
         // it must stay Available until an actual dispatch.
@@ -134,7 +141,7 @@ class ServiceRequestApproveTest extends TestCase
             'scheduled_end' => $customEnd->copy()->setTimezone('Asia/Manila')->format('Y-m-d H:i:s'),
         ])->assertOk();
 
-        $this->assertTrue($request->fresh()->scheduled_end->utc()->equalTo($customEnd));
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_end->utc()->equalTo($customEnd));
     }
 
     public function test_approving_refuses_a_maintenance_unit(): void
@@ -171,12 +178,16 @@ class ServiceRequestApproveTest extends TestCase
         $request = $this->bookedRequest($target);
 
         // Someone else got AMB-01 for the same window in the meantime.
-        ServiceRequest::create([
+        $conflicting = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Another booking that beat this one to approval',
             'status' => 'Booked',
             'vehicle_id' => $this->amb01->vehicle_id,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $conflicting->getKey(),
             'scheduled_at' => $target->copy(),
             'scheduled_end' => $target->copy()->addHours(2),
         ]);
@@ -229,7 +240,7 @@ class ServiceRequestApproveTest extends TestCase
             'vehicle_id' => $this->amb01->vehicle_id,
         ])->assertOk();
 
-        $firstApprovedAt = $request->fresh()->approved_at;
+        $firstApprovedAt = $request->fresh()->ambulanceBooking->approved_at;
         $this->assertNotNull($firstApprovedAt);
         Http::assertSentCount(1);
 
@@ -241,7 +252,7 @@ class ServiceRequestApproveTest extends TestCase
         $this->assertSame($this->amb02->vehicle_id, $request->fresh()->vehicle_id);
         $this->assertSame('Available', $this->amb01->fresh()->status);
         // ...approved_at records the original approval, not the swap...
-        $this->assertTrue($firstApprovedAt->equalTo($request->fresh()->approved_at));
+        $this->assertTrue($firstApprovedAt->equalTo($request->fresh()->ambulanceBooking->approved_at));
         // ...and no second SMS went out for it — the gate is on approved_at
         // already being set before the call, not on the call itself.
         Http::assertSentCount(1);

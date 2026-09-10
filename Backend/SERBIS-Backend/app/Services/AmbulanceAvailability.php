@@ -51,10 +51,11 @@ class AmbulanceAvailability
             ->where('status', '!=', 'Maintenance')
             ->where('status', '!=', 'Dispatched')
             ->whereDoesntHave('serviceRequests', function (Builder $query) use ($start, $end, $excludeServiceRequestId): void {
-                $query->whereNotIn('status', ServiceRequestController::TERMINAL_STATUSES)
-                    ->where('scheduled_at', '<', $end)
-                    ->where('scheduled_end', '>', $start)
-                    ->when($excludeServiceRequestId, fn (Builder $q) => $q->where('request_id', '!=', $excludeServiceRequestId));
+                $query->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
+                    ->whereNotIn('tbl_service_request.status', ServiceRequestController::TERMINAL_STATUSES)
+                    ->where('tbl_ambulance_bookings.scheduled_at', '<', $end)
+                    ->where('tbl_ambulance_bookings.scheduled_end', '>', $start)
+                    ->when($excludeServiceRequestId, fn (Builder $q) => $q->where('tbl_service_request.request_id', '!=', $excludeServiceRequestId));
             })
             ->get();
     }

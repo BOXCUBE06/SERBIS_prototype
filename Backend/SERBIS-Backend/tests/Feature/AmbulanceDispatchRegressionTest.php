@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
 use App\Models\Resident;
@@ -166,6 +167,10 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'service_id' => $this->ambulance->service_id,
             'description' => 'Scheduled dialysis transport',
             'status' => 'Booked',
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => now()->addDays(2),
         ]);
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -66,9 +67,13 @@ class ServiceRequestRejectTest extends TestCase
             'service_id' => $service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
-            // A real Booked row always carries this; without it the rejection
-            // notification's own guard (scheduled_at !== null) would silently
-            // skip, and this fixture would not actually exercise that path.
+        ]);
+
+        // A real Booked row always carries this; without it the rejection
+        // notification's own guard (scheduled_at !== null) would silently
+        // skip, and this fixture would not actually exercise that path.
+        AmbulanceBooking::create([
+            'request_id' => $this->request->getKey(),
             'scheduled_at' => Carbon::now('UTC')->addDays(2),
         ]);
 

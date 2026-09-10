@@ -133,12 +133,17 @@ class AmbulanceBookingModelTest extends TestCase
         $booking = $request->fresh()->ambulanceBooking;
 
         $this->assertNotNull($booking);
-        // The default factory state schedules a two-hour window — asserted
-        // via the relation, not a literal value, since only equality with
-        // the parent's own columns is what this test is protecting.
+        // The default factory state schedules a two-hour window, some day
+        // in the next two weeks — asserted structurally, since the exact
+        // instant is randomised and the parent's own copy is nulled once
+        // the factory moves it onto the booking.
         $this->assertNotNull($booking->scheduled_at);
-        $this->assertTrue($booking->scheduled_at->equalTo($request->scheduled_at));
-        $this->assertTrue($booking->scheduled_end->equalTo($request->scheduled_end));
+        $this->assertNotNull($booking->scheduled_end);
+        $this->assertTrue($booking->scheduled_at->copy()->addHours(2)->equalTo($booking->scheduled_end));
+
+        // Moved, not left behind.
+        $this->assertNull($request->fresh()->scheduled_at);
+        $this->assertNull($request->fresh()->scheduled_end);
     }
 
     public function test_the_factorys_unscheduled_state_still_creates_a_booking_row_with_null_fields(): void

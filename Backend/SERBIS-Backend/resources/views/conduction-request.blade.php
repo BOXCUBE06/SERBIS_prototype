@@ -282,8 +282,7 @@
          * ['people', 'serviceRequest.relatives', 'serviceRequest.ambulanceBooking'].
          *
          * Field sources, in the order the form asks for them:
-         *   patient block, From/To                  tbl_ambulance_bookings
-         *   scheduled date                           tbl_service_request
+         *   patient block, From/To, scheduled date  tbl_ambulance_bookings
          *   relatives                                tbl_service_request_relatives
          *   drivers / authorized passengers          tbl_conduction_request_people
          *   timestamps, odometers, others            tbl_conduction_requests
@@ -315,7 +314,7 @@
         $diagnosis      = $val($booking?->condition_notes ?: $trip->medical_diagnosis);
         $from           = $val($booking?->pickup_location ?: $trip->origin);
         $to             = $val($booking?->destination     ?: $trip->destination);
-        $scheduled      = $when($request?->scheduled_at);
+        $scheduled      = $when($booking?->scheduled_at);
 
         /**
          * Relatives named at intake. createConductionStub copies these into

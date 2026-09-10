@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -88,19 +89,25 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
 
     private function bookedAmbulanceRequest(array $overrides = []): ServiceRequest
     {
-        return ServiceRequest::create(array_merge([
+        $request = ServiceRequest::create(array_merge([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->ambulance->getKey(),
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
-            'scheduled_at' => Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0),
         ], $overrides));
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
+            'scheduled_at' => Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0),
+        ]);
+
+        return $request;
     }
 
     public function test_an_unapproved_ambulance_booking_cannot_be_dispatched(): void
     {
         $request = $this->bookedAmbulanceRequest();
-        $this->assertNull($request->approved_at);
+        $this->assertNull($request->ambulanceBooking->approved_at);
 
         $response = $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -126,7 +133,7 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
             'vehicle_id' => $this->vehicle->vehicle_id,
         ])->assertOk();
 
-        $this->assertNotNull($request->fresh()->approved_at);
+        $this->assertNotNull($request->fresh()->ambulanceBooking->approved_at);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',

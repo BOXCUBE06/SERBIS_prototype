@@ -49,6 +49,18 @@ class ServiceRequestFactory extends Factory
                 'scheduled_end' => $serviceRequest->scheduled_end,
                 'approved_at' => $serviceRequest->approved_at,
             ]);
+
+            // Copied above, not left behind: a real write path
+            // (store()/adminStore()/approve()/reschedule()) never puts these
+            // on the parent row any more, and a factory-made fixture must
+            // not be the one place that still does — every reader of
+            // ServiceRequest is required to go through ambulanceBooking now.
+            $serviceRequest->forceFill([
+                'patient_name' => null, 'patient_age' => null, 'patient_sex' => null,
+                'patient_address' => null, 'patient_contact_number' => null,
+                'pickup_location' => null, 'destination' => null, 'condition_notes' => null,
+                'scheduled_at' => null, 'scheduled_end' => null, 'approved_at' => null,
+            ])->save();
         });
     }
 

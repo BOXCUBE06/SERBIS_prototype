@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
@@ -215,6 +216,10 @@ class ServiceRequestTransitionMatrixTest extends TestCase
 
         $request = $this->requestWithStatus('Booked', [
             'service_id' => $this->ambulance->getKey(),
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => now()->addDays(2),
         ]);
 

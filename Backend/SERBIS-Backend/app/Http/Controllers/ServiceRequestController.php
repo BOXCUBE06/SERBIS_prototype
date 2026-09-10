@@ -126,10 +126,18 @@ class ServiceRequestController extends Controller
      */
     private const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response';
 
-    /** The columns update() must route to AmbulanceBooking rather than write onto this row. */
-    private const PATIENT_FIELDS = [
+    /**
+     * The columns update() must route to AmbulanceBooking rather than write
+     * onto this row. update() does not currently validate scheduled_at,
+     * scheduled_end or approved_at as input — reschedule()/approve() are the
+     * conflict-checked paths for those — but the split is listed here too,
+     * defensively: if $validated ever carries one, Arr::except below must
+     * still strip it before it reaches this row.
+     */
+    private const BOOKING_FIELDS = [
         'patient_name', 'patient_age', 'patient_sex', 'patient_address',
         'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
+        'scheduled_at', 'scheduled_end', 'approved_at',
     ];
 
     /** Null if the service was seeded without a code column somehow, or does not exist. */
@@ -389,7 +397,6 @@ class ServiceRequestController extends Controller
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
-                    'scheduled_at' => $scheduledAt,
                 ]);
 
                 // Ambulance-only, same as adminStore()'s row: nothing reads
@@ -406,6 +413,7 @@ class ServiceRequestController extends Controller
                         'pickup_location' => $validated['pickup_location'] ?? null,
                         'destination' => $validated['destination'] ?? null,
                         'condition_notes' => $validated['condition_notes'] ?? null,
+                        'scheduled_at' => $scheduledAt,
                     ]);
                 }
 
@@ -795,7 +803,6 @@ class ServiceRequestController extends Controller
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
-                    'scheduled_at' => $scheduledAt,
                 ]);
 
                 // Ambulance-only. Null for every other service, same as an
@@ -812,6 +819,7 @@ class ServiceRequestController extends Controller
                         'pickup_location' => $validated['pickup_location'] ?? null,
                         'destination' => $validated['destination'] ?? null,
                         'condition_notes' => $validated['condition_notes'] ?? null,
+                        'scheduled_at' => $scheduledAt,
                     ]);
                 }
 
@@ -954,9 +962,11 @@ class ServiceRequestController extends Controller
         // near" to cancel, it has already happened. Without the guard, gte()
         // stays true forever once the cutoff window passes, so a booking left
         // unresolved past its own schedule could never be cancelled again.
-        if ($serviceRequest->scheduled_at
-            && $serviceRequest->scheduled_at->isFuture()
-            && now()->gte($serviceRequest->scheduled_at->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
+        $scheduledAt = $serviceRequest->ambulanceBooking?->scheduled_at;
+
+        if ($scheduledAt
+            && $scheduledAt->isFuture()
+            && now()->gte($scheduledAt->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
         ) {
             return response()->json([
                 'message' => 'This booking is too close to its scheduled time to cancel. Call the office instead.',
@@ -1128,7 +1138,7 @@ class ServiceRequestController extends Controller
     {
         $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a unit';
 
-        return 'SERBIS: Your ambulance booking for '.$this->forResident($serviceRequest->scheduled_at)
+        return 'SERBIS: Your ambulance booking for '.$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at)
             .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
     }
 
@@ -1173,7 +1183,7 @@ class ServiceRequestController extends Controller
     {
         return $this->withReason(
             'SERBIS: Your ambulance booking has been moved to '
-                .$this->forResident($serviceRequest->scheduled_at).'. Reason: ',
+                .$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at).'. Reason: ',
             $reason,
             ' — MDRRMO Echague',
         );
@@ -1265,7 +1275,7 @@ class ServiceRequestController extends Controller
         if ($isAmbulanceRequest
             && $serviceRequest->status === 'Booked'
             && ($validated['status'] ?? null) === 'Responding'
-            && ! $serviceRequest->approved_at
+            && ! $serviceRequest->ambulanceBooking?->approved_at
         ) {
             throw ValidationException::withMessages([
                 'status' => 'This booking must be approved before it can be dispatched.',
@@ -1360,16 +1370,16 @@ class ServiceRequestController extends Controller
         // Captured before update() overwrites status: rejecting a booking is
         // the case this endpoint notifies for (the panel's older, unscheduled
         // Pending -> Disapproved flow is not "a booking" and stays silent).
-        $wasBookingRejection = $serviceRequest->scheduled_at !== null
+        $wasBookingRejection = $serviceRequest->ambulanceBooking?->scheduled_at !== null
             && $serviceRequest->status !== 'Disapproved'
             && ($validated['status'] ?? null) === 'Disapproved';
 
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
-            $bookingFields = Arr::only($validated, self::PATIENT_FIELDS);
+            $bookingFields = Arr::only($validated, self::BOOKING_FIELDS);
 
-            $serviceRequest->update(Arr::except($validated, self::PATIENT_FIELDS));
+            $serviceRequest->update(Arr::except($validated, self::BOOKING_FIELDS));
 
             // Same invariant as store()/adminStore(): only an ambulance
             // request ever gets a booking row. A non-ambulance request
@@ -1501,7 +1511,9 @@ class ServiceRequestController extends Controller
             ], 422);
         }
 
-        if (! $serviceRequest->scheduled_at) {
+        $scheduledAt = $serviceRequest->ambulanceBooking?->scheduled_at;
+
+        if (! $scheduledAt) {
             return response()->json([
                 'message' => 'This request has no scheduled time to approve against.',
             ], 422);
@@ -1518,9 +1530,9 @@ class ServiceRequestController extends Controller
 
         $scheduledEnd = ! empty($validated['scheduled_end'])
             ? Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc()
-            : $serviceRequest->scheduled_at->copy()->addHours(self::DEFAULT_BOOKING_HOURS);
+            : $scheduledAt->copy()->addHours(self::DEFAULT_BOOKING_HOURS);
 
-        if ($scheduledEnd->lte($serviceRequest->scheduled_at)) {
+        if ($scheduledEnd->lte($scheduledAt)) {
             throw ValidationException::withMessages([
                 'scheduled_end' => 'scheduled_end must be after scheduled_at.',
             ]);
@@ -1531,9 +1543,9 @@ class ServiceRequestController extends Controller
         // point, and only the first one is worth a billed SMS to the
         // resident — PhilSMS has no sandbox and charges per segment, and a
         // re-approval was re-sending the identical "approved" text every time.
-        $wasAlreadyApproved = $serviceRequest->approved_at !== null;
+        $wasAlreadyApproved = $serviceRequest->ambulanceBooking?->approved_at !== null;
 
-        DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledEnd) {
+        DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledAt, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
             // decides who the window's last free unit goes to.
             $units = Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
@@ -1555,7 +1567,7 @@ class ServiceRequestController extends Controller
             // Re-checked, not trusted from submission time: the window may
             // have filled with other approvals since this request was filed.
             $freeIds = $this->availability
-                ->availableAmbulances($serviceRequest->scheduled_at, $scheduledEnd, $serviceRequest->request_id)
+                ->availableAmbulances($scheduledAt, $scheduledEnd, $serviceRequest->request_id)
                 ->pluck('vehicle_id');
 
             if (! $freeIds->contains($vehicle->vehicle_id)) {
@@ -1570,9 +1582,12 @@ class ServiceRequestController extends Controller
 
             $serviceRequest->update([
                 'vehicle_id' => $vehicle->vehicle_id,
-                'scheduled_end' => $scheduledEnd,
-                'approved_at' => $serviceRequest->approved_at ?? now(),
                 'processed_by' => $request->user()->getKey(),
+            ]);
+
+            AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], [
+                'scheduled_end' => $scheduledEnd,
+                'approved_at' => $serviceRequest->ambulanceBooking?->approved_at ?? now(),
             ]);
         });
 
@@ -1651,10 +1666,11 @@ class ServiceRequestController extends Controller
                 ]);
             }
 
-            $serviceRequest->update([
+            $serviceRequest->update(['remarks' => $validated['remarks']]);
+
+            AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], [
                 'scheduled_at' => $scheduledAt,
                 'scheduled_end' => $scheduledEnd,
-                'remarks' => $validated['remarks'],
             ]);
         });
 
