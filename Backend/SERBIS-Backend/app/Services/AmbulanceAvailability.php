@@ -51,7 +51,15 @@ class AmbulanceAvailability
             ->where('status', '!=', 'Maintenance')
             ->where('status', '!=', 'Dispatched')
             ->whereDoesntHave('serviceRequests', function (Builder $query) use ($start, $end, $excludeServiceRequestId): void {
-                $query->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
+                // whereDoesntHave() defaults this subquery's SELECT to *,
+                // which after the join below would pull in
+                // tbl_ambulance_bookings' own request_id/created_at/updated_at
+                // alongside tbl_service_request's — harmless for a NOT EXISTS
+                // (MySQL never materialises the columns), but not a pattern to
+                // leave standing. One real, qualified column is enough for an
+                // existence check.
+                $query->select('tbl_service_request.request_id')
+                    ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
                     ->whereNotIn('tbl_service_request.status', ServiceRequestController::TERMINAL_STATUSES)
                     ->where('tbl_ambulance_bookings.scheduled_at', '<', $end)
                     ->where('tbl_ambulance_bookings.scheduled_end', '>', $start)
