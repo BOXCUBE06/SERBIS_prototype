@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\AmbulanceBooking;
+use App\Models\Service;
 use App\Models\ServiceRequest;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -17,6 +19,38 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class ServiceRequestFactory extends Factory
 {
     protected $model = ServiceRequest::class;
+
+    /**
+     * Keeps the one-booking-row-per-ambulance-request invariant for every
+     * row this factory creates — mirrors what the migration's backfill and
+     * (from phase 4 on) the controllers themselves maintain. Resolved by
+     * code, never hardcoded, same as everywhere else this lookup happens.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (ServiceRequest $serviceRequest) {
+            $ambulanceServiceId = Service::where('code', 'ambulance-medical-response')->value('service_id');
+
+            if ($ambulanceServiceId === null || (int) $serviceRequest->service_id !== $ambulanceServiceId) {
+                return;
+            }
+
+            AmbulanceBooking::create([
+                'request_id' => $serviceRequest->request_id,
+                'patient_name' => $serviceRequest->patient_name,
+                'patient_age' => $serviceRequest->patient_age,
+                'patient_sex' => $serviceRequest->patient_sex,
+                'patient_address' => $serviceRequest->patient_address,
+                'patient_contact_number' => $serviceRequest->patient_contact_number,
+                'pickup_location' => $serviceRequest->pickup_location,
+                'destination' => $serviceRequest->destination,
+                'condition_notes' => $serviceRequest->condition_notes,
+                'scheduled_at' => $serviceRequest->scheduled_at,
+                'scheduled_end' => $serviceRequest->scheduled_end,
+                'approved_at' => $serviceRequest->approved_at,
+            ]);
+        });
+    }
 
     public function definition(): array
     {

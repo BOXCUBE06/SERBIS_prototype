@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Table('tbl_service_request', key: 'request_id')]
 #[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'patient_name', 'patient_age', 'patient_sex', 'patient_address', 'patient_contact_number', 'pickup_location', 'destination', 'condition_notes', 'valid_id', 'site_photo', 'status', 'remarks', 'internal_notes', 'vehicle_id', 'scheduled_at', 'scheduled_end', 'approved_at'])]
@@ -66,6 +67,12 @@ class ServiceRequest extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
+    }
+
+    /** Ambulance's own patient/scheduling columns. Only present for an ambulance request. */
+    public function ambulanceBooking(): HasOne
+    {
+        return $this->hasOne(AmbulanceBooking::class, 'request_id', 'request_id');
     }
 
     /** The trip log(s) filed against this booking. Nothing enforces one-per-request at the schema level. */
