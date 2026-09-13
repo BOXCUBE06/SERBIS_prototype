@@ -331,3 +331,21 @@ does not follow this migration; only a fresh install of a build made against
 the new `API_BASE_URL` does. If both APIs are kept running side by side
 during a transition, decide explicitly how long Render stays up for
 whoever has not reinstalled — this repo does not do that decision for you.
+
+## 9. Troubleshooting
+
+**`AH00534: apache2: Configuration error: More than one MPM loaded.`** —
+every step before Apache starts succeeds (env validation, `migrate --force`,
+seeding); the container fails only on `apache2-foreground` itself. Cause:
+neither `Dockerfile` nor `docker-entrypoint.sh` ever asserted which Apache
+MPM should be enabled — `mod_php` requires exactly `mpm_prefork` (it is not
+thread-safe, and this image is not the ZTS build), and both files simply
+trusted whatever `php:8.4-apache` happened to ship enabled by default. That
+tag is mutable; a build on one host can pull a different revision than a
+build on another, and this surfaced on Railway on a Dockerfile that had run
+on Render for weeks without it — not because Render was ever safe from it,
+only because its build happened to land on a revision with one MPM enabled.
+Fixed by pinning the base image to a digest and asserting `mpm_prefork`
+explicitly in the Dockerfile (`a2dismod mpm_event mpm_worker; a2enmod
+mpm_prefork`) rather than trusting the image's default — see the comment
+directly above that line for the reasoning.
