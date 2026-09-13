@@ -27,6 +27,14 @@ class SendReturnRemindersTest extends TestCase
     {
         parent::setUp();
 
+        // Pinned so every bare now()/today()/addDay() call in this file — and
+        // the command's own single Carbon::now() read — lands on the same
+        // instant regardless of when the suite actually runs. A real midnight
+        // crossing between fixture setup and the command's read used to make
+        // "due tomorrow" and "due today" miss each other; see
+        // SendReturnDueReminders::handle()'s single $now read.
+        Carbon::setTestNow(Carbon::parse('2026-09-10 09:00:00', 'Asia/Manila'));
+
         $this->equipment = Equipment::create([
             'item_name' => 'Rubber Boat',
             'total_quantity' => 4,
