@@ -160,6 +160,8 @@ class _AuthGateState extends State<AuthGate> {
           _currentUser = user;
           _ready = true;
         });
+        unawaited(registerDeviceToken(_api));
+        listenForTokenRefresh(_api);
         return;
       } on ApiException catch (e) {
         // Before `mounted` is checked: a failure that happens as the widget is
@@ -184,6 +186,8 @@ class _AuthGateState extends State<AuthGate> {
               _currentUser = cached;
               _ready = true;
             });
+            unawaited(registerDeviceToken(_api));
+            listenForTokenRefresh(_api);
             return;
           }
         }
@@ -226,6 +230,8 @@ class _AuthGateState extends State<AuthGate> {
       _currentUser = user;
       _ready = true;
     });
+    unawaited(registerDeviceToken(_api));
+    listenForTokenRefresh(_api);
   }
 
   /// Registration now ends at the code screen rather than at the login form:

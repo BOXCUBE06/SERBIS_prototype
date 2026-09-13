@@ -1,6 +1,7 @@
 library serbis.state.api_service;
 
 import 'dart:convert';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -185,6 +186,20 @@ class ApiService {
         body: body != null ? jsonEncode(body) : null,
       ),
       endpoint: 'PATCH $path',
+    );
+  }
+
+  Future<Map<String, dynamic>> _delete(
+    String path, [
+    Map<String, dynamic>? body,
+  ]) {
+    return _send(
+      () => http.delete(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+        body: body != null ? jsonEncode(body) : null,
+      ),
+      endpoint: 'DELETE $path',
     );
   }
 
@@ -542,7 +557,29 @@ class ApiService {
     return listFrom(data);
   }
 
+  /// Upserts by [token] — the same call for a first registration and a later
+  /// refresh. See push_messaging.dart for who calls this and when.
+  Future<void> registerDeviceToken(String token, String platform) async {
+    await _post('/device-tokens', {'token': token, 'platform': platform});
+  }
+
+  Future<void> removeDeviceToken(String token) async {
+    await _delete('/device-tokens', {'token': token});
+  }
+
   Future<void> logout() async {
+    // Best effort and before the local token is cleared below: a device that
+    // fails to unregister just keeps this account's pushes arriving on a
+    // handset nobody is signed into any more, not a broken logout.
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await removeDeviceToken(token);
+      }
+    } catch (error) {
+      AppLog.error(_logArea, 'remove device token', error: error);
+    }
+
     try {
       await _post('/logout', {});
     } catch (_) {

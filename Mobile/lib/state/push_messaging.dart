@@ -4,13 +4,15 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
+import 'api_service.dart';
 import 'app_log.dart';
 
 const _logArea = 'push';
 
-/// Step 1 of push notifications: register the device with FCM and read its
-/// token back. Nothing is sent anywhere — there is no token column, no upload
-/// call and no send path yet, deliberately.
+/// Registers the device with FCM and reads its token back. Uploading that
+/// token to the backend is a separate step — see [registerDeviceToken] —
+/// because there is no resident to attach it to yet this early; this call
+/// only asks Play services for one.
 ///
 /// Never throws. A device with no Play services, an emulator image without
 /// them, or a missing google-services.json all end the same way: no token, one
@@ -60,5 +62,65 @@ Future<void> initPushMessaging() async {
   } catch (error) {
     AppLog.error(_logArea, 'FCM registration', error: error,
         reason: 'push unavailable, app continues');
+  }
+}
+
+/// Android only. There is no GoogleService-Info.plist yet, so iOS has
+/// nothing configured to register a token against.
+bool get _pushSupported =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+/// Uploads this device's current FCM token to the backend, tied to whichever
+/// resident is signed in on [api]. Called after login and, on app start, when
+/// a stored session is restored — both are "this device belongs to this
+/// resident now" moments.
+///
+/// Never throws — a failed upload just leaves this device without push for
+/// the resident to notice on their own, same as a failed [initPushMessaging].
+Future<void> registerDeviceToken(ApiService api) async {
+  if (!_pushSupported) {
+    return;
+  }
+
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null) {
+      return;
+    }
+
+    await api.registerDeviceToken(token, 'android');
+  } catch (error) {
+    AppLog.error(_logArea, 'register device token', error: error);
+  }
+}
+
+bool _listeningForTokenRefresh = false;
+
+/// Starts re-uploading this device's token whenever FCM rotates it. [api] is
+/// stable for the life of the app, so only the first successful call
+/// actually subscribes — safe to call again from every place
+/// [registerDeviceToken] is called from, including a retry if the first call
+/// lost the race with [initPushMessaging]'s own Firebase.initializeApp().
+///
+/// FirebaseMessaging.instance throws synchronously, not just its Future-
+/// returning methods, if no app is registered yet — that has to be inside
+/// the try too, or this breaks the same "never throws" guarantee every other
+/// push entry point holds.
+void listenForTokenRefresh(ApiService api) {
+  if (!_pushSupported || _listeningForTokenRefresh) {
+    return;
+  }
+
+  try {
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      try {
+        await api.registerDeviceToken(token, 'android');
+      } catch (error) {
+        AppLog.error(_logArea, 'device token refresh', error: error);
+      }
+    });
+    _listeningForTokenRefresh = true;
+  } catch (error) {
+    AppLog.error(_logArea, 'listen for token refresh', error: error);
   }
 }
