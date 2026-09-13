@@ -56,3 +56,7 @@ app.*.map.json
 # Gradle build output for the Android host project. Regenerated on every
 # build; `/build/` above only covers the Flutter root.
 /android/build/
+
+# Firebase config, carries a project API key. Per-developer, from the
+# Firebase console, never committed.
+/android/app/google-services.json
