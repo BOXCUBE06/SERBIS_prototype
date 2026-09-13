@@ -129,4 +129,11 @@ port="${PORT:-10000}"
 sed -ri "s/^Listen .*/Listen ${port}/" /etc/apache2/ports.conf
 sed -ri "s!<VirtualHost \*:[0-9]+>!<VirtualHost *:${port}>!" /etc/apache2/sites-available/000-default.conf
 
+# The image enables only mpm_prefork, yet Railway booted with a second MPM, so the
+# fix must hold at runtime. Logged first so the boot log shows what was there.
+echo "docker-entrypoint: MPMs enabled at boot: $(ls /etc/apache2/mods-enabled/ | grep '^mpm_' | tr '\n' ' ')"
+rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.*
+[ -e /etc/apache2/mods-enabled/mpm_prefork.load ] \
+    || fail "mpm_prefork is not enabled; mod_php cannot run under any other MPM."
+
 exec "$@"

@@ -22,12 +22,7 @@
 # composer.lock present it would produce an empty map and quietly fall back to
 # filesystem lookups on every class in app/.
 # ---------------------------------------------------------------------------
-# Pinned by digest, not just the 8.4-apache tag: a tag is mutable, and a
-# Railway build pulling a newer revision than whatever Render happened to
-# build against is exactly what surfaced AH00534 "More than one MPM loaded"
-# on a Dockerfile that had run fine on Render for weeks — nothing here ever
-# asserted which MPM should be enabled, so both builds silently trusted
-# whatever the base image shipped that day. Update deliberately: re-resolve
+# Pinned by digest because the tag is mutable. Update deliberately: re-resolve
 # the digest for 8.4-apache, read what changed, then bump it here.
 FROM php:8.4-apache@sha256:51da594c844a97f31b1cd6b1ac6660982f40788f4fe13e75f7fd39e2f9b58651 AS vendor
 
@@ -85,14 +80,12 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
         echo 'opcache.validate_timestamps=0'; \
     } > "$PHP_INI_DIR/conf.d/serbis.ini"
 
-# mod_php is not thread-safe (this image is not the ZTS build), so exactly
-# mpm_prefork must be enabled and the threaded ones must not be — Apache
-# refuses to start at all ("AH00534: More than one MPM loaded") if more than
-# one is active. This used to be left to whatever the base image shipped
-# enabled by default; asserted explicitly now, unconditionally, so a base
-# image update can no longer change it under us. a2dismod on a module that
-# is already disabled is a no-op that still exits 0.
-RUN a2dismod mpm_event mpm_worker 2>/dev/null; a2enmod mpm_prefork
+# mod_php needs exactly mpm_prefork. No error swallowing: a failed a2dismod must
+# fail the build. The ls and configtest print the MPM state into the build log.
+RUN a2dismod mpm_event mpm_worker \
+    && a2enmod mpm_prefork \
+    && ls -la /etc/apache2/mods-enabled/ | grep mpm_ \
+    && apache2ctl configtest
 
 # Laravel's front controller is public/index.php; serving /var/www/html would
 # expose .env, storage/ and vendor/ to the internet. mod_rewrite is what makes
