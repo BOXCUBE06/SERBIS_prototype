@@ -137,35 +137,54 @@ every start regardless of which service triggered it.
 | `MAIL_FROM_NAME` | optional | no | fixed: `SERBIS` |
 | `PHILSMS_TOKEN` | **required** | **yes** | PhilSMS dashboard — a hard deploy blocker, registration OTP has no other channel |
 | `PHILSMS_SENDER_ID` | optional | no | fixed: `PhilSMS`, the shared default |
-| `FIREBASE_CREDENTIALS_B64` | **required for push** | **yes** | base64 of the downloaded service-account JSON — see the callout below |
-| `FIREBASE_CREDENTIALS` | **required for push** | no (the path, not the file) | written by the boot sequence from the variable above — see below |
+| `FIREBASE_CREDENTIALS_BASE64` | **required for push** | **yes** | base64 of the downloaded service-account JSON — see the callout below |
+| `FIREBASE_CREDENTIALS` | set by the boot sequence, not by hand | no (the path, not the file) | written from the variable above — see below |
 | `SANCTUM_ADMIN_EXPIRATION` | optional | no | fixed: `480` |
 | `SANCTUM_RESIDENT_EXPIRATION` | optional | no | fixed: `43200` |
 | `ADMIN_FRONTEND_URL` | **required** | no | the Vercel admin panel's real origin — see §8 |
 
-**How the Firebase service-account file actually gets onto the container —
-flagged, not yet built.** `App\Services\Fcm` reads `FIREBASE_CREDENTIALS` as
-a **path to a file**, and that file must never be committed — the same rule
-as every other credential here, but this one is shaped as a file, not a
-string, and Railway has no repository-independent place to put a bare file
-the way Render can bake `storage/certs/aiven-ca.pem` into the image (that
-file is a public CA certificate; this one is a private key). The plan: paste
-the downloaded JSON, base64-encoded, into `FIREBASE_CREDENTIALS_B64`, and add
-one line near the top of `docker-entrypoint.sh` — before the environment
-validation block — that decodes it to a file under `storage/` and points
-`FIREBASE_CREDENTIALS` at that path:
+**How the Firebase service-account file actually gets onto the container.**
+`App\Services\Fcm` reads `FIREBASE_CREDENTIALS` as a **path to a file**, and
+that file must never be committed — the same rule as every other credential
+here, but this one is shaped as a file, not a string, and Railway has no
+repository-independent place to put a bare file the way Render can bake
+`storage/certs/aiven-ca.pem` into the image (that file is a public CA
+certificate; this one is a private key). `docker-entrypoint.sh` now handles
+this itself: set `FIREBASE_CREDENTIALS_BASE64` and it decodes that value to
+`storage/app/firebase-credentials.json` on every boot and points
+`FIREBASE_CREDENTIALS` at that file — nothing else to configure, and nothing
+to set by hand on `FIREBASE_CREDENTIALS` itself on Railway.
 
-```bash
-if [ -n "${FIREBASE_CREDENTIALS_B64:-}" ]; then
-    echo "$FIREBASE_CREDENTIALS_B64" | base64 -d > /var/www/html/storage/app/firebase-credentials.json
-    export FIREBASE_CREDENTIALS=/var/www/html/storage/app/firebase-credentials.json
-fi
-```
+1. **Download the service-account JSON** from Firebase Console -> Project
+   Settings -> Service Accounts -> Generate new private key.
+2. **Base64-encode it, on Windows, in PowerShell** — this produces one
+   unbroken line, which matters for where it is pasted next: a Railway
+   variable field is a single line of text, and a value that arrives
+   already split across several lines (which is what most `base64`
+   implementations produce by default, wrapped at 76 characters, meant for
+   things like email attachments) is exactly the shape a paste into a
+   single-line field can silently mangle. `base64 -d` itself tolerates
+   embedded newlines fine — verified directly — so this is about the
+   dashboard field, not the decoder.
 
-That edit is **not part of this commit** — this document is the deploy plan,
-not the code change. Land it in its own commit before the first real deploy;
-without it, `Fcm::configured()` returns false and every push silently no-ops,
-exactly as it does today with no credentials configured at all.
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\firebase-service-account.json")) | Set-Clipboard
+   ```
+
+   That copies the result straight to the clipboard. In Git Bash instead,
+   the equivalent is `base64 -w0 firebase-service-account.json` — the `-w0`
+   is what turns off the 76-character wrapping.
+3. **Paste the result into `FIREBASE_CREDENTIALS_BASE64`** on both the web
+   and cron services (§4) — the raw base64 text, not a file, not a path.
+4. **Do not also set `FIREBASE_CREDENTIALS`** on Railway. If both are set,
+   `docker-entrypoint.sh` still decodes the base64 form and overwrites
+   `FIREBASE_CREDENTIALS` with the resulting file path — the base64 form
+   wins, silently, so leaving the other one unset avoids the question.
+5. **Confirm at the next deploy's boot log.** A bad copy-paste — a stray
+   newline, a character dropped by the clipboard — fails the boot
+   immediately with `FIREBASE_CREDENTIALS_BASE64 decoded to invalid JSON`,
+   not a silently-disabled push path discovered later. That is what §6 step
+   6 is for either way, but a failed boot is the earlier and louder signal.
 
 ### Never set these in production
 
@@ -271,11 +290,11 @@ assumed.
    (`POST /api/device-tokens`, signed in as the resident from step 4), then
    approve, reject, or reschedule an ambulance booking for that resident from
    the admin panel and confirm the push arrives on the device. This is the
-   one check that exercises `FIREBASE_CREDENTIALS` end to end — if it was
-   never wired per the callout in §3, this step fails quietly (`Fcm`
-   no-ops, nothing throws, nothing appears) rather than with an error, so
-   confirm the notification actually arrives rather than just that the
-   request returned 200.
+   one check that exercises `FIREBASE_CREDENTIALS` end to end — if
+   `FIREBASE_CREDENTIALS_BASE64` was never set per §3, this step fails
+   quietly (`Fcm` no-ops, nothing throws, nothing appears) rather than with
+   an error, so confirm the notification actually arrives rather than just
+   that the request returned 200.
 7. **Admin panel.** Vercel is unchanged — this step is the client switch in
    §8, done once the API is otherwise verified.
 8. **Mobile.** A fresh APK build, not a reused one — see §8 for why an
