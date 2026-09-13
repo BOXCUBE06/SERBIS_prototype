@@ -12,14 +12,12 @@ use App\Models\ServiceRequestRelative;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
-use App\Services\PhilSms;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -99,8 +97,7 @@ class ServiceRequestController extends Controller
      * from/to pairs were reachable: a Resolved request could be reopened, a
      * Cancelled one dispatched, a Disapproved one resolved, and a Booked
      * request could reach Responding without ever going through approve() —
-     * skipping its availability re-check, leaving approved_at NULL and
-     * approvalMessage() never sent.
+     * skipping its availability re-check and leaving approved_at NULL.
      *
      * 'Cancelled' is deliberately absent as a key: cancel() is the only route
      * that ever writes it, and it does so on the model directly rather than
@@ -1075,120 +1072,6 @@ class ServiceRequestController extends Controller
         }
     }
 
-    /**
-     * Texts a resident that their booking's status changed. Follows the OTP
-     * call pattern at AuthController::sendVerificationCode(): PhilSms is the
-     * only channel — there is no Laravel Notifications setup, and
-     * MAIL_MAILER is 'log' in production (render.yaml), so an email
-     * "fallback" here would not actually reach anyone, unlike the OTP flow
-     * where email is a real second channel. Walk-in bookings carry no
-     * resident_id and are silently skipped; there is no one to text.
-     *
-     * Deliberately best-effort: this always runs after the transaction that
-     * made the change has already committed (called from outside every
-     * DB::transaction() block below), so a delivery failure can only ever
-     * fail to inform, never undo a booking that already landed. Never
-     * throws — every failure path is caught and logged instead. The
-     * 45-second poll and cold-launch fetch this is compensating for
-     * (main.dart:320, :390) still catch a resident up if the text never
-     * arrives.
-     */
-    private function notifyResident(ServiceRequest $serviceRequest, string $message): void
-    {
-        if ($serviceRequest->resident_id === null) {
-            return;
-        }
-
-        $resident = $serviceRequest->resident ?? $serviceRequest->resident()->first();
-
-        if (! $resident || ! PhilSms::configured()) {
-            return;
-        }
-
-        $number = PhilSms::normalize((string) $resident->phone_number);
-
-        if ($number === '') {
-            return;
-        }
-
-        try {
-            $response = app(PhilSms::class)->send([$number], $message);
-
-            if (! PhilSms::accepted($response)) {
-                Log::warning('Booking status-change SMS not accepted', [
-                    'request_id' => $serviceRequest->request_id,
-                    'status' => $response->status(),
-                ]);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Booking status-change SMS failed', [
-                'request_id' => $serviceRequest->request_id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
-    private function forResident(Carbon $instant): string
-    {
-        return $instant->copy()->timezone(self::OFFICE_TIMEZONE)->format('M j, Y g:i A');
-    }
-
-    private function approvalMessage(ServiceRequest $serviceRequest): string
-    {
-        $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a unit';
-
-        return 'SERBIS: Your ambulance booking for '.$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at)
-            .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
-    }
-
-    /** One billed PhilSMS segment. Past this the vendor charges for a second. */
-    private const SMS_SEGMENT_LIMIT = 160;
-
-    /**
-     * Assembles a message whose middle is staff-typed, trimming that middle —
-     * and only that middle — until the whole body fits one segment.
-     *
-     * The `max:160` on `remarks` bounds what a human types, but it cannot
-     * bound the *assembled* body: these templates add roughly eighty
-     * characters of their own, so a remark at the cap would still bill two
-     * segments. Trimming here rather than raising the validation cap keeps the
-     * limit the admin is shown (160) the same as the limit on the field they
-     * are typing into, and keeps the suffix — which says who sent the text —
-     * from being what gets cut.
-     */
-    private function withReason(string $prefix, string $reason, string $suffix): string
-    {
-        $budget = self::SMS_SEGMENT_LIMIT - mb_strlen($prefix) - mb_strlen($suffix);
-
-        if (mb_strlen($reason) > $budget) {
-            // Ellipsis included in the budget, so the result lands on the limit
-            // rather than one character past it.
-            $reason = mb_substr($reason, 0, max(0, $budget - 1)).'…';
-        }
-
-        return $prefix.$reason.$suffix;
-    }
-
-    private function rejectionMessage(string $reason): string
-    {
-        return $this->withReason(
-            'SERBIS: Your ambulance booking request was not approved. Reason: ',
-            $reason,
-            ' — MDRRMO Echague',
-        );
-    }
-
-    private function rescheduleMessage(ServiceRequest $serviceRequest, string $reason): string
-    {
-        return $this->withReason(
-            'SERBIS: Your ambulance booking has been moved to '
-                .$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at).'. Reason: ',
-            $reason,
-            ' — MDRRMO Echague',
-        );
-    }
-
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
@@ -1218,13 +1101,9 @@ class ServiceRequestController extends Controller
             // reject is the only transition this endpoint makes without a human
             // having already typed something into the request beforehand.
             //
-            // Capped for the same reason SmsController::sendBlast caps its
-            // message at 160: on a rejection this string is pasted into a
-            // PhilSMS body, and PhilSMS bills per segment with no sandbox. The
-            // column is a TEXT and took anything, so a long remark was a
-            // multi-segment billed message nobody priced. 160 is the cap on
-            // what a human types; notifyResident's own builder is what
-            // guarantees the assembled body still fits one segment.
+            // 160 is a leftover cap from when this string was pasted into a
+            // billed PhilSMS body; the SMS is gone but the column is still a
+            // TEXT that took anything before this existed, so the cap stays.
             'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
             // Staff-only, never sent to PhilSMS and never returned to a resident
             // (see index()/show()) — so it carries no per-segment SMS cap.
@@ -1367,13 +1246,6 @@ class ServiceRequestController extends Controller
             }
         }
 
-        // Captured before update() overwrites status: rejecting a booking is
-        // the case this endpoint notifies for (the panel's older, unscheduled
-        // Pending -> Disapproved flow is not "a booking" and stays silent).
-        $wasBookingRejection = $serviceRequest->ambulanceBooking?->scheduled_at !== null
-            && $serviceRequest->status !== 'Disapproved'
-            && ($validated['status'] ?? null) === 'Disapproved';
-
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
@@ -1402,10 +1274,6 @@ class ServiceRequestController extends Controller
                 $this->createConductionStub($serviceRequest);
             }
         });
-
-        if ($wasBookingRejection) {
-            $this->notifyResident($serviceRequest, $this->rejectionMessage((string) $validated['remarks']));
-        }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
     }
@@ -1538,13 +1406,6 @@ class ServiceRequestController extends Controller
             ]);
         }
 
-        // Captured before the transaction overwrites it: a first approval and
-        // a re-approval that only swaps the assigned unit both reach this
-        // point, and only the first one is worth a billed SMS to the
-        // resident — PhilSMS has no sandbox and charges per segment, and a
-        // re-approval was re-sending the identical "approved" text every time.
-        $wasAlreadyApproved = $serviceRequest->ambulanceBooking?->approved_at !== null;
-
         DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledAt, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
             // decides who the window's last free unit goes to.
@@ -1592,10 +1453,6 @@ class ServiceRequestController extends Controller
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
-
-        if (! $wasAlreadyApproved) {
-            $this->notifyResident($fresh, $this->approvalMessage($fresh));
-        }
 
         return response()->json($fresh);
     }
@@ -1675,7 +1532,6 @@ class ServiceRequestController extends Controller
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
-        $this->notifyResident($fresh, $this->rescheduleMessage($fresh, (string) $validated['remarks']));
 
         return response()->json($fresh);
     }

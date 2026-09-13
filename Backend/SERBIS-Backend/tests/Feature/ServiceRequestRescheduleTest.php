@@ -20,8 +20,8 @@ use Tests\TestCase;
  * reason approve() gets one: a locked availability re-check update() cannot
  * do.
  *
- * PhilSMS has no sandbox — preventStrayRequests() is what makes a reschedule
- * test safe to run at all, same as SmsBlastLoggingTest.
+ * preventStrayRequests() is on regardless — no code path here calls out
+ * to PhilSMS any more, but it stays as a tripwire in case one is added back.
  */
 class ServiceRequestRescheduleTest extends TestCase
 {
@@ -102,8 +102,6 @@ class ServiceRequestRescheduleTest extends TestCase
 
     public function test_admin_reschedules_an_unapproved_booking(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
         $request = $this->bookedRequest();
         $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
         $newEnd = $newStart->copy()->addHours(2);
@@ -169,8 +167,6 @@ class ServiceRequestRescheduleTest extends TestCase
      */
     public function test_rescheduling_an_approved_booking_keeps_its_own_unit(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
         $originalStart = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
         $request = $this->bookedRequest($originalStart, $this->amb01);
         $request->ambulanceBooking->update(['scheduled_end' => $originalStart->copy()->addHours(2)]);
@@ -189,43 +185,6 @@ class ServiceRequestRescheduleTest extends TestCase
         $fresh = $request->fresh();
         $this->assertSame($this->amb01->vehicle_id, $fresh->vehicle_id);
         $this->assertTrue($fresh->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
-    }
-
-    public function test_rescheduling_texts_the_resident_the_new_time_and_reason(): void
-    {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
-        $request = $this->bookedRequest();
-        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
-
-        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
-            'scheduled_at' => $this->manilaString($newStart),
-            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
-            'remarks' => 'Resident asked to move the pickup later.',
-        ])->assertOk();
-
-        Http::assertSent(function ($sent) {
-            return $sent->url() === 'https://dashboard.philsms.com/api/v3/sms/send'
-                && str_contains($sent['message'], 'Resident asked to move the pickup later.')
-                && str_contains($sent['message'], 'moved to');
-        });
-    }
-
-    public function test_a_send_failure_does_not_affect_the_reschedule_itself(): void
-    {
-        // No fake registered — preventStrayRequests() throws the moment
-        // notifyResident() tries to send, proving the failure never reaches
-        // the caller: the reschedule itself still commits and answers 200.
-        $request = $this->bookedRequest();
-        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
-
-        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
-            'scheduled_at' => $this->manilaString($newStart),
-            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
-            'remarks' => 'Resident asked to move the pickup later.',
-        ])->assertOk();
-
-        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
     }
 
     /**
@@ -247,29 +206,4 @@ class ServiceRequestRescheduleTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('remarks');
     }
 
-    /**
-     * The cap on the field is not on its own enough: the template adds about
-     * ninety characters of its own, so a remark at the limit would still bill
-     * two segments. The assembled body is what has to fit.
-     */
-    public function test_the_assembled_text_stays_within_one_segment(): void
-    {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
-        $request = $this->bookedRequest();
-        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
-
-        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
-            'scheduled_at' => $this->manilaString($newStart),
-            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
-            'remarks' => str_repeat('a', 160),
-        ])->assertOk();
-
-        Http::assertSent(function ($sent) {
-            // The attribution survives the trim — it is the reason, not the
-            // sender, that gets cut.
-            return mb_strlen($sent['message']) <= 160
-                && str_contains($sent['message'], 'MDRRMO Echague');
-        });
-    }
 }
