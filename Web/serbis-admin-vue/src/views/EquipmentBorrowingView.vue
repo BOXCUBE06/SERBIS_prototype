@@ -1,12 +1,14 @@
 <template>
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
-    <!-- Header -->
-    <div class="page-header">
-      <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
-      <div class="text-subtitle-2 text-medium-emphasis">
-        Move each request through the pipeline — approve, release, then confirm its return
-      </div>
-    </div>
+    <!-- 28px, not the mb-6/24px most other headers use: this page's own
+         documented vertical-rhythm system marks it the "region break"
+         before the tabs, distinct from the tighter intra-group gaps further
+         down (see the comment above .page-tabs below). -->
+    <PageHeader
+      title="Equipment Borrowing"
+      subtitle="Move each request through the pipeline — approve, release, then confirm its return"
+      style="margin-bottom: 28px;"
+    />
 
     <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">
       <v-tab value="board" class="text-none font-weight-bold">
@@ -98,7 +100,7 @@
           @click="clearAllFilters"
         >Clear all</v-btn>
       </template>
-      <span class="text-caption text-medium-emphasis ml-auto" aria-live="polite">
+      <span class="page-subtitle text-medium-emphasis ml-auto" aria-live="polite">
         {{ resultSummary }}
       </span>
     </div>
@@ -363,12 +365,16 @@
         </template>
 
         <template v-slot:item.barangay="{ item }">
-          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || 'N/A'">
+            {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          </span>
         </template>
 
         <template v-slot:item.equipment="{ item }">
-          {{ itemName(item) }}
-          <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+          <span class="cell-truncate" :title="itemName(item)">
+            {{ itemName(item) }}
+            <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+          </span>
         </template>
 
         <template v-slot:item.created_at="{ item }">
@@ -774,25 +780,15 @@ import { useRowNumbers } from '@/composables/rowNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
 
-// Status colours: saturated 700-level ramp, each AA with white text as a
-// badge (measured, see EquipmentBorrowingView audit history). Semantic
-// (data-viz), not brand tokens — except Returned, which uses the system
-// primary green (success tracks primary).
-const columns = [
-  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline' },
-  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
-  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
-  { status: 'Returned', label: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline', terminal: true },
-  { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true },
-  // The resident withdrew it themselves (PATCH /borrowings/{id}/cancel), so it
-  // is not a refusal and must not sit in the red the way Denied does. Slate
-  // 600, 7.4:1 with white text as a badge. Terminal here too: nothing in this
-  // panel can move a cancelled request, and the backend refuses every attempt.
-  { status: 'Cancelled', label: 'Cancelled', accent: '#475569', icon: 'mdi-cancel', terminal: true },
-]
+// Status colours, icons and labels: one definition in borrowingStatus.ts,
+// shared with ProcurementReferenceView (same rows, read-only there). Used
+// to be two verbatim-identical arrays that only agreed by accident.
+const columns = BORROWING_STATUSES
 
 // The "no filter" sentinel for each select. Named rather than repeated as a
 // string literal: it is compared in four places and rendered in one.
@@ -1097,8 +1093,6 @@ const borrowingForLabel = (item) => {
   // relation null and this line would otherwise read as empty.
   return `${item?.resident?.first_name || ''} ${item?.resident?.last_name || ''}`.trim() || 'Unknown borrower'
 }
-const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
-const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
 
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
@@ -1541,8 +1535,8 @@ onMounted(() => {
    the selects and the chips showing what those selects did are one thought
    split across two rows. 28px is the region break. The status strip sits 16px
    above the table because it counts the rows in it; it is a caption for that
-   table, not a band of its own. */
-.page-header { margin-bottom: 28px; }
+   table, not a band of its own. The header's own 28px now lives inline on
+   the PageHeader tag in the template, next to the comment explaining it. */
 .page-tabs { margin-bottom: 24px; }
 .filter-active { margin-bottom: 28px; }
 .status-strip { margin-bottom: 16px; }
@@ -1603,8 +1597,10 @@ onMounted(() => {
 .stat-tile .stat-value { font-size: 1.15rem; font-weight: 800; line-height: 1; }
 .stat-tile .stat-label { font-size: 0.8rem; font-weight: 600; }
 
-/* Table. Fixed layout keeps the truncating cells stable; matches the
-   elegant-table pattern used across User Management and Fleet Management.
+/* Table. Fixed layout keeps the truncating cells stable, the same fixed-
+   layout-plus-min-width fix used on every other data table in the app now
+   (User Management is the one exception with its own richer treatment,
+   not a pattern named "elegant-table" that this table is part of).
    The 720px min-width is load-bearing: without it, `width: 100%` on a fixed
    table lets a narrow wrapper crush every column instead of scrolling —
    "waiting" wraps to one letter per line rather than the table scrolling

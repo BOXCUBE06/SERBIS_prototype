@@ -8,13 +8,10 @@
             <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
-            <div>
-              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Text Blast (SMS)</h2>
-              <!-- "active, opted-in" is exact: SmsController::sendBlast filters
-                   status = Active AND sms_opt_in AND a non-null phone number, so
-                   "every resident" would overstate who actually receives this. -->
-              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">One message to the active, opted-in residents of the barangays you pick</div>
-            </div>
+            <!-- "active, opted-in" is exact: SmsController::sendBlast filters
+                 status = Active AND sms_opt_in AND a non-null phone number, so
+                 "every resident" would overstate who actually receives this. -->
+            <PageHeader title="Text Blast (SMS)" subtitle="One message to the active, opted-in residents of the barangays you pick" />
 
             <!-- Pushed right, and deliberately quiet. The balance is context for
                  a decision, not a call to action — and it must never read as a
@@ -284,6 +281,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { describeSms, nameCharacter } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const message = ref('')
 const loading = ref(false)

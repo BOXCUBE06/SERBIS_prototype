@@ -24,7 +24,12 @@ fail() {
 #    Render dashboard, a PDO connection refusal is not.
 #
 #    DB_CONNECTION is deliberately not required — config/database.php defaults
-#    it to mysql.
+#    it to mysql. MYSQL_ATTR_SSL_CA is deliberately not required either: Aiven
+#    mandated TLS and shipped a CA for it, but Railway's MySQL is reached over
+#    the private network within the same project, which needs no TLS at all.
+#    config/database.php already tolerates this being unset (array_filter
+#    drops it, PDO gets no ATTR_SSL_CA option) — see the conditional check
+#    below for what still applies when a host does need it.
 # ---------------------------------------------------------------------------
 for var in \
     APP_KEY \
@@ -33,24 +38,27 @@ for var in \
     DB_DATABASE \
     DB_USERNAME \
     DB_PASSWORD \
-    ADMIN_SEED_PASSWORD \
-    MYSQL_ATTR_SSL_CA
+    ADMIN_SEED_PASSWORD
 do
     if [ -z "${!var:-}" ]; then
         fail "$var is not set. Set it on the Render service and redeploy."
     fi
 done
 
+# Only checked when MYSQL_ATTR_SSL_CA is actually set — a host that requires
+# TLS (Aiven did) still gets the same guard against a wrong or unreadable path.
 # The CA is checked as a file, not merely as a non-empty string, because of how
 # config/database.php reads it: the path goes through array_filter, so a value
 # that is present but wrong yields a connection with no ATTR_SSL_CA at all.
 # MySQL still negotiates TLS in that case — it simply stops verifying who is on
 # the other end. That failure looks exactly like a working deployment, which is
 # why it is caught here instead of in production.
-[ -f "$MYSQL_ATTR_SSL_CA" ] \
-    || fail "MYSQL_ATTR_SSL_CA points at $MYSQL_ATTR_SSL_CA, which is not a file. Without a readable CA the database connection is unverified."
-[ -r "$MYSQL_ATTR_SSL_CA" ] \
-    || fail "MYSQL_ATTR_SSL_CA points at $MYSQL_ATTR_SSL_CA, which $(id -un) cannot read. Without a readable CA the database connection is unverified."
+if [ -n "${MYSQL_ATTR_SSL_CA:-}" ]; then
+    [ -f "$MYSQL_ATTR_SSL_CA" ] \
+        || fail "MYSQL_ATTR_SSL_CA points at $MYSQL_ATTR_SSL_CA, which is not a file. Without a readable CA the database connection is unverified."
+    [ -r "$MYSQL_ATTR_SSL_CA" ] \
+        || fail "MYSQL_ATTR_SSL_CA points at $MYSQL_ATTR_SSL_CA, which $(id -un) cannot read. Without a readable CA the database connection is unverified."
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Caches. Compiled first so that migrate and db:seed below run against the

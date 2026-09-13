@@ -3,21 +3,20 @@
     <v-row>
       <v-col cols="12">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Procurement Reference</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">
-              Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC
-            </div>
-          </div>
-          <v-btn
-            variant="tonal" rounded="lg" height="48" class="px-6 text-none font-weight-bold"
-            :loading="reloading" @click="refresh"
-          >
-            <v-icon start size="20">mdi-refresh</v-icon> Refresh
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Procurement Reference"
+          subtitle="Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn
+              variant="tonal" rounded="lg" height="48" class="px-6 text-none font-weight-bold"
+              :loading="reloading" @click="refresh"
+            >
+              <v-icon start size="20">mdi-refresh</v-icon> Refresh
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert
           v-if="loadError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg" role="alert"
@@ -71,7 +70,7 @@
             class="control-field-sm"
           ></v-select>
           <v-spacer></v-spacer>
-          <span class="text-body-2 text-medium-emphasis">{{ filtered.length }} of {{ rows.length }}</span>
+          <span class="page-subtitle text-medium-emphasis">{{ filtered.length }} of {{ rows.length }}</span>
         </div>
 
         <div v-if="initialLoad" class="d-flex justify-center py-16">
@@ -95,15 +94,15 @@
             item-value="borrow_id"
             :items-per-page="10"
             density="comfortable"
-            class="text-body-2"
+            class="text-body-2 procurement-table"
           >
             <template v-slot:item.number="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
             <template v-slot:item.other_equipment_text="{ item }">
-              <div class="font-weight-bold text-high-emphasis">{{ item.other_equipment_text }}</div>
-              <div v-if="item.purpose" class="text-caption text-medium-emphasis cell-truncate">{{ item.purpose }}</div>
+              <div class="font-weight-bold text-high-emphasis cell-truncate" :title="item.other_equipment_text">{{ item.other_equipment_text }}</div>
+              <div v-if="item.purpose" class="text-caption text-medium-emphasis cell-truncate" :title="item.purpose">{{ item.purpose }}</div>
             </template>
 
             <template v-slot:item.quantity="{ item }">
@@ -146,7 +145,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { fmtDate } from '@/composables/adminUi'
 import { useBorrowingsList } from '@/composables/borrowingsList'
+import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 import { useRowNumbers } from '@/composables/rowNumber'
+import PageHeader from '@/components/PageHeader.vue'
 
 /**
  * The MDRRMC procurement reference: every borrow request that named an item the
@@ -163,17 +164,6 @@ import { useRowNumbers } from '@/composables/rowNumber'
  * independent fetch would double the panel's heaviest read for identical data.
  */
 
-// Same accents and icons as the borrowing board — the status words are the
-// same vocabulary and must not be drawn two different ways in one panel.
-const STATUS_META = [
-  { status: 'Pending', accent: '#B45309', icon: 'mdi-clock-outline' },
-  { status: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
-  { status: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
-  { status: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline' },
-  { status: 'Denied', accent: '#B91C1C', icon: 'mdi-close-circle-outline' },
-  { status: 'Cancelled', accent: '#475569', icon: 'mdi-cancel' },
-]
-
 const CLOSED_STATUSES = ['Returned', 'Denied', 'Cancelled']
 const ALL_STATUS = 'All'
 
@@ -182,10 +172,7 @@ const { rows: allBorrowings, loadError, initialLoad, reloading, load } = useBorr
 const search = ref('')
 const statusFilter = ref(ALL_STATUS)
 
-const statusOptions = [ALL_STATUS, ...STATUS_META.map((s) => s.status)]
-
-const statusAccent = (status) => STATUS_META.find((s) => s.status === status)?.accent || '#64748B'
-const statusIcon = (status) => STATUS_META.find((s) => s.status === status)?.icon || 'mdi-help-circle-outline'
+const statusOptions = [ALL_STATUS, ...BORROWING_STATUSES.map((s) => s.status)]
 
 // The whole definition of this page: a borrowing whose item is free text rather
 // than an inventory row. The backend's CHECK constraint guarantees exactly one
@@ -226,9 +213,9 @@ const rowNumber = useRowNumbers(filtered, 'borrow_id')
 
 const headers = [
   { title: '#', key: 'number', sortable: false, width: 64 },
-  { title: 'Item requested', key: 'other_equipment_text' },
+  { title: 'Item requested', key: 'other_equipment_text', width: '32%' },
   { title: 'Qty', key: 'quantity', width: 90 },
-  { title: 'Requested by', key: 'resident', sortable: false },
+  { title: 'Requested by', key: 'resident', sortable: false, width: '24%' },
   { title: 'Date filed', key: 'created_at', width: 150 },
   { title: 'Request status', key: 'status', width: 170 },
 ]
@@ -245,7 +232,6 @@ onMounted(() => load({ ifEmpty: true }))
 /* Same locally-scoped utilities the sibling views define — VehiclesView,
    EquipmentBorrowingView. There is no shared stylesheet for them. */
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
-.tracking-tight { letter-spacing: -0.02em; }
 .tracking-widest { letter-spacing: 0.12em; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
@@ -266,6 +252,11 @@ onMounted(() => load({ ifEmpty: true }))
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Fixed layout keeps the six columns at their declared widths; the
+   resident-typed equipment name is the one field here with no length
+   limit at the source. */
+.procurement-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 760px; }
 
 .row-number {
   font-variant-numeric: tabular-nums;

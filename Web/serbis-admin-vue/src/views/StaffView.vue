@@ -3,22 +3,21 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Staff Accounts</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">
-              Who can sign in to this panel. Every admin can manage every other.
-            </div>
-          </div>
-          <v-btn
-            color="primary" variant="flat" rounded="lg" height="48"
-            class="px-6 text-none font-weight-bold btn-soft-shadow"
-            @click="openAdd"
-          >
-            <v-icon start size="20">mdi-account-plus-outline</v-icon> Add staff account
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Staff Accounts"
+          subtitle="Who can sign in to this panel. Every admin can manage every other."
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn
+              color="primary" variant="flat" rounded="lg" height="48"
+              class="px-6 text-none font-weight-bold btn-soft-shadow"
+              @click="openAdd"
+            >
+              <v-icon start size="20">mdi-account-plus-outline</v-icon> Add staff account
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert
           v-if="apiError" type="error" variant="tonal" class="mb-6"
@@ -49,7 +48,7 @@
             :items="admins"
             :items-per-page="10"
             item-value="admin_id"
-            class="elegant-table"
+            class="staff-table"
           >
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
@@ -267,6 +266,7 @@ import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/admins`
 
@@ -306,7 +306,7 @@ const clearFieldErrors = () => { fieldErrors.value = {} }
 
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Name', key: 'name', sortable: false },
+  { title: 'Name', key: 'name', sortable: false, width: '55%' },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '220px' },
 ]
@@ -500,14 +500,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
@@ -559,4 +555,14 @@ onMounted(() => {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* Fixed layout keeps the four columns stable regardless of name/email
+   length. Was `.elegant-table` — the exact class name UsersView's table
+   carries, but Vue's scoped styles don't cross files, so it inherited
+   none of that table's CSS (dark-green header, 76px rows) and did
+   nothing here. "elegant-table" also isn't a shared pattern to opt into:
+   of the app's eight data tables, only UsersView carries that
+   treatment — the other seven (this one included) use the plain
+   uppercase-caps header below. Renamed to say what it actually is. */
+.staff-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 520px; }
 </style>

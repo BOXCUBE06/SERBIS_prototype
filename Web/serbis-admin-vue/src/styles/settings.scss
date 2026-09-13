@@ -26,3 +26,150 @@
 .v-messages__message {
   transition: none !important;
 }
+
+/* ServiceRequest-family status pills — Pending/Booked/Responding/Resolved/
+ * Disapproved/Cancelled, plus the Resolved-with-no-arrival split. Used by
+ * ServiceRequestQueue.vue and ConductionRequestView.vue, which used to carry
+ * this exact block twice, each file's own comment admitting it was a copy
+ * ("mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly"). One
+ * definition here now; both files just use the classes.
+ *
+ * v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
+ * `background: currentColor`. Measured plain tonal chips failed AA on every
+ * status (warning 2.36:1, info 3.84:1, success 4.27:1, error 4.03:1, all on
+ * their own tint over white) — these pills use the tint for background and
+ * the paired `-strong` token for text instead.
+ */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+/* The list row is a denser context than the detail header — one step smaller,
+   nothing else changes. */
+.status-pill--sm {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.pill-pending {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
+/* Booked is the one status with no semantic token behind it -- the theme
+   carries five hues and all five are spoken for, and Booked has to be told
+   apart from Responding at a glance. Literal violet, measured the same way the
+   tokens in plugins/vuetify.ts were: #5B21B6 on rgba(#6D28D9, 0.14) over white
+   is 7.14:1, and #A78BFA on its own 10% tint over #131B2E is 5.42:1. Both
+   clear AA. Promote to a token pair if a second component ever needs it. */
+.pill-booked {
+  background: rgba(109, 40, 217, 0.14);
+  color: #5B21B6;
+}
+.pill-responding {
+  background: rgba(var(--v-theme-info), 0.14);
+  color: rgb(var(--v-theme-info-strong));
+}
+.pill-resolved {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success-strong));
+}
+.pill-disapproved {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error-strong));
+}
+/* Cancelled used to share Disapproved's red rule. Split out: checked both
+   ServiceRequestController.php:962 and EquipmentBorrowingController.php:281
+   before making this change, and a Cancelled request/booking in both models
+   is the resident withdrawing it themselves, never a staff refusal — the
+   same fact EquipmentBorrowingView's own Cancelled pill (a different, solid-
+   fill rendering, borrowingStatus.ts) already used to justify staying out of
+   the red. Sharing this slate rule with Resolved-no-arrival below rather
+   than inventing a third grey. */
+.pill-cancelled,
+.pill-resolved-no-arrival {
+  background: rgba(100, 116, 139, 0.14);
+  color: #334155;
+}
+.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
+.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
+.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
+.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
+.v-theme--dark .pill-disapproved { background-color: rgba(var(--v-theme-error), 0.10); }
+.v-theme--dark .pill-cancelled,
+.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+
+/* Page header typography — used by components/PageHeader.vue, which now
+ * owns the header ROW (title, subtitle, trailing actions, one flex/gap
+ * rule) for every route; see that file for what it deliberately leaves to
+ * each page (outer margin, action-button styling). This pair used to be a
+ * straight copy of whatever `text-h4 font-weight-bold` + `text-subtitle-2`
+ * computed to live (24px / 16px, a 1.5 ratio) — copying a Vuetify utility
+ * pairing isn't the same as choosing a scale, and Impeccable's Operate-mode
+ * guidance (SKILL.md, loaded 2026-09-09) is explicit that product UI wants
+ * a tighter step ratio, ~1.125-1.2, than a marketing surface: more type
+ * elements are on screen at once here, and loose contrast between them
+ * reads as noise, not hierarchy.
+ *
+ * Re-derived instead from the app's own real, already-distinct sizes,
+ * measured live rather than assumed (this build's text-h3/text-h6 both
+ * collapse to one shared 18.72px dialog/section-title tier; text-caption/
+ * text-body-1/text-body-2/text-subtitle-2 all collapse to plain 16px body
+ * text — Vuetify's utility scale is thinner here than its class names
+ * suggest, which is exactly why these are hand-authored px values rather
+ * than utility classes):
+ *   .page-title    24px — one step above the existing ~18.72px section-
+ *                  title tier, so a page's own identity still reads as the
+ *                  biggest thing on it without shouting. Unchanged from
+ *                  the previous pass.
+ *   .page-subtitle 14px — one step below the app's 16px body text, not
+ *                  equal to it. Tightened from 16px: a page subtitle (or
+ *                  the "N of M" counter line it doubles as, see below) is
+ *                  secondary information and reads better denser, and
+ *                  16px was never a real design decision, just what a
+ *                  Vuetify utility happened to fall back to. */
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 36px;
+  letter-spacing: -0.48px;
+}
+.page-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+/* The primary create-action button's hover lift — "Add Unit", "Add
+ * Equipment", "Add staff account". Was byte-identical in VehiclesView,
+ * EquipmentInventoryView and StaffView, plus a fourth, unused copy in
+ * ServicesConfigView (which has no create button to put it on) that carried
+ * a `prefers-reduced-motion` guard the three *used* copies didn't. Kept
+ * that guard here rather than dropping it with the other three duplicates —
+ * it was the one part of the dead copy worth keeping. */
+.btn-soft-shadow {
+  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-soft-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-soft-shadow { transition: none; }
+  .btn-soft-shadow:hover { transform: none; }
+}
+
+/* .page-subtitle doubles as the filter/counter row's summary line ("N of M",
+ * "N active requests") — three views (EquipmentBorrowingView,
+ * ProcurementReferenceView, ServicesConfigView) each had their own class
+ * for this (text-caption/text-body-2/text-body-1) that, checked live, all
+ * computed to the same fallback 16px anyway. Now genuinely one definition:
+ * they get the tightened 14px along with every page subtitle, not a
+ * fourth separate size. */

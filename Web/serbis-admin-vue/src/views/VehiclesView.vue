@@ -3,16 +3,17 @@
     <v-row>
       <v-col cols="12">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Vehicles</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Which units are available and which are currently dispatched</div>
-          </div>
-          <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-            <v-icon start size="20">mdi-plus</v-icon> Add Unit
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Vehicles"
+          subtitle="Which units are available and which are currently dispatched"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
+              <v-icon start size="20">mdi-plus</v-icon> Add Unit
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
@@ -238,6 +239,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']
@@ -460,7 +462,6 @@ onMounted(fetchVehicles)
 
 <style scoped>
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
-.tracking-tight { letter-spacing: -0.02em; }
 .tracking-widest { letter-spacing: 0.12em; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
@@ -469,9 +470,6 @@ onMounted(fetchVehicles)
 .min-w-0 { min-width: 0; }
 .control-field { width: 260px; max-width: 100%; }
 .control-field-sm { width: 180px; max-width: 100%; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
@@ -528,7 +526,9 @@ onMounted(fetchVehicles)
   100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0); }
 }
 
-/* Fleet list */
+/* Fleet list. Fixed layout keeps the five columns stable regardless of unit-
+   identifier length. */
+.fleet-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
 .fleet-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;
@@ -558,9 +558,12 @@ onMounted(fetchVehicles)
   transition: filter 0.15s ease;
 }
 .status-pill:hover { filter: brightness(0.97); }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
-.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
+   error on their own tint measures under AA (see plugins/vuetify.ts for the
+   ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
+.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

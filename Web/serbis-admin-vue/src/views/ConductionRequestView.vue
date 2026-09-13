@@ -16,59 +16,62 @@
          see ServiceRequestQueue.vue's own defineExpose — since it still
          owns that state privately (the same reason "Open Booking" already
          reaches in via a ref rather than duplicating state here). -->
-    <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3" style="flex-shrink: 0;">
-      <div>
-        <h2 class="text-h5 font-weight-bold text-high-emphasis">Ambulance Dispatch Requests</h2>
-        <div class="text-subtitle-2 text-medium-emphasis">
-          MDRRMO Conduction Request Form — Echague Rescue EMS
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'bookings'" class="d-flex align-center gap-3">
+    <!-- 16px, not the mb-6/24px most other headers use: this row sits directly
+         above the tab bar, not a card with its own breathing room, and 24px
+         read as oversized once the action buttons moved inline with the
+         title (layout redesign follow-up, kept through the PageHeader
+         extraction). -->
+    <PageHeader
+      title="Ambulance Dispatch Requests"
+      subtitle="MDRRMO Conduction Request Form — Echague Rescue EMS"
+      style="flex-shrink: 0; margin-bottom: 16px;"
+    >
+      <template v-slot:actions>
+        <template v-if="activeTab === 'bookings'">
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="text-none font-weight-bold px-6 text-white"
+            height="40"
+            @click="bookingsQueueRef?.openCreateDialog()"
+          >
+            <v-icon start size="small">mdi-account-plus-outline</v-icon>
+            Log Service Request
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            class="text-none font-weight-bold px-6"
+            height="40"
+            @click="bookingsQueueRef?.openDayView()"
+          >
+            <v-icon start size="small">mdi-calendar-clock</v-icon>
+            Ambulance Day View
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            class="text-none font-weight-bold px-6"
+            height="40"
+            :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
+            @click="bookingsQueueRef?.exportCsv()"
+          >
+            <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+            {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
+            <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
+          </v-btn>
+        </template>
         <v-btn
-          color="secondary"
+          v-else-if="activeTab === 'trip-logs'"
+          color="primary"
           variant="flat"
-          class="text-none font-weight-bold px-6 text-white"
-          height="40"
-          @click="bookingsQueueRef?.openCreateDialog()"
-        >
-          <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Service Request
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
-          @click="bookingsQueueRef?.openDayView()"
-        >
-          <v-icon start size="small">mdi-calendar-clock</v-icon>
-          Ambulance Day View
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="40"
-          :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
-          @click="bookingsQueueRef?.exportCsv()"
-        >
-          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
-          <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
-        </v-btn>
-      </div>
-
-      <v-btn
-        v-else-if="activeTab === 'trip-logs'"
-        color="primary"
-        variant="flat"
-        class="text-none font-weight-bold px-6"
-        height="44"
-        prepend-icon="mdi-plus"
-        @click="openCreate()"
-      >Ambulance Trip Record</v-btn>
-    </div>
+          height="44"
+          prepend-icon="mdi-plus"
+          @click="openCreate()"
+        >Ambulance Trip Record</v-btn>
+      </template>
+    </PageHeader>
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
          Ambulance/Medical Response — moved here from Resident Requests so
@@ -619,6 +622,7 @@ import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } fr
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
@@ -1178,11 +1182,6 @@ onMounted(fetchData)
 <style scoped>
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-/* 28px→16px: sized for a header that was just a title, sitting above a
-   completely separate button row further down. With the buttons inline in
-   this same row now, that gap to the tabs read as oversized (layout
-   redesign follow-up). */
-.page-header { margin-bottom: 16px; }
 
 /* v-window's own internal wrapper (.v-window__container, the flex row that
    holds every window-item side by side for the slide transition) sizes
@@ -1253,65 +1252,7 @@ onMounted(fetchData)
   background-color: rgba(var(--v-theme-primary), 0.06);
 }
 
-/* Mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly (same
-   values, not shared — scoped styles don't cross files here, same pattern
-   as .soft-card/.trip-row above) — item 5 of the layout redesign: a trip's
-   status now speaks the same badge language as a booking's, via
-   sharedStatusLabel() in adminUi.ts, so the two need the same CSS to render
-   identically, not just the same words. Only pill-booked/-responding/
-   -resolved are ever reachable from a trip_status here, but the full set is
-   kept for exact parity with the source. */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-.status-pill--sm {
-  padding: 2px 8px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
-}
-.pill-pending {
-  background: rgba(var(--v-theme-warning), 0.14);
-  color: rgb(var(--v-theme-warning-strong));
-}
-.pill-booked {
-  background: rgba(109, 40, 217, 0.14);
-  color: #5B21B6;
-}
-.pill-responding {
-  background: rgba(var(--v-theme-info), 0.14);
-  color: rgb(var(--v-theme-info-strong));
-}
-.pill-resolved {
-  background: rgba(var(--v-theme-success), 0.14);
-  color: rgb(var(--v-theme-success-strong));
-}
-.pill-disapproved,
-.pill-cancelled {
-  background: rgba(var(--v-theme-error), 0.14);
-  color: rgb(var(--v-theme-error-strong));
-}
-/* A sixth outcome, neither success nor failure — the five semantic hues are
-   already spoken for (see .pill-booked above), so this is a literal neutral
-   slate rather than reusing warning/error and implying "wrong" or "pending". */
-.pill-resolved-no-arrival {
-  background: rgba(100, 116, 139, 0.14);
-  color: #334155;
-}
-.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
-.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
-.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
-.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
-.v-theme--dark .pill-disapproved,
-.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
-.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ServiceRequestQueue.vue), including the sharedStatusLabel() mapping in adminUi.ts that lets a trip's status speak the same badge language as a booking's. */
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
 /* VDataTableFooter has no prop to drop just the items-per-page selector —

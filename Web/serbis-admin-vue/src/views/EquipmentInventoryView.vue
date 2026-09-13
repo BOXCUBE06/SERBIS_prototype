@@ -3,16 +3,17 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Resource Management</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
-          </div>
-          <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-            <v-icon start size="20">mdi-plus</v-icon> Add Equipment
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Resource Management"
+          subtitle="How much of each item is on hand, and how much is out on loan"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
+              <v-icon start size="20">mdi-plus</v-icon> Add Equipment
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
@@ -196,6 +197,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/equipments`
 
@@ -374,16 +376,12 @@ onMounted(fetchEquipments)
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
 .control-field { width: 260px; max-width: 100%; }
 .control-field-sm { width: 200px; max-width: 100%; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
@@ -407,7 +405,9 @@ onMounted(fetchEquipments)
 .metric-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
 .metric-number { font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
 
-/* Inventory list */
+/* Inventory list. Fixed layout keeps the six columns stable at their
+   declared widths regardless of item-name length. */
+.inventory-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
 .inventory-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;
@@ -432,9 +432,12 @@ onMounted(fetchEquipments)
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
-.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
+   error on their own tint measures under AA (see plugins/vuetify.ts for the
+   ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
+.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .dot-available { background: rgb(var(--v-theme-primary)); }
