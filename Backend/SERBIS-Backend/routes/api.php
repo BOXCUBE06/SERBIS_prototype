@@ -6,6 +6,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\ConductionRequestController;
+use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\InfoMaterialController;
@@ -83,6 +84,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Mobile endpoint to fetch published materials
     Route::get('info-materials', [InfoMaterialController::class, 'index']);
+
+    // Push notification device registration — upsert by token, so login and
+    // a later refresh both hit the same endpoint.
+    Route::post('device-tokens', [DeviceTokenController::class, 'store']);
+    Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);
 
     Route::middleware('is.admin')->group(function () {
         // Administrative Operations
