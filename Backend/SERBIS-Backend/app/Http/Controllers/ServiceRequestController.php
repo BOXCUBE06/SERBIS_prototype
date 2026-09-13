@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
+use App\Models\DeviceToken;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -12,6 +13,7 @@ use App\Models\ServiceRequestRelative;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
+use App\Services\Fcm;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
@@ -27,7 +29,10 @@ class ServiceRequestController extends Controller
     use ResolvesUploadDisks;
     use ScopesToOwner;
 
-    public function __construct(private readonly AmbulanceAvailability $availability) {}
+    public function __construct(
+        private readonly AmbulanceAvailability $availability,
+        private readonly Fcm $fcm,
+    ) {}
 
     /**
      * The wall clock a resident's `scheduled_at` is typed against. Duplicated
@@ -1072,6 +1077,54 @@ class ServiceRequestController extends Controller
         }
     }
 
+    /** Shown as the notification's title on every push this controller sends — see notifyResidentDevices(). */
+    private const PUSH_TITLE = 'SERBIS';
+
+    /**
+     * Pushes a title/body to every device this booking's resident has
+     * registered. Walk-in bookings carry no resident_id and are silently
+     * skipped — there is no account to push to, same as the SMS path this
+     * replaced was silent for. Fcm::sendToDevice() is itself the
+     * best-effort boundary (never throws, logs and swallows any failure),
+     * so a send here can never affect the status change that already
+     * committed before this runs.
+     */
+    private function notifyResidentDevices(ServiceRequest $serviceRequest, string $body): void
+    {
+        if ($serviceRequest->resident_id === null) {
+            return;
+        }
+
+        DeviceToken::where('resident_id', $serviceRequest->resident_id)
+            ->get()
+            ->each(fn (DeviceToken $deviceToken) => $this->fcm->sendToDevice($deviceToken, self::PUSH_TITLE, $body));
+    }
+
+    /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
+    private function forResident(Carbon $instant): string
+    {
+        return $instant->copy()->timezone(self::OFFICE_TIMEZONE)->format('M j, Y g:i A');
+    }
+
+    private function approvalPushBody(ServiceRequest $serviceRequest): string
+    {
+        $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a unit';
+
+        return 'Your ambulance booking for '.$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at)
+            .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
+    }
+
+    private function rejectionPushBody(string $reason): string
+    {
+        return 'Your ambulance booking request was not approved. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
+    private function reschedulePushBody(ServiceRequest $serviceRequest, string $reason): string
+    {
+        return 'Your ambulance booking has been moved to '
+            .$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at).'. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
@@ -1246,6 +1299,13 @@ class ServiceRequestController extends Controller
             }
         }
 
+        // Captured before update() overwrites status: rejecting a booking is
+        // the case this endpoint notifies for (the panel's older, unscheduled
+        // Pending -> Disapproved flow is not "a booking" and stays silent).
+        $wasBookingRejection = $serviceRequest->ambulanceBooking?->scheduled_at !== null
+            && $serviceRequest->status !== 'Disapproved'
+            && ($validated['status'] ?? null) === 'Disapproved';
+
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
@@ -1274,6 +1334,10 @@ class ServiceRequestController extends Controller
                 $this->createConductionStub($serviceRequest);
             }
         });
+
+        if ($wasBookingRejection) {
+            $this->notifyResidentDevices($serviceRequest, $this->rejectionPushBody((string) $validated['remarks']));
+        }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
     }
@@ -1406,6 +1470,12 @@ class ServiceRequestController extends Controller
             ]);
         }
 
+        // Captured before the transaction overwrites it: a first approval and
+        // a re-approval that only swaps the assigned unit both reach this
+        // point, and only the first one is worth pushing to the resident — a
+        // re-approval was re-sending the identical "approved" push every time.
+        $wasAlreadyApproved = $serviceRequest->ambulanceBooking?->approved_at !== null;
+
         DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledAt, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
             // decides who the window's last free unit goes to.
@@ -1454,6 +1524,10 @@ class ServiceRequestController extends Controller
 
         $fresh = $serviceRequest->fresh(['vehicle']);
 
+        if (! $wasAlreadyApproved) {
+            $this->notifyResidentDevices($fresh, $this->approvalPushBody($fresh));
+        }
+
         return response()->json($fresh);
     }
 
@@ -1487,7 +1561,7 @@ class ServiceRequestController extends Controller
             // TracksHistory logs the scheduled_at/scheduled_end change on its
             // own, but the *reason* only reaches that log because remarks moves
             // in the same update — so it is not optional here, unlike update().
-            // Capped like update()'s copy: this one always reaches PhilSMS.
+            // Capped like update()'s copy: this one always reaches the push.
             'remarks' => 'required|string|max:160',
         ]);
 
@@ -1532,6 +1606,8 @@ class ServiceRequestController extends Controller
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
+
+        $this->notifyResidentDevices($fresh, $this->reschedulePushBody($fresh, (string) $validated['remarks']));
 
         return response()->json($fresh);
     }

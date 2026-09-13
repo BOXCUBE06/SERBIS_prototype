@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
+use App\Models\DeviceToken;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -20,8 +22,9 @@ use Tests\TestCase;
  * reason approve() gets one: a locked availability re-check update() cannot
  * do.
  *
- * preventStrayRequests() is on regardless — no code path here calls out
- * to PhilSMS any more, but it stays as a tripwire in case one is added back.
+ * preventStrayRequests() is on regardless — most tests here never configure
+ * Fcm, so notifyResidentDevices() no-ops before any HTTP call, same as it
+ * did for PhilSMS before push replaced it.
  */
 class ServiceRequestRescheduleTest extends TestCase
 {
@@ -206,4 +209,102 @@ class ServiceRequestRescheduleTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('remarks');
     }
 
+    /**
+     * Bypasses the real OAuth2 mint the same way FcmSendTest does: primes
+     * its cache key directly rather than trying to fake google/auth's own
+     * Guzzle client, which Http::fake() cannot see.
+     */
+    private function configureFcm(): void
+    {
+        Cache::put('fcm_access_token', 'fake-access-token', 3000);
+
+        $path = tempnam(sys_get_temp_dir(), 'fcm_test_');
+        file_put_contents($path, json_encode([
+            'client_email' => 'fake@serbis-test.iam.gserviceaccount.com',
+            'private_key' => "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n",
+            'project_id' => 'serbis-test-project',
+        ]));
+        config(['services.firebase.credentials' => $path]);
+    }
+
+    public function test_rescheduling_pushes_every_device_token_the_resident_has(): void
+    {
+        $this->configureFcm();
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-1',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
+        DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-2',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
+
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => 'Resident asked to move the pickup later.',
+        ])->assertOk();
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($sent) => $sent['message']['token'] === 'device-1'
+            && str_contains($sent['message']['notification']['body'], 'moved to')
+            && str_contains($sent['message']['notification']['body'], 'Resident asked to move the pickup later.'));
+        Http::assertSent(fn ($sent) => $sent['message']['token'] === 'device-2');
+
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+    }
+
+    public function test_rescheduling_with_no_device_tokens_is_a_no_op(): void
+    {
+        $this->configureFcm();
+
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => 'Resident asked to move the pickup later.',
+        ])->assertOk();
+
+        Http::assertNothingSent();
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+    }
+
+    public function test_a_push_failure_does_not_affect_the_reschedule(): void
+    {
+        $this->configureFcm();
+        Http::fake(['fcm.googleapis.com/*' => Http::response([
+            'error' => ['status' => 'UNAVAILABLE', 'message' => 'Server is overloaded.'],
+        ], 503)]);
+
+        $deviceToken = DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-1',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
+
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => 'Resident asked to move the pickup later.',
+        ])->assertOk();
+
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+        // UNAVAILABLE is transient — the token itself is still good.
+        $this->assertNotNull(DeviceToken::find($deviceToken->getKey()));
+    }
 }
