@@ -34,8 +34,13 @@ class SendReturnDueReminders extends Command
 
     public function handle(): int
     {
-        $today = Carbon::now(self::OFFICE_TIMEZONE)->toDateString();
-        $tomorrow = Carbon::now(self::OFFICE_TIMEZONE)->addDay()->toDateString();
+        // Read once and derive both from it — two separate Carbon::now() calls
+        // straddling a real midnight would put $tomorrow a full day further out
+        // than $today expects, silently dropping whichever borrowing was due on
+        // the day in between.
+        $now = Carbon::now(self::OFFICE_TIMEZONE);
+        $today = $now->toDateString();
+        $tomorrow = $now->copy()->addDay()->toDateString();
 
         $borrowings = EquipmentBorrowing::with('equipment')
             ->where('status', 'Released')
@@ -47,7 +52,7 @@ class SendReturnDueReminders extends Command
         $skipped = 0;
 
         foreach ($borrowings as $borrowing) {
-            if ($this->remind($borrowing, $today)) {
+            if ($this->remind($borrowing, $today, $now)) {
                 $sent++;
             } else {
                 $skipped++;
@@ -67,7 +72,7 @@ class SendReturnDueReminders extends Command
      * resident_id is a required, non-nullable FK on this table — unlike
      * ServiceRequest, every borrowing has a resident to read a number from.
      */
-    private function remind(EquipmentBorrowing $borrowing, string $today): bool
+    private function remind(EquipmentBorrowing $borrowing, string $today, Carbon $now): bool
     {
         if (! PhilSms::configured()) {
             return false;
@@ -95,7 +100,7 @@ class SendReturnDueReminders extends Command
             ]);
         }
 
-        $borrowing->update(['return_reminder_sent_at' => now()]);
+        $borrowing->update(['return_reminder_sent_at' => $now]);
 
         return true;
     }
