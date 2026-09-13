@@ -19,6 +19,40 @@ fail() {
 }
 
 # ---------------------------------------------------------------------------
+# 0. Firebase credentials. FIREBASE_CREDENTIALS_BASE64 exists because Railway
+#    (unlike Render, which bakes storage/certs/aiven-ca.pem — a public CA, not
+#    a secret — into the image) has nowhere host-independent to put a bare
+#    secret file. Decoded here, once, into a real file, so
+#    config/services.php's FIREBASE_CREDENTIALS still reads as a path either
+#    way — App\Services\Fcm never has to know which host set it.
+#
+#    Only runs when the base64 form is actually set. A host that already has
+#    FIREBASE_CREDENTIALS pointing at a file some other way is left alone,
+#    and local dev — which sets neither — is unaffected either way.
+# ---------------------------------------------------------------------------
+if [ -n "${FIREBASE_CREDENTIALS_BASE64:-}" ]; then
+    firebase_credentials_path="/var/www/html/storage/app/firebase-credentials.json"
+
+    echo "$FIREBASE_CREDENTIALS_BASE64" | base64 -d > "$firebase_credentials_path" \
+        || fail "FIREBASE_CREDENTIALS_BASE64 could not be base64-decoded."
+
+    # Failing here, loudly, is the whole point: Fcm::configured() only checks
+    # that the file exists, not that it parses, so a bad decode would
+    # otherwise sit unnoticed until the first push attempt silently no-ops.
+    php -r '
+        json_decode(file_get_contents($argv[1]));
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            fwrite(STDERR, "invalid JSON: " . json_last_error_msg() . PHP_EOL);
+            exit(1);
+        }
+    ' "$firebase_credentials_path" \
+        || fail "FIREBASE_CREDENTIALS_BASE64 decoded to invalid JSON. Re-copy the base64 output — a stray newline or missing character is the usual cause."
+
+    chmod 644 "$firebase_credentials_path"
+    export FIREBASE_CREDENTIALS="$firebase_credentials_path"
+fi
+
+# ---------------------------------------------------------------------------
 # 1. Environment. Checked before anything touches the database, and each
 #    failure names the variable: "DB_PASSWORD is not set" is actionable in the
 #    Render dashboard, a PDO connection refusal is not.
