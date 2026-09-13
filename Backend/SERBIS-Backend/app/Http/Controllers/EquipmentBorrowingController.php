@@ -424,6 +424,13 @@ class EquipmentBorrowingController extends Controller
             // the transition logic above, and a splat would let a caller write
             // any other fillable column through this route.
             if (array_key_exists('due_date', $validated)) {
+                // A rescheduled due date invalidates any reminder already
+                // sent for the old one — see SendReturnDueReminders, which
+                // would otherwise stay silent for the rest of the loan.
+                if ($validated['due_date'] !== $borrowing->due_date?->format('Y-m-d')) {
+                    $borrowing->return_reminder_sent_at = null;
+                }
+
                 $borrowing->due_date = $validated['due_date'];
             }
 
