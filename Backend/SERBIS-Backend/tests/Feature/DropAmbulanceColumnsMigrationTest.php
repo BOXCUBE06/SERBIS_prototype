@@ -20,10 +20,13 @@ use Tests\TestCase;
  * any logic worth testing (up() is a column/index drop; the earlier
  * migration tests already cover the backfill it mirrors).
  *
- * Rolled back with --step=1, never a full migrate:rollback: the full chain
- * eventually reaches 2026_08_31_150000's broken down() (see
- * AmbulanceBookingsMigrationTest's class doc comment) — --step=1 only ever
- * touches this migration, the most recent one.
+ * Rolled back with --path, never --step or a full migrate:rollback: the full
+ * chain eventually reaches 2026_08_31_150000's broken down() (see
+ * AmbulanceBookingsMigrationTest's class doc comment), and --step picks
+ * whichever migration is chronologically last across the whole table — which
+ * silently stopped being this one the moment return-due-reminder's own
+ * migration landed after this series. --path names this migration directly
+ * and stays correct no matter what gets appended to the chain later.
  *
  * Runs its own migrate:fresh rather than RefreshDatabase for the same
  * reason as AmbulanceBookingsMigrationTest: the rollback here is real DDL,
@@ -100,7 +103,9 @@ class DropAmbulanceColumnsMigrationTest extends TestCase
 
         $this->assertFalse(Schema::hasColumn('tbl_service_request', 'patient_name'));
 
-        $this->artisan('migrate:rollback', ['--step' => 1]);
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_09_10_100000_drop_ambulance_columns_from_tbl_service_request.php',
+        ]);
 
         $this->assertTrue(Schema::hasColumn('tbl_service_request', 'patient_name'));
         $this->assertTrue(Schema::hasColumn('tbl_service_request', 'scheduled_at'));

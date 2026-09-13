@@ -32,10 +32,14 @@ use Tests\TestCase;
  * class to migrate fresh for itself instead of trusting this class's
  * modified schema.
  *
- * setUp() also rolls back 2026_09_10_100000 by one step, right after the
- * fresh migrate — that migration has since dropped the columns this one's
- * backfill writes to, so testing this migration's up() at all needs them
- * back first.
+ * setUp() also rolls back 2026_09_10_100000 right after the fresh migrate —
+ * that migration has since dropped the columns this one's backfill writes
+ * to, so testing this migration's up() at all needs them back first. Done
+ * by --path, not --step: --step picks whichever migration is chronologically
+ * last across the whole table, which silently became wrong the moment
+ * return-due-reminder's own migration landed after this series and started
+ * eating the rollback meant for this one. --path names the file directly and
+ * stays correct no matter what gets appended to the chain later.
  */
 class AmbulanceBookingsMigrationTest extends TestCase
 {
@@ -51,12 +55,13 @@ class AmbulanceBookingsMigrationTest extends TestCase
 
         $this->artisan('migrate:fresh');
 
-        // 2026_09_10_100000 (the last migration in this series) has since
-        // dropped the columns this migration's own backfill writes to — roll
-        // it back on its own (--step, never the full chain: see the class
-        // doc comment) so tbl_service_request has them again, matching the
-        // schema this migration actually runs against.
-        $this->artisan('migrate:rollback', ['--step' => 1]);
+        // Rolled back on its own, by --path rather than --step (see the
+        // class doc comment), so tbl_service_request has the moved columns
+        // back again, matching the schema this migration actually runs
+        // against.
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_09_10_100000_drop_ambulance_columns_from_tbl_service_request.php',
+        ]);
 
         $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
 
