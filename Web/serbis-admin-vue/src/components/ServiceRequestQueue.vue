@@ -28,7 +28,7 @@
         v-if="standalone"
         :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
         :subtitle="`${requestCounts.All} ${scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays'}`"
-        class="mb-3"
+        class="mb-6"
       >
         <template v-slot:actions>
         <!-- The adviser's ask: someone who shows up at the office in person
