@@ -32,7 +32,7 @@
             color="secondary"
             variant="flat"
             class="text-none font-weight-bold px-6 text-white"
-            height="40"
+            height="48"
             @click="bookingsQueueRef?.openCreateDialog()"
           >
             <v-icon start size="small">mdi-account-plus-outline</v-icon>
@@ -42,7 +42,7 @@
             color="primary"
             variant="text"
             class="text-none font-weight-bold px-6"
-            height="40"
+            height="48"
             @click="bookingsQueueRef?.openDayView()"
           >
             <v-icon start size="small">mdi-calendar-clock</v-icon>
@@ -52,7 +52,7 @@
             color="primary"
             variant="text"
             class="text-none font-weight-bold px-6"
-            height="40"
+            height="48"
             :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
             @click="bookingsQueueRef?.exportCsv()"
           >
