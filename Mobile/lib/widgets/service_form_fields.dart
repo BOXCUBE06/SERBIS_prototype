@@ -201,6 +201,7 @@ class ServiceFormFields extends StatelessWidget {
                         lines: field.lines,
                         keyboard: field.keyboard,
                         controller: form.field(field.key),
+                        helpText: field.helpText,
                       ),
                 ],
               ),

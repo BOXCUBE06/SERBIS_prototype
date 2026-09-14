@@ -34,6 +34,11 @@ class AppTextField extends StatelessWidget {
   /// so far.
   final Widget? suffixIcon;
 
+  /// Shown in a tap/long-press tooltip next to the label, via a small "?"
+  /// icon. Null draws no icon at all — most fields need no explanation
+  /// beyond their [hint].
+  final String? helpText;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -47,6 +52,7 @@ class AppTextField extends StatelessWidget {
     this.enabled = true,
     this.obscure = false,
     this.suffixIcon,
+    this.helpText,
   });
 
   /// The phone field, spelled once instead of at each of the call sites that
@@ -90,7 +96,19 @@ class AppTextField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          Row(
+            children: [
+              Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+              if (helpText != null) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: helpText,
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: const Icon(Icons.help_outline_rounded, size: 14, color: AppColors.inkFaint),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: AppSpacing.xs),
           TextField(
             controller: controller,

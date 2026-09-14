@@ -281,6 +281,7 @@ class ServiceFormField {
     this.lines = 1,
     this.keyboard = TextInputType.text,
     this.metaPrefix,
+    this.helpText,
   }) : options = const [];
 
   /// A closed list, so it always has an answer — there is no fallback because
@@ -293,7 +294,8 @@ class ServiceFormField {
   })  : hint = '',
         lines = 1,
         keyboard = TextInputType.text,
-        metaFallback = '';
+        metaFallback = '',
+        helpText = null;
 
   /// Stable id, and the key the controller is stored under — so a renamed
   /// field breaks in one place rather than drifting apart between the widget
@@ -311,6 +313,11 @@ class ServiceFormField {
   /// e.g. `'Household size: '`. Null for the fields a dispatcher reads bare,
   /// like the relief address and the generic details.
   final String? metaPrefix;
+
+  /// Shown behind a "?" tooltip next to the label. Null for every field
+  /// except household_size, whose count is the one ambiguous enough to ask
+  /// about (MDRRMO feedback, 2026-09-14).
+  final String? helpText;
 
   /// What the line says when the resident left the field empty. Never blank: a
   /// gap in the block reads as a field that was never asked for.
@@ -424,6 +431,8 @@ const _reliefSpec = ServiceFormSpec(
           keyboard: TextInputType.number,
           metaPrefix: 'Household size: ',
           metaFallback: 'Not specified',
+          helpText: 'Count everyone who regularly eats and sleeps in this '
+              'household, including yourself.',
         ),
       ],
     ),
