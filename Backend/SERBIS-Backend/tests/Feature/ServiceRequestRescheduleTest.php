@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
+use App\Models\DeviceToken;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -10,6 +12,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -19,16 +22,20 @@ use Tests\TestCase;
  * reason approve() gets one: a locked availability re-check update() cannot
  * do.
  *
- * PhilSMS has no sandbox — preventStrayRequests() is what makes a reschedule
- * test safe to run at all, same as SmsBlastLoggingTest.
+ * preventStrayRequests() is on regardless — most tests here never configure
+ * Fcm, so notifyResidentDevices() no-ops before any HTTP call, same as it
+ * did for PhilSMS before push replaced it.
  */
 class ServiceRequestRescheduleTest extends TestCase
 {
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Vehicle $amb01;
 
     protected function setUp(): void
@@ -75,14 +82,20 @@ class ServiceRequestRescheduleTest extends TestCase
 
     private function bookedRequest(?Carbon $scheduledAt = null, ?Vehicle $vehicle = null): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
             'vehicle_id' => $vehicle?->vehicle_id,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => $scheduledAt ?? Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0),
         ]);
+
+        return $request;
     }
 
     private function manilaString(Carbon $instant): string
@@ -92,8 +105,6 @@ class ServiceRequestRescheduleTest extends TestCase
 
     public function test_admin_reschedules_an_unapproved_booking(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
         $request = $this->bookedRequest();
         $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
         $newEnd = $newStart->copy()->addHours(2);
@@ -105,8 +116,8 @@ class ServiceRequestRescheduleTest extends TestCase
         ])->assertOk();
 
         $fresh = $request->fresh();
-        $this->assertTrue($fresh->scheduled_at->utc()->equalTo($newStart));
-        $this->assertTrue($fresh->scheduled_end->utc()->equalTo($newEnd));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_end->utc()->equalTo($newEnd));
         $this->assertSame('Resident asked to move the pickup later.', $fresh->remarks);
     }
 
@@ -128,12 +139,16 @@ class ServiceRequestRescheduleTest extends TestCase
         $newEnd = $newStart->copy()->addHours(2);
 
         // The only Ambulance unit is already committed elsewhere for that window.
-        ServiceRequest::create([
+        $conflicting = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Another booking',
             'status' => 'Booked',
             'vehicle_id' => $this->amb01->vehicle_id,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $conflicting->getKey(),
             'scheduled_at' => $newStart->copy(),
             'scheduled_end' => $newEnd->copy(),
         ]);
@@ -144,7 +159,7 @@ class ServiceRequestRescheduleTest extends TestCase
             'remarks' => 'Trying to move it anyway.',
         ])->assertStatus(422);
 
-        $this->assertNotNull($request->fresh()->scheduled_at);
+        $this->assertNotNull($request->fresh()->ambulanceBooking->scheduled_at);
     }
 
     /**
@@ -155,11 +170,9 @@ class ServiceRequestRescheduleTest extends TestCase
      */
     public function test_rescheduling_an_approved_booking_keeps_its_own_unit(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
         $originalStart = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
         $request = $this->bookedRequest($originalStart, $this->amb01);
-        $request->update(['scheduled_end' => $originalStart->copy()->addHours(2)]);
+        $request->ambulanceBooking->update(['scheduled_end' => $originalStart->copy()->addHours(2)]);
 
         // Overlaps the original window — without self-exclusion this would
         // wrongly read as "AMB-01 is busy" against its own old booking.
@@ -174,44 +187,7 @@ class ServiceRequestRescheduleTest extends TestCase
 
         $fresh = $request->fresh();
         $this->assertSame($this->amb01->vehicle_id, $fresh->vehicle_id);
-        $this->assertTrue($fresh->scheduled_at->utc()->equalTo($newStart));
-    }
-
-    public function test_rescheduling_texts_the_resident_the_new_time_and_reason(): void
-    {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-
-        $request = $this->bookedRequest();
-        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
-
-        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
-            'scheduled_at' => $this->manilaString($newStart),
-            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
-            'remarks' => 'Resident asked to move the pickup later.',
-        ])->assertOk();
-
-        Http::assertSent(function ($sent) {
-            return $sent->url() === 'https://dashboard.philsms.com/api/v3/sms/send'
-                && str_contains($sent['message'], 'Resident asked to move the pickup later.')
-                && str_contains($sent['message'], 'moved to');
-        });
-    }
-
-    public function test_a_send_failure_does_not_affect_the_reschedule_itself(): void
-    {
-        // No fake registered — preventStrayRequests() throws the moment
-        // notifyResident() tries to send, proving the failure never reaches
-        // the caller: the reschedule itself still commits and answers 200.
-        $request = $this->bookedRequest();
-        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
-
-        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
-            'scheduled_at' => $this->manilaString($newStart),
-            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
-            'remarks' => 'Resident asked to move the pickup later.',
-        ])->assertOk();
-
-        $this->assertTrue($request->fresh()->scheduled_at->utc()->equalTo($newStart));
+        $this->assertTrue($fresh->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
     }
 
     /**
@@ -234,13 +210,40 @@ class ServiceRequestRescheduleTest extends TestCase
     }
 
     /**
-     * The cap on the field is not on its own enough: the template adds about
-     * ninety characters of its own, so a remark at the limit would still bill
-     * two segments. The assembled body is what has to fit.
+     * Bypasses the real OAuth2 mint the same way FcmSendTest does: primes
+     * its cache key directly rather than trying to fake google/auth's own
+     * Guzzle client, which Http::fake() cannot see.
      */
-    public function test_the_assembled_text_stays_within_one_segment(): void
+    private function configureFcm(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Cache::put('fcm_access_token', 'fake-access-token', 3000);
+
+        $path = tempnam(sys_get_temp_dir(), 'fcm_test_');
+        file_put_contents($path, json_encode([
+            'client_email' => 'fake@serbis-test.iam.gserviceaccount.com',
+            'private_key' => "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n",
+            'project_id' => 'serbis-test-project',
+        ]));
+        config(['services.firebase.credentials' => $path]);
+    }
+
+    public function test_rescheduling_pushes_every_device_token_the_resident_has(): void
+    {
+        $this->configureFcm();
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-1',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
+        DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-2',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
 
         $request = $this->bookedRequest();
         $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
@@ -248,14 +251,60 @@ class ServiceRequestRescheduleTest extends TestCase
         $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
             'scheduled_at' => $this->manilaString($newStart),
             'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
-            'remarks' => str_repeat('a', 160),
+            'remarks' => 'Resident asked to move the pickup later.',
         ])->assertOk();
 
-        Http::assertSent(function ($sent) {
-            // The attribution survives the trim — it is the reason, not the
-            // sender, that gets cut.
-            return mb_strlen($sent['message']) <= 160
-                && str_contains($sent['message'], 'MDRRMO Echague');
-        });
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($sent) => $sent['message']['token'] === 'device-1'
+            && str_contains($sent['message']['notification']['body'], 'moved to')
+            && str_contains($sent['message']['notification']['body'], 'Resident asked to move the pickup later.'));
+        Http::assertSent(fn ($sent) => $sent['message']['token'] === 'device-2');
+
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+    }
+
+    public function test_rescheduling_with_no_device_tokens_is_a_no_op(): void
+    {
+        $this->configureFcm();
+
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => 'Resident asked to move the pickup later.',
+        ])->assertOk();
+
+        Http::assertNothingSent();
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+    }
+
+    public function test_a_push_failure_does_not_affect_the_reschedule(): void
+    {
+        $this->configureFcm();
+        Http::fake(['fcm.googleapis.com/*' => Http::response([
+            'error' => ['status' => 'UNAVAILABLE', 'message' => 'Server is overloaded.'],
+        ], 503)]);
+
+        $deviceToken = DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-1',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
+
+        $request = $this->bookedRequest();
+        $newStart = Carbon::now('UTC')->addDays(5)->setTime(9, 0, 0);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/reschedule", [
+            'scheduled_at' => $this->manilaString($newStart),
+            'scheduled_end' => $this->manilaString($newStart->copy()->addHours(2)),
+            'remarks' => 'Resident asked to move the pickup later.',
+        ])->assertOk();
+
+        $this->assertTrue($request->fresh()->ambulanceBooking->scheduled_at->utc()->equalTo($newStart));
+        // UNAVAILABLE is transient — the token itself is still good.
+        $this->assertNotNull(DeviceToken::find($deviceToken->getKey()));
     }
 }

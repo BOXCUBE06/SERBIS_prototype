@@ -28,7 +28,9 @@ class EquipmentBorrowingDueDateTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Equipment $equipment;
 
     protected function setUp(): void
@@ -202,5 +204,85 @@ class EquipmentBorrowingDueDateTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('due_date');
+    }
+
+    /**
+     * Rescheduling due_date has to invalidate a reminder already sent for the
+     * old date — see SendReturnDueReminders, which never retexts a row once
+     * return_reminder_sent_at is set. Without this, moving a due date out
+     * would leave the borrower believing they were reminded for a date that
+     * no longer applies, and silent for the rest of the loan.
+     */
+    public function test_changing_the_due_date_resets_the_return_reminder(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update([
+            'status' => 'Released',
+            'due_date' => $this->dueDate(1),
+            'return_reminder_sent_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Released',
+                'due_date' => $this->dueDate(7),
+            ])
+            ->assertOk();
+
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
+    }
+
+    /**
+     * The counterpart: resending the same due_date (or any other field
+     * changing on its own) must not clear a reminder that still applies.
+     */
+    public function test_resending_the_same_due_date_does_not_reset_the_return_reminder(): void
+    {
+        $due = $this->dueDate(1);
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update([
+            'status' => 'Released',
+            'due_date' => $due,
+            'return_reminder_sent_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Released',
+                'due_date' => $due,
+            ])
+            ->assertOk();
+
+        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+    }
+
+    public function test_returning_stores_the_condition_note(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition_note' => 'Life jacket strap frayed, otherwise usable',
+            ])
+            ->assertOk();
+
+        $this->assertSame(
+            'Life jacket strap frayed, otherwise usable',
+            $borrowing->fresh()->return_condition_note
+        );
+    }
+
+    public function test_a_return_without_a_condition_note_is_still_accepted(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])
+            ->assertOk();
+
+        $this->assertNull($borrowing->fresh()->return_condition_note);
     }
 }

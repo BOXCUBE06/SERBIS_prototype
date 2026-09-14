@@ -26,7 +26,9 @@ class ServiceRequestInternalNotesTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private ServiceRequest $request;
 
     protected function setUp(): void

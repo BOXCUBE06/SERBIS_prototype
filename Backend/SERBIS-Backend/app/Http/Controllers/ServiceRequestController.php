@@ -2,20 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
-use App\Models\ServiceRequestRelative;
-use App\Models\Vehicle;
+use App\Models\DeviceToken;
 use App\Models\Resident;
+use App\Models\Service;
 use App\Models\ServiceRequest;
+use App\Models\ServiceRequestRelative;
+use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
-use App\Services\PhilSms;
+use App\Services\Fcm;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -25,9 +29,10 @@ class ServiceRequestController extends Controller
     use ResolvesUploadDisks;
     use ScopesToOwner;
 
-    public function __construct(private readonly AmbulanceAvailability $availability)
-    {
-    }
+    public function __construct(
+        private readonly AmbulanceAvailability $availability,
+        private readonly Fcm $fcm,
+    ) {}
 
     /**
      * The wall clock a resident's `scheduled_at` is typed against. Duplicated
@@ -97,8 +102,7 @@ class ServiceRequestController extends Controller
      * from/to pairs were reachable: a Resolved request could be reopened, a
      * Cancelled one dispatched, a Disapproved one resolved, and a Booked
      * request could reach Responding without ever going through approve() —
-     * skipping its availability re-check, leaving approved_at NULL and
-     * approvalMessage() never sent.
+     * skipping its availability re-check and leaving approved_at NULL.
      *
      * 'Cancelled' is deliberately absent as a key: cancel() is the only route
      * that ever writes it, and it does so on the model directly rather than
@@ -124,13 +128,27 @@ class ServiceRequestController extends Controller
      */
     private const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response';
 
+    /**
+     * The columns update() must route to AmbulanceBooking rather than write
+     * onto this row. update() does not currently validate scheduled_at,
+     * scheduled_end or approved_at as input — reschedule()/approve() are the
+     * conflict-checked paths for those — but the split is listed here too,
+     * defensively: if $validated ever carries one, Arr::except below must
+     * still strip it before it reaches this row.
+     */
+    private const BOOKING_FIELDS = [
+        'patient_name', 'patient_age', 'patient_sex', 'patient_address',
+        'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
+        'scheduled_at', 'scheduled_end', 'approved_at',
+    ];
+
     /** Null if the service was seeded without a code column somehow, or does not exist. */
     private function ambulanceServiceId(): ?int
     {
-        return \App\Models\Service::where('code', self::AMBULANCE_SERVICE_CODE)->value('service_id');
+        return Service::where('code', self::AMBULANCE_SERVICE_CODE)->value('service_id');
     }
 
-   public function adminIndex()
+    public function adminIndex()
     {
         // Added 'resident.barangay'
         // conductionRequests.people: C5's bridge — the Bookings queue's
@@ -147,7 +165,7 @@ class ServiceRequestController extends Controller
     {
         $user = $request->user();
 
-        if ($user instanceof \App\Models\User && $user->isAdmin()) {
+        if ($user instanceof User && $user->isAdmin()) {
             // Added 'resident.barangay'
             $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->get();
         } else {
@@ -178,8 +196,8 @@ class ServiceRequestController extends Controller
         // instead — this is a seeding/config problem, not a validation one.
         if ($ambulanceServiceId === null) {
             throw new \RuntimeException(
-                'No service found with code "' . self::AMBULANCE_SERVICE_CODE . '" — '
-                . 'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
+                'No service found with code "'.self::AMBULANCE_SERVICE_CODE.'" — '
+                .'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
             );
         }
 
@@ -195,6 +213,9 @@ class ServiceRequestController extends Controller
             // form. Not required, because most requests are filed in conditions
             // where stopping to photograph anything is the wrong advice.
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
+            // Free-text companion to site_photo — a landmark the resident can
+            // type faster than they can stop to photograph one.
+            'landmark' => 'nullable|string|max:255',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
@@ -237,8 +258,8 @@ class ServiceRequestController extends Controller
         // filing-time gate only: update()/approve()/etc. never re-check
         // this, so a request already filed against a service that gets
         // disabled afterward is untouched.
-        $service = \App\Models\Service::find($validated['service_id']);
-        if ($service && !$service->is_active) {
+        $service = Service::find($validated['service_id']);
+        if ($service && ! $service->is_active) {
             throw ValidationException::withMessages([
                 'service_id' => 'This service is no longer accepting new requests.',
             ]);
@@ -331,13 +352,13 @@ class ServiceRequestController extends Controller
                 // seen the booking. required_vehicle_type's own immediate-claim
                 // path below is therefore for the unscheduled, "as soon as you
                 // can" case only — unchanged from before this feature existed.
-                if (!$scheduledAt && !empty($validated['required_vehicle_type'])) {
+                if (! $scheduledAt && ! empty($validated['required_vehicle_type'])) {
                     $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
-                                      ->where('status', 'Available')
-                                      ->lockForUpdate()
-                                      ->first();
+                        ->where('status', 'Available')
+                        ->lockForUpdate()
+                        ->first();
 
-                    if (!$vehicle) {
+                    if (! $vehicle) {
                         return false;
                     }
                     $vehicleId = $vehicle->vehicle_id;
@@ -370,19 +391,9 @@ class ServiceRequestController extends Controller
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $validated['service_id'],
                     'description' => $description,
-                    // Ambulance-only, same as adminStore()'s row: nothing reads
-                    // these off a non-ambulance request, and writing them there
-                    // would put a patient's details on a road-clearing report.
-                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
-                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
-                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
-                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
-                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
-                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
-                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
-                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
+                    'landmark' => $validated['landmark'] ?? null,
                     // A scheduled booking is approved capacity, not a request
                     // waiting on staff triage — 'Pending' would queue it next to
                     // a report nobody has looked at yet. scheduled_end and
@@ -392,8 +403,25 @@ class ServiceRequestController extends Controller
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
-                    'scheduled_at' => $scheduledAt,
                 ]);
+
+                // Ambulance-only, same as adminStore()'s row: nothing reads
+                // these off a non-ambulance request, and writing them there
+                // would put a patient's details on a road-clearing report.
+                if ($isAmbulance) {
+                    AmbulanceBooking::create([
+                        'request_id' => $newServiceRequest->request_id,
+                        'patient_name' => $validated['patient_name'] ?? null,
+                        'patient_age' => $validated['patient_age'] ?? null,
+                        'patient_sex' => $validated['patient_sex'] ?? null,
+                        'patient_address' => $validated['patient_address'] ?? null,
+                        'patient_contact_number' => $validated['patient_contact_number'] ?? null,
+                        'pickup_location' => $validated['pickup_location'] ?? null,
+                        'destination' => $validated['destination'] ?? null,
+                        'condition_notes' => $validated['condition_notes'] ?? null,
+                        'scheduled_at' => $scheduledAt,
+                    ]);
+                }
 
                 $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
@@ -417,7 +445,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest->load('relatives'), 201);
+        return response()->json($serviceRequest->load(['relatives', 'ambulanceBooking']), 201);
     }
 
     /**
@@ -437,7 +465,7 @@ class ServiceRequestController extends Controller
      * whether it was filed at the counter or on a phone, and a second copy of
      * this is how that starts.
      *
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      */
     private static function composeAmbulanceDescription(array $validated, ?string $contactNumber): string
     {
@@ -462,7 +490,7 @@ class ServiceRequestController extends Controller
      * own 'Address not specified' stays the single place that decides what an
      * unknown address reads as.
      */
-    private function registeredAddress(?\App\Models\Resident $resident): ?string
+    private function registeredAddress(?Resident $resident): ?string
     {
         $barangay = $resident?->barangay?->barangay_name;
 
@@ -556,8 +584,8 @@ class ServiceRequestController extends Controller
         if ($scheduledAt->lt(now()->addHours(self::MINIMUM_LEAD_TIME_HOURS))) {
             throw ValidationException::withMessages([
                 'scheduled_at' => 'Scheduled bookings need at least '
-                    . self::MINIMUM_LEAD_TIME_HOURS
-                    . ' hour of lead time. Anything sooner is an emergency — call it in instead.',
+                    .self::MINIMUM_LEAD_TIME_HOURS
+                    .' hour of lead time. Anything sooner is an emergency — call it in instead.',
             ]);
         }
 
@@ -586,7 +614,7 @@ class ServiceRequestController extends Controller
     // the failure with a misleading one.
     private function discardUpload(?string $filePath): void
     {
-        if (!$filePath) {
+        if (! $filePath) {
             return;
         }
 
@@ -618,8 +646,8 @@ class ServiceRequestController extends Controller
         // rules below instead of erroring. Fail loudly.
         if ($ambulanceServiceId === null) {
             throw new \RuntimeException(
-                'No service found with code "' . self::AMBULANCE_SERVICE_CODE . '" — '
-                . 'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
+                'No service found with code "'.self::AMBULANCE_SERVICE_CODE.'" — '
+                .'cannot build ambulance validation rules. Check tbl_services.code for the ambulance row.'
             );
         }
 
@@ -667,8 +695,8 @@ class ServiceRequestController extends Controller
         // filing-time gate only: update()/approve()/etc. never re-check
         // this, so a request already filed against a service that gets
         // disabled afterward is untouched.
-        $service = \App\Models\Service::find($validated['service_id']);
-        if ($service && !$service->is_active) {
+        $service = Service::find($validated['service_id']);
+        if ($service && ! $service->is_active) {
             throw ValidationException::withMessages([
                 'service_id' => 'This service is no longer accepting new requests.',
             ]);
@@ -710,7 +738,7 @@ class ServiceRequestController extends Controller
                 $validated,
                 $validated['patient_contact_number']
                     ?? ($residentId
-                        ? (\App\Models\Resident::find($residentId)->phone_number ?? '')
+                        ? (Resident::find($residentId)->phone_number ?? '')
                         : ($walkInContact ?? ''))
             );
         }
@@ -743,13 +771,13 @@ class ServiceRequestController extends Controller
                 // Same split as store(): an immediate walk-in may claim a unit
                 // here, but a booking's unit is a staffing decision made at
                 // approval, not something this counter form locks in.
-                if (!$scheduledAt && !empty($validated['required_vehicle_type'])) {
+                if (! $scheduledAt && ! empty($validated['required_vehicle_type'])) {
                     $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
-                                      ->where('status', 'Available')
-                                      ->lockForUpdate()
-                                      ->first();
+                        ->where('status', 'Available')
+                        ->lockForUpdate()
+                        ->first();
 
-                    if (!$vehicle) {
+                    if (! $vehicle) {
                         return false;
                     }
                     $vehicleId = $vehicle->vehicle_id;
@@ -776,24 +804,30 @@ class ServiceRequestController extends Controller
                     'walk_in_contact_number' => $walkInContact,
                     'service_id' => $validated['service_id'],
                     'description' => $description,
-                    // Ambulance-only. Null for every other service, same as
-                    // an app submission's row until the mobile app is on
-                    // this too — nothing reads these off a non-ambulance row.
-                    'patient_name' => $isAmbulance ? ($validated['patient_name'] ?? null) : null,
-                    'patient_age' => $isAmbulance ? ($validated['patient_age'] ?? null) : null,
-                    'patient_sex' => $isAmbulance ? ($validated['patient_sex'] ?? null) : null,
-                    'patient_address' => $isAmbulance ? ($validated['patient_address'] ?? null) : null,
-                    'patient_contact_number' => $isAmbulance ? ($validated['patient_contact_number'] ?? null) : null,
-                    'pickup_location' => $isAmbulance ? ($validated['pickup_location'] ?? null) : null,
-                    'destination' => $isAmbulance ? ($validated['destination'] ?? null) : null,
-                    'condition_notes' => $isAmbulance ? ($validated['condition_notes'] ?? null) : null,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
                     'vehicle_id' => $vehicleId,
-                    'scheduled_at' => $scheduledAt,
                 ]);
+
+                // Ambulance-only. Null for every other service, same as an
+                // app submission's row until the mobile app is on this too —
+                // nothing reads these off a non-ambulance row.
+                if ($isAmbulance) {
+                    AmbulanceBooking::create([
+                        'request_id' => $newServiceRequest->request_id,
+                        'patient_name' => $validated['patient_name'] ?? null,
+                        'patient_age' => $validated['patient_age'] ?? null,
+                        'patient_sex' => $validated['patient_sex'] ?? null,
+                        'patient_address' => $validated['patient_address'] ?? null,
+                        'patient_contact_number' => $validated['patient_contact_number'] ?? null,
+                        'pickup_location' => $validated['pickup_location'] ?? null,
+                        'destination' => $validated['destination'] ?? null,
+                        'condition_notes' => $validated['condition_notes'] ?? null,
+                        'scheduled_at' => $scheduledAt,
+                    ]);
+                }
 
                 $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
@@ -817,7 +851,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'No available vehicles at this time.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives']), 201);
+        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
     }
 
     public function show(Request $request, $id)
@@ -838,13 +872,13 @@ class ServiceRequestController extends Controller
 
         $serviceRequest = $query->find($id);
 
-        if (!$serviceRequest) {
+        if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
         // Same reasoning as index()'s resident branch: internal_notes is for
         // staff only, and this route serves the same model to both audiences.
-        if ($user instanceof \App\Models\Resident) {
+        if ($user instanceof Resident) {
             $serviceRequest->makeHidden('internal_notes');
         }
 
@@ -868,11 +902,11 @@ class ServiceRequestController extends Controller
 
         // 404 rather than 403 for a non-owner, so the response does not disclose
         // that the request exists.
-        if (!$serviceRequest || !$serviceRequest->{$column}) {
+        if (! $serviceRequest || ! $serviceRequest->{$column}) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
-        if (!Storage::disk(self::privateDisk())->exists($serviceRequest->{$column})) {
+        if (! Storage::disk(self::privateDisk())->exists($serviceRequest->{$column})) {
             return response()->json(['message' => "{$label} file not found"], 404);
         }
 
@@ -911,7 +945,7 @@ class ServiceRequestController extends Controller
 
         // 404 rather than 403 for a non-owner, matching show() and validId(): the
         // response must not disclose that the request exists.
-        if (!$serviceRequest) {
+        if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
@@ -919,7 +953,7 @@ class ServiceRequestController extends Controller
         // not a resident one — the crew is already moving. Booked joins Pending
         // here: a booking that has not yet been approved into a live dispatch is
         // still purely the resident's own plan to withdraw.
-        if (!in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
+        if (! in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
             return response()->json([
                 'message' => 'Only a pending or booked request can be cancelled.',
             ], 422);
@@ -934,9 +968,11 @@ class ServiceRequestController extends Controller
         // near" to cancel, it has already happened. Without the guard, gte()
         // stays true forever once the cutoff window passes, so a booking left
         // unresolved past its own schedule could never be cancelled again.
-        if ($serviceRequest->scheduled_at
-            && $serviceRequest->scheduled_at->isFuture()
-            && now()->gte($serviceRequest->scheduled_at->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
+        $scheduledAt = $serviceRequest->ambulanceBooking?->scheduled_at;
+
+        if ($scheduledAt
+            && $scheduledAt->isFuture()
+            && now()->gte($scheduledAt->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
         ) {
             return response()->json([
                 'message' => 'This booking is too close to its scheduled time to cancel. Call the office instead.',
@@ -1010,9 +1046,9 @@ class ServiceRequestController extends Controller
             // Only Available is promoted. A unit already Dispatched to this same
             // request stays as it is — every PUT re-sends the current vehicle_id
             // (see the docblock above), so this is the common case, not an edge
-            // one, and must stay a silent no-op. One under Maintenance is also a
-            // silent no-op, deliberately — see
-            // test_a_vehicle_under_maintenance_is_not_pressed_into_service.
+            // one, and must stay a silent no-op. A unit under Maintenance no
+            // longer reaches here at all: update() rejects it before the
+            // transaction opens (ServiceRequestVehicleGuardTest).
             if ($vehicle && $vehicle->status === 'Available') {
                 $vehicle->update(['status' => 'Dispatched']);
             } elseif ($vehicle && $vehicle->status === 'Dispatched' && $incomingVehicleId !== $currentVehicleId) {
@@ -1032,7 +1068,7 @@ class ServiceRequestController extends Controller
     /** Returns a dispatched unit to the fleet. Ignores one already Available. */
     private function releaseVehicle(?int $vehicleId): void
     {
-        if (!$vehicleId) {
+        if (! $vehicleId) {
             return;
         }
 
@@ -1045,57 +1081,27 @@ class ServiceRequestController extends Controller
         }
     }
 
+    /** Shown as the notification's title on every push this controller sends — see notifyResidentDevices(). */
+    private const PUSH_TITLE = 'SERBIS';
+
     /**
-     * Texts a resident that their booking's status changed. Follows the OTP
-     * call pattern at AuthController::sendVerificationCode(): PhilSms is the
-     * only channel — there is no Laravel Notifications setup, and
-     * MAIL_MAILER is 'log' in production (render.yaml), so an email
-     * "fallback" here would not actually reach anyone, unlike the OTP flow
-     * where email is a real second channel. Walk-in bookings carry no
-     * resident_id and are silently skipped; there is no one to text.
-     *
-     * Deliberately best-effort: this always runs after the transaction that
-     * made the change has already committed (called from outside every
-     * DB::transaction() block below), so a delivery failure can only ever
-     * fail to inform, never undo a booking that already landed. Never
-     * throws — every failure path is caught and logged instead. The
-     * 45-second poll and cold-launch fetch this is compensating for
-     * (main.dart:320, :390) still catch a resident up if the text never
-     * arrives.
+     * Pushes a title/body to every device this booking's resident has
+     * registered. Walk-in bookings carry no resident_id and are silently
+     * skipped — there is no account to push to, same as the SMS path this
+     * replaced was silent for. Fcm::sendToDevice() is itself the
+     * best-effort boundary (never throws, logs and swallows any failure),
+     * so a send here can never affect the status change that already
+     * committed before this runs.
      */
-    private function notifyResident(ServiceRequest $serviceRequest, string $message): void
+    private function notifyResidentDevices(ServiceRequest $serviceRequest, string $body): void
     {
         if ($serviceRequest->resident_id === null) {
             return;
         }
 
-        $resident = $serviceRequest->resident ?? $serviceRequest->resident()->first();
-
-        if (!$resident || !PhilSms::configured()) {
-            return;
-        }
-
-        $number = PhilSms::normalize((string) $resident->phone_number);
-
-        if ($number === '') {
-            return;
-        }
-
-        try {
-            $response = app(PhilSms::class)->send([$number], $message);
-
-            if (!PhilSms::accepted($response)) {
-                Log::warning('Booking status-change SMS not accepted', [
-                    'request_id' => $serviceRequest->request_id,
-                    'status' => $response->status(),
-                ]);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Booking status-change SMS failed', [
-                'request_id' => $serviceRequest->request_id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        DeviceToken::where('resident_id', $serviceRequest->resident_id)
+            ->get()
+            ->each(fn (DeviceToken $deviceToken) => $this->fcm->sendToDevice($deviceToken, self::PUSH_TITLE, $body));
     }
 
     /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
@@ -1104,66 +1110,30 @@ class ServiceRequestController extends Controller
         return $instant->copy()->timezone(self::OFFICE_TIMEZONE)->format('M j, Y g:i A');
     }
 
-    private function approvalMessage(ServiceRequest $serviceRequest): string
+    private function approvalPushBody(ServiceRequest $serviceRequest): string
     {
         $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a unit';
 
-        return 'SERBIS: Your ambulance booking for '.$this->forResident($serviceRequest->scheduled_at)
+        return 'Your ambulance booking for '.$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at)
             .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
     }
 
-    /** One billed PhilSMS segment. Past this the vendor charges for a second. */
-    private const SMS_SEGMENT_LIMIT = 160;
-
-    /**
-     * Assembles a message whose middle is staff-typed, trimming that middle —
-     * and only that middle — until the whole body fits one segment.
-     *
-     * The `max:160` on `remarks` bounds what a human types, but it cannot
-     * bound the *assembled* body: these templates add roughly eighty
-     * characters of their own, so a remark at the cap would still bill two
-     * segments. Trimming here rather than raising the validation cap keeps the
-     * limit the admin is shown (160) the same as the limit on the field they
-     * are typing into, and keeps the suffix — which says who sent the text —
-     * from being what gets cut.
-     */
-    private function withReason(string $prefix, string $reason, string $suffix): string
+    private function rejectionPushBody(string $reason): string
     {
-        $budget = self::SMS_SEGMENT_LIMIT - mb_strlen($prefix) - mb_strlen($suffix);
-
-        if (mb_strlen($reason) > $budget) {
-            // Ellipsis included in the budget, so the result lands on the limit
-            // rather than one character past it.
-            $reason = mb_substr($reason, 0, max(0, $budget - 1)).'…';
-        }
-
-        return $prefix.$reason.$suffix;
+        return 'Your ambulance booking request was not approved. Reason: '.$reason.' — MDRRMO Echague';
     }
 
-    private function rejectionMessage(string $reason): string
+    private function reschedulePushBody(ServiceRequest $serviceRequest, string $reason): string
     {
-        return $this->withReason(
-            'SERBIS: Your ambulance booking request was not approved. Reason: ',
-            $reason,
-            ' — MDRRMO Echague',
-        );
-    }
-
-    private function rescheduleMessage(ServiceRequest $serviceRequest, string $reason): string
-    {
-        return $this->withReason(
-            'SERBIS: Your ambulance booking has been moved to '
-                .$this->forResident($serviceRequest->scheduled_at).'. Reason: ',
-            $reason,
-            ' — MDRRMO Echague',
-        );
+        return 'Your ambulance booking has been moved to '
+            .$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at).'. Reason: '.$reason.' — MDRRMO Echague';
     }
 
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
 
-        if (!$serviceRequest) {
+        if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
@@ -1188,17 +1158,25 @@ class ServiceRequestController extends Controller
             // reject is the only transition this endpoint makes without a human
             // having already typed something into the request beforehand.
             //
-            // Capped for the same reason SmsController::sendBlast caps its
-            // message at 160: on a rejection this string is pasted into a
-            // PhilSMS body, and PhilSMS bills per segment with no sandbox. The
-            // column is a TEXT and took anything, so a long remark was a
-            // multi-segment billed message nobody priced. 160 is the cap on
-            // what a human types; notifyResident's own builder is what
-            // guarantees the assembled body still fits one segment.
+            // 160 is a leftover cap from when this string was pasted into a
+            // billed PhilSMS body; the SMS is gone but the column is still a
+            // TEXT that took anything before this existed, so the cap stays.
             'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
             // Staff-only, never sent to PhilSMS and never returned to a resident
             // (see index()/show()) — so it carries no per-segment SMS cap.
             'internal_notes' => 'nullable|string|max:1000',
+            // Same types as store()/adminStore(). Routed to AmbulanceBooking
+            // below rather than written here — this table no longer carries
+            // them as of writing, and correcting a typo in a patient's name
+            // after intake should not require a specialised endpoint.
+            'patient_name' => 'sometimes|nullable|string|max:255',
+            'patient_age' => 'sometimes|nullable|integer|min:0|max:120',
+            'patient_sex' => 'sometimes|nullable|in:male,female',
+            'patient_address' => 'sometimes|nullable|string|max:255',
+            'patient_contact_number' => 'sometimes|nullable|string|max:32',
+            'pickup_location' => 'sometimes|nullable|string|max:255',
+            'destination' => 'sometimes|nullable|string|max:255',
+            'condition_notes' => 'sometimes|nullable|string|max:5000',
         ]);
 
         $ambulanceServiceId = $this->ambulanceServiceId();
@@ -1216,7 +1194,7 @@ class ServiceRequestController extends Controller
         if (array_key_exists('status', $validated) && $validated['status'] !== $serviceRequest->status) {
             $allowedFrom = self::ALLOWED_TRANSITIONS[$validated['status']] ?? [];
 
-            if (!in_array($serviceRequest->status, $allowedFrom, true)) {
+            if (! in_array($serviceRequest->status, $allowedFrom, true)) {
                 throw ValidationException::withMessages([
                     'status' => "Cannot move from {$serviceRequest->status} to {$validated['status']}.",
                 ]);
@@ -1233,7 +1211,7 @@ class ServiceRequestController extends Controller
         if ($isAmbulanceRequest
             && $serviceRequest->status === 'Booked'
             && ($validated['status'] ?? null) === 'Responding'
-            && !$serviceRequest->approved_at
+            && ! $serviceRequest->ambulanceBooking?->approved_at
         ) {
             throw ValidationException::withMessages([
                 'status' => 'This booking must be approved before it can be dispatched.',
@@ -1248,7 +1226,7 @@ class ServiceRequestController extends Controller
             $trip = $serviceRequest->conductionRequests()->latest('conduction_request_id')->first();
             $missing = [];
 
-            if (!$trip) {
+            if (! $trip) {
                 $missing[] = 'a trip record — approve the dispatch again to create one';
             } else {
                 // Either satisfies the arrival requirement: a real arrival, or
@@ -1256,7 +1234,7 @@ class ServiceRequestController extends Controller
                 // left, crew recalled mid-route, transport refused). The
                 // driver requirement below is unconditional either way — a
                 // crew went out regardless of how the trip ended.
-                if (!$trip->arrived_destination_at && !$trip->no_arrival_reason) {
+                if (! $trip->arrived_destination_at && ! $trip->no_arrival_reason) {
                     $missing[] = 'arrival time (or a reason it never arrived)';
                 }
                 // Odometer readings are deliberately NOT required here. They
@@ -1265,7 +1243,7 @@ class ServiceRequestController extends Controller
                 // 'Responding' for a crew already back at the office.
                 // ConductionRequestController still enforces
                 // odometer_end >= odometer_start whenever both are entered.
-                if (!$trip->drivers()->exists()) {
+                if (! $trip->drivers()->exists()) {
                     $missing[] = 'a driver';
                 }
             }
@@ -1277,17 +1255,75 @@ class ServiceRequestController extends Controller
             }
         }
 
+        // The picker's two rules, which until now lived only in the panel
+        // (ServiceRequestQueue.vue's availableVehicles): a unit must be
+        // Available, and its type must match the board — an ambulance request
+        // takes an Ambulance and nothing else, every other request takes
+        // anything but an Ambulance. These rules validated nothing beyond
+        // exists:tbl_vehicles, so a direct API call could put a Fire Truck on
+        // an ambulance booking or a unit under Maintenance on any request.
+        //
+        // Two exemptions, both of them the common case rather than an edge:
+        // the unit already attached to this request (every PUT re-sends the
+        // current vehicle_id — see syncFleet's docblock — and that unit is
+        // Dispatched, not Available), and a move to a terminal status, where
+        // the vehicle is being handed back rather than claimed.
+        $incomingVehicleId = isset($validated['vehicle_id']) ? (int) $validated['vehicle_id'] : null;
+
+        $movingToTerminal = in_array(
+            $validated['status'] ?? $serviceRequest->status,
+            self::TERMINAL_STATUSES,
+            true,
+        );
+
+        if ($incomingVehicleId
+            && $incomingVehicleId !== $serviceRequest->vehicle_id
+            && ! $movingToTerminal
+        ) {
+            $incomingVehicle = Vehicle::where('vehicle_id', $incomingVehicleId)->first();
+
+            if ($isAmbulanceRequest !== ($incomingVehicle->type === 'Ambulance')) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => $isAmbulanceRequest
+                        ? 'That unit is not an Ambulance.'
+                        : 'An Ambulance is only assigned to an ambulance request.',
+                ]);
+            }
+
+            if ($incomingVehicle->status === 'Maintenance') {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => 'That unit is under Maintenance and cannot be assigned.',
+                ]);
+            }
+
+            if ($incomingVehicle->status !== 'Available') {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => $incomingVehicle->unit_identifier.' is no longer available — pick another unit.',
+                ]);
+            }
+        }
+
         // Captured before update() overwrites status: rejecting a booking is
         // the case this endpoint notifies for (the panel's older, unscheduled
         // Pending -> Disapproved flow is not "a booking" and stays silent).
-        $wasBookingRejection = $serviceRequest->scheduled_at !== null
+        $wasBookingRejection = $serviceRequest->ambulanceBooking?->scheduled_at !== null
             && $serviceRequest->status !== 'Disapproved'
             && ($validated['status'] ?? null) === 'Disapproved';
 
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
 
-            $serviceRequest->update($validated);
+            $bookingFields = Arr::only($validated, self::BOOKING_FIELDS);
+
+            $serviceRequest->update(Arr::except($validated, self::BOOKING_FIELDS));
+
+            // Same invariant as store()/adminStore(): only an ambulance
+            // request ever gets a booking row. A non-ambulance request
+            // sending one of these fields has it silently dropped, same as
+            // it always was.
+            if ($isAmbulanceRequest && $bookingFields) {
+                AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], $bookingFields);
+            }
 
             // The bridge itself: this is the one place the instant path ever
             // transitions to Responding, so it is the one place that can
@@ -1297,14 +1333,14 @@ class ServiceRequestController extends Controller
             // progress.
             if ($isAmbulanceRequest
                 && ($validated['status'] ?? null) === 'Responding'
-                && !$serviceRequest->conductionRequests()->exists()
+                && ! $serviceRequest->conductionRequests()->exists()
             ) {
                 $this->createConductionStub($serviceRequest);
             }
         });
 
         if ($wasBookingRejection) {
-            $this->notifyResident($serviceRequest, $this->rejectionMessage((string) $validated['remarks']));
+            $this->notifyResidentDevices($serviceRequest, $this->rejectionPushBody((string) $validated['remarks']));
         }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
@@ -1342,7 +1378,9 @@ class ServiceRequestController extends Controller
     {
         $serviceRequest->loadMissing(['resident', 'vehicle']);
 
-        $patientName = $serviceRequest->patient_name
+        $booking = $serviceRequest->ambulanceBooking;
+
+        $patientName = $booking?->patient_name
             ?: ($serviceRequest->resident
                 ? trim("{$serviceRequest->resident->first_name} {$serviceRequest->resident->last_name}")
                 : $serviceRequest->walk_in_name)
@@ -1353,7 +1391,7 @@ class ServiceRequestController extends Controller
         // travelling, so the account number is the fallback, not the answer.
         // The derivation below is unchanged and still covers every row filed
         // before this column existed.
-        $contactNumber = $serviceRequest->patient_contact_number
+        $contactNumber = $booking?->patient_contact_number
             ?: $serviceRequest->resident?->phone_number
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
@@ -1365,13 +1403,13 @@ class ServiceRequestController extends Controller
             'vehicle_id' => $serviceRequest->vehicle_id,
             'departed_office_at' => now(),
             'patient_name' => $patientName,
-            'patient_age' => $serviceRequest->patient_age,
-            'patient_sex' => $serviceRequest->patient_sex,
-            'patient_address' => $serviceRequest->patient_address ?: null,
+            'patient_age' => $booking?->patient_age,
+            'patient_sex' => $booking?->patient_sex,
+            'patient_address' => $booking?->patient_address ?: null,
             'patient_contact_number' => $contactNumber,
-            'medical_diagnosis' => $serviceRequest->condition_notes ?: null,
-            'origin' => $serviceRequest->pickup_location ?: null,
-            'destination' => $serviceRequest->destination ?: null,
+            'medical_diagnosis' => $booking?->condition_notes ?: null,
+            'origin' => $booking?->pickup_location ?: null,
+            'destination' => $booking?->destination ?: null,
             'vehicle' => $vehicle
                 ? $vehicle->unit_identifier.($vehicle->specification ? " ({$vehicle->specification})" : '')
                 : null,
@@ -1399,7 +1437,7 @@ class ServiceRequestController extends Controller
     {
         $serviceRequest = ServiceRequest::find($id);
 
-        if (!$serviceRequest) {
+        if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
@@ -1409,7 +1447,9 @@ class ServiceRequestController extends Controller
             ], 422);
         }
 
-        if (!$serviceRequest->scheduled_at) {
+        $scheduledAt = $serviceRequest->ambulanceBooking?->scheduled_at;
+
+        if (! $scheduledAt) {
             return response()->json([
                 'message' => 'This request has no scheduled time to approve against.',
             ], 422);
@@ -1424,11 +1464,11 @@ class ServiceRequestController extends Controller
             'scheduled_end' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
         ]);
 
-        $scheduledEnd = !empty($validated['scheduled_end'])
+        $scheduledEnd = ! empty($validated['scheduled_end'])
             ? Carbon::parse($validated['scheduled_end'], self::OFFICE_TIMEZONE)->utc()
-            : $serviceRequest->scheduled_at->copy()->addHours(self::DEFAULT_BOOKING_HOURS);
+            : $scheduledAt->copy()->addHours(self::DEFAULT_BOOKING_HOURS);
 
-        if ($scheduledEnd->lte($serviceRequest->scheduled_at)) {
+        if ($scheduledEnd->lte($scheduledAt)) {
             throw ValidationException::withMessages([
                 'scheduled_end' => 'scheduled_end must be after scheduled_at.',
             ]);
@@ -1436,19 +1476,18 @@ class ServiceRequestController extends Controller
 
         // Captured before the transaction overwrites it: a first approval and
         // a re-approval that only swaps the assigned unit both reach this
-        // point, and only the first one is worth a billed SMS to the
-        // resident — PhilSMS has no sandbox and charges per segment, and a
-        // re-approval was re-sending the identical "approved" text every time.
-        $wasAlreadyApproved = $serviceRequest->approved_at !== null;
+        // point, and only the first one is worth pushing to the resident — a
+        // re-approval was re-sending the identical "approved" push every time.
+        $wasAlreadyApproved = $serviceRequest->ambulanceBooking?->approved_at !== null;
 
-        DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledEnd) {
+        DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledAt, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
             // decides who the window's last free unit goes to.
             $units = Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->lockForUpdate()->get();
 
             $vehicle = $units->firstWhere('vehicle_id', (int) $validated['vehicle_id']);
 
-            if (!$vehicle) {
+            if (! $vehicle) {
                 throw ValidationException::withMessages([
                     'vehicle_id' => 'That unit is not an Ambulance.',
                 ]);
@@ -1463,10 +1502,10 @@ class ServiceRequestController extends Controller
             // Re-checked, not trusted from submission time: the window may
             // have filled with other approvals since this request was filed.
             $freeIds = $this->availability
-                ->availableAmbulances($serviceRequest->scheduled_at, $scheduledEnd, $serviceRequest->request_id)
+                ->availableAmbulances($scheduledAt, $scheduledEnd, $serviceRequest->request_id)
                 ->pluck('vehicle_id');
 
-            if (!$freeIds->contains($vehicle->vehicle_id)) {
+            if (! $freeIds->contains($vehicle->vehicle_id)) {
                 throw ValidationException::withMessages([
                     'vehicle_id' => 'That unit is no longer free for this window.',
                 ]);
@@ -1478,16 +1517,19 @@ class ServiceRequestController extends Controller
 
             $serviceRequest->update([
                 'vehicle_id' => $vehicle->vehicle_id,
-                'scheduled_end' => $scheduledEnd,
-                'approved_at' => $serviceRequest->approved_at ?? now(),
                 'processed_by' => $request->user()->getKey(),
+            ]);
+
+            AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], [
+                'scheduled_end' => $scheduledEnd,
+                'approved_at' => $serviceRequest->ambulanceBooking?->approved_at ?? now(),
             ]);
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
 
-        if (!$wasAlreadyApproved) {
-            $this->notifyResident($fresh, $this->approvalMessage($fresh));
+        if (! $wasAlreadyApproved) {
+            $this->notifyResidentDevices($fresh, $this->approvalPushBody($fresh));
         }
 
         return response()->json($fresh);
@@ -1503,7 +1545,7 @@ class ServiceRequestController extends Controller
     {
         $serviceRequest = ServiceRequest::find($id);
 
-        if (!$serviceRequest) {
+        if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
@@ -1523,7 +1565,7 @@ class ServiceRequestController extends Controller
             // TracksHistory logs the scheduled_at/scheduled_end change on its
             // own, but the *reason* only reaches that log because remarks moves
             // in the same update — so it is not optional here, unlike update().
-            // Capped like update()'s copy: this one always reaches PhilSMS.
+            // Capped like update()'s copy: this one always reaches the push.
             'remarks' => 'required|string|max:160',
         ]);
 
@@ -1548,7 +1590,7 @@ class ServiceRequestController extends Controller
             if ($serviceRequest->vehicle_id) {
                 // Already approved: the unit it already holds must specifically
                 // still be free for the new time, not just some other unit.
-                if (!$freeIds->contains($serviceRequest->vehicle_id)) {
+                if (! $freeIds->contains($serviceRequest->vehicle_id)) {
                     throw ValidationException::withMessages([
                         'scheduled_at' => 'The assigned unit is not free for that time.',
                     ]);
@@ -1559,15 +1601,17 @@ class ServiceRequestController extends Controller
                 ]);
             }
 
-            $serviceRequest->update([
+            $serviceRequest->update(['remarks' => $validated['remarks']]);
+
+            AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], [
                 'scheduled_at' => $scheduledAt,
                 'scheduled_end' => $scheduledEnd,
-                'remarks' => $validated['remarks'],
             ]);
         });
 
         $fresh = $serviceRequest->fresh(['vehicle']);
-        $this->notifyResident($fresh, $this->rescheduleMessage($fresh, (string) $validated['remarks']));
+
+        $this->notifyResidentDevices($fresh, $this->reschedulePushBody($fresh, (string) $validated['remarks']));
 
         return response()->json($fresh);
     }
@@ -1576,7 +1620,7 @@ class ServiceRequestController extends Controller
     {
         $serviceRequest = ServiceRequest::find($id);
 
-        if (!$serviceRequest) {
+        if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 

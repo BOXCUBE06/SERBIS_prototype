@@ -21,9 +21,9 @@ use Illuminate\Support\Facades\DB;
  *
  * Never production data: refuses outside local/testing, the same guard
  * ServiceRequestSeeder and ResidentSeeder use. Self-skips if this seeder's
- * own signature — a scheduled_at already on the table — is already there,
- * the way VehicleSeeder self-skips on a non-empty tbl_vehicles. Not called
- * from ProductionSeeder.
+ * own signature — a scheduled_at already on tbl_ambulance_bookings — is
+ * already there, the way VehicleSeeder self-skips on a non-empty
+ * tbl_vehicles. Not called from ProductionSeeder.
  */
 class AmbulanceBookingSeeder extends Seeder
 {
@@ -32,13 +32,13 @@ class AmbulanceBookingSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'AmbulanceBookingSeeder skipped: refuses to seed simulated bookings outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
         }
 
-        if (DB::table('tbl_service_request')->whereNotNull('scheduled_at')->exists()) {
+        if (DB::table('tbl_ambulance_bookings')->whereNotNull('scheduled_at')->exists()) {
             $this->command?->warn('AmbulanceBookingSeeder skipped: a scheduled booking already exists.');
 
             return;
@@ -51,7 +51,7 @@ class AmbulanceBookingSeeder extends Seeder
         if (! $service || $units->count() < 4) {
             $this->command?->warn(
                 'AmbulanceBookingSeeder skipped: needs the Ambulance/Medical Response service and 4 Ambulance '
-                . 'units — run ServiceSeeder and VehicleSeeder first.'
+                .'units — run ServiceSeeder and VehicleSeeder first.'
             );
 
             return;

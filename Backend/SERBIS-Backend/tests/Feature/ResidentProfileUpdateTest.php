@@ -19,7 +19,9 @@ class ResidentProfileUpdateTest extends TestCase
     use RefreshDatabase;
 
     private Barangay $home;
+
     private Barangay $elsewhere;
+
     private Resident $resident;
 
     protected function setUp(): void

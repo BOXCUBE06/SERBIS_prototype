@@ -20,6 +20,10 @@ class CachedMaterial {
   /// not from when this device happened to download them.
   final DateTime? publishedAt;
 
+  /// Carried so a saved material keeps its badge with the network down.
+  /// Absent from indexes written before it existed, which reads as false.
+  final bool verified;
+
   const CachedMaterial({
     required this.id,
     required this.title,
@@ -28,6 +32,7 @@ class CachedMaterial {
     required this.path,
     required this.savedAt,
     this.publishedAt,
+    this.verified = false,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -38,6 +43,7 @@ class CachedMaterial {
         'path': path,
         'saved_at': savedAt.toIso8601String(),
         if (publishedAt != null) 'published_at': publishedAt!.toIso8601String(),
+        'verified': verified,
       };
 
   static CachedMaterial? fromJson(Object? json) {
@@ -57,6 +63,7 @@ class CachedMaterial {
       // Absent from indexes written before publication dates were carried, so
       // an upgrade must not drop those entries — it just has no date to show.
       publishedAt: DateTime.tryParse(json['published_at'] as String? ?? ''),
+      verified: json['verified'] == true,
     );
   }
 
@@ -69,6 +76,7 @@ class CachedMaterial {
         sizeBytes: sizeBytes,
         url: '',
         publishedAt: publishedAt,
+        verified: verified,
       );
 }
 

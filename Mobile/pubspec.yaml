@@ -23,10 +23,20 @@ dependencies:
   # url_launcher opens the server copy when there is no saved one.
   open_filex: ^4.5.0
   url_launcher: ^6.3.0
+  # Push, step 1: register the device with FCM and read its token back.
+  # firebase_core is not optional — firebase_messaging cannot initialise
+  # without it. Android needs android/app/google-services.json, which is not in
+  # the repository; a build without it fails at processGoogleServices.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
 
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  # E2E: drives the real app on a device/emulator/web, unlike flutter_test's
+  # in-VM widget tests. Run with `flutter test integration_test`.
+  integration_test:
     sdk: flutter
   flutter_lints: ^3.0.0
 

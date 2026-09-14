@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +19,7 @@ class ServiceController extends Controller
         // what they can actually file against; the admin panel's Manage
         // Services page needs every row, disabled ones included, or a
         // disabled service could never be re-enabled from there.
-        $services = ($user instanceof \App\Models\User && $user->isAdmin())
+        $services = ($user instanceof User && $user->isAdmin())
             ? Service::all()
             : Service::where('is_active', true)->get();
 
@@ -41,7 +42,7 @@ class ServiceController extends Controller
     {
         $service = Service::find($id);
 
-        if (!$service) {
+        if (! $service) {
             return response()->json(['message' => 'Service not found'], 404);
         }
 
@@ -52,7 +53,7 @@ class ServiceController extends Controller
     {
         $service = Service::find($id);
 
-        if (!$service) {
+        if (! $service) {
             return response()->json(['message' => 'Service not found'], 404);
         }
 
@@ -71,7 +72,7 @@ class ServiceController extends Controller
     {
         $service = Service::find($id);
 
-        if (!$service) {
+        if (! $service) {
             return response()->json(['message' => 'Service not found'], 404);
         }
 

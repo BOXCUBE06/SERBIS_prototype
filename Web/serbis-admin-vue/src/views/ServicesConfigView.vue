@@ -3,15 +3,11 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Manage Services</h2>
-            <div class="text-subtitle-1 text-medium-emphasis">
-              What residents can request from the MDRRMO, and how each one appears in the app
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Manage Services"
+          subtitle="What residents can request from the MDRRMO, and how each one appears in the app"
+          class="mb-6"
+        />
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
           {{ apiError }}
@@ -52,7 +48,7 @@
 
               <v-spacer class="d-none d-lg-block"></v-spacer>
 
-              <div class="text-body-1 text-medium-emphasis">
+              <div class="page-subtitle text-medium-emphasis">
                 <strong class="text-high-emphasis">{{ filteredServices.length }}</strong>
                 of {{ services.length }} services
               </div>
@@ -92,18 +88,18 @@
           </div>
 
           <!-- Empty -->
-          <div v-else-if="!filteredServices.length" class="empty-state">
+          <div v-else-if="filteredServices.length === 0" class="empty-state">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-clipboard-list-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ services.length ? 'No services match your search' : 'No services configured yet' }}
+              {{ services.length > 0 ? 'No services match your search' : 'No services configured yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
-              {{ services.length
+              {{ services.length > 0
                 ? 'Try a different keyword, or clear the filters to see the full list.'
                 : 'Services are set up in the database directly — none exist yet.' }}
             </div>
             <v-btn
-              v-if="services.length"
+              v-if="services.length > 0"
               variant="flat"
               color="primary"
               rounded="lg"
@@ -270,6 +266,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/services`
 
@@ -295,8 +292,8 @@ const headers = [
   // it needs only the slot's own index, which is already relative to the
   // current sorted+paginated page.
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Service', key: 'service_name', minWidth: '260px' },
-  { title: 'Description', key: 'description', sortable: false, minWidth: '280px' },
+  { title: 'Service', key: 'service_name', width: '26%' },
+  { title: 'Description', key: 'description', sortable: false, width: '28%' },
   { title: 'Category', key: 'category', value: (item) => categoryOf(item).label, width: '170px' },
   { title: 'Date added', key: 'created_at', width: '150px' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '230px' },
@@ -461,22 +458,12 @@ onMounted(fetchServices)
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
 .search-field { width: 340px; max-width: 100%; }
 .filter-field { width: 220px; max-width: 100%; }
-
-.btn-soft-shadow {
-  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.btn-soft-shadow:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important;
-}
 
 .table-card {
   background: rgb(var(--v-theme-surface));
@@ -485,7 +472,11 @@ onMounted(fetchServices)
 }
 
 /* Table — larger type and taller rows than Vuetify's default, so a long
-   list stays readable at arm's length. */
+   list stays readable at arm's length. Fixed layout keeps the six columns
+   at their declared widths; the two `minWidth`-only columns (Service,
+   Description) became explicit percentages because fixed layout only
+   reads `width` to size a column. */
+.services-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 980px; }
 .services-table :deep(th) {
   background: rgba(var(--v-theme-on-surface), 0.04) !important;
   font-size: 0.9rem !important;
@@ -547,18 +538,18 @@ onMounted(fetchServices)
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
-.pill-rescue { background: rgba(var(--v-theme-error), 0.14); color: rgb(var(--v-theme-error)); }
-.pill-medical { background: rgba(var(--v-theme-info), 0.14); color: rgb(var(--v-theme-info)); }
-.pill-relief { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-infrastructure { background: rgba(var(--v-theme-warning), 0.18); color: rgb(var(--v-theme-warning)); }
+/* Text uses the -strong tokens, not the plain ones: raw error/info/primary/
+   warning on their own tint measures under AA (see plugins/vuetify.ts for
+   the ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-rescue { background: rgba(var(--v-theme-error), 0.14); color: rgb(var(--v-theme-error-strong)); }
+.pill-medical { background: rgba(var(--v-theme-info), 0.14); color: rgb(var(--v-theme-info-strong)); }
+.pill-relief { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-infrastructure { background: rgba(var(--v-theme-warning), 0.18); color: rgb(var(--v-theme-warning-strong)); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 72px 16px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .btn-soft-shadow { transition: none; }
-  .btn-soft-shadow:hover { transform: none; }
-}
+
 </style>

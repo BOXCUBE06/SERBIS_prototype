@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Traits\TracksHistory;
 
 class ConductionRequest extends Model
 {
     use TracksHistory;
 
     protected $table = 'tbl_conduction_requests';
+
     protected $primaryKey = 'conduction_request_id';
 
     protected $fillable = [
@@ -106,6 +107,7 @@ class ConductionRequest extends Model
         if ($this->departed_office_at) {
             return 'In transit';
         }
+
         return 'Not dispatched';
     }
 }

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -443,7 +444,7 @@ class ResidentEmailVerificationTest extends TestCase
         return $real === '000000' ? '111111' : '000000';
     }
 
-    private function submit(string $code): \Illuminate\Testing\TestResponse
+    private function submit(string $code): TestResponse
     {
         return $this->postJson('/api/resident/verify-email', [
             'email_address' => 'grace@test.local',

@@ -24,12 +24,13 @@
            that page's title and waste a whole row's height on redundant
            "Ambulance Bookings" text the page-header's own title already
            covers (layout redesign follow-up). -->
-      <div v-if="standalone" class="d-flex justify-space-between align-center w-100 mb-3 flex-wrap gap-3">
-        <div>
-          <h2 class="text-h5 font-weight-bold" style="line-height: 1; margin-bottom: 4px;">{{ scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests' }}</h2>
-          <div class="text-body-2 text-medium-emphasis" style="line-height: 1;">{{ requestCounts.All }} {{ scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays' }}</div>
-        </div>
-        <div class="d-flex align-center gap-3">
+      <PageHeader
+        v-if="standalone"
+        :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
+        :subtitle="`${requestCounts.All} ${scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays'}`"
+        class="mb-6"
+      >
+        <template v-slot:actions>
         <!-- The adviser's ask: someone who shows up at the office in person
              rather than through the app, with or without an account. A
              separate button rather than folding this into the export/filter
@@ -39,7 +40,7 @@
           color="secondary"
           variant="flat"
           class="text-none font-weight-bold px-6 text-white"
-          height="40"
+          height="48"
           @click="openCreateDialog"
         >
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
@@ -59,7 +60,7 @@
           color="primary"
           variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
+          height="48"
           @click="openDayView"
         >
           <v-icon start size="small">mdi-calendar-clock</v-icon>
@@ -80,16 +81,16 @@
           color="primary"
           variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
-          :disabled="!filteredAndSortedRequests.length"
+          height="48"
+          :disabled="filteredAndSortedRequests.length === 0"
           @click="exportCsv"
         >
           <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ filteredAndSortedRequests.length ? 'Export' : 'Nothing to export' }}
-          <span v-if="filteredAndSortedRequests.length" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
+          {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
+          <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
         </v-btn>
-        </div>
-      </div>
+        </template>
+      </PageHeader>
 
       <!-- Split view: list + detail panel.
            Side by side on a desk, which is where this screen is used. Below the
@@ -202,7 +203,7 @@
           <div class="flex-grow-1 overflow-y-auto">
             <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
 
-            <div v-else-if="!pagedRequests.length" class="text-center text-caption text-medium-emphasis py-10">
+            <div v-else-if="pagedRequests.length === 0" class="text-center text-caption text-medium-emphasis py-10">
               {{ emptyListMessage }}
             </div>
 
@@ -433,7 +434,7 @@
                      every break collapsed to a space and the whole thing read
                      as one run-on sentence. -->
                 <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <template v-if="descriptionLines.length">
+                  <template v-if="descriptionLines.length > 0">
                     <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
                   </template>
                   <template v-else>No description provided by the Head of the Family.</template>
@@ -451,7 +452,12 @@
                    reads as a broken image rather than a small one. Fixed
                    180x140 tiles, filled with `cover`, and the full picture is
                    a click away. -->
-              <div class="detail-group" v-if="attachments.length">
+              <div class="detail-group" v-if="selectedRequest.landmark">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Landmark</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.landmark }}</div>
+              </div>
+
+              <div class="detail-group" v-if="attachments.length > 0">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
 
                 <!-- A flex row is a block box, so it stretches to the full
@@ -587,6 +593,7 @@
                    on a Resolved request, not just a Pending one. -->
               <v-textarea
                 v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
+                placeholder="e.g. Called twice, no answer — retrying after lunch"
                 hint="Never shown to the requester — for staff reading this request later."
                 persistent-hint
               ></v-textarea>
@@ -843,10 +850,16 @@
          is its own explanation. Bulk decline gets one reason for the whole
          selection, which is the only thing it could ever have written -- it used
          to resend each row's existing remarks, so it captured nothing at all. -->
-    <v-dialog v-model="reasonDialog.open" max-width="440" @after-leave="clearReason">
+    <!-- persistent: the field below is the text a Head of the Family is shown,
+         and a stray click on the scrim used to discard it with no warning. -->
+    <v-dialog v-model="reasonDialog.open" max-width="440" persistent @after-leave="clearReason">
       <v-card rounded="lg">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          {{ reasonCopy.title }}
+        <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          <span>{{ reasonCopy.title }}</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading || bulkLoading" @click="reasonDialog.open = false"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
@@ -854,6 +867,7 @@
             v-if="reasonCopy.showField"
             v-model="reasonDialog.reason"
             :label="reasonCopy.label"
+            :placeholder="reasonCopy.placeholder"
             :hint="reasonCopy.hint"
             persistent-hint
             variant="outlined"
@@ -929,10 +943,17 @@
          reasonDialog above: that one collects one reason string for a status
          flip, this collects two datetimes plus a reason, and remarks here is
          required unconditionally, not gated on `kind`. -->
-    <v-dialog v-model="rescheduleDialog.open" max-width="440">
+    <!-- persistent for two reasons: it holds a typed reason, and both date
+         fields open a teleported menu — clicking a date in it registers as a
+         click outside the dialog, which used to close it mid-edit. -->
+    <v-dialog v-model="rescheduleDialog.open" max-width="440" persistent>
       <v-card rounded="lg">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          Reschedule booking
+        <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          <span>Reschedule booking</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading" @click="rescheduleDialog.open = false"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <DateTimePickerField
@@ -954,6 +975,7 @@
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
             label="Reason for the change"
+            placeholder="e.g. Unit committed to an earlier transport"
             hint="Required — this is what the Head of the Family sees, and what the log records."
             persistent-hint
             variant="outlined"
@@ -1012,7 +1034,7 @@
             <v-skeleton-loader v-for="n in 4" :key="n" type="list-item-two-line" class="mb-3"></v-skeleton-loader>
           </div>
 
-          <template v-else-if="dayView.units.length">
+          <template v-else-if="dayView.units.length > 0">
             <!-- Hour scale, shared by every track below it. -->
             <div class="day-view-scale">
               <span v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-scale-label" :style="{ left: mark.left }">{{ mark.label }}</span>
@@ -1086,6 +1108,7 @@
             <v-text-field
               v-model="createDialog.form.walk_in_name"
               label="Full name"
+              placeholder="e.g. Juan Dela Cruz"
               variant="outlined"
               density="comfortable"
               class="mb-2"
@@ -1094,6 +1117,7 @@
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
               label="Contact number"
+              placeholder="e.g. 09171234567"
               variant="outlined"
               density="comfortable"
               class="mb-2"
@@ -1119,6 +1143,7 @@
             v-if="scope !== 'ambulance'"
             v-model="createDialog.form.description"
             label="Description"
+            placeholder="e.g. Fallen tree blocking the road at Purok 3"
             variant="outlined"
             density="comfortable"
             rows="3"
@@ -1139,14 +1164,14 @@
               <v-col cols="12" sm="8">
                 <v-text-field
                   v-model="createDialog.form.patient_name"
-                  label="Patient name" variant="outlined" density="comfortable" class="mb-2"
+                  label="Patient name" placeholder="e.g. Maria Santos" variant="outlined" density="comfortable" class="mb-2"
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
                 <v-text-field
                   v-model="createDialog.form.patient_age"
-                  label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
+                  label="Age" placeholder="e.g. 54" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
                 ></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
@@ -1159,28 +1184,28 @@
             </v-row>
             <v-text-field
               v-model="createDialog.form.patient_address"
-              label="Patient address" variant="outlined" density="comfortable" class="mb-2"
+              label="Patient address" placeholder="e.g. Purok 2, San Fabian" variant="outlined" density="comfortable" class="mb-2"
               :rules="[required]"
             ></v-text-field>
             <v-row dense>
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.pickup_location"
-                  label="Pickup location" variant="outlined" density="comfortable" class="mb-2"
+                  label="Pickup location" placeholder="e.g. Barangay Hall, San Fabian" variant="outlined" density="comfortable" class="mb-2"
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.destination"
-                  label="Destination" variant="outlined" density="comfortable" class="mb-2"
+                  label="Destination" placeholder="e.g. Echague District Hospital" variant="outlined" density="comfortable" class="mb-2"
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
             </v-row>
             <v-textarea
               v-model="createDialog.form.condition_notes"
-              label="Condition" variant="outlined" density="comfortable" rows="2" class="mb-2"
+              label="Condition" placeholder="e.g. Chest pains since morning, conscious and breathing" variant="outlined" density="comfortable" rows="2" class="mb-2"
               :rules="[required]"
             ></v-textarea>
 
@@ -1204,6 +1229,7 @@
                 <v-text-field
                   v-model="createDialog.form.patient_relatives[idx]"
                   :label="`Relative ${idx + 1}`"
+                  placeholder="e.g. Ana Santos"
                   variant="outlined"
                   density="compact"
                   hide-details
@@ -1286,6 +1312,7 @@ import { getToken } from '@/composables/authToken'
 import { outcomeLabel, outcomePillClass, isBookingOverdue } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
 // Bookings tab on the Ambulance Dispatch Requests page. 'other': every
@@ -1538,6 +1565,7 @@ const reasonCopy = computed(() => {
         title: 'Approve and dispatch',
         body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
         label: 'Note for the Head of the Family (optional)',
+        placeholder: 'e.g. Wait by the barangay hall, the unit is on its way',
         hint: appHint,
         showField: hasAccount,
         confirm: 'Approve & dispatch',
@@ -1547,6 +1575,7 @@ const reasonCopy = computed(() => {
         title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
         body: 'Every selected request is declined with this same reason.',
         label: 'Reason for declining',
+        placeholder: 'e.g. No unit free for the requested window',
         hint: 'Shown to any Head of the Family in the selection with a linked account; kept as an internal record for a walk-in with none.',
         showField: true,
         confirm: 'Disapprove all',
@@ -1556,6 +1585,7 @@ const reasonCopy = computed(() => {
         title: 'Disapprove this request',
         body: who ? `${who} asked for ${what}.` : `A request for ${what}.`,
         label: 'Reason for declining',
+        placeholder: 'e.g. No unit free for the requested window — file again for tomorrow',
         hint: hasAccount ? appHint : noAppHint,
         showField: true,
         confirm: 'Disapprove request',
@@ -1694,7 +1724,7 @@ const requesterName = (item) =>
 const requesterInitials = (item) => {
   if (item?.resident) return `${item.resident.first_name?.charAt(0) || ''}${item.resident.last_name?.charAt(0) || ''}`
   const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
-  return parts.length ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
+  return parts.length > 0 ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
 }
 const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_contact_number || 'N/A'
 const requesterBarangay = (item) => {
@@ -1843,12 +1873,12 @@ const descriptionLines = computed(() => {
   // Only from the end. The resident's own words sit in the middle of the block
   // and can legitimately begin with either word -- matching anywhere would eat
   // a sentence that happens to start "Contact the barangay hall first".
-  while (kept.length && META_TAIL.test(kept[kept.length - 1])) kept.pop()
+  while (kept.length > 0 && META_TAIL.test(kept.at(-1))) kept.pop()
 
   // A form submitted with nothing typed into it reduces to exactly the meta
   // lines, and stripping all of them would leave a blank card where there was
   // text a moment ago. Show what there is rather than nothing.
-  return kept.length ? kept : lines
+  return kept.length > 0 ? kept : lines
 })
 
 const filteredAndSortedRequests = computed(() => {
@@ -1907,7 +1937,7 @@ const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
 const exportCsv = () => {
   const rows = filteredAndSortedRequests.value
-  if (!rows.length) return
+  if (rows.length === 0) return
 
   const header = ['Request ID', 'Head of the Family', 'Barangay', 'Phone', 'Service', 'Status', 'Vehicle', 'Submitted', 'Remarks', 'Description']
   const body = rows.map(r => [
@@ -1946,8 +1976,10 @@ const toggleSelect = (item) => {
   else selectedIds.add(id)
 }
 
-const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-const formatDateTime = (dateStr) => new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+// Empty rather than adminUi's em dash: exportCsv() feeds these too, and a dash
+// would land in the spreadsheet as a literal cell value.
+const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 // scheduled_end shares a day with scheduled_at on every booking this renders
 // for, so only the time carries new information.
 const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, { timeStyle: 'short' })
@@ -2000,7 +2032,7 @@ const fetchData = async () => {
     residents.value = resData.data || resData
     services.value = svcData.data || svcData
 
-    if (!selectedRequest.value && requests.value.length) {
+    if (!selectedRequest.value && requests.value.length > 0) {
       selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
     } else if (selectedRequest.value) {
       // Keep the panel in sync with the freshly-fetched copy of the selected request
@@ -2314,8 +2346,8 @@ const dayViewSegmentStyle = (window) => {
   const dayStart = new Date(y, m - 1, d)
   const minutesInDay = 24 * 60
 
-  const startMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_at) - dayStart) / 60000))
-  const endMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_end) - dayStart) / 60000))
+  const startMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_at) - dayStart) / 60_000))
+  const endMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_end) - dayStart) / 60_000))
 
   return {
     left: `${(startMin / minutesInDay) * 100}%`,
@@ -2456,7 +2488,7 @@ const bulkDisapprove = async (reason) => {
     selectedIds.clear()
     await fetchData()
     reasonDialog.value.open = false
-  } catch (error) {
+  } catch {
     apiError.value = 'Failed to update one or more requests'
     reasonDialog.value.error = 'Failed to update one or more requests'
   } finally {
@@ -2674,78 +2706,7 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   min-width: 0;
 }
 
-/* Status pills — replacing two v-chips that could not be read.
-   v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
-   `background: currentColor`. The detail-panel chip also carried `.text-white`,
-   and the utilities layer beats the components layer, so it repainted the label
-   AND the underlay white: white on white, ~1.0:1. The list chips were legible
-   but failed AA on every status (warning 2.36:1, info 3.84:1, success 4.27:1,
-   error 4.03:1, all measured on their own tint over white).
-   Same shape as UsersView's .status-pill so the two pages agree. Text uses the
-   -strong tokens; the tint keeps the plain token. */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-/* The list row is a denser context than the detail header — one step smaller,
-   nothing else changes. */
-.status-pill--sm {
-  padding: 2px 8px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
-}
-.pill-pending {
-  background: rgba(var(--v-theme-warning), 0.14);
-  color: rgb(var(--v-theme-warning-strong));
-}
-/* Booked is the one status with no semantic token behind it -- the theme
-   carries five hues and all five are spoken for, and Booked has to be told
-   apart from Responding at a glance. Literal violet, measured the same way the
-   tokens in plugins/vuetify.ts were: #5B21B6 on rgba(#6D28D9, 0.14) over white
-   is 7.14:1, and #A78BFA on its own 10% tint over #131B2E is 5.42:1. Both
-   clear AA. Promote to a token pair if a second component ever needs it. */
-.pill-booked {
-  background: rgba(109, 40, 217, 0.14);
-  color: #5B21B6;
-}
-.pill-responding {
-  background: rgba(var(--v-theme-info), 0.14);
-  color: rgb(var(--v-theme-info-strong));
-}
-.pill-resolved {
-  background: rgba(var(--v-theme-success), 0.14);
-  color: rgb(var(--v-theme-success-strong));
-}
-.pill-disapproved,
-.pill-cancelled {
-  background: rgba(var(--v-theme-error), 0.14);
-  color: rgb(var(--v-theme-error-strong));
-}
-/* A sixth outcome, neither success nor failure — the five semantic hues are
-   already spoken for (see .pill-booked above), so this is a literal neutral
-   slate rather than reusing warning/error and implying "wrong" or "pending". */
-.pill-resolved-no-arrival {
-  background: rgba(100, 116, 139, 0.14);
-  color: #334155;
-}
-/* The dark tokens are already bright enough to use as text, but they need the
-   lighter 10% tint the measurements were taken against — 14% of a bright token
-   over #131B2E lifts the background far enough to eat the margin. Keep each
-   status on its own hue; only the alpha changes. */
-.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
-.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
-.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
-.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
-.v-theme--dark .pill-disapproved,
-.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
-.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ConductionRequestView.vue). */
 
 /* Ambulance Day View. Booked segments reuse .pill-booked's exact violet — the
    same status already means "Booked" everywhere else on this page, so the

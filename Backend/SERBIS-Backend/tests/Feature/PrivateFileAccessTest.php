@@ -8,7 +8,6 @@ use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -36,6 +35,7 @@ class PrivateFileAccessTest extends TestCase
     use RefreshDatabase;
 
     private Resident $owner;
+
     private ServiceRequest $request;
 
     protected function setUp(): void

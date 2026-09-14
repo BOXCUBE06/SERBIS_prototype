@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -25,8 +26,11 @@ class AmbulanceAvailabilityEndpointTest extends TestCase
     use RefreshDatabase;
 
     private Service $service;
+
     private Vehicle $vehicle;
+
     private Resident $resident;
+
     private User $admin;
 
     protected function setUp(): void
@@ -68,13 +72,18 @@ class AmbulanceAvailabilityEndpointTest extends TestCase
 
         // The row a leak would expose: a real patient name and diagnosis, on a
         // window that sits inside the ?date= day used below.
-        ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->getKey(),
             'description' => 'CONFIDENTIAL-PATIENT-NAME Juan Dela Cruz',
             'remarks' => 'CONFIDENTIAL-REMARKS',
             'status' => 'Booked',
             'vehicle_id' => $this->vehicle->getKey(),
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
+            'patient_name' => 'CONFIDENTIAL-PATIENT-NAME Juan Dela Cruz',
             'scheduled_at' => '2026-09-01 00:00:00',
             'scheduled_end' => '2026-09-01 02:00:00',
         ]);

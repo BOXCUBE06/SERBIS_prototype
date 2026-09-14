@@ -66,7 +66,7 @@ class PurgeRetiredServices extends Command
             $present = Service::orderBy('service_id')->pluck('service_name', 'service_id');
 
             $this->newLine();
-            $this->line('Services on this database (' . $present->count() . '):');
+            $this->line('Services on this database ('.$present->count().'):');
             foreach ($present as $id => $name) {
                 $this->line("  id={$id}  {$name}");
             }

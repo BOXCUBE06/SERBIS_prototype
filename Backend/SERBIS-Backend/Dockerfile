@@ -22,7 +22,9 @@
 # composer.lock present it would produce an empty map and quietly fall back to
 # filesystem lookups on every class in app/.
 # ---------------------------------------------------------------------------
-FROM php:8.4-apache AS vendor
+# Pinned by digest because the tag is mutable. Update deliberately: re-resolve
+# the digest for 8.4-apache, read what changed, then bump it here.
+FROM php:8.4-apache@sha256:51da594c844a97f31b1cd6b1ac6660982f40788f4fe13e75f7fd39e2f9b58651 AS vendor
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip \
@@ -43,9 +45,10 @@ RUN composer install \
         --no-scripts
 
 # ---------------------------------------------------------------------------
-# Stage 2 — runtime.
+# Stage 2 — runtime. Same pinned digest as the vendor stage above — see its
+# comment for why this is pinned at all.
 # ---------------------------------------------------------------------------
-FROM php:8.4-apache AS runtime
+FROM php:8.4-apache@sha256:51da594c844a97f31b1cd6b1ac6660982f40788f4fe13e75f7fd39e2f9b58651 AS runtime
 
 # `composer check-platform-reqs --no-dev` asks for ctype, dom, fileinfo, filter,
 # hash, iconv, json, libxml, mbstring, openssl, pcre, session, simplexml and
@@ -76,6 +79,13 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
         echo 'opcache.max_accelerated_files=10000'; \
         echo 'opcache.validate_timestamps=0'; \
     } > "$PHP_INI_DIR/conf.d/serbis.ini"
+
+# mod_php needs exactly mpm_prefork. No error swallowing: a failed a2dismod must
+# fail the build. The ls and configtest print the MPM state into the build log.
+RUN a2dismod mpm_event mpm_worker \
+    && a2enmod mpm_prefork \
+    && ls -la /etc/apache2/mods-enabled/ | grep mpm_ \
+    && apache2ctl configtest
 
 # Laravel's front controller is public/index.php; serving /var/www/html would
 # expose .env, storage/ and vendor/ to the internet. mod_rewrite is what makes

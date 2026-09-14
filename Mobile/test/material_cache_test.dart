@@ -54,6 +54,37 @@ void main() {
     expect(index[7]!.title, 'Flood Preparedness Checklist');
   });
 
+  // #13. The badge is read off the saved copy when the network is down, so a
+  // verified material that loses the flag on the way through the index would
+  // read as unreviewed exactly when the resident cannot check.
+  test('verified survives the index round trip', () async {
+    const verified = InfoMaterial(
+      id: 8,
+      title: 'Evacuation Routes',
+      fileType: 'pdf',
+      sizeBytes: 12,
+      url: 'http://example.test/storage/info_materials/routes.pdf',
+      verified: true,
+    );
+
+    await cacheWith((_) async => <int>[1, 2, 3, 4]).save(verified);
+
+    final index = await cacheWith((_) async => <int>[]).loadIndex();
+
+    expect(index[8]!.verified, isTrue);
+    expect(index[8]!.toMaterial().verified, isTrue);
+  });
+
+  // An index written before the key existed must keep working, and must not
+  // invent a review nobody did.
+  test('an entry with no verified key reads as unverified', () async {
+    await cacheWith((_) async => <int>[1, 2, 3, 4]).save(_material);
+
+    final index = await cacheWith((_) async => <int>[]).loadIndex();
+
+    expect(index[7]!.verified, isFalse);
+  });
+
   test('the index survives a new cache instance', () async {
     await cacheWith((_) async => <int>[1, 2, 3, 4]).save(_material);
 

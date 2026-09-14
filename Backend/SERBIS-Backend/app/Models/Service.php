@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Traits\TracksHistory;
 use RuntimeException;
 
 #[Table('tbl_services', key: 'service_id')]
@@ -57,7 +57,7 @@ class Service extends Model
 
         if ($code === '') {
             throw new RuntimeException(
-                'Cannot derive a service code from "' . $name . '": it has no alphanumeric characters.'
+                'Cannot derive a service code from "'.$name.'": it has no alphanumeric characters.'
             );
         }
 

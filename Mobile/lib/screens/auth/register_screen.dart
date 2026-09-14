@@ -196,7 +196,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // resident to expect one leaves them waiting for a screen
                     // that never comes.
                     Text(
-                      'One account per household, for the head of the family. '
+                      'One account per household, registered by the head of the family. '
                       'You can log in as soon as you have registered.',
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
@@ -227,7 +227,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     AuthTextField(
                       label: 'Mobile number',
-                      hint: 'e.g. 09171234567',
+                      hint: '09XXXXXXXXX',
                       controller: _phoneCtrl,
                       keyboard: TextInputType.phone,
                       prefixIcon: Icons.phone_outlined,
@@ -291,7 +291,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     AuthTextField(
                       label: 'Confirm password',
-                      hint: 'Re-enter your password',
+                      hint: '',
                       controller: _confirmCtrl,
                       obscure: true,
                       prefixIcon: Icons.lock_outline_rounded,

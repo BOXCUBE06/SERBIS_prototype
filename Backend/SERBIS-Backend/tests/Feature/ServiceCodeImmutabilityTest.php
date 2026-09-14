@@ -59,10 +59,10 @@ class ServiceCodeImmutabilityTest extends TestCase
 
         Sanctum::actingAs($this->admin);
 
-        $this->putJson('/api/services/' . $service->service_id, [
+        $this->putJson('/api/services/'.$service->service_id, [
             'service_name' => 'Street Clearing',
-            'description'  => 'Debris and obstacles',
-            'code'         => 'hijacked-code',
+            'description' => 'Debris and obstacles',
+            'code' => 'hijacked-code',
         ])->assertOk();
 
         $service->refresh();
@@ -77,7 +77,7 @@ class ServiceCodeImmutabilityTest extends TestCase
 
         Sanctum::actingAs($this->admin);
 
-        $this->putJson('/api/services/' . $service->service_id, [
+        $this->putJson('/api/services/'.$service->service_id, [
             'service_name' => 'Street Clearing',
         ])->assertOk();
 
@@ -93,7 +93,7 @@ class ServiceCodeImmutabilityTest extends TestCase
 
         $this->postJson('/api/services', [
             'service_name' => 'Animal Rescue',
-            'code'         => 'chosen-by-the-client',
+            'code' => 'chosen-by-the-client',
         ])->assertCreated();
 
         $this->assertSame('animal-rescue', Service::where('service_name', 'Animal Rescue')->firstOrFail()->code);

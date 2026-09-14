@@ -2,6 +2,8 @@
 
 namespace App\Traits;
 
+use App\Models\Resident;
+use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,7 @@ trait TracksHistory
         });
     }
 
-   protected function logAction($action, $oldValues, $newValues)
+    protected function logAction($action, $oldValues, $newValues)
     {
         $ignore = $this->ignoreLogging ?? ['created_at', 'updated_at', 'password', 'remember_token'];
 
@@ -45,17 +47,17 @@ trait TracksHistory
 
         // Check which Model class the logged-in user belongs to
         if ($user) {
-            if ($user instanceof \App\Models\User) {
+            if ($user instanceof User) {
                 $adminId = $user->getKey();
-            } elseif ($user instanceof \App\Models\Resident) {
+            } elseif ($user instanceof Resident) {
                 $residentId = $user->getKey();
             }
         }
 
         DB::table('tbl_system_logs')->insert([
-            'admin_id' => $adminId, 
-            'resident_id' => $residentId, 
-            'action_type' => $action, 
+            'admin_id' => $adminId,
+            'resident_id' => $residentId,
+            'action_type' => $action,
             'auditable_type' => get_class($this),
             'auditable_id' => $this->getKey(),
             'old_values' => $filteredOld ? json_encode($filteredOld) : null,

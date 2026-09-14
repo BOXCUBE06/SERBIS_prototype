@@ -1,8 +1,10 @@
 library serbis.screens.borrow_equipment;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../models/borrow_models.dart';
-import '../models/request_models.dart' show formatTimelineTime;
+import '../models/request_models.dart' show dueLabel, formatTimelineTime;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -65,7 +67,9 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     });
   }
 
-  Future<void> _openBorrowSheet(Equipment item) async {
+  /// A null [item] opens the sheet for something the catalogue does not list,
+  /// which is the only way `other_equipment_text` is ever sent.
+  Future<void> _openBorrowSheet(Equipment? item) async {
     final filed = await showModalBottomSheet<BorrowRequest>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -80,7 +84,9 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       _showMine = true;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Request filed for ${item.name}. MDRRMO will review it.')),
+      // Reads back what the resident typed on the uncatalogued path, since
+      // there is no catalogue name to confirm the request against.
+      SnackBar(content: Text('Request filed for ${item?.name ?? filed.itemLabel}. MDRRMO will review it.')),
     );
   }
 
@@ -103,8 +109,9 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
             child: _SegmentedToggle(
-              showMine: _showMine,
-              myCount: _myRequests.length,
+              leftLabel: 'Available',
+              rightLabel: 'My Requests (${_myRequests.length})',
+              rightSelected: _showMine,
               onChanged: (mine) => setState(() => _showMine = mine),
             ),
           ),
@@ -131,25 +138,35 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       );
     }
 
+    // Reachable from the empty catalogue too: an office with nothing listed is
+    // exactly when a resident has to name the item themselves.
     if (_equipment.isEmpty) {
-      return const _EmptyState(
-        icon: Icons.inventory_2_outlined,
-        title: 'Nothing available right now',
-        body: 'MDRRMO has no equipment listed for loan at the moment.',
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 110),
+        children: [
+          const _EmptyState(
+            icon: Icons.inventory_2_outlined,
+            title: 'Nothing available right now',
+            body: 'MDRRMO has no equipment listed for loan at the moment.',
+          ),
+          const SizedBox(height: 12),
+          _OtherEquipmentCard(onTap: () => _openBorrowSheet(null)),
+        ],
       );
     }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 110),
-      children: _equipment
-          .map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _EquipmentCard(
-                  item: item,
-                  onBorrow: item.availableQuantity > 0 ? () => _openBorrowSheet(item) : null,
-                ),
-              ))
-          .toList(),
+      children: [
+        ..._equipment.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _EquipmentCard(
+                item: item,
+                onBorrow: item.availableQuantity > 0 ? () => _openBorrowSheet(item) : null,
+              ),
+            )),
+        _OtherEquipmentCard(onTap: () => _openBorrowSheet(null)),
+      ],
     );
   }
 
@@ -181,6 +198,7 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
                   request: r,
                   filipino: f,
                   onCancel: () => widget.appState.cancelBorrowRequest(r.id),
+                  loadPhoto: (stage) => widget.appState.borrowPhoto(r.id!, stage),
                 ),
               )),
         ],
@@ -189,15 +207,24 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
   }
 }
 
+/// Two mutually exclusive choices in a pill. Takes its labels rather than
+/// naming the tabs, so the borrow sheet's fulfilment and borrower-type pickers
+/// are this control and not two more copies of it.
 class _SegmentedToggle extends StatelessWidget {
-  final bool showMine;
-  final int myCount;
+  final String leftLabel;
+  final String rightLabel;
+
+  /// True when the right-hand segment is the active one.
+  final bool rightSelected;
   final ValueChanged<bool> onChanged;
+  final bool enabled;
 
   const _SegmentedToggle({
-    required this.showMine,
-    required this.myCount,
+    required this.leftLabel,
+    required this.rightLabel,
+    required this.rightSelected,
     required this.onChanged,
+    this.enabled = true,
   });
 
   @override
@@ -207,8 +234,8 @@ class _SegmentedToggle extends StatelessWidget {
       decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(30)),
       child: Row(
         children: [
-          Expanded(child: _segment('Available', !showMine, () => onChanged(false))),
-          Expanded(child: _segment('My Requests ($myCount)', showMine, () => onChanged(true))),
+          Expanded(child: _segment(leftLabel, !rightSelected, () => onChanged(false))),
+          Expanded(child: _segment(rightLabel, rightSelected, () => onChanged(true))),
         ],
       ),
     );
@@ -216,7 +243,7 @@ class _SegmentedToggle extends StatelessWidget {
 
   Widget _segment(String label, bool active, VoidCallback onTap) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -282,6 +309,50 @@ class _EquipmentCard extends StatelessWidget {
   }
 }
 
+/// The way into an uncatalogued request. Its own card rather than a field in
+/// the sheet: opening the sheet without an item is what makes sending both an
+/// `equipment_id` and an `other_equipment_text` unrepresentable.
+class _OtherEquipmentCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _OtherEquipmentCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Row(
+        children: [
+          const IconBadge(icon: Icons.add_circle_outline, bg: AppColors.grey50, fg: AppColors.inkMuted),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Need something else?', style: AppText.display(size: 14.5)),
+                const SizedBox(height: 2),
+                Text(
+                  'Ask for an item that is not on this list.',
+                  style: AppText.body(size: 12, color: AppColors.inkMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: onTap,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.green700,
+              side: const BorderSide(color: AppColors.green700),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Request'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BorrowRequestCard extends StatelessWidget {
   final BorrowRequest request;
   final bool filipino;
@@ -290,10 +361,15 @@ class _BorrowRequestCard extends StatelessWidget {
   /// dialog waits for it before saying anything happened.
   final Future<bool> Function() onCancel;
 
+  /// Bytes for one handover stage, or null when the fetch found nothing. Only
+  /// called for a stage the row says exists.
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
   const _BorrowRequestCard({
     required this.request,
     required this.filipino,
     required this.onCancel,
+    required this.loadPhoto,
   });
 
   @override
@@ -311,7 +387,7 @@ class _BorrowRequestCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${request.equipmentName ?? 'Equipment'} × ${request.quantity}',
+                      '${request.itemLabel} × ${request.quantity}',
                       style: AppText.display(size: 14.5),
                     ),
                     const SizedBox(height: 2),
@@ -363,10 +439,23 @@ class _BorrowRequestCard extends StatelessWidget {
                 const Icon(Icons.event_outlined, size: 14, color: AppColors.inkFaint),
                 const SizedBox(width: 8),
                 Text(
-                  'Due back ${request.dueDate!.month}/${request.dueDate!.day}/${request.dueDate!.year}',
+                  dueLabel(request.dueDate!),
                   style: AppText.body(size: 12, color: AppColors.inkMuted),
                 ),
               ],
+            ),
+          ],
+          // Staff photograph the item at the counter; the resident only reads
+          // it back. A row with neither photo draws nothing at all — most
+          // loans have none, and an empty "Handover photos" heading would read
+          // as something missing rather than something never taken.
+          if (request.id != null &&
+              (request.hasReleasePhoto || request.hasReturnPhoto)) ...[
+            const SizedBox(height: 12),
+            _HandoverPhotos(
+              hasRelease: request.hasReleasePhoto,
+              hasReturn: request.hasReturnPhoto,
+              loadPhoto: loadPhoto,
             ),
           ],
           // An id-less row is still in flight, so MDRRMO has nothing to cancel
@@ -385,6 +474,170 @@ class _BorrowRequestCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The photographs staff took when the item changed hands. Display only —
+/// POST /borrowings/{id}/photo is behind `is.admin`, and this app has no way
+/// to add or replace one.
+class _HandoverPhotos extends StatelessWidget {
+  final bool hasRelease;
+  final bool hasReturn;
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
+  const _HandoverPhotos({
+    required this.hasRelease,
+    required this.hasReturn,
+    required this.loadPhoto,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Handover photos',
+          style: AppText.display(size: 12, color: AppColors.inkMuted),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (hasRelease)
+              _HandoverThumbnail(
+                label: 'Released',
+                stage: 'release',
+                loadPhoto: loadPhoto,
+              ),
+            if (hasRelease && hasReturn) const SizedBox(width: 10),
+            if (hasReturn)
+              _HandoverThumbnail(
+                label: 'Returned',
+                stage: 'return',
+                loadPhoto: loadPhoto,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One stage's photograph. Fetched once when the card is built and held here:
+/// the bytes are heavier than the borrow list itself, so they are never cached
+/// to disk and never kept on the row.
+class _HandoverThumbnail extends StatefulWidget {
+  final String label;
+  final String stage;
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
+  const _HandoverThumbnail({
+    required this.label,
+    required this.stage,
+    required this.loadPhoto,
+  });
+
+  @override
+  State<_HandoverThumbnail> createState() => _HandoverThumbnailState();
+}
+
+class _HandoverThumbnailState extends State<_HandoverThumbnail> {
+  Uint8List? _bytes;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    // fetchHandoverPhoto swallows its own failures and answers null, so a
+    // photo the server cannot serve leaves the tile in its "not available"
+    // state instead of throwing inside a list item.
+    final bytes = await widget.loadPhoto(widget.stage);
+    if (!mounted) return;
+    setState(() {
+      _bytes = bytes == null ? null : Uint8List.fromList(bytes);
+      _loading = false;
+    });
+  }
+
+  void _openFullSize() {
+    final bytes = _bytes;
+    if (bytes == null) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: Center(child: Image.memory(bytes, fit: BoxFit.contain)),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: _openFullSize,
+          child: Container(
+            width: 76,
+            height: 76,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AppColors.grey50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: _tile(),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          widget.label,
+          style: AppText.body(size: 11, color: AppColors.inkMuted),
+        ),
+      ],
+    );
+  }
+
+  Widget _tile() {
+    if (_loading) {
+      return const Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final bytes = _bytes;
+    if (bytes == null) {
+      return const Center(
+        child: Icon(Icons.image_not_supported_outlined,
+            size: 20, color: AppColors.inkFaint),
+      );
+    }
+
+    return Image.memory(bytes, fit: BoxFit.cover, width: 76, height: 76);
   }
 }
 
@@ -458,12 +711,29 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
+/// The caption over a toggle. `AppTextField` draws its own label; these two
+/// pickers have none, and unlabelled pills read as a filter rather than a
+/// question being asked.
+class _FieldLabel extends StatelessWidget {
+  final String text;
+
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: AppText.display(size: 13, weight: FontWeight.w600));
+  }
+}
+
 /// Quantity picker + submit. A separate widget rather than a method on the
 /// screen because it needs its own `setState` for the stepper and the
 /// in-flight spinner without rebuilding the whole screen behind it.
 class _BorrowSheet extends StatefulWidget {
   final AppState appState;
-  final Equipment item;
+
+  /// Null for an item the catalogue does not list, which is when the sheet
+  /// asks for its name instead of showing one.
+  final Equipment? item;
 
   const _BorrowSheet({required this.appState, required this.item});
 
@@ -476,45 +746,88 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   /// finding that out only after a round trip loses what was typed past 255.
   static const _purposeMaxLength = 255;
 
-  late int _quantity = widget.item.availableQuantity > 0 ? 1 : 0;
+  /// `other_equipment_text` and `delivery_address` are both varchar(255);
+  /// `organization_name` is varchar(150). Same reasoning as above.
+  static const _otherItemMaxLength = 255;
+  static const _addressMaxLength = 255;
+  static const _organizationMaxLength = 150;
+
+  /// Only bounds the uncatalogued path, where there is no stock figure to stop
+  /// at. The stepper is one tap per unit, so it needs an end somewhere.
+  static const _uncataloguedMaxQuantity = 99;
+
+  late int _quantity = _maxQuantity > 0 ? 1 : 0;
   final TextEditingController _purpose = TextEditingController();
+  final TextEditingController _otherItem = TextEditingController();
+  final TextEditingController _address = TextEditingController();
+  final TextEditingController _organization = TextEditingController();
+
+  bool _delivery = false;
+  bool _organizationBorrower = false;
+
   bool _submitting = false;
   String? _error;
   String? _purposeError;
+  String? _otherItemError;
+  String? _addressError;
+  String? _organizationError;
+
+  bool get _uncatalogued => widget.item == null;
+
+  int get _maxQuantity => widget.item?.availableQuantity ?? _uncataloguedMaxQuantity;
 
   @override
   void initState() {
     super.initState();
     // Clears the "tell MDRRMO..." error as soon as there is something to send,
     // rather than leaving a red field under text that would now be accepted.
-    _purpose.addListener(() {
-      if (_purposeError != null && _purpose.text.trim().isNotEmpty) {
-        setState(() => _purposeError = null);
-      }
-    });
+    _purpose.addListener(() => _clearIfFilled(_purpose, _purposeError, () => _purposeError = null));
+    _otherItem.addListener(() => _clearIfFilled(_otherItem, _otherItemError, () => _otherItemError = null));
+    _address.addListener(() => _clearIfFilled(_address, _addressError, () => _addressError = null));
+    _organization.addListener(() => _clearIfFilled(_organization, _organizationError, () => _organizationError = null));
+  }
+
+  void _clearIfFilled(TextEditingController field, String? error, VoidCallback clear) {
+    if (error != null && field.text.trim().isNotEmpty) setState(clear);
   }
 
   @override
   void dispose() {
     _purpose.dispose();
+    _otherItem.dispose();
+    _address.dispose();
+    _organization.dispose();
     super.dispose();
   }
 
   void _step(int delta) {
     final next = _quantity + delta;
-    if (next < 1 || next > widget.item.availableQuantity) return;
+    if (next < 1 || next > _maxQuantity) return;
     setState(() => _quantity = next);
   }
 
   Future<void> _confirm() async {
     if (_submitting || _quantity < 1) return;
 
-    // Checked here as well as on the server: `purpose` is `required` on
-    // `POST /borrowings`, and a round trip to be told the box is empty is a
-    // worse way to learn it than the field going red.
+    // Checked here as well as on the server: each of these is `required` or
+    // `required_if` on `POST /borrowings`, and a round trip to be told a box is
+    // empty is a worse way to learn it than the field going red.
     final purpose = _purpose.text.trim();
-    if (purpose.isEmpty) {
-      setState(() => _purposeError = 'Tell MDRRMO what you need this for.');
+    final otherItem = _otherItem.text.trim();
+    final address = _address.text.trim();
+    final organization = _organization.text.trim();
+
+    final missingItem = _uncatalogued && otherItem.isEmpty;
+    final missingAddress = _delivery && address.isEmpty;
+    final missingOrganization = _organizationBorrower && organization.isEmpty;
+
+    if (purpose.isEmpty || missingItem || missingAddress || missingOrganization) {
+      setState(() {
+        _purposeError = purpose.isEmpty ? 'Tell MDRRMO what you need this for.' : null;
+        _otherItemError = missingItem ? 'Name the item you need.' : null;
+        _addressError = missingAddress ? 'Where should MDRRMO deliver it?' : null;
+        _organizationError = missingOrganization ? 'Name the organization you are borrowing for.' : null;
+      });
       return;
     }
 
@@ -525,8 +838,15 @@ class _BorrowSheetState extends State<_BorrowSheet> {
 
     final result = await widget.appState.submitBorrowRequest(
       item: widget.item,
+      otherEquipmentText: _uncatalogued ? otherItem : null,
       quantity: _quantity,
       purpose: purpose,
+      fulfillmentMethod: _delivery ? 'Delivery' : 'Pickup',
+      // Sent only with the method it belongs to. A resident who types an
+      // address and then switches back to Pickup must not still be delivered to.
+      deliveryAddress: _delivery ? address : null,
+      borrowerType: _organizationBorrower ? 'Organization' : 'Resident',
+      organizationName: _organizationBorrower ? organization : null,
     );
 
     if (!mounted) return;
@@ -567,12 +887,28 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                   decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
                 ),
               ),
-              Text(widget.item.name, style: AppText.display(size: 17)),
+              Text(
+                _uncatalogued ? 'Request another item' : widget.item!.name,
+                style: AppText.display(size: 17),
+              ),
               const SizedBox(height: 4),
               Text(
-                '${widget.item.availableQuantity} available to borrow',
+                _uncatalogued
+                    ? 'MDRRMO will check whether they can lend this.'
+                    : '${widget.item!.availableQuantity} available to borrow',
                 style: AppText.body(size: 12.5, color: AppColors.inkMuted),
               ),
+              if (_uncatalogued) ...[
+                const SizedBox(height: 16),
+                AppTextField(
+                  label: 'What do you need?',
+                  hint: 'e.g. Portable generator',
+                  controller: _otherItem,
+                  maxLength: _otherItemMaxLength,
+                  errorText: _otherItemError,
+                  enabled: !_submitting,
+                ),
+              ],
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -603,6 +939,57 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                 'MDRRMO reviews this before approving the loan.',
                 style: AppText.body(size: 11.5, color: AppColors.inkMuted),
               ),
+              const SizedBox(height: 20),
+              _FieldLabel('How will you get it?'),
+              const SizedBox(height: 8),
+              _SegmentedToggle(
+                leftLabel: 'Pickup',
+                rightLabel: 'Delivery',
+                rightSelected: _delivery,
+                enabled: !_submitting,
+                onChanged: (delivery) => setState(() {
+                  _delivery = delivery;
+                  // The field is about to disappear; leaving its error behind
+                  // would block a submit with nothing on screen to explain it.
+                  if (!delivery) _addressError = null;
+                }),
+              ),
+              if (_delivery) ...[
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Delivery address',
+                  hint: 'House number, street, barangay',
+                  controller: _address,
+                  lines: 2,
+                  maxLength: _addressMaxLength,
+                  errorText: _addressError,
+                  enabled: !_submitting,
+                ),
+              ],
+              const SizedBox(height: 20),
+              _FieldLabel('Who is borrowing?'),
+              const SizedBox(height: 8),
+              _SegmentedToggle(
+                leftLabel: 'Myself',
+                rightLabel: 'An organization',
+                rightSelected: _organizationBorrower,
+                enabled: !_submitting,
+                onChanged: (organization) => setState(() {
+                  _organizationBorrower = organization;
+                  if (!organization) _organizationError = null;
+                }),
+              ),
+              if (_organizationBorrower) ...[
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Organization name',
+                  hint: 'e.g. Barangay San Fabian BDRRMC',
+                  controller: _organization,
+                  maxLength: _organizationMaxLength,
+                  errorText: _organizationError,
+                  enabled: !_submitting,
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 14),
                 Container(

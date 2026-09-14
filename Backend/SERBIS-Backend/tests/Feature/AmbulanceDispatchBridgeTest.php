@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
+use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -36,8 +38,11 @@ class AmbulanceDispatchBridgeTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $ambulance;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void
@@ -87,6 +92,11 @@ class AmbulanceDispatchBridgeTest extends TestCase
         ], $overrides));
     }
 
+    private function bookingFor(ServiceRequest $request, array $attributes = []): AmbulanceBooking
+    {
+        return AmbulanceBooking::create(array_merge(['request_id' => $request->getKey()], $attributes));
+    }
+
     public function test_approving_an_ambulance_request_creates_a_linked_trip_record(): void
     {
         $request = $this->ambulanceRequest();
@@ -130,7 +140,9 @@ class AmbulanceDispatchBridgeTest extends TestCase
 
     public function test_the_stub_prefers_structured_columns_when_present(): void
     {
-        $request = $this->ambulanceRequest([
+        $request = $this->ambulanceRequest();
+
+        $this->bookingFor($request, [
             'patient_name' => 'Juan Dela Cruz',
             'patient_address' => 'Purok 2, San Fabian',
             'pickup_location' => 'Purok 2, San Fabian',
@@ -244,7 +256,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $this->assertStringNotContainsString('arrival time', $message);
         $this->assertStringContainsString('a driver', $message);
 
-        \App\Models\ConductionRequestPerson::create([
+        ConductionRequestPerson::create([
             'conduction_request_id' => $trip->conduction_request_id,
             'role' => 'driver',
             'name' => 'Rico Santos',
@@ -303,7 +315,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         $this->assertStringNotContainsString('arrival time', $message);
         $this->assertStringContainsString('a driver', $message);
 
-        \App\Models\ConductionRequestPerson::create([
+        ConductionRequestPerson::create([
             'conduction_request_id' => $trip->conduction_request_id,
             'role' => 'driver',
             'name' => 'Rico Santos',

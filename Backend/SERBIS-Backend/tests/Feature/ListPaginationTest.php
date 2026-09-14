@@ -3,10 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Barangay;
+use App\Models\InfoMaterial;
+use App\Models\Recipient;
 use App\Models\Resident;
+use App\Models\Service;
+use App\Models\ServiceRequest;
 use App\Models\SmsLog;
 use App\Models\SystemLog;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -38,6 +43,7 @@ class ListPaginationTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangay;
 
     protected function setUp(): void
@@ -396,7 +402,7 @@ class ListPaginationTest extends TestCase
         $resident = $this->resident();
 
         for ($i = 1; $i <= 30; $i++) {
-            \App\Models\Service::create(['service_name' => "Service {$i}"]);
+            Service::create(['service_name' => "Service {$i}"]);
         }
 
         $this->assertReturnsEverything('/api/services', 30, $resident);
@@ -405,10 +411,10 @@ class ListPaginationTest extends TestCase
     public function test_service_requests_returns_every_request_the_resident_filed(): void
     {
         $resident = $this->resident();
-        $service = \App\Models\Service::create(['service_name' => 'Ambulance']);
+        $service = Service::create(['service_name' => 'Ambulance']);
 
         for ($i = 1; $i <= 30; $i++) {
-            \App\Models\ServiceRequest::create([
+            ServiceRequest::create([
                 'resident_id' => $resident->resident_id,
                 'service_id' => $service->service_id,
                 'description' => "Incident {$i}",
@@ -425,7 +431,7 @@ class ListPaginationTest extends TestCase
         $resident = $this->resident();
 
         for ($i = 1; $i <= 30; $i++) {
-            \App\Models\InfoMaterial::create([
+            InfoMaterial::create([
                 'uploader_id' => $this->admin->admin_id,
                 'title' => "Flood guide {$i}",
                 'file_path' => "info-materials/guide-{$i}.pdf",
@@ -464,7 +470,7 @@ class ListPaginationTest extends TestCase
                 'status' => 'Sent',
             ]);
 
-            \App\Models\Recipient::create([
+            Recipient::create([
                 'sms_log_id' => $log->sms_log_id,
                 'resident_id' => $resident->resident_id,
                 'status' => 'Sent',
@@ -477,7 +483,7 @@ class ListPaginationTest extends TestCase
     public function test_admin_lists_left_alone_return_everything(): void
     {
         for ($i = 1; $i <= 30; $i++) {
-            \App\Models\Vehicle::create([
+            Vehicle::create([
                 'unit_identifier' => "ABC-{$i}",
                 'type' => 'Ambulance',
                 'status' => 'Available',

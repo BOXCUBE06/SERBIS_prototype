@@ -1,6 +1,7 @@
 library serbis.state.api_service;
 
 import 'dart:convert';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -185,6 +186,20 @@ class ApiService {
         body: body != null ? jsonEncode(body) : null,
       ),
       endpoint: 'PATCH $path',
+    );
+  }
+
+  Future<Map<String, dynamic>> _delete(
+    String path, [
+    Map<String, dynamic>? body,
+  ]) {
+    return _send(
+      () => http.delete(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+        body: body != null ? jsonEncode(body) : null,
+      ),
+      endpoint: 'DELETE $path',
     );
   }
 
@@ -542,7 +557,29 @@ class ApiService {
     return listFrom(data);
   }
 
+  /// Upserts by [token] — the same call for a first registration and a later
+  /// refresh. See push_messaging.dart for who calls this and when.
+  Future<void> registerDeviceToken(String token, String platform) async {
+    await _post('/device-tokens', {'token': token, 'platform': platform});
+  }
+
+  Future<void> removeDeviceToken(String token) async {
+    await _delete('/device-tokens', {'token': token});
+  }
+
   Future<void> logout() async {
+    // Best effort and before the local token is cleared below: a device that
+    // fails to unregister just keeps this account's pushes arriving on a
+    // handset nobody is signed into any more, not a broken logout.
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await removeDeviceToken(token);
+      }
+    } catch (error) {
+      AppLog.error(_logArea, 'remove device token', error: error);
+    }
+
     try {
       await _post('/logout', {});
     } catch (_) {
@@ -674,6 +711,7 @@ class ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) {
@@ -710,6 +748,9 @@ class ApiService {
 
     if (requiredVehicleType != null && requiredVehicleType.isNotEmpty) {
       request.fields['required_vehicle_type'] = requiredVehicleType;
+    }
+    if (landmark != null && landmark.isNotEmpty) {
+      request.fields['landmark'] = landmark;
     }
     // UTC with a 'Z' suffix, never a naive local string. The server honours an
     // offset-carrying string as the real instant it names; a bare
@@ -755,6 +796,7 @@ class ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
@@ -766,6 +808,7 @@ class ApiService {
       requiredVehicleType: requiredVehicleType,
       sitePhotoBytes: sitePhotoBytes,
       sitePhotoFileName: sitePhotoFileName,
+      landmark: landmark,
       scheduledAt: scheduledAt,
       intake: intake,
     );
@@ -903,15 +946,40 @@ class ApiService {
   /// Files a new equipment loan. The server assigns `resident_id` from the
   /// token and `status: 'Pending'` itself — nothing here can put a request in
   /// any other state or on any other resident's account.
+  /// [equipmentId] names a catalogued item, [otherEquipmentText] one the
+  /// inventory does not list. Exactly one is sent, never both and never
+  /// neither — `tbl_equipment_borrowing` has a CHECK constraint on that, so a
+  /// body carrying both is a 500 rather than a 422.
   Future<Map<String, dynamic>> submitBorrowRequest({
-    required int equipmentId,
+    int? equipmentId,
+    String? otherEquipmentText,
     required int quantity,
     required String purpose,
+    String fulfillmentMethod = 'Pickup',
+    String? deliveryAddress,
+    String borrowerType = 'Resident',
+    String? organizationName,
   }) async {
+    assert(
+      (equipmentId == null) != (otherEquipmentText == null),
+      'submitBorrowRequest takes exactly one item source',
+    );
+
     return _post('/borrowings', {
-      'equipment_id': equipmentId,
+      // if/else rather than two conditional keys: this shape cannot emit both
+      // sides, which is the combination the CHECK constraint rejects.
+      if (equipmentId != null)
+        'equipment_id': equipmentId
+      else
+        'other_equipment_text': otherEquipmentText,
       'quantity': quantity,
       'purpose': purpose,
+      'fulfillment_method': fulfillmentMethod,
+      // Omitted rather than sent null on a pickup: the server drops the column
+      // anyway, and `required_if` only reads it when the method is Delivery.
+      if (fulfillmentMethod == 'Delivery') 'delivery_address': deliveryAddress,
+      'borrower_type': borrowerType,
+      if (borrowerType == 'Organization') 'organization_name': organizationName,
     });
   }
 
@@ -920,5 +988,48 @@ class ApiService {
   /// there is no body, and the controller refuses anything past Approved.
   Future<void> cancelBorrowRequest(int borrowId) async {
     await _patch('/borrowings/$borrowId/cancel');
+  }
+
+  /// The handover photo staff took at release or return, or null when there is
+  /// none. [stage] is 'release' or 'return'.
+  ///
+  /// Read-only from this side: uploading sits behind `is.admin`, and the photo
+  /// is taken by whoever is standing at the counter. The borrower reads it back
+  /// for the reason EquipmentBorrowingController::photo() gives — evidence only
+  /// one side can see is not evidence.
+  ///
+  /// Bytes rather than a URL, for the same reason as [fetchProfilePhoto]: the
+  /// route is behind `auth:sanctum` and an `<img src>` on the web build carries
+  /// no Authorization header.
+  Future<List<int>?> fetchHandoverPhoto(int borrowId, String stage) async {
+    final uri = Uri.parse('$baseUrl/borrowings/$borrowId/photo/$stage');
+    const endpoint = 'GET /borrowings/{id}/photo/{stage}';
+
+    http.Response response;
+    try {
+      response = await http
+          .get(uri, headers: {
+            'Accept': '*/*',
+            if (_token != null) 'Authorization': 'Bearer $_token',
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (error) {
+      AppLog.error(_logArea, endpoint, error: error, reason: 'no response');
+      return null;
+    }
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+
+    // 404 is the ordinary answer for a loan nobody photographed — the office
+    // releases equipment in conditions where stopping to photograph it is the
+    // wrong advice. Not an error, and never an exception either way: a missing
+    // photo must not take the card down with it.
+    if (response.statusCode != 404) {
+      AppLog.warn(_logArea, endpoint, reason: 'status ${response.statusCode}');
+    }
+
+    return null;
   }
 }

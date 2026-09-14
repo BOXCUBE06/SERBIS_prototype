@@ -41,6 +41,19 @@
              a send fakes the host; PhilSMS has no sandbox. -->
         <env name="PHILSMS_TOKEN" value="testing-token"/>
         <env name="PHILSMS_SENDER_ID" value="PhilSMS"/>
+        <!-- Pinned false regardless of the developer's own .env (which may set
+             this true for local E2E runs): most of this suite asserts against a
+             real, Http::fake()'d send, and SERBIS_SMS_FAKE short-circuits
+             PhilSms::send() before it ever reaches Http. SmsFakeTest is the only
+             file that turns it on, and it does so per-test via config(). -->
+        <env name="SERBIS_SMS_FAKE" value="false"/>
+        <!-- Pinned empty regardless of the developer's own .env (which may set
+             this for local Playwright runs): OtpBypassTest sets
+             serbis.otp_bypass_code per-test via config(), the same way
+             SmsFakeTest opts into SERBIS_SMS_FAKE above, so no test depends on
+             this being set here. Pinning it stops an ambient .env value from
+             quietly changing what "unset" means for every other test. -->
+        <env name="SERBIS_OTP_BYPASS_CODE" value=""/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

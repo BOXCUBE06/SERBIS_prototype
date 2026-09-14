@@ -5,26 +5,23 @@
       <div class="residents-main">
         <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
 
-          <div class="residents-toolbar px-6 py-3 border-b d-flex flex-wrap align-center justify-space-between gap-4 flex-shrink-0">
-            <div>
-              <h2 class="text-h5 font-weight-bold text-high-emphasis">Residents</h2>
-              <!-- Says "of" only when something is being hidden. The permanent
-                   "N of N" read as a standing accusation that a filter was on.
-                   ("residents" here is deliberate and ruled on; the heading
-                   above it is the page/nav title.) -->
-              <div class="text-body-2 text-medium-emphasis">
-                <template v-if="filteredAndSortedResidents.length === residents.length">
-                  <strong class="text-high-emphasis">{{ residents.length }}</strong>
-                  {{ residents.length === 1 ? 'resident' : 'residents' }}
-                </template>
-                <template v-else>
-                  <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
-                  of {{ residents.length }} residents
-                </template>
-              </div>
-            </div>
+          <PageHeader title="Residents" class="residents-toolbar px-6 py-3 border-b flex-shrink-0">
+            <!-- Says "of" only when something is being hidden. The permanent
+                 "N of N" read as a standing accusation that a filter was on.
+                 ("residents" here is deliberate and ruled on; the heading
+                 above it is the page/nav title.) -->
+            <template v-slot:subtitle>
+              <template v-if="filteredAndSortedResidents.length === residents.length">
+                <strong class="text-high-emphasis">{{ residents.length }}</strong>
+                {{ residents.length === 1 ? 'resident' : 'residents' }}
+              </template>
+              <template v-else>
+                <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
+                of {{ residents.length }} residents
+              </template>
+            </template>
 
-            <div class="d-flex flex-wrap gap-3 align-center">
+            <template v-slot:actions>
               <v-text-field
                 v-model="search"
                 prepend-inner-icon="mdi-magnify"
@@ -50,7 +47,7 @@
               ></v-select>
 
               <v-btn
-                color="#0f4c3a"
+                color="primary"
                 elevation="0"
                 rounded="lg"
                 height="48"
@@ -59,8 +56,8 @@
               >
                 <v-icon start>mdi-plus</v-icon> Add Head of the Family
               </v-btn>
-            </div>
-          </div>
+            </template>
+          </PageHeader>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
                all without sight: the selected barangay was carried by colour
@@ -115,18 +112,18 @@
           </div>
 
           <!-- Empty -->
-          <div v-else-if="!filteredAndSortedResidents.length" class="empty-state flex-grow-1">
+          <div v-else-if="filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
+              {{ residents.length > 0 ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
-              {{ residents.length
+              {{ residents.length > 0
                 ? 'Try a different keyword, status, or barangay.'
                 : 'Add the first head of the family account to get started.' }}
             </div>
             <v-btn
-              v-if="residents.length"
+              v-if="residents.length > 0"
               color="primary"
               variant="flat"
               rounded="lg"
@@ -256,7 +253,7 @@
               :hidden-by-filter="selectionHidden"
               @close="closeDetail"
               @edit="openExistingEditModal"
-              @toggle-status="toggleStatus"
+              @toggle-status="askToggleStatus"
               @delete="askDelete"
               @clear-filters="clearFilters"
             />
@@ -304,23 +301,27 @@
               </v-col>
 
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.first_name" label="First Name *" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
+                <v-text-field v-model="formData.first_name" label="First Name *" placeholder="Juan" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.middle_name" label="Middle Name" :error-messages="fieldErrors.middle_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
+                <v-text-field v-model="formData.middle_name" label="Middle Name" placeholder="Santos" :error-messages="fieldErrors.middle_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.last_name" label="Last Name *" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
+                <v-text-field v-model="formData.last_name" label="Last Name *" placeholder="Dela Cruz" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6">
-                <v-text-field v-model="formData.phone_number" label="Phone Number *" :rules="[requiredRule('Phone number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
+                <v-text-field v-model="formData.phone_number" label="Phone Number *" placeholder="09171234567" :rules="[requiredRule('Phone number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
-                <v-text-field v-model="formData.email_address" label="Email Address *" :rules="[requiredRule('Email address'), emailRule]" :error-messages="fieldErrors.email_address" type="email" variant="outlined" density="comfortable" rounded="lg" autocomplete="email"></v-text-field>
+                <v-text-field v-model="formData.email_address" label="Email Address *" placeholder="juan.delacruz@gmail.com" :rules="[requiredRule('Email address'), emailRule]" :error-messages="fieldErrors.email_address" type="email" variant="outlined" density="comfortable" rounded="lg" autocomplete="email"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6" v-if="!modal.isEditing">
+                <!-- The hint/error overlap this field used to hit on blank
+                     submit (finding #5, docs/ui-audit/findings.md) is now
+                     fixed globally in src/styles/settings.scss, not locally
+                     here — see that file's comment for the root cause. -->
                 <v-text-field
                   v-model="formData.password"
                   label="Password *"
@@ -430,6 +431,29 @@
       </v-card>
     </v-dialog>
 
+    <!-- Deactivate confirm -->
+    <v-dialog v-model="statusDialog.show" max-width="460">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Deactivate this account?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          <strong class="text-high-emphasis">{{ statusDialog.item ? fullName(statusDialog.item) : '' }}</strong>
+          will lose access to sign in and file requests, and will stop receiving MDRRMO text blasts.
+          It can be reactivated later.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="warning" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            :loading="statusDialog.loading" @click="confirmDeactivate"
+          >
+            Deactivate account
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
     </v-snackbar>
@@ -469,6 +493,7 @@ import {
 } from '@/composables/residentStatus'
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 const { mdAndUp } = useDisplay()
 
@@ -520,6 +545,7 @@ const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All' })
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
+const statusDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 const statusToggleLoading = ref(false)
 
@@ -541,9 +567,17 @@ const closeDetail = () => { selectedResident.value = null }
 // the key: pressing Esc in the edit form closed the profile *behind* the form —
 // and that form is `persistent`, so it stayed open over a panel that was no
 // longer there.
+//
+// Derived from what is actually on screen rather than from a list of this
+// file's dialogs by name: the list was three long and a fourth dialog would
+// not have been in it. Vuetify puts `.v-dialog.v-overlay--active` on every open
+// dialog, and only on dialogs — a snackbar, a tooltip or a select's menu does
+// not match, so those keep behaving as they did.
+const aDialogIsOpen = () => !!document.querySelector('.v-dialog.v-overlay--active')
+
 const onEscape = (event) => {
   if (event.key !== 'Escape') return
-  if (modal.value.isOpen || deleteDialog.value.show) return
+  if (aDialogIsOpen()) return
   if (selectedResident.value) closeDetail()
 }
 
@@ -556,7 +590,7 @@ const onEscape = (event) => {
 // is excluded too, or picking a status would shut the panel behind it.
 const onDocumentClick = (event) => {
   if (!selectedResident.value) return
-  if (modal.value.isOpen || deleteDialog.value.show) return
+  if (aDialogIsOpen()) return
   const target = event.target
   if (!(target instanceof Element)) return
   if (target.closest('.detail-rail')) return
@@ -762,7 +796,7 @@ const requiredRule = (label) => (v) =>
   (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
 
 const emailRule = (v) =>
-  !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
+  !v || /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
 
 // Deliberately loose: 09xx, +639xx and landlines all reach residents here, and
 // a strict pattern would refuse numbers the office actually holds.
@@ -794,11 +828,7 @@ const applyServerErrors = async (res) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
-    const count = Object.keys(mapped).length
-    if (leftovers.length) return leftovers.join(' ')
-    return count === 1
-      ? 'One field needs attention — see below.'
-      : `${count} fields need attention — see below.`
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Request failed'
 }
@@ -829,7 +859,7 @@ const saveUser = async () => {
   // field itself once the rules are attached.
   const { valid } = await form.value.validate()
   if (!valid) {
-    modalError.value = 'Some details are missing or need fixing — see the fields marked below.'
+    modalError.value = 'Please correct the highlighted fields.'
     return
   }
 
@@ -851,6 +881,26 @@ const saveUser = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// Deactivating cuts the account's sign-in and SMS/app access, so it gets the
+// same one-more-step confirm Staff Accounts already has for "Close account".
+// Activating (Pending or Deactivated -> Active) is the safe direction and
+// still fires immediately, matching Staff's own asymmetry: Reactivate there
+// has no confirm dialog either.
+const askToggleStatus = (item) => {
+  if (item.status === RESIDENT_STATUS.active) {
+    statusDialog.value = { show: true, item, loading: false }
+    return
+  }
+  toggleStatus(item)
+}
+
+const confirmDeactivate = async () => {
+  const item = statusDialog.value.item
+  statusDialog.value.loading = true
+  await toggleStatus(item)
+  statusDialog.value = { show: false, item: null, loading: false }
 }
 
 const toggleStatus = async (item) => {

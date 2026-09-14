@@ -26,6 +26,7 @@ class SmsHistoryTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangay;
 
     protected function setUp(): void
@@ -64,6 +65,7 @@ class SmsHistoryTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => $message,
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }

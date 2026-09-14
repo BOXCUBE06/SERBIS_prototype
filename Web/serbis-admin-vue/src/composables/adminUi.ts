@@ -101,6 +101,25 @@ export function fmtDateTime(value: string | Date | null | undefined): string {
 }
 
 /**
+ * Booked's off-palette violet, for a context that needs the color as a JS
+ * value rather than the `.pill-booked` CSS class — currently just
+ * DashboardView's feed chip. Must match `.pill-booked` in
+ * src/styles/settings.scss by hand; CSS and a `:color` prop value can't
+ * share one definition here without introducing custom properties this
+ * codebase doesn't otherwise use.
+ */
+export const BOOKED_COLOR = '#5B21B6'
+
+/**
+ * The neutral slate used for a Cancelled/no-arrival outcome — neither
+ * success nor failure, so not on the five semantic hues. Same reasoning as
+ * `.pill-cancelled` in settings.scss, hand-matched to that rule's tonal
+ * value (not EquipmentBorrowing's `#475569`, which is tuned for solid-fill
+ * white text, a different rendering mode — see borrowingStatus.ts).
+ */
+export const CANCELLED_COLOR = '#334155'
+
+/**
  * The Ambulance Dispatch Requests page described one lifecycle two ways:
  * ConductionRequest::getTripStatusAttribute()'s 'Not dispatched' / 'In
  * transit' / 'Completed' for a trip's own checkpoints, versus

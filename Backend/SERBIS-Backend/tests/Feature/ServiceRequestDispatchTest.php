@@ -33,8 +33,11 @@ class ServiceRequestDispatchTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void
@@ -66,10 +69,13 @@ class ServiceRequestDispatchTest extends TestCase
             'description' => 'Pick-up and drop-off',
         ]);
 
+        // Deliberately not an Ambulance, to match the service above: update()
+        // only lets an ambulance request take an Ambulance, and this fixture's
+        // service does not slugify to `ambulance-medical-response`.
         $this->vehicle = Vehicle::create([
-            'unit_identifier' => 'AMB-01',
-            'type' => 'Ambulance',
-            'specification' => 'Type II',
+            'unit_identifier' => 'RSQ-01',
+            'type' => 'Rescue Vehicle',
+            'specification' => 'Light rescue',
             'status' => 'Available',
         ]);
     }
@@ -183,9 +189,9 @@ class ServiceRequestDispatchTest extends TestCase
     public function test_swapping_the_vehicle_releases_the_one_it_replaced(): void
     {
         $other = Vehicle::create([
-            'unit_identifier' => 'AMB-02',
-            'type' => 'Ambulance',
-            'specification' => 'Type II',
+            'unit_identifier' => 'RSQ-02',
+            'type' => 'Rescue Vehicle',
+            'specification' => 'Light rescue',
             'status' => 'Available',
         ]);
 
@@ -220,6 +226,9 @@ class ServiceRequestDispatchTest extends TestCase
 
     public function test_a_vehicle_under_maintenance_is_not_pressed_into_service(): void
     {
+        // This used to be accepted and silently ignored: the unit stayed under
+        // Maintenance, but the request was written pointing at it, so the panel
+        // showed a dispatch nobody could drive. It is a 422 now.
         $this->vehicle->update(['status' => 'Maintenance']);
 
         $request = $this->pendingRequest();
@@ -227,9 +236,38 @@ class ServiceRequestDispatchTest extends TestCase
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
             'vehicle_id' => $this->vehicle->vehicle_id,
-        ])->assertOk();
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('vehicle_id');
 
         $this->assertSame('Maintenance', $this->vehicle->fresh()->status);
+        $this->assertNull($request->fresh()->vehicle_id);
+        $this->assertSame('Pending', $request->fresh()->status);
+    }
+
+    public function test_a_unit_of_the_wrong_type_is_rejected(): void
+    {
+        // The panel's picker never offers one (an Ambulance belongs to the
+        // ambulance board, and this fixture's service is not that), but the
+        // endpoint took whatever vehicle_id it was handed.
+        $ambulance = Vehicle::create([
+            'unit_identifier' => 'AMB-01',
+            'type' => 'Ambulance',
+            'specification' => 'Type II',
+            'status' => 'Available',
+        ]);
+
+        $request = $this->pendingRequest();
+
+        $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $ambulance->vehicle_id,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('vehicle_id');
+
+        $this->assertNull($request->fresh()->vehicle_id);
+        $this->assertSame('Available', $ambulance->fresh()->status);
     }
 
     public function test_claiming_a_unit_another_request_already_dispatched_is_rejected(): void

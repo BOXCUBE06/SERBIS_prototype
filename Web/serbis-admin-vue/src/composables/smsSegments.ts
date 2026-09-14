@@ -120,7 +120,7 @@ export function describeSms(message: string): SmsSegmentInfo {
   // An empty box is not a zero-length message being sent for free — it is no
   // message at all, and reporting "1 segment" next to an empty field reads as
   // though pressing Send would cost something.
-  const segments = units === 0 ? 0 : units <= single ? 1 : Math.ceil(units / multipart)
+  const segments = units === 0 ? 0 : (units <= single ? 1 : Math.ceil(units / multipart))
   const capacity = segments <= 1 ? single : multipart * segments
 
   return {

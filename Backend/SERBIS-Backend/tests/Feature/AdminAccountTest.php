@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Barangay;
+use App\Models\Resident;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CompletesAdminMfa;
@@ -22,7 +25,7 @@ use Tests\TestCase;
  */
 class AdminAccountTest extends TestCase
 {
-    use RefreshDatabase, CompletesAdminMfa;
+    use CompletesAdminMfa, RefreshDatabase;
 
     private User $admin;
 
@@ -316,8 +319,8 @@ class AdminAccountTest extends TestCase
 
     public function test_a_resident_cannot_reach_any_of_it(): void
     {
-        $barangay = \App\Models\Barangay::create(['barangay_name' => 'San Fabian']);
-        $resident = \App\Models\Resident::create([
+        $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
+        $resident = Resident::create([
             'barangay_id' => $barangay->barangay_id,
             'first_name' => 'Test',
             'last_name' => 'Resident',
@@ -342,7 +345,7 @@ class AdminAccountTest extends TestCase
 
         $created = User::where('email_address', 'grace@test.local')->first();
 
-        $log = \Illuminate\Support\Facades\DB::table('tbl_system_logs')
+        $log = DB::table('tbl_system_logs')
             ->where('auditable_type', User::class)
             ->where('auditable_id', $created->admin_id)
             ->where('action_type', 'created')

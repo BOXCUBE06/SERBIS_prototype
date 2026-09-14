@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\Vehicle;
@@ -21,19 +22,21 @@ class AmbulanceAvailabilityTest extends TestCase
     use RefreshDatabase;
 
     private AmbulanceAvailability $availability;
+
     private Service $service;
 
     /** The four seeded Ambulance units, keyed by unit_identifier. */
     private array $units = [];
 
     private Carbon $windowStart;
+
     private Carbon $windowEnd;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->availability = new AmbulanceAvailability();
+        $this->availability = new AmbulanceAvailability;
 
         $this->service = Service::create([
             'service_name' => 'Ambulance/Medical Response',
@@ -63,14 +66,20 @@ class AmbulanceAvailabilityTest extends TestCase
 
     private function booking(Vehicle $vehicle, string $status, ?Carbon $start, ?Carbon $end): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'service_id' => $this->service->getKey(),
             'vehicle_id' => $vehicle->getKey(),
             'description' => 'Test booking',
             'status' => $status,
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => $start,
             'scheduled_end' => $end,
         ]);
+
+        return $request;
     }
 
     private function availableIdentifiers(): array

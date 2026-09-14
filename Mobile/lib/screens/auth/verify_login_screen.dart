@@ -218,7 +218,7 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
               ),
               const SizedBox(height: 24),
               AppTextField(
-                label: 'Login code',
+                label: 'Verification code',
                 hint: '123456',
                 controller: _codeController,
                 keyboard: TextInputType.number,

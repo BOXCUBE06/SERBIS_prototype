@@ -8,6 +8,7 @@ use App\Models\Resident;
 use App\Models\SmsLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -22,7 +23,9 @@ class SmsBlastLoggingTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangayA;
+
     private Barangay $barangayB;
 
     protected function setUp(): void
@@ -66,6 +69,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $response = $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id, $this->barangayB->barangay_id],
         ]);
 
@@ -102,6 +106,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Test advisory.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertOk()->assertJson(['sent' => 1]);
 
@@ -116,6 +121,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'This one never went out.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertStatus(500);
 
@@ -135,6 +141,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertOk();
 
@@ -157,10 +164,209 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Nobody to send this to.',
+            'password' => 'password123',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertStatus(422);
 
         Http::assertNothingSent();
         $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_a_blast_without_the_senders_password_is_refused_before_the_vendor_is_called(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Should never leave.',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+
+        // The point of the gate: nothing billed, nothing recorded.
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_a_blast_with_the_wrong_password_is_refused_before_the_vendor_is_called(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Should never leave.',
+            'password' => 'not-the-password',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_another_admins_password_does_not_authorise_this_senders_blast(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        User::create([
+            'first_name' => 'Second',
+            'last_name' => 'Admin',
+            'email_address' => 'second@test.local',
+            'password' => Hash::make('a-different-password'),
+            'role' => 'Admin',
+        ]);
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Should never leave.',
+            'password' => 'a-different-password',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_repeated_wrong_passwords_are_throttled_and_then_block_the_correct_one(): void
+    {
+        // Isolated from the route throttle: proving the password limiter costs more
+        // than three sends an hour, and the two guards are independent.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Guessing.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertStatus(422);
+        }
+
+        // Sixth wrong password is refused by the limiter, not the hash check.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Guessing.',
+            'password' => 'wrong-6',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(429);
+
+        // The point of checking the limit before the comparison: inside the
+        // window even the real password does not get through.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Correct password, still locked out.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(429);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::count());
+    }
+
+    public function test_the_throttle_is_per_account_and_does_not_lock_out_another_admin(): void
+    {
+        // Isolated from the route throttle: proving the password limiter costs more
+        // than three sends an hour, and the two guards are independent.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        for ($attempt = 1; $attempt <= 6; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Guessing.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ]);
+        }
+
+        $other = User::create([
+            'first_name' => 'Second',
+            'last_name' => 'Admin',
+            'email_address' => 'second@test.local',
+            'password' => Hash::make('password123'),
+            'role' => 'Admin',
+        ]);
+
+        $this->actingAs($other)->postJson('/api/sms/blast', [
+            'message' => 'A colleague sending normally.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+    }
+
+    public function test_a_correct_password_clears_the_tally_so_ordinary_sending_is_never_throttled(): void
+    {
+        // Isolated from the route throttle: proving the password limiter costs more
+        // than three sends an hour, and the two guards are independent.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        // Four typos — one short of the limit.
+        for ($attempt = 1; $attempt <= 4; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Typo.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertStatus(422);
+        }
+
+        // The right password, which sends and resets the tally to zero.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Got it right.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+
+        // Four more typos. Without the reset these would be attempts five
+        // through eight and the last of them would be refused as 429.
+        for ($attempt = 5; $attempt <= 8; $attempt++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => 'Typo again.',
+                'password' => "wrong-{$attempt}",
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertStatus(422);
+        }
+
+        // And the tally being clear means the right password still works.
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Still able to send.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+    }
+
+    public function test_a_fourth_blast_within_the_hour_is_refused_by_the_route_throttle(): void
+    {
+        Http::fake();
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        for ($sent = 1; $sent <= 3; $sent++) {
+            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+                'message' => "Advisory {$sent}.",
+                'password' => 'password123',
+                'barangays' => [$this->barangayA->barangay_id],
+            ])->assertOk();
+        }
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'One too many.',
+            'password' => 'password123',
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertStatus(429);
+
+        // The money, not the status code: the fourth call must never reach the
+        // vendor, so the log stays at the three that were allowed through.
+        $this->assertSame(3, SmsLog::count());
     }
 }

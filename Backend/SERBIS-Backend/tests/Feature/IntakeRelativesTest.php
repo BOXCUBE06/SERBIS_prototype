@@ -40,8 +40,11 @@ class IntakeRelativesTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $ambulance;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void

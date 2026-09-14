@@ -37,8 +37,11 @@ class OwnershipScopeTest extends TestCase
     use RefreshDatabase;
 
     private Resident $owner;
+
     private Resident $stranger;
+
     private ServiceRequest $request;
+
     private EquipmentBorrowing $borrowing;
 
     protected function setUp(): void

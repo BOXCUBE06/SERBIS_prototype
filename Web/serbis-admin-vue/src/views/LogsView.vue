@@ -2,24 +2,25 @@
   <v-container fluid class="fill-height align-start pa-8 bg-background">
     <v-row>
       <v-col cols="12">
-        <div class="d-flex justify-space-between align-center mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-black text-high-emphasis">Activity Logs</h2>
-            <div class="text-subtitle-1 text-medium-emphasis">Who did what in this panel, and every text blast that was sent</div>
-          </div>
-          
-          <v-text-field
-            v-model="search"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search logs..."
-            variant="solo"
-            density="compact"
-            hide-details
-            rounded="lg"
-            class="elevation-1"
-            style="max-width: 300px;"
-          ></v-text-field>
-        </div>
+        <PageHeader
+          title="Activity Logs"
+          subtitle="Who did what in this panel, and every text blast that was sent"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              placeholder="Search logs..."
+              variant="solo"
+              density="compact"
+              hide-details
+              rounded="lg"
+              class="elevation-1"
+              style="width: 300px; max-width: 100%;"
+            ></v-text-field>
+          </template>
+        </PageHeader>
 
         <v-card elevation="0" border rounded="xl" class="bg-surface">
           <v-tabs v-model="activeTab" color="primary" class="border-b px-4">
@@ -47,7 +48,7 @@
                   :page="systemPage"
                   :loading="loading"
                   hover
-                  class="bg-transparent"
+                  class="bg-transparent logs-table"
                   @update:options="onSystemOptions"
                 >
                   <template v-slot:item.rowNumber="{ index }">
@@ -62,6 +63,9 @@
                   <template v-slot:item.created_at="{ item }">
                     {{ formatDate(item.created_at) }}
                   </template>
+                  <template v-slot:item.description="{ item }">
+                    <span class="cell-truncate" :title="item.description">{{ item.description }}</span>
+                  </template>
                 </v-data-table-server>
               </v-window-item>
 
@@ -74,11 +78,15 @@
                   :page="smsPage"
                   :loading="loading"
                   hover
-                  class="bg-transparent"
+                  class="bg-transparent logs-table"
                   @update:options="onSmsOptions"
                 >
                   <template v-slot:item.rowNumber="{ index }">
                     <span class="row-number text-medium-emphasis">{{ smsRowNumber(index) }}</span>
+                  </template>
+
+                  <template v-slot:item.message="{ item }">
+                    <span class="cell-truncate" :title="item.message">{{ item.message }}</span>
                   </template>
 
                   <template v-slot:item.status="{ item }">
@@ -114,6 +122,7 @@ import { ref, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const activeTab = ref('system')
 const search = ref('')
@@ -266,5 +275,16 @@ onMounted(() => {
   font-size: 0.95rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Fixed layout holds both tables to the header widths declared in
+   systemHeaders/smsHeaders; without it, Description and Message Content
+   wrap freely and every row is a different height. */
+.logs-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 760px; }
+.cell-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

@@ -21,6 +21,7 @@ class InfoMaterialController extends Controller
             // before; on object storage it is the bucket's URL, which asset()
             // could never produce.
             $item->full_url = Storage::disk(self::publicDisk())->url(self::relativePath($item->file_path));
+
             return $item;
         });
 
@@ -65,21 +66,46 @@ class InfoMaterialController extends Controller
         return response()->json($material, 201);
     }
 
-    public function destroy($id)
-{
-    $material = InfoMaterial::find($id);
+    /**
+     * Marks a material as checked by MDRRMO, or takes that mark back.
+     *
+     * One endpoint for both directions rather than separate verify/unverify
+     * routes: the panel holds a toggle, and a toggle that can only be switched
+     * on is a mark nobody can correct after a mistaken click.
+     */
+    public function verify(Request $request, $id)
+    {
+        $material = InfoMaterial::find($id);
 
-    if (!$material) {
-        return response()->json(['message' => 'File not found'], 404);
+        if (! $material) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'verified' => 'required|boolean',
+        ]);
+
+        $material->verified = $validated['verified'];
+        $material->save();
+
+        return response()->json($material);
     }
 
-    Storage::disk(self::publicDisk())->delete(self::relativePath($material->file_path));
+    public function destroy($id)
+    {
+        $material = InfoMaterial::find($id);
 
-    // Delete the DB record
-    $material->delete();
+        if (! $material) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
 
-    return response()->json(['message' => 'File deleted successfully']);
-}
+        Storage::disk(self::publicDisk())->delete(self::relativePath($material->file_path));
+
+        // Delete the DB record
+        $material->delete();
+
+        return response()->json(['message' => 'File deleted successfully']);
+    }
 
     // Rows created before the path shape changed are stored as "storage/<path>",
     // which is a URL fragment rather than a disk path. Strip it so both shapes

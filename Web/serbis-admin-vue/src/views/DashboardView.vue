@@ -1,14 +1,12 @@
 <template>
   <v-container fluid class="pa-6 dashboard-bg">
 
-    <!-- Toolbar -->
-    <div class="d-flex justify-space-between align-center flex-wrap gap-4 mb-6">
-      <div>
-        <h1 class="text-h4 font-weight-black mb-1">Dashboard</h1>
-        <div class="text-subtitle-1 text-medium-emphasis">Request volume, barangay spread and fleet status. Each card sets its own period.</div>
-      </div>
-
-      <div class="d-flex align-center gap-4 flex-wrap">
+    <PageHeader
+      title="Dashboard"
+      subtitle="Request volume, barangay spread and fleet status. Each card sets its own period."
+      class="mb-6"
+    >
+      <template v-slot:actions>
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
@@ -22,7 +20,7 @@
             <v-list density="compact" class="pa-0">
               <v-list-subheader class="font-weight-bold text-uppercase py-2">System Logs</v-list-subheader>
               <v-divider></v-divider>
-              <template v-if="systemLogs.length">
+              <template v-if="systemLogs.length > 0">
                 <v-list-item v-for="(log, i) in systemLogs.slice(0, 5)" :key="'log-'+i" class="py-3 border-b">
                   <template v-slot:prepend>
                     <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
@@ -42,8 +40,8 @@
         </v-menu>
 
         <v-avatar color="primary" size="44" class="cursor-pointer font-weight-bold text-white">J</v-avatar>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- KPI strip: every headline number in one scannable row, independent of
          the trend card's height. Cramming these into a sidebar next to the
@@ -194,7 +192,7 @@
             </div>
           </v-card-item>
           <v-card-text class="pt-2">
-            <div v-if="!topZones.length" class="text-center text-caption text-medium-emphasis py-8">
+            <div v-if="topZones.length === 0" class="text-center text-caption text-medium-emphasis py-8">
               No zone activity yet
             </div>
             <div v-else>
@@ -244,7 +242,7 @@
           <v-card-text class="pt-2">
             <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
 
-            <div v-else-if="!filteredFeed.length" class="text-center text-caption text-medium-emphasis py-8">
+            <div v-else-if="filteredFeed.length === 0" class="text-center text-caption text-medium-emphasis py-8">
               No activity {{ periodLabelFor(feedPeriod).toLowerCase() }}
             </div>
 
@@ -290,7 +288,7 @@
           </div>
           <v-card-text class="pt-0">
             <v-sheet height="320" color="transparent">
-              <Bar v-if="chartDataRaw && volumeChartData.labels.length" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
+              <Bar v-if="chartDataRaw && volumeChartData.labels.length > 0" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
               <div v-else-if="chartDataRaw" class="text-caption text-medium-emphasis text-center py-8">No data yet</div>
               <div class="d-flex align-center justify-center h-100" v-else>
                 <v-progress-circular indeterminate color="primary"></v-progress-circular>
@@ -308,6 +306,9 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import PageHeader from '@/components/PageHeader.vue'
+import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
+import { statusAccent } from '@/composables/borrowingStatus'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
   BarElement, LineElement, PointElement, Filler
@@ -409,24 +410,37 @@ const fetchDashboardData = async () => {
 }
 
 // The feed merges two models that use two different status vocabularies:
-//   ServiceRequest     — Pending, Responding, Resolved, Cancelled, Disapproved
+//   ServiceRequest     — Pending, Booked, Responding, Resolved, Disapproved, Cancelled
 //   EquipmentBorrowing — Pending, Approved, Released, Returned, Denied, Cancelled
-// Only six of those nine were listed, and the one error branch tested for
-// 'Rejected', which neither model writes. Every refused item — Denied,
-// Disapproved, Cancelled — fell through to grey and read as an unknown state,
-// so no red ever reached this feed.
+// Two real defects fixed here, both found while building the one-definition
+// status-color pass (docs/ui-audit and the request-lifecycle color audit):
+// 1. 'Booked' had no case at all and fell through to grey — a booked request
+//    read as an unknown state on the feed.
+// 2. 'Responding' was bucketed with 'approved'/'released' under 'primary'.
+//    Every other view colors Responding with `info`; only this switch
+//    disagreed. Same status, two colors, depending which screen you read it
+//    from.
+// Approved keeps its own color (borrowingStatus.ts) rather than sharing
+// Responding's `info` — the two never render in the same table, but a
+// shared color definition should still mean one thing per hue. Cancelled
+// uses the neutral slate both families settled on (adminUi.ts,
+// CANCELLED_COLOR) rather than Denied/Disapproved's red: checked both
+// ServiceRequestController.php:962 and EquipmentBorrowingController.php:281
+// before relying on this — in both models it's the resident withdrawing
+// their own request, never a staff refusal.
 const getStatusColor = (status) => {
   if (!status) return 'grey'
   switch (status.toLowerCase()) {
     case 'pending': return 'warning'
-    case 'approved':
-    case 'responding':
+    case 'booked': return BOOKED_COLOR
+    case 'responding': return 'info'
+    case 'approved': return statusAccent('Approved')
     case 'released': return 'primary'
     case 'resolved':
     case 'returned': return 'success'
-    case 'cancelled':
     case 'disapproved':
     case 'denied': return 'error'
+    case 'cancelled': return CANCELLED_COLOR
     default: return 'grey'
   }
 }
@@ -440,7 +454,7 @@ const getHeatColor = (percentage) => {
 // Top 5 zones ranked by request volume, percentage relative to the busiest zone
 const topZones = computed(() => {
   const list = mapDataByPeriod.value[zonesPeriod.value] || []
-  if (!list.length) return []
+  if (list.length === 0) return []
   const max = Math.max(...list.map(b => b.requests))
   return [...list]
     .sort((a, b) => b.requests - a.requests)
@@ -453,7 +467,7 @@ const heroTotal = computed(() => {
   if (!chartDataRaw.value) return 0
   if (heroPeriod.value === 'today') {
     const series = chartDataRaw.value.bar.week
-    return series.data[series.data.length - 1] || 0
+    return series.data.at(-1) || 0
   }
   const series = chartDataRaw.value.bar[heroPeriod.value]
   return series.data.reduce((a, b) => a + b, 0)

@@ -173,11 +173,12 @@ Finder _field(String label) => find.descendant(
 /// Asserts that [message] is showing as the validation error under the field
 /// labelled [label].
 ///
-/// Two fields have a hint that reads exactly like their own validator message —
-/// 'Enter your password' and 'Select your barangay'. On those, a bare
-/// `findsOneWidget` passes on the hint alone with validation never having run,
-/// so the assertion has to be that BOTH copies are present. Anywhere else one
-/// copy is the error and the only copy.
+/// One field has a hint that reads exactly like its own validator message —
+/// 'Select your barangay'. On it, a bare `findsOneWidget` passes on the hint
+/// alone with validation never having run, so the assertion has to be that
+/// BOTH copies are present. Anywhere else one copy is the error and the only
+/// copy. (Login's Password field was the second such case until its
+/// label-restating hint was dropped.)
 void _expectFieldError(String label, String message,
     {bool hintReadsTheSame = false}) {
   expect(
@@ -372,8 +373,7 @@ void main() {
       await tester.pumpAndSettle();
 
       _expectFieldError('Email address', 'Enter your email address');
-      _expectFieldError('Password', 'Enter your password',
-          hintReadsTheSame: true);
+      _expectFieldError('Password', 'Enter your password');
       // The whole point of client validation: no round trip.
       expect(api.loginCalls, 0);
     });

@@ -2,15 +2,15 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\ServiceRequest;
+use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\Service;
-use App\Models\Equipment;
-use Illuminate\Support\Facades\Schema;
-use Faker\Factory as Faker;
+use App\Models\ServiceRequest;
 use Carbon\Carbon;
+use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 
 class MockRequestSeeder extends Seeder
 {
@@ -23,7 +23,7 @@ class MockRequestSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'MockRequestSeeder skipped: refuses to truncate and re-seed outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -39,6 +39,7 @@ class MockRequestSeeder extends Seeder
         // Prevent seeding if core data is missing
         if (empty($residentIds) || empty($serviceIds) || empty($equipmentIds)) {
             $this->command->error('You must have at least 1 resident, 1 service, and 1 equipment in the database to run this seeder.');
+
             return;
         }
 
@@ -52,17 +53,17 @@ class MockRequestSeeder extends Seeder
 
         // 3. Generate 50 Service Requests
         $serviceStatuses = ['Pending', 'Responding', 'Resolved', 'Cancelled', 'Disapproved'];
-        
+
         for ($i = 0; $i < 50; $i++) {
             $date = $faker->dateTimeBetween('-3 months', 'now');
-            
+
             ServiceRequest::create([
                 'resident_id' => $faker->randomElement($residentIds),
-                'service_id'  => $faker->randomElement($serviceIds),
-                'status'      => $faker->randomElement($serviceStatuses),
+                'service_id' => $faker->randomElement($serviceIds),
+                'status' => $faker->randomElement($serviceStatuses),
                 'description' => $faker->sentence(6),
-                'created_at'  => $date,
-                'updated_at'  => $date,
+                'created_at' => $date,
+                'updated_at' => $date,
             ]);
         }
 
@@ -71,7 +72,7 @@ class MockRequestSeeder extends Seeder
 
         for ($i = 0; $i < 50; $i++) {
             $status = $faker->randomElement($borrowStatuses);
-            
+
             // Scatter the dates across the last 3 months so the dashboard charts look active
             $createdDate = Carbon::instance($faker->dateTimeBetween('-3 months', '-1 week'));
             $releasedDate = null;
@@ -86,14 +87,14 @@ class MockRequestSeeder extends Seeder
             }
 
             EquipmentBorrowing::create([
-                'resident_id'  => $faker->randomElement($residentIds),
+                'resident_id' => $faker->randomElement($residentIds),
                 'equipment_id' => $faker->randomElement($equipmentIds),
-                'quantity'     => rand(1, 3),
-                'status'       => $status,
-                'released_at'  => $releasedDate,
-                'returned_at'  => $returnedDate,
-                'created_at'   => $createdDate,
-                'updated_at'   => $returnedDate ?? ($releasedDate ?? $createdDate),
+                'quantity' => rand(1, 3),
+                'status' => $status,
+                'released_at' => $releasedDate,
+                'returned_at' => $returnedDate,
+                'created_at' => $createdDate,
+                'updated_at' => $returnedDate ?? ($releasedDate ?? $createdDate),
             ]);
         }
 

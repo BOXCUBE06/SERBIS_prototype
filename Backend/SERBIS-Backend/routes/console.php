@@ -13,3 +13,7 @@ Artisan::command('inspire', function () {
 // (audit #30). --hours=24 means "already expired for a day", so pruning can
 // never be what ends a live session — it is housekeeping, not enforcement.
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
+
+// Week 7 item 3. 08:00 Manila is inside office hours, so a resident who
+// misses the text still has a business day left to call before the due date.
+Schedule::command('serbis:send-return-reminders')->dailyAt('08:00')->timezone('Asia/Manila');

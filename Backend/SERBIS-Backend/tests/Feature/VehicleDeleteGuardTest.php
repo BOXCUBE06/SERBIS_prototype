@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Models\Service;
@@ -24,8 +25,11 @@ class VehicleDeleteGuardTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $service;
+
     private Vehicle $vehicle;
 
     protected function setUp(): void
@@ -70,14 +74,17 @@ class VehicleDeleteGuardTest extends TestCase
 
     private function requestOn(Carbon $scheduledAt, string $status = 'Booked'): ServiceRequest
     {
-        return ServiceRequest::create([
+        $request = ServiceRequest::create([
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->service_id,
             'description' => 'Scheduled hospital transfer',
             'status' => $status,
             'vehicle_id' => $this->vehicle->vehicle_id,
-            'scheduled_at' => $scheduledAt,
         ]);
+
+        AmbulanceBooking::create(['request_id' => $request->getKey(), 'scheduled_at' => $scheduledAt]);
+
+        return $request;
     }
 
     public function test_an_idle_unit_deletes(): void

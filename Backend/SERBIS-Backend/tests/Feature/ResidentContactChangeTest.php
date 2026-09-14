@@ -30,6 +30,7 @@ class ResidentContactChangeTest extends TestCase
     use RefreshDatabase;
 
     private Barangay $home;
+
     private Resident $resident;
 
     protected function setUp(): void

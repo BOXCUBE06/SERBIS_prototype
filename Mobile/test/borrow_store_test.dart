@@ -43,9 +43,14 @@ class _FakeApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitBorrowRequest({
-    required int equipmentId,
+    int? equipmentId,
+    String? otherEquipmentText,
     required int quantity,
     required String purpose,
+    String fulfillmentMethod = 'Pickup',
+    String? deliveryAddress,
+    String borrowerType = 'Resident',
+    String? organizationName,
   }) async {
     submitCalls++;
     lastPurpose = purpose;
@@ -54,6 +59,7 @@ class _FakeApi extends ApiService {
         <String, dynamic>{
           'borrow_id': 99,
           'equipment_id': equipmentId,
+          'other_equipment_text': otherEquipmentText,
           'quantity': quantity,
           'purpose': purpose,
           'status': 'Pending',

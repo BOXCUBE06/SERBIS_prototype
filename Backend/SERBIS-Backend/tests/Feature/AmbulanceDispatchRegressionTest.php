@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\Barangay;
 use App\Models\ConductionRequest;
-use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\ExpectationFailedException;
 use Tests\TestCase;
 
 /**
@@ -35,9 +36,13 @@ class AmbulanceDispatchRegressionTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Service $ambulance;
+
     private Vehicle $vehicleA;
+
     private Vehicle $vehicleB;
+
     private Barangay $barangay;
 
     protected function setUp(): void
@@ -112,7 +117,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
             $hasReason = $trips->contains(fn ($t) => filled($t->vehicle_override_reason));
             $this->assertTrue(
                 $hasReason,
-                "Vehicle {$vehicleId} has ".$trips->count()." concurrent open trips with no override reason on any of them.",
+                "Vehicle {$vehicleId} has ".$trips->count().' concurrent open trips with no override reason on any of them.',
             );
         }
     }
@@ -162,6 +167,10 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'service_id' => $this->ambulance->service_id,
             'description' => 'Scheduled dialysis transport',
             'status' => 'Booked',
+        ]);
+
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
             'scheduled_at' => now()->addDays(2),
         ]);
 
@@ -280,7 +289,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'departed_office_at' => '2026-08-31 08:05:00',
         ]);
 
-        $this->expectException(\PHPUnit\Framework\ExpectationFailedException::class);
+        $this->expectException(ExpectationFailedException::class);
         $this->assertNoUnexplainedDoubleBooking();
     }
 
@@ -292,7 +301,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'service_id' => $this->ambulance->service_id, 'description' => 'Orphaned', 'status' => 'Resolved',
         ]);
 
-        $this->expectException(\PHPUnit\Framework\ExpectationFailedException::class);
+        $this->expectException(ExpectationFailedException::class);
         $this->assertNoOrphanedTerminalAmbulanceRequests();
     }
 }

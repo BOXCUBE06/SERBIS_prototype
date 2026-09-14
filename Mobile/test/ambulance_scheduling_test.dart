@@ -34,6 +34,7 @@ class _RecordingApi extends ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
@@ -402,6 +403,44 @@ void main() {
       expect(confirmation, contains('2026'));
       expect(timeline, isNot(contains('2026')));
       expect(confirmation, 'Aug 1, 2026, 3:04 PM');
+    });
+  });
+
+  group('formatDueDate', () {
+    test('names the month and keeps the year, with no clock', () {
+      expect(formatDueDate(DateTime(2026, 9, 12, 15, 4)), 'Sep 12, 2026');
+    });
+
+    // The borrow screen used to hand-assemble 9/12/2026, which a reader has
+    // to know is M/D and not D/M. A named month cannot be misread.
+    test('is unambiguous on a day the two orders would swap', () {
+      expect(formatDueDate(DateTime(2026, 3, 4)), 'Mar 4, 2026');
+    });
+  });
+
+  // Mirrors the admin panel's dueLabel (EquipmentBorrowingView.vue) so a
+  // borrower and staff read the same urgency off the same date.
+  group('dueLabel', () {
+    final today = DateTime(2026, 9, 12);
+
+    test('due later today reads as due today, not overdue', () {
+      expect(dueLabel(DateTime(2026, 9, 12), today), 'Due today');
+    });
+
+    test('due tomorrow', () {
+      expect(dueLabel(DateTime(2026, 9, 13), today), 'Due tomorrow');
+    });
+
+    test('due several days out', () {
+      expect(dueLabel(DateTime(2026, 9, 17), today), 'Due in 5 days');
+    });
+
+    test('one day overdue is singular', () {
+      expect(dueLabel(DateTime(2026, 9, 11), today), '1 day overdue');
+    });
+
+    test('several days overdue is plural', () {
+      expect(dueLabel(DateTime(2026, 9, 9), today), '3 days overdue');
     });
   });
 }

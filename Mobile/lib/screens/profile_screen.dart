@@ -503,8 +503,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: Text(f ? 'Mag-log out?' : 'Log out?', style: AppText.display(size: 16)),
         content: Text(
           f
-              ? 'Kailangan mong mag-sign in muli para magsumite o subaybayan ang mga kahilingan.'
-              : 'You will need to sign in again to submit or track requests.',
+              ? 'Kailangan mong mag-log in muli para magsumite o subaybayan ang mga kahilingan.'
+              : 'You will need to log in again to submit or track requests.',
           style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1188,20 +1188,20 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
             const SizedBox(height: 14),
             AppTextField(
               label: _tr('profile.first_name'),
-              hint: '',
+              hint: 'e.g. Juan',
               controller: _first,
               errorText: _errors['first'],
               enabled: !_saving,
             ),
             AppTextField(
               label: _tr('profile.middle_name_optional'),
-              hint: '',
+              hint: 'e.g. Reyes',
               controller: _middle,
               enabled: !_saving,
             ),
             AppTextField(
               label: _tr('profile.last_name'),
-              hint: '',
+              hint: 'e.g. Delacruz',
               controller: _last,
               errorText: _errors['last'],
               enabled: !_saving,
@@ -1214,7 +1214,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
             ),
             AppTextField(
               label: _tr('profile.email'),
-              hint: '',
+              hint: 'yourname@email.com',
               controller: _email,
               keyboard: TextInputType.emailAddress,
               errorText: _errors['email'],

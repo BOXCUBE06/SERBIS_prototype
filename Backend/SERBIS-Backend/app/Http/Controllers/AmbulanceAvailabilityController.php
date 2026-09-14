@@ -28,9 +28,7 @@ class AmbulanceAvailabilityController extends Controller
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
-    public function __construct(private readonly AmbulanceAvailability $availability)
-    {
-    }
+    public function __construct(private readonly AmbulanceAvailability $availability) {}
 
     public function index(Request $request)
     {
@@ -68,15 +66,22 @@ class AmbulanceAvailabilityController extends Controller
             ->where('type', 'Ambulance')
             ->orderBy('unit_identifier')
             ->with(['serviceRequests' => function ($query) use ($dayStartUtc, $dayEndUtc) {
-                $query->whereNotIn('status', ServiceRequestController::TERMINAL_STATUSES)
-                    ->whereNotNull('scheduled_at')
-                    ->whereNotNull('scheduled_end')
+                // Joined, not eager-loaded separately: scheduled_at/scheduled_end
+                // now live on tbl_ambulance_bookings. Selecting them by their
+                // plain (unqualified) names after tbl_service_request.* lets
+                // them hydrate onto the ServiceRequest model under their usual
+                // attribute names, same as every other reader of this model.
+                $query->select('tbl_service_request.*', 'tbl_ambulance_bookings.scheduled_at', 'tbl_ambulance_bookings.scheduled_end')
+                    ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
+                    ->whereNotIn('tbl_service_request.status', ServiceRequestController::TERMINAL_STATUSES)
+                    ->whereNotNull('tbl_ambulance_bookings.scheduled_at')
+                    ->whereNotNull('tbl_ambulance_bookings.scheduled_end')
                     // Same half-open overlap test as AmbulanceAvailability: a
                     // booking touching the day boundary only is adjacent, not
                     // shown as booked on this day.
-                    ->where('scheduled_at', '<', $dayEndUtc)
-                    ->where('scheduled_end', '>', $dayStartUtc)
-                    ->orderBy('scheduled_at');
+                    ->where('tbl_ambulance_bookings.scheduled_at', '<', $dayEndUtc)
+                    ->where('tbl_ambulance_bookings.scheduled_end', '>', $dayStartUtc)
+                    ->orderBy('tbl_ambulance_bookings.scheduled_at');
             }])
             ->get();
 

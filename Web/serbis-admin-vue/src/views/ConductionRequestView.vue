@@ -16,59 +16,64 @@
          see ServiceRequestQueue.vue's own defineExpose — since it still
          owns that state privately (the same reason "Open Booking" already
          reaches in via a ref rather than duplicating state here). -->
-    <div class="page-header d-flex justify-space-between align-start flex-wrap gap-3" style="flex-shrink: 0;">
-      <div>
-        <h2 class="text-h5 font-weight-bold text-high-emphasis">Ambulance Dispatch Requests</h2>
-        <div class="text-subtitle-2 text-medium-emphasis">
-          MDRRMO Conduction Request Form — Echague Rescue EMS
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'bookings'" class="d-flex align-center gap-3">
+    <!-- 16px, not the mb-6/24px most other headers use: this row sits directly
+         above the tab bar, not a card with its own breathing room, and 24px
+         read as oversized once the action buttons moved inline with the
+         title (layout redesign follow-up, kept through the PageHeader
+         extraction). -->
+    <PageHeader
+      title="Ambulance Dispatch Requests"
+      subtitle="MDRRMO Conduction Request Form — Echague Rescue EMS"
+      style="flex-shrink: 0; margin-bottom: 16px;"
+    >
+      <template v-slot:actions>
+        <template v-if="activeTab === 'bookings'">
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="text-none font-weight-bold px-6 text-white"
+            height="48"
+            @click="bookingsQueueRef?.openCreateDialog()"
+          >
+            <v-icon start size="small">mdi-account-plus-outline</v-icon>
+            Log Service Request
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            class="text-none font-weight-bold px-6"
+            height="48"
+            @click="bookingsQueueRef?.openDayView()"
+          >
+            <v-icon start size="small">mdi-calendar-clock</v-icon>
+            Ambulance Day View
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="text"
+            class="text-none font-weight-bold px-6"
+            height="48"
+            :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
+            @click="bookingsQueueRef?.exportCsv()"
+          >
+            <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+            {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
+            <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
+          </v-btn>
+        </template>
         <v-btn
-          color="secondary"
+          v-else-if="activeTab === 'trip-logs'"
+          color="primary"
           variant="flat"
-          class="text-none font-weight-bold px-6 text-white"
-          height="40"
-          @click="bookingsQueueRef?.openCreateDialog()"
-        >
-          <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Service Request
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
-          @click="bookingsQueueRef?.openDayView()"
+          height="48"
+          @click="openCreate()"
         >
-          <v-icon start size="small">mdi-calendar-clock</v-icon>
-          Ambulance Day View
+          <v-icon start size="small">mdi-plus</v-icon>
+          Ambulance Trip Record
         </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="40"
-          :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
-          @click="bookingsQueueRef?.exportCsv()"
-        >
-          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
-          <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
-        </v-btn>
-      </div>
-
-      <v-btn
-        v-else-if="activeTab === 'trip-logs'"
-        color="primary"
-        variant="flat"
-        class="text-none font-weight-bold px-6"
-        height="44"
-        prepend-icon="mdi-plus"
-        @click="openCreate()"
-      >Ambulance Trip Record</v-btn>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
          Ambulance/Medical Response — moved here from Resident Requests so
@@ -208,7 +213,7 @@
         </v-card>
 
         <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden flex-grow-1 d-flex flex-column" style="min-height: 0;">
-          <div v-if="!filteredItems.length" class="text-center py-12 px-6">
+          <div v-if="filteredItems.length === 0" class="text-center py-12 px-6">
             <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
             <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
           </div>
@@ -281,32 +286,32 @@
             <h3 class="section-title">Patient</h3>
             <v-row dense>
               <v-col cols="12" sm="8">
-                <v-text-field v-model="createDialog.form.patient_name" label="Patient name" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_name" label="Patient name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
-                <v-text-field v-model="createDialog.form.patient_age" label="Age" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
               </v-col>
               <v-col cols="6" sm="2">
                 <v-select v-model="createDialog.form.patient_sex" :items="sexOptions" label="Sex" variant="outlined" density="comfortable" clearable></v-select>
               </v-col>
               <v-col cols="12" sm="8">
-                <v-text-field v-model="createDialog.form.patient_address" label="Patient address" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_address" label="Patient address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="4">
-                <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12">
-                <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+                <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
               </v-col>
             </v-row>
 
             <h3 class="section-title">Trip</h3>
             <v-row dense>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.origin" label="From:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.origin" label="From:" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.destination" label="To:" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+                <v-text-field v-model="createDialog.form.destination" label="To:" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-select
@@ -327,6 +332,7 @@
                 <v-text-field
                   v-model="createDialog.form.vehicle"
                   label="Vehicle name (not in the fleet — e.g. mutual aid)"
+                  placeholder="Alicia MDRRMO Ambulance"
                   variant="outlined"
                   density="comfortable"
                 ></v-text-field>
@@ -345,6 +351,7 @@
               v-if="createDialog.conflict"
               v-model="createDialog.form.override_reason"
               label="Reason to file anyway (required)"
+              placeholder="Why this unit is being sent despite the conflict"
               variant="outlined"
               density="comfortable"
               rows="2"
@@ -356,7 +363,15 @@
             <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
               <div class="d-flex align-center justify-space-between mb-1">
                 <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-                <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addPerson(group.field)">
+                <v-btn
+                  variant="text"
+                  size="small"
+                  density="compact"
+                  class="text-none"
+                  prepend-icon="mdi-plus"
+                  :disabled="createDialog.form[group.field].length >= group.max"
+                  @click="addPerson(group.field)"
+                >
                   Add {{ group.singular }}
                 </v-btn>
               </div>
@@ -368,6 +383,7 @@
                 <v-text-field
                   v-model="createDialog.form[group.field][idx]"
                   :label="`${group.singular} ${idx + 1}`"
+                  placeholder="Full name"
                   variant="outlined"
                   density="compact"
                   hide-details
@@ -453,7 +469,7 @@
 
           <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
             <div class="field-label">{{ group.label }}</div>
-            <div v-if="peopleByRole(group.role).length" class="field-value">
+            <div v-if="peopleByRole(group.role).length > 0" class="field-value">
               {{ peopleByRole(group.role).map(p => p.name).join(', ') }}
             </div>
             <div v-else class="text-caption text-medium-emphasis">None recorded</div>
@@ -503,6 +519,7 @@
               <v-textarea
                 v-model="tripLog.form.no_arrival_reason"
                 label="No-arrival reason"
+                placeholder="e.g. Patient had already been taken by a relative"
                 hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
                 persistent-hint
                 variant="outlined"
@@ -531,13 +548,13 @@
               <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" variant="outlined" density="comfortable"></v-text-field>
+              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" variant="outlined" density="comfortable"></v-text-field>
+              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="tripLog.form.others" label="Others" variant="outlined" density="comfortable" rows="2"></v-textarea>
+              <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
             </v-col>
           </v-row>
 
@@ -550,7 +567,15 @@
           <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
             <div class="d-flex align-center justify-space-between mb-1">
               <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-              <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addTripPerson(group.field)">
+              <v-btn
+                variant="text"
+                size="small"
+                density="compact"
+                class="text-none"
+                prepend-icon="mdi-plus"
+                :disabled="tripLog.form[group.field].length >= group.max"
+                @click="addTripPerson(group.field)"
+              >
                 Add {{ group.singular }}
               </v-btn>
             </div>
@@ -562,6 +587,7 @@
               <v-text-field
                 v-model="tripLog.form[group.field][idx]"
                 :label="`${group.singular} ${idx + 1}`"
+                placeholder="Full name"
                 variant="outlined"
                 density="compact"
                 hide-details
@@ -598,6 +624,7 @@ import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } fr
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
@@ -621,10 +648,14 @@ const statusOptions = [
   ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
 ]
 
+// `max` mirrors ConductionRequestController's per-role limits — passengers cap
+// at 2, the other two at MAX_PEOPLE_PER_ROLE. This only stops the Add button;
+// the server-side rule is the actual gate, and a request that gets past this
+// still fails validation there.
 const personnelGroups = [
-  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver' },
-  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger' },
-  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative' },
+  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', max: 20 },
+  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', max: 2 },
+  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', max: 20 },
 ]
 
 const sexOptions = [
@@ -688,8 +719,9 @@ const fetchData = async () => {
     items.value = data
     loadError.value = ''
   } catch (error) {
+    // Full-pane loadError card below is the only notification here — a
+    // snackbar on top of it duplicated the same message (ui-audit finding #3).
     loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load ambulance trip records', 'error')
   } finally {
     initialLoad.value = false
     reloading.value = false
@@ -729,7 +761,7 @@ const fetchBookings = async () => {
 // an instant approval already has its own stub the moment it exists, so
 // there is nothing left here for a search to find.
 const linkableBookings = computed(() => bookings.value.filter(r =>
-  r.status === 'Booked' && r.vehicle_id && !(r.conduction_requests || []).length
+  r.status === 'Booked' && r.vehicle_id && (r.conduction_requests || []).length === 0
 ))
 const bookingLabel = (r) => {
   const who = r.resident ? `${r.resident.first_name} ${r.resident.last_name}` : (r.walk_in_name || 'Walk-in')
@@ -934,8 +966,8 @@ const printTrip = async (record) => {
     const html = await res.text()
     const blob = new Blob([html], { type: 'text/html' })
     window.open(URL.createObjectURL(blob), '_blank')
-  } catch (e) {
-    notify(e.message || 'Failed to print', 'error')
+  } catch (error) {
+    notify(error.message || 'Failed to print', 'error')
   }
 }
 
@@ -1034,7 +1066,7 @@ const openTripLog = (record) => {
       others: record.others || '',
       ...Object.fromEntries(personnelGroups.map(({ field, role }) => {
         const names = (record.people || []).filter(p => p.role === role).map(p => p.name)
-        return [field, names.length ? names : ['']]
+        return [field, names.length > 0 ? names : ['']]
       })),
     },
   }
@@ -1152,11 +1184,6 @@ onMounted(fetchData)
 <style scoped>
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-/* 28px→16px: sized for a header that was just a title, sitting above a
-   completely separate button row further down. With the buttons inline in
-   this same row now, that gap to the tabs read as oversized (layout
-   redesign follow-up). */
-.page-header { margin-bottom: 16px; }
 
 /* v-window's own internal wrapper (.v-window__container, the flex row that
    holds every window-item side by side for the slide transition) sizes
@@ -1227,65 +1254,7 @@ onMounted(fetchData)
   background-color: rgba(var(--v-theme-primary), 0.06);
 }
 
-/* Mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly (same
-   values, not shared — scoped styles don't cross files here, same pattern
-   as .soft-card/.trip-row above) — item 5 of the layout redesign: a trip's
-   status now speaks the same badge language as a booking's, via
-   sharedStatusLabel() in adminUi.ts, so the two need the same CSS to render
-   identically, not just the same words. Only pill-booked/-responding/
-   -resolved are ever reachable from a trip_status here, but the full set is
-   kept for exact parity with the source. */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-.status-pill--sm {
-  padding: 2px 8px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
-}
-.pill-pending {
-  background: rgba(var(--v-theme-warning), 0.14);
-  color: rgb(var(--v-theme-warning-strong));
-}
-.pill-booked {
-  background: rgba(109, 40, 217, 0.14);
-  color: #5B21B6;
-}
-.pill-responding {
-  background: rgba(var(--v-theme-info), 0.14);
-  color: rgb(var(--v-theme-info-strong));
-}
-.pill-resolved {
-  background: rgba(var(--v-theme-success), 0.14);
-  color: rgb(var(--v-theme-success-strong));
-}
-.pill-disapproved,
-.pill-cancelled {
-  background: rgba(var(--v-theme-error), 0.14);
-  color: rgb(var(--v-theme-error-strong));
-}
-/* A sixth outcome, neither success nor failure — the five semantic hues are
-   already spoken for (see .pill-booked above), so this is a literal neutral
-   slate rather than reusing warning/error and implying "wrong" or "pending". */
-.pill-resolved-no-arrival {
-  background: rgba(100, 116, 139, 0.14);
-  color: #334155;
-}
-.v-theme--dark .pill-pending { background-color: rgba(var(--v-theme-warning), 0.10); }
-.v-theme--dark .pill-booked { background-color: rgba(167, 139, 250, 0.10); color: #A78BFA; }
-.v-theme--dark .pill-responding { background-color: rgba(var(--v-theme-info), 0.10); }
-.v-theme--dark .pill-resolved { background-color: rgba(var(--v-theme-success), 0.10); }
-.v-theme--dark .pill-disapproved,
-.v-theme--dark .pill-cancelled { background-color: rgba(var(--v-theme-error), 0.10); }
-.v-theme--dark .pill-resolved-no-arrival { background-color: rgba(148, 163, 184, 0.10); color: #94A3B8; }
+/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ServiceRequestQueue.vue), including the sharedStatusLabel() mapping in adminUi.ts that lets a trip's status speak the same badge language as a booking's. */
 
 .conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
 /* VDataTableFooter has no prop to drop just the items-per-page selector —

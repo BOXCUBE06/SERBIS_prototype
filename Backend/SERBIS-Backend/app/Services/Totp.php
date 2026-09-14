@@ -26,7 +26,7 @@ class Totp
 {
     private function engine(): Google2FA
     {
-        return new Google2FA();
+        return new Google2FA;
     }
 
     public function secretFor(int $adminId): string
@@ -60,7 +60,7 @@ class Totp
     {
         $renderer = new ImageRenderer(
             new RendererStyle(200),
-            new SvgImageBackEnd(),
+            new SvgImageBackEnd,
         );
 
         $svg = (new Writer($renderer))->writeString($otpauthUri);

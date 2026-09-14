@@ -37,8 +37,11 @@ class ResidentAmbulanceIntakeTest extends TestCase
     use RefreshDatabase;
 
     private Resident $resident;
+
     private Service $ambulance;
+
     private Service $roadClearing;
+
     private User $admin;
 
     protected function setUp(): void
@@ -100,15 +103,15 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ->postJson('/api/service-requests', $this->payload())
             ->assertStatus(201);
 
-        $created = ServiceRequest::first();
-        $this->assertSame('Juan Dela Cruz', $created->patient_name);
-        $this->assertSame('Echague District Hospital', $created->destination);
+        $booking = ServiceRequest::first()->ambulanceBooking;
+        $this->assertSame('Juan Dela Cruz', $booking->patient_name);
+        $this->assertSame('Echague District Hospital', $booking->destination);
         // Everything else stays optional on this path.
-        $this->assertNull($created->patient_age);
-        $this->assertNull($created->patient_sex);
-        $this->assertNull($created->patient_address);
-        $this->assertNull($created->patient_contact_number);
-        $this->assertNull($created->condition_notes);
+        $this->assertNull($booking->patient_age);
+        $this->assertNull($booking->patient_sex);
+        $this->assertNull($booking->patient_address);
+        $this->assertNull($booking->patient_contact_number);
+        $this->assertNull($booking->condition_notes);
     }
 
     public function test_a_missing_patient_name_is_rejected(): void
@@ -142,12 +145,12 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ]))
             ->assertStatus(201);
 
-        $created = ServiceRequest::first();
-        $this->assertSame(62, $created->patient_age);
-        $this->assertSame('female', $created->patient_sex);
-        $this->assertSame('Purok 2, San Fabian', $created->patient_address);
-        $this->assertSame('09189999999', $created->patient_contact_number);
-        $this->assertSame('Chest pains', $created->condition_notes);
+        $booking = ServiceRequest::first()->ambulanceBooking;
+        $this->assertSame(62, $booking->patient_age);
+        $this->assertSame('female', $booking->patient_sex);
+        $this->assertSame('Purok 2, San Fabian', $booking->patient_address);
+        $this->assertSame('09189999999', $booking->patient_contact_number);
+        $this->assertSame('Chest pains', $booking->condition_notes);
     }
 
     public function test_an_out_of_range_age_is_rejected(): void
@@ -217,7 +220,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ->assertStatus(201);
 
         $created = ServiceRequest::first();
-        $this->assertSame('San Fabian', $created->pickup_location);
+        $this->assertSame('San Fabian', $created->ambulanceBooking->pickup_location);
         $this->assertStringContainsString('San Fabian → Echague District Hospital', $created->description);
     }
 
@@ -229,7 +232,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ]))
             ->assertStatus(201);
 
-        $this->assertSame('Purok 7, beside the chapel', ServiceRequest::first()->pickup_location);
+        $this->assertSame('Purok 7, beside the chapel', ServiceRequest::first()->ambulanceBooking->pickup_location);
     }
 
     public function test_a_whitespace_only_pickup_counts_as_blank(): void
@@ -238,7 +241,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ->postJson('/api/service-requests', $this->payload(['pickup_location' => '   ']))
             ->assertStatus(201);
 
-        $this->assertSame('San Fabian', ServiceRequest::first()->pickup_location);
+        $this->assertSame('San Fabian', ServiceRequest::first()->ambulanceBooking->pickup_location);
     }
 
     // ---- other services are untouched --------------------------------------
@@ -266,12 +269,11 @@ class ResidentAmbulanceIntakeTest extends TestCase
 
         $created = ServiceRequest::first();
         $this->assertSame('Fallen tree blocking the provincial road.', $created->description);
-        // The structured columns must never be written on another service —
-        // patient details on a road-clearing report would be a data leak in
-        // the panel's own detail view.
-        $this->assertNull($created->patient_name);
-        $this->assertNull($created->pickup_location);
-        $this->assertNull($created->destination);
+        // No booking row at all for another service — patient details on a
+        // road-clearing report would be a data leak in the panel's own
+        // detail view, and the invariant is one booking per ambulance
+        // request, none for anything else.
+        $this->assertNull($created->ambulanceBooking);
     }
 
     public function test_patient_fields_sent_on_a_non_ambulance_request_are_dropped(): void
@@ -286,9 +288,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ])
             ->assertStatus(201);
 
-        $created = ServiceRequest::first();
-        $this->assertNull($created->patient_name);
-        $this->assertNull($created->destination);
+        $this->assertNull(ServiceRequest::first()->ambulanceBooking);
     }
 
     // ---- the trip record's contact ----------------------------------------

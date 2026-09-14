@@ -7,10 +7,7 @@
           <!-- Header -->
           <v-row class="mb-6" align="center" justify="space-between">
             <v-col cols="12" md="5">
-              <h2 class="text-h5 font-weight-bold text-high-emphasis">Documents</h2>
-              <div class="text-subtitle-2 text-medium-emphasis">
-                {{ files.length }} published · residents receive these on the mobile app
-              </div>
+              <PageHeader title="Documents" :subtitle="`${files.length} published · residents receive these on the mobile app`" />
             </v-col>
 
             <v-col cols="12" md="7" class="d-flex justify-end align-center gap-4 flex-wrap">
@@ -105,6 +102,7 @@
                 <v-text-field
                   v-model="stagedTitle"
                   label="Title shown to residents *"
+                  placeholder="Flood evacuation map — Barangay San Isidro"
                   variant="outlined"
                   density="compact"
                   hide-details
@@ -145,13 +143,13 @@
           </v-card>
 
           <!-- Empty state -->
-          <div v-else-if="!visibleFiles.length" class="empty-state subtle-surface">
+          <div v-else-if="visibleFiles.length === 0" class="empty-state subtle-surface">
             <v-icon size="48" class="text-medium-emphasis mb-3">mdi-file-hidden</v-icon>
             <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-              {{ files.length ? 'No materials match your filter' : 'No materials published yet' }}
+              {{ files.length > 0 ? 'No materials match your filter' : 'No materials published yet' }}
             </div>
             <div class="text-body-2 text-medium-emphasis">
-              {{ files.length ? 'Try a different search or type.' : 'Upload the first document residents will see.' }}
+              {{ files.length > 0 ? 'Try a different search or type.' : 'Upload the first document residents will see.' }}
             </div>
           </div>
 
@@ -205,6 +203,22 @@
 
               <template v-slot:item.created_at="{ item }">
                 <span class="text-body-2 text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
+              </template>
+
+              <!-- Switch rather than a button pair: this is one state with two
+                   directions, and a mistaken click has to be undoable. -->
+              <template v-slot:item.verified="{ item }">
+                <v-switch
+                  :model-value="item.verified"
+                  :loading="verifying === item.files_id"
+                  :disabled="verifying === item.files_id"
+                  :aria-label="`Mark ${item.title} as verified`"
+                  color="success"
+                  density="compact"
+                  hide-details
+                  inset
+                  @update:model-value="value => setVerified(item, value)"
+                ></v-switch>
               </template>
 
               <template v-slot:item.actions="{ item }">
@@ -263,6 +277,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/admin/info-materials`
 
@@ -349,10 +364,11 @@ const rowNumber = useRowNumbers(visibleFiles, 'files_id')
 
 const materialHeaders = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'File', key: 'title', width: '38%' },
-  { title: 'Type', key: 'file_type', width: '15%' },
-  { title: 'Size', key: 'file_size', width: '11%' },
-  { title: 'Uploaded', key: 'created_at', width: '15%' },
+  { title: 'File', key: 'title', width: '32%' },
+  { title: 'Type', key: 'file_type', width: '12%' },
+  { title: 'Size', key: 'file_size', width: '9%' },
+  { title: 'Uploaded', key: 'created_at', width: '13%' },
+  { title: 'Verified', key: 'verified', width: '13%' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '21%' },
 ]
 
@@ -371,15 +387,15 @@ const typeLabel = (ext) => typeLabels[category(ext)]
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes'
   const k = 1024
-  const dm = decimals < 0 ? 0 : decimals
+  const dm = Math.max(decimals, 0)
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
 const relativeDate = (iso) => {
   const then = new Date(iso)
-  const days = Math.floor((Date.now() - then.getTime()) / 86400000)
+  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000)
   if (days <= 0) return 'Today'
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days} days ago`
@@ -463,10 +479,10 @@ const publish = () => {
   xhr.open('POST', API)
   Object.entries(getHeaders()).forEach(([k, v]) => xhr.setRequestHeader(k, v))
 
-  xhr.upload.onprogress = (evt) => {
+  xhr.upload.addEventListener('progress', (evt) => {
     if (evt.lengthComputable) progress.value = Math.round((evt.loaded / evt.total) * 100)
-  }
-  xhr.onload = async () => {
+  })
+  xhr.addEventListener('load', async () => {
     uploading.value = false
     if (xhr.status >= 200 && xhr.status < 300) {
       clearStaged()
@@ -477,9 +493,40 @@ const publish = () => {
       try { msg = JSON.parse(xhr.responseText).message || msg } catch { /* keep default */ }
       apiError.value = msg
     }
-  }
+  })
   xhr.onerror = () => { uploading.value = false; apiError.value = 'Network error during upload' }
   xhr.send(payload)
+}
+
+// --- Verified flag ---
+// Holds the files_id being written so only that row's switch shows the wait,
+// rather than the whole table going busy for a one-row change.
+const verifying = ref(null)
+
+const setVerified = async (item, value) => {
+  verifying.value = item.files_id
+  const previous = item.verified
+
+  // Flipped up front so the switch does not sit on its old position while the
+  // request is in flight; put back if the write fails.
+  item.verified = value
+
+  try {
+    const res = await fetch(`${API}/${item.files_id}/verify`, {
+      method: 'PATCH',
+      // Content-Type spelled out here: getHeaders() leaves it off on purpose
+      // for the FormData upload, and without it this JSON body never parses.
+      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ verified: value }),
+    })
+    if (!res.ok) throw new Error('Could not update the verified mark')
+    notify(value ? 'Material marked verified' : 'Verified mark removed')
+  } catch (error) {
+    item.verified = previous
+    notify(error.message || 'Could not update the verified mark', 'error')
+  } finally {
+    verifying.value = null
+  }
 }
 
 // --- Delete flow ---
@@ -544,7 +591,9 @@ onMounted(fetchFiles)
 
 .staging-card { border: 1px solid rgba(var(--v-theme-primary), 0.4); }
 
-/* Materials table */
+/* Materials table. Fixed layout keeps the seven columns stable regardless
+   of file-title length. */
+.materials-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 700px; }
 .materials-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;

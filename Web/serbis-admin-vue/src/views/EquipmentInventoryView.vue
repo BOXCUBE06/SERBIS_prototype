@@ -3,21 +3,22 @@
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Resource Management</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">How much of each item is on hand, and how much is out on loan</div>
-          </div>
-          <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-            <v-icon start size="20">mdi-plus</v-icon> Add Equipment
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Resource Management"
+          subtitle="How much of each item is on hand, and how much is out on loan"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
+              <v-icon start size="20">mdi-plus</v-icon> Add Equipment
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
         <!-- Metric tiles -->
-        <v-row v-if="!initialLoad && equipments.length" class="mb-2">
+        <v-row v-if="!initialLoad && equipments.length > 0" class="mb-2">
           <v-col v-for="m in metricTiles" :key="m.key" cols="6" md="3">
             <button type="button" class="metric-tile group-card" :class="{ 'metric-tile--active': m.filter && statusFilter === m.filter }" @click="m.filter && (statusFilter = statusFilter === m.filter ? 'All' : m.filter)">
               <div class="metric-icon" :style="{ background: `rgba(var(--v-theme-${m.color}), 0.12)` }">
@@ -32,7 +33,7 @@
         </v-row>
 
         <!-- Controls -->
-        <div v-if="!initialLoad && equipments.length" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
+        <div v-if="!initialLoad && equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -55,13 +56,13 @@
         </v-card>
 
         <!-- Empty -->
-        <div v-else-if="!filteredEquipments.length" class="empty-state group-card">
+        <div v-else-if="filteredEquipments.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-package-variant</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ equipments.length ? 'No items match your filters' : 'No equipment yet' }}
+            {{ equipments.length > 0 ? 'No items match your filters' : 'No equipment yet' }}
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            {{ equipments.length ? 'Clear the search or filter to see all items.' : 'Add the first resource category to get started.' }}
+            {{ equipments.length > 0 ? 'Clear the search or filter to see all items.' : 'Add the first resource category to get started.' }}
           </div>
         </div>
 
@@ -142,16 +143,17 @@
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert v-if="modal.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ modal.error }}</v-alert>
-          <v-text-field v-model="form.item_name" label="Item name *" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+          <v-text-field v-model="form.item_name" label="Item name *" placeholder="Folding stretcher" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
           <v-row>
             <v-col cols="12" md="6">
-              <v-text-field v-model.number="form.total_quantity" label="Total owned *" type="number" min="1" variant="outlined" density="comfortable" rounded="lg"></v-text-field>
+              <v-text-field v-model.number="form.total_quantity" label="Total owned *" placeholder="12" type="number" min="1" variant="outlined" density="comfortable" rounded="lg"></v-text-field>
             </v-col>
             <v-col cols="12" md="6">
               <v-text-field
                 v-if="modal.editing"
                 v-model.number="form.available_quantity"
                 label="Available now *"
+                placeholder="9"
                 type="number" min="0" :max="form.total_quantity"
                 variant="outlined" density="comfortable" rounded="lg"
               ></v-text-field>
@@ -195,6 +197,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/equipments`
 
@@ -373,16 +376,12 @@ onMounted(fetchEquipments)
 </script>
 
 <style scoped>
-.tracking-tight { letter-spacing: -0.02em; }
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
 .control-field { width: 260px; max-width: 100%; }
 .control-field-sm { width: 200px; max-width: 100%; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
@@ -406,7 +405,9 @@ onMounted(fetchEquipments)
 .metric-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
 .metric-number { font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
 
-/* Inventory list */
+/* Inventory list. Fixed layout keeps the six columns stable at their
+   declared widths regardless of item-name length. */
+.inventory-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
 .inventory-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;
@@ -431,9 +432,12 @@ onMounted(fetchEquipments)
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
-.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
+   error on their own tint measures under AA (see plugins/vuetify.ts for the
+   ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
+.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .dot-available { background: rgb(var(--v-theme-primary)); }

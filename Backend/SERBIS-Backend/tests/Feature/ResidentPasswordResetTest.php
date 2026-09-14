@@ -29,7 +29,9 @@ class ResidentPasswordResetTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangay;
+
     private Resident $resident;
 
     protected function setUp(): void

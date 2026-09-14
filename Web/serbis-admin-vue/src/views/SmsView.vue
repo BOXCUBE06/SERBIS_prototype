@@ -8,13 +8,10 @@
             <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
-            <div>
-              <h2 class="text-h4 font-weight-black text-high-emphasis" style="line-height: 1.1; letter-spacing: -0.02em;">Text Blast (SMS)</h2>
-              <!-- "active, opted-in" is exact: SmsController::sendBlast filters
-                   status = Active AND sms_opt_in AND a non-null phone number, so
-                   "every resident" would overstate who actually receives this. -->
-              <div class="text-subtitle-1 font-weight-medium text-medium-emphasis mt-2">One message to the active, opted-in residents of the barangays you pick</div>
-            </div>
+            <!-- "active, opted-in" is exact: SmsController::sendBlast filters
+                 status = Active AND sms_opt_in AND a non-null phone number, so
+                 "every resident" would overstate who actually receives this. -->
+            <PageHeader title="Text Blast (SMS)" subtitle="One message to the active, opted-in residents of the barangays you pick" />
 
             <!-- Pushed right, and deliberately quiet. The balance is context for
                  a decision, not a call to action — and it must never read as a
@@ -74,6 +71,7 @@
                   bg-color="grey-lighten-5"
                   class="font-weight-medium"
                   :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
+                  :error-messages="fieldErrors.barangays"
                 >
                   <!-- The old duplicate panel had a Select All and the rewrite
                        that swapped a hardcoded list for real GET /barangays rows
@@ -135,6 +133,7 @@
                     v => !!v || 'A message is required.',
                     v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
                   ]"
+                  :error-messages="fieldErrors.message"
                 ></v-textarea>
               </div>
 
@@ -185,7 +184,7 @@
                      counter cannot tell them apart — so the warning has to name
                      the character that moved it, not just report the total. -->
                 <v-alert
-                  v-if="sms.offendingCharacters.length"
+                  v-if="sms.offendingCharacters.length > 0"
                   type="warning"
                   variant="tonal"
                   density="compact"
@@ -207,9 +206,8 @@
                   class="text-none font-weight-bold text-white w-100" 
                   size="x-large"
                   height="64"
-                  type="submit" 
+                  type="submit"
                   :loading="loading"
-                  :disabled="!isValid"
                   elevation="2"
                 >
                   <v-icon start size="24" class="mr-2">mdi-send</v-icon>
@@ -225,6 +223,56 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Replaces a native confirm(). The scale and the cost still read the
+         same; what is new is the password, which the server re-checks against
+         the signed-in account before it spends anything. -->
+    <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
+          <span>Confirm this blast</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading" @click="cancelSend"
+          ></v-btn>
+        </v-card-title>
+        <v-card-text class="px-6">
+          <p class="text-body-1 mb-3">{{ confirmDialog.summary }}</p>
+          <p v-if="confirmDialog.cost" class="text-body-2 text-medium-emphasis mb-4">{{ confirmDialog.cost }}</p>
+          <v-text-field
+            v-model="confirmDialog.password"
+            label="Your password"
+            placeholder="Re-enter your account password"
+            type="password"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            autocomplete="current-password"
+            :error-messages="fieldErrors.password"
+            :disabled="loading"
+            @keyup.enter="confirmSend"
+          ></v-text-field>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
+          <v-btn
+            variant="text"
+            class="text-none font-weight-bold"
+            height="44"
+            :disabled="loading"
+            @click="cancelSend"
+          >Cancel</v-btn>
+          <v-btn
+            color="#0f4c3a"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold text-white px-6"
+            height="44"
+            :loading="loading"
+            @click="confirmSend"
+          >Send Blast</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -233,6 +281,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { describeSms, nameCharacter } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const message = ref('')
 const loading = ref(false)
@@ -246,6 +295,10 @@ const alert = ref({
   type: 'success',
   message: ''
 })
+
+// The send confirmation. `password` lives only as long as the dialog is open —
+// cleared on cancel, on a successful send, and on any failure that closes it.
+const confirmDialog = ref({ open: false, summary: '', cost: '', password: '' })
 
 // Starting text, not a fill-in form. There are deliberately no [AREA]-style
 // tokens: a token that survives editing goes out to a real handset with the
@@ -318,11 +371,29 @@ const getHeaders = () => ({
   'Accept': 'application/json'
 })
 
-const isValid = computed(() => {
-  return message.value.length > 0
-    && message.value.length <= 160
-    && selectedBarangays.value.length > 0
-})
+// Server-side errors, keyed by field, so a 422 lands on the input it belongs
+// to instead of being concatenated into the banner above the form. Mirrors
+// VehiclesView's/StaffView's applyServerErrors.
+const fieldErrors = ref({ message: '', barangays: '', password: '' })
+const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '', password: '' } }
+
+const applyServerErrors = (data) => {
+  if (data?.errors && typeof data.errors === 'object') {
+    const mapped = { message: '', barangays: '', password: '' }
+    const leftovers = []
+    for (const [key, messages] of Object.entries(data.errors)) {
+      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      // barangays.* validation failures report as "barangays.0", not "barangays".
+      if (key === 'message') mapped.message = text
+      else if (key === 'barangays' || key.startsWith('barangays.')) mapped.barangays = text
+      else if (key === 'password') mapped.password = text
+      else leftovers.push(text)
+    }
+    fieldErrors.value = mapped
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+  }
+  return data?.message || 'Failed to send blast'
+}
 
 // Guarded on barangays.length > 0 so an empty list (still loading, or the
 // request failed) does not report "all selected" when nothing is.
@@ -402,7 +473,7 @@ const fetchRecipientCount = async (key) => {
     // Cached on success only. A failed or throttled attempt must stay retryable
     // rather than be remembered as an answer.
     countCache.set(key, data.count)
-  } catch (error) {
+  } catch {
     if (requestId !== countRequestId) return
 
     // Deliberately not the page-level alert: failing to preview a count is not
@@ -487,7 +558,7 @@ const fetchBalance = async () => {
       expiresOn: data.data?.expired_on ?? '',
       message: data.message ?? 'SMS credit unavailable',
     }
-  } catch (error) {
+  } catch {
     // Swallowed on purpose. GET /sms/balance already answers 200 on every
     // failure path it knows about, so this catches only a dead network — and a
     // missing balance is not a reason to redden a form that still sends.
@@ -501,8 +572,13 @@ onMounted(() => {
 })
 
 const sendSmsBlast = async () => {
+  clearFieldErrors()
+
   const { valid } = await form.value.validate()
-  if (!valid) return
+  if (!valid) {
+    alert.value = { show: true, type: 'error', message: 'Please correct the highlighted fields.' }
+    return
+  }
 
   // Selecting every barangay is one tap now, and the blast is billed per real
   // send — so the confirmation names the scale instead of listing every
@@ -519,10 +595,22 @@ const sendSmsBlast = async () => {
   // be spent as well as who it reaches.
   const costLine = billedUnits.value === null
     ? ''
-    : `\n\n${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
+    : `${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
 
-  if (!confirm(confirmMessage + costLine)) return
+  confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, password: '' }
+}
 
+const cancelSend = () => {
+  confirmDialog.value.open = false
+  confirmDialog.value.password = ''
+  fieldErrors.value.password = ''
+}
+
+// The dialog stays open on a rejected password so the wrong one can be
+// corrected in place, and the send is retried against the same message and
+// barangay selection rather than composed again.
+const confirmSend = async () => {
+  fieldErrors.value.password = ''
   loading.value = true
   alert.value.show = false
 
@@ -532,13 +620,17 @@ const sendSmsBlast = async () => {
       headers: getHeaders(),
       body: JSON.stringify({
         message: message.value,
-        barangays: selectedBarangays.value
+        barangays: selectedBarangays.value,
+        password: confirmDialog.value.password
       })
     })
 
     const data = await res.json()
 
-    if (!res.ok) throw new Error(data.message || 'Failed to send blast')
+    if (!res.ok) throw new Error(applyServerErrors(data))
+
+    // Sent. The password is dropped here rather than held for a second blast.
+    confirmDialog.value = { open: false, summary: '', cost: '', password: '' }
 
     // A 202 with `unconfirmed` means the vendor never answered, so res.ok is
     // true but the send is not confirmed. Branching on it matters more than it
@@ -556,6 +648,7 @@ const sendSmsBlast = async () => {
     message.value = ''
     selectedTemplate.value = null
     selectedBarangays.value = []
+    clearFieldErrors()
     if (form.value) form.value.resetValidation()
     
   } catch (error) {
@@ -563,6 +656,14 @@ const sendSmsBlast = async () => {
       show: true,
       type: 'error',
       message: error.message
+    }
+
+    // A rejected password keeps the dialog open to be retyped. Any other
+    // failure closes it, because the alert explaining that failure renders on
+    // the page behind this overlay and would otherwise not be readable.
+    if (!fieldErrors.value.password) {
+      confirmDialog.value.open = false
+      confirmDialog.value.password = ''
     }
   } finally {
     loading.value = false

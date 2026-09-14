@@ -73,7 +73,7 @@ class ServiceCatalogPayloadTest extends TestCase
         // Both a real subtag and a malformed one: the old localeFrom() told
         // them apart, and nothing downstream should care any more.
         foreach (['fil', 'not-a-locale'] as $locale) {
-            $this->getJson('/api/services?locale=' . $locale)
+            $this->getJson('/api/services?locale='.$locale)
                 ->assertOk()
                 ->assertExactJson($plain);
         }

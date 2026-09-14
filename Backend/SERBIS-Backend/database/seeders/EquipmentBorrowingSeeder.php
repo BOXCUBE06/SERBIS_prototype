@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class EquipmentBorrowingSeeder extends Seeder
 {
@@ -27,7 +27,7 @@ class EquipmentBorrowingSeeder extends Seeder
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn(
                 'EquipmentBorrowingSeeder skipped: refuses to seed outside local/testing (env: '
-                . app()->environment() . ').'
+                .app()->environment().').'
             );
 
             return;
@@ -54,20 +54,55 @@ class EquipmentBorrowingSeeder extends Seeder
             $at = fn (?int $hours) => $hours === null ? null : Carbon::now()->subHours($hours);
 
             $rows[] = [
-                'resident_id'  => $residentIds[$s['resident'] % count($residentIds)],
+                'resident_id' => $residentIds[$s['resident'] % count($residentIds)],
                 'equipment_id' => $equipmentIds[$s['equipment'] % count($equipmentIds)],
-                'quantity'     => $s['quantity'],
-                'purpose'      => $s['purpose'],
-                'status'       => $s['status'],
-                'released_at'  => $at($s['released']),
-                'returned_at'  => $at($s['returned']),
-                'created_at'   => $at($s['created']),
-                'updated_at'   => $at($s['updated']),
+                'quantity' => $s['quantity'],
+                'purpose' => $s['purpose'],
+                'status' => $s['status'],
+                'released_at' => $at($s['released']),
+                'returned_at' => $at($s['returned']),
+                'created_at' => $at($s['created']),
+                'updated_at' => $at($s['updated']),
             ];
         }
 
-        DB::table('tbl_equipment_borrowing')->insert($rows);
+        // A raw insert never goes through EquipmentBorrowingController::update(),
+        // so a 'Released' row seeded here — units genuinely out — never
+        // decremented the equipment it borrowed. That mismatch is exactly what
+        // let a later, real Released->Returned transition push
+        // available_quantity past total_quantity: nothing had ever subtracted
+        // for the release in the first place, so the return's increment had no
+        // matching withdrawal to restore. Reconciled here so seeded data starts
+        // consistent — a 'Returned' row nets to zero (released then returned)
+        // and needs no adjustment; only 'Released' currently holds stock out.
+        $releasedByEquipment = collect($rows)
+            ->where('status', 'Released')
+            ->groupBy('equipment_id')
+            ->map(fn ($group) => collect($group)->sum('quantity'));
 
-        $this->command?->info('EquipmentBorrowingSeeder: created ' . count($rows) . ' borrowings.');
+        DB::transaction(function () use ($rows, $releasedByEquipment) {
+            DB::table('tbl_equipment_borrowing')->insert($rows);
+
+            foreach ($releasedByEquipment as $equipmentId => $releasedQty) {
+                DB::table('tbl_equipments')
+                    ->where('equipment_id', $equipmentId)
+                    ->update([
+                        // Clamped at 0 rather than trusted to stay positive —
+                        // this seeder should never itself become a source of
+                        // the same kind of unchecked-arithmetic corruption it
+                        // was written to stop compounding.
+                        'available_quantity' => DB::raw("GREATEST(0, available_quantity - {$releasedQty})"),
+                    ]);
+            }
+        });
+
+        $this->command?->info('EquipmentBorrowingSeeder: created '.count($rows).' borrowings.');
+
+        if ($releasedByEquipment->isNotEmpty()) {
+            $this->command?->info(
+                'EquipmentBorrowingSeeder: decremented available_quantity for '
+                .$releasedByEquipment->count().' equipment row(s) to match seeded Released loans.'
+            );
+        }
     }
 }

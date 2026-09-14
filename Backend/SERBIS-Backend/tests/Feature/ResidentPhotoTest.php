@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -25,8 +26,11 @@ class ResidentPhotoTest extends TestCase
     use RefreshDatabase;
 
     private Barangay $barangay;
+
     private Resident $resident;
+
     private Resident $other;
+
     private User $admin;
 
     protected function setUp(): void
@@ -81,7 +85,7 @@ class ResidentPhotoTest extends TestCase
         return UploadedFile::fake()->create('face.jpg', $kilobytes, 'image/jpeg');
     }
 
-    private function upload(Resident $as): \Illuminate\Testing\TestResponse
+    private function upload(Resident $as): TestResponse
     {
         return $this->actingAs($as)->post('/api/me/photo', [
             'photo' => self::fakePhoto(),

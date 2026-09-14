@@ -380,6 +380,15 @@ class TimelineStep {
 
 enum RequestStepState { done, current, pending }
 
+/// The month abbreviations every date in this app is rendered with.
+///
+/// Left in English deliberately — see [formatTimelineTime] for why — and
+/// shared so the three formatters below cannot drift apart.
+const _monthAbbrev = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 /// Renders a timestamp the way the request cards do: "Today, 3:04 PM" for
 /// today, "Aug 1, 3:04 PM" otherwise.
 ///
@@ -402,11 +411,7 @@ String formatTimelineTime(DateTime at, bool filipino) {
     return '${tr(filipino, 'timeline.today')}, $clock';
   }
 
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return '${months[local.month - 1]} ${local.day}, $clock';
+  return '${_monthAbbrev[local.month - 1]} ${local.day}, $clock';
 }
 
 /// Renders a timestamp for a booking confirmation: "Aug 1, 2026, 3:04 PM".
@@ -422,12 +427,38 @@ String formatBookingConfirmationTime(DateTime at, bool filipino) {
   final minute = local.minute.toString().padLeft(2, '0');
   final period = local.hour >= 12 ? 'PM' : 'AM';
 
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return '${months[local.month - 1]} ${local.day}, ${local.year}, '
+  return '${_monthAbbrev[local.month - 1]} ${local.day}, ${local.year}, '
       '$hour12:$minute $period';
+}
+
+/// Renders a calendar day with no clock: "Sep 12, 2026".
+///
+/// A loan's due date is a day, not an instant, so [formatBookingConfirmationTime]
+/// would append a time of day the borrowing record does not carry. The year is
+/// kept for the same reason that formatter keeps it: a loan can outlive the
+/// month it was filed in.
+String formatDueDate(DateTime at) {
+  final local = at.toLocal();
+  return '${_monthAbbrev[local.month - 1]} ${local.day}, ${local.year}';
+}
+
+/// Matches the admin panel's `dueLabel` (`EquipmentBorrowingView.vue`) —
+/// "N days overdue" / "Due today" / "Due tomorrow" / "Due in N days" — so a
+/// borrower and staff read the same urgency off the same date. Both
+/// midnights are taken locally, same as the panel's `dueDelta`. [now]
+/// defaults to the device clock and is injectable for tests.
+String dueLabel(DateTime due, [DateTime? now]) {
+  final today = now ?? DateTime.now();
+  final todayMidnight = DateTime(today.year, today.month, today.day);
+  final dueMidnight = DateTime(due.year, due.month, due.day);
+  final delta = dueMidnight.difference(todayMidnight).inDays;
+  if (delta < 0) {
+    final overdueDays = -delta;
+    return '$overdueDays day${overdueDays == 1 ? '' : 's'} overdue';
+  }
+  if (delta == 0) return 'Due today';
+  if (delta == 1) return 'Due tomorrow';
+  return 'Due in $delta days';
 }
 
 class ServiceRequest {

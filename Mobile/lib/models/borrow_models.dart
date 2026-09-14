@@ -131,7 +131,18 @@ extension BorrowStatusX on BorrowStatus {
 /// Everything else on the record still belongs to `is.admin`.
 class BorrowRequest {
   final int? id;
-  final int equipmentId;
+
+  /// Null when the request names something the MDRRMO inventory does not list
+  /// — see [otherEquipmentText]. The column is nullable on the server and the
+  /// table enforces that exactly one of the two is set, so null here is a
+  /// normal state and not a parse failure. It used to fall back to `0`, which
+  /// would now read as a real equipment row that does not exist.
+  final int? equipmentId;
+
+  /// What the resident typed when the item they need is not in the catalogue.
+  /// Exactly one of this and [equipmentId] is non-null.
+  final String? otherEquipmentText;
+
   final int quantity;
 
   /// What the resident said the item is for. `POST /borrowings` requires it,
@@ -152,9 +163,24 @@ class BorrowRequest {
   /// `GET /borrowings` (which does eager-load it).
   final String? equipmentName;
 
+  /// Whether staff photographed the item at handover. `has_release_photo` and
+  /// `has_return_photo` are appended by the model; the path columns behind them
+  /// are hidden, since a private-disk path is not something a client is handed.
+  /// The bytes come from GET /borrowings/{id}/photo/{stage}. A loan with no
+  /// photo is a normal, complete record.
+  final bool hasReleasePhoto;
+  final bool hasReturnPhoto;
+
+  /// What to print on the card. Prefers the catalogue name, falls back to what
+  /// the resident wrote, and only then to the generic word — so an
+  /// uncatalogued request shows the item the resident actually asked for
+  /// instead of reading as a row whose name failed to load.
+  String get itemLabel => equipmentName ?? otherEquipmentText ?? 'Equipment';
+
   const BorrowRequest({
     this.id,
-    required this.equipmentId,
+    this.equipmentId,
+    this.otherEquipmentText,
     required this.quantity,
     this.purpose,
     required this.status,
@@ -164,6 +190,8 @@ class BorrowRequest {
     this.releasedAt,
     this.returnedAt,
     this.equipmentName,
+    this.hasReleasePhoto = false,
+    this.hasReturnPhoto = false,
   });
 
   BorrowRequest copyWith({
@@ -178,6 +206,7 @@ class BorrowRequest {
     return BorrowRequest(
       id: id ?? this.id,
       equipmentId: equipmentId,
+      otherEquipmentText: otherEquipmentText,
       quantity: quantity,
       purpose: purpose,
       status: status ?? this.status,
@@ -187,6 +216,8 @@ class BorrowRequest {
       releasedAt: releasedAt ?? this.releasedAt,
       returnedAt: returnedAt ?? this.returnedAt,
       equipmentName: equipmentName ?? this.equipmentName,
+      hasReleasePhoto: hasReleasePhoto,
+      hasReturnPhoto: hasReturnPhoto,
     );
   }
 
@@ -194,9 +225,12 @@ class BorrowRequest {
     final idValue = json['borrow_id'];
     final id = idValue is int ? idValue : int.tryParse(idValue?.toString() ?? '');
 
+    // No `?? 0` fallback any more: a null equipment_id is a real, expected
+    // value for an uncatalogued request, and zero would claim an inventory row
+    // that cannot exist.
     final equipIdValue = json['equipment_id'];
     final equipmentId =
-        equipIdValue is int ? equipIdValue : int.tryParse(equipIdValue?.toString() ?? '') ?? 0;
+        equipIdValue is int ? equipIdValue : int.tryParse(equipIdValue?.toString() ?? '');
 
     final qtyValue = json['quantity'];
     final quantity = qtyValue is int ? qtyValue : int.tryParse(qtyValue?.toString() ?? '') ?? 0;
@@ -210,6 +244,7 @@ class BorrowRequest {
     return BorrowRequest(
       id: id,
       equipmentId: equipmentId,
+      otherEquipmentText: json['other_equipment_text'] as String?,
       quantity: quantity,
       purpose: json['purpose'] as String?,
       status: borrowStatusFromText((json['status'] as String?) ?? 'Pending'),
@@ -219,6 +254,8 @@ class BorrowRequest {
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
       equipmentName: equipmentName,
+      hasReleasePhoto: json['has_release_photo'] == true,
+      hasReturnPhoto: json['has_return_photo'] == true,
     );
   }
 }
@@ -229,6 +266,7 @@ extension BorrowRequestCache on BorrowRequest {
   Map<String, dynamic> toCacheJson() => <String, dynamic>{
         'id': id,
         'equipment_id': equipmentId,
+        'other_equipment_text': otherEquipmentText,
         'quantity': quantity,
         'purpose': purpose,
         'status': status.name,
@@ -242,6 +280,8 @@ extension BorrowRequestCache on BorrowRequest {
         'released_at': releasedAt?.toIso8601String(),
         'returned_at': returnedAt?.toIso8601String(),
         'equipment_name': equipmentName,
+        'has_release_photo': hasReleasePhoto,
+        'has_return_photo': hasReturnPhoto,
       };
 
   /// Rebuilds a cached row, or null for an entry this version cannot read. A
@@ -255,7 +295,8 @@ extension BorrowRequestCache on BorrowRequest {
 
     return BorrowRequest(
       id: id,
-      equipmentId: json['equipment_id'] is int ? json['equipment_id'] as int : 0,
+      equipmentId: json['equipment_id'] is int ? json['equipment_id'] as int : null,
+      otherEquipmentText: json['other_equipment_text'] as String?,
       quantity: json['quantity'] is int ? json['quantity'] as int : 0,
       purpose: json['purpose'] as String?,
       status: BorrowStatus.values.firstWhere(
@@ -268,6 +309,8 @@ extension BorrowRequestCache on BorrowRequest {
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
       equipmentName: json['equipment_name'] as String?,
+      hasReleasePhoto: json['has_release_photo'] == true,
+      hasReturnPhoto: json['has_return_photo'] == true,
     );
   }
 }

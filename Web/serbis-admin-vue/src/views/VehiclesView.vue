@@ -3,21 +3,22 @@
     <v-row>
       <v-col cols="12">
 
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-space-between align-center gap-4 mb-6">
-          <div>
-            <h2 class="text-h4 font-weight-bold text-high-emphasis tracking-tight">Vehicles</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">Which units are available and which are currently dispatched</div>
-          </div>
-          <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-            <v-icon start size="20">mdi-plus</v-icon> Add Unit
-          </v-btn>
-        </div>
+        <PageHeader
+          title="Vehicles"
+          subtitle="Which units are available and which are currently dispatched"
+          class="mb-6"
+        >
+          <template v-slot:actions>
+            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
+              <v-icon start size="20">mdi-plus</v-icon> Add Unit
+            </v-btn>
+          </template>
+        </PageHeader>
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
         <!-- Readiness overview -->
-        <v-card v-if="!loading && vehicles.length" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
+        <v-card v-if="!loading && vehicles.length > 0" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
           <div class="d-flex flex-wrap align-center justify-space-between gap-6">
             <div class="readiness-headline">
               <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Fleet Readiness</div>
@@ -50,7 +51,7 @@
         </v-card>
 
         <!-- Controls -->
-        <div v-if="!loading && vehicles.length" class="d-flex flex-wrap align-center gap-3 mb-6">
+        <div v-if="!loading && vehicles.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -83,13 +84,13 @@
         </template>
 
         <!-- Empty -->
-        <div v-else-if="!filteredVehicles.length" class="empty-state group-card">
+        <div v-else-if="filteredVehicles.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-truck-remove-outline</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ vehicles.length ? 'No units match your filters' : 'No units in the fleet yet' }}
+            {{ vehicles.length > 0 ? 'No units match your filters' : 'No units in the fleet yet' }}
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            {{ vehicles.length ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
+            {{ vehicles.length > 0 ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
           </div>
         </div>
 
@@ -198,11 +199,13 @@
           <v-btn icon="mdi-close" variant="text" size="small" @click="formDialog.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
-          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ formDialog.error }}</v-alert>
-          <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-          <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
-          <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-          <v-select v-model="form.status" :items="STATUSES" label="Status *" variant="outlined" density="comfortable" rounded="lg"></v-select>
+          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
+          <v-form ref="formRef">
+            <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" :rules="[requiredRule('Unit identifier')]" :error-messages="fieldErrors.unit_identifier" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+            <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" :rules="[requiredRule('Type')]" :error-messages="fieldErrors.type" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
+            <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" :error-messages="fieldErrors.specification" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
+            <v-select v-model="form.status" :items="STATUSES" label="Status *" :rules="[requiredRule('Status')]" :error-messages="fieldErrors.status" variant="outlined" density="comfortable" rounded="lg"></v-select>
+          </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
           <v-btn variant="text" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
@@ -236,6 +239,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']
@@ -261,6 +265,37 @@ const deleteDialog = ref({ show: false, vehicle: null, loading: false })
 const form = ref({ unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
+// Template ref for the Add/Edit <v-form> — named formRef, not form, because
+// `form` above is already the reactive object the fields are bound to.
+const formRef = ref(null)
+
+const requiredRule = (label) => (v) =>
+  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+
+// Server-side errors, keyed by field, so a 422 lands on the input it belongs
+// to instead of being concatenated into the banner above the form.
+const fieldErrors = ref({})
+const clearFieldErrors = () => { fieldErrors.value = {} }
+
+// Laravel answers `{errors: {field: [msg]}}`. Split it: known fields go to
+// their input, anything unrecognised stays in the banner so nothing is
+// silently swallowed. Mirrors UsersView's applyServerErrors.
+const applyServerErrors = async (res) => {
+  const data = await res.json().catch(() => ({}))
+  if (data.errors && typeof data.errors === 'object') {
+    const mapped = {}
+    const leftovers = []
+    for (const [key, messages] of Object.entries(data.errors)) {
+      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      if (key in form.value) mapped[key] = text
+      else leftovers.push(text)
+    }
+    fieldErrors.value = mapped
+    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+  }
+  return data.message || 'Save failed'
+}
+
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
@@ -276,7 +311,7 @@ const counts = computed(() => {
   for (const v of vehicles.value) c[v.status] = (c[v.status] || 0) + 1
   return c
 })
-const pct = (s) => vehicles.value.length ? `${(counts.value[s] / vehicles.value.length) * 100}%` : '0%'
+const pct = (s) => vehicles.value.length > 0 ? `${(counts.value[s] / vehicles.value.length) * 100}%` : '0%'
 
 const typeOptions = computed(() => ['All', ...VEHICLE_TYPES.filter((t) => vehicles.value.some((v) => v.type === t))])
 
@@ -353,6 +388,8 @@ const executeStatusChange = async () => {
 const openAdd = () => {
   form.value = { unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' }
   formDialog.value = { show: true, editing: false, loading: false, error: '' }
+  clearFieldErrors()
+  formRef.value?.resetValidation()
 }
 const openEdit = (vehicle) => {
   form.value = {
@@ -363,15 +400,23 @@ const openEdit = (vehicle) => {
     status: vehicle.status,
   }
   formDialog.value = { show: true, editing: true, loading: false, error: '' }
+  clearFieldErrors()
+  formRef.value?.resetValidation()
 }
 
 const saveVehicle = async () => {
-  if (!form.value.unit_identifier.trim() || !form.value.type || !form.value.status) {
-    formDialog.value.error = 'Unit identifier, type and status are required.'
+  formDialog.value.error = ''
+  clearFieldErrors()
+
+  // Validate before spending a round trip. Vuetify focuses the first invalid
+  // field itself once the rules are attached.
+  const { valid } = await formRef.value.validate()
+  if (!valid) {
+    formDialog.value.error = 'Please correct the highlighted fields.'
     return
   }
+
   formDialog.value.loading = true
-  formDialog.value.error = ''
   const editing = formDialog.value.editing
   const url = editing ? `${API}/${form.value.vehicle_id}` : API
   const payload = {
@@ -382,11 +427,7 @@ const saveVehicle = async () => {
   }
   try {
     const res = await fetch(url, { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
-      throw new Error(msg)
-    }
+    if (!res.ok) throw new Error(await applyServerErrors(res))
     await fetchVehicles()
     formDialog.value.show = false
     notify(editing ? 'Unit updated' : 'Unit added')
@@ -421,7 +462,6 @@ onMounted(fetchVehicles)
 
 <style scoped>
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
-.tracking-tight { letter-spacing: -0.02em; }
 .tracking-widest { letter-spacing: 0.12em; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
@@ -430,9 +470,6 @@ onMounted(fetchVehicles)
 .min-w-0 { min-width: 0; }
 .control-field { width: 260px; max-width: 100%; }
 .control-field-sm { width: 180px; max-width: 100%; }
-
-.btn-soft-shadow { box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.btn-soft-shadow:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -4px rgba(var(--v-theme-primary), 0.34) !important; }
 
 .group-card {
   background: rgb(var(--v-theme-surface));
@@ -489,7 +526,9 @@ onMounted(fetchVehicles)
   100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0); }
 }
 
-/* Fleet list */
+/* Fleet list. Fixed layout keeps the five columns stable regardless of unit-
+   identifier length. */
+.fleet-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
 .fleet-table :deep(thead th) {
   font-size: 0.72rem;
   font-weight: 700;
@@ -519,9 +558,12 @@ onMounted(fetchVehicles)
   transition: filter 0.15s ease;
 }
 .status-pill:hover { filter: brightness(0.97); }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary)); }
-.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning)); }
-.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error)); }
+/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
+   error on their own tint measures under AA (see plugins/vuetify.ts for the
+   ratios) — same fix as UsersView's avatar initials and pill-pending. */
+.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
+.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
+.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

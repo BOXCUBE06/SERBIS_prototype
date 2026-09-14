@@ -172,5 +172,148 @@ void main() {
       expect(BorrowRequestCache.fromCacheJson('not a map'), isNull);
       expect(BorrowRequestCache.fromCacheJson(null), isNull);
     });
+
+    test('an uncatalogued row survives the cache with its text intact', () {
+      final request = BorrowRequest(
+        id: 12,
+        otherEquipmentText: 'Chainsaw with a 20-inch bar',
+        quantity: 1,
+        purpose: 'Clearing a fallen acacia',
+        status: BorrowStatus.pending,
+      );
+
+      final restored = BorrowRequestCache.fromCacheJson(request.toCacheJson())!;
+
+      expect(restored.equipmentId, isNull);
+      expect(restored.otherEquipmentText, 'Chainsaw with a 20-inch bar');
+      expect(restored.itemLabel, 'Chainsaw with a 20-inch bar');
+    });
+  });
+
+  group('BorrowRequest item source', () {
+    test('a null equipment_id reads as null, not as zero', () {
+      // It used to fall back to 0, which now reads as a real inventory row
+      // that cannot exist.
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': null,
+        'other_equipment_text': 'Chainsaw with a 20-inch bar',
+        'quantity': 1,
+        'status': 'Pending',
+      });
+
+      expect(request.equipmentId, isNull);
+      expect(request.otherEquipmentText, 'Chainsaw with a 20-inch bar');
+    });
+
+    test('itemLabel prefers the catalogue name over the free text', () {
+      // The server's CHECK constraint makes both-set impossible, so this is
+      // about precedence being stated rather than incidental.
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'equipment': {'item_name': 'Wheelchair'},
+        'other_equipment_text': 'ignored',
+        'quantity': 1,
+        'status': 'Pending',
+      });
+
+      expect(request.itemLabel, 'Wheelchair');
+    });
+
+    test('itemLabel falls back to the free text, then to the generic word', () {
+      final uncatalogued = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'other_equipment_text': 'Chainsaw with a 20-inch bar',
+        'quantity': 1,
+        'status': 'Pending',
+      });
+      expect(uncatalogued.itemLabel, 'Chainsaw with a 20-inch bar');
+
+      // POST's 201 returns the row with no `equipment` relation embedded, so a
+      // freshly filed catalogued request has neither name until the next GET.
+      final unresolved = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Pending',
+      });
+      expect(unresolved.itemLabel, 'Equipment');
+    });
+  });
+
+  group('BorrowRequest handover photos', () {
+    // The four combinations the server can send. The pair is not one flag: a
+    // loan can be photographed on release and never on return.
+    test('the flags read the appended booleans, in every combination', () {
+      Map<String, dynamic> row(bool? release, bool? ret) => <String, dynamic>{
+            'borrow_id': 9,
+            'equipment_id': 3,
+            'quantity': 1,
+            'status': 'Returned',
+            if (release != null) 'has_release_photo': release,
+            if (ret != null) 'has_return_photo': ret,
+          };
+
+      final neither = BorrowRequest.fromJson(row(false, false));
+      expect(neither.hasReleasePhoto, isFalse);
+      expect(neither.hasReturnPhoto, isFalse);
+
+      final releaseOnly = BorrowRequest.fromJson(row(true, false));
+      expect(releaseOnly.hasReleasePhoto, isTrue);
+      expect(releaseOnly.hasReturnPhoto, isFalse);
+
+      final returnOnly = BorrowRequest.fromJson(row(false, true));
+      expect(returnOnly.hasReleasePhoto, isFalse);
+      expect(returnOnly.hasReturnPhoto, isTrue);
+
+      final both = BorrowRequest.fromJson(row(true, true));
+      expect(both.hasReleasePhoto, isTrue);
+      expect(both.hasReturnPhoto, isTrue);
+
+      // A row cached before these keys existed carries neither.
+      final absent = BorrowRequest.fromJson(row(null, null));
+      expect(absent.hasReleasePhoto, isFalse);
+      expect(absent.hasReturnPhoto, isFalse);
+    });
+
+    test('the storage path is not what the flag reads', () {
+      // The model hides `release_photo_path`, so it never arrives. If it ever
+      // did, it is not the thing this client trusts.
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Released',
+        'release_photo_path': 'borrowing-photos/9/release.jpg',
+      });
+      expect(request.hasReleasePhoto, isFalse);
+    });
+
+    test('the flags survive the cache', () {
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Released',
+        'has_release_photo': true,
+      });
+
+      final restored = BorrowRequestCache.fromCacheJson(request.toCacheJson())!;
+      expect(restored.hasReleasePhoto, isTrue);
+      expect(restored.hasReturnPhoto, isFalse);
+    });
+
+    test('a cancel keeps the flags on the row it rewrites', () {
+      final request = BorrowRequest.fromJson({
+        'borrow_id': 9,
+        'equipment_id': 3,
+        'quantity': 1,
+        'status': 'Released',
+        'has_release_photo': true,
+      });
+
+      expect(request.copyWith(status: BorrowStatus.cancelled).hasReleasePhoto, isTrue);
+    });
   });
 }

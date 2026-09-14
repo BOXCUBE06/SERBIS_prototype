@@ -96,6 +96,7 @@ class FakeApi extends ApiService {
   int submitCount = 0;
   List<int>? lastSitePhotoBytes;
   String? lastSitePhotoName;
+  String? lastLandmark;
 
   /// The description as it reaches the server, which is the only place the
   /// dispatcher reads the resident's callback number now that no form asks for
@@ -163,12 +164,14 @@ class FakeApi extends ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
     lastSitePhotoName = sitePhotoFileName;
+    lastLandmark = landmark;
     lastDescription = description;
     lastIntake = intake;
 
@@ -296,7 +299,7 @@ Future<void> _attachValidId(WidgetTester tester, {String name = 'id.jpg'}) async
 
 Future<void> _attachSitePhoto(WidgetTester tester, {String name = 'scene.jpg'}) async {
   picker.result = _picked(name);
-  await _tapUpload(tester, 'Landmark (optional)');
+  await _tapUpload(tester, 'Site photo (optional)');
 }
 
 /// Opens the service dropdown and returns once the menu is on screen.

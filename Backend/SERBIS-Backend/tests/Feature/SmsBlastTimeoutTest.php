@@ -7,10 +7,12 @@ use App\Models\Recipient;
 use App\Models\Resident;
 use App\Models\SmsLog;
 use App\Models\User;
+use App\Services\PhilSms;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -36,6 +38,7 @@ class SmsBlastTimeoutTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Barangay $barangay;
 
     protected function setUp(): void
@@ -76,12 +79,13 @@ class SmsBlastTimeoutTest extends TestCase
         ]);
     }
 
-    private function blast(): \Illuminate\Testing\TestResponse
+    private function blast(): TestResponse
     {
         Sanctum::actingAs($this->admin);
 
         return $this->postJson('/api/sms/blast', [
             'message' => 'MDRRMO Echague weather advisory: heavy rain expected.',
+            'password' => 'password123',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }
@@ -160,9 +164,9 @@ class SmsBlastTimeoutTest extends TestCase
      */
     public function test_the_blast_uses_the_longer_timeout_and_not_the_otp_default(): void
     {
-        $this->assertSame(20, \App\Services\PhilSms::BLAST_TIMEOUT);
+        $this->assertSame(20, PhilSms::BLAST_TIMEOUT);
 
-        $reflected = new \ReflectionMethod(\App\Services\PhilSms::class, 'send');
+        $reflected = new \ReflectionMethod(PhilSms::class, 'send');
         $default = $reflected->getParameters()[2]->getDefaultValue();
 
         $this->assertSame(6, $default, 'The OTP paths must keep the short timeout.');

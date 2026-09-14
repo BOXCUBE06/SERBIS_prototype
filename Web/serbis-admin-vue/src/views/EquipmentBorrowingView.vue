@@ -1,12 +1,10 @@
 <template>
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
-    <!-- Header -->
-    <div class="page-header">
-      <h2 class="text-h5 font-weight-bold text-high-emphasis">Equipment Borrowing</h2>
-      <div class="text-subtitle-2 text-medium-emphasis">
-        Move each request through the pipeline — approve, release, then confirm its return
-      </div>
-    </div>
+    <PageHeader
+      title="Equipment Borrowing"
+      subtitle="Move each request through the pipeline — approve, release, then confirm its return"
+      class="mb-6"
+    />
 
     <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">
       <v-tab value="board" class="text-none font-weight-bold">
@@ -79,7 +77,7 @@
 
     <!-- Active filters, each removable on its own, plus a clear-all. -->
     <div v-if="!initialLoad && !loadError" class="filter-active d-flex align-center flex-wrap gap-2">
-      <template v-if="activeFilters.length">
+      <template v-if="activeFilters.length > 0">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
         <v-chip
           v-for="f in activeFilters"
@@ -98,7 +96,7 @@
           @click="clearAllFilters"
         >Clear all</v-btn>
       </template>
-      <span class="text-caption text-medium-emphasis ml-auto" aria-live="polite">
+      <span class="page-subtitle text-medium-emphasis ml-auto" aria-live="polite">
         {{ resultSummary }}
       </span>
     </div>
@@ -229,13 +227,18 @@
 
           <template v-slot:item.equipment="{ item }">
             <div class="min-w-0">
-              <v-tooltip :text="item.equipment?.item_name || 'Unknown'" location="top">
+              <v-tooltip :text="itemName(item)" location="top">
                 <template v-slot:activator="{ props }">
                   <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
-                    {{ item.equipment?.item_name || 'Unknown' }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+                    {{ itemName(item) }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
                   </div>
                 </template>
               </v-tooltip>
+              <!-- Says why there is no stock figure beside this row, rather
+                   than leaving a blank where every other row has one. -->
+              <div v-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic">
+                Not in the inventory
+              </div>
               <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
                 Only {{ item.equipment?.available_quantity ?? 0 }} in stock
               </div>
@@ -302,9 +305,9 @@
           <template v-slot:no-data>
             <div class="text-center py-12">
               <v-icon size="40" class="text-medium-emphasis mb-2">
-                {{ activeFilters.length ? 'mdi-filter-remove-outline' : 'mdi-inbox-outline' }}
+                {{ activeFilters.length > 0 ? 'mdi-filter-remove-outline' : 'mdi-inbox-outline' }}
               </v-icon>
-              <template v-if="activeFilters.length">
+              <template v-if="activeFilters.length > 0">
                 <div class="text-body-2 font-weight-bold text-high-emphasis">No requests match</div>
                 <v-btn variant="outlined" size="small" class="text-none font-weight-bold mt-3" @click="clearAllFilters">
                   Clear all filters
@@ -358,12 +361,16 @@
         </template>
 
         <template v-slot:item.barangay="{ item }">
-          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || 'N/A'">
+            {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          </span>
         </template>
 
         <template v-slot:item.equipment="{ item }">
-          {{ item.equipment?.item_name || 'Unknown' }}
-          <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+          <span class="cell-truncate" :title="itemName(item)">
+            {{ itemName(item) }}
+            <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+          </span>
         </template>
 
         <template v-slot:item.created_at="{ item }">
@@ -373,9 +380,9 @@
         <template v-slot:no-data>
           <div class="text-center py-12">
             <v-icon size="40" class="text-medium-emphasis mb-2">
-              {{ activeFilters.length ? 'mdi-filter-remove-outline' : 'mdi-archive-outline' }}
+              {{ activeFilters.length > 0 ? 'mdi-filter-remove-outline' : 'mdi-archive-outline' }}
             </v-icon>
-            <template v-if="activeFilters.length">
+            <template v-if="activeFilters.length > 0">
               <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests match</div>
               <div class="text-caption text-medium-emphasis mb-3">
                 {{ totalHistory }} record{{ totalHistory === 1 ? '' : 's' }} are hidden by the filters above.
@@ -396,7 +403,9 @@
     </v-card>
 
     <!-- Detail modal (full record + fallback actions) -->
-    <v-dialog v-model="modal.isOpen" max-width="900" persistent transition="dialog-fade-transition">
+    <!-- Not persistent: this reads a record. The one input on it, the handover
+         photo picker, uploads on pick, so there is no unsaved state to lose. -->
+    <v-dialog v-model="modal.isOpen" max-width="900" transition="dialog-fade-transition">
       <v-card rounded="lg" elevation="4">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
@@ -431,6 +440,18 @@
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
                 <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedRecord?.resident?.barangay?.barangay_name || 'N/A' }}</div>
               </div>
+              <!-- The account holder above stays the contact either way — the
+                   request was filed from their account and resident_id is
+                   required. This says who the item is FOR, which is the part
+                   that separates an institutional loan from a personal one. -->
+              <div class="mb-3">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Borrowing For</div>
+                <div
+                  class="font-weight-medium text-body-1"
+                  :class="unnamedOrganization(selectedRecord) ? 'text-error font-italic' : 'text-high-emphasis'"
+                >{{ borrowingForLabel(selectedRecord) }}</div>
+                <div v-if="isOrganization(selectedRecord)" class="text-caption text-medium-emphasis">Organization</div>
+              </div>
             </v-col>
 
             <v-col cols="12" md="7" class="pa-6 bg-surface">
@@ -461,8 +482,16 @@
               <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Equipment Requested</h3>
               <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
                 <div>
-                  <div class="text-h5 font-weight-black text-high-emphasis">{{ selectedRecord?.equipment?.item_name }}</div>
-                  <div class="text-subtitle-2 font-weight-medium text-medium-emphasis mt-1">
+                  <div class="text-h5 font-weight-black text-high-emphasis">{{ itemName(selectedRecord) }}</div>
+                  <!-- An uncatalogued item has no stock row to quote, and the
+                       backend refuses to release one until staff add it to the
+                       inventory and attach it. Saying so here is what makes
+                       that 422 predictable instead of a surprise at the point
+                       of release. -->
+                  <div v-if="isUncatalogued(selectedRecord)" class="text-subtitle-2 font-weight-medium text-warning mt-1">
+                    Not in the inventory — add this item to the equipment list and attach it before releasing.
+                  </div>
+                  <div v-else class="text-subtitle-2 font-weight-medium text-medium-emphasis mt-1">
                     Current Stock Available:
                     <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-primary' : 'text-error'">
                       {{ selectedRecord?.equipment?.available_quantity }}
@@ -481,6 +510,130 @@
                   :class="selectedRecord?.purpose ? 'text-high-emphasis' : 'text-medium-emphasis font-italic'"
                   style="white-space: pre-wrap;"
                 >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
+              </v-card>
+
+              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Handover</h3>
+              <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
+                <div class="d-flex align-center gap-2">
+                  <v-icon
+                    size="20"
+                    :color="isDelivery(selectedRecord) ? 'primary' : 'medium-emphasis'"
+                  >{{ isDelivery(selectedRecord) ? 'mdi-truck-outline' : 'mdi-storefront-outline' }}</v-icon>
+                  <span class="text-body-1 font-weight-bold text-high-emphasis">
+                    {{ isDelivery(selectedRecord) ? 'Deliver to the borrower' : 'Collect from the MDRRMO office' }}
+                  </span>
+                </div>
+                <!-- Only a delivery has an address, and a delivery without one
+                     is a run nobody can make — so this says so rather than
+                     rendering an empty line. -->
+                <div v-if="isDelivery(selectedRecord)" class="mt-3">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Delivery address</div>
+                  <div
+                    class="text-body-1"
+                    :class="selectedRecord?.delivery_address ? 'text-high-emphasis' : 'text-error font-italic'"
+                    style="white-space: pre-wrap;"
+                  >{{ selectedRecord?.delivery_address || 'No address was recorded — ask the borrower before dispatching.' }}</div>
+                </div>
+              </v-card>
+
+              <!-- Only shown once something has changed hands. Before that the
+                   backend refuses the upload, so offering it would be a button
+                   that always fails. -->
+              <template v-if="photoStages(selectedRecord).length > 0">
+                <h3 class="text-subtitle-1 font-weight-bold mb-1 text-high-emphasis text-uppercase">Condition Photos</h3>
+                <div class="text-caption text-medium-emphasis mb-4">
+                  Optional. A record of what the item looked like at handover — nothing here blocks a release or a return.
+                </div>
+                <v-row class="mb-6">
+                  <v-col
+                    v-for="stage in photoStages(selectedRecord)"
+                    :key="stage"
+                    cols="12"
+                    sm="6"
+                  >
+                    <v-card variant="outlined" border class="pa-4 rounded-lg subtle-surface h-100">
+                      <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
+                        {{ stage === 'release' ? 'At release' : 'At return' }}
+                      </div>
+
+                      <v-img
+                        v-if="photoState(stage).url"
+                        :src="photoState(stage).url"
+                        :alt="`Condition of ${itemName(selectedRecord)} at ${stage}`"
+                        height="160"
+                        cover
+                        class="rounded mb-3"
+                      ></v-img>
+
+                      <v-skeleton-loader
+                        v-else-if="photoState(stage).loading"
+                        type="image"
+                        height="160"
+                        class="mb-3"
+                      ></v-skeleton-loader>
+
+                      <v-alert
+                        v-else-if="photoState(stage).error"
+                        type="error"
+                        variant="tonal"
+                        density="compact"
+                        class="mb-3"
+                      >{{ photoState(stage).error }}</v-alert>
+
+                      <div v-else class="text-body-2 text-medium-emphasis font-italic mb-3">
+                        No photo was taken.
+                      </div>
+
+                      <!-- Uploads on pick rather than holding the file for a
+                           later submit: there is nothing else on this card to
+                           submit it with. -->
+                      <v-file-input
+                        :label="photoState(stage).url ? 'Replace photo' : 'Add photo'"
+                        accept="image/jpeg,image/png"
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-icon=""
+                        prepend-inner-icon="mdi-camera-outline"
+                        :loading="photoUploading === stage"
+                        :disabled="!!photoUploading"
+                        @update:model-value="(picked) => uploadHandoverPhoto(selectedRecord, stage, Array.isArray(picked) ? picked[0] : picked)"
+                      ></v-file-input>
+
+                      <!-- Only while the record is still in the stage this
+                           photo belongs to. Past that the server refuses
+                           (PHOTO_STAGES.removable_in), so drawing the button
+                           would be offering an action that always fails —
+                           replacing is what is left. -->
+                      <v-btn
+                        v-if="canRemovePhoto(selectedRecord, stage)"
+                        variant="text"
+                        color="error"
+                        size="small"
+                        rounded="lg"
+                        class="text-none mt-2"
+                        :loading="photoRemoving === stage"
+                        :disabled="!!photoUploading || !!photoRemoving"
+                        @click="askRemovePhoto(stage)"
+                      >
+                        <v-icon start size="18">mdi-delete-outline</v-icon> Remove photo
+                      </v-btn>
+                    </v-card>
+                  </v-col>
+                </v-row>
+              </template>
+
+              <!-- Optional, like the photo it accompanies — a row with none
+                   draws nothing at all, same reasoning as the photos above. -->
+              <v-card
+                v-if="selectedRecord?.return_condition_note"
+                variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface"
+              >
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Condition at return</div>
+                <div
+                  class="text-body-2 text-high-emphasis"
+                  style="white-space: pre-wrap;"
+                >{{ selectedRecord.return_condition_note }}</div>
               </v-card>
 
               <v-row class="mb-4">
@@ -527,10 +680,16 @@
 
     <!-- One dialog for the three transitions that need something from the
          operator before they fire. -->
-    <v-dialog v-model="actionDialog.open" max-width="440" @after-leave="clearActionDialog">
+    <!-- persistent: holds a due date and, on a denial, the reason the resident
+         is shown. -->
+    <v-dialog v-model="actionDialog.open" max-width="440" persistent @after-leave="clearActionDialog">
       <v-card rounded="lg">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          {{ actionCopy.title }}
+        <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
+          <span>{{ actionCopy.title }}</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="loading" @click="actionDialog.open = false"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ actionCopy.body }}</div>
@@ -546,7 +705,7 @@
           </v-alert>
 
           <v-alert
-            v-if="actionDialog.mode === 'confirm' && actionDialog.error"
+            v-if="(actionDialog.mode === 'confirm' || actionDialog.mode === 'return') && actionDialog.error"
             type="error" variant="tonal" density="compact" class="mb-4"
           >{{ actionDialog.error }}</v-alert>
 
@@ -555,6 +714,7 @@
             v-model="actionDialog.dueDate"
             type="date"
             :min="todayInput()"
+            :max="daysFromToday(DEFAULT_LOAN_DAYS)"
             label="Due back on"
             variant="outlined"
             density="comfortable"
@@ -566,6 +726,7 @@
             v-else-if="actionDialog.mode === 'deny'"
             v-model="actionDialog.reason"
             label="Reason for denial"
+            placeholder="e.g. All units are committed to the flood drill that week"
             hint="The resident is shown this. Say what would make a future request succeed."
             persistent-hint
             variant="outlined"
@@ -574,6 +735,19 @@
             maxlength="255"
             :error-messages="actionDialog.error"
             @update:model-value="actionDialog.error = ''"
+          ></v-textarea>
+
+          <v-textarea
+            v-else-if="actionDialog.mode === 'return'"
+            v-model="actionDialog.conditionNote"
+            label="Condition note (optional)"
+            placeholder="e.g. Life jacket strap frayed, otherwise usable"
+            hint="What the item looked like coming back — alongside the return photo."
+            persistent-hint
+            variant="outlined"
+            rows="3"
+            counter="500"
+            maxlength="500"
           ></v-textarea>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
@@ -586,6 +760,24 @@
             :loading="loading"
             @click="confirmAction"
           >{{ actionCopy.confirm }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Removal is permanent and the file goes with the row, so it is asked
+         for rather than assumed — the same treatment the record delete gets. -->
+    <v-dialog v-model="removePhotoDialog.open" max-width="440">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Remove this photo?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          The
+          <strong class="text-high-emphasis">{{ removePhotoDialog.stage === 'release' ? 'at release' : 'at return' }}</strong>
+          photo is deleted from storage and cannot be recovered. Staff can take a new one while this
+          borrowing is still {{ removePhotoDialog.stage === 'release' ? 'Released' : 'Returned' }}.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="!!photoRemoving" @click="removePhotoDialog.open = false">Cancel</v-btn>
+          <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="!!photoRemoving" @click="confirmRemovePhoto">Remove</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -603,32 +795,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
+import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
 
-// Status colours: saturated 700-level ramp, each AA with white text as a
-// badge (measured, see EquipmentBorrowingView audit history). Semantic
-// (data-viz), not brand tokens — except Returned, which uses the system
-// primary green (success tracks primary).
-const columns = [
-  { status: 'Pending',  label: 'Pending',  accent: '#B45309', icon: 'mdi-clock-outline' },
-  { status: 'Approved', label: 'Approved', accent: '#1D4ED8', icon: 'mdi-check-decagram-outline' },
-  { status: 'Released', label: 'Released', accent: '#0E7490', icon: 'mdi-hand-extended-outline' },
-  { status: 'Returned', label: 'Returned', accent: '#297A67', icon: 'mdi-check-circle-outline', terminal: true },
-  { status: 'Denied',   label: 'Denied',   accent: '#B91C1C', icon: 'mdi-close-circle-outline', terminal: true },
-  // The resident withdrew it themselves (PATCH /borrowings/{id}/cancel), so it
-  // is not a refusal and must not sit in the red the way Denied does. Slate
-  // 600, 7.4:1 with white text as a badge. Terminal here too: nothing in this
-  // panel can move a cancelled request, and the backend refuses every attempt.
-  { status: 'Cancelled', label: 'Cancelled', accent: '#475569', icon: 'mdi-cancel', terminal: true },
-]
+// Status colours, icons and labels: one definition in borrowingStatus.ts,
+// shared with ProcurementReferenceView (same rows, read-only there). Used
+// to be two verbatim-identical arrays that only agreed by accident.
+const columns = BORROWING_STATUSES
 
 // The "no filter" sentinel for each select. Named rather than repeated as a
 // string literal: it is compared in four places and rendered in one.
@@ -637,7 +820,10 @@ const ALL_BARANGAYS = 'All barangays'
 const ALL_STATUS = 'All'
 const ALL_OUTCOMES = 'All'
 
-const borrowings = ref([])
+// Module-level state, not this component's: ProcurementReferenceView reads the
+// same rows, and `GET /borrowings` returns the whole table unpaginated — two
+// copies of that is twice the heaviest read in the panel for the same data.
+const { rows: borrowings, loadError, initialLoad, reloading, load } = useBorrowingsList()
 const activeTab = ref('board')
 const search = ref('')
 const itemFilter = ref(ALL_ITEMS)
@@ -645,17 +831,14 @@ const barangayFilter = ref(ALL_BARANGAYS)
 const statusFilter = ref(ALL_STATUS)
 const outcomeFilter = ref(ALL_OUTCOMES)
 const overdueOnly = ref(false)
-const initialLoad = ref(true)
 
 // Dashboard KPI cards deep-link here with ?status=... / ?overdue=1 — honor
 // them once on arrival so the operator lands on the filtered view.
 if (columns.some((c) => c.status === route.query.status)) statusFilter.value = route.query.status
 if (route.query.overdue === '1') overdueOnly.value = true
 const loading = ref(false)
-const reloading = ref(false)
 const processingId = ref(null)
 const apiError = ref('')
-const loadError = ref('')
 const liveMessage = ref('')
 const modal = ref({ isOpen: false })
 const selectedRecord = ref(null)
@@ -668,6 +851,7 @@ const emptyAction = () => ({
   record: null,
   dueDate: '',
   reason: '',
+  conditionNote: '',
   error: '',
 })
 const actionDialog = ref(emptyAction())
@@ -732,7 +916,11 @@ const matchesSearch = (b) => {
   const q = (search.value || '').trim().toLowerCase()
   if (!q) return true
   const name = `${b.resident?.first_name || ''} ${b.resident?.last_name || ''}`.toLowerCase()
-  const item = (b.equipment?.item_name || '').toLowerCase()
+  // Both item sources, not just the catalogued one — typing what a resident
+  // wrote in the free-text box has to find their request. Read off the fields
+  // rather than through itemName(), whose 'Unknown' fallback would otherwise
+  // make every uncatalogued row a hit for the word "unknown".
+  const item = `${b.equipment?.item_name || ''} ${b.other_equipment_text || ''}`.toLowerCase()
   const purpose = (b.purpose || '').toLowerCase()
   return name.includes(q) || item.includes(q) || purpose.includes(q)
 }
@@ -883,11 +1071,52 @@ const resultSummary = computed(() => {
 const initials = (r) => computeInitials(r)
 // Names a record for an accessible label: who and what, which is what tells
 // two otherwise identical "Approve" buttons apart.
+// A borrowing names its item one of two ways and never both: an equipment row
+// the office has catalogued, or free text for something it has not. The table
+// enforces exactly-one with a CHECK constraint, so `equipment` being absent is
+// a normal state here and not a loading failure.
+const isUncatalogued = (item) => !item?.equipment_id
+const itemName = (item) =>
+  item?.equipment?.item_name || item?.other_equipment_text || 'Unknown'
+
 const cardLabel = (item) =>
-  `${item.equipment?.item_name || 'equipment'} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
-const shortStock = (item) => (item.equipment?.available_quantity ?? 0) < item.quantity
-const statusAccent = (status) => columns.find((c) => c.status === status)?.accent || '#64748B'
-const statusIcon = (status) => columns.find((c) => c.status === status)?.icon || 'mdi-help-circle-outline'
+  `${itemName(item) === 'Unknown' ? 'equipment' : itemName(item)} for ${item.resident?.first_name || ''} ${item.resident?.last_name || ''}`.trim()
+
+// An uncatalogued item has no stock figure at all, so it is never short. The
+// old `?? 0` read a missing equipment row as zero available, which would have
+// flagged every one of these red for a shortage that is not a shortage.
+const shortStock = (item) =>
+  !isUncatalogued(item) && (item.equipment?.available_quantity ?? 0) < item.quantity
+
+// Anything that is not explicitly a delivery is a pickup, which is also what
+// every request filed before the column existed was.
+const isDelivery = (item) => item?.fulfillment_method === 'Delivery'
+
+// Same shape as isDelivery: anything not explicitly an organisation is a
+// resident borrowing for themselves, which every pre-column row was.
+const isOrganization = (item) => item?.borrower_type === 'Organization'
+
+// store() makes the name required for an organisation, so this is a data-drift
+// guard rather than an expected state — but a record that claims to be
+// institutional and cannot say which institution is worth flagging in red
+// rather than rendering as a blank line.
+const unnamedOrganization = (item) => isOrganization(item) && !item?.organization_name
+
+// Symmetric on purpose: a name on both sides. This line separates an
+// individual loan from an institutional one, so it names who or what the item
+// is for — not the account holder's role. "Head of the family" would assert a
+// household position the schema does not record and that is simply wrong for a
+// borrower who is not one; the seven strings that phrase belongs to are all
+// generic headings, never a value beside one named record.
+const borrowingForLabel = (item) => {
+  if (isOrganization(item)) {
+    return item?.organization_name || 'No organization was recorded — ask the borrower.'
+  }
+  // Falls back rather than rendering a bare space: `resident` is eager-loaded
+  // on both show() and index(), but a resident deleted mid-session leaves the
+  // relation null and this line would otherwise read as empty.
+  return `${item?.resident?.first_name || ''} ${item?.resident?.last_name || ''}`.trim() || 'Unknown borrower'
+}
 
 const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
@@ -928,7 +1157,7 @@ const dueDelta = (item) => {
   if (!due) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  return Math.round((due - today) / 86400000)
+  return Math.round((due - today) / 86_400_000)
 }
 
 // A returned or denied record cannot be overdue, however far past its date it
@@ -955,7 +1184,7 @@ const dueLabel = (item) => {
 const agingLabel = (item) => {
   const released = item.status === 'Released'
   const anchor = (released && item.released_at) || item.created_at
-  const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86400000)
+  const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86_400_000)
   if (days <= 0) return released ? 'Out today' : 'Today'
   return `${days}d ${released ? 'out' : 'waiting'}`
 }
@@ -966,32 +1195,14 @@ const getHeaders = () => ({
   Accept: 'application/json',
 })
 
-// A non-2xx used to fall straight through: `res.json()` on an error body assigns
-// whatever came back to `borrowings`, so a 401 or a 500 rendered as an empty
-// board rather than as a failure.
-const fetchData = async () => {
-  reloading.value = true
-  try {
-    const res = await fetch(`${API_BASE}/borrowings`, { headers: getHeaders() })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
-    const data = await res.json()
-    const rows = data.data || data
-    if (!Array.isArray(rows)) throw new Error('The server returned an unexpected response')
-    borrowings.value = rows
-    loadError.value = ''
-  } catch (error) {
-    console.error('Failed to fetch borrowings:', error)
-    // Kept on the page, not only in a snackbar that clears itself after 3.5s.
-    loadError.value = error.message || 'Could not reach the server'
-    notify('Could not load borrowings', 'error')
-  } finally {
-    initialLoad.value = false
-    reloading.value = false
-  }
-}
+// The request, the non-2xx handling and the error text all live in
+// `useBorrowingsList` now. Wrapped rather than bound straight to `load`,
+// because this is also a @click handler and a click event would arrive where
+// the loader takes its options.
+//
+// The full-pane loadError card below is the only notification for a failure —
+// a snackbar on top of it duplicated the same message (ui-audit finding #3).
+const fetchData = () => load()
 
 // Failures here are non-fatal to the page — the filters just fall back to
 // showing only "All items"/"All barangays" until they load, same as any
@@ -1019,6 +1230,10 @@ const openDetail = (item) => {
   apiError.value = ''
   selectedRecord.value = item
   modal.value.isOpen = true
+  // Not awaited: the panel opens immediately and each photo fills in when it
+  // arrives, the same way the service-request attachments do.
+  releasePhoto.load(item)
+  returnPhoto.load(item)
 }
 
 // `@click:row` alone is mouse-only — a `<tr>` handler is unreachable by
@@ -1044,14 +1259,191 @@ const rowProps = ({ item }) => ({
   onKeydown: (e) => onRowKeydown(e, item),
 })
 
+// ---------------------------------------------------------------- handover photos
+//
+// Both photos live on the private disk and are served only by an authenticated
+// route, so neither can be addressed by plain URL from an image tag — the
+// request has to carry the bearer token. Fetched as a blob with the same
+// headers every other call uses, exactly like the valid-ID and site-photo
+// attachments on ServiceRequestQueue. One factory rather than two hand-written
+// copies -- the copy is where "revoke the previous object URL" gets forgotten
+// and the tab leaks a blob per record opened.
+const createHandoverPhoto = (stage) => {
+  const state = reactive({ url: '', loading: false, error: '', for: null })
+
+  const release = () => {
+    if (state.url) URL.revokeObjectURL(state.url)
+    state.url = ''
+  }
+
+  const load = async (record) => {
+    const id = record ? (record.borrow_id || record.id) : null
+    if (id === state.for) return
+
+    release()
+    state.for = id
+    state.error = ''
+    // The path columns are hidden on the model — a private-disk path is not
+    // something a client is handed — so this keys off the appended boolean.
+    if (!id || !record?.[`has_${stage}_photo`]) return
+
+    state.loading = true
+    try {
+      const res = await fetch(`${API_BASE}/borrowings/${id}/photo/${stage}`, { headers: getHeaders() })
+      if (!res.ok) throw new Error('Could not load the handover photo.')
+      const blob = await res.blob()
+      // The operator moved on while this was in flight; the blob belongs to a
+      // record that is no longer on screen.
+      if (state.for !== id) return
+      state.url = URL.createObjectURL(blob)
+    } catch (error) {
+      if (state.for === id) state.error = error.message
+    } finally {
+      if (state.for === id) state.loading = false
+    }
+  }
+
+  return { state, load, release }
+}
+
+const releasePhoto = createHandoverPhoto('release')
+const returnPhoto = createHandoverPhoto('return')
+const photoState = (stage) => (stage === 'release' ? releasePhoto.state : returnPhoto.state)
+
+// Which stage the record can be photographed in right now, mirroring
+// PHOTO_STAGES in EquipmentBorrowingController. Kept as one source here so the
+// button and the backend cannot drift into offering an upload the server then
+// refuses.
+const photoStages = (record) => {
+  const stages = []
+  if (record?.status === 'Released' || record?.status === 'Returned') stages.push('release')
+  if (record?.status === 'Returned') stages.push('return')
+  return stages
+}
+
+const photoUploading = ref('')
+const photoRemoving = ref('')
+const removePhotoDialog = ref({ open: false, stage: '' })
+
+// Mirrors PHOTO_STAGES.removable_in on the server, which is deliberately
+// narrower than the window for adding one: the wrong file can be taken back off
+// at the counter, but a photo on a record that has moved on is part of a
+// finished handover. A stage with no photo has nothing to remove.
+const canRemovePhoto = (record, stage) => {
+  if (!record || !record[`has_${stage}_photo`]) return false
+  return stage === 'release' ? record.status === 'Released' : record.status === 'Returned'
+}
+
+const askRemovePhoto = (stage) => {
+  removePhotoDialog.value = { open: true, stage }
+}
+
+const confirmRemovePhoto = async () => {
+  const record = selectedRecord.value
+  const stage = removePhotoDialog.value.stage
+  if (!record || !stage) return
+
+  const id = record.borrow_id || record.id
+  photoRemoving.value = stage
+  apiError.value = ''
+
+  try {
+    const res = await fetch(`${API_BASE}/borrowings/${id}/photo/${stage}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || 'Failed to remove the photo')
+    }
+
+    const updated = await res.json()
+
+    // Same in-place patch the upload does, so the card redraws without closing
+    // the panel: clear the cached blob's record id or the loader would keep
+    // serving the image it already fetched.
+    if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
+      selectedRecord.value[`has_${stage}_photo`] = updated[`has_${stage}_photo`]
+      const holder = stage === 'release' ? releasePhoto : returnPhoto
+      holder.release()
+      holder.state.for = null
+      await holder.load(selectedRecord.value)
+    }
+
+    await fetchData()
+    notify('Handover photo removed')
+    removePhotoDialog.value = { open: false, stage: '' }
+  } catch (error) {
+    apiError.value = error.message
+    notify(error.message, 'error')
+  } finally {
+    photoRemoving.value = ''
+  }
+}
+
+const uploadHandoverPhoto = async (record, stage, file) => {
+  if (!file) return
+  const id = record.borrow_id || record.id
+  photoUploading.value = stage
+  apiError.value = ''
+  try {
+    const payload = new FormData()
+    payload.append('stage', stage)
+    payload.append('photo', file)
+
+    // getHeaders() sets Content-Type: application/json, which would stop the
+    // browser writing the multipart boundary and make the body unparseable.
+    // Authorization only, and let fetch set the type.
+    const res = await fetch(`${API_BASE}/borrowings/${id}/photo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}`, Accept: 'application/json' },
+      body: payload,
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || 'Failed to upload the photo')
+    }
+    const updated = await res.json()
+    // Patch the open record in place so the photo appears without closing the
+    // panel, then force a re-fetch of the blob by clearing the cached id.
+    if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
+      selectedRecord.value[`has_${stage}_photo`] = updated[`has_${stage}_photo`]
+      const holder = stage === 'release' ? releasePhoto : returnPhoto
+      holder.state.for = null
+      await holder.load(selectedRecord.value)
+    }
+    await fetchData()
+    notify('Handover photo saved')
+  } catch (error) {
+    apiError.value = error.message
+    notify(error.message, 'error')
+  } finally {
+    photoUploading.value = ''
+  }
+}
+
 const closeModal = () => {
   modal.value.isOpen = false
   selectedRecord.value = null
+  releasePhoto.release()
+  returnPhoto.release()
+  // Cleared as well as released: `for` is what load() checks to skip a refetch,
+  // so leaving it set would show the next record's panel with no photo.
+  releasePhoto.state.for = null
+  returnPhoto.state.for = null
 }
 
-// Default fortnight-minus-a-week: a week is the office's usual loan and the
-// operator can move it in the dialog. It is a default, never a silent write —
-// the date is always shown before the request goes out.
+// A blob URL outlives the component unless it is revoked by hand, and leaving
+// the panel by route change never calls closeModal().
+onUnmounted(() => {
+  releasePhoto.release()
+  returnPhoto.release()
+})
+
+// Also the policy cap (MDRRMO feedback, 2026-09-14): a loan runs 1-7 days,
+// enforced server-side too (EquipmentBorrowingController::update). The
+// operator can still move the date within that window in the dialog; the
+// date is always shown before the request goes out.
 const DEFAULT_LOAN_DAYS = 7
 
 const requestAction = (record, newStatus) => {
@@ -1068,6 +1460,8 @@ const requestAction = (record, newStatus) => {
     if (record.due_date) return updateStatus(record, newStatus)
     next.mode = 'due'
     next.dueDate = daysFromToday(DEFAULT_LOAN_DAYS)
+  } else if (newStatus === 'Returned') {
+    next.mode = 'return'
   } else {
     next.mode = 'confirm'
   }
@@ -1077,7 +1471,7 @@ const requestAction = (record, newStatus) => {
 const actionCopy = computed(() => {
   const record = actionDialog.value.record
   const who = `${record?.resident?.first_name || ''} ${record?.resident?.last_name || ''}`.trim() || 'this resident'
-  const what = record?.equipment?.item_name || 'the equipment'
+  const what = record?.equipment?.item_name || record?.other_equipment_text || 'the equipment'
   switch (actionDialog.value.mode) {
     case 'deny':
       return { title: 'Deny this request', body: `${who} asked for ${what}.`, confirm: 'Deny request' }
@@ -1087,6 +1481,8 @@ const actionCopy = computed(() => {
         body: `Set the date ${who} is expected to bring ${what} back.`,
         confirm: actionDialog.value.status === 'Approved' ? 'Approve request' : 'Release',
       }
+    // 'return' falls through to here — same copy as the old unconditional
+    // default, now named for the one status left that reaches it.
     default:
       return {
         title: 'Confirm the return',
@@ -1099,7 +1495,7 @@ const actionCopy = computed(() => {
 const clearActionDialog = () => { actionDialog.value = emptyAction() }
 
 const confirmAction = () => {
-  const { mode, status, record, dueDate, reason } = actionDialog.value
+  const { mode, status, record, dueDate, reason, conditionNote } = actionDialog.value
   if (mode === 'due' && !dueDate) {
     actionDialog.value.error = 'Pick a due date'
     return
@@ -1111,6 +1507,8 @@ const confirmAction = () => {
   const extra = {}
   if (mode === 'due') extra.due_date = dueDate
   if (mode === 'deny') extra.denial_reason = reason.trim()
+  // Optional — unlike the denial reason, nothing blocks the return over it.
+  if (mode === 'return' && conditionNote.trim()) extra.return_condition_note = conditionNote.trim()
   return updateStatus(record, status, extra)
 }
 
@@ -1168,8 +1566,9 @@ onMounted(() => {
    the selects and the chips showing what those selects did are one thought
    split across two rows. 28px is the region break. The status strip sits 16px
    above the table because it counts the rows in it; it is a caption for that
-   table, not a band of its own. */
-.page-header { margin-bottom: 28px; }
+   table, not a band of its own. The header's own gap is mb-6 (24px) now,
+   the same as every other page's header-to-content gap, not a third
+   page-local value. */
 .page-tabs { margin-bottom: 24px; }
 .filter-active { margin-bottom: 28px; }
 .status-strip { margin-bottom: 16px; }
@@ -1230,8 +1629,10 @@ onMounted(() => {
 .stat-tile .stat-value { font-size: 1.15rem; font-weight: 800; line-height: 1; }
 .stat-tile .stat-label { font-size: 0.8rem; font-weight: 600; }
 
-/* Table. Fixed layout keeps the truncating cells stable; matches the
-   elegant-table pattern used across User Management and Fleet Management.
+/* Table. Fixed layout keeps the truncating cells stable, the same fixed-
+   layout-plus-min-width fix used on every other data table in the app now
+   (User Management is the one exception with its own richer treatment,
+   not a pattern named "elegant-table" that this table is part of).
    The 720px min-width is load-bearing: without it, `width: 100%` on a fixed
    table lets a narrow wrapper crush every column instead of scrolling —
    "waiting" wraps to one letter per line rather than the table scrolling

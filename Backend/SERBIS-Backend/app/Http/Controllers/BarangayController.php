@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Barangay;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 
 class BarangayController extends Controller
 {
@@ -62,7 +61,7 @@ class BarangayController extends Controller
     public function destroy($id)
     {
         $barangay = Barangay::findOrFail($id);
-        
+
         $barangay->delete();
 
         return response()->json(['message' => 'Barangay deleted successfully']);

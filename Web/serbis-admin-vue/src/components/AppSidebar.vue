@@ -90,7 +90,9 @@
     </div>
   </v-navigation-drawer>
 
-  <v-dialog v-model="showLogoutDialog" max-width="380" persistent>
+  <!-- A confirmation holds nothing typed, so Esc and a click outside are both
+       valid answers to it. -->
+  <v-dialog v-model="showLogoutDialog" max-width="380">
     <v-card rounded="xl" elevation="10" class="pb-2">
       <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold">Confirm Logout</v-card-title>
       <v-card-text class="px-6 py-2 text-body-2 text-grey-darken-1">
@@ -133,6 +135,9 @@ const mainMenu = [
   { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
   { to: '/vehicles', icon: 'mdi-ambulance', title: 'Vehicles' },
   { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Resource Management' },
+  // Below Resource Management on purpose: it is the list of what the catalogue
+  // above does not carry, and it is read next to it, not next to the board.
+  { to: '/procurement', icon: 'mdi-clipboard-list-outline', title: 'Procurement Reference' },
   { to: '/sms', icon: 'mdi-message-text-fast-outline', title: 'Text Blast (SMS)' }
 ]
 

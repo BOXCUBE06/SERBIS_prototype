@@ -25,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         self::assertDebugIsOffInProduction();
+        self::assertOtpBypassIsUnsetInProduction();
+        self::assertSmsFakeIsUnsetInProduction();
 
         // Auth throttling for /admin/login, /resident/login.
         //
@@ -76,6 +78,17 @@ class AppServiceProvider extends ServiceProvider
         // one login attempt as precisely as an email identifies one account, and
         // the challenge's own 5-attempt cap (AuthController::consumeMfaChallengeAttempt)
         // is still the real brake — this is defence in depth, same as 'login' is.
+        // POST /sms/blast, the only endpoint that spends money. Named rather than
+        // an inline throttle:3,60 - see the ->by() note under 'register' above: an
+        // inline limit reuses ThrottleRequests' route signature, which is the same
+        // signature the api group's own throttleApi('60,1') already counts on, so
+        // every request would increment one shared bucket twice and three sends an
+        // hour became closer to one. Keyed on the account for the reason
+        // SmsController::assertCurrentPassword is: an office on one CGNAT address
+        // must not be able to spend a colleague's allowance.
+        RateLimiter::for('sms-blast', function (Request $request) {
+            return Limit::perHour(3)->by('admin:'.$request->user()->admin_id);
+        });
         RateLimiter::for('mfa', function (Request $request) {
             $challenge = Str::lower((string) $request->input('challenge_id'));
 
@@ -120,6 +133,69 @@ class AppServiceProvider extends ServiceProvider
             .'Debug mode exposes stack traces, file paths and SQL — including '
             .'query bindings — to anyone who can reach this API. '
             .'Set APP_DEBUG=false in the .env on this server, then run '
+            .'`php artisan config:clear` (or `config:cache`) and start again.'
+        );
+    }
+
+    /**
+     * Refuse to run a production deployment with the test-only OTP bypass
+     * configured (config/serbis.php, AuthController::otpBypassMatches()).
+     *
+     * That method already refuses the bypass on its own by checking
+     * app()->environment() at request time — this guard exists so a
+     * misconfigured production server fails loudly at boot instead of
+     * depending on that request-time check never being changed or bypassed
+     * by a future edit. Same shape as assertDebugIsOffInProduction() above,
+     * for the same reason: quietly clearing the config would leave the
+     * variable still set in the .env on the server, so the next person to
+     * read it learns the wrong thing about what is running.
+     */
+    public static function assertOtpBypassIsUnsetInProduction(): void
+    {
+        if (! app()->environment('production')) {
+            return;
+        }
+
+        if ((string) config('serbis.otp_bypass_code', '') === '') {
+            return;
+        }
+
+        throw new RuntimeException(
+            'REFUSING TO START: SERBIS_OTP_BYPASS_CODE is set while APP_ENV is '
+            .'production. This bypass exists only so local development and CI '
+            .'test automation (Playwright) can skip real OTP delivery, and must '
+            .'never be reachable in production. '
+            .'Unset SERBIS_OTP_BYPASS_CODE in the .env on this server, then run '
+            .'`php artisan config:clear` (or `config:cache`) and start again.'
+        );
+    }
+
+    /**
+     * Refuse to run a production deployment with the test-only SMS
+     * suppression flag configured (config/serbis.php, PhilSms::send()).
+     *
+     * Same shape as assertOtpBypassIsUnsetInProduction() above, for the same
+     * reason: that flag already refuses itself at request time
+     * (PhilSms::fakingEnabled() checks app()->environment() too), and this
+     * guard exists so a misconfigured production server fails loudly at boot
+     * instead of depending on that request-time check never being changed.
+     */
+    public static function assertSmsFakeIsUnsetInProduction(): void
+    {
+        if (! app()->environment('production')) {
+            return;
+        }
+
+        if (! config('serbis.sms_fake', false)) {
+            return;
+        }
+
+        throw new RuntimeException(
+            'REFUSING TO START: SERBIS_SMS_FAKE is set while APP_ENV is '
+            .'production. This flag exists only so local development and CI '
+            .'test automation (Playwright) can skip real, billed PhilSMS '
+            .'sends, and must never be reachable in production. '
+            .'Unset SERBIS_SMS_FAKE in the .env on this server, then run '
             .'`php artisan config:clear` (or `config:cache`) and start again.'
         );
     }

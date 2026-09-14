@@ -48,10 +48,10 @@ class AdminController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'first_name'    => 'required|string|max:255',
-            'last_name'     => 'required|string|max:255',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
             'email_address' => 'required|email|max:255|unique:tbl_user,email_address',
-            'password'      => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+            'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ]);
 
         // Assigned key by key, and `role` is not among the rules. It is set
@@ -59,12 +59,12 @@ class AdminController extends Controller
         // account ends up with a value the is.admin middleware does not
         // recognise, locking the account out of the panel it was made for.
         $admin = User::create([
-            'first_name'    => $validated['first_name'],
-            'last_name'     => $validated['last_name'],
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
             'email_address' => $validated['email_address'],
-            'password'      => $validated['password'],
-            'role'          => 'Admin',
-            'status'        => 'Active',
+            'password' => $validated['password'],
+            'role' => 'Admin',
+            'status' => 'Active',
         ]);
 
         return response()->json($admin, 201);
@@ -90,8 +90,8 @@ class AdminController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name'    => 'required|string|max:255',
-            'last_name'     => 'required|string|max:255',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
             'email_address' => [
                 'required',
                 'email',
@@ -100,11 +100,11 @@ class AdminController extends Controller
             ],
             // Blank leaves the stored hash alone. Assigning null would lock the
             // account out of its own panel.
-            'password'      => ['nullable', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+            'password' => ['nullable', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ]);
 
-        $admin->first_name    = $validated['first_name'];
-        $admin->last_name     = $validated['last_name'];
+        $admin->first_name = $validated['first_name'];
+        $admin->last_name = $validated['last_name'];
         $admin->email_address = $validated['email_address'];
 
         $passwordChanged = ! empty($validated['password']);

@@ -36,6 +36,14 @@ return [
         'sender_id' => env('PHILSMS_SENDER_ID', 'PhilSMS'),
     ],
 
+    'firebase' => [
+        // Absolute path to the service-account JSON downloaded from Firebase
+        // Console -> Project Settings -> Service Accounts. The file itself
+        // carries the project id — nothing else to configure here. Never
+        // commit the file this points at.
+        'credentials' => env('FIREBASE_CREDENTIALS'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

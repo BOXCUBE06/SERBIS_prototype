@@ -25,8 +25,7 @@ class ResidentLoginCode extends Mailable
     public function __construct(
         public Resident $resident,
         public string $code,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

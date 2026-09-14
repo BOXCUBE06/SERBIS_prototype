@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\ServiceRequest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,19 @@ class ConductionRequestController extends Controller
      */
     private const MAX_PEOPLE_PER_ROLE = 20;
 
+    /**
+     * Authorized passengers are capped harder than the other two roles: the
+     * ambulance carries at most two people riding under that role, which is
+     * the operational rule, not a column limit.
+     *
+     * Only this role is narrowed. Drivers keep MAX_PEOPLE_PER_ROLE, and
+     * relatives must keep it because copyRelativesToTrip() appends a booking's
+     * intake relatives onto a trip that may already hold typed names — that
+     * append writes rows directly and never passes through this validation, so
+     * narrowing the relative limit here would not bound it anyway.
+     */
+    private const MAX_AUTHORIZED_PASSENGERS = 2;
+
     /** The trip log's four checkpoints, in the order they actually happen. */
     private const TRIP_SEQUENCE = [
         'departed_office_at' => 'Departed office',
@@ -117,7 +131,7 @@ class ConductionRequestController extends Controller
             // MAX_PEOPLE_PER_ROLE for what the 256th name does to `position`.
             'drivers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
-            'authorized_passengers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            'authorized_passengers' => 'nullable|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
             'authorized_passengers.*' => 'nullable|string|max:255',
             'patient_relatives' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'patient_relatives.*' => 'nullable|string|max:255',
@@ -136,7 +150,7 @@ class ConductionRequestController extends Controller
         // now closes the button-side hole; this closes it at the one place
         // every caller (button, and the create dialog's own booking search)
         // actually goes through.
-        if (!empty($validated['service_request_id'])) {
+        if (! empty($validated['service_request_id'])) {
             $existingTrip = ConductionRequest::where('service_request_id', $validated['service_request_id'])->first();
 
             if ($existingTrip) {
@@ -156,7 +170,7 @@ class ConductionRequestController extends Controller
         // makes that impossible gets worked around outside the system).
         // "Open" matches ConductionRequest::getTripStatusAttribute()'s own
         // 'In transit' definition, not a new one: departed, not yet back.
-        $conflict = !empty($validated['vehicle_id'])
+        $conflict = ! empty($validated['vehicle_id'])
             ? ConductionRequest::where('vehicle_id', $validated['vehicle_id'])
                 ->whereNotNull('departed_office_at')
                 ->whereNull('returned_office_at')
@@ -216,7 +230,7 @@ class ConductionRequestController extends Controller
             // forever — which is also why "Mark as Resolved" (gated on
             // status === 'Responding') was unreachable for a manually
             // dispatched booking.
-            if (!empty($validated['service_request_id'])) {
+            if (! empty($validated['service_request_id'])) {
                 $serviceRequest = ServiceRequest::find($validated['service_request_id']);
 
                 if ($serviceRequest) {
@@ -249,7 +263,7 @@ class ConductionRequestController extends Controller
     {
         $conductionRequest = ConductionRequest::with(['people', 'serviceRequest'])->find($id);
 
-        if (!$conductionRequest) {
+        if (! $conductionRequest) {
             return response()->json(['message' => 'Conduction request not found'], 404);
         }
 
@@ -260,13 +274,14 @@ class ConductionRequestController extends Controller
      * Admin-only printable rendering of the paper form. Eager-loads what
      * conduction-request.blade.php expects (its own doc comment): people for
      * drivers/passengers/manually-typed relatives, serviceRequest.relatives
-     * for a bridged trip's intake-named relatives.
+     * for a bridged trip's intake-named relatives. serviceRequest's own
+     * ambulanceBooking comes along automatically — see ServiceRequest::$with.
      */
     public function print($id)
     {
         $conductionRequest = ConductionRequest::with(['people', 'serviceRequest.relatives'])->find($id);
 
-        if (!$conductionRequest) {
+        if (! $conductionRequest) {
             abort(404, 'Conduction request not found');
         }
 
@@ -284,7 +299,7 @@ class ConductionRequestController extends Controller
     {
         $conductionRequest = ConductionRequest::find($id);
 
-        if (!$conductionRequest) {
+        if (! $conductionRequest) {
             return response()->json(['message' => 'Conduction request not found'], 404);
         }
 
@@ -305,7 +320,7 @@ class ConductionRequestController extends Controller
             // bridge path never is.
             'drivers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
-            'authorized_passengers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            'authorized_passengers' => 'sometimes|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
             'authorized_passengers.*' => 'nullable|string|max:255',
             'patient_relatives' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
             'patient_relatives.*' => 'nullable|string|max:255',
@@ -330,14 +345,14 @@ class ConductionRequestController extends Controller
             if (array_key_exists($field, $validated) && $validated[$field] !== null) {
                 $raw = (string) $validated[$field];
 
-                if (!self::carriesExplicitOffset($raw)) {
+                if (! self::carriesExplicitOffset($raw)) {
                     Log::info('Conduction checkpoint received with no UTC offset — read as Asia/Manila.', [
                         'conduction_request_id' => $conductionRequest->conduction_request_id,
                         'field' => $field,
                     ]);
                 }
 
-                $validated[$field] = \Carbon\Carbon::parse(
+                $validated[$field] = Carbon::parse(
                     $raw,
                     self::OFFICE_TIMEZONE
                 )->utc();
@@ -427,7 +442,7 @@ class ConductionRequestController extends Controller
         foreach ($sequence as $field => $label) {
             $value = $effective($field);
             if ($value !== null) {
-                $checkpoints[] = ['field' => $field, 'label' => $label, 'at' => \Carbon\Carbon::parse($value)];
+                $checkpoints[] = ['field' => $field, 'label' => $label, 'at' => Carbon::parse($value)];
             }
         }
 
@@ -446,7 +461,7 @@ class ConductionRequestController extends Controller
         // reports a checkpoint but says nothing about passengers must not
         // wipe passengers already on record.
         foreach (self::PEOPLE_FIELDS as $field => $role) {
-            if (!array_key_exists($field, $validated)) {
+            if (! array_key_exists($field, $validated)) {
                 continue;
             }
 

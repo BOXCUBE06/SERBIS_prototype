@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.4",
         "bacon/bacon-qr-code": "^3.1",
+        "google/auth": "^1.53",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",

@@ -7,7 +7,6 @@ use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
-use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -27,8 +26,11 @@ class ServiceActiveStatusTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Resident $resident;
+
     private Service $activeService;
+
     private Service $inactiveService;
 
     protected function setUp(): void

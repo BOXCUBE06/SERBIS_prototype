@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The single place this application talks to PhilSMS. Both callers — the admin
@@ -68,10 +70,27 @@ class PhilSms
             ->unique()
             ->implode(',');
 
+        if (self::fakingEnabled()) {
+            Log::info('PhilSMS send suppressed (SERBIS_SMS_FAKE)', [
+                'recipient' => $recipients,
+                'message' => $message,
+            ]);
+
+            // Same shape a real accepted send returns — no 'status' key at
+            // all, same as PhilSMS's own success body — so PhilSms::accepted()
+            // and every caller downstream of it (the mail fallback included)
+            // treat this exactly like a real send that went through.
+            return new Response(new Psr7Response(
+                200,
+                ['Content-Type' => 'application/json'],
+                json_encode(['fake' => true]),
+            ));
+        }
+
         return Http::withHeaders([
             'Authorization' => 'Bearer '.config('services.philsms.token'),
-            'Content-Type'  => 'application/json',
-            'Accept'        => 'application/json',
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
         ])
             // Guzzle has no timeout by default, so a slow PhilSMS response used to
             // run into PHP's own max_execution_time (30s, php.ini-production) —
@@ -89,11 +108,11 @@ class PhilSms
             // longer because there are more recipients in the body.
             ->connectTimeout(3)
             ->post(self::ENDPOINT, [
-            'recipient' => $recipients,
-            'sender_id' => config('services.philsms.sender_id'),
-            'type'      => 'plain',
-            'message'   => $message,
-        ]);
+                'recipient' => $recipients,
+                'sender_id' => config('services.philsms.sender_id'),
+                'type' => 'plain',
+                'message' => $message,
+            ]);
     }
 
     /**
@@ -108,7 +127,7 @@ class PhilSms
     {
         return Http::withHeaders([
             'Authorization' => 'Bearer '.config('services.philsms.token'),
-            'Accept'        => 'application/json',
+            'Accept' => 'application/json',
         ])
             ->timeout(6)
             ->connectTimeout(3)
@@ -128,9 +147,9 @@ class PhilSms
 
         return match (true) {
             str_starts_with($digits, '639') && strlen($digits) === 12 => '+'.$digits,
-            str_starts_with($digits, '09') && strlen($digits) === 11   => '+63'.substr($digits, 1),
-            str_starts_with($digits, '9') && strlen($digits) === 10    => '+63'.$digits,
-            default                                                    => '',
+            str_starts_with($digits, '09') && strlen($digits) === 11 => '+63'.substr($digits, 1),
+            str_starts_with($digits, '9') && strlen($digits) === 10 => '+63'.$digits,
+            default => '',
         };
     }
 
@@ -151,5 +170,21 @@ class PhilSms
     public static function accepted(Response $response): bool
     {
         return $response->successful() && $response->json('status') !== 'error';
+    }
+
+    /**
+     * Whether send() should skip the real HTTP call (config/serbis.php,
+     * SERBIS_SMS_FAKE).
+     *
+     * Checked here, at the point of the call, rather than trusted from the
+     * boot-time guard alone (AppServiceProvider::assertSmsFakeIsUnsetInProduction)
+     * — same reasoning as AuthController::otpBypassMatches() for the OTP
+     * bypass: a config value cached before an environment change, or a future
+     * refactor that drops the boot guard, must not silently reopen this in
+     * production.
+     */
+    private static function fakingEnabled(): bool
+    {
+        return (bool) config('serbis.sms_fake', false) && ! app()->environment('production');
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Equipment;
+use App\Models\Resident;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -32,7 +33,7 @@ class EquipmentController extends Controller
     {
         $query = Equipment::query();
 
-        if ($request->user() instanceof \App\Models\Resident) {
+        if ($request->user() instanceof Resident) {
             $query->where('status', 'Available');
         }
 
@@ -59,7 +60,7 @@ class EquipmentController extends Controller
     {
         $equipment = Equipment::find($id);
 
-        if (!$equipment) {
+        if (! $equipment) {
             return response()->json(['message' => 'Equipment not found'], 404);
         }
 
@@ -69,8 +70,8 @@ class EquipmentController extends Controller
     public function update(Request $request, $id)
     {
         $equipment = Equipment::find($id);
-        
-        if (!$equipment) {
+
+        if (! $equipment) {
             return response()->json(['message' => 'Equipment not found'], 404);
         }
 
@@ -80,10 +81,34 @@ class EquipmentController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('tbl_equipments')->ignore($equipment->equipment_id, 'equipment_id')
+                Rule::unique('tbl_equipments')->ignore($equipment->equipment_id, 'equipment_id'),
             ],
             'total_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY,
-            'available_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY.'|lte:total_quantity',
+            'available_quantity' => [
+                'sometimes',
+                'required',
+                'integer',
+                'min:0',
+                'max:'.self::MAX_QUANTITY,
+                // lte:total_quantity compares only against another field in
+                // THIS request. A solo available_quantity edit — adjusting
+                // stock without touching the total — carries no
+                // total_quantity at all, and Laravel's own lte semantics
+                // treat a missing comparison field as failing every value,
+                // not as skipping the rule: this endpoint could never accept
+                // a solo available_quantity edit, for any value including 0.
+                // Compares against the request's total_quantity when one was
+                // sent (unchanged), the stored value otherwise.
+                function ($attribute, $value, $fail) use ($request, $equipment) {
+                    $total = $request->has('total_quantity')
+                        ? (int) $request->input('total_quantity')
+                        : (int) $equipment->total_quantity;
+
+                    if ($value > $total) {
+                        $fail("The available quantity field must be less than or equal to {$total}.");
+                    }
+                },
+            ],
             'status' => 'sometimes|required|in:Available,Unavailable',
         ]);
 
@@ -99,8 +124,8 @@ class EquipmentController extends Controller
 
                 return response()->json([
                     'message' => "Cannot set total to {$validated['total_quantity']} — "
-                        . "{$equipment->available_quantity} unit(s) are currently available "
-                        . "and {$onLoan} on loan; total cannot drop below what is available.",
+                        ."{$equipment->available_quantity} unit(s) are currently available "
+                        ."and {$onLoan} on loan; total cannot drop below what is available.",
                 ], 422);
             }
         }
@@ -114,7 +139,7 @@ class EquipmentController extends Controller
     {
         $equipment = Equipment::find($id);
 
-        if (!$equipment) {
+        if (! $equipment) {
             return response()->json(['message' => 'Equipment not found'], 404);
         }
 

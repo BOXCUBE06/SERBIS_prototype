@@ -360,18 +360,28 @@ class AppState extends ChangeNotifier {
   /// Files a new equipment loan. Returns the server-confirmed row, or `null`
   /// if it never reached MDRRMO — callers must not announce success on a
   /// `null`. Mirrors [addRequest]'s optimistic-insert-then-reconcile shape.
+  ///
+  /// [item] is null when the resident named something the catalogue does not
+  /// list, in which case [otherEquipmentText] carries it. Exactly one of the
+  /// two is set; see [ApiService.submitBorrowRequest] for why.
   Future<BorrowRequest?> submitBorrowRequest({
-    required Equipment item,
+    Equipment? item,
+    String? otherEquipmentText,
     required int quantity,
     required String purpose,
+    String fulfillmentMethod = 'Pickup',
+    String? deliveryAddress,
+    String borrowerType = 'Resident',
+    String? organizationName,
   }) async {
     final optimistic = _resolveBorrow(BorrowRequest(
-      equipmentId: item.id,
+      equipmentId: item?.id,
+      otherEquipmentText: item == null ? otherEquipmentText : null,
       quantity: quantity,
       purpose: purpose,
       status: BorrowStatus.pending,
       createdAt: DateTime.now(),
-      equipmentName: item.name,
+      equipmentName: item?.name,
     ));
 
     borrowRequests.insert(0, optimistic);
@@ -379,9 +389,14 @@ class AppState extends ChangeNotifier {
 
     try {
       final result = await _api.submitBorrowRequest(
-        equipmentId: item.id,
+        equipmentId: item?.id,
+        otherEquipmentText: item == null ? otherEquipmentText : null,
         quantity: quantity,
         purpose: purpose,
+        fulfillmentMethod: fulfillmentMethod,
+        deliveryAddress: deliveryAddress,
+        borrowerType: borrowerType,
+        organizationName: organizationName,
       );
 
       final confirmed = _resolveBorrow(BorrowRequest.fromJson(result));
@@ -456,6 +471,13 @@ class AppState extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Bytes of the handover photo staff took at [stage] ('release' or
+  /// 'return'), or null when there is none. Not cached and not held on the
+  /// row: a photograph is heavier than the whole borrow list and is only ever
+  /// looked at when the card is on screen.
+  Future<List<int>?> borrowPhoto(int borrowId, String stage) =>
+      _api.fetchHandoverPhoto(borrowId, stage);
 
   /// The blasts MDRRMO sent this resident.
   ///
@@ -760,6 +782,7 @@ class AppState extends ChangeNotifier {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     /// Present only for an ambulance request. When it is, the server composes
     /// `description` from it and `request.description` is not sent at all —
     /// the optimistic row still carries its own copy for the Track screen.
@@ -791,6 +814,7 @@ class AppState extends ChangeNotifier {
         requiredVehicleType: requiredVehicleType,
         sitePhotoBytes: sitePhotoBytes,
         sitePhotoFileName: sitePhotoFileName,
+        landmark: landmark,
         scheduledAt: request.scheduledAt,
         intake: intake,
       );
