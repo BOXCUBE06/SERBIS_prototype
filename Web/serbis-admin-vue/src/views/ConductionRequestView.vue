@@ -66,10 +66,12 @@
           color="primary"
           variant="flat"
           class="text-none font-weight-bold px-6"
-          height="44"
-          prepend-icon="mdi-plus"
+          height="48"
           @click="openCreate()"
-        >Ambulance Trip Record</v-btn>
+        >
+          <v-icon start size="small">mdi-plus</v-icon>
+          Ambulance Trip Record
+        </v-btn>
       </template>
     </PageHeader>
 

@@ -40,7 +40,7 @@
           color="secondary"
           variant="flat"
           class="text-none font-weight-bold px-6 text-white"
-          height="40"
+          height="48"
           @click="openCreateDialog"
         >
           <v-icon start size="small">mdi-account-plus-outline</v-icon>
@@ -60,7 +60,7 @@
           color="primary"
           variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
+          height="48"
           @click="openDayView"
         >
           <v-icon start size="small">mdi-calendar-clock</v-icon>
@@ -81,7 +81,7 @@
           color="primary"
           variant="text"
           class="text-none font-weight-bold px-6"
-          height="40"
+          height="48"
           :disabled="filteredAndSortedRequests.length === 0"
           @click="exportCsv"
         >
