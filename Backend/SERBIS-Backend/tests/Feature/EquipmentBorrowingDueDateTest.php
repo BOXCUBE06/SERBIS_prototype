@@ -255,4 +255,34 @@ class EquipmentBorrowingDueDateTest extends TestCase
 
         $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
     }
+
+    public function test_returning_stores_the_condition_note(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition_note' => 'Life jacket strap frayed, otherwise usable',
+            ])
+            ->assertOk();
+
+        $this->assertSame(
+            'Life jacket strap frayed, otherwise usable',
+            $borrowing->fresh()->return_condition_note
+        );
+    }
+
+    public function test_a_return_without_a_condition_note_is_still_accepted(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])
+            ->assertOk();
+
+        $this->assertNull($borrowing->fresh()->return_condition_note);
+    }
 }

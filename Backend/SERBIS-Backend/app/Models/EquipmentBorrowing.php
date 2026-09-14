@@ -39,6 +39,7 @@ class EquipmentBorrowing extends Model
         'return_reminder_sent_at',
         'status',
         'denial_reason',
+        'return_condition_note',
         'released_at',
         'returned_at',
     ];

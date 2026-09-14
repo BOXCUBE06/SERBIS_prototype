@@ -627,6 +627,19 @@
                 </v-row>
               </template>
 
+              <!-- Optional, like the photo it accompanies — a row with none
+                   draws nothing at all, same reasoning as the photos above. -->
+              <v-card
+                v-if="selectedRecord?.return_condition_note"
+                variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface"
+              >
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Condition at return</div>
+                <div
+                  class="text-body-2 text-high-emphasis"
+                  style="white-space: pre-wrap;"
+                >{{ selectedRecord.return_condition_note }}</div>
+              </v-card>
+
               <v-row class="mb-4">
                 <v-col cols="6">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
@@ -696,7 +709,7 @@
           </v-alert>
 
           <v-alert
-            v-if="actionDialog.mode === 'confirm' && actionDialog.error"
+            v-if="(actionDialog.mode === 'confirm' || actionDialog.mode === 'return') && actionDialog.error"
             type="error" variant="tonal" density="compact" class="mb-4"
           >{{ actionDialog.error }}</v-alert>
 
@@ -726,6 +739,19 @@
             maxlength="255"
             :error-messages="actionDialog.error"
             @update:model-value="actionDialog.error = ''"
+          ></v-textarea>
+
+          <v-textarea
+            v-else-if="actionDialog.mode === 'return'"
+            v-model="actionDialog.conditionNote"
+            label="Condition note (optional)"
+            placeholder="e.g. Life jacket strap frayed, otherwise usable"
+            hint="What the item looked like coming back — alongside the return photo."
+            persistent-hint
+            variant="outlined"
+            rows="3"
+            counter="500"
+            maxlength="500"
           ></v-textarea>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
@@ -829,6 +855,7 @@ const emptyAction = () => ({
   record: null,
   dueDate: '',
   reason: '',
+  conditionNote: '',
   error: '',
 })
 const actionDialog = ref(emptyAction())
@@ -1437,6 +1464,8 @@ const requestAction = (record, newStatus) => {
     if (record.due_date) return updateStatus(record, newStatus)
     next.mode = 'due'
     next.dueDate = daysFromToday(DEFAULT_LOAN_DAYS)
+  } else if (newStatus === 'Returned') {
+    next.mode = 'return'
   } else {
     next.mode = 'confirm'
   }
@@ -1456,6 +1485,8 @@ const actionCopy = computed(() => {
         body: `Set the date ${who} is expected to bring ${what} back.`,
         confirm: actionDialog.value.status === 'Approved' ? 'Approve request' : 'Release',
       }
+    // 'return' falls through to here — same copy as the old unconditional
+    // default, now named for the one status left that reaches it.
     default:
       return {
         title: 'Confirm the return',
@@ -1468,7 +1499,7 @@ const actionCopy = computed(() => {
 const clearActionDialog = () => { actionDialog.value = emptyAction() }
 
 const confirmAction = () => {
-  const { mode, status, record, dueDate, reason } = actionDialog.value
+  const { mode, status, record, dueDate, reason, conditionNote } = actionDialog.value
   if (mode === 'due' && !dueDate) {
     actionDialog.value.error = 'Pick a due date'
     return
@@ -1480,6 +1511,8 @@ const confirmAction = () => {
   const extra = {}
   if (mode === 'due') extra.due_date = dueDate
   if (mode === 'deny') extra.denial_reason = reason.trim()
+  // Optional — unlike the denial reason, nothing blocks the return over it.
+  if (mode === 'return' && conditionNote.trim()) extra.return_condition_note = conditionNote.trim()
   return updateStatus(record, status, extra)
 }
 

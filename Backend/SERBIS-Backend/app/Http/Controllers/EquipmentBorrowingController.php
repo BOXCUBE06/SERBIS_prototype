@@ -313,6 +313,9 @@ class EquipmentBorrowingController extends Controller
             // slack rather than reject a legitimate same-day approval.
             'due_date' => 'sometimes|nullable|date|after_or_equal:today|before_or_equal:+7 days',
             'denial_reason' => 'sometimes|nullable|string|max:255',
+            // Optional, alongside the return photo — what staff noticed about
+            // the item's condition when it came back.
+            'return_condition_note' => 'sometimes|nullable|string|max:500',
         ]);
 
         $newStatus = $validated['status'];
@@ -433,6 +436,10 @@ class EquipmentBorrowingController extends Controller
                 }
 
                 $borrowing->due_date = $validated['due_date'];
+            }
+
+            if (array_key_exists('return_condition_note', $validated)) {
+                $borrowing->return_condition_note = $validated['return_condition_note'];
             }
 
             // Only a denial carries a reason. Moving off Denied clears it, or a
