@@ -47,7 +47,7 @@
               ></v-select>
 
               <v-btn
-                color="#0f4c3a"
+                color="primary"
                 elevation="0"
                 rounded="lg"
                 height="48"
