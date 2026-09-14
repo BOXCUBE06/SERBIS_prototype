@@ -1,11 +1,14 @@
 # Deploying SERBIS to Railway + Cloudflare R2
 
-**Status:** prepared, not yet executed. Nothing below has been deployed, and no
+**Status: deployed and live**, at `serbis-api-production.up.railway.app`. No
 `railway.json`/`railway.toml` has been added to the repository — this is
 dashboard-driven configuration, described here so it can be re-created
-identically if a service is ever rebuilt. **This is a fresh database, not a
-copy of the Aiven one.** No import, no migration of existing rows: whoever
-signed up on Render starts over on Railway.
+identically if the service is ever rebuilt. **This was a fresh database, not
+a copy of the Aiven one** — no import, no migration of existing rows;
+whoever had signed up on Render started over on Railway. **Render and Aiven
+are now decommissioned.** This is the only live deployment; every other
+mention of Render below describes the platform this migration replaced, for
+comparison, not a parallel environment still running.
 
 Target shape:
 
@@ -323,14 +326,14 @@ developer machine.
 - **Mobile:** `flutter build apk --release --dart-define=API_BASE_URL=https://<railway-api>/api`.
   HTTPS is mandatory in a release build regardless of host.
 
-**Old installed APKs keep pointing at Render.** `API_BASE_URL` is baked in at
-build time with no runtime config and no update channel — this app
-deliberately has no Play Store distribution and no OTA mechanism (see
-`PRODUCT.md`/repo decisions on that). A resident's already-installed app
-does not follow this migration; only a fresh install of a build made against
-the new `API_BASE_URL` does. If both APIs are kept running side by side
-during a transition, decide explicitly how long Render stays up for
-whoever has not reinstalled — this repo does not do that decision for you.
+**Old installed APKs still point at Render, which is now decommissioned —
+they are dead, not merely stale.** `API_BASE_URL` is baked in at build time
+with no runtime config and no update channel — this app deliberately has no
+Play Store distribution and no OTA mechanism (see `PRODUCT.md`/repo
+decisions on that). A resident's already-installed app did not follow this
+migration on its own; only a fresh install of a build made against the
+Railway `API_BASE_URL` does. Anyone still on an old build needs a new APK,
+not a wait — there is no live Render left to fall back to.
 
 ## 9. Troubleshooting
 
