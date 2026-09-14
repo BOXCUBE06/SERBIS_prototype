@@ -34,6 +34,7 @@ class _RecordingApi extends ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {

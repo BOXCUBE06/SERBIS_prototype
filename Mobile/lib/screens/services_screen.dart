@@ -64,6 +64,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// carry a photo is one the resident would have to discover by its absence.
   fp.PlatformFile? _sitePhotoFile;
 
+  /// Optional free-text companion to the site photo — faster to type than to
+  /// stop and photograph.
+  final _landmarkController = TextEditingController();
+
   /// True after a submit that never reached the server. Drives a persistent
   /// error card with Retry — a snackbar alone auto-dismisses, and the previous
   /// code showed a success sheet instead.
@@ -169,6 +173,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     for (final form in _forms.values) {
       form.dispose();
     }
+    _landmarkController.dispose();
     super.dispose();
   }
 
@@ -309,6 +314,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         // required to make at all.
         sitePhotoBytes: _sitePhotoFile?.bytes,
         sitePhotoFileName: _sitePhotoFile?.bytes == null ? null : _sitePhotoFile?.name,
+        landmark: _landmarkController.text.trim().isEmpty ? null : _landmarkController.text.trim(),
         // Plumbed through three layers and sent by nothing until now. For an
         // unscheduled ambulance request the server still claims a unit
         // immediately, same as before; a scheduled one ignores this
@@ -347,6 +353,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     setState(() {
       _submitFailed = false;
       _sitePhotoFile = null;
+      _landmarkController.clear();
     });
 
     // A mutable local is not promoted inside a closure, and the sheet's builder
@@ -433,6 +440,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       onClear: () => setState(() => _sitePhotoFile = null),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _landmarkController,
+                  decoration: const InputDecoration(
+                    labelText: 'Landmark (optional)',
+                    hintText: 'e.g. beside the chapel, near the covered court',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
                 const SizedBox(height: 6),

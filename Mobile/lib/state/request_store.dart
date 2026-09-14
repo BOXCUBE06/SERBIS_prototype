@@ -782,6 +782,7 @@ class AppState extends ChangeNotifier {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     /// Present only for an ambulance request. When it is, the server composes
     /// `description` from it and `request.description` is not sent at all —
     /// the optimistic row still carries its own copy for the Track screen.
@@ -813,6 +814,7 @@ class AppState extends ChangeNotifier {
         requiredVehicleType: requiredVehicleType,
         sitePhotoBytes: sitePhotoBytes,
         sitePhotoFileName: sitePhotoFileName,
+        landmark: landmark,
         scheduledAt: request.scheduledAt,
         intake: intake,
       );

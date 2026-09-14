@@ -213,6 +213,9 @@ class ServiceRequestController extends Controller
             // form. Not required, because most requests are filed in conditions
             // where stopping to photograph anything is the wrong advice.
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
+            // Free-text companion to site_photo — a landmark the resident can
+            // type faster than they can stop to photograph one.
+            'landmark' => 'nullable|string|max:255',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
@@ -390,6 +393,7 @@ class ServiceRequestController extends Controller
                     'description' => $description,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
+                    'landmark' => $validated['landmark'] ?? null,
                     // A scheduled booking is approved capacity, not a request
                     // waiting on staff triage — 'Pending' would queue it next to
                     // a report nobody has looked at yet. scheduled_end and

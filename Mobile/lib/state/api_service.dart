@@ -711,6 +711,7 @@ class ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) {
@@ -747,6 +748,9 @@ class ApiService {
 
     if (requiredVehicleType != null && requiredVehicleType.isNotEmpty) {
       request.fields['required_vehicle_type'] = requiredVehicleType;
+    }
+    if (landmark != null && landmark.isNotEmpty) {
+      request.fields['landmark'] = landmark;
     }
     // UTC with a 'Z' suffix, never a naive local string. The server honours an
     // offset-carrying string as the real instant it names; a bare
@@ -792,6 +796,7 @@ class ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
@@ -803,6 +808,7 @@ class ApiService {
       requiredVehicleType: requiredVehicleType,
       sitePhotoBytes: sitePhotoBytes,
       sitePhotoFileName: sitePhotoFileName,
+      landmark: landmark,
       scheduledAt: scheduledAt,
       intake: intake,
     );

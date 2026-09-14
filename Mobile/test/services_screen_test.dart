@@ -96,6 +96,7 @@ class FakeApi extends ApiService {
   int submitCount = 0;
   List<int>? lastSitePhotoBytes;
   String? lastSitePhotoName;
+  String? lastLandmark;
 
   /// The description as it reaches the server, which is the only place the
   /// dispatcher reads the resident's callback number now that no form asks for
@@ -163,12 +164,14 @@ class FakeApi extends ApiService {
     String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
+    String? landmark,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
     lastSitePhotoName = sitePhotoFileName;
+    lastLandmark = landmark;
     lastDescription = description;
     lastIntake = intake;
 

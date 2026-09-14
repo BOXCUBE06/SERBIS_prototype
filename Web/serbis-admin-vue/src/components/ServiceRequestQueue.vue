@@ -452,6 +452,11 @@
                    reads as a broken image rather than a small one. Fixed
                    180x140 tiles, filled with `cover`, and the full picture is
                    a click away. -->
+              <div class="detail-group" v-if="selectedRequest.landmark">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Landmark</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.landmark }}</div>
+              </div>
+
               <div class="detail-group" v-if="attachments.length > 0">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
 
