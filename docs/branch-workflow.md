@@ -2,7 +2,10 @@
 
 ## `main` — production
 
-Railway deploys from `main`. Merging here ships.
+**Railway deploys from `update-admin-vue` today, not `main`.** Switching the
+Railway service to build from `main` is a pending manual change in the
+Railway dashboard, not yet done — until it is, merging into `main` does not
+ship by itself. Update this note once that switch happens.
 
 `main` only receives merges from `update-admin-vue`, and only after that
 branch's tests pass — backend (`php artisan test`), mobile (`flutter test`),
