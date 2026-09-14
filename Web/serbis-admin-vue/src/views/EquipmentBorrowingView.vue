@@ -705,6 +705,7 @@
             v-model="actionDialog.dueDate"
             type="date"
             :min="todayInput()"
+            :max="daysFromToday(DEFAULT_LOAN_DAYS)"
             label="Due back on"
             variant="outlined"
             density="comfortable"
@@ -1416,9 +1417,10 @@ onUnmounted(() => {
   returnPhoto.release()
 })
 
-// Default fortnight-minus-a-week: a week is the office's usual loan and the
-// operator can move it in the dialog. It is a default, never a silent write —
-// the date is always shown before the request goes out.
+// Also the policy cap (MDRRMO feedback, 2026-09-14): a loan runs 1-7 days,
+// enforced server-side too (EquipmentBorrowingController::update). The
+// operator can still move the date within that window in the dialog; the
+// date is always shown before the request goes out.
 const DEFAULT_LOAN_DAYS = 7
 
 const requestAction = (record, newStatus) => {

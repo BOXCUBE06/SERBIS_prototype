@@ -317,7 +317,7 @@ class InputBoundsTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('due_date');
     }
 
-    public function test_a_due_date_more_than_a_year_out_is_rejected(): void
+    public function test_a_due_date_past_the_seven_day_cap_is_rejected(): void
     {
         $borrowing = $this->pendingBorrowing();
 
@@ -325,7 +325,7 @@ class InputBoundsTest extends TestCase
 
         $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
             'status' => 'Approved',
-            'due_date' => now()->addYears(3)->format('Y-m-d'),
+            'due_date' => now()->addDays(8)->format('Y-m-d'),
         ])->assertStatus(422)->assertJsonValidationErrors('due_date');
     }
 

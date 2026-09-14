@@ -33,6 +33,7 @@
         <v-date-picker
           v-model="pickerDate"
           :min="dateMin"
+          :max="dateMax"
           hide-header
           show-adjacent-months
           class="dtp-pane"
@@ -84,6 +85,8 @@ const props = defineProps({
   // create dialog's "1 hour from now") is still enforced server-side,
   // untouched by this component.
   min: { type: String, default: '' },
+  // Same shape and same day-only granularity as min, mirrored the same way.
+  max: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -116,6 +119,8 @@ const displayValue = computed(() => {
 // The day-only floor VDatePicker enforces. min itself may carry a time
 // component (minScheduleValue does); only the calendar day matters here.
 const dateMin = computed(() => parseValue(props.min, false) || (isDateTime.value ? parseValue(props.min, true) : null))
+// The day-only ceiling, mirroring dateMin.
+const dateMax = computed(() => parseValue(props.max, false) || (isDateTime.value ? parseValue(props.max, true) : null))
 
 const menuOpen = ref(false)
 const pickerDate = ref(null)
@@ -158,6 +163,25 @@ function confirm () {
       rangeError.value = isDateTime.value
         ? 'That time is earlier than the earliest this can be scheduled.'
         : 'That date is earlier than the earliest allowed.'
+      return
+    }
+  }
+
+  if (props.max) {
+    const maxInstant = parseValue(props.max, isDateTime.value)
+    const candidate = isDateTime.value
+      ? (() => {
+          const [h, mi] = pickerTime.value.split(':').map(Number)
+          const d = new Date(pickerDate.value)
+          d.setHours(h, mi, 0, 0)
+          return d
+        })()
+      : pickerDate.value
+
+    if (maxInstant && candidate > maxInstant) {
+      rangeError.value = isDateTime.value
+        ? 'That time is later than the latest this can be scheduled.'
+        : 'That date is later than the latest allowed.'
       return
     }
   }

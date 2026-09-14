@@ -296,11 +296,12 @@ class EquipmentBorrowingController extends Controller
             // Both optional: a status change on its own is still a valid call,
             // and only two of the five transitions carry either of these.
             //
-            // Bounded in both directions, which it was not at all. A loan is
-            // due back after it is lent, so a date already past is a typo, not
-            // an instruction — and a year is far beyond the panel's own
-            // seven-day default (DEFAULT_LOAN_DAYS, EquipmentBorrowingView.vue)
-            // while still catching the mis-keyed century.
+            // Bounded in both directions. A loan is due back after it is
+            // lent, so a date already past is a typo, not an instruction —
+            // and the upper bound is the agency's own policy cap (MDRRMO
+            // feedback, 2026-09-14): a loan runs 1-7 days, matching the
+            // panel's DEFAULT_LOAN_DAYS default (EquipmentBorrowingView.vue).
+            // This used to allow +1 year, which was never a real loan term.
             //
             // Safe against the overdue case specifically: the panel sends
             // `due_date` only when approving, or when releasing a row that
@@ -308,9 +309,9 @@ class EquipmentBorrowingController extends Controller
             // the status alone, so closing one out is untouched by the lower
             // bound. `today` resolves in app.timezone (UTC) while the office
             // reads Manila, which can admit yesterday-in-Manila for eight
-            // hours — the rule is here to reject 2019 and 9999, not to police
-            // a day boundary.
-            'due_date' => 'sometimes|nullable|date|after_or_equal:today|before_or_equal:+1 year',
+            // hours — the lower bound stays loose on purpose, to absorb that
+            // slack rather than reject a legitimate same-day approval.
+            'due_date' => 'sometimes|nullable|date|after_or_equal:today|before_or_equal:+7 days',
             'denial_reason' => 'sometimes|nullable|string|max:255',
         ]);
 

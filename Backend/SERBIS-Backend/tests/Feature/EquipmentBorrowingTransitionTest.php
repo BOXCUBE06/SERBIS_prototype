@@ -236,9 +236,9 @@ class EquipmentBorrowingTransitionTest extends TestCase
     public function test_resending_the_current_status_is_a_no_op_not_a_transition(): void
     {
         $borrowing = $this->borrowingAt('Approved');
-        // Relative: `due_date` is bounded to [today, +1 year], so a hardcoded
+        // Relative: `due_date` is bounded to [today, +7 days], so a hardcoded
         // literal starts failing on a date unrelated to what this asserts.
-        $due = now()->addDays(9)->format('Y-m-d');
+        $due = now()->addDays(6)->format('Y-m-d');
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", [
