@@ -442,6 +442,25 @@ String formatDueDate(DateTime at) {
   return '${_monthAbbrev[local.month - 1]} ${local.day}, ${local.year}';
 }
 
+/// Matches the admin panel's `dueLabel` (`EquipmentBorrowingView.vue`) —
+/// "N days overdue" / "Due today" / "Due tomorrow" / "Due in N days" — so a
+/// borrower and staff read the same urgency off the same date. Both
+/// midnights are taken locally, same as the panel's `dueDelta`. [now]
+/// defaults to the device clock and is injectable for tests.
+String dueLabel(DateTime due, [DateTime? now]) {
+  final today = now ?? DateTime.now();
+  final todayMidnight = DateTime(today.year, today.month, today.day);
+  final dueMidnight = DateTime(due.year, due.month, due.day);
+  final delta = dueMidnight.difference(todayMidnight).inDays;
+  if (delta < 0) {
+    final overdueDays = -delta;
+    return '$overdueDays day${overdueDays == 1 ? '' : 's'} overdue';
+  }
+  if (delta == 0) return 'Due today';
+  if (delta == 1) return 'Due tomorrow';
+  return 'Due in $delta days';
+}
+
 class ServiceRequest {
   final int? id;
   final int? serviceId;

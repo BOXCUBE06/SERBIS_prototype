@@ -417,4 +417,30 @@ void main() {
       expect(formatDueDate(DateTime(2026, 3, 4)), 'Mar 4, 2026');
     });
   });
+
+  // Mirrors the admin panel's dueLabel (EquipmentBorrowingView.vue) so a
+  // borrower and staff read the same urgency off the same date.
+  group('dueLabel', () {
+    final today = DateTime(2026, 9, 12);
+
+    test('due later today reads as due today, not overdue', () {
+      expect(dueLabel(DateTime(2026, 9, 12), today), 'Due today');
+    });
+
+    test('due tomorrow', () {
+      expect(dueLabel(DateTime(2026, 9, 13), today), 'Due tomorrow');
+    });
+
+    test('due several days out', () {
+      expect(dueLabel(DateTime(2026, 9, 17), today), 'Due in 5 days');
+    });
+
+    test('one day overdue is singular', () {
+      expect(dueLabel(DateTime(2026, 9, 11), today), '1 day overdue');
+    });
+
+    test('several days overdue is plural', () {
+      expect(dueLabel(DateTime(2026, 9, 9), today), '3 days overdue');
+    });
+  });
 }

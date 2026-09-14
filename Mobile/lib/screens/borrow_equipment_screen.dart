@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../models/borrow_models.dart';
-import '../models/request_models.dart' show formatDueDate, formatTimelineTime;
+import '../models/request_models.dart' show dueLabel, formatTimelineTime;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -439,7 +439,7 @@ class _BorrowRequestCard extends StatelessWidget {
                 const Icon(Icons.event_outlined, size: 14, color: AppColors.inkFaint),
                 const SizedBox(width: 8),
                 Text(
-                  'Due back ${formatDueDate(request.dueDate!)}',
+                  dueLabel(request.dueDate!),
                   style: AppText.body(size: 12, color: AppColors.inkMuted),
                 ),
               ],
