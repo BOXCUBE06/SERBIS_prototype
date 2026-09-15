@@ -640,7 +640,8 @@
                       <template v-if="formData.vehicle_id">
                         Ready to dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
                       </template>
-                      <template v-else>Select one to enable dispatch.</template>
+                      <template v-else-if="scope === 'ambulance'">Select one to enable dispatch.</template>
+                      <template v-else>Optional — approving without one sends no unit.</template>
                     </div>
                   </div>
                 </div>
@@ -1568,16 +1569,28 @@ const reasonCopy = computed(() => {
   const appHint = 'Shown to the Head of the Family in the mobile app.'
   const noAppHint = 'No linked account — kept as an internal record only, not shown to anyone.'
   switch (reasonDialog.value.kind) {
-    case 'approve':
-      return {
-        title: 'Approve and dispatch',
-        body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
-        label: 'Note for the Head of the Family (optional)',
-        placeholder: 'e.g. Wait by the barangay hall, the unit is on its way',
-        hint: appHint,
-        showField: hasAccount,
-        confirm: 'Approve & dispatch',
-      }
+    case 'approve': {
+      // Only a non-ambulance request reaches this with no unit — the
+      // ambulance button stays disabled until one is picked — and saying a
+      // unit "will be sent" there promised something nobody was sending.
+      const unit = getSelectedVehicleName()
+      const note = { label: 'Note for the Head of the Family (optional)', hint: appHint, showField: hasAccount }
+      return unit
+        ? {
+            ...note,
+            title: 'Approve and dispatch',
+            body: `${unit} will be sent for ${what}.`,
+            placeholder: 'e.g. Wait by the barangay hall, the unit is on its way',
+            confirm: 'Approve & dispatch',
+          }
+        : {
+            ...note,
+            title: 'Approve without a vehicle',
+            body: `This approves the request for ${what} and marks it Responding. No vehicle is assigned — cancel and use Select Vehicle first if one is going out.`,
+            placeholder: 'e.g. Our team will visit your address this afternoon',
+            confirm: 'Approve',
+          }
+    }
     case 'bulk':
       return {
         title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
