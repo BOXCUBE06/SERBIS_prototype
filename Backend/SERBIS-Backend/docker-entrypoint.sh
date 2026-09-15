@@ -20,7 +20,7 @@ fail() {
 
 # ---------------------------------------------------------------------------
 # 0. Firebase credentials. FIREBASE_CREDENTIALS_BASE64 exists because Railway
-#    (unlike Render, which bakes storage/certs/aiven-ca.pem — a public CA, not
+#    (unlike Render, which baked storage/certs/aiven-ca.pem — a public CA, not
 #    a secret — into the image) has nowhere host-independent to put a bare
 #    secret file. Decoded here, once, into a real file, so
 #    config/services.php's FIREBASE_CREDENTIALS still reads as a path either
@@ -55,7 +55,7 @@ fi
 # ---------------------------------------------------------------------------
 # 1. Environment. Checked before anything touches the database, and each
 #    failure names the variable: "DB_PASSWORD is not set" is actionable in the
-#    Render dashboard, a PDO connection refusal is not.
+#    Railway dashboard, a PDO connection refusal is not.
 #
 #    DB_CONNECTION is deliberately not required — config/database.php defaults
 #    it to mysql. MYSQL_ATTR_SSL_CA is deliberately not required either: Aiven
@@ -75,7 +75,7 @@ for var in \
     ADMIN_SEED_PASSWORD
 do
     if [ -z "${!var:-}" ]; then
-        fail "$var is not set. Set it on the Render service and redeploy."
+        fail "$var is not set. Set it on the Railway service and redeploy."
     fi
 done
 
@@ -101,7 +101,7 @@ fi
 #    One consequence worth stating: once a config cache exists Laravel stops
 #    loading .env at all (LoadEnvironmentVariables returns early), so every
 #    env() call from here on reads the real process environment. That is exactly
-#    what Render supplies, and it is why ProductionAdminSeeder's
+#    what Railway supplies, and it is why ProductionAdminSeeder's
 #    env('ADMIN_SEED_PASSWORD') still resolves after this line.
 # ---------------------------------------------------------------------------
 php artisan config:cache
