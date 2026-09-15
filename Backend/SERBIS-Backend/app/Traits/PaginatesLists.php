@@ -48,6 +48,12 @@ use Illuminate\Http\Request;
  *
  * When one of those is picked up, reuse this trait so every paginated
  * endpoint answers with the same meta keys.
+ *
+ * `/admin/service-requests` specifically was re-walked by the P1 rate-limit/
+ * request-count audit (2026-09-15) — see the doc comment on
+ * ServiceRequestController::adminIndex() for what a correct paginated
+ * version needs beyond just calling paginate(). Same conclusion as above,
+ * with the specifics spelled out there instead of duplicated here.
  */
 trait PaginatesLists
 {
