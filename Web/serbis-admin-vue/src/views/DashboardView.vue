@@ -305,6 +305,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTheme } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import PageHeader from '@/components/PageHeader.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
@@ -326,6 +327,20 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineEl
 
 const router = useRouter()
 const goTo = (route) => router.push(route)
+
+// Chart.js draws to canvas, not the DOM, so it can't read CSS custom
+// properties the way the rest of the app does -- these read the active
+// theme's resolved hex through Vuetify's own reactive theme instance
+// instead, so the charts repaint when the toggle in AppSidebar flips
+// theme.global.name (see the P2 dark-mode audit, 2026-09-15: this data
+// used to hardcode the light theme's primary, so the dark charts and
+// choropleth never changed color at all).
+const theme = useTheme()
+const themeColors = computed(() => theme.global.current.value.colors)
+const hexToRgb = (hex) => {
+  const n = parseInt(hex.replace('#', ''), 16)
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
+}
 
 const kpiStats = ref([])
 const serviceRequests = ref([])
@@ -479,12 +494,13 @@ const heroSparklineData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
   const key = heroPeriod.value === 'today' ? 'week' : heroPeriod.value
   const source = chartDataRaw.value.bar[key]
+  const primary = themeColors.value.primary
   return {
     labels: source.labels,
     datasets: [{
       data: source.data,
-      borderColor: '#297A67',
-      backgroundColor: 'rgba(41, 122, 103, 0.15)',
+      borderColor: primary,
+      backgroundColor: `rgba(${hexToRgb(primary)}, 0.15)`,
       fill: true,
       borderWidth: 2,
       tension: 0.4
@@ -539,7 +555,7 @@ const volumeChartData = computed(() => {
     labels: paired.map(p => p.label),
     datasets: [{
       label: 'Requests',
-      backgroundColor: '#297A67',
+      backgroundColor: themeColors.value.primary,
       borderRadius: 4,
       barThickness: 14,
       data: paired.map(p => p.value)
@@ -590,19 +606,20 @@ const barChartData = computed(() => {
   if (!chartDataRaw.value) return { labels: [], datasets: [] }
   const key = trendPeriod.value === 'today' ? 'week' : trendPeriod.value
   const source = chartDataRaw.value.bar[key]
+  const primary = themeColors.value.primary
   return {
     labels: source.labels,
     datasets: [{
       label: 'Requests',
       data: source.data,
-      borderColor: '#297A67',
-      backgroundColor: 'rgba(41, 122, 103, 0.15)',
+      borderColor: primary,
+      backgroundColor: `rgba(${hexToRgb(primary)}, 0.15)`,
       fill: true,
       borderWidth: 2,
       tension: 0.35,
       pointRadius: 3,
       pointHoverRadius: 5,
-      pointBackgroundColor: '#297A67',
+      pointBackgroundColor: primary,
       pointBorderColor: '#fff',
       pointBorderWidth: 1,
     }]
@@ -620,12 +637,15 @@ const chartOptions = {
   }
 }
 
-// Define colors based on request density
+// Define colors based on request density. Neutral (zero requests) has no
+// theme token -- it's an explicit per-theme pair, same pattern as the
+// pill-cancelled slate in settings.scss, rather than one literal blind to
+// which theme is active.
 const getMapColor = (d) => {
-  return d > 30 ? '#d32f2f' : // High (Red)
-         d > 15 ? '#f57c00' : // Medium (Orange)
-         d > 0  ? '#2E8B75' : // Low (Green)
-                  '#e0e0e0';  // Zero requests (Grey)
+  if (d > 30) return themeColors.value.error       // High
+  if (d > 15) return themeColors.value.warning      // Medium
+  if (d > 0) return themeColors.value.success       // Low
+  return theme.global.name.value === 'dark' ? '#3A4459' : '#e0e0e0' // Zero requests
 }
 
 const mapEl = ref(null)
@@ -674,8 +694,10 @@ onMounted(() => {
 
 // Repaint whenever counts arrive or change. The map is built on mount with
 // whatever data exists (usually none), so this — not a timer — is what makes
-// the fetch land.
-watch(requestCountByName, () => {
+// the fetch land. Also repaints on a theme toggle: Leaflet isn't reactive,
+// so getMapColor's new theme-token values wouldn't otherwise reach the
+// choropleth until something else re-triggered this watcher.
+watch([requestCountByName, () => theme.global.name.value], () => {
   if (!geoLayer) return
   geoLayer.setStyle(styleFor)
   geoLayer.eachLayer((layer) => layer.setTooltipContent(tooltipFor(layer.feature)))
