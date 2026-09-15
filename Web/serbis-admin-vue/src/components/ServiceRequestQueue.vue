@@ -2032,13 +2032,23 @@ const releaseAttachments = () => {
   sitePhoto.release()
 }
 
+// Aborted on unmount (below) so a component torn down mid-request — a quick
+// nav away from Resident Requests or Ambulance Dispatch — doesn't have its
+// list-load resolve into a ref nobody reads anymore.
+const listAbortController = new AbortController()
+
+// Mount only. vehicles/residents/services barely change mid-session — every
+// write path used to re-pull all four on every approve/reject/reschedule/
+// walk-in/bulk-disapprove, which is most of where ordinary navigation on
+// this page burned its share of the admin-api rate limit (P1 audit,
+// 2026-09-15). fetchRequests() below is what those call now.
 const fetchData = async () => {
   try {
     const [reqRes, vehRes, resRes, svcRes] = await Promise.all([
-      fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/vehicles`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/residents`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/services`, { headers: getHeaders() })
+      fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders(), signal: listAbortController.signal }),
+      fetch(`${API_BASE}/vehicles`, { headers: getHeaders(), signal: listAbortController.signal }),
+      fetch(`${API_BASE}/residents`, { headers: getHeaders(), signal: listAbortController.signal }),
+      fetch(`${API_BASE}/services`, { headers: getHeaders(), signal: listAbortController.signal })
     ])
     const reqData = await reqRes.json()
     const vehData = await vehRes.json()
@@ -2053,17 +2063,40 @@ const fetchData = async () => {
     residents.value = resData.data || resData
     services.value = svcData.data || svcData
 
-    if (!selectedRequest.value && requests.value.length > 0) {
-      selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
-    } else if (selectedRequest.value) {
-      // Keep the panel in sync with the freshly-fetched copy of the selected request
-      const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
-      if (fresh) selectRequest(fresh, false)
-    }
+    selectDefaultOrRefreshSelection()
   } catch (error) {
+    if (error.name === 'AbortError') return
     console.error('Failed to fetch data:', error)
   } finally {
     initialLoad.value = false
+  }
+}
+
+// Every write on this page only ever changes tbl_service_request rows —
+// vehicles/residents/services are untouched by an approve, reject,
+// reschedule, walk-in filing or bulk-disapprove, so re-pulling them on every
+// one of those was three unnecessary requests per write.
+const fetchRequests = async () => {
+  try {
+    const reqRes = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders(), signal: listAbortController.signal })
+    const reqData = await reqRes.json()
+    const allRequests = reqData.data || reqData
+    requests.value = allRequests.filter(r => isAmbulanceRequest(r) === (props.scope === 'ambulance'))
+
+    selectDefaultOrRefreshSelection()
+  } catch (error) {
+    if (error.name === 'AbortError') return
+    console.error('Failed to fetch service requests:', error)
+  }
+}
+
+const selectDefaultOrRefreshSelection = () => {
+  if (!selectedRequest.value && requests.value.length > 0) {
+    selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
+  } else if (selectedRequest.value) {
+    // Keep the panel in sync with the freshly-fetched copy of the selected request
+    const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
+    if (fresh) selectRequest(fresh, false)
   }
 }
 
@@ -2155,7 +2188,7 @@ const updateStatus = async (newStatus, targetRequest = selectedRequest.value) =>
     // moves it to Dispatched, and returns it to Available on a terminal status.
     // Doing it from here could only ever handle the dispatch half — nothing was
     // releasing the unit afterwards, so the fleet drained one vehicle at a time.
-    await fetchData()
+    await fetchRequests()
 
     // Responding is the one transition that makes the server create a trip
     // stub (ServiceRequestController's C5 bridge) — Trip Logs keeps its own
@@ -2197,7 +2230,7 @@ const saveInternalNote = async () => {
       const errData = await res.json()
       throw new Error(errData.message || 'Failed to save the note')
     }
-    await fetchData()
+    await fetchRequests()
     noteSaved.value = true
     clearTimeout(noteSavedTimer)
     noteSavedTimer = setTimeout(() => { noteSaved.value = false }, 2000)
@@ -2231,7 +2264,7 @@ const approveBooking = async () => {
       throw new Error(firstError || errData.message || 'Failed to approve the booking')
     }
 
-    await fetchData()
+    await fetchRequests()
   } catch (error) {
     apiError.value = error.message
   } finally {
@@ -2327,7 +2360,7 @@ const submitReschedule = async () => {
       return
     }
 
-    await fetchData()
+    await fetchRequests()
     rescheduleDialog.value.open = false
   } catch (error) {
     rescheduleDialog.value.error = error.message
@@ -2511,7 +2544,7 @@ const submitWalkIn = async () => {
       throw new Error(firstError || errData.message || 'Failed to file the request')
     }
     createDialog.value.open = false
-    await fetchData()
+    await fetchRequests()
   } catch (error) {
     createDialog.value.error = error.message
   } finally {
@@ -2537,7 +2570,7 @@ const bulkDisapprove = async (reason) => {
       if (!res.ok) throw new Error('Failed to update one or more requests')
     }))
     selectedIds.clear()
-    await fetchData()
+    await fetchRequests()
     reasonDialog.value.open = false
   } catch {
     apiError.value = 'Failed to update one or more requests'
@@ -2558,6 +2591,7 @@ watch(search, () => { page.value = 1 })
 
 onMounted(fetchData)
 onUnmounted(releaseAttachments)
+onUnmounted(() => listAbortController.abort())
 
 // Everything ConductionRequestView.vue's page-header needs to render this
 // component's own toolbar buttons externally when embedded (standalone=

@@ -148,6 +148,24 @@ class ServiceRequestController extends Controller
         return Service::where('code', self::AMBULANCE_SERVICE_CODE)->value('service_id');
     }
 
+    /**
+     * Full list, unpaginated — intentional, not an oversight. See the
+     * PaginatesLists trait's own comment for the general reasoning; the P1
+     * rate-limit/request-count audit (2026-09-15) walked this endpoint
+     * specifically and confirmed adding paginate() alone would break rather
+     * than fix it: ServiceRequestQueue.vue's status-tab counts, search,
+     * Pending-first sort, bulk-disapprove-by-selected-id and CSV export all
+     * run over the *whole* array client-side, and the endpoint currently
+     * returns both boards (resident requests and ambulance dispatch) mixed,
+     * split by service code only after the full fetch. A correct paginated
+     * version needs, together, not separately: server-side status/search
+     * filtering, a status-count endpoint or payload, a scope param to split
+     * the two boards before paginating, a bulk action that targets a filter
+     * rather than a loaded id list, and an export path that ignores the page
+     * size. That is a feature, not a follow-up patch — revisit if this
+     * endpoint's payload size or query time becomes a real problem as the
+     * table grows, not before.
+     */
     public function adminIndex()
     {
         // Added 'resident.barangay'
