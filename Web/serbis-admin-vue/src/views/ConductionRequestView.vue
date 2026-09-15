@@ -461,8 +461,10 @@
             <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination || 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selected.vehicle || 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selectedVehicleLabel }}</div></v-col>
+            <!-- The fleet has no plate column, so a fleet-linked trip has no
+                 plate to show; the free-text one belongs to the unlinked case. -->
+            <v-col v-if="!selected.vehicle_id" cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
           </v-row>
 
           <v-divider class="my-4"></v-divider>
@@ -783,11 +785,23 @@ const fetchVehicles = async () => {
     // files a trip record, which is the case this must never block.
   }
 }
+const fleetUnitLabel = (v) => `${v.unit_identifier}${v.specification ? ` (${v.specification})` : ''}`
 const ambulanceVehicles = computed(() => vehicles.value.filter(v => v.type === 'Ambulance'))
 const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
-  title: `${v.unit_identifier}${v.specification ? ` (${v.specification})` : ''}`,
+  title: fleetUnitLabel(v),
   value: v.vehicle_id,
 })))
+// vehicle_id is the trip's real link; the free-text `vehicle` column is only
+// what was typed or copied at filing and goes stale, so it is shown only for a
+// trip with no fleet unit. Not an eager-loaded relation: it would serialise
+// under the same `vehicle` key and overwrite that column in the JSON.
+const selectedVehicleLabel = computed(() => {
+  const trip = selected.value
+  if (!trip) return 'N/A'
+  if (!trip.vehicle_id) return trip.vehicle || 'N/A'
+  const unit = vehicles.value.find(v => v.vehicle_id === trip.vehicle_id)
+  return unit ? fleetUnitLabel(unit) : `Unit #${trip.vehicle_id}`
+})
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
 // at selection time. There is no plate to derive here any more — the input was
@@ -795,7 +809,7 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
 const onSelectFleetVehicle = (vehicleId) => {
   const form = createDialog.value.form
   const vehicle = ambulanceVehicles.value.find(v => v.vehicle_id === vehicleId)
-  form.vehicle = vehicle ? `${vehicle.unit_identifier}${vehicle.specification ? ` (${vehicle.specification})` : ''}` : ''
+  form.vehicle = vehicle ? fleetUnitLabel(vehicle) : ''
   // A new pick clears any conflict the previous one raised — it may not
   // apply to this unit at all.
   createDialog.value.conflict = null
@@ -886,7 +900,7 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   // only the display name text is left for the operator to see once it
   // arrives, or to type by hand.
   const fleetUnit = ambulanceVehicles.value.find(v => v.vehicle_id === form.vehicle_id)
-  if (fleetUnit) form.vehicle = `${fleetUnit.unit_identifier}${fleetUnit.specification ? ` (${fleetUnit.specification})` : ''}`
+  if (fleetUnit) form.vehicle = fleetUnitLabel(fleetUnit)
   createDialog.value.conflict = null
 }
 
@@ -1178,7 +1192,10 @@ const submitTripLog = async () => {
   }
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  fetchVehicles()
+})
 </script>
 
 <style scoped>
