@@ -274,7 +274,7 @@
             <v-alert v-if="bookingsError" type="warning" variant="tonal" border="start" density="compact" class="mb-2">
               Could not load approved requests to link: {{ bookingsError }}
               <template v-slot:append>
-                <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="fetchBookings">Retry</v-btn>
+                <v-btn variant="text" size="small" class="text-none font-weight-bold" :loading="bookingsLoading" @click="fetchBookings">Retry</v-btn>
               </template>
             </v-alert>
             <v-autocomplete
@@ -323,7 +323,7 @@
                 <v-alert type="warning" variant="tonal" border="start" density="compact">
                   Could not load the fleet list: {{ vehiclesError }}
                   <template v-slot:append>
-                    <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="fetchVehicles">Retry</v-btn>
+                    <v-btn variant="text" size="small" class="text-none font-weight-bold" :loading="vehiclesLoading" @click="fetchVehicles">Retry</v-btn>
                   </template>
                 </v-alert>
               </v-col>
@@ -760,7 +760,9 @@ const rowProps = ({ item }) => ({
 const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
 const bookings = ref([])
 const bookingsError = ref('')
+const bookingsLoading = ref(false)
 const fetchBookings = async () => {
+  bookingsLoading.value = true
   try {
     const res = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() })
     if (!res.ok) {
@@ -774,6 +776,8 @@ const fetchBookings = async () => {
     // Shown above the booking search, never blocking: filing standalone must
     // still work. Silent, an empty search read as "nothing to link".
     bookingsError.value = error.message || 'Could not reach the server'
+  } finally {
+    bookingsLoading.value = false
   }
 }
 
@@ -795,7 +799,9 @@ const bookingOptions = computed(() => linkableBookings.value.map(r => ({ title: 
 // that component keeps its vehicle list private, same as bookings above.
 const vehicles = ref([])
 const vehiclesError = ref('')
+const vehiclesLoading = ref(false)
 const fetchVehicles = async () => {
+  vehiclesLoading.value = true
   try {
     const res = await fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
     if (!res.ok) {
@@ -809,6 +815,8 @@ const fetchVehicles = async () => {
     // Shown above the fleet picker, never blocking: the free-text name still
     // files. Silent, staff typed a name the double-booking guard cannot check.
     vehiclesError.value = error.message || 'Could not reach the server'
+  } finally {
+    vehiclesLoading.value = false
   }
 }
 const fleetUnitLabel = (v) => `${v.unit_identifier}${v.specification ? ` (${v.specification})` : ''}`
