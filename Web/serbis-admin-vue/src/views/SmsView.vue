@@ -199,11 +199,11 @@
                 </v-alert>
               </div>
               <div class="pt-6 mt-4 border-t">
-                <v-btn 
-                  color="#0f4c3a" 
-                  variant="flat" 
-                  rounded="lg" 
-                  class="text-none font-weight-bold text-white w-100" 
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  rounded="lg"
+                  class="text-none font-weight-bold w-100"
                   size="x-large"
                   height="64"
                   type="submit"
@@ -262,10 +262,10 @@
             @click="cancelSend"
           >Cancel</v-btn>
           <v-btn
-            color="#0f4c3a"
+            color="primary"
             variant="flat"
             rounded="lg"
-            class="text-none font-weight-bold text-white px-6"
+            class="text-none font-weight-bold px-6"
             height="44"
             :loading="loading"
             @click="confirmSend"

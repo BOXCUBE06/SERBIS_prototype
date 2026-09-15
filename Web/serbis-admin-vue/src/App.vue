@@ -4,8 +4,8 @@
          breakpoint (see AppSidebar.vue), so there has to be some way to open
          it that isn't already off-screen itself. Desktop keeps the permanent
          drawer it always had; this bar never renders there. -->
-    <v-app-bar v-if="!isAuthPage && mobile" theme="dark" color="#0A2620" density="comfortable" flat>
-      <v-app-bar-nav-icon aria-label="Open menu" @click="sidebarOpen = true"></v-app-bar-nav-icon>
+    <v-app-bar v-if="!isAuthPage && mobile" class="mobile-app-bar" density="comfortable" flat>
+      <v-app-bar-nav-icon aria-label="Open menu" color="white" @click="sidebarOpen = true"></v-app-bar-nav-icon>
       <span class="text-subtitle-1 font-weight-black text-white tracking-widest">SERBIS</span>
     </v-app-bar>
     <AppSidebar v-if="!isAuthPage" v-model:open="sidebarOpen" />
@@ -66,7 +66,22 @@ useAppTheme().init()
 
 .v-main {
   padding: 0 !important;
-  background-color: #0A2620;
+  background-color: rgb(var(--v-theme-secondary));
+}
+/* Dark mode used this same green gutter behind the rounded content card,
+   which sits right next to the card's own near-black surface -- two
+   unrelated dark hues reading as one muddy block (P0, 2026-09-15 dark-mode
+   audit). Dark gets the theme's own background token instead; light is
+   unchanged. */
+.v-theme--dark .v-main {
+  background-color: rgb(var(--v-theme-background));
+}
+
+.mobile-app-bar {
+  background-color: rgb(var(--v-theme-secondary)) !important;
+}
+.v-theme--dark .mobile-app-bar {
+  background-color: rgb(var(--v-theme-background)) !important;
 }
 
 .v-main__wrap {
@@ -138,8 +153,22 @@ useAppTheme().init()
 
 .modern-drawer {
   font-family: 'Inter', sans-serif;
-  background: radial-gradient(circle at -10% 50%, #154c41 0%, #0A2620 80%) !important;
+  /* #154c41 is a one-off lighter highlight for this gradient's near stop,
+     not used anywhere else -- nothing to collapse it onto. The far stop is
+     the secondary token (already exactly this value in vuetify.ts). */
+  background: radial-gradient(circle at -10% 50%, #154c41 0%, rgb(var(--v-theme-secondary)) 80%) !important;
   border-right: none !important;
+}
+/* Dark mode: same neutral background token as .v-main, with at most a faint
+   green whisper (the radial's own color, not primary) so the shell reads as
+   one consistent dark canvas instead of green-chrome-next-to-navy-card.
+   AppSidebar.vue no longer forces `theme="dark"` on the drawer, so this
+   selector can actually tell dark mode apart from light -- previously the
+   drawer always carried .v-theme--dark itself regardless of the app theme. */
+.v-theme--dark .modern-drawer {
+  background:
+    radial-gradient(circle at -10% 50%, rgba(52, 195, 154, 0.05) 0%, transparent 60%),
+    rgb(var(--v-theme-background)) !important;
 }
 
 .nav-item {

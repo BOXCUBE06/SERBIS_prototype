@@ -14,11 +14,11 @@
       </div>
 
       <v-btn
-        color="#0f4c3a"
+        color="primary"
         variant="flat"
         rounded="lg"
         height="48"
-        class="px-6 text-none font-weight-bold text-white"
+        class="px-6 text-none font-weight-bold"
         to="/"
       >
         <v-icon start>mdi-view-dashboard-outline</v-icon> Go to dashboard

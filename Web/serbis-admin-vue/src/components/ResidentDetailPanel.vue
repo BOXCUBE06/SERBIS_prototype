@@ -90,12 +90,12 @@
 
     <div class="pa-6 pt-4 detail-actions">
       <v-btn
-        color="#0f4c3a"
+        color="primary"
         variant="flat"
         height="48"
         rounded="lg"
         block
-        class="text-none font-weight-bold text-white mb-3"
+        class="text-none font-weight-bold mb-3"
         @click="$emit('edit', resident)"
       >
         <v-icon start>mdi-pencil</v-icon> Edit profile

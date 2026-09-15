@@ -66,16 +66,26 @@ export default createVuetify({
           success: '#34C39A',
           warning: '#F5A524',
           error: '#F16565',
-          info: '#4F9EF8',
+          // #4F9EF8 until this pass: Vuetify's own v-alert tonal variant reads
+          // `info` directly as `currentColor` for its text (not `info-strong`
+          // — that token is our own, Vuetify doesn't know about it), so a
+          // bright, fully-saturated sky blue sat as vivid full-opacity text on
+          // a near-black card and read as glare, not just a tinted background.
+          // Desaturated to a muted steel blue at the same lightness band:
+          // still 6.05:1 on the plain surface and 5.05:1 on its own ~12%
+          // tonal tint over #131B2E (VAlert.css's --v-activated-opacity),
+          // clearly above AA with room to spare, and calm enough to sit next
+          // to the rest of the dark palette.
+          info: '#7C9CC4',
           // Every dark token already clears AA on its own 10% tint over #131B2E
-          // — success 6.48:1, warning 7.08:1, info 5.32:1, error 4.95:1 — so the
+          // — success 6.48:1, warning 7.08:1, info 5.05:1, error 4.95:1 — so the
           // strong keys are aliases here. They exist only so the pill CSS can be
           // written once and work in both themes, the same arrangement
           // primary-strong already uses.
           'success-strong': '#34C39A',
           'warning-strong': '#F5A524',
           'error-strong': '#F16565',
-          'info-strong': '#4F9EF8',
+          'info-strong': '#7C9CC4',
         },
       },
     },

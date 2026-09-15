@@ -219,11 +219,13 @@ class AdminController extends Controller
     /**
      * True when anything in the audit trail points at this account. That
      * foreign key is what makes deletion impossible, so it is also what decides
-     * between deleting and deactivating.
+     * between deleting and deactivating. SMS blasts count too: they write no
+     * audit row but hold their own RESTRICT key on the sender.
      */
     private function hasHistory(User $admin): bool
     {
-        return DB::table('tbl_system_logs')->where('admin_id', $admin->getKey())->exists();
+        return DB::table('tbl_system_logs')->where('admin_id', $admin->getKey())->exists()
+            || DB::table('tbl_sms_logs')->where('sender_id', $admin->getKey())->exists();
     }
 
     /**

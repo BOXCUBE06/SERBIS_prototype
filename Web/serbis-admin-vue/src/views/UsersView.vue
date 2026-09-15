@@ -375,7 +375,7 @@
                     Saving leaves it pending; choose Active to activate it.
                   </span>
                 </v-alert>
-                <v-radio-group v-model="formData.status" inline hide-details color="#0f4c3a">
+                <v-radio-group v-model="formData.status" inline hide-details color="primary">
                   <v-radio label="Active" :value="RESIDENT_STATUS.active"></v-radio>
                   <v-radio label="Deactivated" :value="RESIDENT_STATUS.deactivated"></v-radio>
                 </v-radio-group>
@@ -389,10 +389,10 @@
             Cancel
           </v-btn>
           <v-btn
-            color="#0f4c3a"
+            color="primary"
             variant="flat"
             rounded="lg"
-            class="px-6 text-none font-weight-bold text-white"
+            class="px-6 text-none font-weight-bold"
             height="48"
             :loading="loading"
             @click="saveUser"
@@ -1042,17 +1042,13 @@ onUnmounted(() => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-bottom: 3px solid transparent;
 }
-/* Deep brand green reads well on the light surface (9.9:1) but vanishes on the
-   dark one, so each theme gets the version that stays legible. The primary
-   token alone is not enough: it is mint in dark (good) but only 5.15:1 on
-   white, and the underline needs the heavier weight. */
+/* primary-strong exists for exactly this: primary alone is only 5.15:1 on a
+   light surface, not enough for the underline's weight. primary-strong
+   reaches 7.94:1 on white and is already aliased to primary in the dark
+   theme (6.00:1 there), so one rule now covers both. */
 .active-tab {
-  border-bottom: 3px solid #0f4c3a !important;
-  color: #0f4c3a !important;
-}
-.v-theme--dark .active-tab {
-  border-bottom-color: rgb(var(--v-theme-primary)) !important;
-  color: rgb(var(--v-theme-primary)) !important;
+  border-bottom: 3px solid rgb(var(--v-theme-primary-strong)) !important;
+  color: rgb(var(--v-theme-primary-strong)) !important;
 }
 
 .transition-btn { transition: transform 0.2s ease, opacity 0.2s ease; }
@@ -1109,9 +1105,12 @@ onUnmounted(() => {
   padding: 0 16px !important;
   height: 56px !important;
   border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
-  /* Fixed brand green, not the primary token: this header carries white text,
-     and primary lightens to mint in the dark theme (white-on-mint ~2.2:1). */
-  background-color: #0f4c3a !important;
+  /* secondary, not primary: this header carries white text, and primary
+     lightens to mint in the dark theme (white-on-mint ~2.2:1, fails AA).
+     secondary is the same #0A2620 in both themes on purpose (see
+     plugins/vuetify.ts) -- 16.02:1 with white, so the header stays legible
+     without needing its own per-theme override. */
+  background-color: rgb(var(--v-theme-secondary)) !important;
   white-space: nowrap !important;
 }
 .cell-truncate {
