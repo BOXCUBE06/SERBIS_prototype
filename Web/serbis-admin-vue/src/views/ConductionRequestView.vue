@@ -271,6 +271,12 @@
                  pre-selects this same field — see openCreate). Left empty on
                  purpose is the legitimate walk-up-emergency case: a trip
                  record with no booking behind it at all. -->
+            <v-alert v-if="bookingsError" type="warning" variant="tonal" border="start" density="compact" class="mb-2">
+              Could not load approved requests to link: {{ bookingsError }}
+              <template v-slot:append>
+                <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="fetchBookings">Retry</v-btn>
+              </template>
+            </v-alert>
             <v-autocomplete
               :model-value="createDialog.form.service_request_id"
               @update:model-value="onLinkBooking"
@@ -312,6 +318,14 @@
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field v-model="createDialog.form.destination" label="To:" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              </v-col>
+              <v-col v-if="vehiclesError" cols="12">
+                <v-alert type="warning" variant="tonal" border="start" density="compact">
+                  Could not load the fleet list: {{ vehiclesError }}
+                  <template v-slot:append>
+                    <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="fetchVehicles">Retry</v-btn>
+                  </template>
+                </v-alert>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-select
@@ -461,7 +475,7 @@
             <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination || 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selectedVehicleLabel }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selectedVehicleLabel }}<span v-if="selectedVehicleUnverified" class="text-caption text-medium-emphasis"> · fleet list unavailable</span></div></v-col>
             <!-- The fleet has no plate column, so a fleet-linked trip has no
                  plate to show; the free-text one belongs to the unlinked case. -->
             <v-col v-if="!selected.vehicle_id" cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
@@ -745,15 +759,21 @@ const rowProps = ({ item }) => ({
 // OFFICE_TIMEZONE precedent in ServiceRequestController).
 const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
 const bookings = ref([])
+const bookingsError = ref('')
 const fetchBookings = async () => {
   try {
     const res = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() })
-    if (!res.ok) return
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || `Request failed (${res.status})`)
+    }
     const data = await res.json()
     bookings.value = (data.data || data).filter(r => r.service?.code === AMBULANCE_SERVICE_CODE)
-  } catch {
-    // The create dialog just shows nothing to link — filing a trip record
-    // standalone still works, which is the case this must never block.
+    bookingsError.value = ''
+  } catch (error) {
+    // Shown above the booking search, never blocking: filing standalone must
+    // still work. Silent, an empty search read as "nothing to link".
+    bookingsError.value = error.message || 'Could not reach the server'
   }
 }
 
@@ -774,15 +794,21 @@ const bookingOptions = computed(() => linkableBookings.value.map(r => ({ title: 
 // C7: the fleet picker. Own fetch rather than sharing ServiceRequestQueue's —
 // that component keeps its vehicle list private, same as bookings above.
 const vehicles = ref([])
+const vehiclesError = ref('')
 const fetchVehicles = async () => {
   try {
     const res = await fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
-    if (!res.ok) return
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || `Request failed (${res.status})`)
+    }
     const data = await res.json()
     vehicles.value = data.data || data
-  } catch {
-    // The picker just shows no fleet units — the free-text fallback still
-    // files a trip record, which is the case this must never block.
+    vehiclesError.value = ''
+  } catch (error) {
+    // Shown above the fleet picker, never blocking: the free-text name still
+    // files. Silent, staff typed a name the double-booking guard cannot check.
+    vehiclesError.value = error.message || 'Could not reach the server'
   }
 }
 const fleetUnitLabel = (v) => `${v.unit_identifier}${v.specification ? ` (${v.specification})` : ''}`
@@ -795,13 +821,21 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
 // what was typed or copied at filing and goes stale, so it is shown only for a
 // trip with no fleet unit. Not an eager-loaded relation: it would serialise
 // under the same `vehicle` key and overwrite that column in the JSON.
+const selectedFleetUnit = computed(() => {
+  const id = selected.value?.vehicle_id
+  return id ? vehicles.value.find(v => v.vehicle_id === id) : null
+})
 const selectedVehicleLabel = computed(() => {
   const trip = selected.value
   if (!trip) return 'N/A'
   if (!trip.vehicle_id) return trip.vehicle || 'N/A'
-  const unit = vehicles.value.find(v => v.vehicle_id === trip.vehicle_id)
+  const unit = selectedFleetUnit.value
   return unit ? fleetUnitLabel(unit) : (trip.vehicle || `Unit #${trip.vehicle_id}`)
 })
+// The label above fell back only because the fleet list never loaded.
+const selectedVehicleUnverified = computed(() =>
+  !!(vehiclesError.value && selected.value?.vehicle_id && !selectedFleetUnit.value)
+)
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
 // at selection time. There is no plate to derive here any more — the input was
