@@ -640,7 +640,8 @@
                       <template v-if="formData.vehicle_id">
                         Ready to dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
                       </template>
-                      <template v-else>Select one to enable dispatch.</template>
+                      <template v-else-if="scope === 'ambulance'">Select one to enable dispatch.</template>
+                      <template v-else>Optional — approving without one sends no unit.</template>
                     </div>
                   </div>
                 </div>
@@ -956,13 +957,19 @@
           ></v-btn>
         </v-card-title>
         <v-card-text class="px-5 pt-2">
+          <v-alert
+            v-if="rescheduleDialog.error"
+            type="error" variant="tonal" density="compact" class="mb-4"
+          >{{ rescheduleDialog.error }}</v-alert>
           <DateTimePickerField
-            v-model="rescheduleDialog.form.scheduled_at"
+            :model-value="rescheduleDialog.form.scheduled_at"
             type="datetime-local"
             label="New scheduled time"
             variant="outlined"
             density="comfortable"
             class="mb-3"
+            :error-messages="rescheduleDialog.errors.scheduled_at"
+            @update:model-value="setRescheduleStart"
           ></DateTimePickerField>
           <DateTimePickerField
             v-model="rescheduleDialog.form.scheduled_end"
@@ -971,6 +978,8 @@
             variant="outlined"
             density="comfortable"
             class="mb-3"
+            :error-messages="rescheduleDialog.errors.scheduled_end"
+            @update:model-value="rescheduleDialog.errors.scheduled_end = ''"
           ></DateTimePickerField>
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
@@ -982,8 +991,8 @@
             rows="2"
             counter="255"
             maxlength="255"
-            :error-messages="rescheduleDialog.error"
-            @update:model-value="rescheduleDialog.error = ''"
+            :error-messages="rescheduleDialog.errors.remarks"
+            @update:model-value="rescheduleDialog.errors.remarks = ''"
           ></v-textarea>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
@@ -1560,16 +1569,28 @@ const reasonCopy = computed(() => {
   const appHint = 'Shown to the Head of the Family in the mobile app.'
   const noAppHint = 'No linked account — kept as an internal record only, not shown to anyone.'
   switch (reasonDialog.value.kind) {
-    case 'approve':
-      return {
-        title: 'Approve and dispatch',
-        body: `${getSelectedVehicleName() || 'The selected unit'} will be sent for ${what}.`,
-        label: 'Note for the Head of the Family (optional)',
-        placeholder: 'e.g. Wait by the barangay hall, the unit is on its way',
-        hint: appHint,
-        showField: hasAccount,
-        confirm: 'Approve & dispatch',
-      }
+    case 'approve': {
+      // Only a non-ambulance request reaches this with no unit — the
+      // ambulance button stays disabled until one is picked — and saying a
+      // unit "will be sent" there promised something nobody was sending.
+      const unit = getSelectedVehicleName()
+      const note = { label: 'Note for the Head of the Family (optional)', hint: appHint, showField: hasAccount }
+      return unit
+        ? {
+            ...note,
+            title: 'Approve and dispatch',
+            body: `${unit} will be sent for ${what}.`,
+            placeholder: 'e.g. Wait by the barangay hall, the unit is on its way',
+            confirm: 'Approve & dispatch',
+          }
+        : {
+            ...note,
+            title: 'Approve without a vehicle',
+            body: `This approves the request for ${what} and marks it Responding. No vehicle is assigned — cancel and use Select Vehicle first if one is going out.`,
+            placeholder: 'e.g. Our team will visit your address this afternoon',
+            confirm: 'Approve',
+          }
+    }
     case 'bulk':
       return {
         title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
@@ -2222,7 +2243,10 @@ const approveBooking = async () => {
 // remarks here is a required reason for THIS change, not the general-purpose
 // admin note formData.remarks holds for update().
 const emptyRescheduleForm = () => ({ scheduled_at: '', scheduled_end: '', remarks: '' })
-const rescheduleDialog = ref({ open: false, form: emptyRescheduleForm(), error: '' })
+const emptyRescheduleErrors = () => ({ scheduled_at: '', scheduled_end: '', remarks: '' })
+// `errors` sits under the field the server named; `error` is the alert for
+// anything with no field (a 422 message alone, a network failure).
+const rescheduleDialog = ref({ open: false, form: emptyRescheduleForm(), errors: emptyRescheduleErrors(), error: '' })
 
 // datetime-local wants "YYYY-MM DDTHH:mm" in whatever timezone the input is
 // rendered in, which browsers treat as local — matching formatDateTime's own
@@ -2240,6 +2264,7 @@ const openReschedule = () => {
   rescheduleDialog.value = {
     open: true,
     error: '',
+    errors: emptyRescheduleErrors(),
     form: {
       scheduled_at: toDateTimeLocal(req.scheduled_at),
       scheduled_end: toDateTimeLocal(req.scheduled_end) || toDateTimeLocal(new Date(new Date(req.scheduled_at).getTime() + 2 * 60 * 60 * 1000)),
@@ -2248,15 +2273,32 @@ const openReschedule = () => {
   }
 }
 
+// Moving the start carries the end with it by the same amount, so the
+// booking keeps its length — including a length the operator just typed into
+// Ends. Left alone, Ends kept the old time and a later start failed as
+// "scheduled_end must be after scheduled_at".
+const setRescheduleStart = (value) => {
+  const { form, errors } = rescheduleDialog.value
+  const shift = new Date(value).getTime() - new Date(form.scheduled_at).getTime()
+  const end = new Date(form.scheduled_end).getTime()
+  form.scheduled_at = value
+  errors.scheduled_at = ''
+  if (Number.isNaN(shift) || Number.isNaN(end)) return
+  form.scheduled_end = toDateTimeLocal(new Date(end + shift))
+  errors.scheduled_end = ''
+}
+
 const submitReschedule = async () => {
-  const form = rescheduleDialog.value.form
-  if (!form.scheduled_at || !form.scheduled_end || !form.remarks.trim()) {
-    rescheduleDialog.value.error = 'Every field here is required.'
-    return
-  }
+  const { form } = rescheduleDialog.value
+  const errors = emptyRescheduleErrors()
+  if (!form.scheduled_at) errors.scheduled_at = 'Pick the new time.'
+  if (!form.scheduled_end) errors.scheduled_end = 'Pick when it ends.'
+  if (!form.remarks.trim()) errors.remarks = 'Give a reason — the Head of the Family is shown this.'
+  rescheduleDialog.value.errors = errors
+  rescheduleDialog.value.error = ''
+  if (Object.values(errors).some(Boolean)) return
 
   loading.value = true
-  rescheduleDialog.value.error = ''
   const id = itemId(selectedRequest.value)
 
   try {
@@ -2272,8 +2314,17 @@ const submitReschedule = async () => {
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
-      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
-      throw new Error(firstError || errData.message || 'Failed to reschedule the booking')
+      const fieldErrors = errData.errors || {}
+      const errors = rescheduleDialog.value.errors
+      const unplaced = []
+      for (const [field, messages] of Object.entries(fieldErrors)) {
+        if (field in errors) errors[field] = messages[0]
+        else unplaced.push(messages[0])
+      }
+      if (unplaced.length || !Object.keys(fieldErrors).length) {
+        rescheduleDialog.value.error = unplaced[0] || errData.message || 'Failed to reschedule the booking'
+      }
+      return
     }
 
     await fetchData()
