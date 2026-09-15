@@ -22,9 +22,11 @@ folder and must never be caught by that exclusion; verify with
 
 ## `update-admin-vue` — where the work happens
 
-Feature work commits directly here unless it is large enough to warrant its
-own branch, in which case that branch merges back into `update-admin-vue`
-first, and `update-admin-vue` is what eventually merges into `main`.
+**No new feature branches.** Commit directly to `update-admin-vue`, and
+`update-admin-vue` is what eventually merges into `main`. `wip/schema-audit`
+is the one exception in flight (started before this rule) — finish it there,
+merge it into `update-admin-vue` once, then delete it. Everything after that
+commits directly.
 
 ## OTP bypass — `SERBIS_OTP_BYPASS_CODE`
 
