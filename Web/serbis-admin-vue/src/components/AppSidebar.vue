@@ -7,9 +7,9 @@
     width="260"
     class="modern-drawer"
   >
-    <div class="pa-4 d-flex flex-column h-100">
-      
-      <div class="d-flex align-center justify-space-between mb-8 mt-2 px-2">
+    <div class="d-flex flex-column h-100 sidebar-shell">
+
+      <div class="sidebar-header d-flex align-center justify-space-between mb-2 mt-2 px-4">
         <div class="d-flex align-center">
           <div class="logo-accent"></div>
           <span class="text-h6 font-weight-black text-white tracking-widest">SERBIS</span>
@@ -24,69 +24,71 @@
         ></v-btn>
       </div>
 
-      <div class="text-caption font-weight-medium text-white-50 mb-2 px-2 tracking-widest">Main Menu</div>
-      <v-list bg-color="transparent" density="compact" nav class="px-0">
-        <v-list-item 
-          v-for="item in mainMenu" 
-          :key="item.to" 
-          :to="item.to" 
-          class="mb-1 nav-item" 
-          rounded="pill" 
-          active-class="active-nav-item" 
-          :ripple="false"
+      <div ref="navScrollEl" class="nav-scroll px-4">
+        <div class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest">Main Menu</div>
+        <v-list bg-color="transparent" density="compact" nav class="px-0">
+          <v-list-item
+            v-for="item in mainMenu"
+            :key="item.to"
+            :to="item.to"
+            class="nav-item"
+            rounded="pill"
+            active-class="active-nav-item"
+            :ripple="false"
+          >
+            <template v-slot:prepend>
+              <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
+                <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
+              </v-avatar>
+            </template>
+            <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
+              {{ item.title }}
+            </v-list-item-title>
+          </v-list-item>
+        </v-list>
+
+        <div class="text-caption font-weight-medium text-white-50 mt-3 mb-1 px-2 tracking-widest">System</div>
+        <v-list bg-color="transparent" density="compact" nav class="px-0">
+          <v-list-item
+            v-for="item in systemMenu"
+            :key="item.to"
+            :to="item.to"
+            class="nav-item"
+            rounded="pill"
+            active-class="active-nav-item"
+            :ripple="false"
+          >
+            <template v-slot:prepend>
+              <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
+                <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
+              </v-avatar>
+            </template>
+            <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
+              {{ item.title }}
+            </v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </div>
+
+      <div class="sidebar-footer px-4 pb-4">
+        <v-card
+          color="rgba(255, 255, 255, 0.03)"
+          border="0"
+          class="pa-2 d-flex align-center profile-card"
+          style="cursor: pointer"
+          @click="showLogoutDialog = true"
         >
-          <template v-slot:prepend>
-            <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
-              <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-            </v-avatar>
-          </template>
-          <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-            {{ item.title }}
-          </v-list-item-title>
-        </v-list-item>
-      </v-list>
-
-      <div class="text-caption font-weight-medium text-white-50 mt-6 mb-2 px-2 tracking-widest">System</div>
-      <v-list bg-color="transparent" density="compact" nav class="px-0">
-        <v-list-item 
-          v-for="item in systemMenu" 
-          :key="item.to" 
-          :to="item.to" 
-          class="mb-1 nav-item" 
-          rounded="pill" 
-          active-class="active-nav-item" 
-          :ripple="false"
-        >
-          <template v-slot:prepend>
-            <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
-              <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-            </v-avatar>
-          </template>
-          <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-            {{ item.title }}
-          </v-list-item-title>
-        </v-list-item>
-      </v-list>
-
-      <v-spacer></v-spacer>
-
-      <v-card 
-        color="rgba(255, 255, 255, 0.03)" 
-        border="0" 
-        class="pa-2 d-flex align-center mt-auto profile-card"
-        style="cursor: pointer"
-        @click="showLogoutDialog = true"
-      >
-        <v-avatar size="32" color="rgba(255, 255, 255, 0.1)" class="mr-2 avatar-soft">
-          <v-icon color="white" size="small">mdi-account-outline</v-icon>
-        </v-avatar>
-        <div style="min-width: 0;">
-          <div class="text-caption font-weight-bold text-white text-truncate">MDRRMO Admin</div>
-          <div class="text-white-50 text-truncate" style="font-size: 0.65rem !important;">Echague Panel</div>
-        </div>
-        <v-spacer></v-spacer>
-        <v-icon color="white-50" size="small" class="logout-icon">mdi-logout</v-icon>
-      </v-card>
+          <v-avatar size="32" color="rgba(255, 255, 255, 0.1)" class="mr-2 avatar-soft">
+            <v-icon color="white" size="small">mdi-account-outline</v-icon>
+          </v-avatar>
+          <div style="min-width: 0;">
+            <div class="text-caption font-weight-bold text-white text-truncate">MDRRMO Admin</div>
+            <div class="text-white-50 text-truncate" style="font-size: 0.65rem !important;">Echague Panel</div>
+          </div>
+          <v-spacer></v-spacer>
+          <v-icon color="white-50" size="small" class="logout-icon">mdi-logout</v-icon>
+        </v-card>
+      </div>
     </div>
   </v-navigation-drawer>
 
@@ -111,12 +113,30 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
 import { useAppTheme } from '@/composables/useAppTheme'
 
 const { isLoggingOut, showLogoutDialog, handleLogout } = useAuth()
 const { theme, toggle } = useAppTheme()
+
+// Both sections share one scroll region (see the style block below) so a
+// short viewport clips the end of the list instead of a section going
+// unreachable — see the P0 finding in the 2026-09-15 sidebar audit.
+const navScrollEl = ref<HTMLElement | null>(null)
+const route = useRoute()
+const router = useRouter()
+
+function scrollActiveIntoView() {
+  navScrollEl.value?.querySelector('.active-nav-item')?.scrollIntoView({ block: 'nearest' })
+}
+
+onMounted(() => {
+  router.isReady().then(() => nextTick(scrollActiveIntoView))
+})
+watch(() => route.path, () => nextTick(scrollActiveIntoView))
 
 // permanent forces the drawer to render at full width regardless of
 // model-value, which is what made every page below Vuetify's own mobile
@@ -160,6 +180,41 @@ const systemMenu = [
 
 .tracking-widest { letter-spacing: 0.1em; text-transform: uppercase; }
 .text-white-50 { color: rgba(255, 255, 255, 0.5) !important; }
+
+/* One scroll region between a pinned header and a pinned footer, instead of
+   two independently-clippable v-lists — see the P0 sidebar audit finding
+   (2026-09-15). Vuetify forces `.v-navigation-drawer .v-list{overflow:hidden}`
+   (VNavigationDrawer.css), which gives a v-list an automatic flex min-height
+   of 0; two such lists as flex-column siblings meant the shorter one
+   (System) could be shrunk to zero by the flex algorithm while Main Menu
+   kept most of the space. Wrapping both lists in one flex:1 region with its
+   own overflow-y fixes that: there's exactly one thing left that can shrink. */
+.sidebar-header, .sidebar-footer {
+  flex: none;
+}
+.nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.nav-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.nav-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+/* Tightened from the default compact item height so more of the 13 items
+   fit before .nav-scroll needs to scroll at all — same value in both
+   sections since they share this rule. */
+.nav-scroll :deep(.v-list-item) {
+  min-height: 38px;
+  margin-bottom: 2px;
+}
 
 .logo-accent {
   width: 4px; height: 20px;
