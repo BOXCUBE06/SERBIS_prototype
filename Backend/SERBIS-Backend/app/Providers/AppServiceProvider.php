@@ -47,8 +47,27 @@ class AppServiceProvider extends ServiceProvider
         // navigation could 429. Keyed on admin_id, same reasoning as
         // 'sms-blast' below — one office's CGNAT address must not throttle
         // every admin behind it as a single caller.
+        //
+        // $request->user()->admin_id used to be read unconditionally. In
+        // practice it can't crash today — is.admin (App\Http\Middleware\
+        // IsAdmin) sits between auth:sanctum and this limiter in every
+        // request's final middleware order (see the comment above
+        // Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])
+        // in routes/api.php for how that's verified), so a non-admin never
+        // reaches this closure at all — IsAdmin's 403 stops the pipeline
+        // first. Written defensively anyway: no property read on a
+        // possibly-null user, and a non-admin authenticated user (should
+        // this ever run ahead of IsAdmin after some future reordering)
+        // falls back to its own per-user key rather than colliding with
+        // every other non-admin on '' or with a real admin's bucket.
         RateLimiter::for('admin-api', function (Request $request) {
-            return Limit::perMinute(300)->by('admin:'.$request->user()->admin_id);
+            $user = $request->user();
+
+            if ($user?->admin_id) {
+                return Limit::perMinute(300)->by('admin:'.$user->admin_id);
+            }
+
+            return Limit::perMinute(300)->by($user ? 'user:'.$user->getAuthIdentifier() : $request->ip());
         });
 
         // Auth throttling for /admin/login, /resident/login.

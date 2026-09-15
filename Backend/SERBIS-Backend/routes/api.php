@@ -101,6 +101,20 @@ Route::middleware('throttle:api')->group(function () {
 // inside it — 'admin-api' (300/min per admin_id, AppServiceProvider.php)
 // applies instead of 'api', not on top of it. See the P1 rate-limit audit,
 // 2026-09-15.
+//
+// Middleware order matters here and is not the array order below on its
+// own: Laravel priority-sorts 'auth:sanctum' (Authenticate, implements
+// AuthenticatesRequests, priority index 5) ahead of 'throttle:admin-api'
+// (ThrottleRequests, index 6) regardless of how they're listed —
+// vendor/laravel/framework/.../Foundation/Http/Kernel.php:103-115 for the
+// priority list, vendor/.../Routing/SortedMiddleware.php:33-64 for the sort
+// itself. 'is.admin' (App\Http\Middleware\IsAdmin) isn't in that priority
+// list at all, so SortedMiddleware never moves it — it keeps its literal
+// position in this array, between the two. Net effect: auth:sanctum runs
+// first, then is.admin, then throttle:admin-api — a non-admin is rejected
+// (403) before the admin-api limiter's closure ever sees the request. See
+// the comment on RateLimiter::for('admin-api', ...) for why its key
+// function is still written defensively despite that.
 Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(function () {
     // Administrative Operations
     // GET /admin/analytics used to be registered here against
