@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -325,7 +326,7 @@ class InputBoundsTest extends TestCase
 
         $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
             'status' => 'Approved',
-            'due_date' => now()->addDays(8)->format('Y-m-d'),
+            'due_date' => now('Asia/Manila')->addDays(8)->format('Y-m-d'),
         ])->assertStatus(422)->assertJsonValidationErrors('due_date');
     }
 
@@ -339,8 +340,55 @@ class InputBoundsTest extends TestCase
         // the rule has been tightened past what the panel actually sends.
         $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
             'status' => 'Approved',
-            'due_date' => now()->addDays(7)->format('Y-m-d'),
+            'due_date' => now('Asia/Manila')->addDays(7)->format('Y-m-d'),
         ])->assertOk();
+    }
+
+    /**
+     * 20:00 UTC is 04:00 the next day in Manila. The panel offers Manila
+     * today + 7; the rule used to count from the UTC date and refuse it for
+     * those eight hours every night.
+     */
+    public function test_the_seven_day_cap_counts_from_the_office_calendar(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-15 20:00:00', 'UTC'));
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => '2026-09-23',
+        ])->assertOk();
+    }
+
+    public function test_a_due_date_past_the_cap_gets_a_readable_message(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-15 20:00:00', 'UTC'));
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => '2026-09-24',
+        ])->assertStatus(422)
+            ->assertJsonPath('errors.due_date.0', 'A loan runs at most 7 days — pick Sep 23, 2026 or earlier.');
+    }
+
+    /** The lower bound follows the office calendar too: Manila's yesterday is past. */
+    public function test_the_office_calendars_yesterday_is_rejected(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-15 20:00:00', 'UTC'));
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => '2026-09-15',
+        ])->assertStatus(422)
+            ->assertJsonPath('errors.due_date.0', 'The due date cannot be earlier than today.');
     }
 
     /**

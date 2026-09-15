@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +20,12 @@ class EquipmentBorrowingController extends Controller
 {
     use ResolvesUploadDisks;
     use ScopesToOwner;
+
+    /** The calendar a due date is read in — the office's, same as the panel's picker. */
+    private const OFFICE_TIMEZONE = 'Asia/Manila';
+
+    /** Agency policy cap (MDRRMO feedback, 2026-09-14); DEFAULT_LOAN_DAYS in EquipmentBorrowingView.vue. */
+    private const MAX_LOAN_DAYS = 7;
 
     /**
      * Which column each handover stage writes, and which statuses it may be
@@ -291,6 +298,13 @@ class EquipmentBorrowingController extends Controller
             return response()->json(['message' => 'Borrowing record not found'], 404);
         }
 
+        // Counted from Manila's calendar, not app.timezone (UTC). Between 00:00
+        // and 08:00 Manila the UTC date is still yesterday, so `+7 days` capped
+        // one day short of what the panel's picker offers and its own default
+        // was refused with the raw rule text.
+        $officeToday = Carbon::now(self::OFFICE_TIMEZONE)->startOfDay();
+        $latestDue = $officeToday->copy()->addDays(self::MAX_LOAN_DAYS);
+
         $validated = $request->validate([
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
             // Both optional: a status change on its own is still a valid call,
@@ -298,24 +312,27 @@ class EquipmentBorrowingController extends Controller
             //
             // Bounded in both directions. A loan is due back after it is
             // lent, so a date already past is a typo, not an instruction —
-            // and the upper bound is the agency's own policy cap (MDRRMO
-            // feedback, 2026-09-14): a loan runs 1-7 days, matching the
-            // panel's DEFAULT_LOAN_DAYS default (EquipmentBorrowingView.vue).
-            // This used to allow +1 year, which was never a real loan term.
+            // and the upper bound is the agency's own policy cap. This used
+            // to allow +1 year, which was never a real loan term.
             //
             // Safe against the overdue case specifically: the panel sends
             // `due_date` only when approving, or when releasing a row that
             // never got one. Marking an overdue item Returned or Denied sends
             // the status alone, so closing one out is untouched by the lower
-            // bound. `today` resolves in app.timezone (UTC) while the office
-            // reads Manila, which can admit yesterday-in-Manila for eight
-            // hours — the lower bound stays loose on purpose, to absorb that
-            // slack rather than reject a legitimate same-day approval.
-            'due_date' => 'sometimes|nullable|date|after_or_equal:today|before_or_equal:+7 days',
+            // bound.
+            'due_date' => [
+                'sometimes', 'nullable', 'date',
+                'after_or_equal:'.$officeToday->toDateString(),
+                'before_or_equal:'.$latestDue->toDateString(),
+            ],
             'denial_reason' => 'sometimes|nullable|string|max:255',
             // Optional, alongside the return photo — what staff noticed about
             // the item's condition when it came back.
             'return_condition_note' => 'sometimes|nullable|string|max:500',
+        ], [
+            'due_date.date' => 'Pick a valid due date.',
+            'due_date.after_or_equal' => 'The due date cannot be earlier than today.',
+            'due_date.before_or_equal' => 'A loan runs at most '.self::MAX_LOAN_DAYS.' days — pick '.$latestDue->format('M j, Y').' or earlier.',
         ]);
 
         $newStatus = $validated['status'];

@@ -1525,7 +1525,10 @@ const updateStatus = async (record, newStatus, extra = {}) => {
     })
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || 'Failed to update status')
+      // Field message first: Laravel's top-level `message` appends "(and 1
+      // more error)" when more than one field failed.
+      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
+      throw new Error(firstError || errData.message || 'Failed to update status')
     }
     await fetchData()
     notify(`Request marked ${newStatus}`)
