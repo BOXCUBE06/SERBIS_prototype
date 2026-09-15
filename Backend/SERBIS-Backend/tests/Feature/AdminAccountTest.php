@@ -252,6 +252,27 @@ class AdminAccountTest extends TestCase
         $this->assertSame('Inactive', $other->fresh()->status);
     }
 
+    public function test_an_account_that_only_sent_sms_blasts_is_deactivated(): void
+    {
+        $other = $this->makeAdmin('other@test.local');
+        $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
+        // A blast writes no audit row, so this is the sender's only trace.
+        DB::table('tbl_sms_logs')->insert([
+            'sender_id' => $other->admin_id,
+            'target_area_id' => $barangay->barangay_id,
+            'message_body' => 'Evacuate now.',
+            'status' => 'Sent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->deleteJson("/api/admins/{$other->admin_id}")
+            ->assertStatus(200)
+            ->assertJsonPath('deactivated', true);
+
+        $this->assertSame('Inactive', $other->fresh()->status);
+    }
+
     public function test_closing_an_account_revokes_its_tokens(): void
     {
         $other = $this->makeAdmin('other@test.local');

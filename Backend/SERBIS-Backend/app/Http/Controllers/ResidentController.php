@@ -185,7 +185,24 @@ class ResidentController extends Controller
 
         if ($requestCount > 0) {
             return response()->json([
-                'message' => "Cannot delete — {$requestCount} service request(s) still reference this resident.",
+                'message' => "Cannot delete — {$requestCount} service request(s) still reference this resident. Set their status to Deactivated instead.",
+            ], 422);
+        }
+
+        // The other two RESTRICT keys onto a resident, same reason.
+        $logCount = DB::table('tbl_system_logs')->where('resident_id', $id)->count();
+
+        if ($logCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$logCount} activity log record(s) still reference this resident. Set their status to Deactivated instead.",
+            ], 422);
+        }
+
+        $smsCount = DB::table('tbl_recipients')->where('resident_id', $id)->count();
+
+        if ($smsCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$smsCount} SMS delivery record(s) still reference this resident. Set their status to Deactivated instead.",
             ], 422);
         }
 

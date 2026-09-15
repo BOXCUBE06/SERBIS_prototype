@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Barangay;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BarangayController extends Controller
 {
@@ -61,6 +62,24 @@ class BarangayController extends Controller
     public function destroy($id)
     {
         $barangay = Barangay::findOrFail($id);
+
+        // Both keys onto a barangay are RESTRICT, so an unchecked delete of one
+        // in use was an uncaught 500. Same guard as ServiceController::destroy().
+        $residentCount = DB::table('tbl_residents')->where('barangay_id', $id)->count();
+
+        if ($residentCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$residentCount} resident(s) still reference this barangay.",
+            ], 422);
+        }
+
+        $smsCount = DB::table('tbl_sms_logs')->where('target_area_id', $id)->count();
+
+        if ($smsCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$smsCount} SMS blast(s) still reference this barangay.",
+            ], 422);
+        }
 
         $barangay->delete();
 
