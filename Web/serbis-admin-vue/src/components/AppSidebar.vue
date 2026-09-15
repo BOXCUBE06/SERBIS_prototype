@@ -1,7 +1,6 @@
 <template>
   <v-navigation-drawer
     v-model="isOpen"
-    theme="dark"
     :permanent="!mobile"
     :temporary="mobile"
     width="260"
@@ -173,10 +172,9 @@ const systemMenu = [
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 
-.modern-drawer {
-  font-family: 'Inter', sans-serif;
-  background: radial-gradient(circle at -10% 50%, #154c41 0%, #0A2620 80%) !important;
-}
+/* .modern-drawer's background lives in App.vue now -- it was a byte-for-byte
+   duplicate here (this file is scoped, App.vue's copy is global and already
+   matched this element by class name regardless). One definition, theme-aware. */
 
 .tracking-widest { letter-spacing: 0.1em; text-transform: uppercase; }
 .text-white-50 { color: rgba(255, 255, 255, 0.5) !important; }
