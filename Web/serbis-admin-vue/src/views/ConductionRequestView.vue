@@ -800,7 +800,7 @@ const selectedVehicleLabel = computed(() => {
   if (!trip) return 'N/A'
   if (!trip.vehicle_id) return trip.vehicle || 'N/A'
   const unit = vehicles.value.find(v => v.vehicle_id === trip.vehicle_id)
-  return unit ? fleetUnitLabel(unit) : `Unit #${trip.vehicle_id}`
+  return unit ? fleetUnitLabel(unit) : (trip.vehicle || `Unit #${trip.vehicle_id}`)
 })
 // The free-text `vehicle` name column has no fleet equivalent to leave blank
 // and derive later — unlike a booking's own fields, this has to be written
