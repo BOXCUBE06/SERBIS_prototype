@@ -66,7 +66,7 @@ useAppTheme().init()
 
 .v-main {
   padding: 0 !important;
-  background-color: #0A2620;
+  background-color: rgb(var(--v-theme-secondary));
 }
 /* Dark mode used this same green gutter behind the rounded content card,
    which sits right next to the card's own near-black surface -- two
@@ -78,7 +78,7 @@ useAppTheme().init()
 }
 
 .mobile-app-bar {
-  background-color: #0A2620 !important;
+  background-color: rgb(var(--v-theme-secondary)) !important;
 }
 .v-theme--dark .mobile-app-bar {
   background-color: rgb(var(--v-theme-background)) !important;
@@ -153,7 +153,10 @@ useAppTheme().init()
 
 .modern-drawer {
   font-family: 'Inter', sans-serif;
-  background: radial-gradient(circle at -10% 50%, #154c41 0%, #0A2620 80%) !important;
+  /* #154c41 is a one-off lighter highlight for this gradient's near stop,
+     not used anywhere else -- nothing to collapse it onto. The far stop is
+     the secondary token (already exactly this value in vuetify.ts). */
+  background: radial-gradient(circle at -10% 50%, #154c41 0%, rgb(var(--v-theme-secondary)) 80%) !important;
   border-right: none !important;
 }
 /* Dark mode: same neutral background token as .v-main, with at most a faint
