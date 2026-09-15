@@ -17,8 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Behind a TLS-terminating proxy (any PaaS, or nginx in front of php-fpm)
         // every request arrives from the proxy over plain HTTP. Untrusted, that
         // means asset() and url() emit http:// links on an https:// site, and —
-        // worse — throttleApi() keys its rate limit on the proxy's IP for every
-        // unauthenticated request, so all callers share one 60/min bucket and
+        // worse — the 'api' RateLimiter (routes/api.php, AppServiceProvider.php)
+        // falls back to $request->ip() for every unauthenticated request, so an
+        // untrusted proxy IP would put every caller behind it in one bucket and
         // login stops working under any real load.
         //
         // Trusting '*' is the correct setting for a platform that assigns proxy
@@ -32,7 +33,12 @@ return Application::configure(basePath: dirname(__DIR__))
             | Request::HEADER_X_FORWARDED_PORT
             | Request::HEADER_X_FORWARDED_PROTO);
 
-        $middleware->throttleApi('60,1');
+        // No flat throttleApi() here on purpose — routes/api.php attaches
+        // 'throttle:api' (public + resident routes) or 'throttle:admin-api'
+        // (the is.admin group) explicitly instead, so admin traffic gets its
+        // own higher ceiling rather than sharing the public one (P1 rate-limit
+        // audit, 2026-09-15: a single admin clicking through the request queue
+        // alone could exceed a flat 60/min).
         // API-only app: there is no `login` route to redirect a guest to, and
         // Laravel's default guest redirect resolves route('login') eagerly, so an
         // unauthenticated api/* request without an Accept: application/json header

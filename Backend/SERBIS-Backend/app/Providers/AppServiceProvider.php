@@ -28,6 +28,29 @@ class AppServiceProvider extends ServiceProvider
         self::assertOtpBypassIsUnsetInProduction();
         self::assertSmsFakeIsUnsetInProduction();
 
+        // Replaces the old flat throttleApi('60,1') (bootstrap/app.php used to
+        // set this for the whole 'api' middleware group). Same shape Laravel's
+        // own default 'api' limiter uses — keyed on the authenticated user
+        // where there is one, IP otherwise — but named so routes/api.php can
+        // attach it explicitly to the public/resident routes only. Admin
+        // routes get 'admin-api' below instead of this one.
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->getAuthIdentifier() ?? $request->ip());
+        });
+
+        // Admin panel routes (routes/api.php's is.admin group) — a higher
+        // ceiling than the public 'api' limiter above, and a separate bucket
+        // rather than stacked on top of it (P1 rate-limit audit, 2026-09-15):
+        // a single admin working the request queue already fires several
+        // requests per action (ServiceRequestQueue's list + master-list
+        // refetches), and 60/min shared with public traffic meant ordinary
+        // navigation could 429. Keyed on admin_id, same reasoning as
+        // 'sms-blast' below — one office's CGNAT address must not throttle
+        // every admin behind it as a single caller.
+        RateLimiter::for('admin-api', function (Request $request) {
+            return Limit::perMinute(300)->by('admin:'.$request->user()->admin_id);
+        });
+
         // Auth throttling for /admin/login, /resident/login.
         //
         // Keyed by submitted email first so one account under attack cannot lock out
