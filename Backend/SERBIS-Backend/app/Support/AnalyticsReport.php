@@ -116,6 +116,7 @@ class AnalyticsReport
             'outcomes' => $this->outcomeByMonth(),
             'turnaround' => $this->turnaround(),
             'aging' => $this->aging(),
+            'equipmentUtilization' => $this->equipmentUtilization(),
         ];
     }
 
@@ -415,6 +416,55 @@ class AnalyticsReport
             'data' => array_values($buckets),
             'total' => $rows->count(),
             'oldestDays' => (int) floor($oldestDays),
+        ];
+    }
+
+    /**
+     * Section 6 — equipment utilization, including items never borrowed.
+     *
+     * Built from the full catalogue outward, not from the borrowing table
+     * inward: a query that starts at tbl_equipment_borrowing and groups by
+     * equipment_id can only ever list items that were borrowed at least
+     * once, which is the one thing this section exists to correct. Dead
+     * stock is half the purchasing decision and a chart of only borrowed
+     * items hides it entirely.
+     *
+     * No barangay/service filter — an item's utilization is a fact about
+     * the item, not about who borrowed it or what service they filed for,
+     * and filtering the catalogue by either would make a zero-borrow row
+     * ambiguous between "never borrowed" and "not borrowed by this
+     * barangay". Only the date window narrows the borrow counts.
+     */
+    private function equipmentUtilization(): array
+    {
+        $items = DB::table('tbl_equipments')
+            ->orderBy('item_name')
+            ->select('equipment_id', 'item_name')
+            ->get();
+
+        $borrowed = DB::table('tbl_equipment_borrowing')
+            ->where('created_at', '>=', $this->from)
+            ->where('created_at', '<', $this->to)
+            ->whereNotNull('equipment_id')
+            ->groupBy('equipment_id')
+            ->selectRaw('equipment_id, COUNT(*) as times, COALESCE(SUM(quantity), 0) as qty')
+            ->get()
+            ->keyBy('equipment_id');
+
+        $rows = $items->map(function ($item) use ($borrowed) {
+            $match = $borrowed->get($item->equipment_id);
+
+            return [
+                'label' => $item->item_name,
+                'timesBorrowed' => $match ? (int) $match->times : 0,
+                'quantityBorrowed' => $match ? (int) $match->qty : 0,
+            ];
+        })->sortByDesc('timesBorrowed')->values();
+
+        return [
+            'items' => $rows,
+            'total' => (int) $rows->sum('timesBorrowed'),
+            'zeroBorrowCount' => $rows->where('timesBorrowed', 0)->count(),
         ];
     }
 

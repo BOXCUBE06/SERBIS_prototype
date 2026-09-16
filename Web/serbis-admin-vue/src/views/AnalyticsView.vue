@@ -357,6 +357,48 @@
       </v-col>
     </v-row>
 
+    <v-row>
+      <!-- 6. Equipment utilization. Built from the full catalogue, so a
+           never-borrowed item shows as a zero row rather than not showing at
+           all — dead stock is half the purchasing decision. -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="Equipment utilization"
+          subtitle="Times borrowed and quantity borrowed per item, in this range. Items never borrowed are listed at zero."
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && equipmentUtilization.items.length === 0"
+          :count="equipmentUtilization.total"
+          empty-text="No equipment in the catalogue"
+          @retry="fetchReport"
+        >
+          <div class="table-scroll">
+            <table class="data-table text-body-2">
+              <thead>
+                <tr>
+                  <th class="text-left">Item</th>
+                  <th class="text-right">Times borrowed</th>
+                  <th class="text-right">Quantity borrowed</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in equipmentUtilization.items" :key="item.label">
+                  <td>{{ item.label }}</td>
+                  <td class="text-right" :class="{ 'text-medium-emphasis': item.timesBorrowed === 0 }">{{ item.timesBorrowed }}</td>
+                  <td class="text-right" :class="{ 'text-medium-emphasis': item.quantityBorrowed === 0 }">{{ item.quantityBorrowed }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-if="equipmentUtilization.zeroBorrowCount > 0" class="text-caption text-medium-emphasis mt-3">
+            {{ equipmentUtilization.zeroBorrowCount }} of {{ equipmentUtilization.items.length }}
+            {{ equipmentUtilization.items.length === 1 ? 'item was' : 'items were' }} not borrowed in this range.
+          </div>
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+
   </v-container>
 </template>
 
@@ -380,9 +422,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * was chosen from the data and cut only for scope, so this list is the
  * shortlist to pick up from rather than a wish list:
  *
- *   6.  Equipment utilization — times borrowed and quantity borrowed per
- *       item, INCLUDING zero-borrow items, because dead stock is half the
- *       purchasing decision and a chart of only borrowed items hides it.
  *   7.  Loan turnaround and overdue — median days released to returned,
  *       currently overdue, share returned late. Columns already exist
  *       (released_at, returned_at, due_date).
@@ -582,6 +621,7 @@ const demand = computed(() => report.value?.demand ?? { weekdays: ['Mon', 'Tue',
 const volume = computed(() => report.value?.volume ?? EMPTY_STACK)
 const outcomes = computed(() => report.value?.outcomes ?? EMPTY_STACK)
 const aging = computed(() => report.value?.aging ?? { labels: [], data: [], total: 0, oldestDays: 0 })
+const equipmentUtilization = computed(() => report.value?.equipmentUtilization ?? { items: [], total: 0, zeroBorrowCount: 0 })
 const turnaround = computed(() => report.value?.turnaround ?? {
   firstResponse: { medianHours: null, n: 0 },
   resolution: { medianDays: null, n: 0 },
