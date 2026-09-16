@@ -306,6 +306,43 @@ assumed.
    on-demand run separate from its schedule) and confirm both commands exit
    0 in its logs before trusting the `0 0 * * *` schedule to run it
    unattended.
+10. **Analytics backfill.** Manual, once, after the deploy is otherwise
+    green — see §6a. Skipping it is not a failure: the analytics page works
+    without it and simply reports a smaller sample.
+
+### 6a. Analytics backfill — manual, run once
+
+`first_responded_at` and `resolved_at` on `tbl_service_request` are filled
+going forward by the model, and the **schema** arrives on its own:
+`docker-entrypoint.sh:116` runs `php artisan migrate --force` on every boot
+under `set -euo pipefail`, so a container that is serving requests at all has
+already applied the migration. Nothing to do for the columns themselves.
+
+Historic rows are a separate matter and are **not** touched by any automatic
+step. Recovering them reads the audit log:
+
+```
+php artisan serbis:backfill-request-timestamps --dry-run
+php artisan serbis:backfill-request-timestamps
+```
+
+Run it from a Railway one-off shell against the production service. Deliberately
+not in a migration: a migration runs unattended on every boot, and this is a
+data repair whose coverage a person should read.
+
+- **Idempotent.** It only fills a column that is currently NULL and derives
+  values from log rows that never change, so a second run writes nothing.
+  Safe to re-run later once more history has accumulated.
+- **Expected output** is a coverage table — filled, still NULL, and percent
+  covered, per column — followed by the request total. On the local
+  development database it reported 14 and 8 filled against 50 requests, which
+  is 28% and 16% coverage. **Production will differ and low coverage is the
+  expected result, not a fault.** The audit log begins after the oldest
+  requests, a deleted request takes its log rows with it, and a request
+  created already `Booked` never had a first response to record.
+- Gate: the command exits 0 and prints the table. Then load the Analytics
+  page and confirm the turnaround section shows a sample size (`n`) rather
+  than presenting partial history as a complete record.
 
 ## 7. What stays local
 
