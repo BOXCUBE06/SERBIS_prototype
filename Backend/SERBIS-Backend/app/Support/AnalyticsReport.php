@@ -117,6 +117,7 @@ class AnalyticsReport
             'turnaround' => $this->turnaround(),
             'aging' => $this->aging(),
             'equipmentUtilization' => $this->equipmentUtilization(),
+            'loans' => $this->loanTurnaround(),
         ];
     }
 
@@ -466,6 +467,98 @@ class AnalyticsReport
             'total' => (int) $rows->sum('timesBorrowed'),
             'zeroBorrowCount' => $rows->where('timesBorrowed', 0)->count(),
         ];
+    }
+
+    /**
+     * Section 7 — loan turnaround and overdue.
+     *
+     * Three figures, each reading a different slice of the borrowing
+     * lifecycle:
+     *
+     * - Median days out and the returned-late share are windowed by
+     *   created_at, like every other section, and are asked only of
+     *   borrowings that actually completed the leg they measure — a loan
+     *   still out is neither on time nor late yet.
+     * - Currently overdue DELIBERATELY ignores the date window, the same
+     *   choice aging() makes for open requests: it is a present-moment
+     *   backlog, and scoping it to a range would hide a loan that went out
+     *   last quarter and never came back.
+     *
+     * Barangay filter applies (a loan is tied to the borrowing resident);
+     * service filter does not (equipment borrowing has no service_id).
+     */
+    private function loanTurnaround(): array
+    {
+        $rows = $this->borrowingsScoped()
+            ->select(['tbl_equipment_borrowing.due_date', 'tbl_equipment_borrowing.released_at', 'tbl_equipment_borrowing.returned_at'])
+            ->get();
+
+        $daysOut = [];
+        $returnedCount = 0;
+        $lateCount = 0;
+
+        foreach ($rows as $row) {
+            if ($row->released_at !== null && $row->returned_at !== null) {
+                $daysOut[] = CarbonImmutable::parse($row->released_at, 'UTC')
+                    ->diffInMinutes(CarbonImmutable::parse($row->returned_at, 'UTC')) / 1440;
+            }
+
+            if ($row->returned_at !== null) {
+                $returnedCount++;
+
+                if ($row->due_date !== null) {
+                    $returnedDate = CarbonImmutable::parse($row->returned_at, 'UTC')->timezone(self::OFFICE_TIMEZONE)->toDateString();
+
+                    if ($returnedDate > $row->due_date) {
+                        $lateCount++;
+                    }
+                }
+            }
+        }
+
+        return [
+            'daysOut' => [
+                'medianDays' => $this->median($daysOut),
+                'n' => count($daysOut),
+            ],
+            'returnedLate' => [
+                'count' => $lateCount,
+                'of' => $returnedCount,
+                'percent' => $returnedCount > 0 ? (int) round(($lateCount / $returnedCount) * 100) : null,
+            ],
+            'currentlyOverdue' => $this->currentlyOverdueLoans(),
+        ];
+    }
+
+    /**
+     * Base query for the loan section: the window, plus the barangay filter
+     * joined through the borrowing resident. No service filter — equipment
+     * borrowing carries no service_id.
+     */
+    private function borrowingsScoped()
+    {
+        return DB::table('tbl_equipment_borrowing')
+            ->where('tbl_equipment_borrowing.created_at', '>=', $this->from)
+            ->where('tbl_equipment_borrowing.created_at', '<', $this->to)
+            ->when($this->barangayId, fn ($q) => $q
+                ->join('tbl_residents', 'tbl_equipment_borrowing.resident_id', '=', 'tbl_residents.resident_id')
+                ->where('tbl_residents.barangay_id', $this->barangayId));
+    }
+
+    /**
+     * Released but not yet returned, past its due date, as of right now.
+     * Ignores the date window on purpose — see loanTurnaround() above.
+     */
+    private function currentlyOverdueLoans(): int
+    {
+        return DB::table('tbl_equipment_borrowing')
+            ->where('tbl_equipment_borrowing.status', 'Released')
+            ->whereNotNull('tbl_equipment_borrowing.due_date')
+            ->where('tbl_equipment_borrowing.due_date', '<', CarbonImmutable::now(self::OFFICE_TIMEZONE)->toDateString())
+            ->when($this->barangayId, fn ($q) => $q
+                ->join('tbl_residents', 'tbl_equipment_borrowing.resident_id', '=', 'tbl_residents.resident_id')
+                ->where('tbl_residents.barangay_id', $this->barangayId))
+            ->count();
     }
 
     /**

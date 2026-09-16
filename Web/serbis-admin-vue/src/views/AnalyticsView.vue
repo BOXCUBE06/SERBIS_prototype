@@ -399,6 +399,53 @@
       </v-col>
     </v-row>
 
+    <v-row>
+      <!-- 7. Loan turnaround and overdue. Deliberately calm: this is a
+           standing operational fact, not an incident, so overdue reads in
+           the same neutral tiles as everything else on the page rather than
+           an alarm colour. currentlyOverdue ignores the date filter on
+           purpose (see AnalyticsReport::loanTurnaround) — a loan that went
+           out last quarter and never came back must not disappear because
+           the filter bar says "this month". -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="Loan turnaround and overdue"
+          subtitle="Median days an item is out, and how often it comes back late."
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && loans.daysOut.n === 0 && loans.currentlyOverdue === 0"
+          empty-text="No returned loans in this range"
+          @retry="fetchReport"
+        >
+          <div class="d-flex flex-wrap gap-4">
+            <div class="stat-tile subtle-surface">
+              <div class="text-caption text-medium-emphasis">Median days out</div>
+              <div class="stat-value text-high-emphasis">
+                {{ loans.daysOut.medianDays === null ? '—' : formatDays(loans.daysOut.medianDays) }}
+              </div>
+              <div class="text-caption text-medium-emphasis">n = {{ loans.daysOut.n }}</div>
+            </div>
+
+            <div class="stat-tile subtle-surface">
+              <div class="text-caption text-medium-emphasis">Returned late</div>
+              <div class="stat-value text-high-emphasis">
+                {{ loans.returnedLate.percent === null ? '—' : `${loans.returnedLate.percent}%` }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned in this range
+              </div>
+            </div>
+
+            <div class="stat-tile subtle-surface">
+              <div class="text-caption text-medium-emphasis">Currently overdue</div>
+              <div class="stat-value text-high-emphasis">{{ loans.currentlyOverdue }}</div>
+              <div class="text-caption text-medium-emphasis">As of today, not scoped to this range</div>
+            </div>
+          </div>
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+
   </v-container>
 </template>
 
@@ -422,9 +469,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * was chosen from the data and cut only for scope, so this list is the
  * shortlist to pick up from rather than a wish list:
  *
- *   7.  Loan turnaround and overdue — median days released to returned,
- *       currently overdue, share returned late. Columns already exist
- *       (released_at, returned_at, due_date).
  *   8.  Fleet usage — trips per unit and median trip duration from the
  *       conduction timeline. Odometer km is present on a minority of trips,
  *       so it needs its own sample size.
@@ -622,6 +666,11 @@ const volume = computed(() => report.value?.volume ?? EMPTY_STACK)
 const outcomes = computed(() => report.value?.outcomes ?? EMPTY_STACK)
 const aging = computed(() => report.value?.aging ?? { labels: [], data: [], total: 0, oldestDays: 0 })
 const equipmentUtilization = computed(() => report.value?.equipmentUtilization ?? { items: [], total: 0, zeroBorrowCount: 0 })
+const loans = computed(() => report.value?.loans ?? {
+  daysOut: { medianDays: null, n: 0 },
+  returnedLate: { count: 0, of: 0, percent: null },
+  currentlyOverdue: 0,
+})
 const turnaround = computed(() => report.value?.turnaround ?? {
   firstResponse: { medianHours: null, n: 0 },
   resolution: { medianDays: null, n: 0 },
