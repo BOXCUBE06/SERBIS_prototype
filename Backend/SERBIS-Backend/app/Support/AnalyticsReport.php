@@ -120,6 +120,7 @@ class AnalyticsReport
             'loans' => $this->loanTurnaround(),
             'fleet' => $this->fleetUsage(),
             'barangayCoverage' => $this->barangayResidentsVsRequests(),
+            'adoption' => $this->appAdoptionByMonth(),
         ];
     }
 
@@ -699,6 +700,26 @@ class AnalyticsReport
             'totalResidents' => (int) $residentCounts->sum(),
             'totalRequests' => $counts['total'],
         ];
+    }
+
+    /**
+     * Section 10 — app adoption: walk-in vs app-filed share by month.
+     *
+     * Reuses scoped() and stackByMonth(), the same base query and rollup
+     * volumeByMonth() and outcomeByMonth() use, just labelled by origin
+     * instead of service or status. That means it respects the barangay
+     * filter exactly as scoped() already documents it should — a walk-in
+     * carries no barangay, so filtering by one legitimately zeroes the
+     * walk-in series rather than hiding the section.
+     */
+    private function appAdoptionByMonth(): array
+    {
+        $rows = $this->scoped()
+            ->groupByRaw("CAST(tbl_service_request.created_at AS DATE), CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END")
+            ->selectRaw("CAST(tbl_service_request.created_at AS DATE) as bucket_date, CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END as label, COUNT(*) as total")
+            ->get();
+
+        return $this->stackByMonth($rows);
     }
 
     /**

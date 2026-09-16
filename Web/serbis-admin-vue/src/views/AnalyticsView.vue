@@ -557,6 +557,30 @@
       </v-col>
     </v-row>
 
+    <v-row>
+      <!-- 10. App adoption. Same base query and month rollup as sections 2
+           and 3, labelled by origin instead of service or status — respects
+           the barangay filter exactly as that shared query already does: a
+           walk-in carries no barangay, so filtering by one legitimately
+           zeroes the walk-in series rather than hiding the section. -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="App adoption"
+          subtitle="Walk-in vs app-filed share of requests, by month."
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && adoption.total === 0"
+          :count="adoption.total"
+          empty-text="No requests in this range"
+          @retry="fetchReport"
+        >
+          <div style="height: 260px;">
+            <Bar :data="adoptionChartDataNormalised" :options="percentStackedOptions" />
+          </div>
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+
   </v-container>
 </template>
 
@@ -580,8 +604,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * was chosen from the data and cut only for scope, so this list is the
  * shortlist to pick up from rather than a wish list:
  *
- *   10. App adoption — walk-in vs app-filed share by month. Measures the
- *       project's own premise and is invisible today.
  *   11. Account activation backlog — Inactive residents and signups over
  *       time. Small, but nothing currently surfaces the waiting accounts.
  *
@@ -785,6 +807,7 @@ const fleet = computed(() => report.value?.fleet ?? {
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
+const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
 const turnaround = computed(() => report.value?.turnaround ?? {
   firstResponse: { medianHours: null, n: 0 },
   resolution: { medianDays: null, n: 0 },
@@ -952,6 +975,28 @@ const outcomeChartDataNormalised = computed(() => {
     labels: outcomes.value.labels,
     datasets: outcomes.value.series.map(s => ({
       ...stackedDataset(s, statusColor(s.label)),
+      data: s.data.map((v, i) => (totals[i] ? (v / totals[i]) * 100 : 0)),
+      rawData: s.data,
+    })),
+  }
+})
+
+/** App vs Walk-in is a binary origin, not a status and not a categorical series — its own two-colour mapping rather than reusing either palette. */
+const adoptionColor = (label) => {
+  const c = themeColors.value
+
+  return label === 'App' ? c.primary : (isDark.value ? '#94A3B8' : CANCELLED_COLOR)
+}
+
+const adoptionChartDataNormalised = computed(() => {
+  const totals = adoption.value.labels.map((_, i) =>
+    adoption.value.series.reduce((sum, s) => sum + (s.data[i] || 0), 0)
+  )
+
+  return {
+    labels: adoption.value.labels,
+    datasets: adoption.value.series.map(s => ({
+      ...stackedDataset(s, adoptionColor(s.label)),
       data: s.data.map((v, i) => (totals[i] ? (v / totals[i]) * 100 : 0)),
       rawData: s.data,
     })),
