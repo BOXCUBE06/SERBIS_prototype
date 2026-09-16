@@ -22,7 +22,10 @@
       <div class="d-flex justify-space-between align-start flex-wrap gap-2">
         <div class="min-w-0">
           <v-card-title class="text-body-1 font-weight-bold pa-0">{{ title }}</v-card-title>
-          <v-card-subtitle class="pa-0">
+          <!-- wrap-subtitle: v-card-subtitle ships nowrap + ellipsis, which
+               silently truncated these one-line explanations in the narrower
+               columns. The sentence is the point of the card; it wraps. -->
+          <v-card-subtitle class="pa-0 wrap-subtitle">
             <slot name="subtitle">{{ subtitle }}</slot>
           </v-card-subtitle>
         </div>
@@ -85,5 +88,12 @@ defineEmits(['retry'])
 
 .min-w-0 {
   min-width: 0;
+}
+
+.wrap-subtitle {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
 }
 </style>
