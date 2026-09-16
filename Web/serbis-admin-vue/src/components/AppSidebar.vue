@@ -149,6 +149,9 @@ const isOpen = defineModel<boolean>('open', { default: true })
 
 const mainMenu = [
   { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
+  // Directly after Dashboard: the two are read together, one for today and
+  // one for the quarter.
+  { to: '/analytics', icon: 'mdi-chart-box-outline', title: 'Analytics' },
   { to: '/manage-requests', icon: 'mdi-clipboard-text-outline', title: 'Resident Requests' },
   { to: '/conduction-requests', icon: 'mdi-ambulance', title: 'Ambulance Dispatch Requests' },
   { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
