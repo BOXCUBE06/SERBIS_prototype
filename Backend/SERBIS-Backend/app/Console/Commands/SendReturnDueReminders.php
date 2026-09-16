@@ -10,11 +10,15 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Week 7 item 3. One SMS per borrowing that is out and due back today or
- * tomorrow, sent once — never on a retry — because return_reminder_sent_at is
- * set right after the attempt regardless of whether PhilSMS accepted it.
+ * tomorrow. Marked reminded (return_reminder_sent_at set) only once PhilSMS
+ * actually accepts the send — a rejected response or a thrown exception
+ * leaves the row unmarked so the next run retries it, bounded by the
+ * due-date window above (at most today and tomorrow ever match, so a
+ * permanently-failing number is retried at most twice, not forever).
  *
- * Best-effort like ServiceRequestController::notifyResident(): never throws,
- * a failed send is logged and still marks the row so it is not retried daily.
+ * Best-effort like ServiceRequestController::notifyResident(): never throws.
+ * A failed send is logged (borrowing id only, never the phone number or
+ * message body) rather than the row being falsely marked as delivered.
  */
 class SendReturnDueReminders extends Command
 {
@@ -48,61 +52,93 @@ class SendReturnDueReminders extends Command
             ->whereIn('due_date', [$today, $tomorrow])
             ->get();
 
-        $sent = 0;
-        $skipped = 0;
+        // Checked once per run, not once per borrowing: this reflects a
+        // global config value (the token), never a fact about one row, and a
+        // missing token means every row in the window is equally unreachable
+        // — one warning naming the count, not N identical per-row log lines.
+        if (! PhilSms::configured()) {
+            Log::warning("PhilSMS not configured, {$borrowings->count()} reminder(s) skipped");
+            $this->summary(sent: 0, failed: 0, skippedNoNumber: 0, skippedNotConfigured: $borrowings->count());
 
-        foreach ($borrowings as $borrowing) {
-            if ($this->remind($borrowing, $today, $now)) {
-                $sent++;
-            } else {
-                $skipped++;
-            }
+            return self::FAILURE;
         }
 
-        $this->info("{$sent} reminder(s) sent, {$skipped} skipped (no reachable phone number).");
+        $sent = 0;
+        $failed = 0;
+        $skippedNoNumber = 0;
+
+        foreach ($borrowings as $borrowing) {
+            match ($this->remind($borrowing, $today, $now)) {
+                self::OUTCOME_SENT => $sent++,
+                self::OUTCOME_FAILED => $failed++,
+                self::OUTCOME_SKIPPED => $skippedNoNumber++,
+            };
+        }
+
+        $this->summary($sent, $failed, $skippedNoNumber, skippedNotConfigured: 0);
 
         return self::SUCCESS;
     }
 
+    private const OUTCOME_SENT = 'sent';
+
+    private const OUTCOME_FAILED = 'failed';
+
+    private const OUTCOME_SKIPPED = 'skipped';
+
+    private function summary(int $sent, int $failed, int $skippedNoNumber, int $skippedNotConfigured): void
+    {
+        $this->info(
+            "{$sent} sent, {$failed} failed (will retry), ".
+            "{$skippedNoNumber} skipped (no usable number), ".
+            "{$skippedNotConfigured} skipped (not configured)."
+        );
+    }
+
     /**
-     * True on an attempted send (marks the row so it is not retried), false
-     * on a true skip (no reachable number — left unmarked, so a resident who
-     * fixes their number before the due date still gets reminded).
+     * 'sent' only on an accepted send (marks the row so it is not retried).
+     * 'failed' (a rejected response or a thrown exception) and 'skipped' (no
+     * reachable number) both leave the row unmarked, so a resident who fixes
+     * their number, or a send that goes through next time, still gets
+     * reminded on a later run — the distinction is for the summary line
+     * only, both are retried identically.
      *
      * resident_id is a required, non-nullable FK on this table — unlike
      * ServiceRequest, every borrowing has a resident to read a number from.
      */
-    private function remind(EquipmentBorrowing $borrowing, string $today, Carbon $now): bool
+    private function remind(EquipmentBorrowing $borrowing, string $today, Carbon $now): string
     {
-        if (! PhilSms::configured()) {
-            return false;
-        }
-
+        // PhilSms::configured() is checked once in handle(), before this is
+        // ever called — a missing token is a fact about the run, not this row.
         $number = PhilSms::normalize((string) $borrowing->resident->phone_number);
 
         if ($number === '') {
-            return false;
+            return self::OUTCOME_SKIPPED;
         }
 
         try {
             $response = app(PhilSms::class)->send([$number], $this->reminderMessage($borrowing, $today));
 
             if (! PhilSms::accepted($response)) {
-                Log::warning('Return-due reminder SMS not accepted', [
+                Log::warning('Return-due reminder SMS not accepted, will retry', [
                     'borrow_id' => $borrowing->borrow_id,
                     'status' => $response->status(),
                 ]);
+
+                return self::OUTCOME_FAILED;
             }
         } catch (\Throwable $e) {
-            Log::error('Return-due reminder SMS failed', [
+            Log::error('Return-due reminder SMS failed, will retry', [
                 'borrow_id' => $borrowing->borrow_id,
                 'error' => $e->getMessage(),
             ]);
+
+            return self::OUTCOME_FAILED;
         }
 
         $borrowing->update(['return_reminder_sent_at' => $now]);
 
-        return true;
+        return self::OUTCOME_SENT;
     }
 
     /**

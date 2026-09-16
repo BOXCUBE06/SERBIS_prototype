@@ -8,8 +8,10 @@ use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -130,6 +132,32 @@ class SendReturnRemindersTest extends TestCase
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
     }
 
+    public function test_a_rejected_response_leaves_the_row_unmarked_for_retry(): void
+    {
+        // A 200 carrying status "error" — PhilSms::accepted() treats this as
+        // a rejection, not a success, same as ServiceRequestController's own
+        // sends.
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200)]);
+
+        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        Http::assertSentCount(1);
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a rejected send must not be marked as delivered');
+    }
+
+    public function test_a_thrown_exception_leaves_the_row_unmarked_for_retry(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out')]);
+
+        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a failed send must not be marked as delivered');
+    }
+
     public function test_skips_a_borrowing_with_no_reachable_phone_number(): void
     {
         Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
@@ -146,6 +174,45 @@ class SendReturnRemindersTest extends TestCase
         // Left unmarked: a resident who fixes their number before the due
         // date still gets reminded on a later run.
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
+    }
+
+    public function test_missing_philsms_config_logs_one_warning_and_exits_non_zero(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Config::set('services.philsms.token', null);
+
+        $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+        $this->released($this->resident('09172222222'), now()->format('Y-m-d'));
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('PhilSMS not configured, 2 reminder(s) skipped');
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_the_summary_line_reports_all_four_buckets(): void
+    {
+        // Keyed on the recipient in the request body, not call order, since
+        // EquipmentBorrowing::get() makes no ordering guarantee here.
+        Http::fake(function ($request) {
+            $rejected = str_contains((string) $request['recipient'], '639172222222');
+
+            return Http::response(['status' => $rejected ? 'error' : 'success'], 200);
+        });
+
+        // Sent.
+        $this->released($this->resident('09171111111'), now()->addDay()->format('Y-m-d'));
+        // Failed — rejected by PhilSMS, left unmarked.
+        $this->released($this->resident('09172222222'), now()->addDay()->format('Y-m-d'));
+        // Skipped — no usable number.
+        $this->released($this->resident('not-a-phone'), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')
+            ->expectsOutputToContain('1 sent, 1 failed (will retry), 1 skipped (no usable number), 0 skipped (not configured).')
+            ->assertExitCode(0);
     }
 
     public function test_respects_manila_date_boundaries_not_utc(): void
