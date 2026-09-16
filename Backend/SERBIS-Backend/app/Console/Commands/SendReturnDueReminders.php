@@ -10,11 +10,15 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Week 7 item 3. One SMS per borrowing that is out and due back today or
- * tomorrow, sent once — never on a retry — because return_reminder_sent_at is
- * set right after the attempt regardless of whether PhilSMS accepted it.
+ * tomorrow. Marked reminded (return_reminder_sent_at set) only once PhilSMS
+ * actually accepts the send — a rejected response or a thrown exception
+ * leaves the row unmarked so the next run retries it, bounded by the
+ * due-date window above (at most today and tomorrow ever match, so a
+ * permanently-failing number is retried at most twice, not forever).
  *
- * Best-effort like ServiceRequestController::notifyResident(): never throws,
- * a failed send is logged and still marks the row so it is not retried daily.
+ * Best-effort like ServiceRequestController::notifyResident(): never throws.
+ * A failed send is logged (borrowing id only, never the phone number or
+ * message body) rather than the row being falsely marked as delivered.
  */
 class SendReturnDueReminders extends Command
 {
@@ -88,16 +92,20 @@ class SendReturnDueReminders extends Command
             $response = app(PhilSms::class)->send([$number], $this->reminderMessage($borrowing, $today));
 
             if (! PhilSms::accepted($response)) {
-                Log::warning('Return-due reminder SMS not accepted', [
+                Log::warning('Return-due reminder SMS not accepted, will retry', [
                     'borrow_id' => $borrowing->borrow_id,
                     'status' => $response->status(),
                 ]);
+
+                return false;
             }
         } catch (\Throwable $e) {
-            Log::error('Return-due reminder SMS failed', [
+            Log::error('Return-due reminder SMS failed, will retry', [
                 'borrow_id' => $borrowing->borrow_id,
                 'error' => $e->getMessage(),
             ]);
+
+            return false;
         }
 
         $borrowing->update(['return_reminder_sent_at' => $now]);

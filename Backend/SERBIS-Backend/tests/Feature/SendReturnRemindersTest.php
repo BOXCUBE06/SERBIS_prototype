@@ -130,6 +130,32 @@ class SendReturnRemindersTest extends TestCase
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
     }
 
+    public function test_a_rejected_response_leaves_the_row_unmarked_for_retry(): void
+    {
+        // A 200 carrying status "error" — PhilSms::accepted() treats this as
+        // a rejection, not a success, same as ServiceRequestController's own
+        // sends.
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200)]);
+
+        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        Http::assertSentCount(1);
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a rejected send must not be marked as delivered');
+    }
+
+    public function test_a_thrown_exception_leaves_the_row_unmarked_for_retry(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out')]);
+
+        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a failed send must not be marked as delivered');
+    }
+
     public function test_skips_a_borrowing_with_no_reachable_phone_number(): void
     {
         Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
