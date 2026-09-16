@@ -35,7 +35,7 @@
           size="x-small"
           variant="tonal"
           color="primary"
-          class="font-weight-bold"
+          class="font-weight-bold chip-count"
         >
           n = {{ count.toLocaleString() }}
         </v-chip>
@@ -98,5 +98,12 @@ defineEmits(['retry'])
   overflow: visible;
   text-overflow: clip;
   line-height: 1.35;
+}
+
+/* Vuetify's x-small chip default (0.625rem/10px) falls under an 11px
+   readability floor — flagged by the design detector across every section
+   that shows a sample-size chip, since they all share this component. */
+.chip-count {
+  font-size: 0.6875rem;
 }
 </style>

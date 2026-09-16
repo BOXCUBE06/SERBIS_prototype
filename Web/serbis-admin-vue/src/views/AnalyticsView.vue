@@ -55,6 +55,7 @@
             item-title="label"
             item-value="value"
             label="Barangay"
+            aria-label="Barangay"
             density="compact"
             variant="outlined"
             hide-details
@@ -67,6 +68,7 @@
             item-title="label"
             item-value="value"
             label="Service"
+            aria-label="Service"
             density="compact"
             variant="outlined"
             hide-details
@@ -205,8 +207,8 @@
                    table view is required rather than optional. It doubles as
                    the non-visual reading of the same numbers. -->
               <v-btn-toggle v-model="volumeView" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
-                <v-btn value="chart" size="x-small" class="text-none font-weight-bold px-2" aria-label="Show as chart">Chart</v-btn>
-                <v-btn value="table" size="x-small" class="text-none font-weight-bold px-2" aria-label="Show as table">Table</v-btn>
+                <v-btn value="chart" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as chart">Chart</v-btn>
+                <v-btn value="table" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as table">Table</v-btn>
               </v-btn-toggle>
             </div>
           </template>
@@ -376,9 +378,9 @@
             <table class="data-table text-body-2">
               <thead>
                 <tr>
-                  <th class="text-left">Item</th>
-                  <th class="text-right">Times borrowed</th>
-                  <th class="text-right">Quantity borrowed</th>
+                  <th class="text-left" scope="col">Item</th>
+                  <th class="text-right" scope="col">Times borrowed</th>
+                  <th class="text-right" scope="col">Quantity borrowed</th>
                 </tr>
               </thead>
               <tbody>
@@ -419,7 +421,7 @@
         >
           <div class="d-flex flex-wrap gap-4">
             <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median days out</div>
+              <div class="text-caption text-medium-emphasis">Median time out</div>
               <div class="stat-value text-high-emphasis">
                 {{ loans.daysOut.medianDays === null ? '—' : formatDays(loans.daysOut.medianDays) }}
               </div>
@@ -484,10 +486,10 @@
             <table class="data-table text-body-2">
               <thead>
                 <tr>
-                  <th class="text-left">Unit</th>
-                  <th class="text-left">Type</th>
-                  <th class="text-right">Trips</th>
-                  <th class="text-right">Median duration</th>
+                  <th class="text-left" scope="col">Unit</th>
+                  <th class="text-left" scope="col">Type</th>
+                  <th class="text-right" scope="col">Trips</th>
+                  <th class="text-right" scope="col">Median duration</th>
                 </tr>
               </thead>
               <tbody>
@@ -527,9 +529,9 @@
             <table class="data-table text-body-2">
               <thead>
                 <tr>
-                  <th class="text-left">Barangay</th>
-                  <th class="text-right">Residents</th>
-                  <th class="text-right">Requests</th>
+                  <th class="text-left" scope="col">Barangay</th>
+                  <th class="text-right" scope="col">Residents</th>
+                  <th class="text-right" scope="col">Requests</th>
                 </tr>
               </thead>
               <tbody>
@@ -1101,6 +1103,12 @@ defineExpose({ fetchReport })
 <style scoped>
 .analytics-bg {
   background-color: rgb(var(--v-theme-background));
+}
+
+/* Vuetify's x-small button default (0.625rem/10px) falls under an 11px
+   readability floor, same fact as AnalyticsSection's chip-count override. */
+.toggle-btn-text {
+  font-size: 0.6875rem;
 }
 
 .soft-card {
