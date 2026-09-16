@@ -192,8 +192,11 @@
             </div>
           </v-card-item>
           <v-card-text class="pt-2">
-            <div v-if="topZones.length === 0" class="text-center text-caption text-medium-emphasis py-8">
+            <div v-if="topZones.length === 0 && walkInCount === 0" class="text-center text-caption text-medium-emphasis py-8">
               No zone activity yet
+            </div>
+            <div v-else-if="topZones.length === 0" class="text-center text-caption text-medium-emphasis py-8">
+              No barangay activity yet
             </div>
             <div v-else>
               <div v-for="(brgy, index) in topZones" :key="index" class="d-flex align-center py-2">
@@ -209,6 +212,24 @@
                 </div>
               </div>
             </div>
+
+            <!-- Requests filed at the counter carry no barangay anywhere in
+                 the schema, so they cannot be ranked or drawn on the map. They
+                 used to be dropped by the join instead, which left both this
+                 list and the map reporting fewer requests than exist with
+                 nothing explaining the gap. Counted here instead, beside the
+                 reconciled total, so the section adds up. -->
+            <template v-if="sectionTotal > 0">
+              <v-divider class="my-2"></v-divider>
+              <div class="d-flex justify-space-between align-center py-1">
+                <span class="text-caption text-medium-emphasis">Walk-in (no barangay)</span>
+                <span class="text-caption font-weight-bold text-medium-emphasis">{{ walkInCount }}</span>
+              </div>
+              <div class="d-flex justify-space-between align-center py-1">
+                <span class="text-caption font-weight-bold text-high-emphasis">Total requests</span>
+                <span class="text-caption font-weight-bold text-high-emphasis">{{ sectionTotal }}</span>
+              </div>
+            </template>
           </v-card-text>
         </v-card>
       </v-col>
@@ -366,6 +387,11 @@ const volumePeriod = ref('all')
 
 const mapDataByPeriod = ref({}) // { today|week|month|all: [{name, requests}] } — feeds the Leaflet map + the barangay ranking
 const pieDataByPeriod = ref({}) // { today|week|month|all: { services: {...}, items: {...} } }
+// Requests with no barangay — walk-ins filed at the counter. Reported beside
+// the ranking rather than folded into it: there is no location on the record
+// to rank or draw, but they are still requests and the total has to say so.
+const walkInByPeriod = ref({}) // { today|week|month|all: N }
+const totalsByPeriod = ref({}) // { today|week|month|all: N } — barangays + walk-ins
 
 const PERIOD_LABELS = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All-time' }
 const periodLabelFor = (period) => PERIOD_LABELS[period] || ''
@@ -414,6 +440,8 @@ const fetchDashboardData = async () => {
     borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
     mapDataByPeriod.value = data.mapDataByPeriod || {}
+    walkInByPeriod.value = data.walkInByPeriod || {}
+    totalsByPeriod.value = data.totalsByPeriod || {}
     chartDataRaw.value = data.charts || null
     pieDataByPeriod.value = data.charts?.pieByPeriod || {}
 
@@ -476,6 +504,11 @@ const topZones = computed(() => {
     .slice(0, 5)
     .map(b => ({ ...b, percentage: max > 0 ? Math.round((b.requests / max) * 100) : 0 }))
 })
+
+// Both follow the ranking's own period toggle, not the map's — they are read
+// as part of that list's arithmetic, so they have to move with it.
+const walkInCount = computed(() => walkInByPeriod.value[zonesPeriod.value] ?? 0)
+const sectionTotal = computed(() => totalsByPeriod.value[zonesPeriod.value] ?? 0)
 
 // Headline metric: real aggregate from the backend's day-by-day series (not the 5-item sample lists)
 const heroTotal = computed(() => {
