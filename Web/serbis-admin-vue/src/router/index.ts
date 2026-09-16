@@ -4,6 +4,9 @@ import { getToken } from '../composables/authToken'
 const routes = [
   { path: '/login', component: () => import('../views/LoginView.vue') },
   { path: '/', component: () => import('../views/DashboardView.vue') },
+  // A scrolling page, like every route except the two marked fixedHeight —
+  // the sections stack and the filter bar sticks to the top of the scroll.
+  { path: '/analytics', component: () => import('../views/AnalyticsView.vue') },
   { path: '/users', component: () => import('../views/UsersView.vue') },
   { path: '/staff', component: () => import('../views/StaffView.vue') },
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue') },

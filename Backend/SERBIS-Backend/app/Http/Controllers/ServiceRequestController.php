@@ -91,7 +91,7 @@ class ServiceRequestController extends Controller
      * Public: App\Services\AmbulanceAvailability reads this list rather than
      * keeping its own copy, so the two cannot drift apart.
      */
-    public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
+    public const TERMINAL_STATUSES = ServiceRequest::TERMINAL_STATUSES;
 
     /**
      * update()'s whole state machine: for each target status, the statuses a

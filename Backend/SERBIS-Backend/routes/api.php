@@ -126,6 +126,10 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // resident-facing POST /service-requests above.
     Route::post('/admin/service-requests', [ServiceRequestController::class, 'adminStore']);
     Route::get('/admin/dashboard', [AnalyticsController::class, 'index']);
+    // The retrospective page. This path existed once against a method that
+    // never did and 500'd on every call; it now points at real code. Same
+    // admin-only group as the dashboard.
+    Route::get('/admin/analytics', [AnalyticsController::class, 'report']);
 
     // Info Materials Administrative CRUD Routes
     Route::get('/admin/info-materials', [InfoMaterialController::class, 'index']);

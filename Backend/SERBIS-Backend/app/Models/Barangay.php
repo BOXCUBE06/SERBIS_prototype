@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\InvalidatesAnalyticsCache;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['barangay_name'])]
 class Barangay extends Model
 {
-    use HasFactory, TracksHistory;
+    use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
 

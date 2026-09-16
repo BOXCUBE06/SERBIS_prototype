@@ -8,6 +8,9 @@ use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
 use App\Models\Vehicle;
+use App\Support\AnalyticsCache;
+use App\Support\AnalyticsReport;
+use App\Support\BarangayRequestCounts;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,15 +19,70 @@ use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
 {
+    /**
+     * GET /admin/analytics — the retrospective page, as opposed to index()
+     * below, which is the operational dashboard.
+     *
+     * Unlike the dashboard this one reads the request, so its cache key has to
+     * discriminate on the filters. The key is built through AnalyticsCache so
+     * it carries the current version and a write to any counted model strands
+     * it; the database cache store has no tags and no pattern delete, so a
+     * version counter is the only way to reach a keyspace this shape.
+     *
+     * Key growth is bounded: three of the four presets ignore from/to
+     * entirely, custom ranges are clamped to whole days, and every entry
+     * expires on the same five-minute TTL regardless.
+     */
+    public function report(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'preset' => ['nullable', 'string', 'in:'.implode(',', AnalyticsReport::PRESETS)],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
+            'barangay_id' => ['nullable', 'integer', 'exists:tbl_barangay,barangay_id'],
+            'service_id' => ['nullable', 'integer', 'exists:tbl_services,service_id'],
+        ]);
+
+        [$from, $to, $preset] = AnalyticsReport::resolveRange(
+            $validated['preset'] ?? null,
+            $validated['from'] ?? null,
+            $validated['to'] ?? null,
+        );
+
+        $barangayId = isset($validated['barangay_id']) ? (int) $validated['barangay_id'] : null;
+        $serviceId = isset($validated['service_id']) ? (int) $validated['service_id'] : null;
+
+        $key = AnalyticsCache::key(sprintf(
+            'report:%s:%s:%s:%s:%s',
+            $preset,
+            $from->toDateString(),
+            $to->toDateString(),
+            $barangayId ?? 'all',
+            $serviceId ?? 'all',
+        ));
+
+        return response()->json(Cache::remember($key, AnalyticsCache::TTL_SECONDS, function () use ($from, $to, $preset, $barangayId, $serviceId) {
+            $report = new AnalyticsReport($from, $to, $preset, $barangayId, $serviceId);
+
+            // Same json round-trip as index(): config/cache.php sets
+            // serializable_classes to false, so any Collection reaching the
+            // cache comes back as __PHP_Incomplete_Class on a hit.
+            return json_decode(json_encode($report->build()), true);
+        }));
+    }
+
     public function index(Request $request): JsonResponse
     {
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
         // ~25 queries per admin dashboard load). No discriminator in the key:
         // nothing below reads $request, so the payload is identical for every
-        // admin. TTL-only staleness — no explicit invalidation on the write
-        // paths that feed these numbers, so a change can take up to 5 minutes
-        // to show up on the dashboard.
-        return response()->json(Cache::remember('analytics:dashboard', 300, function () {
+        // admin.
+        //
+        // The TTL is now a backstop rather than the only invalidation:
+        // InvalidatesAnalyticsCache forgets this key on every write to a model
+        // these numbers count, so a status change reaches the panel on the next
+        // load instead of up to five minutes later.
+        return response()->json(Cache::remember(AnalyticsCache::DASHBOARD_KEY, AnalyticsCache::TTL_SECONDS, function () {
             // 1. Calculate KPI Stats
             $totalResidents = Resident::count();
             $pendingService = ServiceRequest::where('status', 'Pending')->count();
@@ -154,31 +212,27 @@ class AnalyticsController extends Controller
             ];
 
             // 5. Heatmap (Choropleth): request counts per barangay.
-            // The join is inner, which drops rows with no resident or no barangay —
-            // matching the old behaviour, which bucketed them as 'Unknown Barangay'
-            // and then rejected them.
-            $countByBarangay = fn (string $table, string $model, ?Carbon $since) => $model::query()
-                ->join('tbl_residents', "{$table}.resident_id", '=', 'tbl_residents.resident_id')
-                ->join('tbl_barangay', 'tbl_residents.barangay_id', '=', 'tbl_barangay.barangay_id')
-                ->when($since, fn ($q) => $q->where("{$table}.created_at", '>=', $since))
-                ->groupBy('tbl_barangay.barangay_name')
-                ->selectRaw('tbl_barangay.barangay_name as name, COUNT(*) as total')
-                ->pluck('total', 'name');
-
+            //
+            // BarangayRequestCounts LEFT JOINs and reports the unplaced rows
+            // separately. The join here used to be inner, which dropped every
+            // walk-in request — resident_id is null on a request filed at the
+            // counter, so 20 of 50 rows locally never reached the map and the
+            // card's totals were 40% short with nothing saying so.
+            //
+            // A walk-in still cannot be drawn: no barangay is recorded for it
+            // anywhere, and inventing one would be worse than omitting it. It
+            // is surfaced as its own count beside the ranking instead, which
+            // is what makes the section reconcile.
             $mapDataByPeriod = [];
-            foreach ($periods as $periodKey => $since) {
-                $serviceByBarangay = $countByBarangay('tbl_service_request', ServiceRequest::class, $since);
-                $borrowByBarangay = $countByBarangay('tbl_equipment_borrowing', EquipmentBorrowing::class, $since);
+            $walkInByPeriod = [];
+            $totalsByPeriod = [];
 
-                $mapDataByPeriod[$periodKey] = $serviceByBarangay->keys()
-                    ->merge($borrowByBarangay->keys())
-                    ->unique()
-                    ->map(fn ($name) => [
-                        'name' => $name,
-                        'requests' => (int) $serviceByBarangay->get($name, 0) + (int) $borrowByBarangay->get($name, 0),
-                    ])
-                    ->sortByDesc('requests')
-                    ->values();
+            foreach ($periods as $periodKey => $since) {
+                $counts = BarangayRequestCounts::forWindow($since);
+
+                $mapDataByPeriod[$periodKey] = $counts['barangays'];
+                $walkInByPeriod[$periodKey] = $counts['walkIn'];
+                $totalsByPeriod[$periodKey] = $counts['total'];
             }
 
             // 6. Pie Chart Data (Services vs Items), same per-period treatment.
@@ -259,6 +313,15 @@ class AnalyticsController extends Controller
                 'borrowRequests' => $borrowRequests,
                 'systemLogs' => $systemLogs,
                 'mapDataByPeriod' => $mapDataByPeriod,
+                // Requests that carry no barangay at all, per period, and the
+                // reconciled section total. The panel prints both beside the
+                // ranking so the numbers on screen add up to the real count.
+                'walkInByPeriod' => $walkInByPeriod,
+                'totalsByPeriod' => $totalsByPeriod,
+                // Same buckets as the analytics page, from the same method:
+                // the KPI strip can say "8 Pending" but not whether one of
+                // them is six weeks old, and that is a today problem.
+                'aging' => AnalyticsReport::openRequestAging(),
                 'charts' => [
                     'pieByPeriod' => $pieByPeriod,
                     'bar' => [

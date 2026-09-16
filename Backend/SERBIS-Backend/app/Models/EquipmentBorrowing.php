@@ -4,6 +4,7 @@
 
 namespace App\Models;
 
+use App\Traits\InvalidatesAnalyticsCache;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Appends(['has_release_photo', 'has_return_photo'])]
 class EquipmentBorrowing extends Model
 {
-    use TracksHistory;
+    use InvalidatesAnalyticsCache, TracksHistory;
 
     protected $table = 'tbl_equipment_borrowing';
 

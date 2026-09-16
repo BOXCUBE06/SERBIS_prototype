@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\InvalidatesAnalyticsCache;
 use App\Traits\TracksHistory; // 1. Import the trait
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -34,7 +35,7 @@ use Laravel\Sanctum\HasApiTokens;
 class Resident extends Authenticatable
 {
     // 2. Add TracksHistory to the used traits list
-    use HasApiTokens, HasFactory, TracksHistory;
+    use HasApiTokens, HasFactory, InvalidatesAnalyticsCache, TracksHistory;
 
     // 3. Sensitive authentication columns you want to exclude from logging
     protected $ignoreLogging = [

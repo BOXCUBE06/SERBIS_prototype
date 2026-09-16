@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\InvalidatesAnalyticsCache;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -19,9 +20,24 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Appends(['has_valid_id', 'has_site_photo'])]
 class ServiceRequest extends Model
 {
-    use HasFactory, TracksHistory;
+    use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
+
+    /**
+     * Statuses that mean the office has answered a request that was waiting
+     * for an answer. 'Cancelled' is deliberately absent: cancel() is guarded
+     * by scopeToOwner and is the resident withdrawing their own request, not
+     * the office responding to it.
+     */
+    public const RESPONSE_STATUSES = ['Booked', 'Responding', 'Disapproved'];
+
+    /**
+     * Statuses that end the request. ServiceRequestController aliases this
+     * rather than keeping a second copy, and App\Services\AmbulanceAvailability
+     * reads it through that alias, so all three agree by construction.
+     */
+    public const TERMINAL_STATUSES = ['Resolved', 'Cancelled', 'Disapproved'];
 
     /**
      * Not stale leftovers: tbl_service_request no longer has these columns,
@@ -35,7 +51,63 @@ class ServiceRequest extends Model
         'scheduled_at' => 'datetime',
         'scheduled_end' => 'datetime',
         'approved_at' => 'datetime',
+        'first_responded_at' => 'datetime',
+        'resolved_at' => 'datetime',
     ];
+
+    /**
+     * Stamps the lifecycle timestamps as the status moves. One place, so
+     * every write path agrees — update(), cancel() and the automatic
+     * Booked -> Responding flip in ConductionRequestController all reach this
+     * through the same model event.
+     *
+     * Two rules, both of which exist to keep the numbers honest rather than
+     * flattering:
+     *
+     * 1. first_responded_at is only stamped on a transition OUT OF Pending.
+     *    Pending is the only status in which a request is actually waiting
+     *    for the office. A request that was created already Booked
+     *    (store()/adminStore() both write that for a scheduled booking) never
+     *    waited, so it keeps a null here forever — and a later Booked ->
+     *    Responding is the trip starting on its appointed day, not the office
+     *    answering, so timing it from created_at would report the lead time
+     *    to the appointment as if it were staff delay.
+     *
+     * 2. Neither column is ever overwritten. "First" response means first.
+     *
+     * Registered on `updating` rather than `updated` so both columns go out
+     * in the same UPDATE as the status itself; stamping afterwards would need
+     * a second save and would recurse through this same event.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (ServiceRequest $request): void {
+            if (! $request->isDirty('status')) {
+                return;
+            }
+
+            $request->stampLifecycle($request->getOriginal('status'), $request->status);
+        });
+    }
+
+    /**
+     * Public and explicit about both ends of the transition so a write path
+     * that ever bypasses model events can apply the identical rules. Sets
+     * attributes only — the caller decides when to persist.
+     */
+    public function stampLifecycle(?string $from, ?string $to): void
+    {
+        if ($this->first_responded_at === null
+            && $from === 'Pending'
+            && in_array($to, self::RESPONSE_STATUSES, true)
+        ) {
+            $this->first_responded_at = now();
+        }
+
+        if ($this->resolved_at === null && in_array($to, self::TERMINAL_STATUSES, true)) {
+            $this->resolved_at = now();
+        }
+    }
 
     /**
      * Always loaded, on every query this model builds — find(), get(), where(),
