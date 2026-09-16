@@ -8,8 +8,10 @@ use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -172,6 +174,23 @@ class SendReturnRemindersTest extends TestCase
         // Left unmarked: a resident who fixes their number before the due
         // date still gets reminded on a later run.
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
+    }
+
+    public function test_missing_philsms_config_logs_one_warning_and_exits_non_zero(): void
+    {
+        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Config::set('services.philsms.token', null);
+
+        $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+        $this->released($this->resident('09172222222'), now()->format('Y-m-d'));
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('PhilSMS not configured, 2 reminder(s) skipped');
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
+
+        Http::assertNothingSent();
     }
 
     public function test_respects_manila_date_boundaries_not_utc(): void

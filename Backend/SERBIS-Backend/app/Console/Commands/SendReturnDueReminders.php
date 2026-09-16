@@ -52,6 +52,17 @@ class SendReturnDueReminders extends Command
             ->whereIn('due_date', [$today, $tomorrow])
             ->get();
 
+        // Checked once per run, not once per borrowing: this reflects a
+        // global config value (the token), never a fact about one row, and a
+        // missing token means every row in the window is equally unreachable
+        // — one warning naming the count, not N identical per-row log lines.
+        if (! PhilSms::configured()) {
+            Log::warning("PhilSMS not configured, {$borrowings->count()} reminder(s) skipped");
+            $this->info("0 sent, 0 failed (will retry), 0 skipped (no usable number), {$borrowings->count()} skipped (not configured).");
+
+            return self::FAILURE;
+        }
+
         $sent = 0;
         $skipped = 0;
 
@@ -69,19 +80,19 @@ class SendReturnDueReminders extends Command
     }
 
     /**
-     * True on an attempted send (marks the row so it is not retried), false
-     * on a true skip (no reachable number — left unmarked, so a resident who
-     * fixes their number before the due date still gets reminded).
+     * True only on an accepted send (marks the row so it is not retried).
+     * False covers three different reasons — no reachable number, a rejected
+     * response, or a thrown exception — and leaves the row unmarked in every
+     * case, so a resident who fixes their number, or a send that goes
+     * through next time, still gets reminded on a later run.
      *
      * resident_id is a required, non-nullable FK on this table — unlike
      * ServiceRequest, every borrowing has a resident to read a number from.
      */
     private function remind(EquipmentBorrowing $borrowing, string $today, Carbon $now): bool
     {
-        if (! PhilSms::configured()) {
-            return false;
-        }
-
+        // PhilSms::configured() is checked once in handle(), before this is
+        // ever called — a missing token is a fact about the run, not this row.
         $number = PhilSms::normalize((string) $borrowing->resident->phone_number);
 
         if ($number === '') {
