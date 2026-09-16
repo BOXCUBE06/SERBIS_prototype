@@ -121,6 +121,7 @@ class AnalyticsReport
             'fleet' => $this->fleetUsage(),
             'barangayCoverage' => $this->barangayResidentsVsRequests(),
             'adoption' => $this->appAdoptionByMonth(),
+            'activation' => $this->activationBacklog(),
         ];
     }
 
@@ -720,6 +721,48 @@ class AnalyticsReport
             ->get();
 
         return $this->stackByMonth($rows);
+    }
+
+    /**
+     * Section 11 — account activation backlog.
+     *
+     * 'Inactive' on tbl_residents means self-registered and waiting for an
+     * admin to switch the account on — NOT the closed state 'Deactivated'
+     * an admin turns off deliberately. The two are a plain varchar column
+     * apart (Resident::isDeactivated() documents the same split in detail),
+     * so counting 'Inactive' exactly, and never 'Deactivated', is what makes
+     * this the waiting-for-activation backlog and not a mix of two
+     * different problems.
+     *
+     * The backlog count itself DELIBERATELY ignores the date window, the
+     * same choice aging() and loanTurnaround()'s currentlyOverdue make: it
+     * is a present-moment count of accounts waiting right now, and scoping
+     * it to "this month" would hide a sign-up from three months ago nobody
+     * has activated yet. signupsByMonth is windowed, because a trend over
+     * time is exactly what the aggregate backlog number cannot show.
+     *
+     * Barangay filter applies to both; no service filter — a resident row
+     * has no service dimension.
+     */
+    private function activationBacklog(): array
+    {
+        $backlog = DB::table('tbl_residents')
+            ->where('status', 'Inactive')
+            ->when($this->barangayId, fn ($q) => $q->where('barangay_id', $this->barangayId))
+            ->count();
+
+        $signupRows = DB::table('tbl_residents')
+            ->where('created_at', '>=', $this->from)
+            ->where('created_at', '<', $this->to)
+            ->when($this->barangayId, fn ($q) => $q->where('barangay_id', $this->barangayId))
+            ->groupByRaw('CAST(created_at AS DATE), status')
+            ->selectRaw('CAST(created_at AS DATE) as bucket_date, status as label, COUNT(*) as total')
+            ->get();
+
+        return [
+            'backlog' => (int) $backlog,
+            'signupsByMonth' => $this->stackByMonth($signupRows),
+        ];
     }
 
     /**
