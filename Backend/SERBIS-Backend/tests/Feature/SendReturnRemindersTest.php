@@ -193,6 +193,28 @@ class SendReturnRemindersTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_the_summary_line_reports_all_four_buckets(): void
+    {
+        // Keyed on the recipient in the request body, not call order, since
+        // EquipmentBorrowing::get() makes no ordering guarantee here.
+        Http::fake(function ($request) {
+            $rejected = str_contains((string) $request['recipient'], '639172222222');
+
+            return Http::response(['status' => $rejected ? 'error' : 'success'], 200);
+        });
+
+        // Sent.
+        $this->released($this->resident('09171111111'), now()->addDay()->format('Y-m-d'));
+        // Failed — rejected by PhilSMS, left unmarked.
+        $this->released($this->resident('09172222222'), now()->addDay()->format('Y-m-d'));
+        // Skipped — no usable number.
+        $this->released($this->resident('not-a-phone'), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')
+            ->expectsOutputToContain('1 sent, 1 failed (will retry), 1 skipped (no usable number), 0 skipped (not configured).')
+            ->assertExitCode(0);
+    }
+
     public function test_respects_manila_date_boundaries_not_utc(): void
     {
         Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
