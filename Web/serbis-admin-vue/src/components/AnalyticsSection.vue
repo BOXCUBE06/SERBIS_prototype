@@ -21,7 +21,7 @@
     <v-card-item>
       <div class="d-flex justify-space-between align-start flex-wrap gap-2">
         <div class="min-w-0">
-          <v-card-title class="text-body-1 font-weight-bold pa-0">{{ title }}</v-card-title>
+          <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-subtitle">{{ title }}</v-card-title>
           <!-- wrap-subtitle: v-card-subtitle ships nowrap + ellipsis, which
                silently truncated these one-line explanations in the narrower
                columns. The sentence is the point of the card; it wraps. -->
@@ -90,6 +90,9 @@ defineEmits(['retry'])
   min-width: 0;
 }
 
+/* Applied to the title as well as the subtitle: both Vuetify components ship
+   nowrap + ellipsis, which clipped "Requests by month and service" inside its
+   own card at phone width. */
 .wrap-subtitle {
   white-space: normal;
   overflow: visible;

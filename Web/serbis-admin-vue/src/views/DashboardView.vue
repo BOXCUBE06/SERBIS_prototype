@@ -158,14 +158,22 @@
       <v-col cols="12">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 7 }">
           <v-card-item>
+            <!-- min-width-0 + wrapping subtitle: at 430px this row measured
+                 315px inside a 295px card and clipped, because v-card-title
+                 and v-card-subtitle are both nowrap by default. -->
             <div class="d-flex justify-space-between align-center flex-wrap gap-2">
-              <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Open Requests by Age</v-card-title>
-                <v-card-subtitle class="pa-0">Still waiting, however long ago they were filed</v-card-subtitle>
+              <div class="min-width-0">
+                <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-text">Open Requests by Age</v-card-title>
+                <!-- Names the statuses outright. The KPI strip above reads
+                     "Pending Service Requests: 8" while this card reads 32,
+                     and both are right — Pending is one status, open is every
+                     status that is not an ending. Unlabelled, the two numbers
+                     look like a contradiction to whoever has to put one of
+                     them in a monthly report. -->
+                <v-card-subtitle class="pa-0 wrap-text">Pending, booked or being responded to</v-card-subtitle>
               </div>
               <v-btn
                 variant="text"
-                size="small"
                 color="primary"
                 class="text-none font-weight-bold"
                 append-icon="mdi-arrow-right"
@@ -883,6 +891,14 @@ onUnmounted(() => {
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+/* v-card-title and v-card-subtitle both ship nowrap + ellipsis, which clipped
+   this card's header inside its own width at phone size. */
+.wrap-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .age-tile {

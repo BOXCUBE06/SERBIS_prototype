@@ -85,9 +85,18 @@
           </v-btn>
         </div>
 
+        <!-- Selecting Custom does not fetch until both dates are set, because
+             the server reads a half-filled range as no range and answers with
+             the quarter. Saying so beats leaving the previous range's caption
+             on screen asserting a window the controls no longer show. -->
+        <div v-if="awaitingCustomRange" class="text-caption text-medium-emphasis mt-3">
+          Pick a start and an end date to apply a custom range. Showing
+          {{ report ? `${report.range.from} to ${report.range.to}` : 'nothing' }} until then.
+        </div>
+
         <!-- Reconciled against the same helper the Dashboard uses, so the two
              pages cannot report different totals for the same window. -->
-        <div v-if="report" class="text-caption text-medium-emphasis mt-3">
+        <div v-else-if="report" class="text-caption text-medium-emphasis mt-3">
           {{ report.range.from }} to {{ report.range.to }} ({{ report.range.timezone }})
           &bull; {{ report.totals.serviceRequests.toLocaleString() }}
           {{ report.totals.serviceRequests === 1 ? 'request' : 'requests' }} in range
@@ -119,8 +128,8 @@
     <v-row class="mb-2">
       <v-col cols="12">
         <AnalyticsSection
-          title="When requests arrive"
-          subtitle="Day of week against hour of day, in Asia/Manila. Use it to decide when the desk needs covering."
+          title="When requests are filed"
+          subtitle="Day and hour a request was submitted, in Asia/Manila. This is when residents file, which is not the same as when the office is open."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && demand.total === 0"
@@ -147,7 +156,8 @@
                   class="heat-cell"
                   :style="heatStyle(count)"
                   :title="`${demand.weekdays[dayIndex]} ${String(hourIndex).padStart(2, '0')}:00 — ${count} ${count === 1 ? 'request' : 'requests'}`"
-                  :aria-label="`${demand.weekdays[dayIndex]} ${hourIndex} hundred hours, ${count} requests`"
+                  :aria-label="`${demand.weekdays[dayIndex]} ${String(hourIndex).padStart(2, '0')}:00, ${count} ${count === 1 ? 'request' : 'requests'}`"
+                  role="img"
                 ></div>
               </template>
             </div>
@@ -158,9 +168,15 @@
               Busiest hour: <strong class="text-high-emphasis">{{ demand.peak.weekday }} {{ String(demand.peak.hour).padStart(2, '0') }}:00</strong>
               ({{ demand.peak.count }} {{ demand.peak.count === 1 ? 'request' : 'requests' }})
             </div>
+            <!-- "None" is its own key rather than the first step of the ramp.
+                 Zero is a neutral, not the palest tint of the hue, and putting
+                 it under the word "Fewer" labelled absence as "a little" —
+                 undoing the distinction the cell colouring deliberately makes. -->
             <div class="d-flex align-center gap-2">
+              <div class="heat-legend" :style="heatStyle(0)"></div>
+              <span class="text-caption text-medium-emphasis mr-2">None</span>
               <span class="text-caption text-medium-emphasis">Fewer</span>
-              <div v-for="step in 5" :key="'l' + step" class="heat-legend" :style="heatStyle(((step - 1) / 4) * demand.peak.count)"></div>
+              <div v-for="step in 4" :key="'l' + step" class="heat-legend" :style="heatStyle((step / 4) * demand.peak.count)"></div>
               <span class="text-caption text-medium-emphasis">More</span>
             </div>
           </div>
@@ -201,21 +217,26 @@
 
           <div v-else class="table-scroll">
             <table class="data-table text-body-2">
+              <!-- Total sits second, not last. With a long service name and
+                   three month columns the row outgrew the box and pushed the
+                   final column out of sight — and this view is the mandated
+                   accessible path for the three light-mode series that miss
+                   3:1, so it must not be the least readable one. -->
               <thead>
                 <tr>
                   <th class="text-left">Service</th>
-                  <th v-for="label in volume.labels" :key="label" class="text-right">{{ label }}</th>
                   <th class="text-right">Total</th>
+                  <th v-for="label in volume.labels" :key="label" class="text-right">{{ label }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="series in volume.series" :key="series.label">
-                  <td>
+                  <td class="service-cell">
                     <span class="series-dot" :style="{ backgroundColor: colorForSeries(series.label, volume.series) }"></span>
                     {{ series.label }}
                   </td>
-                  <td v-for="(value, i) in series.data" :key="i" class="text-right">{{ value }}</td>
                   <td class="text-right font-weight-bold">{{ series.data.reduce((a, b) => a + b, 0) }}</td>
+                  <td v-for="(value, i) in series.data" :key="i" class="text-right">{{ value }}</td>
                 </tr>
               </tbody>
             </table>
@@ -272,11 +293,21 @@
                 {{ turnaround.resolution.medianDays === null ? '—' : formatDays(turnaround.resolution.medianDays) }}
               </div>
               <div class="text-caption text-medium-emphasis">n = {{ turnaround.resolution.n }}</div>
+              <!-- Survivor bias, stated where the number is read rather than in
+                   the coverage note below. This median describes only requests
+                   that closed; the ones still open are excluded by definition,
+                   and some of them are older than everything counted here. -->
+              <div v-if="aging.total > 0" class="text-caption text-medium-emphasis mt-1">
+                Closed requests only — {{ aging.total }} still open are not counted.
+              </div>
             </div>
           </div>
 
-          <div v-if="turnaround.histogram.n > 0" style="height: 170px;">
-            <Bar :data="histogramChartData" :options="simpleBarOptions" />
+          <div v-if="turnaround.histogram.n > 0">
+            <div class="text-caption text-medium-emphasis mb-1">How long closing took</div>
+            <div style="height: 170px;">
+              <Bar :data="histogramChartData" :options="simpleBarOptions" />
+            </div>
           </div>
           <div v-else class="text-body-2 text-medium-emphasis py-4">
             No request in this range has been closed yet, so there is nothing to time.
@@ -305,8 +336,8 @@
            so unlike turnaround it is complete for every row from day one. -->
       <v-col id="open-request-age" cols="12" lg="5">
         <AnalyticsSection
-          title="Open requests by age"
-          subtitle="Everything not yet resolved, disapproved or cancelled. Ignores the date filter on purpose."
+          title="Open Requests by Age"
+          subtitle="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && aging.total === 0"
@@ -419,6 +450,10 @@ const serviceOptions = computed(() => [
   { label: 'All services', value: ALL },
   ...services.value.map(s => ({ label: s.service_name, value: s.service_id })),
 ])
+
+const awaitingCustomRange = computed(() =>
+  preset.value === 'custom' && !(customFrom.value && customTo.value)
+)
 
 const hasFilters = computed(() =>
   barangayId.value !== ALL || serviceId.value !== ALL || preset.value !== 'quarter'
@@ -562,8 +597,13 @@ const turnaround = computed(() => report.value?.turnaround ?? {
 const heatStyle = (count) => {
   const peak = demand.value.peak.count || 1
 
+  // 0.06 white on the dark surface measured ~1.25:1 — the empty cells all but
+  // vanished, taking the day/hour scaffolding with them and leaving the filled
+  // cells floating with nothing to read them against. Light mode never had the
+  // problem, so the two need different weights rather than one shared alpha.
   if (!count) {
-    return { backgroundColor: `rgba(${hexToRgb(themeColors.value['on-surface'])}, 0.06)` }
+    const alpha = isDark.value ? 0.14 : 0.06
+    return { backgroundColor: `rgba(${hexToRgb(themeColors.value['on-surface'])}, ${alpha})` }
   }
 
   // sqrt, not linear: a single busy cell would otherwise flatten every other
@@ -765,6 +805,49 @@ defineExpose({ fetchReport })
   background-color: rgb(var(--v-theme-surface));
 }
 
+/* Not on a phone: the bar stacks to ~254px there, which is 27% of a 430px
+   viewport permanently occupied by controls that are set once and then read
+   past. It scrolls away with the rest instead. */
+@media (max-width: 599px) {
+  .filter-bar {
+    position: static;
+  }
+}
+
+/* The range toggle wraps onto a second line when it outgrows the card; it
+   must not scroll. Vuetify gives v-btn-group a fixed 36px height, so an
+   overflow-x scrollbar renders INSIDE that box and leaves a 17px content
+   strip — the four buttons measured 93x17 at 430px while measuring a correct
+   36px at 1280. Wrapping keeps every button at full height and needs no
+   horizontal gesture on a phone. */
+.filter-bar :deep(.v-btn-group) {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  height: auto;
+  overflow: visible;
+}
+
+/* min-height, not height: Vuetify writes an INLINE `height: auto` on every
+   button inside a v-btn-group, which no stylesheet rule can outrank. With
+   the group wrapped and no vertical padding on the button, auto resolves to
+   the text box alone and each button measured 17px tall. min-height is not
+   set inline, so it is the one lever that reaches. */
+.filter-bar :deep(.v-btn-group .v-btn) {
+  flex-shrink: 0;
+  min-height: 36px;
+}
+
+/* Vuetify signals focus only with a 12%-opacity overlay, which measured
+   1.32:1 against its own surface in light mode and 1.59:1 in dark — both far
+   under the 3:1 a non-text indicator needs. Keyboard users had no visible
+   focus at all on this page's controls. */
+.analytics-bg :deep(.v-btn:focus-visible),
+.analytics-bg :deep(.v-field:focus-within),
+.analytics-bg :deep(a:focus-visible) {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
 .gap-4 {
   gap: 16px;
 }
@@ -856,6 +939,13 @@ defineExpose({ fetchReport })
   padding: 6px 10px;
   border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   white-space: nowrap;
+}
+
+/* The one cell allowed to wrap. "Ambulance/Medical Response" on one line is
+   what pushed the month columns out of the scroll box. */
+.data-table .service-cell {
+  white-space: normal;
+  min-width: 150px;
 }
 
 .data-table th {
