@@ -118,6 +118,7 @@ class AnalyticsReport
             'aging' => $this->aging(),
             'equipmentUtilization' => $this->equipmentUtilization(),
             'loans' => $this->loanTurnaround(),
+            'fleet' => $this->fleetUsage(),
         ];
     }
 
@@ -559,6 +560,93 @@ class AnalyticsReport
                 ->join('tbl_residents', 'tbl_equipment_borrowing.resident_id', '=', 'tbl_residents.resident_id')
                 ->where('tbl_residents.barangay_id', $this->barangayId))
             ->count();
+    }
+
+    /**
+     * Section 8 — fleet usage: trips and time per vehicle/type, from the
+     * conduction (ambulance dispatch) trip log.
+     *
+     * Windowed by created_at, matching every other section. No barangay or
+     * service filter: tbl_conduction_requests carries no resident_id at all
+     * (filed by MDRRMO staff, not a resident — see the table's own
+     * migration comment) and its parent service_request_id is always the
+     * one ambulance-dispatch service, so a service filter would either show
+     * everything or nothing.
+     *
+     * Duration is computed only for a trip with both departed_office_at and
+     * returned_office_at — a dispatch still out has no duration yet.
+     * Distance is computed only where both odometer readings exist, which
+     * the migration that added them notes is a minority of trips, so it
+     * carries its own sample size rather than being folded into trip count.
+     */
+    private function fleetUsage(): array
+    {
+        $rows = DB::table('tbl_conduction_requests')
+            ->leftJoin('tbl_vehicles', 'tbl_conduction_requests.vehicle_id', '=', 'tbl_vehicles.vehicle_id')
+            ->where('tbl_conduction_requests.created_at', '>=', $this->from)
+            ->where('tbl_conduction_requests.created_at', '<', $this->to)
+            ->select([
+                'tbl_conduction_requests.vehicle_id',
+                'tbl_vehicles.unit_identifier',
+                'tbl_vehicles.type',
+                'tbl_conduction_requests.departed_office_at',
+                'tbl_conduction_requests.returned_office_at',
+                'tbl_conduction_requests.odometer_start',
+                'tbl_conduction_requests.odometer_end',
+            ])
+            ->get();
+
+        $byVehicle = [];
+        $allDurations = [];
+        $distances = [];
+
+        foreach ($rows as $row) {
+            $key = $row->vehicle_id ?? 0;
+
+            $byVehicle[$key] ??= [
+                'label' => $row->unit_identifier ?? 'No unit recorded',
+                'type' => $row->type,
+                'trips' => 0,
+                'durations' => [],
+            ];
+            $byVehicle[$key]['trips']++;
+
+            if ($row->departed_office_at !== null && $row->returned_office_at !== null) {
+                $hours = CarbonImmutable::parse($row->departed_office_at, 'UTC')
+                    ->diffInMinutes(CarbonImmutable::parse($row->returned_office_at, 'UTC')) / 60;
+
+                $byVehicle[$key]['durations'][] = $hours;
+                $allDurations[] = $hours;
+            }
+
+            if ($row->odometer_start !== null && $row->odometer_end !== null) {
+                $distances[] = max(0, (int) $row->odometer_end - (int) $row->odometer_start);
+            }
+        }
+
+        $units = collect($byVehicle)
+            ->map(fn ($v) => [
+                'label' => $v['label'],
+                'type' => $v['type'],
+                'trips' => $v['trips'],
+                'medianTripHours' => $this->median($v['durations']),
+                'n' => count($v['durations']),
+            ])
+            ->sortByDesc('trips')
+            ->values();
+
+        return [
+            'units' => $units,
+            'totalTrips' => $rows->count(),
+            'duration' => [
+                'medianHours' => $this->median($allDurations),
+                'n' => count($allDurations),
+            ],
+            'distance' => [
+                'medianKm' => $this->median($distances),
+                'n' => count($distances),
+            ],
+        ];
     }
 
     /**

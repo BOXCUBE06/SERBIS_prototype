@@ -446,6 +446,67 @@
       </v-col>
     </v-row>
 
+    <v-row>
+      <!-- 8. Fleet usage. No barangay/service filter — the trip log carries
+           no resident_id at all (filed by MDRRMO staff, not a resident) and
+           every conduction request is the same one dispatch service, so
+           neither filter has anything to narrow. -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="Fleet usage"
+          subtitle="Trips and time per vehicle. Distance is shown only where both odometer readings exist."
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && fleet.totalTrips === 0"
+          :count="fleet.totalTrips"
+          empty-text="No dispatch trips in this range"
+          @retry="fetchReport"
+        >
+          <div class="d-flex flex-wrap gap-4 mb-4">
+            <div class="stat-tile subtle-surface">
+              <div class="text-caption text-medium-emphasis">Median trip duration</div>
+              <div class="stat-value text-high-emphasis">
+                {{ fleet.duration.medianHours === null ? '—' : formatHours(fleet.duration.medianHours) }}
+              </div>
+              <div class="text-caption text-medium-emphasis">n = {{ fleet.duration.n }}</div>
+            </div>
+
+            <div class="stat-tile subtle-surface">
+              <div class="text-caption text-medium-emphasis">Median distance</div>
+              <div class="stat-value text-high-emphasis">
+                {{ fleet.distance.medianKm === null ? '—' : `${fleet.distance.medianKm} km` }}
+              </div>
+              <div class="text-caption text-medium-emphasis">n = {{ fleet.distance.n }}</div>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table class="data-table text-body-2">
+              <thead>
+                <tr>
+                  <th class="text-left">Unit</th>
+                  <th class="text-left">Type</th>
+                  <th class="text-right">Trips</th>
+                  <th class="text-right">Median duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="unit in fleet.units" :key="unit.label">
+                  <td>{{ unit.label }}</td>
+                  <td>{{ unit.type || '—' }}</td>
+                  <td class="text-right">{{ unit.trips }}</td>
+                  <td class="text-right">
+                    {{ unit.medianTripHours === null ? '—' : formatHours(unit.medianTripHours) }}
+                    <span class="text-medium-emphasis"> (n = {{ unit.n }})</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+
   </v-container>
 </template>
 
@@ -469,9 +530,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * was chosen from the data and cut only for scope, so this list is the
  * shortlist to pick up from rather than a wish list:
  *
- *   8.  Fleet usage — trips per unit and median trip duration from the
- *       conduction timeline. Odometer km is present on a minority of trips,
- *       so it needs its own sample size.
  *   9.  Barangay: residents vs requests — reveals barangays with accounts
  *       but no requests, and barangays with neither. Needs the walk-in row
  *       BarangayRequestCounts already returns.
@@ -670,6 +728,12 @@ const loans = computed(() => report.value?.loans ?? {
   daysOut: { medianDays: null, n: 0 },
   returnedLate: { count: 0, of: 0, percent: null },
   currentlyOverdue: 0,
+})
+const fleet = computed(() => report.value?.fleet ?? {
+  units: [],
+  totalTrips: 0,
+  duration: { medianHours: null, n: 0 },
+  distance: { medianKm: null, n: 0 },
 })
 const turnaround = computed(() => report.value?.turnaround ?? {
   firstResponse: { medianHours: null, n: 0 },
