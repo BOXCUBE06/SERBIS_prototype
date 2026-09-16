@@ -9,6 +9,7 @@ use App\Models\ServiceRequest;
 use App\Models\SystemLog;
 use App\Models\Vehicle;
 use App\Support\AnalyticsCache;
+use App\Support\AnalyticsReport;
 use App\Support\BarangayRequestCounts;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +19,58 @@ use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
 {
+    /**
+     * GET /admin/analytics — the retrospective page, as opposed to index()
+     * below, which is the operational dashboard.
+     *
+     * Unlike the dashboard this one reads the request, so its cache key has to
+     * discriminate on the filters. The key is built through AnalyticsCache so
+     * it carries the current version and a write to any counted model strands
+     * it; the database cache store has no tags and no pattern delete, so a
+     * version counter is the only way to reach a keyspace this shape.
+     *
+     * Key growth is bounded: three of the four presets ignore from/to
+     * entirely, custom ranges are clamped to whole days, and every entry
+     * expires on the same five-minute TTL regardless.
+     */
+    public function report(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'preset' => ['nullable', 'string', 'in:'.implode(',', AnalyticsReport::PRESETS)],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
+            'barangay_id' => ['nullable', 'integer', 'exists:tbl_barangay,barangay_id'],
+            'service_id' => ['nullable', 'integer', 'exists:tbl_services,service_id'],
+        ]);
+
+        [$from, $to, $preset] = AnalyticsReport::resolveRange(
+            $validated['preset'] ?? null,
+            $validated['from'] ?? null,
+            $validated['to'] ?? null,
+        );
+
+        $barangayId = isset($validated['barangay_id']) ? (int) $validated['barangay_id'] : null;
+        $serviceId = isset($validated['service_id']) ? (int) $validated['service_id'] : null;
+
+        $key = AnalyticsCache::key(sprintf(
+            'report:%s:%s:%s:%s:%s',
+            $preset,
+            $from->toDateString(),
+            $to->toDateString(),
+            $barangayId ?? 'all',
+            $serviceId ?? 'all',
+        ));
+
+        return response()->json(Cache::remember($key, AnalyticsCache::TTL_SECONDS, function () use ($from, $to, $preset, $barangayId, $serviceId) {
+            $report = new AnalyticsReport($from, $to, $preset, $barangayId, $serviceId);
+
+            // Same json round-trip as index(): config/cache.php sets
+            // serializable_classes to false, so any Collection reaching the
+            // cache comes back as __PHP_Incomplete_Class on a hit.
+            return json_decode(json_encode($report->build()), true);
+        }));
+    }
+
     public function index(Request $request): JsonResponse
     {
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
