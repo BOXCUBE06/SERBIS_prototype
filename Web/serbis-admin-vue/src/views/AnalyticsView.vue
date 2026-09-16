@@ -215,6 +215,12 @@
 
           <div v-if="volumeView === 'chart'" style="height: 300px;">
             <Bar :data="volumeChartData" :options="stackedOptions" />
+            <ChartDataTable
+              caption="Requests by month and service — same data as the chart above"
+              category-label="Month"
+              :labels="volume.labels"
+              :series="volume.series"
+            />
           </div>
 
           <div v-else class="table-scroll">
@@ -262,6 +268,12 @@
         >
           <div style="height: 300px;">
             <Bar :data="outcomeChartDataNormalised" :options="percentStackedOptions" />
+            <ChartDataTable
+              caption="Outcomes by month — request counts by status (the chart shows share, this table the real counts)"
+              category-label="Month"
+              :labels="outcomes.labels"
+              :series="outcomes.series"
+            />
           </div>
         </AnalyticsSection>
       </v-col>
@@ -309,6 +321,12 @@
             <div class="text-caption text-medium-emphasis mb-1">How long closing took</div>
             <div style="height: 170px;">
               <Bar :data="histogramChartData" :options="simpleBarOptions" />
+              <ChartDataTable
+                caption="How long closing took — same data as the chart above"
+                category-label="Duration bucket"
+                :labels="turnaround.histogram.labels"
+                :series="[{ label: 'Requests', data: turnaround.histogram.data }]"
+              />
             </div>
           </div>
           <div v-else class="text-body-2 text-medium-emphasis py-4">
@@ -350,6 +368,12 @@
         >
           <div style="height: 220px;">
             <Bar :data="agingChartData" :options="horizontalBarOptions" />
+            <ChartDataTable
+              caption="Open requests by age — same data as the chart above"
+              category-label="Age bucket"
+              :labels="aging.labels"
+              :series="[{ label: 'Open requests', data: aging.data }]"
+            />
           </div>
 
           <div v-if="aging.oldestDays > 0" class="text-caption text-medium-emphasis mt-3">
@@ -578,6 +602,12 @@
         >
           <div style="height: 260px;">
             <Bar :data="adoptionChartDataNormalised" :options="percentStackedOptions" />
+            <ChartDataTable
+              caption="App adoption — request counts by origin (the chart shows share, this table the real counts)"
+              category-label="Month"
+              :labels="adoption.labels"
+              :series="adoption.series"
+            />
           </div>
         </AnalyticsSection>
       </v-col>
@@ -622,6 +652,12 @@
         >
           <div style="height: 260px;">
             <Bar :data="signupsChartData" :options="stackedOptions" />
+            <ChartDataTable
+              caption="Sign-ups by month — same data as the chart above"
+              category-label="Month"
+              :labels="signupsByMonth.labels"
+              :series="signupsByMonth.series"
+            />
           </div>
         </AnalyticsSection>
       </v-col>
@@ -639,6 +675,7 @@ import {
 import { Bar } from 'vue-chartjs'
 import PageHeader from '@/components/PageHeader.vue'
 import AnalyticsSection from '@/components/AnalyticsSection.vue'
+import ChartDataTable from '@/components/ChartDataTable.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
