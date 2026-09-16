@@ -8,6 +8,7 @@ use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
 use App\Models\Vehicle;
+use App\Support\BarangayRequestCounts;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -154,31 +155,27 @@ class AnalyticsController extends Controller
             ];
 
             // 5. Heatmap (Choropleth): request counts per barangay.
-            // The join is inner, which drops rows with no resident or no barangay —
-            // matching the old behaviour, which bucketed them as 'Unknown Barangay'
-            // and then rejected them.
-            $countByBarangay = fn (string $table, string $model, ?Carbon $since) => $model::query()
-                ->join('tbl_residents', "{$table}.resident_id", '=', 'tbl_residents.resident_id')
-                ->join('tbl_barangay', 'tbl_residents.barangay_id', '=', 'tbl_barangay.barangay_id')
-                ->when($since, fn ($q) => $q->where("{$table}.created_at", '>=', $since))
-                ->groupBy('tbl_barangay.barangay_name')
-                ->selectRaw('tbl_barangay.barangay_name as name, COUNT(*) as total')
-                ->pluck('total', 'name');
-
+            //
+            // BarangayRequestCounts LEFT JOINs and reports the unplaced rows
+            // separately. The join here used to be inner, which dropped every
+            // walk-in request — resident_id is null on a request filed at the
+            // counter, so 20 of 50 rows locally never reached the map and the
+            // card's totals were 40% short with nothing saying so.
+            //
+            // A walk-in still cannot be drawn: no barangay is recorded for it
+            // anywhere, and inventing one would be worse than omitting it. It
+            // is surfaced as its own count beside the ranking instead, which
+            // is what makes the section reconcile.
             $mapDataByPeriod = [];
-            foreach ($periods as $periodKey => $since) {
-                $serviceByBarangay = $countByBarangay('tbl_service_request', ServiceRequest::class, $since);
-                $borrowByBarangay = $countByBarangay('tbl_equipment_borrowing', EquipmentBorrowing::class, $since);
+            $walkInByPeriod = [];
+            $totalsByPeriod = [];
 
-                $mapDataByPeriod[$periodKey] = $serviceByBarangay->keys()
-                    ->merge($borrowByBarangay->keys())
-                    ->unique()
-                    ->map(fn ($name) => [
-                        'name' => $name,
-                        'requests' => (int) $serviceByBarangay->get($name, 0) + (int) $borrowByBarangay->get($name, 0),
-                    ])
-                    ->sortByDesc('requests')
-                    ->values();
+            foreach ($periods as $periodKey => $since) {
+                $counts = BarangayRequestCounts::forWindow($since);
+
+                $mapDataByPeriod[$periodKey] = $counts['barangays'];
+                $walkInByPeriod[$periodKey] = $counts['walkIn'];
+                $totalsByPeriod[$periodKey] = $counts['total'];
             }
 
             // 6. Pie Chart Data (Services vs Items), same per-period treatment.
@@ -259,6 +256,11 @@ class AnalyticsController extends Controller
                 'borrowRequests' => $borrowRequests,
                 'systemLogs' => $systemLogs,
                 'mapDataByPeriod' => $mapDataByPeriod,
+                // Requests that carry no barangay at all, per period, and the
+                // reconciled section total. The panel prints both beside the
+                // ranking so the numbers on screen add up to the real count.
+                'walkInByPeriod' => $walkInByPeriod,
+                'totalsByPeriod' => $totalsByPeriod,
                 'charts' => [
                     'pieByPeriod' => $pieByPeriod,
                     'bar' => [
