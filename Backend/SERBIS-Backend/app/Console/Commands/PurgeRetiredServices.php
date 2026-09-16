@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Service;
+use App\Support\AnalyticsCache;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -142,6 +143,12 @@ class PurgeRetiredServices extends Command
 
             DB::table('tbl_services')->whereIn('service_id', $serviceIds)->delete();
         });
+
+        // Raw deletes fire no model events, so InvalidatesAnalyticsCache never
+        // runs for any of the rows above. Without this the dashboard would
+        // keep serving counts that include deleted services and requests until
+        // the TTL expired.
+        AnalyticsCache::flush();
 
         // Files last, and outside the transaction: object storage does not roll
         // back. Deleting them before the commit would strand a live row whose

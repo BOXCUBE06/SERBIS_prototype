@@ -8,6 +8,7 @@ use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
 use App\Models\Vehicle;
+use App\Support\AnalyticsCache;
 use App\Support\BarangayRequestCounts;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -22,10 +23,13 @@ class AnalyticsController extends Controller
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
         // ~25 queries per admin dashboard load). No discriminator in the key:
         // nothing below reads $request, so the payload is identical for every
-        // admin. TTL-only staleness — no explicit invalidation on the write
-        // paths that feed these numbers, so a change can take up to 5 minutes
-        // to show up on the dashboard.
-        return response()->json(Cache::remember('analytics:dashboard', 300, function () {
+        // admin.
+        //
+        // The TTL is now a backstop rather than the only invalidation:
+        // InvalidatesAnalyticsCache forgets this key on every write to a model
+        // these numbers count, so a status change reaches the panel on the next
+        // load instead of up to five minutes later.
+        return response()->json(Cache::remember(AnalyticsCache::DASHBOARD_KEY, AnalyticsCache::TTL_SECONDS, function () {
             // 1. Calculate KPI Stats
             $totalResidents = Resident::count();
             $pendingService = ServiceRequest::where('status', 'Pending')->count();
