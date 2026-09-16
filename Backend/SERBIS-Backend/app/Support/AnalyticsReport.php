@@ -358,19 +358,31 @@ class AnalyticsReport
      */
     private function aging(): array
     {
-        // Deliberately ignores the window. An request filed last quarter that
-        // is still open is exactly what this section exists to surface, and
-        // scoping it to the range would hide the oldest ones — the only ones
+        return self::openRequestAging($this->serviceId, $this->barangayId);
+    }
+
+    /**
+     * Public and static because the dashboard shows the same buckets. The
+     * dashboard's KPI strip can say "8 Pending" but not whether one of them
+     * has been sitting there for six weeks, and staleness is a today problem
+     * — so both surfaces read this, and neither can drift into its own
+     * definition of what "open" or "7+ days" means.
+     */
+    public static function openRequestAging(?int $serviceId = null, ?int $barangayId = null): array
+    {
+        // Deliberately ignores any date window. A request filed last quarter
+        // that is still open is exactly what this exists to surface, and
+        // scoping it to a range would hide the oldest ones — the only ones
         // that matter here.
         $rows = DB::table('tbl_service_request')
             // Table-qualified: the barangay filter below joins tbl_residents,
             // which also has a `status` column, and an unqualified name there
             // is a 1052 rather than a wrong answer.
             ->whereNotIn('tbl_service_request.status', ServiceRequest::TERMINAL_STATUSES)
-            ->when($this->serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $this->serviceId))
-            ->when($this->barangayId, fn ($q) => $q
+            ->when($serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $serviceId))
+            ->when($barangayId, fn ($q) => $q
                 ->join('tbl_residents', 'tbl_service_request.resident_id', '=', 'tbl_residents.resident_id')
-                ->where('tbl_residents.barangay_id', $this->barangayId))
+                ->where('tbl_residents.barangay_id', $barangayId))
             ->select('tbl_service_request.created_at')
             ->get();
 

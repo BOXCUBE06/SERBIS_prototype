@@ -303,7 +303,7 @@
 
       <!-- 5. What is stuck right now. Reads created_at and the current status,
            so unlike turnaround it is complete for every row from day one. -->
-      <v-col cols="12" lg="5">
+      <v-col id="open-request-age" cols="12" lg="5">
         <AnalyticsSection
           title="Open requests by age"
           subtitle="Everything not yet resolved, disapproved or cancelled. Ignores the date filter on purpose."
@@ -330,7 +330,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useTheme } from 'vuetify'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
@@ -503,9 +503,18 @@ watch([preset, barangayId, serviceId, customFrom, customTo], () => {
   fetchReport()
 })
 
-onMounted(() => {
+onMounted(async () => {
   fetchFilterOptions()
-  fetchReport()
+  await fetchReport()
+
+  // The Dashboard's aging card links here with #open-request-age. The browser
+  // cannot act on that hash itself: the section does not exist until the
+  // first payload has rendered, and the app scrolls an inner wrapper rather
+  // than the document, so the native jump has nothing to move.
+  if (window.location.hash === '#open-request-age') {
+    await nextTick()
+    document.querySelector('#open-request-age')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 })
 
 /* ---------------------------------------------------------------------------

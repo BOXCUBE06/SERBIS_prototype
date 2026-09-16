@@ -318,6 +318,10 @@ class AnalyticsController extends Controller
                 // ranking so the numbers on screen add up to the real count.
                 'walkInByPeriod' => $walkInByPeriod,
                 'totalsByPeriod' => $totalsByPeriod,
+                // Same buckets as the analytics page, from the same method:
+                // the KPI strip can say "8 Pending" but not whether one of
+                // them is six weeks old, and that is a today problem.
+                'aging' => AnalyticsReport::openRequestAging(),
                 'charts' => [
                     'pieByPeriod' => $pieByPeriod,
                     'bar' => [

@@ -147,6 +147,57 @@
     </v-row>
 
     <!-- Geographic row: map + its data-table fallback, all-time scope -->
+    <!-- How long the open requests have been open. The KPI strip above counts
+         them but cannot say whether one has been sitting there for weeks, and
+         a stale request is a today problem rather than a quarterly one. Per
+         bucket there is no deep link: the requests list filters on status
+         only (ServiceRequestQueue's `filters` is {status}), so a clickable
+         bucket would have nowhere to land. The card as a whole opens the
+         fuller breakdown on Analytics. -->
+    <v-row class="mb-2">
+      <v-col cols="12">
+        <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 7 }">
+          <v-card-item>
+            <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+              <div>
+                <v-card-title class="text-body-1 font-weight-bold pa-0">Open Requests by Age</v-card-title>
+                <v-card-subtitle class="pa-0">Still waiting, however long ago they were filed</v-card-subtitle>
+              </div>
+              <v-btn
+                variant="text"
+                size="small"
+                color="primary"
+                class="text-none font-weight-bold"
+                append-icon="mdi-arrow-right"
+                @click="goTo('/analytics#open-request-age')"
+              >
+                See the breakdown
+              </v-btn>
+            </div>
+          </v-card-item>
+          <v-card-text class="pt-2">
+            <div v-if="aging.total === 0" class="text-center text-caption text-medium-emphasis py-6">
+              Nothing is open
+            </div>
+            <div v-else class="d-flex flex-wrap gap-3">
+              <div
+                v-for="(label, i) in aging.labels"
+                :key="label"
+                class="age-tile subtle-surface"
+                :class="{ 'age-tile--stale': i === aging.labels.length - 1 && aging.data[i] > 0 }"
+              >
+                <div class="age-count text-high-emphasis">{{ aging.data[i] }}</div>
+                <div class="text-caption text-medium-emphasis">{{ label }}</div>
+              </div>
+            </div>
+            <div v-if="aging.oldestDays > 0" class="text-caption text-medium-emphasis mt-3">
+              Oldest open request: <strong class="text-high-emphasis">{{ aging.oldestDays }} {{ aging.oldestDays === 1 ? 'day' : 'days' }}</strong>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
     <v-row class="mb-2">
       <v-col cols="12" lg="7">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 8 }">
@@ -392,6 +443,9 @@ const pieDataByPeriod = ref({}) // { today|week|month|all: { services: {...}, it
 // to rank or draw, but they are still requests and the total has to say so.
 const walkInByPeriod = ref({}) // { today|week|month|all: N }
 const totalsByPeriod = ref({}) // { today|week|month|all: N } — barangays + walk-ins
+// Open-request age buckets. Not period-filtered by design — an old request
+// still open is the whole point, and scoping it to a window would hide it.
+const aging = ref({ labels: [], data: [], total: 0, oldestDays: 0 })
 
 const PERIOD_LABELS = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All-time' }
 const periodLabelFor = (period) => PERIOD_LABELS[period] || ''
@@ -442,6 +496,7 @@ const fetchDashboardData = async () => {
     mapDataByPeriod.value = data.mapDataByPeriod || {}
     walkInByPeriod.value = data.walkInByPeriod || {}
     totalsByPeriod.value = data.totalsByPeriod || {}
+    aging.value = data.aging || { labels: [], data: [], total: 0, oldestDays: 0 }
     chartDataRaw.value = data.charts || null
     pieDataByPeriod.value = data.charts?.pieByPeriod || {}
 
@@ -828,6 +883,25 @@ onUnmounted(() => {
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.age-tile {
+  flex: 1 1 140px;
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+/* The oldest bucket gets a quiet warning tint, never an alarm red: this is
+   administrative software and an old request is a queue to work through, not
+   an emergency (PRODUCT.md, calm over alarming). */
+.age-tile--stale {
+  background-color: rgba(var(--v-theme-warning), 0.12);
+}
+
+.age-count {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .rank-badge {
