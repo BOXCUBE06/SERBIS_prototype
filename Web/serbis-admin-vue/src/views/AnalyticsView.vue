@@ -507,6 +507,56 @@
       </v-col>
     </v-row>
 
+    <v-row>
+      <!-- 9. Barangay: residents vs requests. Built from the full barangay
+           roster, so an account-but-no-request barangay and a neither
+           barangay both still show at zero rather than dropping out. No
+           barangay filter — filtering the one cross-barangay comparison
+           down to one barangay would defeat its purpose. -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="Barangay: residents vs requests"
+          subtitle="Registered accounts (all time) against requests filed in this range. A barangay with accounts but no requests, or neither, still appears at zero."
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && barangayCoverage.barangays.length === 0"
+          empty-text="No barangays configured"
+          @retry="fetchReport"
+        >
+          <div class="table-scroll">
+            <table class="data-table text-body-2">
+              <thead>
+                <tr>
+                  <th class="text-left">Barangay</th>
+                  <th class="text-right">Residents</th>
+                  <th class="text-right">Requests</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in barangayCoverage.barangays" :key="row.name">
+                  <td>{{ row.name }}</td>
+                  <td class="text-right" :class="{ 'text-medium-emphasis': row.residents === 0 }">{{ row.residents }}</td>
+                  <td class="text-right" :class="{ 'text-medium-emphasis': row.requests === 0 }">{{ row.requests }}</td>
+                </tr>
+                <tr v-if="barangayCoverage.walkIn > 0">
+                  <td class="text-medium-emphasis">Walk-in (no barangay)</td>
+                  <td class="text-right text-medium-emphasis">—</td>
+                  <td class="text-right">{{ barangayCoverage.walkIn }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="text-caption text-medium-emphasis mt-3">
+            {{ barangayCoverage.totalResidents.toLocaleString() }} registered
+            {{ barangayCoverage.totalResidents === 1 ? 'resident' : 'residents' }}
+            &bull; {{ barangayCoverage.totalRequests.toLocaleString() }}
+            {{ barangayCoverage.totalRequests === 1 ? 'request' : 'requests' }} in this range
+          </div>
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+
   </v-container>
 </template>
 
@@ -530,9 +580,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * was chosen from the data and cut only for scope, so this list is the
  * shortlist to pick up from rather than a wish list:
  *
- *   9.  Barangay: residents vs requests — reveals barangays with accounts
- *       but no requests, and barangays with neither. Needs the walk-in row
- *       BarangayRequestCounts already returns.
  *   10. App adoption — walk-in vs app-filed share by month. Measures the
  *       project's own premise and is invisible today.
  *   11. Account activation backlog — Inactive residents and signups over
@@ -734,6 +781,9 @@ const fleet = computed(() => report.value?.fleet ?? {
   totalTrips: 0,
   duration: { medianHours: null, n: 0 },
   distance: { medianKm: null, n: 0 },
+})
+const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
+  barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
 const turnaround = computed(() => report.value?.turnaround ?? {
   firstResponse: { medianHours: null, n: 0 },

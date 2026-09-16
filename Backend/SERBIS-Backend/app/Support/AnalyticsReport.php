@@ -119,6 +119,7 @@ class AnalyticsReport
             'equipmentUtilization' => $this->equipmentUtilization(),
             'loans' => $this->loanTurnaround(),
             'fleet' => $this->fleetUsage(),
+            'barangayCoverage' => $this->barangayResidentsVsRequests(),
         ];
     }
 
@@ -646,6 +647,57 @@ class AnalyticsReport
                 'medianKm' => $this->median($distances),
                 'n' => count($distances),
             ],
+        ];
+    }
+
+    /**
+     * Section 9 — barangay: residents vs requests.
+     *
+     * Built from the full barangay roster outward, the same shape as
+     * equipmentUtilization(): a query that starts at the requests and groups
+     * by barangay can only ever list a barangay that has at least one, which
+     * is exactly what hides "accounts but no requests" and "neither" — the
+     * two facts this section exists to surface.
+     *
+     * Request counts reuse BarangayRequestCounts, the same helper the
+     * dashboard and totals() use, so this cannot disagree with the rest of
+     * the page about how many requests a barangay has. That helper counts
+     * service requests and equipment loans together and does not take a
+     * service filter, so neither does this section; resident counts are not
+     * date-windowed at all — an account does not expire, and windowing it
+     * would make a barangay's own resident count depend on which quarter is
+     * selected.
+     *
+     * No barangay filter either: filtering the one section whose whole
+     * purpose is the cross-barangay comparison down to a single barangay
+     * would defeat it.
+     */
+    private function barangayResidentsVsRequests(): array
+    {
+        $counts = BarangayRequestCounts::forWindow($this->from, $this->to);
+        $placedByName = collect($counts['barangays'])->keyBy('name');
+
+        $residentCounts = DB::table('tbl_residents')
+            ->whereNotNull('barangay_id')
+            ->groupBy('barangay_id')
+            ->selectRaw('barangay_id, COUNT(*) as total')
+            ->pluck('total', 'barangay_id');
+
+        $barangays = DB::table('tbl_barangay')
+            ->orderBy('barangay_name')
+            ->select('barangay_id', 'barangay_name')
+            ->get()
+            ->map(fn ($b) => [
+                'name' => $b->barangay_name,
+                'residents' => (int) ($residentCounts[$b->barangay_id] ?? 0),
+                'requests' => (int) ($placedByName[$b->barangay_name]['requests'] ?? 0),
+            ]);
+
+        return [
+            'barangays' => $barangays,
+            'walkIn' => $counts['walkIn'],
+            'totalResidents' => (int) $residentCounts->sum(),
+            'totalRequests' => $counts['total'],
         ];
     }
 
