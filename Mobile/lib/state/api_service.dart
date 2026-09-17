@@ -337,7 +337,7 @@ class ApiService {
     }
 
     if (status == 401) return 'Your session expired. Please log in again.';
-    if (status == 403) return 'You are not allowed to do that.';
+    if (status == 403) return 'This action isn\'t available to your account.';
     if (status == 404) return 'Not found.';
     if (status >= 500) return 'The server had a problem. Please try again.';
     return 'Request failed ($status).';

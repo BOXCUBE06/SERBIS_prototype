@@ -423,7 +423,7 @@ class EquipmentBorrowingController extends Controller
                 if ($equipment->available_quantity < $borrowing->quantity) {
                     DB::rollBack();
 
-                    return response()->json(['message' => 'Not enough equipment available to release.'], 422);
+                    return response()->json(['message' => 'We wish to comply but as of the moment the equipment is not available.'], 422);
                 }
                 $equipment->decrement('available_quantity', $borrowing->quantity);
                 $borrowing->released_at = now();

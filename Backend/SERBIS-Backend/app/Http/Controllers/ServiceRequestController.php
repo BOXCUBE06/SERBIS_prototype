@@ -457,7 +457,7 @@ class ServiceRequestController extends Controller
             $this->discardUpload($filePath);
             $this->discardUpload($sitePhotoPath);
 
-            return response()->json(['message' => 'No available vehicles at this time.'], 422);
+            return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
 
         return response()->json($serviceRequest->load(['relatives', 'ambulanceBooking']), 201);
@@ -881,7 +881,7 @@ class ServiceRequestController extends Controller
             $this->discardUpload($filePath);
             $this->discardUpload($sitePhotoPath);
 
-            return response()->json(['message' => 'No available vehicles at this time.'], 422);
+            return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
 
         return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
