@@ -76,14 +76,20 @@ class EquipmentBorrowingDueDateTest extends TestCase
     }
 
     /**
-     * Relative, not a hardcoded date. `due_date` is bounded to
-     * [today, +1 year] now, so a literal like '2026-08-10' passes until the
-     * day it silently starts failing for a reason that has nothing to do with
-     * what the test is checking.
+     * Relative, not a hardcoded date, and read against the office calendar
+     * specifically — the controller's own bound is computed in Asia/Manila
+     * (EquipmentBorrowingController::OFFICE_TIMEZONE), and `now()` here used
+     * to read the app's default timezone instead. For roughly eight hours a
+     * day (UTC evening, Manila past midnight) that skew put `dueDate(1)` on
+     * Manila's "today" rather than "tomorrow", so the 1-day minimum this
+     * suite added on 2026-09-17 rejected a payload the test asserts is
+     * accepted — a real intermittent failure, not flakiness in the tests'
+     * imagination (reproduced both in CI and locally, at the hours the skew
+     * is live).
      */
     private function dueDate(int $daysFromToday = 7): string
     {
-        return now()->addDays($daysFromToday)->format('Y-m-d');
+        return now('Asia/Manila')->addDays($daysFromToday)->format('Y-m-d');
     }
 
     public function test_approving_stores_the_due_date(): void
