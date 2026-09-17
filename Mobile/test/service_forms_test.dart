@@ -64,8 +64,7 @@ void main() {
       final typed = await _fillEveryField(tester);
       // Eight, up from four: the structured rebuild added age, patient
       // address, patient contact number and one relative slot alongside the
-      // original patient / from / to / diagnosis. Sex is not counted — it is
-      // an AppDropdown, not a TextField, and is asserted separately below.
+      // original patient / from / to / diagnosis.
       //
       // This count is the guard that catches a field rendered but never read,
       // so it moves deliberately and never to make a run go green.
@@ -79,28 +78,6 @@ void main() {
         expect(description, contains(value),
             reason: 'a field the resident filled in was dropped: $value');
       }
-    });
-
-    testWidgets('ambulance — the sex dropdown reaches the description too',
-        (tester) async {
-      // The one input on this form that is not a TextField, so
-      // _fillEveryField above cannot cover it.
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      await _pump(tester, form);
-
-      await tester.tap(find.byType(DropdownButton<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Female').last);
-      await tester.pumpAndSettle();
-
-      expect(form.sex, 'Female');
-      // Lowercased on the way to the API, which takes `in:male,female`.
-      expect(form.sexValue, 'female');
-      expect(
-        form.metaLines(serviceName: 'Ambulance', submittedLabel: 'x'),
-        contains('Sex: female'),
-      );
     });
 
     testWidgets('road obstruction', (tester) async {
@@ -228,8 +205,6 @@ void main() {
       expect(form.pickup.text, isEmpty);
       expect(form.destination.text, isEmpty);
       expect(form.diagnosis.text, isEmpty);
-      expect(form.sex, AmbulanceFormData.sexUnspecified);
-      expect(form.sexValue, isNull);
       expect(form.relativeNames, isEmpty);
       expect(form.scheduledAt, isNull);
     });
@@ -510,7 +485,6 @@ void main() {
       for (final label in const [
         'Patient name',
         'Age',
-        'Sex',
         'Patient address',
         'Contact number',
         'From',

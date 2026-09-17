@@ -136,7 +136,7 @@ class ServiceRequestController extends Controller
      * still strip it before it reaches this row.
      */
     private const BOOKING_FIELDS = [
-        'patient_name', 'patient_age', 'patient_sex', 'patient_address',
+        'patient_name', 'patient_age', 'patient_address',
         'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
         'scheduled_at', 'scheduled_end', 'approved_at',
     ];
@@ -252,7 +252,6 @@ class ServiceRequestController extends Controller
             // verified human lived to 122. Mirrored in adminStore() and in
             // ConductionRequestController::store().
             'patient_age' => 'nullable|integer|min:0|max:120',
-            'patient_sex' => 'nullable|in:male,female',
             'patient_address' => 'nullable|string|max:255',
             // The number for this patient, when it is not the account holder's.
             // Left null when they are the same person; the trip record falls
@@ -430,7 +429,6 @@ class ServiceRequestController extends Controller
                         'request_id' => $newServiceRequest->request_id,
                         'patient_name' => $validated['patient_name'] ?? null,
                         'patient_age' => $validated['patient_age'] ?? null,
-                        'patient_sex' => $validated['patient_sex'] ?? null,
                         'patient_address' => $validated['patient_address'] ?? null,
                         'patient_contact_number' => $validated['patient_contact_number'] ?? null,
                         'pickup_location' => $validated['pickup_location'] ?? null,
@@ -698,14 +696,13 @@ class ServiceRequestController extends Controller
             // is composed server-side below from the structured fields, so
             // whatever the client sends here is ignored rather than trusted.
             'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
-            // Structured intake, ambulance only. patient_age/patient_sex stay
-            // optional even for ambulance — the paper form allows either to
-            // be unknown at intake and ConductionRequestController's own
-            // columns are nullable for the same reason.
+            // Structured intake, ambulance only. patient_age stays optional
+            // even for ambulance — the paper form allows it to be unknown at
+            // intake and ConductionRequestController's own column is
+            // nullable for the same reason.
             'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             // Same ceiling as store() — see the note there.
             'patient_age' => 'nullable|integer|min:0|max:120',
-            'patient_sex' => 'nullable|in:male,female',
             'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
             // Optional on both paths: null means the patient is reachable on
             // the number that filed the request, which is the common case.
@@ -856,7 +853,6 @@ class ServiceRequestController extends Controller
                         'request_id' => $newServiceRequest->request_id,
                         'patient_name' => $validated['patient_name'] ?? null,
                         'patient_age' => $validated['patient_age'] ?? null,
-                        'patient_sex' => $validated['patient_sex'] ?? null,
                         'patient_address' => $validated['patient_address'] ?? null,
                         'patient_contact_number' => $validated['patient_contact_number'] ?? null,
                         'pickup_location' => $validated['pickup_location'] ?? null,
@@ -1227,7 +1223,6 @@ class ServiceRequestController extends Controller
             // after intake should not require a specialised endpoint.
             'patient_name' => 'sometimes|nullable|string|max:255',
             'patient_age' => 'sometimes|nullable|integer|min:0|max:120',
-            'patient_sex' => 'sometimes|nullable|in:male,female',
             'patient_address' => 'sometimes|nullable|string|max:255',
             'patient_contact_number' => 'sometimes|nullable|string|max:32',
             'pickup_location' => 'sometimes|nullable|string|max:255',
@@ -1440,11 +1435,11 @@ class ServiceRequestController extends Controller
      * field is still filled in later, by hand, while the crew is actually
      * out.
      *
-     * patient_age/patient_sex and the free-text vehicle snapshot are
-     * nullable, so they were silently left off this stub even though the
-     * request already had the first two and the fleet record already had the
-     * last one — the trip's own detail view then showed N/A for all three on
-     * every auto-dispatched trip. `vehicle` mirrors onSelectFleetVehicle in
+     * patient_age and the free-text vehicle snapshot are nullable, so they
+     * were silently left off this stub even though the request already had
+     * the first and the fleet record already had the second — the trip's own
+     * detail view then showed N/A for both on every auto-dispatched trip.
+     * `vehicle` mirrors onSelectFleetVehicle in
      * ConductionRequestView.vue exactly, so a stub reads the same as a
      * manually-created trip for the same unit.
      *
@@ -1482,7 +1477,6 @@ class ServiceRequestController extends Controller
             'departed_office_at' => now(),
             'patient_name' => $patientName,
             'patient_age' => $booking?->patient_age,
-            'patient_sex' => $booking?->patient_sex,
             'patient_address' => $booking?->patient_address ?: null,
             'patient_contact_number' => $contactNumber,
             'medical_diagnosis' => $booking?->condition_notes ?: null,

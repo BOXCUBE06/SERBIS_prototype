@@ -124,7 +124,7 @@ class ServiceRequest extends Model
      * different shape depending on which table happens to back a field.
      */
     private const BOOKING_FIELDS = [
-        'patient_name', 'patient_age', 'patient_sex', 'patient_address',
+        'patient_name', 'patient_age', 'patient_address',
         'patient_contact_number', 'pickup_location', 'destination', 'condition_notes',
         'scheduled_at', 'scheduled_end', 'approved_at',
     ];

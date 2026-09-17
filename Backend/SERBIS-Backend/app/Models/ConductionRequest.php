@@ -23,7 +23,6 @@ class ConductionRequest extends Model
         'patient_name',
         'patient_age',
         'patient_address',
-        'patient_sex',
         'patient_contact_number',
         'vehicle',
         'medical_diagnosis',

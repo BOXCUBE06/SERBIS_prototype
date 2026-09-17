@@ -386,25 +386,21 @@
               </v-row>
 
               <!-- Structured ambulance intake (C3's columns: patient_name,
-                   patient_age, patient_sex, patient_address, pickup_location,
-                   destination, condition_notes) shown as its own labeled
-                   fields when present, instead of only the server-composed
-                   `description` text those exact columns generate. The Log
-                   Service Request form (below) already asks for these seven
-                   fields separately; the detail view showed them nowhere
-                   individually, only folded back into one paragraph. -->
+                   patient_age, patient_address, pickup_location, destination,
+                   condition_notes) shown as its own labeled fields when
+                   present, instead of only the server-composed `description`
+                   text those exact columns generate. The Log Service Request
+                   form (below) already asks for these fields separately; the
+                   detail view showed them nowhere individually, only folded
+                   back into one paragraph. -->
               <v-row v-if="selectedRequest.patient_name" class="detail-group">
                 <v-col cols="12" sm="6" md="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Patient</div>
                   <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_name }}</div>
                 </v-col>
-                <v-col cols="6" sm="3" md="2">
+                <v-col cols="6" sm="3" md="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Age</div>
                   <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_age ?? 'N/A' }}</div>
-                </v-col>
-                <v-col cols="6" sm="3" md="2">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Sex</div>
-                  <div class="font-weight-medium text-body-2 text-capitalize">{{ selectedRequest.patient_sex ?? 'N/A' }}</div>
                 </v-col>
                 <v-col cols="12" sm="6" md="4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Address</div>
@@ -1177,18 +1173,11 @@
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
-              <v-col cols="6" sm="2">
+              <v-col cols="6" sm="4">
                 <v-text-field
                   v-model="createDialog.form.patient_age"
                   label="Age" placeholder="e.g. 54" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
                 ></v-text-field>
-              </v-col>
-              <v-col cols="6" sm="2">
-                <v-select
-                  v-model="createDialog.form.patient_sex"
-                  :items="sexOptions"
-                  label="Sex" variant="outlined" density="comfortable" clearable class="mb-2"
-                ></v-select>
               </v-col>
             </v-row>
             <v-text-field
@@ -1410,12 +1399,6 @@ const noteSaved = ref(false)
 let noteSavedTimer = null
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
-// Same two values ConductionRequestView.vue's own create form offers, for
-// the same patient.
-const sexOptions = [
-  { title: 'Male', value: 'male' },
-  { title: 'Female', value: 'female' },
-]
 
 const emptyCreateForm = () => ({
   resident_id: null,
@@ -1426,7 +1409,6 @@ const emptyCreateForm = () => ({
   // Ambulance only — see the v-else block in the template above.
   patient_name: '',
   patient_age: null,
-  patient_sex: null,
   patient_address: '',
   pickup_location: '',
   destination: '',
@@ -2512,7 +2494,6 @@ const submitWalkIn = async () => {
       // detail panel's own "Description" display, not a parser anymore.
       body.append('patient_name', form.patient_name.trim())
       if (form.patient_age) body.append('patient_age', form.patient_age)
-      if (form.patient_sex) body.append('patient_sex', form.patient_sex)
       body.append('patient_address', form.patient_address.trim())
       body.append('pickup_location', form.pickup_location.trim())
       body.append('destination', form.destination.trim())

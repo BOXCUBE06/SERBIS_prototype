@@ -42,7 +42,6 @@ class ConductionRequestTest extends TestCase
             'patient_name' => 'Juan Dela Cruz',
             'patient_age' => 45,
             'patient_address' => 'Purok 3, San Isidro',
-            'patient_sex' => 'male',
             'patient_contact_number' => '09171234567',
             'vehicle' => 'Ambulance 1',
             'medical_diagnosis' => 'Suspected stroke',

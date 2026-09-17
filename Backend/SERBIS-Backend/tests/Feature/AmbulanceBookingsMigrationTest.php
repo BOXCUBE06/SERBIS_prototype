@@ -40,6 +40,14 @@ use Tests\TestCase;
  * return-due-reminder's own migration landed after this series and started
  * eating the rollback meant for this one. --path names the file directly and
  * stays correct no matter what gets appended to the chain later.
+ *
+ * A second --path rollback runs first, of 2026_09_17_..._remove_patient_sex_
+ * from_ambulance_and_conduction_tables: that later migration drops
+ * tbl_ambulance_bookings.patient_sex, and 2026_09_10_100000's own down() (run
+ * next) copies patient_sex back onto tbl_service_request BY NAME from
+ * tbl_ambulance_bookings — undoing the later migration first, restoring the
+ * column, is what a real full-chain rollback would do anyway, in the same
+ * reverse order.
  */
 class AmbulanceBookingsMigrationTest extends TestCase
 {
@@ -54,6 +62,11 @@ class AmbulanceBookingsMigrationTest extends TestCase
         parent::setUp();
 
         $this->artisan('migrate:fresh');
+
+        // Undone first, in real rollback order — see the class doc comment.
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_09_17_123139_remove_patient_sex_from_ambulance_and_conduction_tables.php',
+        ]);
 
         // Rolled back on its own, by --path rather than --step (see the
         // class doc comment), so tbl_service_request has the moved columns

@@ -34,6 +34,14 @@ use Tests\TestCase;
  * per-test transaction. RefreshDatabaseState::$migrated is reset in
  * tearDown() so the next RefreshDatabase test class migrates fresh for
  * itself instead of trusting this class's rolled-back schema.
+ *
+ * setUp() also rolls back 2026_09_17_..._remove_patient_sex_from_ambulance_
+ * and_conduction_tables right after the fresh migrate, before the test rolls
+ * back this one: that later migration drops tbl_ambulance_bookings.patient_sex,
+ * and this migration's own down() copies patient_sex back onto
+ * tbl_service_request BY NAME from tbl_ambulance_bookings — undoing the
+ * later migration first, restoring the column, is what a real full-chain
+ * rollback would do anyway, in the same reverse order.
  */
 class DropAmbulanceColumnsMigrationTest extends TestCase
 {
@@ -42,6 +50,10 @@ class DropAmbulanceColumnsMigrationTest extends TestCase
         parent::setUp();
 
         $this->artisan('migrate:fresh');
+
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_09_17_123139_remove_patient_sex_from_ambulance_and_conduction_tables.php',
+        ]);
     }
 
     protected function tearDown(): void
@@ -81,7 +93,6 @@ class DropAmbulanceColumnsMigrationTest extends TestCase
             'request_id' => $request->getKey(),
             'patient_name' => 'Juan Dela Cruz',
             'patient_age' => 62,
-            'patient_sex' => 'male',
             'patient_address' => 'Purok 2, San Fabian',
             'patient_contact_number' => '09189999999',
             'pickup_location' => 'Purok 2, San Fabian',
@@ -115,7 +126,6 @@ class DropAmbulanceColumnsMigrationTest extends TestCase
         $row = DB::table('tbl_service_request')->where('request_id', $request->getKey())->first();
         $this->assertSame('Juan Dela Cruz', $row->patient_name);
         $this->assertSame(62, (int) $row->patient_age);
-        $this->assertSame('male', $row->patient_sex);
         $this->assertSame('Purok 2, San Fabian', $row->patient_address);
         $this->assertSame('09189999999', $row->patient_contact_number);
         $this->assertSame('Purok 2, San Fabian', $row->pickup_location);

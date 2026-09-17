@@ -125,7 +125,6 @@ void main() {
           patientName: 'Juan Dela Cruz',
           destination: 'Echague District Hospital',
           patientAge: '62',
-          patientSex: 'female',
           patientAddress: 'Purok 2, San Fabian',
           patientContactNumber: '09189999999',
           pickupLocation: 'Purok 2, San Fabian',
@@ -137,7 +136,6 @@ void main() {
       expect(request.fields['patient_name'], 'Juan Dela Cruz');
       expect(request.fields['destination'], 'Echague District Hospital');
       expect(request.fields['patient_age'], '62');
-      expect(request.fields['patient_sex'], 'female');
       expect(request.fields['patient_address'], 'Purok 2, San Fabian');
       expect(request.fields['patient_contact_number'], '09189999999');
       expect(request.fields['pickup_location'], 'Purok 2, San Fabian');
@@ -152,9 +150,9 @@ void main() {
     });
 
     test('an unset optional field is absent, never an empty string', () {
-      // `nullable|integer` rejects '', and `in:male,female` rejects ''. An
-      // untouched field has to be missing from the body, not present and
-      // blank, or an optional field becomes a 422.
+      // `nullable|integer` rejects ''. An untouched field has to be missing
+      // from the body, not present and blank, or an optional field becomes
+      // a 422.
       final request = ApiService().buildSubmitRequest(
         serviceId: 3,
         description: 'x',
@@ -168,7 +166,6 @@ void main() {
 
       for (final key in const [
         'patient_age',
-        'patient_sex',
         'patient_address',
         'patient_contact_number',
         'pickup_location',
@@ -216,28 +213,6 @@ void main() {
   });
 
   group('AmbulanceIntake.from', () {
-    test('maps the dropdown\'s "Not specified" to null, not the label', () {
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      form.patient.text = 'Juan Dela Cruz';
-      form.destination.text = 'Echague District Hospital';
-
-      final intake = AmbulanceIntake.from(form);
-
-      expect(intake.patientSex, isNull);
-      expect(intake.toFields().containsKey('patient_sex'), isFalse);
-    });
-
-    test('maps a picked sex to the lowercase value the API takes', () {
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      form.patient.text = 'Juan Dela Cruz';
-      form.destination.text = 'Echague District Hospital';
-      form.sex = 'Female';
-
-      expect(AmbulanceIntake.from(form).patientSex, 'female');
-    });
-
     test('an untouched age is null, not an empty string', () {
       final form = AmbulanceFormData();
       addTearDown(form.dispose);

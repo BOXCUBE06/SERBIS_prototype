@@ -294,11 +294,8 @@
               <v-col cols="12" sm="8">
                 <v-text-field v-model="createDialog.form.patient_name" label="Patient name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
-              <v-col cols="6" sm="2">
+              <v-col cols="6" sm="4">
                 <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
-              </v-col>
-              <v-col cols="6" sm="2">
-                <v-select v-model="createDialog.form.patient_sex" :items="sexOptions" label="Sex" variant="outlined" density="comfortable" clearable></v-select>
               </v-col>
               <v-col cols="12" sm="8">
                 <v-text-field v-model="createDialog.form.patient_address" label="Patient address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
@@ -469,7 +466,6 @@
 
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>
             <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Contact number</div><div class="field-value">{{ selected.patient_contact_number }}</div></v-col>
             <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
@@ -674,11 +670,6 @@ const personnelGroups = [
   { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', max: 20 },
 ]
 
-const sexOptions = [
-  { title: 'Male', value: 'male' },
-  { title: 'Female', value: 'female' },
-]
-
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
 
 const items = ref([])
@@ -863,7 +854,7 @@ const emptyCreateForm = () => ({
   // (handleDispatchBooking below); a plain "Ambulance Trip Record"
   // leaves both null, exactly as before this feature existed.
   service_request_id: null, vehicle_id: null, override_reason: '',
-  patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
+  patient_name: '', patient_age: null, patient_address: '',
   // No plate_no. The input was removed 2026-09-03: tbl_vehicles has had no
   // plate column since 2026_09_02_100000 dropped the one added the day before,
   // so nothing could prefill it, and tripLog() does not validate plate_no — a
@@ -916,7 +907,6 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   // `??`, not `||`: an age of 0 is a real value on this form. Neonate transport
   // is why the server's rule is min:0, and `||` would blank it.
   form.patient_age = booking.patient_age ?? null
-  form.patient_sex = booking.patient_sex ?? null
   form.patient_address = booking.patient_address || ''
   form.origin = booking.pickup_location || ''
   form.destination = booking.destination || ''

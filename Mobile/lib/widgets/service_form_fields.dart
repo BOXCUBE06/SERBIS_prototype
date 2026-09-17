@@ -55,15 +55,6 @@ class ServiceFormFields extends StatelessWidget {
                   keyboard: TextInputType.number,
                   controller: form.age,
                 ),
-                AppDropdown<String>(
-                  label: 'Sex',
-                  items: AmbulanceFormData.sexOptions,
-                  value: form.sex,
-                  onChanged: (v) {
-                    form.sex = v;
-                    onChanged();
-                  },
-                ),
                 // Prefilled from the account and fully editable: the account
                 // answers for the requester, and the patient may live
                 // elsewhere.

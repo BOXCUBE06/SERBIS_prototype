@@ -118,7 +118,6 @@ class ConductionRequestController extends Controller
             // verified human lived to 122.
             'patient_age' => 'nullable|integer|min:0|max:120',
             'patient_address' => 'required|string|max:255',
-            'patient_sex' => 'nullable|in:male,female',
             'patient_contact_number' => 'required|string|max:32',
             // Fallback only, for a unit outside the fleet table entirely
             // (mutual aid from a neighbouring LGU) — the panel now sources

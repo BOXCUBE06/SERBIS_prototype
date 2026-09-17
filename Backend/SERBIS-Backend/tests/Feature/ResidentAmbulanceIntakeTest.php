@@ -18,9 +18,9 @@ use Tests\TestCase;
  * Structured ambulance intake on the resident-facing path.
  *
  * store() used to accept a single `description` string and nothing else, so
- * patient_name, patient_age, patient_sex, patient_address,
- * patient_contact_number, pickup_location, destination and condition_notes
- * were NULL on every app-filed request — the admin panel's structured detail
+ * patient_name, patient_age, patient_address, patient_contact_number,
+ * pickup_location, destination and condition_notes were NULL on every
+ * app-filed request — the admin panel's structured detail
  * view (ServiceRequestQueue.vue, gated on patient_name) never rendered for one,
  * and createConductionStub() filled the trip record with placeholders.
  *
@@ -108,7 +108,6 @@ class ResidentAmbulanceIntakeTest extends TestCase
         $this->assertSame('Echague District Hospital', $booking->destination);
         // Everything else stays optional on this path.
         $this->assertNull($booking->patient_age);
-        $this->assertNull($booking->patient_sex);
         $this->assertNull($booking->patient_address);
         $this->assertNull($booking->patient_contact_number);
         $this->assertNull($booking->condition_notes);
@@ -132,12 +131,11 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ->assertJsonValidationErrors(['destination']);
     }
 
-    public function test_the_four_optional_columns_are_stored_when_sent(): void
+    public function test_the_optional_columns_are_stored_when_sent(): void
     {
         $this->actingAs($this->resident)
             ->postJson('/api/service-requests', $this->payload([
                 'patient_age' => 62,
-                'patient_sex' => 'female',
                 'patient_address' => 'Purok 2, San Fabian',
                 'patient_contact_number' => '09189999999',
                 'pickup_location' => 'Purok 2, San Fabian',
@@ -147,7 +145,6 @@ class ResidentAmbulanceIntakeTest extends TestCase
 
         $booking = ServiceRequest::first()->ambulanceBooking;
         $this->assertSame(62, $booking->patient_age);
-        $this->assertSame('female', $booking->patient_sex);
         $this->assertSame('Purok 2, San Fabian', $booking->patient_address);
         $this->assertSame('09189999999', $booking->patient_contact_number);
         $this->assertSame('Chest pains', $booking->condition_notes);

@@ -64,7 +64,6 @@ class AmbulanceIntake {
     required this.patientName,
     required this.destination,
     this.patientAge,
-    this.patientSex,
     this.patientAddress,
     this.patientContactNumber,
     this.pickupLocation,
@@ -81,10 +80,6 @@ class AmbulanceIntake {
   /// `''`, so an untouched field has to be absent from the body rather than
   /// present and blank.
   final String? patientAge;
-
-  /// 'male', 'female', or null — never the dropdown's own "Not specified"
-  /// label, which is a display string the API has no rule for.
-  final String? patientSex;
 
   final String? patientAddress;
   final String? patientContactNumber;
@@ -109,7 +104,6 @@ class AmbulanceIntake {
       patientName: _text(form.patient),
       destination: _text(form.destination),
       patientAge: optional(form.age),
-      patientSex: form.sexValue,
       patientAddress: optional(form.patientAddress),
       patientContactNumber: optional(form.patientContact),
       pickupLocation: optional(form.pickup),
@@ -125,7 +119,6 @@ class AmbulanceIntake {
         'patient_name': patientName,
         'destination': destination,
         if (patientAge != null) 'patient_age': patientAge!,
-        if (patientSex != null) 'patient_sex': patientSex!,
         if (patientAddress != null) 'patient_address': patientAddress!,
         if (patientContactNumber != null)
           'patient_contact_number': patientContactNumber!,
@@ -153,13 +146,6 @@ class AmbulanceFormData extends ServiceFormData {
   /// not loaded.
   final String contactNumber;
 
-  /// The dropdown's own vocabulary. `AppDropdown` takes a non-null value, and
-  /// sex is optional server-side (`nullable|in:male,female`), so the unset
-  /// state is a real option here rather than a null the widget cannot hold.
-  /// [sexValue] maps it back to what the API accepts.
-  static const sexUnspecified = 'Not specified';
-  static const sexOptions = [sexUnspecified, 'Male', 'Female'];
-
   final TextEditingController patient = TextEditingController();
   final TextEditingController age = TextEditingController();
 
@@ -182,8 +168,6 @@ class AmbulanceFormData extends ServiceFormData {
   /// separate `medical_diagnosis` would give the same fact two homes.
   final TextEditingController diagnosis = TextEditingController();
 
-  String sex = sexUnspecified;
-
   /// Companions travelling with the patient, capped at two per MDRRMO policy
   /// — optional here, but the hospital requires them to be named. Starts with
   /// one empty slot, the same as the walk-in dialog's repeater. Blank slots
@@ -199,9 +183,6 @@ class AmbulanceFormData extends ServiceFormData {
   /// above it must survive to `ServiceRequest.scheduledAt` untouched by
   /// [metaLines], never folded into prose.
   DateTime? scheduledAt;
-
-  /// What the API takes for `patient_sex`: lowercase, or null when unset.
-  String? get sexValue => sex == sexUnspecified ? null : sex.toLowerCase();
 
   /// The relative names actually typed in, in order, blanks removed.
   List<String> get relativeNames => relatives
@@ -238,7 +219,6 @@ class AmbulanceFormData extends ServiceFormData {
       serviceName,
       'Patient: ${_or(patient, 'Not specified')}',
       'Age: ${_or(age, 'Not specified')}',
-      'Sex: ${sexValue ?? 'Not specified'}',
       'Address: ${_or(patientAddress, 'Not specified')}',
       '${_or(pickup, 'Address not specified')} → '
           '${_or(destination, 'destination not specified')}',

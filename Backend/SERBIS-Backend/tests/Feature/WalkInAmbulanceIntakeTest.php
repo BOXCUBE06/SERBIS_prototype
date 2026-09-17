@@ -88,7 +88,6 @@ class WalkInAmbulanceIntakeTest extends TestCase
             'service_id' => $this->ambulance->service_id,
             'patient_name' => 'Pedro Ramos',
             'patient_age' => 67,
-            'patient_sex' => 'male',
             'patient_address' => 'Purok 3, San Fabian',
             'pickup_location' => 'Purok 3, San Fabian',
             'destination' => 'Echague District Hospital',
@@ -97,7 +96,6 @@ class WalkInAmbulanceIntakeTest extends TestCase
 
         $response->assertJsonPath('patient_name', 'Pedro Ramos')
             ->assertJsonPath('patient_age', 67)
-            ->assertJsonPath('patient_sex', 'male')
             ->assertJsonPath('pickup_location', 'Purok 3, San Fabian')
             ->assertJsonPath('destination', 'Echague District Hospital');
 
