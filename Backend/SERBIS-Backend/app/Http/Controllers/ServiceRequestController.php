@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
-use App\Models\DeviceToken;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -1099,28 +1098,8 @@ class ServiceRequestController extends Controller
         }
     }
 
-    /** Shown as the notification's title on every push this controller sends — see notifyResidentDevices(). */
+    /** Shown as the notification's title on every push this controller sends — see Fcm::notifyResident(). */
     private const PUSH_TITLE = 'SERBIS';
-
-    /**
-     * Pushes a title/body to every device this booking's resident has
-     * registered. Walk-in bookings carry no resident_id and are silently
-     * skipped — there is no account to push to, same as the SMS path this
-     * replaced was silent for. Fcm::sendToDevice() is itself the
-     * best-effort boundary (never throws, logs and swallows any failure),
-     * so a send here can never affect the status change that already
-     * committed before this runs.
-     */
-    private function notifyResidentDevices(ServiceRequest $serviceRequest, string $body): void
-    {
-        if ($serviceRequest->resident_id === null) {
-            return;
-        }
-
-        DeviceToken::where('resident_id', $serviceRequest->resident_id)
-            ->get()
-            ->each(fn (DeviceToken $deviceToken) => $this->fcm->sendToDevice($deviceToken, self::PUSH_TITLE, $body));
-    }
 
     /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
     private function forResident(Carbon $instant): string
@@ -1358,7 +1337,7 @@ class ServiceRequestController extends Controller
         });
 
         if ($wasBookingRejection) {
-            $this->notifyResidentDevices($serviceRequest, $this->rejectionPushBody((string) $validated['remarks']));
+            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->rejectionPushBody((string) $validated['remarks']));
         }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
@@ -1547,7 +1526,7 @@ class ServiceRequestController extends Controller
         $fresh = $serviceRequest->fresh(['vehicle']);
 
         if (! $wasAlreadyApproved) {
-            $this->notifyResidentDevices($fresh, $this->approvalPushBody($fresh));
+            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->approvalPushBody($fresh));
         }
 
         return response()->json($fresh);
@@ -1629,7 +1608,7 @@ class ServiceRequestController extends Controller
 
         $fresh = $serviceRequest->fresh(['vehicle']);
 
-        $this->notifyResidentDevices($fresh, $this->reschedulePushBody($fresh, (string) $validated['remarks']));
+        $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']));
 
         return response()->json($fresh);
     }

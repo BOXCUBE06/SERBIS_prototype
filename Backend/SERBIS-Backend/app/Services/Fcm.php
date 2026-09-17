@@ -45,6 +45,26 @@ class Fcm
     }
 
     /**
+     * Pushes a title/body to every device a resident has registered.
+     * Walk-in requests carry no resident_id and are silently skipped —
+     * there is no account to push to.
+     *
+     * Extracted from ServiceRequestController::notifyResidentDevices() so a
+     * second controller (equipment borrowing) can reuse it instead of
+     * duplicating the device-token lookup.
+     */
+    public function notifyResident(?int $residentId, string $title, string $body): void
+    {
+        if ($residentId === null) {
+            return;
+        }
+
+        DeviceToken::where('resident_id', $residentId)
+            ->get()
+            ->each(fn (DeviceToken $deviceToken) => $this->sendToDevice($deviceToken, $title, $body));
+    }
+
+    /**
      * One push to one device. Best-effort, like every other notification
      * channel in this app: a missing config, a network error, or FCM
      * rejecting the request is logged and swallowed, never thrown — the
