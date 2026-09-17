@@ -3,28 +3,37 @@
 namespace App\Console\Commands;
 
 use App\Models\EquipmentBorrowing;
+use App\Services\Fcm;
 use App\Services\PhilSms;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Week 7 item 3. One SMS per borrowing that is out and due back today or
- * tomorrow. Marked reminded (return_reminder_sent_at set) only once PhilSMS
- * actually accepts the send — a rejected response or a thrown exception
- * leaves the row unmarked so the next run retries it, bounded by the
- * due-date window above (at most today and tomorrow ever match, so a
- * permanently-failing number is retried at most twice, not forever).
+ * Week 7 item 3. One SMS, and now also one push, per borrowing that is out
+ * and due back today or tomorrow.
  *
- * Best-effort like ServiceRequestController::notifyResident(): never throws.
- * A failed send is logged (borrowing id only, never the phone number or
- * message body) rather than the row being falsely marked as delivered.
+ * The two channels fail independently and neither gates the other:
+ * - The push is attempted for every borrowing in the window, regardless of
+ *   whether this resident even has an SMS-reachable number — Fcm::notifyResident()
+ *   is itself a best-effort boundary (never throws, logs and swallows any
+ *   failure), so it cannot affect what happens to the SMS side below it.
+ * - Marked reminded (return_reminder_sent_at set) only once PhilSMS
+ *   actually accepts the send, exactly as before this channel was added —
+ *   a successful push never sets it on its own, and a rejected SMS response
+ *   or a thrown exception leaves the row unmarked so the next run retries
+ *   it, bounded by the due-date window above (at most today and tomorrow
+ *   ever match, so a permanently-failing number is retried at most twice,
+ *   not forever). The push has no such marker and is attempted again on
+ *   every retry — a resident whose SMS keeps failing could get the push
+ *   twice; accepted here rather than adding a second tracking column for a
+ *   two-run-wide window.
  */
 class SendReturnDueReminders extends Command
 {
     protected $signature = 'serbis:send-return-reminders';
 
-    protected $description = 'Text residents whose released equipment is due back today or tomorrow';
+    protected $description = 'Text and push-notify residents whose released equipment is due back today or tomorrow';
 
     /**
      * Named here rather than trusted from app.timezone (UTC) — same reasoning
@@ -35,6 +44,9 @@ class SendReturnDueReminders extends Command
 
     /** One billed PhilSMS segment. Matches ServiceRequestController's cap. */
     private const SMS_SEGMENT_LIMIT = 160;
+
+    /** Shown as the notification's title on every push this command sends, matching the two controllers. */
+    private const PUSH_TITLE = 'SERBIS';
 
     public function handle(): int
     {
@@ -108,6 +120,15 @@ class SendReturnDueReminders extends Command
      */
     private function remind(EquipmentBorrowing $borrowing, string $today, Carbon $now): string
     {
+        // Fired before the SMS channel below and never touches $borrowing —
+        // see the class docblock for why the two channels stay independent.
+        app(Fcm::class)->notifyResident(
+            $borrowing->resident_id,
+            self::PUSH_TITLE,
+            $this->reminderPushBody($borrowing, $today),
+            ['borrow_id' => (string) $borrowing->borrow_id],
+        );
+
         // PhilSms::configured() is checked once in handle(), before this is
         // ever called — a missing token is a fact about the run, not this row.
         $number = PhilSms::normalize((string) $borrowing->resident->phone_number);
@@ -162,5 +183,17 @@ class SendReturnDueReminders extends Command
         }
 
         return $prefix.$itemName.$suffix;
+    }
+
+    /**
+     * Same fact as reminderMessage(), for the push channel — no 160-character
+     * segment budget to trim against here, so the item name goes in whole.
+     */
+    private function reminderPushBody(EquipmentBorrowing $borrowing, string $today): string
+    {
+        $when = $borrowing->due_date->toDateString() === $today ? 'today' : 'tomorrow';
+        $itemName = $borrowing->equipment->item_name ?? $borrowing->other_equipment_text ?? 'item';
+
+        return 'Your borrowed '.$itemName.' is due back '.$when.' ('.$borrowing->due_date->format('M j').'). — MDRRMO Echague';
     }
 }
