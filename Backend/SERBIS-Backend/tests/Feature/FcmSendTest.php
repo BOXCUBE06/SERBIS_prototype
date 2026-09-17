@@ -115,6 +115,33 @@ class FcmSendTest extends TestCase
         $this->assertNotNull(DeviceToken::find($this->deviceToken->getKey()));
     }
 
+    public function test_sends_the_data_payload_when_given_one(): void
+    {
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        (new Fcm)->sendToDevice(
+            $this->deviceToken,
+            'Booking approved',
+            'Unit AMB-01 is on the way.',
+            ['request_id' => '42', 'service_type' => 'Ambulance/Medical Response'],
+        );
+
+        Http::assertSent(function ($request) {
+            return $request['message']['data']['request_id'] === '42'
+                && $request['message']['data']['service_type'] === 'Ambulance/Medical Response';
+        });
+    }
+
+    /** No data key at all, not an empty one — an absent key and {} are not the same wire shape for "nothing extra". */
+    public function test_omits_the_data_key_entirely_when_none_is_given(): void
+    {
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Http::assertSent(fn ($request) => ! array_key_exists('data', $request['message']));
+    }
+
     public function test_deletes_the_token_when_fcm_reports_it_unregistered(): void
     {
         Http::fake(['fcm.googleapis.com/*' => Http::response([

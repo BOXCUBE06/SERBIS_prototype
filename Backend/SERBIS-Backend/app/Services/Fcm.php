@@ -17,9 +17,8 @@ use Illuminate\Support\Facades\Log;
  * credentials file is exchanged for a short-lived bearer token, which is
  * cached so a burst of sends does not mint (and sign) a fresh one per call.
  *
- * Unlike PhilSms, there is no caller yet to do this — nothing triggers a push
- * in this branch — so sendToDevice() is the best-effort boundary itself: it
- * never throws, and it is the thing that decides a dead token gets deleted.
+ * sendToDevice() is the best-effort boundary itself: it never throws, and it
+ * is the thing that decides a dead token gets deleted.
  */
 class Fcm
 {
@@ -52,8 +51,14 @@ class Fcm
      * Extracted from ServiceRequestController::notifyResidentDevices() so a
      * second controller (equipment borrowing) can reuse it instead of
      * duplicating the device-token lookup.
+     *
+     * $data is the FCM data payload — string values only, FCM's own
+     * requirement. Lets a caller identify what the push was about
+     * (request_id, service_type) without putting either in the visible
+     * title/body. No client reads this yet; nothing in the app deep-links
+     * on it.
      */
-    public function notifyResident(?int $residentId, string $title, string $body): void
+    public function notifyResident(?int $residentId, string $title, string $body, array $data = []): void
     {
         if ($residentId === null) {
             return;
@@ -61,7 +66,7 @@ class Fcm
 
         DeviceToken::where('resident_id', $residentId)
             ->get()
-            ->each(fn (DeviceToken $deviceToken) => $this->sendToDevice($deviceToken, $title, $body));
+            ->each(fn (DeviceToken $deviceToken) => $this->sendToDevice($deviceToken, $title, $body, $data));
     }
 
     /**
@@ -76,14 +81,14 @@ class Fcm
      * nothing keeps sending to a device that will never answer again. Every
      * other failure leaves it alone, since it might still be good next time.
      */
-    public function sendToDevice(DeviceToken $deviceToken, string $title, string $body): void
+    public function sendToDevice(DeviceToken $deviceToken, string $title, string $body, array $data = []): void
     {
         if (! self::configured()) {
             return;
         }
 
         try {
-            $response = $this->post($deviceToken->token, $title, $body);
+            $response = $this->post($deviceToken->token, $title, $body, $data);
 
             if ($response->successful()) {
                 return;
@@ -108,7 +113,7 @@ class Fcm
         }
     }
 
-    private function post(string $token, string $title, string $body): Response
+    private function post(string $token, string $title, string $body, array $data = []): Response
     {
         $projectId = $this->credentials()->getProjectId();
 
@@ -122,6 +127,10 @@ class Fcm
                         'title' => $title,
                         'body' => $body,
                     ],
+                    // Omitted entirely when empty rather than sent as {} — an
+                    // absent key and an empty map should not be two different
+                    // wire shapes for the same "nothing extra" case.
+                    ...($data === [] ? [] : ['data' => $data]),
                 ],
             ]);
     }

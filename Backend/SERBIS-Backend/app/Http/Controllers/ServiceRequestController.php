@@ -1101,6 +1101,21 @@ class ServiceRequestController extends Controller
     /** Shown as the notification's title on every push this controller sends — see Fcm::notifyResident(). */
     private const PUSH_TITLE = 'SERBIS';
 
+    /**
+     * The FCM data payload every push this controller sends carries — string
+     * values only, FCM's own requirement. Nothing reads this yet (no
+     * deep-link handler on the mobile side), but it lets a tapped
+     * notification identify which request it was about instead of only
+     * showing prose.
+     */
+    private function pushData(ServiceRequest $serviceRequest): array
+    {
+        return [
+            'request_id' => (string) $serviceRequest->request_id,
+            'service_type' => $serviceRequest->service->service_name,
+        ];
+    }
+
     /** Manila wall clock, the same shape a staffer reads on the paper form and the panel. */
     private function forResident(Carbon $instant): string
     {
@@ -1337,7 +1352,7 @@ class ServiceRequestController extends Controller
         });
 
         if ($wasBookingRejection) {
-            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->rejectionPushBody((string) $validated['remarks']));
+            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->rejectionPushBody((string) $validated['remarks']), $this->pushData($serviceRequest));
         }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
@@ -1526,7 +1541,7 @@ class ServiceRequestController extends Controller
         $fresh = $serviceRequest->fresh(['vehicle']);
 
         if (! $wasAlreadyApproved) {
-            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->approvalPushBody($fresh));
+            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->approvalPushBody($fresh), $this->pushData($fresh));
         }
 
         return response()->json($fresh);
@@ -1608,7 +1623,7 @@ class ServiceRequestController extends Controller
 
         $fresh = $serviceRequest->fresh(['vehicle']);
 
-        $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']));
+        $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']), $this->pushData($fresh));
 
         return response()->json($fresh);
     }
