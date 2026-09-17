@@ -1130,9 +1130,33 @@ class ServiceRequestController extends Controller
             .' has been approved. Unit: '.$unit.'. — MDRRMO Echague';
     }
 
-    private function rejectionPushBody(string $reason): string
+    /**
+     * Generic across every service — unlike approvalPushBody() above, this
+     * fires for any service's rejection, not just a scheduled ambulance
+     * booking, so it cannot assume "ambulance booking" the way that one does.
+     */
+    private function rejectionPushBody(ServiceRequest $serviceRequest, string $reason): string
     {
-        return 'Your ambulance booking request was not approved. Reason: '.$reason.' — MDRRMO Echague';
+        return 'Your '.$serviceRequest->service->service_name.' request was not approved. Reason: '.$reason.' — MDRRMO Echague';
+    }
+
+    /** Generic across every service — a request moving into Booked, whatever staff action produced it. */
+    private function bookedPushBody(ServiceRequest $serviceRequest): string
+    {
+        return 'Your '.$serviceRequest->service->service_name.' request has been booked. — MDRRMO Echague';
+    }
+
+    /**
+     * Generic across every service — a request moving into Responding,
+     * whichever path got it there: a non-ambulance instant approval, an
+     * unscheduled ambulance request reaching Responding straight from
+     * Pending, or a scheduled ambulance booking's actual dispatch (Booked ->
+     * Responding after approve() has already run separately — see the push
+     * block in update() for why that is a second push, not a duplicate).
+     */
+    private function respondingPushBody(ServiceRequest $serviceRequest): string
+    {
+        return 'Your '.$serviceRequest->service->service_name.' request has been approved and is being responded to. — MDRRMO Echague';
     }
 
     private function reschedulePushBody(ServiceRequest $serviceRequest, string $reason): string
@@ -1315,12 +1339,8 @@ class ServiceRequestController extends Controller
             }
         }
 
-        // Captured before update() overwrites status: rejecting a booking is
-        // the case this endpoint notifies for (the panel's older, unscheduled
-        // Pending -> Disapproved flow is not "a booking" and stays silent).
-        $wasBookingRejection = $serviceRequest->ambulanceBooking?->scheduled_at !== null
-            && $serviceRequest->status !== 'Disapproved'
-            && ($validated['status'] ?? null) === 'Disapproved';
+        // Captured before update() overwrites status — see the push block below.
+        $oldStatus = $serviceRequest->status;
 
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
             $this->syncFleet($serviceRequest, $validated);
@@ -1351,8 +1371,34 @@ class ServiceRequestController extends Controller
             }
         });
 
-        if ($wasBookingRejection) {
-            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->rejectionPushBody((string) $validated['remarks']), $this->pushData($serviceRequest));
+        // Fires on the transition itself, regardless of which endpoint or
+        // panel button produced it — previously this only covered a
+        // scheduled ambulance booking's rejection (an arbitrary scope limit
+        // from when this endpoint was ambulance-only), leaving every
+        // non-ambulance service, and even an unscheduled ambulance request,
+        // silent.
+        //
+        // A scheduled ambulance booking now gets two separate pushes across
+        // its life, not a duplicate of one: approve() (Booked stays Booked)
+        // sends its own richer body when the office confirms the unit and
+        // time, and THIS generic block fires again later when staff move it
+        // Booked -> Responding (dispatch) — approve() only unlocks that
+        // second transition (via approved_at), it does not perform it, so
+        // the second-order guard above does not stop this generic push from
+        // firing once dispatch actually happens.
+        $newStatus = $validated['status'] ?? $oldStatus;
+
+        if ($newStatus !== $oldStatus) {
+            $pushBody = match ($newStatus) {
+                'Booked' => $this->bookedPushBody($serviceRequest),
+                'Responding' => $this->respondingPushBody($serviceRequest),
+                'Disapproved' => $this->rejectionPushBody($serviceRequest, (string) $validated['remarks']),
+                default => null,
+            };
+
+            if ($pushBody !== null) {
+                $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $pushBody, $this->pushData($serviceRequest));
+            }
         }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
