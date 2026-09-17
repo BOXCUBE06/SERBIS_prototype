@@ -388,57 +388,44 @@
     </v-row>
 
     <v-row>
-      <!-- 8. Fleet usage. No barangay/service filter — the trip log carries
-           no resident_id at all (filed by MDRRMO staff, not a resident) and
-           every conduction request is the same one dispatch service, so
-           neither filter has anything to narrow. -->
+      <!-- 8. Most used vehicles. Its own Today/This week/This month toggle,
+           independent of the page's shared date filter (see
+           AnalyticsReport::mostUsedVehicles — all three periods come back in
+           one payload, so the toggle never requeries). No barangay/service
+           filter — the trip log carries no resident_id at all (filed by
+           MDRRMO staff, not a resident) and every conduction request is the
+           same one dispatch service, so neither filter has anything to
+           narrow. Only ambulances are actually dispatched through this flow
+           — see the subtitle. -->
       <v-col cols="12">
         <AnalyticsSection
-          title="Fleet usage"
-          subtitle="Trips and time per vehicle. Distance is shown only where both odometer readings exist."
+          title="Most used vehicles"
+          subtitle="Trips per vehicle, highest first. Only ambulances are dispatched through this flow — boats, fire trucks and rescue vehicles carry no trips here."
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && fleet.totalTrips === 0"
-          empty-text="No dispatch trips in this range"
+          :empty="!loading && !error && selectedVehicleTrips.every(v => v.trips === 0)"
+          empty-text="No dispatch trips in this period"
           @retry="fetchReport"
         >
-          <div class="d-flex flex-wrap gap-4 mb-4">
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median trip duration</div>
-              <div class="stat-value text-high-emphasis">
-                {{ fleet.duration.medianHours === null ? '—' : formatHours(fleet.duration.medianHours) }}
-              </div>
+          <template #subtitle>
+            <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+              <span>Trips per vehicle, highest first. Only ambulances are dispatched through this flow — boats, fire trucks and rescue vehicles carry no trips here.</span>
+              <v-btn-toggle v-model="vehiclePeriod" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
+                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">Today</v-btn>
+                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This week</v-btn>
+                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This month</v-btn>
+              </v-btn-toggle>
             </div>
+          </template>
 
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median distance</div>
-              <div class="stat-value text-high-emphasis">
-                {{ fleet.distance.medianKm === null ? '—' : `${fleet.distance.medianKm} km` }}
-              </div>
-            </div>
-          </div>
-
-          <div class="table-scroll">
-            <table class="data-table text-body-2">
-              <thead>
-                <tr>
-                  <th class="text-left" scope="col">Unit</th>
-                  <th class="text-left" scope="col">Type</th>
-                  <th class="text-right" scope="col">Trips</th>
-                  <th class="text-right" scope="col">Median duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="unit in fleet.units" :key="unit.label">
-                  <td>{{ unit.label }}</td>
-                  <td>{{ unit.type || '—' }}</td>
-                  <td class="text-right">{{ unit.trips }}</td>
-                  <td class="text-right">
-                    {{ unit.medianTripHours === null ? '—' : formatHours(unit.medianTripHours) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div :style="{ height: Math.max(120, selectedVehicleTrips.length * 40) + 'px' }">
+            <Bar :data="vehicleTripsChartData" :options="horizontalBarOptions" />
+            <ChartDataTable
+              caption="Most used vehicles — same data as the chart above"
+              category-label="Vehicle"
+              :labels="selectedVehicleTrips.map(v => v.label)"
+              :series="[{ label: 'Trips', data: selectedVehicleTrips.map(v => v.trips) }]"
+            />
           </div>
         </AnalyticsSection>
       </v-col>
@@ -789,12 +776,9 @@ const loans = computed(() => report.value?.loans ?? {
   returnedLate: { count: 0, of: 0, percent: null },
   currentlyOverdue: 0,
 })
-const fleet = computed(() => report.value?.fleet ?? {
-  units: [],
-  totalTrips: 0,
-  duration: { medianHours: null, n: 0 },
-  distance: { medianKm: null, n: 0 },
-})
+const vehicleTrips = computed(() => report.value?.vehicleTrips ?? { today: [], week: [], month: [] })
+const vehiclePeriod = ref('week')
+const selectedVehicleTrips = computed(() => vehicleTrips.value[vehiclePeriod.value] ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
@@ -877,6 +861,17 @@ const agingChartData = computed(() => ({
   datasets: [{
     label: 'Open requests',
     data: aging.value.data,
+    backgroundColor: themeColors.value.primary,
+    borderRadius: 4,
+    maxBarThickness: 26,
+  }],
+}))
+
+const vehicleTripsChartData = computed(() => ({
+  labels: selectedVehicleTrips.value.map(v => v.label),
+  datasets: [{
+    label: 'Trips',
+    data: selectedVehicleTrips.value.map(v => v.trips),
     backgroundColor: themeColors.value.primary,
     borderRadius: 4,
     maxBarThickness: 26,
@@ -1011,12 +1006,6 @@ const horizontalBarOptions = computed(() => ({
     y: { grid: { display: false }, ticks: { color: tickColor.value } },
   },
 }))
-
-const formatHours = (hours) => {
-  if (hours < 1) return `${Math.round(hours * 60)} min`
-  if (hours < 48) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-  return `${(hours / 24).toFixed(1)} days`
-}
 
 defineExpose({ fetchReport })
 </script>
