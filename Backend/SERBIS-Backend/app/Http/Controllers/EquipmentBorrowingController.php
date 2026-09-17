@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\User;
+use App\Services\EquipmentAvailabilityNotifier;
 use App\Services\Fcm;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
@@ -22,7 +23,10 @@ class EquipmentBorrowingController extends Controller
     use ResolvesUploadDisks;
     use ScopesToOwner;
 
-    public function __construct(private readonly Fcm $fcm) {}
+    public function __construct(
+        private readonly Fcm $fcm,
+        private readonly EquipmentAvailabilityNotifier $availabilityNotifier,
+    ) {}
 
     /** The calendar a due date is read in — the office's, same as the panel's picker. */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
@@ -367,6 +371,12 @@ class EquipmentBorrowingController extends Controller
                 'before_or_equal:'.$latestDue->toDateString(),
             ],
             'denial_reason' => 'sometimes|nullable|string|max:255',
+            // What actually keys the "still needed?" reconfirm notification
+            // (EquipmentAvailabilityNotifier) — denial_reason alone is free
+            // text an admin typed, with nothing machine-readable to check
+            // later. Optional: an admin denying for a reason that is not
+            // unavailability sends neither this nor anything to reconfirm.
+            'denial_reason_code' => 'sometimes|nullable|in:Unavailable,Other',
             // Good needs nothing beyond the flag itself; Bad needs the note
             // to say what's wrong, or "bad" is a label with no information
             // behind it for the next person deciding whether to lend again.
@@ -420,6 +430,11 @@ class EquipmentBorrowingController extends Controller
         }
 
         DB::beginTransaction();
+
+        // Set inside the Returned branch below, read after DB::commit() —
+        // the availability check does push/SMS, which has no business
+        // holding the row lock this transaction takes.
+        $restockedEquipment = null;
 
         try {
             // Named for the only status Released can be reached from. The old
@@ -487,6 +502,7 @@ class EquipmentBorrowingController extends Controller
                 $equipment->available_quantity = $clampedTo;
                 $equipment->save();
                 $borrowing->returned_at = now();
+                $restockedEquipment = $equipment;
             }
 
             // Assigned key by key rather than by splat: `status` is handled by
@@ -518,8 +534,13 @@ class EquipmentBorrowingController extends Controller
                 if (array_key_exists('denial_reason', $validated)) {
                     $borrowing->denial_reason = $validated['denial_reason'];
                 }
+                if (array_key_exists('denial_reason_code', $validated)) {
+                    $borrowing->denial_reason_code = $validated['denial_reason_code'];
+                }
             } else {
                 $borrowing->denial_reason = null;
+                $borrowing->denial_reason_code = null;
+                $borrowing->availability_reconfirm_sent_at = null;
             }
 
             $borrowing->status = $newStatus;
@@ -541,6 +562,10 @@ class EquipmentBorrowingController extends Controller
                     $pushBody,
                     ['borrow_id' => (string) $borrowing->borrow_id],
                 );
+            }
+
+            if ($restockedEquipment !== null) {
+                $this->availabilityNotifier->notifyIfAvailable($restockedEquipment);
             }
 
             return response()->json($borrowing);

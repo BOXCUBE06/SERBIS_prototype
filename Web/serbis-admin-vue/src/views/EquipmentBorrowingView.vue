@@ -468,7 +468,12 @@
                 v-if="selectedRecord?.status === 'Denied'"
                 type="error" variant="tonal" class="mb-4" density="compact"
                 :title="'Request denied'"
-              >{{ selectedRecord?.denial_reason || 'No reason was recorded.' }}</v-alert>
+              >
+                {{ selectedRecord?.denial_reason || 'No reason was recorded.' }}
+                <div v-if="selectedRecord?.denial_reason_code === 'Unavailable'" class="text-caption mt-2">
+                  Marked as "not available" — the resident is texted and pushed automatically once this item is back in stock.
+                </div>
+              </v-alert>
 
               <!-- Info, not error: the office refused nothing here. Saying
                    stock was untouched out loud because the obvious guess is
@@ -785,20 +790,36 @@
             @update:model-value="actionDialog.error = ''"
           ></DateTimePickerField>
 
-          <v-textarea
-            v-else-if="actionDialog.mode === 'deny'"
-            v-model="actionDialog.reason"
-            label="Reason for denial"
-            placeholder="e.g. All units are committed to the flood drill that week"
-            hint="The resident is shown this. Say what would make a future request succeed."
-            persistent-hint
-            variant="outlined"
-            rows="3"
-            counter="255"
-            maxlength="255"
-            :error-messages="actionDialog.error"
-            @update:model-value="actionDialog.error = ''"
-          ></v-textarea>
+          <template v-else-if="actionDialog.mode === 'deny'">
+            <!-- Unavailable specifically, not denial in general: this is
+                 what keys the "still needed?" reconfirm notification once
+                 the item is back in stock (MDRRMO feedback, 2026-09-18) —
+                 denial_reason alone is free text with nothing to check that
+                 automatically. -->
+            <v-btn-toggle
+              v-model="actionDialog.denialReasonCode"
+              mandatory
+              density="comfortable"
+              class="mb-4"
+            >
+              <v-btn value="Unavailable" class="text-none">Not available</v-btn>
+              <v-btn value="Other" class="text-none">Other reason</v-btn>
+            </v-btn-toggle>
+
+            <v-textarea
+              v-model="actionDialog.reason"
+              label="Reason for denial"
+              placeholder="e.g. All units are committed to the flood drill that week"
+              hint="The resident is shown this. Say what would make a future request succeed."
+              persistent-hint
+              variant="outlined"
+              rows="3"
+              counter="255"
+              maxlength="255"
+              :error-messages="actionDialog.error"
+              @update:model-value="actionDialog.error = ''"
+            ></v-textarea>
+          </template>
 
           <template v-else-if="actionDialog.mode === 'return'">
             <v-btn-toggle
@@ -929,6 +950,7 @@ const emptyAction = () => ({
   record: null,
   dueDate: '',
   reason: '',
+  denialReasonCode: 'Unavailable',
   condition: 'Good',
   conditionNote: '',
   error: '',
@@ -1592,7 +1614,7 @@ const actionCopy = computed(() => {
 const clearActionDialog = () => { actionDialog.value = emptyAction() }
 
 const confirmAction = () => {
-  const { mode, status, record, dueDate, reason, condition, conditionNote } = actionDialog.value
+  const { mode, status, record, dueDate, reason, denialReasonCode, condition, conditionNote } = actionDialog.value
   if (mode === 'due' && !dueDate) {
     actionDialog.value.error = 'Pick a due date'
     return
@@ -1609,7 +1631,10 @@ const confirmAction = () => {
   }
   const extra = {}
   if (mode === 'due') extra.due_date = dueDate
-  if (mode === 'deny') extra.denial_reason = reason.trim()
+  if (mode === 'deny') {
+    extra.denial_reason = reason.trim()
+    extra.denial_reason_code = denialReasonCode
+  }
   if (mode === 'return') {
     extra.return_condition = condition
     // Optional on Good — unlike a bad return, nothing blocks it over the note.
