@@ -713,7 +713,7 @@
             v-if="actionDialog.mode === 'due'"
             v-model="actionDialog.dueDate"
             type="date"
-            :min="todayInput()"
+            :min="daysFromToday(MIN_LOAN_DAYS)"
             :max="daysFromToday(DEFAULT_LOAN_DAYS)"
             label="Due back on"
             variant="outlined"
@@ -1143,7 +1143,6 @@ const fmtDate = (value) => {
 
 const pad = (n) => String(n).padStart(2, '0')
 const toDateInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-const todayInput = () => toDateInput(new Date())
 const daysFromToday = (n) => {
   const d = new Date()
   d.setDate(d.getDate() + n)
@@ -1445,6 +1444,7 @@ onUnmounted(() => {
 // operator can still move the date within that window in the dialog; the
 // date is always shown before the request goes out.
 const DEFAULT_LOAN_DAYS = 7
+const MIN_LOAN_DAYS = 1
 
 const requestAction = (record, newStatus) => {
   const next = { ...emptyAction(), open: true, status: newStatus, record }

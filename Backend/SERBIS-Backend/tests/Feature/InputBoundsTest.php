@@ -397,7 +397,32 @@ class InputBoundsTest extends TestCase
             'status' => 'Approved',
             'due_date' => '2026-09-15',
         ])->assertStatus(422)
-            ->assertJsonPath('errors.due_date.0', 'The due date cannot be earlier than today.');
+            ->assertJsonPath('errors.due_date.0', 'A loan runs at least 1 day — pick Sep 17, 2026 or later.');
+    }
+
+    /** A same-day loan is not a real borrow term (MDRRMO feedback, 2026-09-17). */
+    public function test_a_same_day_due_date_is_rejected(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => now('Asia/Manila')->format('Y-m-d'),
+        ])->assertStatus(422)->assertJsonValidationErrors('due_date');
+    }
+
+    public function test_a_one_day_loan_is_still_accepted(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => now('Asia/Manila')->addDay()->format('Y-m-d'),
+        ])->assertOk();
     }
 
     /**

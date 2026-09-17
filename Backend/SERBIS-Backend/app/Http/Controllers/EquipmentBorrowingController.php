@@ -30,6 +30,9 @@ class EquipmentBorrowingController extends Controller
     /** Agency policy cap (MDRRMO feedback, 2026-09-14); DEFAULT_LOAN_DAYS in EquipmentBorrowingView.vue. */
     private const MAX_LOAN_DAYS = 7;
 
+    /** Agency policy floor (MDRRMO feedback, 2026-09-17): a same-day loan is not a real borrow term. */
+    private const MIN_LOAN_DAYS = 1;
+
     /** Shown as the notification's title on every push this controller sends, matching ServiceRequestController. */
     private const PUSH_TITLE = 'SERBIS';
 
@@ -339,6 +342,7 @@ class EquipmentBorrowingController extends Controller
         // one day short of what the panel's picker offers and its own default
         // was refused with the raw rule text.
         $officeToday = Carbon::now(self::OFFICE_TIMEZONE)->startOfDay();
+        $earliestDue = $officeToday->copy()->addDays(self::MIN_LOAN_DAYS);
         $latestDue = $officeToday->copy()->addDays(self::MAX_LOAN_DAYS);
 
         $validated = $request->validate([
@@ -346,10 +350,11 @@ class EquipmentBorrowingController extends Controller
             // Both optional: a status change on its own is still a valid call,
             // and only two of the five transitions carry either of these.
             //
-            // Bounded in both directions. A loan is due back after it is
-            // lent, so a date already past is a typo, not an instruction —
-            // and the upper bound is the agency's own policy cap. This used
-            // to allow +1 year, which was never a real loan term.
+            // Bounded in both directions per agency policy: a loan runs
+            // 1-7 days. A same-day due date is not a real loan term any more
+            // than one already past is, and the upper bound is the agency's
+            // own policy cap. This used to allow same-day and +1 year, which
+            // were never real loan terms.
             //
             // Safe against the overdue case specifically: the panel sends
             // `due_date` only when approving, or when releasing a row that
@@ -358,7 +363,7 @@ class EquipmentBorrowingController extends Controller
             // bound.
             'due_date' => [
                 'sometimes', 'nullable', 'date',
-                'after_or_equal:'.$officeToday->toDateString(),
+                'after_or_equal:'.$earliestDue->toDateString(),
                 'before_or_equal:'.$latestDue->toDateString(),
             ],
             'denial_reason' => 'sometimes|nullable|string|max:255',
@@ -367,7 +372,7 @@ class EquipmentBorrowingController extends Controller
             'return_condition_note' => 'sometimes|nullable|string|max:500',
         ], [
             'due_date.date' => 'Pick a valid due date.',
-            'due_date.after_or_equal' => 'The due date cannot be earlier than today.',
+            'due_date.after_or_equal' => 'A loan runs at least '.self::MIN_LOAN_DAYS.' day — pick '.$earliestDue->format('M j, Y').' or later.',
             'due_date.before_or_equal' => 'A loan runs at most '.self::MAX_LOAN_DAYS.' days — pick '.$latestDue->format('M j, Y').' or earlier.',
         ]);
 
