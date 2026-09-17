@@ -200,3 +200,27 @@ export function isBookingOverdue(status: string | null | undefined, scheduledAt:
   const d = new Date(scheduledAt)
   return !Number.isNaN(d.getTime()) && d.getTime() < Date.now()
 }
+
+/**
+ * Same "Due today" / "Due tomorrow" / "Due in N days" tiering
+ * EquipmentBorrowingView.vue's own dueLabel() uses, extended to a confirmed
+ * ambulance booking's scheduled_at (MDRRMO feedback, 2026-09-18). Null for
+ * anything not a live, still-upcoming Booked slot — isBookingOverdue already
+ * covers the past-due case with its own pill, and the two are mutually
+ * exclusive by construction (an overdue slot never reaches this tiering).
+ */
+export function bookingCountdownLabel(status: string | null | undefined, scheduledAt: string | Date | null | undefined): string | null {
+  if (status !== 'Booked' || !scheduledAt) return null
+
+  const d = new Date(scheduledAt)
+  if (Number.isNaN(d.getTime()) || isBookingOverdue(status, scheduledAt)) return null
+
+  const today = new Date()
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const schedMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const delta = Math.round((schedMidnight.getTime() - todayMidnight.getTime()) / 86_400_000)
+
+  if (delta <= 0) return 'Scheduled today'
+  if (delta === 1) return 'Scheduled tomorrow'
+  return `Scheduled in ${delta} days`
+}

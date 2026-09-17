@@ -480,6 +480,24 @@ String dueLabel(DateTime due, [DateTime? now]) {
   return 'Due in $delta days';
 }
 
+/// Same tiering as [dueLabel] and the same reason it stays English rather
+/// than going through [tr] — MDRRMO feedback, 2026-09-18, extending the
+/// equipment due countdown to a confirmed ambulance booking's own scheduled
+/// time. Never called once a booking is already overdue: [ServiceRequest]'s
+/// own display logic gates this behind `!isOverdue`, which is the box that
+/// covers the past-due case with its own message.
+String scheduledCountdownLabel(DateTime scheduledAt, [DateTime? now]) {
+  final today = now ?? DateTime.now();
+  final todayMidnight = DateTime(today.year, today.month, today.day);
+  final local = scheduledAt.toLocal();
+  final schedMidnight = DateTime(local.year, local.month, local.day);
+  final delta = schedMidnight.difference(todayMidnight).inDays;
+
+  if (delta <= 0) return 'Scheduled today';
+  if (delta == 1) return 'Scheduled tomorrow';
+  return 'Scheduled in $delta days';
+}
+
 class ServiceRequest {
   final int? id;
   final int? serviceId;

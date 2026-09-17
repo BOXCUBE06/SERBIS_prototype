@@ -263,6 +263,12 @@
                       <v-icon size="12" class="ml-2 mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
                       <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
                       <span v-if="isBookingOverdue(item.status, item.scheduled_at)" class="status-pill status-pill--sm pill-disapproved ml-2">Overdue</span>
+                      <!-- Same box treatment the equipment due countdown has
+                           — MDRRMO feedback, 2026-09-18. -->
+                      <span
+                        v-else-if="bookingCountdownLabel(item.status, item.scheduled_at)"
+                        class="status-pill status-pill--sm pill-booked ml-2"
+                      >{{ bookingCountdownLabel(item.status, item.scheduled_at) }}</span>
                     </template>
                     <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
                   </div>
@@ -361,6 +367,22 @@
                 density="compact"
               >
                 Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.
+              </v-alert>
+
+              <!-- Confirmed and still upcoming — same box treatment the
+                   equipment due countdown has (MDRRMO feedback, 2026-09-18).
+                   Mutually exclusive with the overdue alert above by
+                   construction: bookingCountdownLabel returns null once
+                   isBookingOverdue is true. -->
+              <v-alert
+                v-else-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at)"
+                :type="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at) === 'Scheduled today' ? 'warning' : 'info'"
+                variant="tonal"
+                class="mb-4"
+                density="compact"
+                :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at)"
+              >
+                Scheduled for {{ formatDateTime(selectedRequest.scheduled_at) }}.
               </v-alert>
 
               <v-row class="detail-group">
@@ -1307,7 +1329,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, outcomePillClass, isBookingOverdue } from '@/composables/adminUi'
+import { outcomeLabel, outcomePillClass, isBookingOverdue, bookingCountdownLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
