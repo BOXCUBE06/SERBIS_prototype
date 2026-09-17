@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * ambulance request has exactly one row here; no other service does.
  */
 #[Table('tbl_ambulance_bookings', key: 'request_id', incrementing: false)]
-#[Fillable(['request_id', 'patient_name', 'patient_age', 'patient_address', 'patient_contact_number', 'pickup_location', 'destination', 'condition_notes', 'scheduled_at', 'scheduled_end', 'approved_at'])]
+#[Fillable(['request_id', 'patient_name', 'patient_age', 'patient_address', 'patient_contact_number', 'pickup_location', 'destination', 'condition_notes', 'scheduled_at', 'scheduled_end', 'approved_at', 'scheduled_reminder_sent_at'])]
 class AmbulanceBooking extends Model
 {
     use TracksHistory;
@@ -25,6 +25,7 @@ class AmbulanceBooking extends Model
         'scheduled_at' => 'datetime',
         'scheduled_end' => 'datetime',
         'approved_at' => 'datetime',
+        'scheduled_reminder_sent_at' => 'datetime',
     ];
 
     public function serviceRequest(): BelongsTo
