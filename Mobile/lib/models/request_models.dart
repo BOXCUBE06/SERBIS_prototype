@@ -260,6 +260,23 @@ class ServiceCatalogItem {
     this.description,
   });
 
+  /// The client-only "Others" tile appended after the real catalogue loads —
+  /// not a row in `tbl_services`, so [id] is a sentinel the submit path
+  /// recognises and omits from the request rather than sending. Mirrors how
+  /// an uncatalogued equipment borrow leaves `equipment_id` null and carries
+  /// the item's name as free text instead; here the free text is whatever
+  /// the resident types into the generic description form, since
+  /// `service_id` null already makes `description` required server-side.
+  static const int othersId = -1;
+
+  const ServiceCatalogItem.others()
+      : id = othersId,
+        name = 'Others',
+        code = 'others',
+        description = 'Something not covered by the services above.';
+
+  bool get isOthers => id == othersId;
+
   /// The name to show, resolved from the app's own translation table by [code].
   ///
   /// The API's `name_localized` is no longer read. It came from a translations
@@ -349,6 +366,8 @@ IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
       return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
     case 'sandbagging':
       return (icon: Icons.shield_rounded, bg: AppColors.green50, fg: AppColors.green700);
+    case 'others':
+      return (icon: Icons.more_horiz_rounded, bg: AppColors.grey50, fg: AppColors.inkMuted);
     default:
       return (icon: Icons.emergency_rounded, bg: AppColors.grey50, fg: AppColors.inkMuted);
   }

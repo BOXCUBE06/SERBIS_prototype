@@ -794,11 +794,14 @@ class AppState extends ChangeNotifier {
     requests.insert(0, request);
     notifyListeners();
 
-    if (request.serviceId == null || request.description == null) {
+    // serviceId null is not incomplete — it is the "Others" tile, which has
+    // no tbl_services row to point at. description is still required either
+    // way, same as the server's own required_unless rule.
+    if (request.description == null) {
       requests.remove(request);
       lastError = 'This request is incomplete. Please choose a service and try again.';
-      // Never reachable from the form, which validates both. If this line ever
-      // shows up in a report, the form and the model have drifted apart.
+      // Never reachable from the form, which validates this. If this line
+      // ever shows up in a report, the form and the model have drifted apart.
       AppLog.error(_logArea, 'submit request',
           reason: 'blocked before sending: incomplete');
       notifyListeners();
@@ -807,7 +810,7 @@ class AppState extends ChangeNotifier {
 
     try {
       final result = await _api.submitRequest(
-        serviceId: request.serviceId!,
+        serviceId: request.serviceId,
         description: request.description!,
         validIdFileBytes: validIdFileBytes,
         validIdFileName: validIdFileName,

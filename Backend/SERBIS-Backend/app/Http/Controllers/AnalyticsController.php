@@ -154,7 +154,10 @@ class AnalyticsController extends Controller
                         'resident' => $req->resident ? $req->resident->first_name.' '.$req->resident->last_name : 'Unknown',
                         // Fetch the barangay name through the nested relationship
                         'barangay' => ($req->resident && $req->resident->barangay) ? $req->resident->barangay->barangay_name : 'Unknown Barangay',
-                        'type' => $req->service ? $req->service->service_name : 'Unknown Service',
+                        // Null only for an "Others" request now that service_id is
+                        // nullable (MDRRMO feedback, 2026-09-17) — 'Other', not
+                        // 'Unknown', since this is an intentional resident choice.
+                        'type' => $req->service ? $req->service->service_name : 'Other',
                         'date' => $req->created_at->format('M j, Y h:i A'),
                         'status' => $req->status,
                     ];

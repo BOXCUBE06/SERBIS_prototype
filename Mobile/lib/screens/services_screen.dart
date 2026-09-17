@@ -91,7 +91,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       // in place (`..clear()..addAll()`), so aliasing it let a later reload —
       // or a failed one, which clears it — rewrite the grid with no `setState`
       // while `_selected` still pointed at a row that had been removed.
-      _services = List.of(widget.appState.services);
+      // Appended, not part of the catalogue: "Others" has no tbl_services
+      // row, so it never comes back from loadServices() and has to be added
+      // here every time the grid is (re)built from a fresh fetch.
+      _services = [...widget.appState.services, const ServiceCatalogItem.others()];
       _loadingServices = false;
       _selected = _defaultSelection(_services, widget.initialType);
     });
@@ -284,7 +287,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final scheduledAt = form is AmbulanceFormData ? form.scheduledAt : null;
 
     final request = ServiceRequest(
-      serviceId: service.id,
+      serviceId: service.isOthers ? null : service.id,
       description: metaLines.join('\n'),
       type: _typeForKind(service.formKind),
       // Empty until the server answers: the reference number is the server's

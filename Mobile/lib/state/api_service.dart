@@ -704,7 +704,10 @@ class ApiService {
   /// end up attached.
   @visibleForTesting
   http.MultipartRequest buildSubmitRequest({
-    required int serviceId,
+    // Null for the "Others" tile, which has no tbl_services row — the field
+    // is omitted from the body entirely rather than sent empty, the same
+    // "absent means unset" contract every other optional field here follows.
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -723,7 +726,9 @@ class ApiService {
       if (_token != null) 'Authorization': 'Bearer $_token',
     });
 
-    request.fields['service_id'] = serviceId.toString();
+    if (serviceId != null) {
+      request.fields['service_id'] = serviceId.toString();
+    }
 
     if (intake != null) {
       // No `description` for an ambulance request. The server composes it from
@@ -789,7 +794,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,

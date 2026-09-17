@@ -253,4 +253,20 @@ void main() {
       expect(item.displayDescription(false), '');
     });
   });
+
+  group('the client-only "Others" tile', () {
+    test('is flagged and localised, unlike a real catalogue row', () {
+      const others = ServiceCatalogItem.others();
+
+      expect(others.isOthers, isTrue);
+      expect(ServiceCatalogItem.fromJson({
+        'service_id': 1,
+        'code': 'road-clearing',
+        'service_name': 'Road Clearing',
+      }).isOthers, isFalse);
+      expect(others.formKind, ServiceFormKind.generic);
+      expect(others.displayName(false), 'Others');
+      expect(others.displayName(true), 'Iba pa');
+    });
+  });
 }

@@ -27,7 +27,7 @@ class _RecordingApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -188,6 +188,19 @@ void main() {
       expect(request.fields['description'], 'Fallen tree blocking the road');
       expect(request.fields.containsKey('patient_name'), isFalse);
       expect(request.fields.containsKey('destination'), isFalse);
+    });
+
+    test('an "Others" request omits service_id rather than sending it empty',
+        () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: null,
+        description: 'A generator that will not start.',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+      );
+
+      expect(request.fields.containsKey('service_id'), isFalse);
+      expect(request.fields['description'], 'A generator that will not start.');
     });
 
     test('a scheduled ambulance request keeps both the schedule and the fields', () {

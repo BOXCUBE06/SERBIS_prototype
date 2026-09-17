@@ -28,7 +28,7 @@ class _RecordingApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,

@@ -220,7 +220,7 @@
                 role="button"
                 tabindex="0"
                 :aria-current="isSelected(item) ? 'true' : undefined"
-                :aria-label="`${requesterName(item)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
+                :aria-label="`${requesterName(item)}, ${item.service?.service_name || 'Other'}, ${item.status || 'Pending'}`"
                 @click="selectRequest(item)"
                 @keydown.enter.prevent="selectRequest(item)"
                 @keydown.space.prevent="selectRequest(item)"
@@ -255,7 +255,7 @@
                        'other') genuinely varies by service, so it keeps
                        showing that instead. -->
                   <div class="d-flex align-center text-caption text-medium-emphasis">
-                    <span class="text-truncate">{{ scope === 'ambulance' ? requesterBarangay(item) : (item.service?.service_name || 'N/A') }}</span>
+                    <span class="text-truncate">{{ scope === 'ambulance' ? requesterBarangay(item) : (item.service?.service_name || 'Other') }}</span>
                     <!-- A Booked row's own scheduled time is the date an operator
                          actually needs here, not when it was filed — created_at
                          stays as the fallback for every other status. -->
@@ -366,7 +366,7 @@
               <v-row class="detail-group">
                 <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
-                  <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'N/A' }}</div>
+                  <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'Other' }}</div>
                 </v-col>
                 <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>

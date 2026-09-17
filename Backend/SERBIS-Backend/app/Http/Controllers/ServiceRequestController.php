@@ -219,7 +219,14 @@ class ServiceRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'service_id' => 'required|exists:tbl_services,service_id',
+            // Nullable: the "Others" tile has no catalogue row to point at —
+            // mirrors tbl_equipment_borrowing.equipment_id, which is nullable
+            // for the same uncatalogued-item reason. required_unless below
+            // already requires `description` whenever service_id isn't the
+            // ambulance row, null included, so the resident's own words are
+            // where an "Others" request lives — the same way
+            // other_equipment_text is for a borrow request.
+            'service_id' => 'nullable|exists:tbl_services,service_id',
             // Ambulance is exempt because the server composes it below from the
             // structured fields, exactly as adminStore() does — whatever a
             // client sends under this key for an ambulance request is ignored
@@ -274,7 +281,9 @@ class ServiceRequestController extends Controller
         // filing-time gate only: update()/approve()/etc. never re-check
         // this, so a request already filed against a service that gets
         // disabled afterward is untouched.
-        $service = Service::find($validated['service_id']);
+        $serviceId = $validated['service_id'] ?? null;
+
+        $service = Service::find($serviceId);
         if ($service && ! $service->is_active) {
             throw ValidationException::withMessages([
                 'service_id' => 'This service is no longer accepting new requests.',
@@ -284,7 +293,8 @@ class ServiceRequestController extends Controller
         $scheduledAt = $this->resolveScheduledAt($validated['scheduled_at'] ?? null);
 
         $isAmbulance = $ambulanceServiceId !== null
-            && (int) $validated['service_id'] === $ambulanceServiceId;
+            && $serviceId !== null
+            && (int) $serviceId === $ambulanceServiceId;
 
         $resident = $request->user();
 
@@ -357,7 +367,7 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $serviceId, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -405,7 +415,7 @@ class ServiceRequestController extends Controller
 
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $request->user()->getKey(),
-                    'service_id' => $validated['service_id'],
+                    'service_id' => $serviceId,
                     'description' => $description,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,

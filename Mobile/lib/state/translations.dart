@@ -321,6 +321,11 @@ const Map<String, (String, String)> _strings = {
     'Provision and placement of sandbags for flood prevention.',
     'Paglalaan at paglalagay ng sandbags upang maiwasan ang baha.',
   ),
+  'service.others.name': ('Others', 'Iba pa'),
+  'service.others.desc': (
+    'Something not covered by the services above.',
+    'Isang bagay na hindi saklaw ng mga serbisyo sa itaas.',
+  ),
 };
 
 String tr(bool filipino, String key) {
