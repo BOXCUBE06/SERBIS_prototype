@@ -3,12 +3,17 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
  * 2026_09_15_100000 — the list indexes exist, in column order, and the
  * redundant single-column status index is gone.
+ *
+ * Reads via Schema::getIndexes() rather than information_schema directly:
+ * the raw query passed locally (MariaDB 10.4) but failed on GitHub Actions'
+ * MySQL over identifier casing, which is exactly the kind of engine detail
+ * Laravel's own introspection is built to paper over.
  */
 class LogAndBorrowingListIndexesMigrationTest extends TestCase
 {
@@ -16,13 +21,9 @@ class LogAndBorrowingListIndexesMigrationTest extends TestCase
 
     private function indexColumns(string $table, string $index): array
     {
-        return DB::table('information_schema.statistics')
-            ->where('table_schema', DB::getDatabaseName())
-            ->where('table_name', $table)
-            ->where('index_name', $index)
-            ->orderBy('seq_in_index')
-            ->pluck('column_name')
-            ->all();
+        $match = collect(Schema::getIndexes($table))->firstWhere('name', $index);
+
+        return $match['columns'] ?? [];
     }
 
     public function test_the_log_tables_are_indexed_on_created_at(): void
