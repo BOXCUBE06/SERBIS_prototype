@@ -510,55 +510,6 @@
       </v-col>
     </v-row>
 
-    <v-row>
-      <!-- 11. Account activation backlog. 'Inactive' here means self-
-           registered and waiting for an admin to switch the account on —
-           not 'Deactivated', which is an admin turning one off on purpose.
-           The backlog count ignores the date filter on purpose (see
-           AnalyticsReport::activationBacklog) — a sign-up from three months
-           ago nobody has activated yet must not vanish because the filter
-           bar says "this month". -->
-      <v-col cols="12" lg="5">
-        <AnalyticsSection
-          title="Account activation backlog"
-          subtitle="Residents who self-registered and are waiting for an admin to activate them, as of today."
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && activation.backlog === 0"
-          empty-text="No accounts are waiting on activation"
-          @retry="fetchReport"
-        >
-          <div class="stat-tile subtle-surface" style="width: fit-content;">
-            <div class="text-caption text-medium-emphasis">Waiting on activation</div>
-            <div class="stat-value text-high-emphasis">{{ activation.backlog }}</div>
-            <div class="text-caption text-medium-emphasis">As of today, not scoped to this range</div>
-          </div>
-        </AnalyticsSection>
-      </v-col>
-
-      <v-col cols="12" lg="7">
-        <AnalyticsSection
-          title="Sign-ups by month"
-          subtitle="New resident accounts in this range, by the status they hold today."
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && signupsByMonth.total === 0"
-          empty-text="No sign-ups in this range"
-          @retry="fetchReport"
-        >
-          <div style="height: 260px;">
-            <Bar :data="signupsChartData" :options="stackedOptions" />
-            <ChartDataTable
-              caption="Sign-ups by month — same data as the chart above"
-              category-label="Month"
-              :labels="signupsByMonth.labels"
-              :series="signupsByMonth.series"
-            />
-          </div>
-        </AnalyticsSection>
-      </v-col>
-    </v-row>
-
   </v-container>
 </template>
 
@@ -783,8 +734,6 @@ const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
 const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
-const activation = computed(() => report.value?.activation ?? { backlog: 0, signupsByMonth: EMPTY_STACK })
-const signupsByMonth = computed(() => activation.value.signupsByMonth)
 
 /**
  * Sequential fill for the heatmap: one hue, light to dark, as magnitude
@@ -975,28 +924,6 @@ const adoptionChartDataNormalised = computed(() => {
     })),
   }
 })
-
-/**
- * A resident's own status vocabulary (Active/Inactive/Deactivated), not the
- * request status colours above — reused where the words happen to overlap
- * ('Deactivated' reads as an ended state, same intent as Disapproved) and
- * given its own entries otherwise, since a resident is not a request.
- */
-const residentStatusColor = (status) => {
-  const c = themeColors.value
-
-  switch (status) {
-    case 'Active': return c.success
-    case 'Inactive': return c.warning
-    case 'Deactivated': return c.error
-    default: return c.info
-  }
-}
-
-const signupsChartData = computed(() => ({
-  labels: signupsByMonth.value.labels,
-  datasets: signupsByMonth.value.series.map(s => stackedDataset(s, residentStatusColor(s.label))),
-}))
 
 const horizontalBarOptions = computed(() => ({
   ...baseOptions.value,
