@@ -67,11 +67,16 @@ class InfoMaterialController extends Controller
     }
 
     /**
-     * Marks a material as checked by MDRRMO, or takes that mark back.
+     * Marks a material as checked by a named expert, or takes that mark back.
      *
      * One endpoint for both directions rather than separate verify/unverify
      * routes: the panel holds a toggle, and a toggle that can only be switched
      * on is a mark nobody can correct after a mistaken click.
+     *
+     * verified_by_name/role are required going on — a "verified" with nobody
+     * named behind it is what this replaces — and are cleared coming off,
+     * so an unverified row never displays a name for a check that no longer
+     * stands.
      */
     public function verify(Request $request, $id)
     {
@@ -83,9 +88,22 @@ class InfoMaterialController extends Controller
 
         $validated = $request->validate([
             'verified' => 'required|boolean',
+            'verified_by_name' => 'required_if:verified,true|nullable|string|max:255',
+            'verified_by_role' => 'required_if:verified,true|nullable|string|max:255',
         ]);
 
         $material->verified = $validated['verified'];
+
+        if ($validated['verified']) {
+            $material->verified_by_name = $validated['verified_by_name'];
+            $material->verified_by_role = $validated['verified_by_role'];
+            $material->verified_at = now();
+        } else {
+            $material->verified_by_name = null;
+            $material->verified_by_role = null;
+            $material->verified_at = null;
+        }
+
         $material->save();
 
         return response()->json($material);

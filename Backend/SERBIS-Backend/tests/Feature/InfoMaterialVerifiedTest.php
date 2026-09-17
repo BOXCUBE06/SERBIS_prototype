@@ -52,18 +52,63 @@ class InfoMaterialVerifiedTest extends TestCase
         $material = $this->material();
 
         $this->actingAs($this->admin)
-            ->patchJson("/api/admin/info-materials/{$material->files_id}/verify", ['verified' => true])
+            ->patchJson("/api/admin/info-materials/{$material->files_id}/verify", [
+                'verified' => true,
+                'verified_by_name' => 'Dr. Ana Reyes',
+                'verified_by_role' => 'MDRRMO Medical Officer',
+            ])
             ->assertOk()
-            ->assertJsonPath('verified', true);
+            ->assertJsonPath('verified', true)
+            ->assertJsonPath('verified_by_name', 'Dr. Ana Reyes')
+            ->assertJsonPath('verified_by_role', 'MDRRMO Medical Officer');
 
-        $this->assertTrue($material->fresh()->verified);
+        $fresh = $material->fresh();
+        $this->assertTrue($fresh->verified);
+        $this->assertNotNull($fresh->verified_at);
 
         // The mark has to be reversible — a toggle that only switches on is a
-        // mistaken click nobody can take back.
+        // mistaken click nobody can take back. Taking it back clears who and
+        // when: an unverified row must not still name an expert for a check
+        // that no longer stands.
         $this->actingAs($this->admin)
             ->patchJson("/api/admin/info-materials/{$material->files_id}/verify", ['verified' => false])
             ->assertOk()
-            ->assertJsonPath('verified', false);
+            ->assertJsonPath('verified', false)
+            ->assertJsonPath('verified_by_name', null)
+            ->assertJsonPath('verified_by_role', null);
+
+        $fresh = $material->fresh();
+        $this->assertFalse($fresh->verified);
+        $this->assertNull($fresh->verified_by_name);
+        $this->assertNull($fresh->verified_by_role);
+        $this->assertNull($fresh->verified_at);
+    }
+
+    public function test_verifying_without_a_name_and_role_is_rejected(): void
+    {
+        $material = $this->material();
+
+        $this->actingAs($this->admin)
+            ->patchJson("/api/admin/info-materials/{$material->files_id}/verify", ['verified' => true])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['verified_by_name', 'verified_by_role']);
+
+        $this->assertFalse($material->fresh()->verified);
+    }
+
+    /** Unverifying needs neither field — they exist to name who verified, not who is taking it back. */
+    public function test_unverifying_needs_no_name_or_role(): void
+    {
+        $material = $this->material([
+            'verified' => true,
+            'verified_by_name' => 'Dr. Ana Reyes',
+            'verified_by_role' => 'MDRRMO Medical Officer',
+            'verified_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->patchJson("/api/admin/info-materials/{$material->files_id}/verify", ['verified' => false])
+            ->assertOk();
 
         $this->assertFalse($material->fresh()->verified);
     }
