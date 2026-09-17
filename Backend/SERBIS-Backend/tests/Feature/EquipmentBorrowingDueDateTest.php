@@ -291,4 +291,53 @@ class EquipmentBorrowingDueDateTest extends TestCase
 
         $this->assertNull($borrowing->fresh()->return_condition_note);
     }
+
+    public function test_a_bad_return_condition_requires_a_note(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Bad',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['return_condition_note']);
+
+        $this->assertNull($borrowing->fresh()->return_condition);
+    }
+
+    public function test_a_bad_return_condition_with_a_note_is_accepted_and_stored(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Bad',
+                'return_condition_note' => 'Motor housing cracked, unusable.',
+            ])
+            ->assertOk();
+
+        $fresh = $borrowing->fresh();
+        $this->assertSame('Bad', $fresh->return_condition);
+        $this->assertSame('Motor housing cracked, unusable.', $fresh->return_condition_note);
+    }
+
+    public function test_a_good_return_condition_needs_no_note(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Good',
+            ])
+            ->assertOk();
+
+        $this->assertSame('Good', $borrowing->fresh()->return_condition);
+    }
 }

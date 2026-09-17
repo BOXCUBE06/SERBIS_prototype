@@ -41,6 +41,7 @@ class EquipmentBorrowing extends Model
         'status',
         'denial_reason',
         'return_condition_note',
+        'return_condition',
         'released_at',
         'returned_at',
     ];

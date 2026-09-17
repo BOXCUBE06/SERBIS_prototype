@@ -642,14 +642,23 @@
                 </v-row>
               </template>
 
-              <!-- Optional, like the photo it accompanies — a row with none
-                   draws nothing at all, same reasoning as the photos above. -->
+              <!-- Optional, like the photo it accompanies — a row with
+                   neither the flag nor a note draws nothing at all, same
+                   reasoning as the photos above. -->
               <v-card
-                v-if="selectedRecord?.return_condition_note"
+                v-if="selectedRecord?.return_condition || selectedRecord?.return_condition_note"
                 variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface"
               >
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Condition at return</div>
+                <div class="d-flex align-center justify-space-between mb-2">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition at return</div>
+                  <v-chip
+                    v-if="selectedRecord?.return_condition"
+                    size="small" variant="flat" class="font-weight-bold"
+                    :color="selectedRecord.return_condition === 'Bad' ? 'error' : 'success'"
+                  >{{ selectedRecord.return_condition }}</v-chip>
+                </div>
                 <div
+                  v-if="selectedRecord?.return_condition_note"
                   class="text-body-2 text-high-emphasis"
                   style="white-space: pre-wrap;"
                 >{{ selectedRecord.return_condition_note }}</div>
@@ -756,18 +765,33 @@
             @update:model-value="actionDialog.error = ''"
           ></v-textarea>
 
-          <v-textarea
-            v-else-if="actionDialog.mode === 'return'"
-            v-model="actionDialog.conditionNote"
-            label="Condition note (optional)"
-            placeholder="e.g. Life jacket strap frayed, otherwise usable"
-            hint="What the item looked like coming back — alongside the return photo."
-            persistent-hint
-            variant="outlined"
-            rows="3"
-            counter="500"
-            maxlength="500"
-          ></v-textarea>
+          <template v-else-if="actionDialog.mode === 'return'">
+            <v-btn-toggle
+              v-model="actionDialog.condition"
+              mandatory
+              density="comfortable"
+              class="mb-4"
+              @update:model-value="actionDialog.error = ''"
+            >
+              <v-btn value="Good" class="text-none">Good condition</v-btn>
+              <v-btn value="Bad" class="text-none">Bad condition</v-btn>
+            </v-btn-toggle>
+
+            <v-textarea
+              v-model="actionDialog.conditionNote"
+              :label="actionDialog.condition === 'Bad' ? 'What\'s wrong with it' : 'Condition note (optional)'"
+              placeholder="e.g. Life jacket strap frayed, otherwise usable"
+              :hint="actionDialog.condition === 'Bad'
+                ? 'Required for a bad return — this is what the next person deciding whether to lend again reads.'
+                : 'What the item looked like coming back — alongside the return photo.'"
+              persistent-hint
+              variant="outlined"
+              rows="3"
+              counter="500"
+              maxlength="500"
+              @update:model-value="actionDialog.error = ''"
+            ></v-textarea>
+          </template>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="actionDialog.open = false">Cancel</v-btn>
@@ -870,6 +894,7 @@ const emptyAction = () => ({
   record: null,
   dueDate: '',
   reason: '',
+  condition: 'Good',
   conditionNote: '',
   error: '',
 })
@@ -1514,7 +1539,7 @@ const actionCopy = computed(() => {
 const clearActionDialog = () => { actionDialog.value = emptyAction() }
 
 const confirmAction = () => {
-  const { mode, status, record, dueDate, reason, conditionNote } = actionDialog.value
+  const { mode, status, record, dueDate, reason, condition, conditionNote } = actionDialog.value
   if (mode === 'due' && !dueDate) {
     actionDialog.value.error = 'Pick a due date'
     return
@@ -1523,11 +1548,20 @@ const confirmAction = () => {
     actionDialog.value.error = 'Give a reason — the resident is shown this'
     return
   }
+  // Good needs nothing beyond the toggle; Bad needs the note, same rule the
+  // server enforces (required_if:return_condition,Bad).
+  if (mode === 'return' && condition === 'Bad' && !conditionNote.trim()) {
+    actionDialog.value.error = "Say what's wrong with it — a bad return needs a note."
+    return
+  }
   const extra = {}
   if (mode === 'due') extra.due_date = dueDate
   if (mode === 'deny') extra.denial_reason = reason.trim()
-  // Optional — unlike the denial reason, nothing blocks the return over it.
-  if (mode === 'return' && conditionNote.trim()) extra.return_condition_note = conditionNote.trim()
+  if (mode === 'return') {
+    extra.return_condition = condition
+    // Optional on Good — unlike a bad return, nothing blocks it over the note.
+    if (conditionNote.trim()) extra.return_condition_note = conditionNote.trim()
+  }
   return updateStatus(record, status, extra)
 }
 

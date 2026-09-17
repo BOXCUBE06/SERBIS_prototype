@@ -367,13 +367,20 @@ class EquipmentBorrowingController extends Controller
                 'before_or_equal:'.$latestDue->toDateString(),
             ],
             'denial_reason' => 'sometimes|nullable|string|max:255',
-            // Optional, alongside the return photo — what staff noticed about
-            // the item's condition when it came back.
-            'return_condition_note' => 'sometimes|nullable|string|max:500',
+            // Good needs nothing beyond the flag itself; Bad needs the note
+            // to say what's wrong, or "bad" is a label with no information
+            // behind it for the next person deciding whether to lend again.
+            'return_condition' => 'sometimes|nullable|in:Good,Bad',
+            // No `sometimes` here: that rule skips everything else when the
+            // field is absent, which would let required_if never fire at all
+            // for exactly the case it exists to catch — Bad sent with no
+            // note key in the payload, not just an empty one.
+            'return_condition_note' => 'nullable|string|max:500|required_if:return_condition,Bad',
         ], [
             'due_date.date' => 'Pick a valid due date.',
             'due_date.after_or_equal' => 'A loan runs at least '.self::MIN_LOAN_DAYS.' day — pick '.$earliestDue->format('M j, Y').' or later.',
             'due_date.before_or_equal' => 'A loan runs at most '.self::MAX_LOAN_DAYS.' days — pick '.$latestDue->format('M j, Y').' or earlier.',
+            'return_condition_note.required_if' => 'Say what\'s wrong with it — a bad return needs a note.',
         ]);
 
         $newStatus = $validated['status'];
@@ -498,6 +505,10 @@ class EquipmentBorrowingController extends Controller
 
             if (array_key_exists('return_condition_note', $validated)) {
                 $borrowing->return_condition_note = $validated['return_condition_note'];
+            }
+
+            if (array_key_exists('return_condition', $validated)) {
+                $borrowing->return_condition = $validated['return_condition'];
             }
 
             // Only a denial carries a reason. Moving off Denied clears it, or a
