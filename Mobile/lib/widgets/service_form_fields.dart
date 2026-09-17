@@ -137,26 +137,27 @@ class ServiceFormFields extends StatelessWidget {
                       ),
                     ],
                   ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      form.addRelative();
-                      onChanged();
-                    },
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text(
-                      'Add relative',
-                      style: AppText.display(size: 12, weight: FontWeight.w600),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.green600,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 36),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                if (form.relatives.length < AmbulanceFormData.maxRelatives)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        form.addRelative();
+                        onChanged();
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(
+                        'Add relative',
+                        style: AppText.display(size: 12, weight: FontWeight.w600),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.green600,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             FormSection(

@@ -180,13 +180,22 @@ class InputBoundsTest extends TestCase
         $this->assertSame(20, $trip->fresh()->people()->where('role', 'driver')->count());
     }
 
-    public function test_a_resident_cannot_file_more_than_twenty_relatives(): void
+    public function test_a_resident_cannot_file_more_than_two_relatives(): void
     {
         Sanctum::actingAs($this->resident);
 
         $this->postJson('/api/service-requests', $this->intake([
-            'patient_relatives' => array_fill(0, 21, 'Relative'),
+            'patient_relatives' => array_fill(0, 3, 'Relative'),
         ]))->assertStatus(422)->assertJsonValidationErrors('patient_relatives');
+    }
+
+    public function test_two_relatives_is_still_accepted(): void
+    {
+        Sanctum::actingAs($this->resident);
+
+        $this->postJson('/api/service-requests', $this->intake([
+            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz'],
+        ]))->assertStatus(201);
     }
 
     // ---- patient age --------------------------------------------------------

@@ -59,13 +59,13 @@ class ServiceRequestController extends Controller
     private const BOOKING_HORIZON = '+1 year';
 
     /**
-     * Names one intake list may carry. Mirrors
-     * ConductionRequestController::MAX_PEOPLE_PER_ROLE, and for the same
-     * reason: `tbl_service_request_relatives.position` is an
-     * `unsignedTinyInteger`, and copyRelativesToTrip() carries these names
-     * onto the trip's own tinyint-backed table as well.
+     * Companions named at ambulance intake. Capped at two per MDRRMO policy —
+     * optional in the app, required to be named before the hospital admits
+     * them. Independent of ConductionRequestController::MAX_PEOPLE_PER_ROLE,
+     * which caps the trip log's own relative/driver roles at 20 and is
+     * unrelated to this intake-time list.
      */
-    private const MAX_RELATIVES = 20;
+    private const MAX_RELATIVES = 2;
 
     /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
     private const DEFAULT_BOOKING_HOURS = 2;
@@ -265,7 +265,7 @@ class ServiceRequestController extends Controller
             // Who is coming with the patient, named at intake rather than at
             // dispatch. Optional on every service: nobody is required to bring
             // anyone, and a non-ambulance request simply never sends them.
-            'patient_relatives' => 'nullable|array|max:'.self::MAX_RELATIVES,
+            'patient_relatives' => ['nullable', 'array', $this->relativesCountRule()],
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 
@@ -515,6 +515,26 @@ class ServiceRequestController extends Controller
     }
 
     /**
+     * MAX_RELATIVES applies to named companions, not raw array slots — a
+     * blank slot beside a filled one (the form's own default state) must not
+     * count against the cap, for the same reason storeRelatives() filters
+     * blanks rather than rejecting them.
+     */
+    private function relativesCountRule(): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail): void {
+            $named = array_filter(
+                array_map(static fn ($name) => trim((string) $name), $value ?? []),
+                static fn (string $name) => $name !== ''
+            );
+
+            if (count($named) > self::MAX_RELATIVES) {
+                $fail('The patient relatives field must not have more than '.self::MAX_RELATIVES.' named entries.');
+            }
+        };
+    }
+
+    /**
      * Writes the intake relative list, shared by store() and adminStore().
      *
      * Blank slots are filtered here rather than by a validation rule, the
@@ -702,7 +722,7 @@ class ServiceRequestController extends Controller
             // Same optional intake list as store(). Collected at the counter
             // now rather than waited for until dispatch, when the trip record
             // that used to be their only home is finally created.
-            'patient_relatives' => 'nullable|array|max:'.self::MAX_RELATIVES,
+            'patient_relatives' => ['nullable', 'array', $this->relativesCountRule()],
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 

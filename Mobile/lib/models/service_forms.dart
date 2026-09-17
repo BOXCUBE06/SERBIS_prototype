@@ -184,10 +184,12 @@ class AmbulanceFormData extends ServiceFormData {
 
   String sex = sexUnspecified;
 
-  /// Who is travelling with the patient. Starts with one empty slot, the same
-  /// as the walk-in dialog's repeater — "Add relative" covers the case that
-  /// needs more, and starting at two pads the common trip with a field nobody
-  /// fills. Blank slots are dropped when read, not rejected.
+  /// Companions travelling with the patient, capped at two per MDRRMO policy
+  /// — optional here, but the hospital requires them to be named. Starts with
+  /// one empty slot, the same as the walk-in dialog's repeater. Blank slots
+  /// are dropped when read, not rejected.
+  static const maxRelatives = 2;
+
   final List<TextEditingController> relatives = [TextEditingController()];
 
   /// Picked via the framework's showDatePicker + showTimePicker
@@ -207,7 +209,10 @@ class AmbulanceFormData extends ServiceFormData {
       .where((name) => name.isNotEmpty)
       .toList();
 
-  void addRelative() => relatives.add(TextEditingController());
+  void addRelative() {
+    if (relatives.length >= maxRelatives) return;
+    relatives.add(TextEditingController());
+  }
 
   /// Never leaves the group empty: a repeater with no rows reads as a broken
   /// section rather than an optional one, and "Add relative" becomes the only

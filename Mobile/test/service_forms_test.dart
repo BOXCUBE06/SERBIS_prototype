@@ -277,6 +277,16 @@ void main() {
       );
     });
 
+    test('caps at two and refuses to add a third slot', () {
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+
+      form.addRelative();
+      form.addRelative();
+
+      expect(form.relatives, hasLength(2));
+    });
+
     test('blank and whitespace-only slots are dropped, not sent', () {
       final form = AmbulanceFormData();
       addTearDown(form.dispose);
@@ -551,6 +561,9 @@ void main() {
       await tester.tap(find.text('Add relative'));
       await tester.pumpAndSettle();
       expect(find.text('Relative 2'), findsOneWidget);
+
+      // Cap of two reached: the button that would add a third row is gone.
+      expect(find.text('Add relative'), findsNothing);
 
       await tester.enterText(
         find.descendant(
