@@ -20,8 +20,8 @@ use Tests\TestCase;
  *
  * - created_at is stored UTC but an office day is a Manila day, so a request
  *   filed late in the Manila evening is stored on the previous UTC date. Read
- *   without converting, it lands on the wrong weekday and the wrong hour, and
- *   the resulting heatmap still looks like a heatmap.
+ *   without converting, it lands on the wrong weekday and the wrong
+ *   time-of-day block, and the resulting chart still looks like a chart.
  * - turnaround reads partly-backfilled columns, so a null has to be excluded
  *   rather than counted as zero, and the sample size has to travel with the
  *   number.
@@ -106,22 +106,31 @@ class AnalyticsReportEndpointTest extends TestCase
 
     /**
      * 2026-09-02 17:30 UTC is 2026-09-03 01:30 in Manila — a different date,
-     * a different weekday (Wednesday to Thursday) and a different hour.
-     * Reading the stored value without converting puts this request in
-     * Wed 17:00, which is a cell a real office would have been closed for.
+     * a different weekday (Wednesday to Thursday) and a different time-of-day
+     * block (Late night, not Afternoon). Reading the stored value without
+     * converting puts this request on Wednesday afternoon, a slot a real
+     * office would have been open for and would misreport as busy.
      */
-    public function test_the_demand_grid_is_bucketed_in_manila_not_utc(): void
+    public function test_demand_by_day_and_time_block_is_bucketed_in_manila_not_utc(): void
     {
         $this->requestAt('2026-09-02 17:30:00');
 
-        $grid = $this->report($this->wholeOf('2026-09-01', '2026-09-30'))['demand']['grid'];
+        $demand = $this->report($this->wholeOf('2026-09-01', '2026-09-30'))['demand'];
 
-        // Mon=0 .. Thu=3, Wed=2.
-        $this->assertSame(1, $grid[3][1], 'must land on Thursday 01:00 Manila');
-        $this->assertSame(0, $grid[2][17], 'must not land on Wednesday 17:00 UTC');
+        $thursday = array_search('Thu', $demand['days']['labels'], true);
+        $wednesday = array_search('Wed', $demand['days']['labels'], true);
+
+        $this->assertSame(1, $demand['days']['data'][$thursday], 'must land on Thursday (Manila), not Wednesday (UTC)');
+        $this->assertSame(0, $demand['days']['data'][$wednesday]);
+
+        $lateNight = array_search('Late night', $demand['timeOfDay']['labels'], true);
+        $afternoon = array_search('Afternoon', $demand['timeOfDay']['labels'], true);
+
+        $this->assertSame(1, $demand['timeOfDay']['data'][$lateNight], 'must land on Late night 01:00 Manila, not Afternoon 17:00 UTC');
+        $this->assertSame(0, $demand['timeOfDay']['data'][$afternoon]);
     }
 
-    public function test_the_demand_grid_totals_every_request_in_range(): void
+    public function test_demand_by_day_and_time_block_totals_every_request_in_range(): void
     {
         $this->requestAt('2026-09-02 17:30:00');
         $this->requestAt('2026-09-03 01:00:00');
@@ -130,7 +139,8 @@ class AnalyticsReportEndpointTest extends TestCase
         $demand = $this->report($this->wholeOf('2026-09-01', '2026-09-30'))['demand'];
 
         $this->assertSame(3, $demand['total']);
-        $this->assertSame(3, array_sum(array_map('array_sum', $demand['grid'])));
+        $this->assertSame(3, array_sum($demand['days']['data']));
+        $this->assertSame(3, array_sum($demand['timeOfDay']['data']));
     }
 
     /**

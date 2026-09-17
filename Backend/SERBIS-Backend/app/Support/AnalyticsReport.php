@@ -159,12 +159,17 @@ class AnalyticsReport
                 ->where('tbl_residents.barangay_id', $this->barangayId));
     }
 
+    /** Monday-first day labels, paired with the four-block day split below. */
+    private const TIME_BLOCKS = ['Morning', 'Afternoon', 'Evening', 'Late night'];
+
     /**
-     * Section 1 — when demand actually arrives, as a 7 x 24 grid.
+     * Section 1 — when demand actually arrives: which day, and which quarter
+     * of the day, in Manila.
      *
      * Aggregated by UTC date and UTC hour in the database, then each bucket is
-     * shifted into Manila here. The bucket count is bounded by days x 24, so
-     * this returns counts rather than rows however large the table gets.
+     * shifted into Manila and folded into a weekday total and a time-of-day
+     * total here. The bucket count is bounded by days x 24, so this returns
+     * counts rather than rows however large the table gets.
      */
     private function demandByWeekdayHour(): array
     {
@@ -173,34 +178,56 @@ class AnalyticsReport
             ->selectRaw('CAST(tbl_service_request.created_at AS DATE) as bucket_date, EXTRACT(HOUR FROM tbl_service_request.created_at) as bucket_hour, COUNT(*) as total')
             ->get();
 
-        $grid = array_fill(0, 7, array_fill(0, 24, 0));
+        $dayTotals = array_fill_keys(self::WEEKDAYS, 0);
+        $blockTotals = array_fill_keys(self::TIME_BLOCKS, 0);
+        $crossTab = [];
         $total = 0;
 
         foreach ($rows as $row) {
             $utc = CarbonImmutable::parse($row->bucket_date, 'UTC')->setTime((int) $row->bucket_hour, 0);
             $local = $utc->timezone(self::OFFICE_TIMEZONE);
+            $count = (int) $row->total;
 
-            // dayOfWeekIso is 1 (Mon) to 7 (Sun).
-            $grid[$local->dayOfWeekIso - 1][$local->hour] += (int) $row->total;
-            $total += (int) $row->total;
+            $weekday = self::WEEKDAYS[$local->dayOfWeekIso - 1];
+            $block = self::timeBlockFor($local->hour);
+
+            $dayTotals[$weekday] += $count;
+            $blockTotals[$block] += $count;
+            $crossTab[$weekday][$block] = ($crossTab[$weekday][$block] ?? 0) + $count;
+            $total += $count;
         }
 
-        $peak = ['weekday' => null, 'hour' => null, 'count' => 0];
+        $peak = ['weekday' => null, 'block' => null, 'count' => 0];
 
-        foreach ($grid as $weekday => $hours) {
-            foreach ($hours as $hour => $count) {
+        foreach ($crossTab as $weekday => $blocks) {
+            foreach ($blocks as $block => $count) {
                 if ($count > $peak['count']) {
-                    $peak = ['weekday' => self::WEEKDAYS[$weekday], 'hour' => $hour, 'count' => $count];
+                    $peak = ['weekday' => $weekday, 'block' => $block, 'count' => $count];
                 }
             }
         }
 
         return [
-            'weekdays' => self::WEEKDAYS,
-            'grid' => $grid,
+            'days' => ['labels' => self::WEEKDAYS, 'data' => array_values($dayTotals)],
+            'timeOfDay' => ['labels' => self::TIME_BLOCKS, 'data' => array_values($blockTotals)],
             'total' => $total,
             'peak' => $peak,
         ];
+    }
+
+    /**
+     * Morning 6 AM-12 PM, Afternoon 12-6 PM, Evening 6 PM-12 AM, Late night
+     * 12-6 AM — the four-block split the Analytics page shows instead of a
+     * raw hour. $hour is the Manila-local hour, 0-23.
+     */
+    private static function timeBlockFor(int $hour): string
+    {
+        return match (true) {
+            $hour >= 6 && $hour < 12 => 'Morning',
+            $hour >= 12 && $hour < 18 => 'Afternoon',
+            $hour >= 18 => 'Evening',
+            default => 'Late night',
+        };
     }
 
     /**

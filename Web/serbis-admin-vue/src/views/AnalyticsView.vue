@@ -124,61 +124,50 @@
       </div>
     </v-alert>
 
-    <!-- 1. When demand arrives. Two cyclical dimensions at once, which no bar
-         chart can carry, and a plain CSS grid rather than a Chart.js matrix
-         plugin — this needs no new dependency. -->
+    <!-- 1. When demand arrives, split into two ordinary bar charts instead of
+         a day x hour heatmap: which weekday, and which quarter of the day
+         (see AnalyticsReport::demandByWeekdayHour / timeBlockFor). -->
     <v-row class="mb-2">
       <v-col cols="12">
         <AnalyticsSection
           title="When requests are filed"
-          subtitle="Day and hour a request was submitted, in Asia/Manila. This is when residents file, which is not the same as when the office is open."
+          subtitle="Day and time of day a request was submitted, in Asia/Manila. This is when residents file, which is not the same as when the office is open."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && demand.total === 0"
           empty-text="No requests in this range"
           empty-hint="Widen the range or clear the filters."
-          skeleton="image"
           @retry="fetchReport"
         >
-          <div class="heatmap-scroll">
-            <div class="heatmap">
-              <div class="heat-corner"></div>
-              <div
-                v-for="hour in 24"
-                :key="'h' + hour"
-                class="heat-hour text-caption text-medium-emphasis"
-              >{{ (hour - 1) % 3 === 0 ? (hour - 1) : '' }}</div>
-
-              <template v-for="(row, dayIndex) in demand.grid" :key="'d' + dayIndex">
-                <div class="heat-day text-caption text-medium-emphasis">{{ demand.weekdays[dayIndex] }}</div>
-                <div
-                  v-for="(count, hourIndex) in row"
-                  :key="'c' + dayIndex + '-' + hourIndex"
-                  class="heat-cell"
-                  :style="heatStyle(count)"
-                  :title="`${demand.weekdays[dayIndex]} ${String(hourIndex).padStart(2, '0')}:00 — ${count} ${count === 1 ? 'request' : 'requests'}`"
-                  :aria-label="`${demand.weekdays[dayIndex]} ${String(hourIndex).padStart(2, '0')}:00, ${count} ${count === 1 ? 'request' : 'requests'}`"
-                  role="img"
-                ></div>
-              </template>
-            </div>
+          <div v-if="demand.peak.count > 0" class="text-body-1 font-weight-bold text-high-emphasis mb-4">
+            Most requests: {{ demand.peak.weekday }} {{ demand.peak.block }}
           </div>
 
-          <div class="d-flex align-center justify-space-between flex-wrap gap-3 mt-3">
-            <div v-if="demand.peak.count > 0" class="text-caption text-medium-emphasis">
-              Busiest hour: <strong class="text-high-emphasis">{{ demand.peak.weekday }} {{ String(demand.peak.hour).padStart(2, '0') }}:00</strong>
-              ({{ demand.peak.count }} {{ demand.peak.count === 1 ? 'request' : 'requests' }})
+          <div class="d-flex flex-wrap gap-4">
+            <div class="demand-chart">
+              <div class="text-caption text-medium-emphasis mb-1">Busiest days</div>
+              <div style="height: 220px;">
+                <Bar :data="busiestDaysChartData" :options="baseOptions" />
+                <ChartDataTable
+                  caption="Busiest days — same data as the chart above"
+                  category-label="Day"
+                  :labels="demand.days.labels"
+                  :series="[{ label: 'Requests', data: demand.days.data }]"
+                />
+              </div>
             </div>
-            <!-- "None" is its own key rather than the first step of the ramp.
-                 Zero is a neutral, not the palest tint of the hue, and putting
-                 it under the word "Fewer" labelled absence as "a little" —
-                 undoing the distinction the cell colouring deliberately makes. -->
-            <div class="d-flex align-center gap-2">
-              <div class="heat-legend" :style="heatStyle(0)"></div>
-              <span class="text-caption text-medium-emphasis mr-2">None</span>
-              <span class="text-caption text-medium-emphasis">Fewer</span>
-              <div v-for="step in 4" :key="'l' + step" class="heat-legend" :style="heatStyle((step / 4) * demand.peak.count)"></div>
-              <span class="text-caption text-medium-emphasis">More</span>
+
+            <div class="demand-chart">
+              <div class="text-caption text-medium-emphasis mb-1">Busiest time of day</div>
+              <div style="height: 220px;">
+                <Bar :data="busiestTimeOfDayChartData" :options="baseOptions" />
+                <ChartDataTable
+                  caption="Busiest time of day — same data as the chart above"
+                  category-label="Time of day"
+                  :labels="demand.timeOfDay.labels"
+                  :series="[{ label: 'Requests', data: demand.timeOfDay.data }]"
+                />
+              </div>
             </div>
           </div>
         </AnalyticsSection>
@@ -717,7 +706,12 @@ function hexToRgb (hex) {
 // without a guard on every access.
 const EMPTY_STACK = { labels: [], series: [], total: 0 }
 
-const demand = computed(() => report.value?.demand ?? { weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], grid: [], total: 0, peak: { weekday: null, hour: null, count: 0 } })
+const demand = computed(() => report.value?.demand ?? {
+  days: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [] },
+  timeOfDay: { labels: ['Morning', 'Afternoon', 'Evening', 'Late night'], data: [] },
+  total: 0,
+  peak: { weekday: null, block: null, count: 0 },
+})
 const volume = computed(() => report.value?.volume ?? EMPTY_STACK)
 const outcomes = computed(() => report.value?.outcomes ?? EMPTY_STACK)
 const aging = computed(() => report.value?.aging ?? { labels: [], data: [], total: 0, oldestDays: 0 })
@@ -734,30 +728,6 @@ const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
 const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
-
-/**
- * Sequential fill for the heatmap: one hue, light to dark, as magnitude
- * demands. Zero gets a neutral rather than the palest tint of the hue, so
- * "none" reads as absence instead of "a little".
- */
-const heatStyle = (count) => {
-  const peak = demand.value.peak.count || 1
-
-  // 0.06 white on the dark surface measured ~1.25:1 — the empty cells all but
-  // vanished, taking the day/hour scaffolding with them and leaving the filled
-  // cells floating with nothing to read them against. Light mode never had the
-  // problem, so the two need different weights rather than one shared alpha.
-  if (!count) {
-    const alpha = isDark.value ? 0.14 : 0.06
-    return { backgroundColor: `rgba(${hexToRgb(themeColors.value['on-surface'])}, ${alpha})` }
-  }
-
-  // sqrt, not linear: a single busy cell would otherwise flatten every other
-  // cell on the grid to near-invisible.
-  const intensity = 0.18 + 0.82 * Math.sqrt(count / peak)
-
-  return { backgroundColor: `rgba(${hexToRgb(themeColors.value.primary)}, ${intensity.toFixed(3)})` }
-}
 
 const seriesPalette = computed(() => (isDark.value ? SERIES_DARK : SERIES_LIGHT))
 
@@ -824,6 +794,28 @@ const vehicleTripsChartData = computed(() => ({
     backgroundColor: themeColors.value.primary,
     borderRadius: 4,
     maxBarThickness: 26,
+  }],
+}))
+
+const busiestDaysChartData = computed(() => ({
+  labels: demand.value.days.labels,
+  datasets: [{
+    label: 'Requests',
+    data: demand.value.days.data,
+    backgroundColor: themeColors.value.primary,
+    borderRadius: 4,
+    maxBarThickness: 38,
+  }],
+}))
+
+const busiestTimeOfDayChartData = computed(() => ({
+  labels: demand.value.timeOfDay.labels,
+  datasets: [{
+    label: 'Requests',
+    data: demand.value.timeOfDay.data,
+    backgroundColor: themeColors.value.primary,
+    borderRadius: 4,
+    maxBarThickness: 38,
   }],
 }))
 
@@ -1025,47 +1017,12 @@ defineExpose({ fetchReport })
   background-color: rgba(var(--v-theme-on-surface), 0.05);
 }
 
-/* 24 hour columns do not fit a phone, and squeezing them would make every
-   cell unreadable rather than merely offscreen. Scroll the grid, not the
-   page. */
-.heatmap-scroll {
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.heatmap {
-  display: grid;
-  grid-template-columns: 34px repeat(24, minmax(20px, 1fr));
-  gap: 3px;
-  min-width: 620px;
-}
-
-.heat-corner {
-  grid-column: 1;
-}
-
-.heat-hour {
-  text-align: center;
-  font-size: 10px;
-  line-height: 1;
-}
-
-.heat-day {
-  display: flex;
-  align-items: center;
-  font-size: 11px;
-}
-
-.heat-cell {
-  aspect-ratio: 1;
-  border-radius: 3px;
-  min-height: 18px;
-}
-
-.heat-legend {
-  width: 16px;
-  height: 10px;
-  border-radius: 2px;
+/* Two side by side above 600px (min 280px each, so a narrow half never
+   squeezes a bar chart's ticks); one per row below that, same as every
+   other flex-wrap pairing on this page. */
+.demand-chart {
+  flex: 1 1 280px;
+  min-width: 0;
 }
 
 .stat-tile {
