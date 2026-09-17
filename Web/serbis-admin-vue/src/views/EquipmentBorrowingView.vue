@@ -664,6 +664,41 @@
                 >{{ selectedRecord.return_condition_note }}</div>
               </v-card>
 
+              <!-- Display only — see borrowerHistory's own comment. Nothing
+                   here narrows what the operator can do; it is context for a
+                   decision they make themselves. -->
+              <v-card
+                v-if="borrowerHistory.length > 0"
+                variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface"
+              >
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
+                  This resident's past returns ({{ borrowerHistory.length }})
+                </div>
+                <div
+                  v-for="past in borrowerHistory" :key="past.borrow_id"
+                  class="d-flex align-start gap-3 mb-3"
+                  style="border-left: 3px solid rgb(var(--v-theme-outline)); padding-left: 12px;"
+                >
+                  <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-center gap-2 mb-1">
+                      <v-chip
+                        v-if="past.return_condition"
+                        size="x-small" variant="flat" class="font-weight-bold"
+                        :color="past.return_condition === 'Bad' ? 'error' : 'success'"
+                      >{{ past.return_condition }}</v-chip>
+                      <span class="text-caption text-medium-emphasis">
+                        {{ past.equipment?.item_name || past.other_equipment_text }} · {{ fmtDate(past.returned_at || past.created_at) }}
+                      </span>
+                    </div>
+                    <div
+                      v-if="past.return_condition_note"
+                      class="text-body-2 text-high-emphasis"
+                      style="white-space: pre-wrap;"
+                    >{{ past.return_condition_note }}</div>
+                  </div>
+                </div>
+              </v-card>
+
               <v-row class="mb-4">
                 <v-col cols="6">
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
@@ -1205,6 +1240,24 @@ const dueDelta = (item) => {
 
 // A returned or denied record cannot be overdue, however far past its date it
 // sits — the item is back, or it never left.
+// Display only — MDRRMO feedback, 2026-09-18: an admin deciding whether to
+// approve a new request sees how this same resident treated equipment
+// before, but nothing here blocks or auto-denies anything. `borrowings` is
+// already the whole unpaginated table (see useBorrowingsList's own comment),
+// so no second fetch is needed — just filtered to rows this same resident
+// has been the borrower on, that carry a recorded condition, excluding the
+// record currently open.
+const borrowerHistory = computed(() => {
+  const residentId = selectedRecord.value?.resident_id
+  if (!residentId) return []
+
+  return borrowings.value
+    .filter((b) => b.resident_id === residentId
+      && b.borrow_id !== selectedRecord.value?.borrow_id
+      && (b.return_condition || b.return_condition_note))
+    .sort((a, b) => new Date(b.returned_at || b.created_at) - new Date(a.returned_at || a.created_at))
+})
+
 const isOverdue = (item) => {
   if (!item || terminalStatuses.includes(item.status)) return false
   const delta = dueDelta(item)
