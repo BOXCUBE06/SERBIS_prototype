@@ -11,6 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -96,6 +97,39 @@ class FcmSendTest extends TestCase
 
         Http::assertNothingSent();
         $this->assertNotNull(DeviceToken::find($this->deviceToken->getKey()));
+    }
+
+    /**
+     * The one branch that used to leave zero trace — every other failure
+     * path logs, this one silently returned. A missing credential on a real
+     * deploy must not look identical to "everything is fine, nothing to
+     * send" in the logs.
+     */
+    public function test_logs_a_warning_when_no_credentials_path_is_set(): void
+    {
+        Log::spy();
+        config(['services.firebase.credentials' => null]);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM push skipped: not configured'
+                && $context['reason'] === 'FIREBASE_CREDENTIALS is not set');
+    }
+
+    public function test_logs_a_warning_naming_the_missing_file_when_the_path_is_set_but_wrong(): void
+    {
+        Log::spy();
+        config(['services.firebase.credentials' => '/nowhere/does-not-exist.json']);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM push skipped: not configured'
+                && str_contains($context['reason'], '/nowhere/does-not-exist.json')
+                && str_contains($context['reason'], 'does not exist'));
     }
 
     public function test_sends_to_the_projects_endpoint_with_the_token_title_and_body(): void

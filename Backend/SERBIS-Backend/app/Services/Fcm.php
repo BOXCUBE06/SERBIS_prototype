@@ -84,6 +84,18 @@ class Fcm
     public function sendToDevice(DeviceToken $deviceToken, string $title, string $body, array $data = []): void
     {
         if (! self::configured()) {
+            // The one branch that used to leave zero trace: every other
+            // failure path below logs, so a missing credential was
+            // indistinguishable from "nothing tried to send" — see
+            // docs/mdrrmo-feedback.md item 1's debug notes, 2026-09-18.
+            $path = config('services.firebase.credentials');
+            Log::warning('FCM push skipped: not configured', [
+                'device_token_id' => $deviceToken->getKey(),
+                'reason' => filled($path)
+                    ? "FIREBASE_CREDENTIALS is set to \"{$path}\" but that file does not exist"
+                    : 'FIREBASE_CREDENTIALS is not set',
+            ]);
+
             return;
         }
 
