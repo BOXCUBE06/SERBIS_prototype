@@ -349,31 +349,24 @@
     </v-row>
 
     <v-row>
-      <!-- 7. Loan turnaround and overdue. Deliberately calm: this is a
+      <!-- 7. Equipment returns: on-time vs overdue. Deliberately calm: this is a
            standing operational fact, not an incident, so overdue reads in
            the same neutral tiles as everything else on the page rather than
            an alarm colour. currentlyOverdue ignores the date filter on
-           purpose (see AnalyticsReport::loanTurnaround) — a loan that went
-           out last quarter and never came back must not disappear because
-           the filter bar says "this month". -->
+           purpose (see AnalyticsReport::loanTurnaround) — a borrowed item
+           that went out last quarter and never came back must not disappear
+           because the filter bar says "this month". -->
       <v-col cols="12">
         <AnalyticsSection
-          title="Loan turnaround and overdue"
-          subtitle="Median days an item is out, and how often it comes back late."
+          title="Equipment returns"
+          subtitle="How often borrowed equipment comes back late, and what's still out."
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && loans.daysOut.n === 0 && loans.currentlyOverdue === 0"
-          empty-text="No returned loans in this range"
+          :empty="!loading && !error && loans.returnedLate.of === 0 && loans.currentlyOverdue === 0"
+          empty-text="No equipment returned in this range"
           @retry="fetchReport"
         >
           <div class="d-flex flex-wrap gap-4">
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median time out</div>
-              <div class="stat-value text-high-emphasis">
-                {{ loans.daysOut.medianDays === null ? '—' : formatDays(loans.daysOut.medianDays) }}
-              </div>
-            </div>
-
             <div class="stat-tile subtle-surface">
               <div class="text-caption text-medium-emphasis">Returned late</div>
               <div class="stat-value text-high-emphasis">
@@ -1023,17 +1016,6 @@ const formatHours = (hours) => {
   if (hours < 1) return `${Math.round(hours * 60)} min`
   if (hours < 48) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
   return `${(hours / 24).toFixed(1)} days`
-}
-
-const formatDays = (days) => {
-  const hours = Math.round(days * 24)
-
-  // "0 hours" reads as instantaneous, which is never what happened — it is a
-  // rounding artefact of a resolution that landed inside the same hour.
-  if (hours < 1) return 'Under an hour'
-  if (days < 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-
-  return `${days} ${days === 1 ? 'day' : 'days'}`
 }
 
 defineExpose({ fetchReport })
