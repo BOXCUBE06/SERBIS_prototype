@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\User;
+use App\Services\Fcm;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
@@ -21,11 +22,16 @@ class EquipmentBorrowingController extends Controller
     use ResolvesUploadDisks;
     use ScopesToOwner;
 
+    public function __construct(private readonly Fcm $fcm) {}
+
     /** The calendar a due date is read in — the office's, same as the panel's picker. */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
     /** Agency policy cap (MDRRMO feedback, 2026-09-14); DEFAULT_LOAN_DAYS in EquipmentBorrowingView.vue. */
     private const MAX_LOAN_DAYS = 7;
+
+    /** Shown as the notification's title on every push this controller sends, matching ServiceRequestController. */
+    private const PUSH_TITLE = 'SERBIS';
 
     /**
      * Which column each handover stage writes, and which statuses it may be
@@ -291,6 +297,36 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing);
     }
 
+    /** The catalogued item's name, or the free-text description for an uncatalogued ("Other") request. */
+    private function itemLabel(EquipmentBorrowing $borrowing): string
+    {
+        return $borrowing->equipment?->item_name ?? $borrowing->other_equipment_text;
+    }
+
+    private function approvedPushBody(EquipmentBorrowing $borrowing): string
+    {
+        return 'Your request to borrow '.$this->itemLabel($borrowing).' has been approved. — MDRRMO Echague';
+    }
+
+    /** denial_reason is optional (unlike a service request's rejection remarks), so the sentence only grows one when there is one. */
+    private function deniedPushBody(EquipmentBorrowing $borrowing): string
+    {
+        $reason = $borrowing->denial_reason;
+
+        return 'Your request to borrow '.$this->itemLabel($borrowing).' was not approved.'
+            .($reason ? ' Reason: '.$reason.'.' : '').' — MDRRMO Echague';
+    }
+
+    /** Pickup and Delivery are materially different instructions, not a wording preference. */
+    private function releasedPushBody(EquipmentBorrowing $borrowing): string
+    {
+        $item = $this->itemLabel($borrowing);
+
+        return $borrowing->fulfillment_method === 'Delivery'
+            ? 'Your '.$item.' is ready and will be delivered to you. — MDRRMO Echague'
+            : 'Your '.$item.' is ready for pickup. — MDRRMO Echague';
+    }
+
     public function update(Request $request, $id)
     {
         $borrowing = EquipmentBorrowing::find($id);
@@ -474,6 +510,22 @@ class EquipmentBorrowingController extends Controller
             $borrowing->save();
 
             DB::commit();
+
+            $pushBody = match ($newStatus) {
+                'Approved' => $this->approvedPushBody($borrowing),
+                'Denied' => $this->deniedPushBody($borrowing),
+                'Released' => $this->releasedPushBody($borrowing),
+                default => null,
+            };
+
+            if ($pushBody !== null) {
+                $this->fcm->notifyResident(
+                    $borrowing->resident_id,
+                    self::PUSH_TITLE,
+                    $pushBody,
+                    ['borrow_id' => (string) $borrowing->borrow_id],
+                );
+            }
 
             return response()->json($borrowing);
 
