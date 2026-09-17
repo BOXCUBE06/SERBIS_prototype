@@ -135,7 +135,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && demand.total === 0"
-          :count="demand.total"
           empty-text="No requests in this range"
           empty-hint="Widen the range or clear the filters."
           skeleton="image"
@@ -196,7 +195,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && volume.total === 0"
-          :count="volume.total"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
@@ -262,7 +260,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && outcomes.total === 0"
-          :count="outcomes.total"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
@@ -298,7 +295,6 @@
               <div class="stat-value text-high-emphasis">
                 {{ turnaround.firstResponse.medianHours === null ? '—' : formatHours(turnaround.firstResponse.medianHours) }}
               </div>
-              <div class="text-caption text-medium-emphasis">n = {{ turnaround.firstResponse.n }}</div>
             </div>
 
             <div class="stat-tile subtle-surface">
@@ -306,7 +302,6 @@
               <div class="stat-value text-high-emphasis">
                 {{ turnaround.resolution.medianDays === null ? '—' : formatDays(turnaround.resolution.medianDays) }}
               </div>
-              <div class="text-caption text-medium-emphasis">n = {{ turnaround.resolution.n }}</div>
               <!-- Survivor bias, stated where the number is read rather than in
                    the coverage note below. This median describes only requests
                    that closed; the ones still open are excluded by definition,
@@ -361,7 +356,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && aging.total === 0"
-          :count="aging.total"
           empty-text="Nothing is open"
           empty-hint="Every request has been closed."
           @retry="fetchReport"
@@ -394,7 +388,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && equipmentUtilization.items.length === 0"
-          :count="equipmentUtilization.total"
           empty-text="No equipment in the catalogue"
           @retry="fetchReport"
         >
@@ -449,7 +442,6 @@
               <div class="stat-value text-high-emphasis">
                 {{ loans.daysOut.medianDays === null ? '—' : formatDays(loans.daysOut.medianDays) }}
               </div>
-              <div class="text-caption text-medium-emphasis">n = {{ loans.daysOut.n }}</div>
             </div>
 
             <div class="stat-tile subtle-surface">
@@ -484,7 +476,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && fleet.totalTrips === 0"
-          :count="fleet.totalTrips"
           empty-text="No dispatch trips in this range"
           @retry="fetchReport"
         >
@@ -494,7 +485,6 @@
               <div class="stat-value text-high-emphasis">
                 {{ fleet.duration.medianHours === null ? '—' : formatHours(fleet.duration.medianHours) }}
               </div>
-              <div class="text-caption text-medium-emphasis">n = {{ fleet.duration.n }}</div>
             </div>
 
             <div class="stat-tile subtle-surface">
@@ -502,7 +492,6 @@
               <div class="stat-value text-high-emphasis">
                 {{ fleet.distance.medianKm === null ? '—' : `${fleet.distance.medianKm} km` }}
               </div>
-              <div class="text-caption text-medium-emphasis">n = {{ fleet.distance.n }}</div>
             </div>
           </div>
 
@@ -523,7 +512,6 @@
                   <td class="text-right">{{ unit.trips }}</td>
                   <td class="text-right">
                     {{ unit.medianTripHours === null ? '—' : formatHours(unit.medianTripHours) }}
-                    <span class="text-medium-emphasis"> (n = {{ unit.n }})</span>
                   </td>
                 </tr>
               </tbody>
@@ -596,7 +584,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && adoption.total === 0"
-          :count="adoption.total"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
@@ -646,7 +633,6 @@
           :loading="loading"
           :error="error"
           :empty="!loading && !error && signupsByMonth.total === 0"
-          :count="signupsByMonth.total"
           empty-text="No sign-ups in this range"
           @retry="fetchReport"
         >
