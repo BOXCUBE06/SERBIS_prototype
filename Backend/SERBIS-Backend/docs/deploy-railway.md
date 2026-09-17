@@ -306,11 +306,13 @@ assumed.
    on-demand run separate from its schedule) and confirm both commands exit
    0 in its logs before trusting the `0 0 * * *` schedule to run it
    unattended.
-10. **Analytics backfill.** Manual, once, after the deploy is otherwise
-    green — see §6a. Skipping it is not a failure: the analytics page works
-    without it and simply reports a smaller sample.
+10. **Analytics backfill (optional).** Manual, once, after the deploy is
+    otherwise green — see §6a. The Analytics page no longer surfaces a
+    turnaround section, so nothing on that page depends on this running;
+    skip it unless the columns are needed for another purpose (a report, a
+    future turnaround feature).
 
-### 6a. Analytics backfill — manual, run once
+### 6a. Analytics backfill — manual, run once, optional
 
 `first_responded_at` and `resolved_at` on `tbl_service_request` are filled
 going forward by the model, and the **schema** arrives on its own:
@@ -340,9 +342,10 @@ data repair whose coverage a person should read.
   expected result, not a fault.** The audit log begins after the oldest
   requests, a deleted request takes its log rows with it, and a request
   created already `Booked` never had a first response to record.
-- Gate: the command exits 0 and prints the table. Then load the Analytics
-  page and confirm the turnaround section shows a sample size (`n`) rather
-  than presenting partial history as a complete record.
+- Gate: the command exits 0 and prints the table. The Analytics page has no
+  turnaround section to check this against; verify coverage from the
+  command's own output, or with
+  `php artisan tinker --execute="echo DB::table('tbl_service_request')->whereNotNull('first_responded_at')->count();"`.
 
 ## 7. What stays local
 

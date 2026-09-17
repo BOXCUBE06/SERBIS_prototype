@@ -3,7 +3,7 @@
 
     <PageHeader
       title="Analytics"
-      subtitle="Demand, turnaround and backlog over a period. The Dashboard answers today; this answers the quarter."
+      subtitle="Demand and backlog over a period. The Dashboard answers today; this answers the quarter."
       class="mb-6"
     />
 
@@ -277,79 +277,9 @@
     </v-row>
 
     <v-row>
-      <!-- 4. How long the office takes. Every figure carries the sample it
-           came from: these columns are only partly backfilled. -->
-      <v-col cols="12" lg="7">
-        <AnalyticsSection
-          title="Turnaround"
-          subtitle="Median time to a first answer, and to closing the request."
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && turnaround.coverage.requests === 0"
-          empty-text="No requests in this range"
-          @retry="fetchReport"
-        >
-          <div class="d-flex flex-wrap gap-4 mb-4">
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median first response</div>
-              <div class="stat-value text-high-emphasis">
-                {{ turnaround.firstResponse.medianHours === null ? '—' : formatHours(turnaround.firstResponse.medianHours) }}
-              </div>
-            </div>
-
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median time to close</div>
-              <div class="stat-value text-high-emphasis">
-                {{ turnaround.resolution.medianDays === null ? '—' : formatDays(turnaround.resolution.medianDays) }}
-              </div>
-              <!-- Survivor bias, stated where the number is read rather than in
-                   the coverage note below. This median describes only requests
-                   that closed; the ones still open are excluded by definition,
-                   and some of them are older than everything counted here. -->
-              <div v-if="aging.total > 0" class="text-caption text-medium-emphasis mt-1">
-                Closed requests only — {{ aging.total }} still open are not counted.
-              </div>
-            </div>
-          </div>
-
-          <div v-if="turnaround.histogram.n > 0">
-            <div class="text-caption text-medium-emphasis mb-1">How long closing took</div>
-            <div style="height: 170px;">
-              <Bar :data="histogramChartData" :options="simpleBarOptions" />
-              <ChartDataTable
-                caption="How long closing took — same data as the chart above"
-                category-label="Duration bucket"
-                :labels="turnaround.histogram.labels"
-                :series="[{ label: 'Requests', data: turnaround.histogram.data }]"
-              />
-            </div>
-          </div>
-          <div v-else class="text-body-2 text-medium-emphasis py-4">
-            No request in this range has been closed yet, so there is nothing to time.
-          </div>
-
-          <!-- Not a footnote. These columns were backfilled from the audit
-               log, which starts later than the oldest requests, so a reader
-               must not take the medians above as the whole history. -->
-          <v-alert
-            v-if="turnaround.coverage.requests > turnaround.coverage.withResolution"
-            density="compact"
-            variant="tonal"
-            color="info"
-            rounded="lg"
-            class="mt-4 text-caption"
-          >
-            Timed from recorded history only:
-            {{ turnaround.coverage.withFirstResponse }} of {{ turnaround.coverage.requests }} requests have a recorded
-            first response and {{ turnaround.coverage.withResolution }} have a recorded closing time. Requests without
-            one are left out rather than counted as zero.
-          </v-alert>
-        </AnalyticsSection>
-      </v-col>
-
       <!-- 5. What is stuck right now. Reads created_at and the current status,
-           so unlike turnaround it is complete for every row from day one. -->
-      <v-col id="open-request-age" cols="12" lg="5">
+           so it is complete for every row from day one. -->
+      <v-col id="open-request-age" cols="12">
         <AnalyticsSection
           title="Open Requests by Age"
           subtitle="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
@@ -878,12 +808,6 @@ const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
 const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
 const activation = computed(() => report.value?.activation ?? { backlog: 0, signupsByMonth: EMPTY_STACK })
 const signupsByMonth = computed(() => activation.value.signupsByMonth)
-const turnaround = computed(() => report.value?.turnaround ?? {
-  firstResponse: { medianHours: null, n: 0 },
-  resolution: { medianDays: null, n: 0 },
-  histogram: { labels: [], data: [], n: 0 },
-  coverage: { requests: 0, withFirstResponse: 0, withResolution: 0 },
-})
 
 /**
  * Sequential fill for the heatmap: one hue, light to dark, as magnitude
@@ -953,17 +877,6 @@ const stackedDataset = (series, color) => ({
 const volumeChartData = computed(() => ({
   labels: volume.value.labels,
   datasets: volume.value.series.map(s => stackedDataset(s, colorForSeries(s.label, volume.value.series))),
-}))
-
-const histogramChartData = computed(() => ({
-  labels: turnaround.value.histogram.labels,
-  datasets: [{
-    label: 'Requests',
-    data: turnaround.value.histogram.data,
-    backgroundColor: themeColors.value.primary,
-    borderRadius: 4,
-    maxBarThickness: 38,
-  }],
 }))
 
 const agingChartData = computed(() => ({
@@ -1096,8 +1009,6 @@ const signupsChartData = computed(() => ({
   labels: signupsByMonth.value.labels,
   datasets: signupsByMonth.value.series.map(s => stackedDataset(s, residentStatusColor(s.label))),
 }))
-
-const simpleBarOptions = computed(() => baseOptions.value)
 
 const horizontalBarOptions = computed(() => ({
   ...baseOptions.value,
