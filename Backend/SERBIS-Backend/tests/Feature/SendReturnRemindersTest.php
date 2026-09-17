@@ -188,6 +188,14 @@ class SendReturnRemindersTest extends TestCase
             ->once()
             ->with('PhilSMS not configured, 2 reminder(s) skipped');
 
+        // This class creates no admin User at all, so the office-email side
+        // of the reminder has nobody to send to — same real behavior as a
+        // deployment with no active admin account, not something this test
+        // is otherwise about.
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Admin due-tomorrow email skipped: no active admin has an email address');
+
         $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
 
         Http::assertNothingSent();

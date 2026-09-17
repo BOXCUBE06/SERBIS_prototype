@@ -2,13 +2,17 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\EquipmentDueTomorrow;
 use App\Models\AmbulanceBooking;
 use App\Models\EquipmentBorrowing;
+use App\Models\User;
 use App\Services\Fcm;
 use App\Services\PhilSms;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Week 7 item 3, extended to every request type with a date to remind about
@@ -69,7 +73,9 @@ class SendReturnDueReminders extends Command
         $today = $now->toDateString();
         $tomorrow = $now->copy()->addDay()->toDateString();
 
-        $borrowings = EquipmentBorrowing::with('equipment')
+        // 'resident' added for notifyAdminsOfDueTomorrow()'s own use — remind()
+        // itself still reads $borrowing->resident lazily, unchanged.
+        $borrowings = EquipmentBorrowing::with('equipment', 'resident')
             ->where('status', 'Released')
             ->whereNull('return_reminder_sent_at')
             ->whereIn('due_date', [$today, $tomorrow])
@@ -85,6 +91,13 @@ class SendReturnDueReminders extends Command
             ->where(fn ($q) => $q->whereDate('scheduled_at', $today)->orWhereDate('scheduled_at', $tomorrow))
             ->whereHas('serviceRequest', fn ($q) => $q->where('status', 'Booked')->whereNotNull('resident_id'))
             ->get();
+
+        // Independent of the PhilSMS gate below on purpose: the admin email
+        // has nothing to do with SMS being configured, and a PhilSMS outage
+        // must not also silence the office's own copy of this reminder.
+        $this->notifyAdminsOfDueTomorrow(
+            $borrowings->filter(fn (EquipmentBorrowing $b) => $b->due_date->toDateString() === $tomorrow)
+        );
 
         // Checked once per run, not once per row: this reflects a global
         // config value (the token), never a fact about one row, and a
@@ -121,6 +134,49 @@ class SendReturnDueReminders extends Command
         $this->summary($sent, $failed, $skippedNoNumber, skippedNotConfigured: 0);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The office's own copy of the reminder — one email, not one per
+     * borrowing, and best-effort like every other channel here: a mail
+     * failure is logged and swallowed, never thrown, so it cannot affect
+     * whether the resident's own push/SMS gets sent or marked. Independent
+     * in the other direction too — called before the PhilSms::configured()
+     * gate, so an SMS outage does not also silence this.
+     *
+     * Deliberately not marked anywhere: unlike return_reminder_sent_at,
+     * there is nothing to protect against here re-sending — this command
+     * only ever runs once a day, and the query already excludes anything
+     * already marked reminded on the resident side, so a row appears in this
+     * email at most once regardless.
+     */
+    private function notifyAdminsOfDueTomorrow(Collection $dueTomorrow): void
+    {
+        if ($dueTomorrow->isEmpty()) {
+            return;
+        }
+
+        $recipients = User::where('status', 'Active')->pluck('email_address')->filter()->values();
+
+        if ($recipients->isEmpty()) {
+            Log::warning('Admin due-tomorrow email skipped: no active admin has an email address');
+
+            return;
+        }
+
+        $rows = $dueTomorrow->map(fn (EquipmentBorrowing $b) => [
+            'item' => $b->equipment?->item_name ?? $b->other_equipment_text ?? 'item',
+            'borrower' => $b->resident
+                ? trim("{$b->resident->first_name} {$b->resident->last_name}")
+                : 'Unknown borrower',
+            'due_date' => $b->due_date->format('M j, Y'),
+        ])->all();
+
+        try {
+            Mail::to($recipients->all())->send(new EquipmentDueTomorrow($rows));
+        } catch (\Throwable $e) {
+            Log::error('Admin due-tomorrow email failed', ['error' => $e->getMessage()]);
+        }
     }
 
     private const OUTCOME_SENT = 'sent';
