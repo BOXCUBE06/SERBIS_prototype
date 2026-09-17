@@ -691,15 +691,18 @@ const ALL = 'all'
  * modes, all checks pass on the adjacent pairlist that stacked bars use —
  * worst adjacent CVD ΔE 9.1 light / 8.4 dark against a target of 8.
  *
- * Light mode raises a contrast relief on three slots (aqua 2.82, yellow 2.17,
- * magenta 2.69 against white). That is not dismissable, which is why this
- * chart ships a Table view rather than treating one as optional.
+ * Light mode slots 2 (aqua), 3 (yellow) and 4 (magenta) originally measured
+ * 2.82/2.17/2.69 against white — under the 3:1 floor for a non-text fill.
+ * Darkened in place, same hue, to 3.22/3.32/3.28 (#1baf7a→#19a371,
+ * #eda100→#be8100, #e87ba4→#d16f94). The Table view stays regardless — it is
+ * the accessible path for anyone who can't read colour at all, not only a
+ * workaround for these three.
  *
  * Kept off the brand green deliberately: primary is the app's own accent and
  * reading it as "one particular service" would collide with every other use
  * of it on the page.
  */
-const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948']
+const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#19a371', '#be8100', '#d16f94', '#008300', '#4a3aa7', '#e34948']
 const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
 
 const preset = ref('quarter')
@@ -1010,11 +1013,13 @@ const percentStackedOptions = computed(() => ({
       boxPadding: 4,
       callbacks: {
         // The axis is a percentage but the useful number is the count, so the
-        // tooltip gives both rather than making the reader multiply.
+        // tooltip gives both rather than making the reader multiply. ctx.raw
+        // is the normalised percentage the bar is drawn from — the real count
+        // lives in dataset.rawData, set alongside it below.
         label: (ctx) => {
-          const total = ctx.chart.data.datasets.reduce((sum, d) => sum + (d.data[ctx.dataIndex] || 0), 0)
-          const share = total ? Math.round((ctx.raw / total) * 100) : 0
-          return `${ctx.dataset.label}: ${ctx.raw} (${share}%)`
+          const count = ctx.dataset.rawData?.[ctx.dataIndex] ?? ctx.raw
+          const share = Math.round(ctx.raw)
+          return `${ctx.dataset.label}: ${count} (${share}%)`
         },
       },
     },
