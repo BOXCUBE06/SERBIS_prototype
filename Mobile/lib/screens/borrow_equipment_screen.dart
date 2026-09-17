@@ -434,16 +434,32 @@ class _BorrowRequestCard extends StatelessWidget {
           ],
           if (request.dueDate != null && !request.status.isTerminal) ...[
             const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.event_outlined, size: 14, color: AppColors.inkFaint),
-                const SizedBox(width: 8),
-                Text(
-                  dueLabel(request.dueDate!),
-                  style: AppText.body(size: 12, color: AppColors.inkMuted),
+            Builder(builder: (context) {
+              // Prominent, not a small caption line — MDRRMO feedback,
+              // 2026-09-17. Same three-tier colouring the admin panel's own
+              // countdown chip uses: red once overdue, amber inside the
+              // 1-day reminder window, neutral otherwise.
+              final label = dueLabel(request.dueDate!);
+              final overdue = label.endsWith('overdue');
+              final urgent = label == 'Due today' || label == 'Due tomorrow';
+              final bg = overdue ? AppColors.red50 : (urgent ? AppColors.amber50 : AppColors.grey50);
+              final fg = overdue ? AppColors.red600 : (urgent ? AppColors.amber600 : AppColors.inkMuted);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_outlined, size: 16, color: fg),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: AppText.body(size: 13, weight: FontWeight.w700, color: fg),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            }),
           ],
           // Staff photograph the item at the counter; the resident only reads
           // it back. A row with neither photo draws nothing at all — most

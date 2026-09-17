@@ -263,10 +263,17 @@
           </template>
 
           <template v-slot:item.timeline="{ item }">
-            <div class="text-body-2 font-weight-medium" :class="isOverdue(item) ? 'text-error' : 'text-high-emphasis'">
-              {{ dueLabel(item) || agingLabel(item) }}
-            </div>
-            <div v-if="dueLabel(item)" class="text-caption text-medium-emphasis">{{ agingLabel(item) }}</div>
+            <!-- A chip, not plain text — the due countdown MDRRMO asked to be
+                 made prominent (feedback, 2026-09-17), same weight as the
+                 status chip in the column beside it. -->
+            <template v-if="dueLabel(item)">
+              <v-chip
+                size="small" variant="flat" class="font-weight-bold"
+                :color="isOverdue(item) ? 'error' : ['Due today', 'Due tomorrow'].includes(dueLabel(item)) ? 'warning' : undefined"
+              >{{ dueLabel(item) }}</v-chip>
+              <div class="text-caption text-medium-emphasis mt-1">{{ agingLabel(item) }}</div>
+            </template>
+            <div v-else class="text-body-2 text-high-emphasis">{{ agingLabel(item) }}</div>
           </template>
 
           <template v-slot:item.actions="{ item }">
@@ -478,6 +485,18 @@
                 type="error" variant="tonal" class="mb-4" density="compact"
                 :title="dueLabel(selectedRecord)"
               >This item was due back on {{ fmtDate(selectedRecord?.due_date) }} and has not been returned.</v-alert>
+
+              <!-- Not overdue yet, but still a live loan with a due date —
+                   the countdown MDRRMO asked to be made prominent (feedback,
+                   2026-09-17), not just the small field further down. Amber
+                   inside the 1-day reminder window (matches
+                   SendReturnDueReminders' own window), blue otherwise. -->
+              <v-alert
+                v-else-if="selectedRecord?.due_date && !terminalStatuses.includes(selectedRecord.status)"
+                :type="['Due today', 'Due tomorrow'].includes(dueLabel(selectedRecord)) ? 'warning' : 'info'"
+                variant="tonal" class="mb-4" density="compact"
+                :title="dueLabel(selectedRecord)"
+              >Due back on {{ fmtDate(selectedRecord?.due_date) }}.</v-alert>
 
               <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Equipment Requested</h3>
               <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
