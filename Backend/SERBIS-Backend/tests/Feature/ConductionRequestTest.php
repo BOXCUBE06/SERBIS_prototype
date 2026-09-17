@@ -427,6 +427,29 @@ class ConductionRequestTest extends TestCase
             ->assertJsonValidationErrors(['patient_name']);
     }
 
+    /** A trip log is always an ambulance dispatch — a Boat or Fire Truck cannot be the unit on one. */
+    public function test_a_non_ambulance_vehicle_is_rejected(): void
+    {
+        $boat = Vehicle::create([
+            'unit_identifier' => 'BOT-01', 'type' => 'Boat', 'specification' => null, 'status' => 'Available',
+        ]);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $boat->vehicle_id,
+        ]))->assertStatus(422)->assertJsonValidationErrors(['vehicle_id']);
+    }
+
+    public function test_an_ambulance_vehicle_is_still_accepted(): void
+    {
+        $ambulance = Vehicle::create([
+            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
+        ]);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'vehicle_id' => $ambulance->vehicle_id,
+        ]))->assertStatus(201);
+    }
+
     public function test_authorized_passengers_are_capped_at_two(): void
     {
         $this->postJson('/api/conduction-requests', $this->payload([

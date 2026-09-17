@@ -105,7 +105,13 @@ class ConductionRequestController extends Controller
             // model has carried them in $fillable since the columns were added,
             // but store() never actually accepted them as input until now.
             'service_request_id' => 'nullable|integer|exists:tbl_service_request,request_id',
-            'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id',
+            // A trip log is always an ambulance dispatch — this controller has
+            // no other kind of request to log — so the unit attached must be
+            // one, the same rule ServiceRequestController::update() enforces
+            // on its own manual vehicle assignment (MDRRMO feedback,
+            // 2026-09-17). Previously exists-checked only, so a raw API call
+            // could put a Boat or Fire Truck on a trip record.
+            'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id,type,Ambulance',
             'patient_name' => 'required|string|max:255',
             // min:0 stays — a neonate transport is a real ambulance case and 0
             // is the honest reading. 150 was not defensible: the oldest
@@ -139,6 +145,8 @@ class ConductionRequestController extends Controller
             // Only meaningful, and only ever stored, when filing over an
             // actual conflict below — see the double-booking guard.
             'override_reason' => 'nullable|string|max:500',
+        ], [
+            'vehicle_id.exists' => 'That unit is not an Ambulance.',
         ]);
 
         // A hard block, unlike the vehicle conflict below: a booking maps to
