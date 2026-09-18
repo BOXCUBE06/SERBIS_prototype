@@ -149,6 +149,24 @@ class FcmSendTest extends TestCase
         $this->assertNotNull(DeviceToken::find($this->deviceToken->getKey()));
     }
 
+    /**
+     * The one success path that used to leave zero trace — "FCM accepted
+     * this" and "never attempted" were both silence in the logs.
+     */
+    public function test_logs_the_message_name_on_a_successful_send(): void
+    {
+        Log::spy();
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM send accepted'
+                && $context['device_token_id'] === $this->deviceToken->getKey()
+                && $context['message_name'] === 'projects/x/messages/0:1');
+    }
+
     public function test_sends_the_data_payload_when_given_one(): void
     {
         Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);

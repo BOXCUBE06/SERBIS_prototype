@@ -103,6 +103,14 @@ class Fcm
             $response = $this->post($deviceToken->token, $title, $body, $data);
 
             if ($response->successful()) {
+                // The one success path that used to leave zero trace, same
+                // gap as the "not configured" branch above: nothing here
+                // distinguished "FCM accepted this" from "never attempted".
+                Log::info('FCM send accepted', [
+                    'device_token_id' => $deviceToken->getKey(),
+                    'message_name' => $response->json('name'),
+                ]);
+
                 return;
             }
 
