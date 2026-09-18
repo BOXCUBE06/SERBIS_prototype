@@ -115,6 +115,14 @@ class Fcm
             }
 
             if ($this->tokenIsDead($response)) {
+                // Logged before the delete, not after — there's nothing
+                // left to log about a row that no longer exists.
+                Log::info('FCM device token deleted', [
+                    'device_token_id' => $deviceToken->getKey(),
+                    'resident_id' => $deviceToken->resident_id,
+                    'reason' => $response->json('error.status'),
+                ]);
+
                 $deviceToken->delete();
 
                 return;

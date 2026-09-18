@@ -196,24 +196,39 @@ class FcmSendTest extends TestCase
 
     public function test_deletes_the_token_when_fcm_reports_it_unregistered(): void
     {
+        Log::spy();
+        $tokenId = $this->deviceToken->getKey();
+        $residentId = $this->deviceToken->resident_id;
         Http::fake(['fcm.googleapis.com/*' => Http::response([
             'error' => ['status' => 'UNREGISTERED', 'message' => 'Requested entity was not found.'],
         ], 404)]);
 
         (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
 
-        $this->assertNull(DeviceToken::find($this->deviceToken->getKey()));
+        $this->assertNull(DeviceToken::find($tokenId));
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM device token deleted'
+                && $context['device_token_id'] === $tokenId
+                && $context['resident_id'] === $residentId
+                && $context['reason'] === 'UNREGISTERED');
     }
 
     public function test_deletes_the_token_when_fcm_reports_it_invalid(): void
     {
+        Log::spy();
+        $tokenId = $this->deviceToken->getKey();
         Http::fake(['fcm.googleapis.com/*' => Http::response([
             'error' => ['status' => 'INVALID_ARGUMENT', 'message' => 'The registration token is not a valid FCM registration token.'],
         ], 400)]);
 
         (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
 
-        $this->assertNull(DeviceToken::find($this->deviceToken->getKey()));
+        $this->assertNull(DeviceToken::find($tokenId));
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM device token deleted'
+                && $context['reason'] === 'INVALID_ARGUMENT');
     }
 
     /** UNAVAILABLE is FCM saying "try again later", not "this token is dead". */
