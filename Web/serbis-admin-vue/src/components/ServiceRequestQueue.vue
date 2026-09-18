@@ -2295,14 +2295,14 @@ const fetchRequests = async () => {
   }
 }
 
+// Only ever refreshes an already-open selection — never picks a row on its
+// own. This used to auto-select filteredAndSortedRequests[0] whenever
+// nothing was selected, which opened the detail drawer on every page load
+// before anything was clicked (MDRRMO feedback, 2026-09-18).
 const selectDefaultOrRefreshSelection = () => {
-  if (!selectedRequest.value && requests.value.length > 0) {
-    selectRequest(filteredAndSortedRequests.value[0])
-  } else if (selectedRequest.value) {
-    // Keep the panel in sync with the freshly-fetched copy of the selected request
-    const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
-    if (fresh) selectRequest(fresh, false)
-  }
+  if (!selectedRequest.value) return
+  const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
+  if (fresh) selectRequest(fresh, false)
 }
 
 const selectRequest = (item, resetRemarks = true) => {
