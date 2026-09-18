@@ -517,110 +517,127 @@
     </v-dialog>
 
     <!-- Trip log -->
-    <v-dialog v-model="tripLog.open" max-width="600" persistent>
+    <v-dialog v-model="tripLog.open" max-width="960" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
           {{ tripLog.title }}
         </v-card-title>
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-6" style="max-height: 70vh;">
           <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
-          <v-row dense>
-            <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></DateTimePickerField>
+
+          <!-- Two columns at md+: checkpoints/odometer on the left, personnel
+               on the right — the same width this content needed to stop
+               scrolling on a 600px-wide dialog (MDRRMO feedback,
+               2026-09-18). Stacks to one column below md. -->
+          <v-row>
+            <v-col cols="12" md="6">
+              <h3 class="section-title">Departure &amp; arrival</h3>
+              <v-row dense>
+                <v-col cols="12">
+                  <DateTimePickerField v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></DateTimePickerField>
+                </v-col>
+                <v-col cols="12">
+                  <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
+                </v-col>
+                <v-col cols="12">
+                  <v-textarea
+                    v-model="tripLog.form.no_arrival_reason"
+                    label="No-arrival reason"
+                    placeholder="e.g. Patient had already been taken by a relative"
+                    hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
+                    persistent-hint
+                    variant="outlined"
+                    density="comfortable"
+                    rows="2"
+                  ></v-textarea>
+                </v-col>
+              </v-row>
+
+              <h3 class="section-title">Return &amp; odometer</h3>
+              <v-row dense>
+                <v-col cols="12" sm="6">
+                  <!-- Disabled rather than left typeable and refused afterwards. A
+                       trip that never arrived has no departure from a destination
+                       it never reached, and a 422 explaining that after the fact is
+                       worse than a field that cannot be filled in the first place.
+                       The hint says why, so the control does not just look broken. -->
+                  <DateTimePickerField
+                    v-model="tripLog.form.departed_destination_at"
+                    type="datetime-local"
+                    label="Departed destination"
+                    variant="outlined"
+                    density="comfortable"
+                    :disabled="hasNoArrivalReason"
+                    :hint="hasNoArrivalReason ? 'Not applicable — this trip never reached its destination.' : undefined"
+                    :persistent-hint="hasNoArrivalReason"
+                  ></DateTimePickerField>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
+                </v-col>
+                <v-col cols="12">
+                  <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+                </v-col>
+              </v-row>
             </v-col>
-            <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
-            </v-col>
-            <v-col cols="12">
-              <v-textarea
-                v-model="tripLog.form.no_arrival_reason"
-                label="No-arrival reason"
-                placeholder="e.g. Patient had already been taken by a relative"
-                hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
-                persistent-hint
-                variant="outlined"
-                density="comfortable"
-                rows="2"
-              ></v-textarea>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <!-- Disabled rather than left typeable and refused afterwards. A
-                   trip that never arrived has no departure from a destination
-                   it never reached, and a 422 explaining that after the fact is
-                   worse than a field that cannot be filled in the first place.
-                   The hint says why, so the control does not just look broken. -->
-              <DateTimePickerField
-                v-model="tripLog.form.departed_destination_at"
-                type="datetime-local"
-                label="Departed destination"
-                variant="outlined"
-                density="comfortable"
-                :disabled="hasNoArrivalReason"
-                :hint="hasNoArrivalReason ? 'Not applicable — this trip never reached its destination.' : undefined"
-                :persistent-hint="hasNoArrivalReason"
-              ></DateTimePickerField>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
-            </v-col>
-            <v-col cols="12">
-              <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+
+            <v-col cols="12" md="6">
+              <!-- All three PEOPLE_FIELDS roles, same pattern as the create
+                   dialog's own Personnel section (personnelGroups) — see
+                   ConductionRequestController::tripLog(). A stub created by
+                   Approve & Dispatch (C5's bridge) always starts with none of
+                   them, and a driver is required before this request can
+                   resolve. -->
+              <h3 class="section-title">Personnel</h3>
+              <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
+                <div class="d-flex align-center justify-space-between mb-1">
+                  <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
+                  <v-btn
+                    variant="text"
+                    size="small"
+                    density="compact"
+                    class="text-none"
+                    prepend-icon="mdi-plus"
+                    :disabled="tripLog.form[group.field].length >= group.max"
+                    @click="addTripPerson(group.field)"
+                  >
+                    Add {{ group.singular }}
+                  </v-btn>
+                </div>
+                <div
+                  v-for="(_n, idx) in tripLog.form[group.field]"
+                  :key="idx"
+                  class="d-flex align-center gap-2 mb-2"
+                >
+                  <v-text-field
+                    v-model="tripLog.form[group.field][idx]"
+                    :label="`${group.singular} ${idx + 1}`"
+                    placeholder="Full name"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                  ></v-text-field>
+                  <v-btn
+                    v-if="idx > 0 || group.min < 1"
+                    icon="mdi-close"
+                    variant="text"
+                    size="small"
+                    :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                    @click="removeTripPerson(group.field, idx)"
+                  ></v-btn>
+                </div>
+                <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+                  Up to {{ group.max }} {{ group.label.toLowerCase() }}.
+                </div>
+              </div>
             </v-col>
           </v-row>
-
-          <!-- All three PEOPLE_FIELDS roles, same pattern as the create
-               dialog's own Personnel section above (personnelGroups) — see
-               ConductionRequestController::tripLog(). A stub created by
-               Approve & Dispatch (C5's bridge) always starts with none of
-               them, and a driver is required before this request can
-               resolve. -->
-          <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
-            <div class="d-flex align-center justify-space-between mb-1">
-              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-              <v-btn
-                variant="text"
-                size="small"
-                density="compact"
-                class="text-none"
-                prepend-icon="mdi-plus"
-                :disabled="tripLog.form[group.field].length >= group.max"
-                @click="addTripPerson(group.field)"
-              >
-                Add {{ group.singular }}
-              </v-btn>
-            </div>
-            <div
-              v-for="(_n, idx) in tripLog.form[group.field]"
-              :key="idx"
-              class="d-flex align-center gap-2 mb-2"
-            >
-              <v-text-field
-                v-model="tripLog.form[group.field][idx]"
-                :label="`${group.singular} ${idx + 1}`"
-                placeholder="Full name"
-                variant="outlined"
-                density="compact"
-                hide-details
-              ></v-text-field>
-              <v-btn
-                v-if="idx > 0 || group.min < 1"
-                icon="mdi-close"
-                variant="text"
-                size="small"
-                :aria-label="`Remove ${group.singular} ${idx + 1}`"
-                @click="removeTripPerson(group.field, idx)"
-              ></v-btn>
-            </div>
-            <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
-              Up to {{ group.max }} {{ group.label.toLowerCase() }}.
-            </div>
-          </div>
         </v-card-text>
         <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
