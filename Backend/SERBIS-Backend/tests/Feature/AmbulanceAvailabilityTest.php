@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ServiceRequestController;
 use App\Models\AmbulanceBooking;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -203,5 +204,37 @@ class AmbulanceAvailabilityTest extends TestCase
         $this->booking($this->units['AMB-01'], 'Responding', null, null);
 
         $this->assertSame(['AMB-02', 'AMB-03', 'AMB-04'], $this->availableIdentifiers());
+    }
+
+    /**
+     * The bug this class exists to catch: an unapproved Booked request has
+     * scheduled_at but no scheduled_end yet (store()/adminStore() only ever
+     * write the former), and `NULL > $start` is false in SQL — so before the
+     * COALESCE fallback, this booking held no window at all and a second
+     * resident could be offered the same unit for an overlapping slot.
+     */
+    public function test_an_unapproved_booking_reserves_the_default_window(): void
+    {
+        $this->booking(
+            $this->units['AMB-01'],
+            'Booked',
+            $this->windowStart->copy()->addMinutes(30),
+            null,
+        );
+
+        $this->assertSame(['AMB-02', 'AMB-03', 'AMB-04'], $this->availableIdentifiers());
+    }
+
+    /** The derived fallback is bounded, not an indefinite hold — it ends exactly where DEFAULT_BOOKING_HOURS says. */
+    public function test_an_unapproved_booking_outside_the_default_window_leaves_unit_free(): void
+    {
+        $this->booking(
+            $this->units['AMB-01'],
+            'Booked',
+            $this->windowStart->copy()->subHours(ServiceRequestController::DEFAULT_BOOKING_HOURS + 2),
+            null,
+        );
+
+        $this->assertSame(['AMB-01', 'AMB-02', 'AMB-03', 'AMB-04'], $this->availableIdentifiers());
     }
 }

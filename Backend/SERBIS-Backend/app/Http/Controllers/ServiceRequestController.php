@@ -67,8 +67,14 @@ class ServiceRequestController extends Controller
      */
     private const MAX_RELATIVES = 2;
 
-    /** The window an availability check uses for a booking, until approval sets a real scheduled_end. */
-    private const DEFAULT_BOOKING_HOURS = 2;
+    /**
+     * The window an availability check uses for a booking, until approval sets
+     * a real scheduled_end. Public: App\Services\AmbulanceAvailability reads
+     * this rather than keeping its own copy, so the fallback the overlap
+     * query derives at query time cannot drift from the one approve() itself
+     * defaults to.
+     */
+    public const DEFAULT_BOOKING_HOURS = 2;
 
     /** How close to scheduled_at a resident may still back out on their own. */
     private const CANCEL_CUTOFF_HOURS = 2;
