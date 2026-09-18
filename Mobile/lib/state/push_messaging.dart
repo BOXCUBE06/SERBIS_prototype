@@ -70,6 +70,42 @@ Future<void> initPushMessaging() async {
 bool get _pushSupported =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+/// Attempts, total, before a failed upload is given up on for this call —
+/// not retries in addition to the first try.
+const _tokenRegistrationAttempts = 3;
+
+/// One entry per retry (so `length == _tokenRegistrationAttempts - 1`):
+/// the wait before attempt 2, then before attempt 3.
+const _tokenRegistrationBackoff = [Duration(seconds: 1), Duration(seconds: 3)];
+
+/// Uploads [token] to the backend, retrying a failure with backoff before
+/// giving up. A dropped request or a backend blip that clears in a few
+/// seconds used to cost this device its push registration for the rest of
+/// the session — nothing else re-attempts it.
+///
+/// Never throws — same guarantee as every other push entry point. [context]
+/// is the log event name, so the two call sites ([registerDeviceToken] and
+/// [listenForTokenRefresh]) still read as distinct lines in [AppLog].
+Future<void> _registerTokenWithRetry(
+  ApiService api,
+  String token,
+  String context,
+) async {
+  for (var attempt = 1; attempt <= _tokenRegistrationAttempts; attempt++) {
+    try {
+      await api.registerDeviceToken(token, 'android');
+      return;
+    } catch (error) {
+      if (attempt == _tokenRegistrationAttempts) {
+        AppLog.error(_logArea, context, error: error);
+        return;
+      }
+
+      await Future.delayed(_tokenRegistrationBackoff[attempt - 1]);
+    }
+  }
+}
+
 /// Uploads this device's current FCM token to the backend, tied to whichever
 /// resident is signed in on [api]. Called after login and, on app start, when
 /// a stored session is restored — both are "this device belongs to this
@@ -88,7 +124,7 @@ Future<void> registerDeviceToken(ApiService api) async {
       return;
     }
 
-    await api.registerDeviceToken(token, 'android');
+    await _registerTokenWithRetry(api, token, 'register device token');
   } catch (error) {
     AppLog.error(_logArea, 'register device token', error: error);
   }
@@ -113,11 +149,7 @@ void listenForTokenRefresh(ApiService api) {
 
   try {
     FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
-      try {
-        await api.registerDeviceToken(token, 'android');
-      } catch (error) {
-        AppLog.error(_logArea, 'device token refresh', error: error);
-      }
+      await _registerTokenWithRetry(api, token, 'device token refresh');
     });
     _listeningForTokenRefresh = true;
   } catch (error) {
