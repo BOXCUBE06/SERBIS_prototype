@@ -61,7 +61,11 @@
       border
       rounded="lg"
       class="bg-surface overflow-hidden flex-grow-1 d-flex flex-column dtp-table-card"
-      style="min-height: 0;"
+      :style="{
+        minHeight: tableMinHeight + 'px',
+        '--dtp-row-height': ROW_HEIGHT + 'px',
+        '--dtp-body-height': tableBodyHeight + 'px',
+      }"
     >
       <v-data-table
         :headers="headers"
@@ -70,7 +74,6 @@
         :page="page"
         :item-value="itemValue"
         hide-default-footer
-        density="comfortable"
         :no-data-text="noDataText"
         :row-props="rowProps"
         class="dtp-table flex-grow-1"
@@ -178,6 +181,20 @@ const rowNumberOf = (item) => rowNumberById.value.get(item?.[props.itemValue]) ?
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
 
+// Fixed row height, not density="comfortable" — a row that grows with its
+// own content is exactly the layout shift this component exists to remove
+// (matches the 73px the pre-refactor ServiceRequestQueue fixed rows to, see
+// `fix table column widths and row heights`, 1212d04). itemsPerPage is now a
+// fixed 10/25/50 choice rather than sized off window height, so the table's
+// own reserved area is itemsPerPage rows tall regardless of how many rows
+// the current page actually has — a partial page or a zero-row/no-data
+// result still reserves a full page's height, so the footer below it never
+// jumps.
+const ROW_HEIGHT = 73
+const HEADER_HEIGHT = 44
+const tableBodyHeight = computed(() => props.itemsPerPage * ROW_HEIGHT)
+const tableMinHeight = computed(() => tableBodyHeight.value + HEADER_HEIGHT)
+
 // Changing the page size mid-list can strand the current page past the new
 // last page (25 rows at 50/page = page 1 of 1; switch to 10/page and page 1
 // is still valid, but the reverse isn't) — reset to page 1 rather than
@@ -212,6 +229,20 @@ const defaultSummary = computed(() => `${props.items.length} ${props.resultNoun}
 }
 .dtp-table :deep(tbody tr) {
   cursor: pointer;
+  height: var(--dtp-row-height);
+}
+.dtp-table :deep(td) {
+  height: var(--dtp-row-height);
+  overflow: hidden;
+}
+/* The no-data row is the only row in the table when items is empty — sized
+   to the full reserved row area (not one row's worth) and centered, so an
+   empty result fills the same box a full page of rows would rather than
+   collapsing to header + one short row. */
+.dtp-table :deep(tr.v-data-table-rows-no-data td) {
+  height: var(--dtp-body-height);
+  text-align: center;
+  vertical-align: middle;
 }
 .dtp-table :deep(tbody tr:focus-visible) {
   outline: 2px solid rgb(var(--v-theme-primary));
