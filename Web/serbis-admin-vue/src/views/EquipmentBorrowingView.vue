@@ -19,88 +19,6 @@
       </v-tab>
     </v-tabs>
 
-    <!-- Filters sit under the tabs, not in the header, because they apply to
-         whichever surface is showing and reading them second makes that order
-         explicit. -->
-    <div v-if="!loadError" class="filter-bar">
-      <v-text-field
-        v-model="search"
-        label="Search"
-        placeholder="Resident, item or purpose"
-        prepend-inner-icon="mdi-magnify"
-        variant="outlined"
-        density="compact"
-        hide-details
-        clearable
-        rounded="lg"
-        class="filter-field"
-      ></v-text-field>
-      <v-select
-        v-model="itemFilter"
-        :items="itemOptions"
-        label="Equipment"
-        prepend-inner-icon="mdi-package-variant-closed"
-        variant="outlined"
-        density="compact"
-        hide-details
-        rounded="lg"
-        class="filter-field"
-      ></v-select>
-      <v-select
-        v-model="barangayFilter"
-        :items="barangayOptions"
-        label="Barangay"
-        prepend-inner-icon="mdi-map-marker-outline"
-        variant="outlined"
-        density="compact"
-        hide-details
-        rounded="lg"
-        class="filter-field"
-      ></v-select>
-      <!-- History only: the terminal outcomes were only ever visible per-row,
-           in the Outcome column's chip — there was no way to filter to just
-           one of them. Cancelled joins Returned and Denied here on its own,
-           since the list is derived from the terminal columns. -->
-      <v-select
-        v-if="activeTab === 'history'"
-        v-model="outcomeFilter"
-        :items="outcomeOptions"
-        label="Outcome"
-        prepend-inner-icon="mdi-check-decagram-outline"
-        variant="outlined"
-        density="compact"
-        hide-details
-        rounded="lg"
-        class="filter-field"
-      ></v-select>
-    </div>
-
-    <!-- Active filters, each removable on its own, plus a clear-all. -->
-    <div v-if="!initialLoad && !loadError" class="filter-active d-flex align-center flex-wrap gap-2">
-      <template v-if="activeFilters.length > 0">
-        <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
-        <v-chip
-          v-for="f in activeFilters"
-          :key="f.key"
-          size="small"
-          variant="outlined"
-          closable
-          class="filter-chip font-weight-medium"
-          :close-label="`Remove filter: ${f.label}`"
-          @click:close="clearFilter(f.key)"
-        >{{ f.label }}</v-chip>
-        <v-btn
-          variant="text"
-          size="small"
-          class="text-none font-weight-bold"
-          @click="clearAllFilters"
-        >Clear all</v-btn>
-      </template>
-      <span class="page-subtitle text-medium-emphasis ml-auto" aria-live="polite">
-        {{ resultSummary }}
-      </span>
-    </div>
-
     <!-- An action that failed used to leave no trace once the snackbar timed
          out, 3.5 seconds later. It is the same error the modal has always
          shown in place; the page simply had nowhere to put it. -->
@@ -136,278 +54,238 @@
       </div>
     </v-card>
 
-    <template v-else-if="activeTab === 'board'">
-      <!-- Status strip. Replaces the kanban columns' at-a-glance counts:
-           click a tile to filter the table to that stage, same mechanic as
-           Fleet Management's readiness tiles. Overdue is a fourth tile, not
-           a status, since a record can be Approved-and-overdue. -->
-      <div class="status-strip d-flex flex-wrap gap-3">
-        <button
-          v-for="tile in statusTiles"
-          :key="tile.status"
-          type="button"
-          class="stat-tile"
-          :class="{ 'stat-tile--active': statusFilter === tile.status }"
-          :style="{ '--tile-accent': tile.accent }"
-          @click="toggleStatusFilter(tile.status)"
-        >
-          <span class="dot" :style="{ backgroundColor: tile.accent }"></span>
-          <span class="stat-value text-high-emphasis">{{ tile.count }}</span>
-          <span class="stat-label text-medium-emphasis">{{ tile.label }}</span>
-        </button>
-        <button
-          type="button"
-          class="stat-tile"
-          :class="{ 'stat-tile--active': overdueOnly }"
-          style="--tile-accent: rgb(var(--v-theme-error));"
-          @click="overdueOnly = !overdueOnly"
-        >
-          <span class="dot" style="background-color: rgb(var(--v-theme-error));"></span>
-          <span class="stat-value text-high-emphasis">{{ overdueCount }}</span>
-          <span class="stat-label text-medium-emphasis">Overdue</span>
-        </button>
-        <!-- Returned/Denied/Cancelled never appear in this table — they're
-             terminal, so they only live in History. Same "hide when zero" rule
-             Service Requests uses for its own status tabs: shown only when
-             there's something behind it, and a click jumps straight to the
-             filtered History view rather than pretending to filter this table. -->
-        <button
-          v-for="tile in terminalTiles"
-          :key="tile.status"
-          type="button"
-          class="stat-tile stat-tile--link"
-          :style="{ '--tile-accent': tile.accent }"
-          :aria-label="`${tile.count} ${tile.label} — open in History`"
-          @click="goToOutcome(tile.status)"
-        >
-          <span class="dot" :style="{ backgroundColor: tile.accent }"></span>
-          <span class="stat-value text-high-emphasis">{{ tile.count }}</span>
-          <span class="stat-label text-medium-emphasis">{{ tile.label }}</span>
-          <v-icon size="13" class="stat-tile__go" aria-hidden="true">mdi-arrow-top-right</v-icon>
-        </button>
-      </div>
+    <!-- Active pipeline. Overdue is its own segment now (used to be a
+         secondary toggle beside the pipeline-stage tiles) — a record can no
+         longer be filtered to "Approved AND overdue" at once, only one or
+         the other, matching the single-select segmented control every other
+         table on this page now uses. -->
+    <DataTablePage
+      v-else-if="activeTab === 'board'"
+      v-model:search="search"
+      search-placeholder="Resident, item or purpose"
+      :tabs="activeStatusTabs"
+      :status="statusFilter"
+      @update:status="statusFilter = $event"
+      :headers="activeHeaders"
+      :items="activeItems"
+      item-value="borrow_id"
+      :row-props="rowProps"
+      no-data-text="Nothing needs action right now"
+      :page="activePage"
+      @update:page="activePage = $event"
+      :items-per-page="activeItemsPerPage"
+      @update:items-per-page="activeItemsPerPage = $event"
+      result-noun="active requests"
+      class="borrow-table"
+      @click:row="(_event, { item }) => openDetail(item)"
+    >
+      <template v-slot:summary>{{ resultSummary }}</template>
 
-      <v-card elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
-        <v-data-table
-          :headers="activeHeaders"
-          :items="activeItems"
-          :items-per-page="-1"
-          density="comfortable"
-          hover
-          class="bg-transparent borrow-table"
-          item-value="borrow_id"
-          :row-props="rowProps"
-          @click:row="(_event, { item }) => openDetail(item)"
-        >
-          <template v-slot:item.rowNumber="{ item }">
-            <span class="row-number text-medium-emphasis">{{ activeRowNumber(item) }}</span>
-          </template>
+      <template v-slot:filters>
+        <v-select
+          v-model="itemFilter"
+          :items="itemOptions"
+          label="Equipment"
+          prepend-inner-icon="mdi-package-variant-closed"
+          variant="outlined"
+          density="compact"
+          hide-details
+          rounded="lg"
+          class="filter-field"
+        ></v-select>
+        <v-select
+          v-model="barangayFilter"
+          :items="barangayOptions"
+          label="Barangay"
+          prepend-inner-icon="mdi-map-marker-outline"
+          variant="outlined"
+          density="compact"
+          hide-details
+          rounded="lg"
+          class="filter-field"
+        ></v-select>
+      </template>
 
-          <template v-slot:item.avatar="{ item }">
-            <v-avatar size="40" class="avatar-tint">
-              <span class="avatar-initials">{{ initials(item.resident) }}</span>
-            </v-avatar>
-          </template>
+      <template v-slot:item.avatar="{ item }">
+        <v-avatar size="40" class="avatar-tint">
+          <span class="avatar-initials">{{ initials(item.resident) }}</span>
+        </v-avatar>
+      </template>
 
-          <template v-slot:item.resident="{ item }">
-            <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
-              <template v-slot:activator="{ props }">
-                <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
-                  {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-                </div>
-              </template>
-            </v-tooltip>
-          </template>
-
-          <template v-slot:item.barangay="{ item }">
-            <span class="text-body-2 text-medium-emphasis cell-truncate">
-              {{ item.resident?.barangay?.barangay_name || 'N/A' }}
-            </span>
-          </template>
-
-          <template v-slot:item.equipment="{ item }">
-            <div class="min-w-0">
-              <v-tooltip :text="itemName(item)" location="top">
-                <template v-slot:activator="{ props }">
-                  <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
-                    {{ itemName(item) }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
-                  </div>
-                </template>
-              </v-tooltip>
-              <!-- Says why there is no stock figure beside this row, rather
-                   than leaving a blank where every other row has one. -->
-              <div v-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic">
-                Not in the inventory
-              </div>
-              <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
-                Only {{ item.equipment?.available_quantity ?? 0 }} in stock
-              </div>
-              <v-tooltip v-if="item.purpose" :text="item.purpose" location="bottom" max-width="360">
-                <template v-slot:activator="{ props }">
-                  <div v-bind="props" class="text-caption text-medium-emphasis cell-truncate">{{ item.purpose }}</div>
-                </template>
-              </v-tooltip>
+      <template v-slot:item.resident="{ item }">
+        <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
+          <template v-slot:activator="{ props }">
+            <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
+              {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
             </div>
           </template>
+        </v-tooltip>
+      </template>
 
-          <template v-slot:item.status="{ item }">
-            <v-chip
-              size="small"
-              variant="flat"
-              class="font-weight-bold"
-              :style="{ backgroundColor: statusAccent(item.status), color: '#FFFFFF' }"
-            >
-              <v-icon start size="14">{{ statusIcon(item.status) }}</v-icon>
-              {{ item.status }}
-            </v-chip>
-          </template>
+      <template v-slot:item.barangay="{ item }">
+        <span class="text-body-2 text-medium-emphasis cell-truncate">
+          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+        </span>
+      </template>
 
-          <template v-slot:item.timeline="{ item }">
-            <!-- A chip, not plain text — the due countdown MDRRMO asked to be
-                 made prominent (feedback, 2026-09-17), same weight as the
-                 status chip in the column beside it. -->
-            <template v-if="dueLabel(item)">
-              <v-chip
-                size="small" variant="flat" class="font-weight-bold"
-                :color="isOverdue(item) ? 'error' : ['Due today', 'Due tomorrow'].includes(dueLabel(item)) ? 'warning' : undefined"
-              >{{ dueLabel(item) }}</v-chip>
-              <div class="text-caption text-medium-emphasis mt-1">{{ agingLabel(item) }}</div>
+      <template v-slot:item.equipment="{ item }">
+        <div class="min-w-0">
+          <v-tooltip :text="itemName(item)" location="top">
+            <template v-slot:activator="{ props }">
+              <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
+                {{ itemName(item) }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+              </div>
             </template>
-            <div v-else class="text-body-2 text-high-emphasis">{{ agingLabel(item) }}</div>
-          </template>
+          </v-tooltip>
+          <!-- Says why there is no stock figure beside this row, rather
+               than leaving a blank where every other row has one. -->
+          <div v-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic">
+            Not in the inventory
+          </div>
+          <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
+            Only {{ item.equipment?.available_quantity ?? 0 }} in stock
+          </div>
+          <v-tooltip v-if="item.purpose" :text="item.purpose" location="bottom" max-width="360">
+            <template v-slot:activator="{ props }">
+              <div v-bind="props" class="text-caption text-medium-emphasis cell-truncate">{{ item.purpose }}</div>
+            </template>
+          </v-tooltip>
+        </div>
+      </template>
 
-          <template v-slot:item.actions="{ item }">
-            <div class="d-flex justify-end gap-2" @click.stop>
-              <template v-if="item.status === 'Pending'">
-                <v-btn
-                  size="small" variant="outlined" color="error" class="text-none font-weight-bold"
-                  :loading="processingId === (item.borrow_id || item.id)"
-                  :aria-label="`Deny ${cardLabel(item)}`"
-                  @click="requestAction(item, 'Denied')"
-                >Deny</v-btn>
-                <v-btn
-                  size="small" variant="flat" color="primary" class="text-none font-weight-bold"
-                  :loading="processingId === (item.borrow_id || item.id)"
-                  :aria-label="`Approve ${cardLabel(item)}`"
-                  @click="requestAction(item, 'Approved')"
-                >Approve</v-btn>
-              </template>
-              <v-btn
-                v-else-if="item.status === 'Approved'"
-                size="small" variant="flat" color="primary" class="text-none font-weight-bold"
-                :loading="processingId === (item.borrow_id || item.id)"
-                :aria-label="`Release ${cardLabel(item)}`"
-                @click="requestAction(item, 'Released')"
-              >Release</v-btn>
-              <v-btn
-                v-else-if="item.status === 'Released'"
-                size="small" variant="flat" color="primary" class="text-none font-weight-bold"
-                :loading="processingId === (item.borrow_id || item.id)"
-                :aria-label="`Confirm return of ${cardLabel(item)}`"
-                @click="requestAction(item, 'Returned')"
-              >Confirm return</v-btn>
-            </div>
-          </template>
+      <template v-slot:item.status="{ item }">
+        <StatusPill small :status="item.status" :icon="statusIcon(item.status)" />
+      </template>
 
-          <template v-slot:no-data>
-            <div class="text-center py-12">
-              <v-icon size="40" class="text-medium-emphasis mb-2">
-                {{ activeFilters.length > 0 ? 'mdi-filter-remove-outline' : 'mdi-inbox-outline' }}
-              </v-icon>
-              <template v-if="activeFilters.length > 0">
-                <div class="text-body-2 font-weight-bold text-high-emphasis">No requests match</div>
-                <v-btn variant="outlined" size="small" class="text-none font-weight-bold mt-3" @click="clearAllFilters">
-                  Clear all filters
-                </v-btn>
-              </template>
-              <div v-else class="text-body-2 font-weight-bold text-high-emphasis">Nothing needs action right now</div>
-            </div>
+      <template v-slot:item.timeline="{ item }">
+        <!-- A chip, not plain text — the due countdown MDRRMO asked to be
+             made prominent (feedback, 2026-09-17), same weight as the
+             status chip in the column beside it. -->
+        <template v-if="dueLabel(item)">
+          <v-chip
+            size="small" variant="flat" class="font-weight-bold"
+            :color="isOverdue(item) ? 'error' : ['Due today', 'Due tomorrow'].includes(dueLabel(item)) ? 'warning' : undefined"
+          >{{ dueLabel(item) }}</v-chip>
+          <div class="text-caption text-medium-emphasis mt-1">{{ agingLabel(item) }}</div>
+        </template>
+        <div v-else class="text-body-2 text-high-emphasis">{{ agingLabel(item) }}</div>
+      </template>
+
+      <template v-slot:item.actions="{ item }">
+        <div class="d-flex justify-end gap-2" @click.stop>
+          <template v-if="item.status === 'Pending'">
+            <v-btn
+              size="small" variant="outlined" color="error" class="text-none font-weight-bold"
+              :loading="processingId === (item.borrow_id || item.id)"
+              :aria-label="`Deny ${cardLabel(item)}`"
+              @click="requestAction(item, 'Denied')"
+            >Deny</v-btn>
+            <v-btn
+              size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+              :loading="processingId === (item.borrow_id || item.id)"
+              :aria-label="`Approve ${cardLabel(item)}`"
+              @click="requestAction(item, 'Approved')"
+            >Approve</v-btn>
           </template>
-        </v-data-table>
-      </v-card>
-    </template>
+          <v-btn
+            v-else-if="item.status === 'Approved'"
+            size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+            :loading="processingId === (item.borrow_id || item.id)"
+            :aria-label="`Release ${cardLabel(item)}`"
+            @click="requestAction(item, 'Released')"
+          >Release</v-btn>
+          <v-btn
+            v-else-if="item.status === 'Released'"
+            size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+            :loading="processingId === (item.borrow_id || item.id)"
+            :aria-label="`Confirm return of ${cardLabel(item)}`"
+            @click="requestAction(item, 'Returned')"
+          >Confirm return</v-btn>
+        </div>
+      </template>
+    </DataTablePage>
 
     <!-- History. This list only ever grows, and the questions asked of it are
          lookups ("did the Cruz family return the generator?") rather than a
          pipeline glance. -->
-    <v-card v-else elevation="0" border rounded="lg" class="bg-surface overflow-hidden">
-      <v-data-table
-        :headers="historyHeaders"
-        :items="historyItems"
-        density="comfortable"
-        class="bg-transparent borrow-table"
-        hover
-        item-value="borrow_id"
-        :row-props="rowProps"
-        @click:row="(_event, { item }) => openDetail(item)"
-      >
-        <template v-slot:item.rowNumber="{ item }">
-          <span class="row-number text-medium-emphasis">{{ historyRowNumber(item) }}</span>
-        </template>
+    <DataTablePage
+      v-else
+      v-model:search="search"
+      search-placeholder="Resident, item or purpose"
+      :tabs="historyStatusTabs"
+      :status="outcomeFilter"
+      @update:status="outcomeFilter = $event"
+      :headers="historyHeaders"
+      :items="historyItems"
+      item-value="borrow_id"
+      :row-props="rowProps"
+      no-data-text="No completed requests yet"
+      :page="historyPage"
+      @update:page="historyPage = $event"
+      :items-per-page="historyItemsPerPage"
+      @update:items-per-page="historyItemsPerPage = $event"
+      result-noun="completed requests"
+      class="borrow-table"
+      @click:row="(_event, { item }) => openDetail(item)"
+    >
+      <template v-slot:summary>{{ resultSummary }}</template>
 
-        <template v-slot:item.status="{ item }">
-          <v-chip
-            size="small"
-            variant="flat"
-            class="font-weight-bold"
-            :style="{ backgroundColor: statusAccent(item.status), color: '#FFFFFF' }"
-          >
-            <v-icon start size="14">{{ statusIcon(item.status) }}</v-icon>
-            {{ item.status }}
-          </v-chip>
-        </template>
+      <template v-slot:filters>
+        <v-select
+          v-model="itemFilter"
+          :items="itemOptions"
+          label="Equipment"
+          prepend-inner-icon="mdi-package-variant-closed"
+          variant="outlined"
+          density="compact"
+          hide-details
+          rounded="lg"
+          class="filter-field"
+        ></v-select>
+        <v-select
+          v-model="barangayFilter"
+          :items="barangayOptions"
+          label="Barangay"
+          prepend-inner-icon="mdi-map-marker-outline"
+          variant="outlined"
+          density="compact"
+          hide-details
+          rounded="lg"
+          class="filter-field"
+        ></v-select>
+      </template>
 
-        <template v-slot:item.resident="{ item }">
-          <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
-            <template v-slot:activator="{ props }">
-              <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
-                {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-              </div>
-            </template>
-          </v-tooltip>
-        </template>
+      <template v-slot:item.status="{ item }">
+        <StatusPill small :status="item.status" :icon="statusIcon(item.status)" />
+      </template>
 
-        <template v-slot:item.barangay="{ item }">
-          <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || 'N/A'">
-            {{ item.resident?.barangay?.barangay_name || 'N/A' }}
-          </span>
-        </template>
+      <template v-slot:item.resident="{ item }">
+        <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
+          <template v-slot:activator="{ props }">
+            <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
+              {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
+            </div>
+          </template>
+        </v-tooltip>
+      </template>
 
-        <template v-slot:item.equipment="{ item }">
-          <span class="cell-truncate" :title="itemName(item)">
-            {{ itemName(item) }}
-            <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
-          </span>
-        </template>
+      <template v-slot:item.barangay="{ item }">
+        <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || 'N/A'">
+          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+        </span>
+      </template>
 
-        <template v-slot:item.created_at="{ item }">
-          {{ fmtDate(item.created_at) }}
-        </template>
+      <template v-slot:item.equipment="{ item }">
+        <span class="cell-truncate" :title="itemName(item)">
+          {{ itemName(item) }}
+          <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
+        </span>
+      </template>
 
-        <template v-slot:no-data>
-          <div class="text-center py-12">
-            <v-icon size="40" class="text-medium-emphasis mb-2">
-              {{ activeFilters.length > 0 ? 'mdi-filter-remove-outline' : 'mdi-archive-outline' }}
-            </v-icon>
-            <template v-if="activeFilters.length > 0">
-              <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests match</div>
-              <div class="text-caption text-medium-emphasis mb-3">
-                {{ totalHistory }} record{{ totalHistory === 1 ? '' : 's' }} are hidden by the filters above.
-              </div>
-              <v-btn variant="outlined" size="small" class="text-none font-weight-bold" @click="clearAllFilters">
-                Clear all filters
-              </v-btn>
-            </template>
-            <template v-else>
-              <div class="text-body-2 font-weight-bold text-high-emphasis">No completed requests yet</div>
-              <div class="text-caption text-medium-emphasis">
-                Returned, denied and cancelled requests are kept here once they leave the pipeline.
-              </div>
-            </template>
-          </div>
-        </template>
-      </v-data-table>
-    </v-card>
+      <template v-slot:item.created_at="{ item }">
+        {{ fmtDate(item.created_at) }}
+      </template>
+    </DataTablePage>
 
     <!-- Detail modal (full record + fallback actions) -->
     <!-- Not persistent: this reads a record. The one input on it, the handover
@@ -417,11 +295,7 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">Borrowing Request Details</span>
-            <v-chip
-              :color="statusAccent(selectedRecord?.status)"
-              size="small" rounded="pill" variant="flat"
-              class="text-uppercase font-weight-bold"
-            >{{ selectedRecord?.status }}</v-chip>
+            <StatusPill :status="selectedRecord?.status" :icon="statusIcon(selectedRecord?.status)" />
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="closeModal"></v-btn>
         </v-card-title>
@@ -894,16 +768,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
-import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
+import DataTablePage from '@/components/DataTablePage.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
 
@@ -927,14 +802,23 @@ const activeTab = ref('board')
 const search = ref('')
 const itemFilter = ref(ALL_ITEMS)
 const barangayFilter = ref(ALL_BARANGAYS)
+// 'Overdue' joins the three real statuses as a fourth, mutually-exclusive
+// segment (see activeStatusTabs) — no longer a separate toggle a pipeline
+// stage could be combined with.
 const statusFilter = ref(ALL_STATUS)
 const outcomeFilter = ref(ALL_OUTCOMES)
-const overdueOnly = ref(false)
+const activePage = ref(1)
+const activeItemsPerPage = ref(25)
+const historyPage = ref(1)
+const historyItemsPerPage = ref(25)
+
+watch([search, itemFilter, barangayFilter, statusFilter], () => { activePage.value = 1 })
+watch([search, itemFilter, barangayFilter, outcomeFilter], () => { historyPage.value = 1 })
 
 // Dashboard KPI cards deep-link here with ?status=... / ?overdue=1 — honor
 // them once on arrival so the operator lands on the filtered view.
 if (columns.some((c) => c.status === route.query.status)) statusFilter.value = route.query.status
-if (route.query.overdue === '1') overdueOnly.value = true
+if (route.query.overdue === '1') statusFilter.value = 'Overdue'
 const loading = ref(false)
 const processingId = ref(null)
 const apiError = ref('')
@@ -1033,40 +917,10 @@ const matchesBarangay = (b) =>
   barangayFilter.value === ALL_BARANGAYS ||
   b.resident?.barangay?.barangay_name === barangayFilter.value
 
-// The three filters shared by both tabs and the status strip's tile counts.
-// Status and overdue are not among them — each tile needs the count as if
-// it, specifically, were the only one applied.
+// The three filters shared by both tabs and both segmented controls' own
+// counts. Status/outcome are not among them — each segment needs the count
+// as if it, specifically, were the only one applied.
 const matchesFilters = (b) => matchesItem(b) && matchesBarangay(b) && matchesSearch(b)
-
-const countByStatus = (status) =>
-  borrowings.value.filter((b) => b.status === status && matchesFilters(b)).length
-
-// Tile row above the table — the pipeline glance the kanban columns used to
-// carry, without a fixed-width board.
-const statusTiles = computed(() =>
-  columns.filter((c) => !c.terminal).map((c) => ({ ...c, count: countByStatus(c.status) })),
-)
-
-const toggleStatusFilter = (status) => {
-  statusFilter.value = statusFilter.value === status ? ALL_STATUS : status
-}
-
-// Hidden at zero, shown once there's something behind it — same rule
-// Service Requests applies to its own status tabs via visibleStatusTabs.
-const terminalTiles = computed(() =>
-  columns
-    .filter((c) => c.terminal)
-    .map((c) => ({ ...c, count: countByStatus(c.status) }))
-    .filter((c) => c.count > 0),
-)
-
-// Returned/Denied rows never appear in this table — they're terminal, so the
-// tile jumps to History pre-filtered to that outcome rather than pretending
-// to filter a table that structurally excludes them.
-const goToOutcome = (status) => {
-  activeTab.value = 'history'
-  outcomeFilter.value = status
-}
 
 // Overdue-first, then pipeline stage, then oldest-waiting first: the request
 // that has sat longest is the one due for a decision, not the newest one to
@@ -1078,8 +932,11 @@ const activeItems = computed(() => {
     (b) => STAGE_RANK[b.status] !== undefined && matchesFilters(b),
   )
   return rows
-    .filter((b) => statusFilter.value === ALL_STATUS || b.status === statusFilter.value)
-    .filter((b) => !overdueOnly.value || isOverdue(b))
+    .filter((b) => {
+      if (statusFilter.value === ALL_STATUS) return true
+      if (statusFilter.value === 'Overdue') return isOverdue(b)
+      return b.status === statusFilter.value
+    })
     .sort((a, b) => {
       const byOverdue = Number(isOverdue(b)) - Number(isOverdue(a))
       if (byOverdue) return byOverdue
@@ -1089,9 +946,24 @@ const activeItems = computed(() => {
     })
 })
 
-// Terminal records, same shared filters as the board so a search spans both
-// tabs rather than quietly applying to one of them.
-const outcomeOptions = [ALL_OUTCOMES, ...terminalStatuses]
+// SegmentedTabs' {value, label, count} shape for the Active pipeline —
+// Pending/Approved/Released plus Overdue as its own segment (used to be a
+// secondary toggle beside these). Counts are off the shared item/barangay/
+// search filters only, same reasoning statusTiles used to follow: a
+// segment's own count should not move because a different segment is
+// selected.
+const activeStatusTabs = computed(() => {
+  const rows = borrowings.value.filter((b) => STAGE_RANK[b.status] !== undefined && matchesFilters(b))
+  return [
+    { value: ALL_STATUS, label: 'All', count: rows.length },
+    ...columns.filter((c) => !c.terminal).map((c) => ({
+      value: c.status,
+      label: c.label,
+      count: rows.filter((b) => b.status === c.status).length,
+    })),
+    { value: 'Overdue', label: 'Overdue', count: rows.filter((b) => isOverdue(b)).length },
+  ]
+})
 
 const historyItems = computed(() =>
   borrowings.value
@@ -1100,52 +972,19 @@ const historyItems = computed(() =>
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
 
-// Two tables, two independent counts — a borrowing is numbered within the
-// list it actually appears in, and the same record never shows in both.
-const activeRowNumber = useRowNumbers(activeItems, 'borrow_id')
-const historyRowNumber = useRowNumbers(historyItems, 'borrow_id')
-
-// What the "Overdue" tile would leave if it were the only thing active — the
-// other filters still apply, or the number would not describe the tile that
-// carries it.
-const overdueCount = computed(
-  () => borrowings.value.filter((b) => matchesFilters(b) && isOverdue(b)).length,
-)
-
-const activeFilters = computed(() => {
-  const out = []
-  const q = (search.value || '').trim()
-  if (q) out.push({ key: 'search', label: `Search: "${q}"` })
-  if (itemFilter.value !== ALL_ITEMS) out.push({ key: 'item', label: `Equipment: ${itemFilter.value}` })
-  if (barangayFilter.value !== ALL_BARANGAYS) out.push({ key: 'barangay', label: `Barangay: ${barangayFilter.value}` })
-  // Status and overdue only act on the board, outcome only on History — each
-  // chip only appears on the tab it actually filters.
-  if (activeTab.value === 'board') {
-    if (statusFilter.value !== ALL_STATUS) out.push({ key: 'status', label: `Status: ${statusFilter.value}` })
-    if (overdueOnly.value) out.push({ key: 'overdue', label: 'Overdue only' })
-  } else if (outcomeFilter.value !== ALL_OUTCOMES) {
-    out.push({ key: 'outcome', label: `Outcome: ${outcomeFilter.value}` })
-  }
-  return out
+// Same shape as activeStatusTabs, for History's terminal outcomes —
+// replaces the old "Outcome" v-select.
+const historyStatusTabs = computed(() => {
+  const rows = borrowings.value.filter((b) => terminalStatuses.includes(b.status) && matchesFilters(b))
+  return [
+    { value: ALL_OUTCOMES, label: 'All', count: rows.length },
+    ...columns.filter((c) => c.terminal).map((c) => ({
+      value: c.status,
+      label: c.label,
+      count: rows.filter((b) => b.status === c.status).length,
+    })),
+  ]
 })
-
-const clearFilter = (key) => {
-  if (key === 'search') search.value = ''
-  else if (key === 'item') itemFilter.value = ALL_ITEMS
-  else if (key === 'barangay') barangayFilter.value = ALL_BARANGAYS
-  else if (key === 'status') statusFilter.value = ALL_STATUS
-  else if (key === 'overdue') overdueOnly.value = false
-  else if (key === 'outcome') outcomeFilter.value = ALL_OUTCOMES
-}
-
-const clearAllFilters = () => {
-  search.value = ''
-  itemFilter.value = ALL_ITEMS
-  barangayFilter.value = ALL_BARANGAYS
-  statusFilter.value = ALL_STATUS
-  outcomeFilter.value = ALL_OUTCOMES
-  overdueOnly.value = false
-}
 
 const totalActive = computed(
   () => borrowings.value.filter((b) => !terminalStatuses.includes(b.status)).length,
@@ -1704,92 +1543,19 @@ onMounted(() => {
    the same as every other page's header-to-content gap, not a third
    page-local value. */
 .page-tabs { margin-bottom: 24px; }
-.filter-active { margin-bottom: 28px; }
-.status-strip { margin-bottom: 16px; }
 
-/* Filter bar. Fixed-width fields that wrap rather than a grid: field count
-   can vary and a fixed column count would leave gaps on narrow screens. */
-.filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-}
 .filter-field { width: 220px; max-width: 100%; }
-
 @media (max-width: 599px) {
   .filter-field { flex: 1 1 100%; width: 100%; }
 }
 
-/* primary-strong again, not primary. Vuetify's tonal chip draws the label on a
-   12% tint of the same colour, which measures 4.40:1 and fails AA at this
-   weight. Outlined puts the label on the page surface instead. */
-.filter-chip {
-  color: rgb(var(--v-theme-primary-strong));
-  border-color: rgba(var(--v-theme-primary), 0.45);
-}
-
-/* Status strip. Same mechanic as Fleet Management's readiness tiles: a dot,
-   a count, a label, click to filter the table to that stage. */
-.stat-tile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-  background: rgba(var(--v-theme-on-surface), 0.02);
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-.stat-tile--active {
-  border-color: var(--tile-accent);
-  background: color-mix(in srgb, var(--tile-accent) 10%, transparent);
-}
-/* Returned and Denied do not filter the table underneath them -- they switch
-   to the History tab. Three tiles that look identical while one group leaves
-   the surface is the whole confusion, so these carry a departure arrow and a
-   dashed edge: still a tile, visibly not the same kind of tile. */
-.stat-tile--link {
-  border-style: dashed;
-}
-.stat-tile__go {
-  margin-left: 2px;
-  opacity: 0.5;
-}
-
-.stat-tile .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.stat-tile .stat-value { font-size: 1.15rem; font-weight: 800; line-height: 1; }
-.stat-tile .stat-label { font-size: 0.8rem; font-weight: 600; }
-
-/* Table. Fixed layout keeps the truncating cells stable, the same fixed-
-   layout-plus-min-width fix used on every other data table in the app now
-   (User Management is the one exception with its own richer treatment,
-   not a pattern named "elegant-table" that this table is part of).
-   The 720px min-width is load-bearing: without it, `width: 100%` on a fixed
-   table lets a narrow wrapper crush every column instead of scrolling —
-   "waiting" wraps to one letter per line rather than the table scrolling
-   sideways. The wrapper's own overflow-x (Vuetify's default) does the rest. */
-.borrow-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 784px; }
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.borrow-table :deep(thead th) {
-  font-size: 0.72rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.borrow-table :deep(tbody tr) { cursor: pointer; }
-.borrow-table :deep(td) { white-space: nowrap; }
-.borrow-table :deep(tbody tr:focus-visible) {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: -2px;
-}
+/* DataTablePage's own .dtp-table rule already sets table-layout: fixed and
+   the header/row styling; this only adds the page-specific min-width floor
+   (720px was load-bearing: without it a fixed table's width:100% lets a
+   narrow wrapper crush every column instead of scrolling — the wrapper's
+   own overflow-x, Vuetify's default, does the rest). */
+.borrow-table :deep(.dtp-table table) { min-width: 784px; }
+.borrow-table :deep(.dtp-table td) { white-space: nowrap; }
 .cell-truncate {
   display: block;
   overflow: hidden;
@@ -1826,7 +1592,4 @@ onMounted(() => {
   border: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .stat-tile { transition: none; }
-}
 </style>
