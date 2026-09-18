@@ -97,7 +97,18 @@ Future<void> _registerTokenWithRetry(
       return;
     } catch (error) {
       if (attempt == _tokenRegistrationAttempts) {
-        AppLog.error(_logArea, context, error: error);
+        // describeError() already unpacks an ApiException's own status and
+        // its resident-safe message — no separate `status:` here, or the
+        // line would print it twice. fieldErrors is the same body, keyed by
+        // field, for the one status (422) that carries more than one line.
+        // The raw response body is never written here — app_log.dart's own
+        // rule, since a body this app didn't compose itself is not proven
+        // safe to write down.
+        final fieldErrors = error is ApiException && error.fieldErrors.isNotEmpty
+            ? error.fieldErrors.toString()
+            : null;
+
+        AppLog.error(_logArea, context, error: error, reason: fieldErrors);
         return;
       }
 
