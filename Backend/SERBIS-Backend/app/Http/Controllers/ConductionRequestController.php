@@ -50,19 +50,16 @@ class ConductionRequestController extends Controller
     private const MAX_ODOMETER = 1000000;
 
     /**
-     * How many names one role may carry on a single trip.
+     * How many drivers a single trip may carry. The other two PEOPLE_FIELDS
+     * roles were narrowed to their own, smaller constants below (MDRRMO
+     * feedback, 2026-09-18) — this one is the sole remaining user.
      *
      * `tbl_conduction_request_people.position` is an `unsignedTinyInteger`, so
      * the 256th name in a role writes 256 into a column that stops at 255 and
-     * takes the whole transaction down with a 500. The arrays were bounded per
+     * takes the whole transaction down with a 500. The array was bounded per
      * element (`max:255` on each name) and not in length.
      *
-     * Twenty is an order of magnitude above any real trip — the paper form
-     * prints two slots per role. It also has to leave room for
-     * ServiceRequestController::copyRelativesToTrip(), which APPENDS a
-     * booking's intake relatives onto a trip that may already carry names
-     * typed into the create dialog: the worst case is two full lists on one
-     * trip, 40 rows, still nowhere near the column's limit.
+     * Twenty is an order of magnitude above any real trip's crew.
      */
     private const MAX_PEOPLE_PER_ROLE = 20;
 
@@ -71,13 +68,29 @@ class ConductionRequestController extends Controller
      * ambulance carries at most two people riding under that role, which is
      * the operational rule, not a column limit.
      *
-     * Only this role is narrowed. Drivers keep MAX_PEOPLE_PER_ROLE, and
-     * relatives must keep it because copyRelativesToTrip() appends a booking's
-     * intake relatives onto a trip that may already hold typed names — that
-     * append writes rows directly and never passes through this validation, so
-     * narrowing the relative limit here would not bound it anyway.
+     * Only this role was narrowed here originally. Drivers keep
+     * MAX_PEOPLE_PER_ROLE.
      */
     private const MAX_AUTHORIZED_PASSENGERS = 2;
+
+    /**
+     * Patient/relatives, narrowed to match the paper form's two slots for
+     * this role (MDRRMO feedback, 2026-09-18) — the same operational cap
+     * MAX_RELATIVES already applies at ambulance intake
+     * (ServiceRequestController), just given its own name here since this
+     * class already has an unrelated MAX_PEOPLE_PER_ROLE that drivers still
+     * uses.
+     *
+     * This bounds the form array only. ServiceRequestController::
+     * copyRelativesToTrip() still appends a booking's intake relatives (up
+     * to MAX_RELATIVES = 2 of its own) directly onto `tbl_conduction_
+     * request_people` via Eloquent, never through this validation — so a
+     * trip whose stub already copied 2 intake relatives, then has 2 more
+     * typed into this form, can still end up with 4 rows on one trip. Not
+     * addressed here: that append path bounding its own count is a separate
+     * change from capping what a human can type into this form.
+     */
+    private const MAX_PATIENT_RELATIVES = 2;
 
     /** The trip log's four checkpoints, in the order they actually happen. */
     private const TRIP_SEQUENCE = [
@@ -134,11 +147,15 @@ class ConductionRequestController extends Controller
             // these are arrays rather than fixed driver_1/driver_2 inputs.
             // Bounded in length as well as per element — see
             // MAX_PEOPLE_PER_ROLE for what the 256th name does to `position`.
-            'drivers' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            //
+            // drivers is the one role a trip cannot be filed without a real
+            // crew for — min:1 matches the create form's own row-zero-is-
+            // permanent rule (MDRRMO feedback, 2026-09-18).
+            'drivers' => 'required|array|min:1|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
             'authorized_passengers' => 'nullable|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
             'authorized_passengers.*' => 'nullable|string|max:255',
-            'patient_relatives' => 'nullable|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            'patient_relatives' => 'nullable|array|max:'.self::MAX_PATIENT_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
 
             // Only meaningful, and only ever stored, when filing over an
@@ -325,11 +342,17 @@ class ConductionRequestController extends Controller
             // relatives too, the only way to record either was to have
             // known them at the moment the trip was first filed, which the
             // bridge path never is.
-            'drivers' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            //
+            // drivers keeps `sometimes` — an update touching only odometer,
+            // say, must not be forced to also submit a crew — but min:1
+            // applies the moment the key IS sent, so a driver-less stub
+            // cannot be "updated" into staying driver-less by submitting an
+            // empty array on purpose.
+            'drivers' => 'sometimes|array|min:1|max:'.self::MAX_PEOPLE_PER_ROLE,
             'drivers.*' => 'nullable|string|max:255',
             'authorized_passengers' => 'sometimes|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
             'authorized_passengers.*' => 'nullable|string|max:255',
-            'patient_relatives' => 'sometimes|array|max:'.self::MAX_PEOPLE_PER_ROLE,
+            'patient_relatives' => 'sometimes|array|max:'.self::MAX_PATIENT_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
         ]);
 

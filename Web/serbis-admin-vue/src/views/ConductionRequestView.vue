@@ -400,12 +400,16 @@
                   hide-details
                 ></v-text-field>
                 <v-btn
+                  v-if="idx > 0 || group.min < 1"
                   icon="mdi-close"
                   variant="text"
                   size="small"
                   :aria-label="`Remove ${group.singular} ${idx + 1}`"
                   @click="removePerson(group.field, idx)"
                 ></v-btn>
+              </div>
+              <div v-if="createDialog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+                Up to {{ group.max }} {{ group.label.toLowerCase() }}.
               </div>
             </div>
           </v-form>
@@ -605,12 +609,16 @@
                 hide-details
               ></v-text-field>
               <v-btn
+                v-if="idx > 0 || group.min < 1"
                 icon="mdi-close"
                 variant="text"
                 size="small"
                 :aria-label="`Remove ${group.singular} ${idx + 1}`"
                 @click="removeTripPerson(group.field, idx)"
               ></v-btn>
+            </div>
+            <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+              Up to {{ group.max }} {{ group.label.toLowerCase() }}.
             </div>
           </div>
         </v-card-text>
@@ -660,14 +668,20 @@ const statusOptions = [
   ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
 ]
 
-// `max` mirrors ConductionRequestController's per-role limits — passengers cap
-// at 2, the other two at MAX_PEOPLE_PER_ROLE. This only stops the Add button;
-// the server-side rule is the actual gate, and a request that gets past this
-// still fails validation there.
+// `max` mirrors ConductionRequestController's per-role limits (MAX_PEOPLE_PER_ROLE
+// for drivers, MAX_AUTHORIZED_PASSENGERS, MAX_PATIENT_RELATIVES). This only stops
+// the Add button and shows the "up to N" cap message; the server-side rule is the
+// actual gate, and a request that gets past this still fails validation there.
+//
+// `min` is a driver-only rule (MDRRMO feedback, 2026-09-18): a trip cannot be
+// filed or updated without at least one real crew member, so index 0 never
+// shows a remove button for this group — see the remove-button v-if in both
+// the create dialog and the trip log dialog below. Passengers and relatives
+// have no minimum; either can go to zero.
 const personnelGroups = [
-  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', max: 20 },
-  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', max: 2 },
-  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', max: 20 },
+  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', min: 1, max: 20 },
+  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', min: 0, max: 2 },
+  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', min: 0, max: 2 },
 ]
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'

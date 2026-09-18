@@ -461,14 +461,34 @@ class ConductionRequestTest extends TestCase
             ->assertJsonValidationErrors(['authorized_passengers']);
     }
 
-    public function test_the_passenger_cap_does_not_narrow_the_other_two_roles(): void
+    public function test_the_passenger_cap_does_not_narrow_drivers(): void
     {
-        // Drivers and relatives keep MAX_PEOPLE_PER_ROLE. Three of each would
-        // fail if the passenger limit had been applied to all three.
+        // Drivers keeps MAX_PEOPLE_PER_ROLE (20). Three would fail if the
+        // passenger limit (2) had been applied to this role by accident.
         $this->postJson('/api/conduction-requests', $this->payload([
             'drivers' => ['Pedro Santos', 'Luis Ramos', 'Ben Aquino'],
-            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz', 'Mario Cruz'],
         ]))->assertStatus(201);
+    }
+
+    /** MDRRMO feedback, 2026-09-18: narrowed from MAX_PEOPLE_PER_ROLE (20) to match the paper form's two slots. */
+    public function test_patient_relatives_are_capped_at_two(): void
+    {
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz'],
+        ]))->assertStatus(201);
+
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz', 'Mario Cruz'],
+        ]))->assertStatus(422)
+            ->assertJsonValidationErrors(['patient_relatives']);
+    }
+
+    public function test_drivers_require_at_least_one(): void
+    {
+        $this->postJson('/api/conduction-requests', $this->payload([
+            'drivers' => [],
+        ]))->assertStatus(422)
+            ->assertJsonValidationErrors(['drivers']);
     }
 
     public function test_the_passenger_cap_also_holds_on_the_trip_log(): void
@@ -479,6 +499,49 @@ class ConductionRequestTest extends TestCase
             'authorized_passengers' => ['Maria Santos', 'Ana Reyes', 'Jose Cruz'],
         ])->assertStatus(422)
             ->assertJsonValidationErrors(['authorized_passengers']);
+    }
+
+    public function test_the_relatives_cap_also_holds_on_the_trip_log(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz', 'Mario Cruz'],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['patient_relatives']);
+    }
+
+    /**
+     * The driver-less stub createConductionStub() leaves behind must still be
+     * fillable-in-later by this exact endpoint — min:1 only applies once
+     * `drivers` is actually sent, never merely because the stub started empty.
+     */
+    public function test_the_trip_log_can_add_the_first_driver_to_a_driverless_stub(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload(['drivers' => []]));
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'drivers' => ['Pedro Santos'],
+        ])->assertStatus(200);
+    }
+
+    public function test_the_trip_log_refuses_to_clear_every_driver(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'drivers' => [],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['drivers']);
+    }
+
+    public function test_the_trip_log_can_update_an_unrelated_field_without_touching_drivers(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'odometer_start' => 12000,
+        ])->assertStatus(200);
     }
 
     public function test_trip_log_can_be_filled_in_over_separate_calls(): void

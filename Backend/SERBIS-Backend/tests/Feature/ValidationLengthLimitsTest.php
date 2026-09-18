@@ -242,6 +242,7 @@ class ValidationLengthLimitsTest extends TestCase
             'medical_diagnosis' => 'Suspected stroke',
             'origin' => 'San Isidro',
             'destination' => 'Echague District Hospital',
+            'drivers' => ['Pedro Santos'],
         ])->json('conduction_request_id');
 
         $this->actingAsAdmin()->patchJson("/api/conduction-requests/{$conductionRequest}/trip-log", [

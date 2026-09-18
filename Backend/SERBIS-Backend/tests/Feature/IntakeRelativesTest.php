@@ -251,6 +251,7 @@ class IntakeRelativesTest extends TestCase
             'medical_diagnosis' => 'Fractured leg',
             'origin' => 'Purok 2, San Fabian',
             'destination' => 'Echague District Hospital',
+            'drivers' => ['Pedro Santos'],
         ])->assertStatus(201);
 
         $trip = ConductionRequest::first();
@@ -278,6 +279,7 @@ class IntakeRelativesTest extends TestCase
             'medical_diagnosis' => 'Fractured leg',
             'origin' => 'Purok 2, San Fabian',
             'destination' => 'Echague District Hospital',
+            'drivers' => ['Pedro Santos'],
             'patient_relatives' => ['Rosa Dela Cruz'],
         ])->assertStatus(201);
 
@@ -302,6 +304,7 @@ class IntakeRelativesTest extends TestCase
             'medical_diagnosis' => 'Fractured leg',
             'origin' => 'Purok 2, San Fabian',
             'destination' => 'Echague District Hospital',
+            'drivers' => ['Pedro Santos'],
         ])->assertStatus(201);
 
         $this->assertSame([], $this->relativeNamesOn(ConductionRequest::first()));

@@ -251,6 +251,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'patient_contact_number' => '09175555555', 'medical_diagnosis' => 'Cardiac arrest',
             'origin' => 'Purok 2, San Fabian', 'destination' => 'Echague District Hospital',
             'vehicle_id' => $this->vehicleA->vehicle_id,
+            'drivers' => ['Test Driver'],
             'override_reason' => 'Dispatcher-approved reassignment, second patient higher acuity.',
         ]);
         $secondResponse->assertStatus(201);
