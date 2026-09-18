@@ -704,39 +704,22 @@
                 </v-btn>
               </template>
               <template v-else-if="selectedRequest.status === 'Booked'">
-                <!-- Not yet approved: same unit-and-button row as the Pending
-                     branch above, same gating, same picker dialog — only the
-                     data source differs (see openAssignUnitModal), and Reject
-                     reuses the existing Disapprove flow untouched. -->
+                <!-- Not yet approved: assigning a unit and approving used to
+                     be two separate controls (a picker dialog plus a button
+                     here that only unlocked once it closed) — both steps now
+                     live inside the one dialog this button opens (MDRRMO
+                     feedback, 2026-09-18). Reject reuses the existing
+                     Disapprove flow untouched. -->
                 <template v-if="!selectedRequest.vehicle_id">
-                  <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
-                    <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
-                      <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
-                        {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
-                      </v-icon>
-                    </v-avatar>
-                    <div class="min-width-0">
-                      <div class="text-body-2 font-weight-bold text-truncate">
-                        {{ formData.vehicle_id ? getSelectedVehicleName() : 'No unit selected' }}
-                      </div>
-                      <div class="text-caption text-medium-emphasis text-truncate">
-                        <template v-if="formData.vehicle_id">
-                          Free for this window<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
-                        </template>
-                        <template v-else>Select a unit free for the scheduled window.</template>
-                      </div>
-                    </div>
-                  </div>
-
                   <v-btn
-                    color="primary"
-                    variant="outlined"
-                    class="text-none font-weight-bold"
+                    color="secondary"
+                    variant="flat"
+                    class="text-none font-weight-bold text-white mr-auto"
                     height="40"
                     :loading="scheduledAvailabilityLoading"
                     @click="openAssignUnitModal"
                   >
-                    {{ formData.vehicle_id ? 'Change Unit' : 'Assign Unit' }}
+                    Approve &amp; Assign Unit
                   </v-btn>
                   <v-btn variant="text" class="text-none font-weight-bold" height="40" @click="openReschedule">
                     Reschedule
@@ -744,21 +727,6 @@
                   <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                     Reject
                   </v-btn>
-                  <v-btn
-                    color="secondary"
-                    variant="flat"
-                    class="text-none font-weight-bold text-white"
-                    height="40"
-                    :loading="loading"
-                    :disabled="!formData.vehicle_id"
-                    :aria-describedby="!formData.vehicle_id ? 'approve-gate' : undefined"
-                    @click="approveBooking"
-                  >
-                    Approve
-                  </v-btn>
-                  <span v-if="!formData.vehicle_id" id="approve-gate" class="d-sr-only">
-                    Disabled until a unit is chosen with the Assign Unit button beside it.
-                  </span>
                 </template>
 
                 <!-- Already approved: the fleet decision is made, so what is
@@ -803,14 +771,20 @@
     </v-dialog>
 
     <!-- Vehicle picker -->
-    <v-dialog v-model="vehicleModal.isOpen" max-width="600">
+    <v-dialog v-model="vehicleModal.isOpen" max-width="600" :persistent="selectedRequest?.status === 'Booked'">
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
           <span class="text-h6 font-weight-bold">
-            {{ selectedRequest?.status === 'Booked' ? 'Units Free for This Window' : 'Available Vehicles' }}
+            {{ selectedRequest?.status === 'Booked' ? 'Approve & Assign Unit' : 'Available Vehicles' }}
           </span>
           <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
+
+        <!-- Rendered here, not left to the detail panel's own alert (:361) —
+             that one sits behind this dialog's scrim, so a failed approve
+             would report an error nobody could see without closing the
+             dialog first. -->
+        <v-alert v-if="selectedRequest?.status === 'Booked' && apiError" type="error" variant="tonal" density="compact" class="ma-4 mb-0">{{ apiError }}</v-alert>
 
         <!-- A two-across grid of cards for a list of identical units. Each tile
              carried three words and the eye had to travel in two directions to
@@ -820,6 +794,54 @@
           <div v-if="scheduledAvailabilityLoading" class="pa-4">
             <v-skeleton-loader type="list-item-avatar-two-line" v-for="n in 3" :key="n" class="mb-1"></v-skeleton-loader>
           </div>
+
+          <!-- Booked/approve: every Ambulance unit is listed, not just the
+               free ones — an unavailable unit shows why instead of vanishing,
+               so a dispatcher who expects to see AMB-02 can tell "already
+               booked" from "the list failed to load" (MDRRMO feedback,
+               2026-09-18). Picking one here does not close the dialog —
+               Approve below does, once a free unit is actually chosen. -->
+          <v-list v-else-if="selectedRequest?.status === 'Booked'" bg-color="transparent" class="py-0">
+            <template v-if="bookingUnitOptions.length > 0">
+              <v-list-item
+                v-for="opt in bookingUnitOptions"
+                :key="opt.vehicle.vehicle_id"
+                class="vehicle-option px-4 py-3"
+                :active="formData.vehicle_id === opt.vehicle.vehicle_id"
+                :disabled="!opt.available"
+                @click="selectVehicle(opt.vehicle.vehicle_id)"
+              >
+                <template v-slot:prepend>
+                  <v-avatar
+                    :color="formData.vehicle_id === opt.vehicle.vehicle_id ? 'success' : undefined"
+                    :variant="formData.vehicle_id === opt.vehicle.vehicle_id ? 'flat' : 'tonal'"
+                    size="42"
+                    class="mr-3"
+                  >
+                    <v-icon :color="formData.vehicle_id === opt.vehicle.vehicle_id ? 'white' : undefined">{{ vehicleIcon(opt.vehicle.type) }}</v-icon>
+                  </v-avatar>
+                </template>
+
+                <v-list-item-title class="font-weight-bold text-body-1">{{ vehicleName(opt.vehicle) }}</v-list-item-title>
+                <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
+                  <template v-if="opt.available">
+                    {{ opt.vehicle.type }}<template v-if="opt.vehicle.specification"> &bull; {{ opt.vehicle.specification }}</template>
+                  </template>
+                  <template v-else>{{ opt.reason }}</template>
+                </v-list-item-subtitle>
+
+                <template v-slot:append>
+                  <v-icon v-if="formData.vehicle_id === opt.vehicle.vehicle_id" color="success">mdi-check-circle</v-icon>
+                </template>
+              </v-list-item>
+            </template>
+            <div v-else class="pa-6 text-center text-medium-emphasis">
+              <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
+              <div class="text-h6 font-weight-bold">No Ambulance Units</div>
+              <div class="text-body-2">The fleet has no Ambulance unit at all yet.</div>
+            </div>
+          </v-list>
+
           <v-list v-else-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
             <v-list-item
               v-for="v in availableVehicles"
@@ -853,12 +875,28 @@
             <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
             <div class="text-h6 font-weight-bold">No Vehicles Available</div>
             <div class="text-body-2">
-              {{ selectedRequest?.status === 'Booked'
-                ? 'No Ambulance unit is free for the scheduled window. Try Reschedule instead.'
-                : 'All fleet vehicles are currently dispatched or under maintenance.' }}
+              All fleet vehicles are currently dispatched or under maintenance.
             </div>
           </div>
         </v-card-text>
+
+        <!-- The dialog this collapses: picking a unit and approving used to be
+             a picker modal plus a separate always-visible footer button
+             elsewhere on the page (MDRRMO feedback, 2026-09-18) — both steps
+             now live here, next to each other. -->
+        <v-card-actions v-if="selectedRequest?.status === 'Booked'" class="pa-4 border-t d-flex justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" :disabled="loading" @click="vehicleModal.isOpen = false">Cancel</v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="text-none font-weight-bold text-white"
+            :disabled="!formData.vehicle_id"
+            :loading="loading"
+            @click="approveBooking"
+          >
+            Approve
+          </v-btn>
+        </v-card-actions>
       </v-card>
     </v-dialog>
 
@@ -882,21 +920,41 @@
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
-          <v-textarea
-            v-if="reasonCopy.showField"
-            v-model="reasonDialog.reason"
-            :label="reasonCopy.label"
-            :placeholder="reasonCopy.placeholder"
-            :hint="reasonCopy.hint"
-            persistent-hint
-            variant="outlined"
-            rows="3"
-            counter="255"
-            maxlength="255"
-            autofocus
-            :error-messages="reasonDialog.error"
-            @update:model-value="reasonDialog.error = ''"
-          ></v-textarea>
+
+          <template v-if="reasonCopy.showField">
+            <!-- Approve's note is optional and used to be a permanent 3-row
+                 textarea dominating what is otherwise one line plus a
+                 confirm button — collapsed behind a toggle so the default
+                 view is just the decision (MDRRMO feedback, 2026-09-18). A
+                 decline's reason is required, so it stays always visible;
+                 kind !== 'approve' covers both 'disapprove' and 'bulk'. -->
+            <v-textarea
+              v-if="reasonDialog.kind !== 'approve' || noteExpanded"
+              v-model="reasonDialog.reason"
+              :label="reasonCopy.label"
+              :placeholder="reasonCopy.placeholder"
+              :hint="reasonCopy.hint"
+              persistent-hint
+              variant="outlined"
+              rows="3"
+              counter="255"
+              maxlength="255"
+              autofocus
+              :error-messages="reasonDialog.error"
+              @update:model-value="reasonDialog.error = ''"
+            ></v-textarea>
+            <v-btn
+              v-else
+              variant="text"
+              size="small"
+              density="compact"
+              class="text-none px-0"
+              prepend-icon="mdi-plus"
+              @click="noteExpanded = true"
+            >
+              Add a note
+            </v-btn>
+          </template>
           <!-- Approve on a walk-in with no account: the note is optional and
                there is no app to show it in, so there is nothing to type. -->
           <div v-else class="text-caption text-medium-emphasis">
@@ -1530,6 +1588,14 @@ const checkWalkInAvailability = async () => {
 const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
 const reasonDialog = ref(emptyReason())
 
+// Approve's note is optional (a dispatched unit is its own explanation —
+// see reasonCopy) and used to sit as a permanent 3-row textarea dominating
+// a dialog that is otherwise one line of context and a confirm button
+// (MDRRMO feedback, 2026-09-18). Collapsed behind this toggle so the
+// default view is just the decision; a decline's reason stays always
+// visible below, since that one is required, not decoration.
+const noteExpanded = ref(false)
+
 // Resolve is terminal and the panel offers no way back, so it gets a
 // confirmation rather than firing on the click. `label` is captured at open
 // time purely so the dialog can name the request in its own copy; the resolve
@@ -1619,6 +1685,7 @@ const reasonCopy = computed(() => {
 })
 
 const openReason = (kind) => {
+  noteExpanded.value = false
   reasonDialog.value = {
     ...emptyReason(),
     open: true,
@@ -1632,7 +1699,7 @@ const openReason = (kind) => {
   }
 }
 
-const clearReason = () => { reasonDialog.value = emptyReason() }
+const clearReason = () => { reasonDialog.value = emptyReason(); noteExpanded.value = false }
 
 const confirmReason = () => {
   const { kind, reason } = reasonDialog.value
@@ -1794,6 +1861,7 @@ const fetchScheduledAvailability = async (req) => {
 }
 
 const openAssignUnitModal = async () => {
+  apiError.value = ''
   await fetchScheduledAvailability(selectedRequest.value)
   vehicleModal.value.isOpen = true
 }
@@ -1818,6 +1886,31 @@ const availableVehicles = computed(() => {
   return props.scope === 'ambulance'
     ? vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
     : vehicles.value.filter(v => v.status === 'Available' && v.type !== 'Ambulance')
+})
+
+/**
+ * The Booked/approve picker's own list — every Ambulance unit, not just the
+ * free ones, each tagged with why it can or cannot take this window (MDRRMO
+ * feedback, 2026-09-18). Naming why a known unit is missing beats silently
+ * omitting it; a dispatcher who expects to see AMB-02 and does not has no
+ * way to tell "already booked" from "the list failed to load" otherwise.
+ * Free units sort first so the common case is never scrolled past.
+ */
+const bookingUnitOptions = computed(() => {
+  const freeIds = new Set(scheduledAvailability.value.map(u => u.vehicle_id))
+
+  return vehicles.value
+    .filter(v => v.type === 'Ambulance')
+    .map(v => ({
+      vehicle: v,
+      available: freeIds.has(v.vehicle_id),
+      reason: freeIds.has(v.vehicle_id)
+        ? null
+        : v.status === 'Maintenance'
+          ? 'Under maintenance'
+          : 'Already booked for this window',
+    }))
+    .sort((a, b) => Number(b.available) - Number(a.available))
 })
 
 const residentOptions = computed(() => residents.value
@@ -2136,7 +2229,14 @@ const selectRequestById = (id) => {
 
 const selectVehicle = (id) => {
   formData.value.vehicle_id = id
-  vehicleModal.value.isOpen = false
+  // A Booked (ambulance) pick stays open — Approve now lives in this same
+  // dialog's footer, so picking a unit is a selection, not a submit. Every
+  // other caller (the Pending board's plain "Select Vehicle") keeps the old
+  // one-click-and-close behavior; its own Approve & Dispatch is a separate
+  // button outside this dialog entirely.
+  if (selectedRequest.value?.status !== 'Booked') {
+    vehicleModal.value.isOpen = false
+  }
 }
 
 // `tbl_vehicles` has no `plate_number` column and never has -- the unit is
@@ -2269,6 +2369,10 @@ const approveBooking = async () => {
     }
 
     await fetchRequests()
+    // Left open on failure — the error alert renders inside this same
+    // dialog (below), and closing would hide it behind the scrim right as
+    // it appears. Only a successful approve dismisses the dialog.
+    vehicleModal.value.isOpen = false
   } catch (error) {
     apiError.value = error.message
   } finally {
