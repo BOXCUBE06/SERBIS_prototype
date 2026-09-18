@@ -78,7 +78,21 @@
         @click:row="(event, ctx) => $emit('click:row', event, ctx)"
         @update:page="$emit('update:page', $event)"
       >
-        <template v-for="(_, slotName) in $slots" v-slot:[slotName]="slotProps" :key="slotName">
+        <!-- Named explicitly, ahead of the generic forwarding loop below, so
+             a caller with a `#rowNumber` header gets numbering for free — the
+             shared numbering every page used to reimplement via
+             composables/rowNumber.ts's useRowNumbers (position in the full
+             filtered list, not the page-local index v-data-table's own
+             slot scope offers, which would restart at 1 on page 2). A
+             caller that still provides its own `item.rowNumber` template
+             overrides this fallback, same as any other Vue slot default. -->
+        <template v-slot:item.rowNumber="{ item, index }">
+          <slot name="item.rowNumber" :item="item" :index="index">
+            <span class="text-medium-emphasis">{{ rowNumberOf(item) }}</span>
+          </slot>
+        </template>
+
+        <template v-for="slotName in forwardSlotNames" :key="slotName" v-slot:[slotName]="slotProps">
           <slot :name="slotName" v-bind="slotProps ?? {}" />
         </template>
       </v-data-table>
@@ -115,7 +129,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, useSlots } from 'vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 const props = defineProps({
@@ -143,6 +157,24 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:search', 'update:status', 'update:page', 'update:itemsPerPage', 'click:row'])
+
+const slots = useSlots()
+// `item.rowNumber` gets its own explicit template above (with a built-in
+// fallback) — forwarding it again here would register the same slot name on
+// v-data-table twice.
+const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => name !== 'item.rowNumber'))
+
+// Numbered by position in the full items list this instance was handed, not
+// v-data-table's own per-page slot index — see the template comment above.
+const rowNumberById = computed(() => {
+  const map = new Map()
+  props.items.forEach((item, i) => {
+    const id = item?.[props.itemValue]
+    if (id !== undefined && id !== null) map.set(id, i + 1)
+  })
+  return map
+})
+const rowNumberOf = (item) => rowNumberById.value.get(item?.[props.itemValue]) ?? ''
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
 

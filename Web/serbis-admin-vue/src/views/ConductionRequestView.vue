@@ -91,33 +91,6 @@
       </v-window-item>
 
       <v-window-item value="trip-logs" class="h-100 d-flex flex-column">
-        <div v-if="!loadError" class="filter-bar">
-          <v-text-field
-            v-model="search"
-            label="Search"
-            placeholder="Patient, origin or destination"
-            prepend-inner-icon="mdi-magnify"
-            variant="outlined"
-            density="compact"
-            hide-details
-            clearable
-            rounded="lg"
-            class="filter-field"
-          ></v-text-field>
-          <v-select
-            v-model="statusFilter"
-            :items="statusOptions"
-            label="Trip status"
-            attach
-            prepend-inner-icon="mdi-map-marker-path"
-            variant="outlined"
-            density="compact"
-            hide-details
-            rounded="lg"
-            class="filter-field"
-          ></v-select>
-        </div>
-
         <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" style="flex-shrink: 0;" @click:close="apiError = ''">
           {{ apiError }}
         </v-alert>
@@ -135,115 +108,54 @@
           </div>
         </v-card>
 
-        <!-- Table at lgAndUp, same breakpoint Bookings' two-pane layout uses
-             (ServiceRequestQueue.vue's `twoUp`) — so at any given width both
-             tabs are in the same layout mode, not two different products
-             switching at two different points (impeccable critique, P1,
-             2026-08-30). Below it, a card list in Bookings' own visual
-             language (soft-card, rounded-xl, avatar-initial rows) replaces a
-             table that forced a 704px min-width and horizontal scroll.
-
-             flex-grow-1 + height:100% on the card, height="100%" on the
-             table itself: short result sets used to leave whitespace below
-             the bordered table instead of inside it (Trip Logs fix,
-             layout redesign follow-up). Vuetify's v-data-table keeps its
-             header fixed and scrolls only the body when given a real
-             height, with the footer/pagination bar following directly
-             after — exactly the "table flexes, pagination stays pinned to
-             the container's bottom" the fix asked for, since the card
-             itself is now the thing bounded to the remaining flex height. -->
-        <!-- v-card is display:block by default -- v-data-table's own
-             height="100%" prop needs a parent whose *computed* height is
-             the resolution context for a percentage, and a percentage
-             cannot resolve against a block box the way it can a flex
-             item's main size. Forcing the card into an explicit flex
-             column and the table into flex:1 sidesteps that resolution
-             question entirely (found by comparing computed height of the
-             card, the table's own root, and its internal .v-table__wrapper
-             directly -- the table root sat at 242px against a 555px card
-             until this). -->
-        <v-card
-          v-else-if="isWide" elevation="0" border rounded="lg"
-          class="bg-surface overflow-hidden flex-grow-1 d-flex flex-column"
-          style="height: 100%; min-height: 0;"
+        <!-- One table at every width — it scrolls horizontally rather than
+             switching to a separate card-list renderer below lgAndUp
+             (dropped; see .conduction-table's min-width in this file's
+             <style> for the scroll threshold). -->
+        <DataTablePage
+          v-else
+          v-model:search="search"
+          search-placeholder="Patient, origin or destination"
+          :tabs="statusTabItems"
+          :status="statusFilter"
+          @update:status="statusFilter = $event"
+          :headers="headers"
+          :items="filteredItems"
+          item-value="conduction_request_id"
+          :row-props="rowProps"
+          no-data-text="No ambulance trip records yet"
+          :page="page"
+          @update:page="page = $event"
+          :items-per-page="itemsPerPage"
+          @update:items-per-page="itemsPerPage = $event"
+          result-noun="trip records"
+          class="conduction-table flex-grow-1"
+          @click:row="(_e, { item }) => openDetail(item)"
         >
-          <v-data-table
-            :headers="headers"
-            :items="filteredItems"
-            :items-per-page="10"
-            height="100%"
-            density="comfortable"
-            hover
-            class="bg-transparent conduction-table flex-grow-1"
-            style="min-height: 0;"
-            item-value="conduction_request_id"
-            :row-props="rowProps"
-            @click:row="(_e, { item }) => openDetail(item)"
-          >
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-            </template>
+          <template v-slot:item.patient="{ item }">
+            <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
+            <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
+          </template>
 
-            <template v-slot:item.patient="{ item }">
-              <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
-              <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
-            </template>
+          <template v-slot:item.trip="{ item }">
+            <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
+          </template>
 
-            <template v-slot:item.trip="{ item }">
-              <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
-            </template>
+          <template v-slot:item.trip_status="{ item }">
+            <StatusPill small :status="pillStatus(item)" :label="outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason)" />
+          </template>
 
-            <template v-slot:item.trip_status="{ item }">
-              <span class="status-pill status-pill--sm" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
-                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
-              </span>
-            </template>
+          <template v-slot:item.created_at="{ item }">
+            {{ fmtDateTime(item.created_at) }}
+          </template>
 
-            <template v-slot:item.created_at="{ item }">
-              {{ fmtDateTime(item.created_at) }}
-            </template>
-
-            <template v-slot:no-data>
-              <div class="text-center py-12">
-                <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
-              </div>
-            </template>
-          </v-data-table>
-        </v-card>
-
-        <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden flex-grow-1 d-flex flex-column" style="min-height: 0;">
-          <div v-if="filteredItems.length === 0" class="text-center py-12 px-6">
-            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
-          </div>
-          <div v-else class="overflow-y-auto">
-            <div
-              v-for="item in filteredItems" :key="item.conduction_request_id"
-              class="d-flex align-center px-4 py-3 trip-row"
-              role="button"
-              tabindex="0"
-              :aria-label="`Open details for ${item.patient_name}`"
-              @click="openDetail(item)"
-              @keydown.enter.prevent="openDetail(item)"
-              @keydown.space.prevent="openDetail(item)"
-            >
-              <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
-                <span class="font-weight-bold text-caption">{{ (item.patient_name || '?').slice(0, 2).toUpperCase() }}</span>
-              </v-avatar>
-              <div class="flex-grow-1 min-width-0">
-                <div class="text-body-2 font-weight-bold text-truncate">{{ item.patient_name }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">
-                  {{ item.origin }} <v-icon size="10" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}
-                </div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
-              </div>
-              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
-                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
-              </span>
+          <template v-slot:no-data>
+            <div class="text-center py-12">
+              <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
+              <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
             </div>
-          </div>
-        </v-card>
+          </template>
+        </DataTablePage>
       </v-window-item>
     </v-window>
 
@@ -429,9 +341,7 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <span class="status-pill" :class="outcomePillClass(sharedStatusLabel(selected.trip_status), selected.no_arrival_reason)">
-              {{ outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason) }}
-            </span>
+            <StatusPill :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
@@ -653,37 +563,27 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useDisplay } from 'vuetify'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
-import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } from '@/composables/adminUi'
+import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import StatusPill from '@/components/StatusPill.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
 const activeTab = ref('bookings')
 
-// Same breakpoint ServiceRequestQueue's `twoUp` uses for its own two-pane vs
-// single-column switch, so this tab changes layout mode in step with the
-// Bookings tab beside it rather than at a different width of its own.
-const { lgAndUp } = useDisplay()
-const isWide = lgAndUp
-
 const ALL_STATUS = 'All'
 // Filtering still compares the raw trip_status value (matchesStatus below is
-// unchanged) -- only the label shown in the dropdown and on every badge
-// moves to tripStatusLabel() (adminUi.ts), so the underlying value stays
-// exactly what the API sends. Pill color still comes from sharedStatusLabel()
-// separately -- the two only disagree on the 'Not dispatched' text.
+// unchanged) -- only the label shown on the tab/badge moves to
+// tripStatusLabel() (adminUi.ts), so the underlying value stays exactly what
+// the API sends. Pill color still comes from sharedStatusLabel() separately
+// -- the two only disagree on the 'Not dispatched' text.
 const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
-const statusOptions = [
-  { title: ALL_STATUS, value: ALL_STATUS },
-  ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
-]
 
 // `max` mirrors ConductionRequestController's per-role limits (MAX_PEOPLE_PER_ROLE
 // for drivers, MAX_AUTHORIZED_PASSENGERS, MAX_PATIENT_RELATIVES). This only stops
@@ -706,6 +606,8 @@ const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '
 const items = ref([])
 const search = ref('')
 const statusFilter = ref(ALL_STATUS)
+const page = ref(1)
+const itemsPerPage = ref(25)
 const initialLoad = ref(true)
 const reloading = ref(false)
 const loading = ref(false)
@@ -736,7 +638,34 @@ const matchesSearch = (r) => {
 }
 const matchesStatus = (r) => statusFilter.value === ALL_STATUS || r.trip_status === statusFilter.value
 const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r)))
-const rowNumber = useRowNumbers(filteredItems, 'conduction_request_id')
+
+// SegmentedTabs' {value, label, count} shape. Counts are off the search
+// match only, same as ServiceRequestQueue's own requestCounts — a status
+// tab's count should not move just because a different status tab is
+// selected.
+const statusTabItems = computed(() => {
+  const searched = items.value.filter(matchesSearch)
+  return [
+    { value: ALL_STATUS, label: ALL_STATUS, count: searched.length },
+    ...RAW_TRIP_STATUSES.map((s) => ({
+      value: s,
+      label: tripStatusLabel(s),
+      count: searched.filter((r) => r.trip_status === s).length,
+    })),
+  ]
+})
+
+// StatusPill's :status prop wants an accent-table key (Booked/Responding/
+// Resolved/'Resolved — no arrival') -- sharedStatusLabel() already maps a
+// raw trip_status onto that same vocabulary; only the no-arrival split needs
+// adding here, same condition outcomeLabel() uses for the label text.
+const pillStatus = (item) => {
+  const shared = sharedStatusLabel(item.trip_status)
+  return shared === 'Resolved' && item.no_arrival_reason ? 'Resolved — no arrival' : shared
+}
+
+watch(search, () => { page.value = 1 })
+watch(statusFilter, () => { page.value = 1 })
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -1279,12 +1208,6 @@ onMounted(() => {
   height: 100%;
 }
 
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; flex-shrink: 0; }
-.filter-field { width: 240px; max-width: 100%; }
-@media (max-width: 599px) {
-  .filter-field { flex: 1 1 100%; width: 100%; }
-}
-
 .section-title {
   font-size: 0.78rem;
   font-weight: 800;
@@ -1309,61 +1232,16 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-/* Mirrors ServiceRequestQueue.vue's .soft-card/.request-row exactly (same
-   values, not shared — scoped styles don't cross files here, same pattern
-   already used for OFFICE_TIMEZONE elsewhere in this codebase, and for this
-   file's own .status-pill/.pill-* further down) so the two tabs read as one
-   container language below the breakpoint instead of two different
-   products sharing a tab bar. */
-.soft-card {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
-}
-.trip-row {
-  cursor: pointer;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
-  transition: background-color 150ms ease;
-}
-.trip-row:last-child { border-bottom: none; }
-.trip-row:hover {
-  background-color: rgba(var(--v-theme-on-surface), 0.04);
-}
-.trip-row:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
-  background-color: rgba(var(--v-theme-primary), 0.06);
-}
 
-/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ServiceRequestQueue.vue), including the sharedStatusLabel() mapping in adminUi.ts that lets a trip's status speak the same badge language as a booking's. */
+/* Status pills: components/StatusPill.vue now, driven by pillStatus() above via composables/statusPill.ts's shared accent table -- was a locally duplicated .status-pill/.pill-* CSS block. */
 
-.conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
-/* VDataTableFooter has no prop to drop just the items-per-page selector —
-   an empty itemsPerPageOptions array (tried first) still renders the
-   select, just with nothing in it, which opens to a blank dropdown on
-   click. Real trip-log volume here is a handful of rows; offering a
-   page-size picker for a dataset smaller than any of its own options (10)
-   was the "large empty page" complaint (item 7). Plain prev/next plus the
-   "x-y of z" count is what's left. */
-.conduction-table :deep(.v-data-table-footer__items-per-page) {
-  display: none;
-}
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.conduction-table :deep(thead th) {
-  font-size: 0.72rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.conduction-table :deep(tbody tr) { cursor: pointer; }
-.conduction-table :deep(tbody tr:focus-visible) {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: -2px;
-}
+/* One table at every width now (the card-list branch below lgAndUp is
+   gone) — this min-width is what makes that honest: below it the table
+   scrolls horizontally (Vuetify's own .v-table__wrapper overflow-x) rather
+   than crushing a column unreadable. DataTablePage's own .dtp-table rule
+   already sets table-layout: fixed and the header/row styling; this only
+   adds the page-specific floor. */
+.conduction-table :deep(.dtp-table table) { min-width: 704px; }
 .cell-truncate {
   display: block;
   overflow: hidden;
