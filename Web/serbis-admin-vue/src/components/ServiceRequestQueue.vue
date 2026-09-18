@@ -92,24 +92,23 @@
         </template>
       </PageHeader>
 
-      <!-- Split view: list + detail panel.
-           Side by side on a desk, which is where this screen is used. Below the
-           md breakpoint the two stop competing for one narrow column and become
-           one surface at a time: the list until a request is picked, the detail
-           with a way back after. -->
+      <!-- Full-width list. Detail used to sit beside this as a permanent
+           rail-width sibling; that squeezed a six-column table into a
+           fixed narrow width, reproducing exactly the crowding the table
+           was meant to fix. Detail now opens in an overlay drawer
+           (v-navigation-drawer below) instead of a sibling pane, at every
+           breakpoint — see the drawer's own comment (MDRRMO feedback,
+           2026-09-18). -->
       <div
-        class="d-flex flex-grow-1 gap-4 overflow-hidden"
-        :class="twoUp ? 'flex-row' : 'flex-column'"
+        class="d-flex flex-grow-1 overflow-hidden"
         style="min-height: 0;"
       >
 
-        <!-- LEFT: request list -->
+        <!-- The request list -->
         <v-card
-          v-if="twoUp || !selectedRequest"
           elevation="0"
           rounded="xl"
-          class="soft-card d-flex flex-column overflow-hidden request-list"
-          :class="twoUp ? 'request-list--rail' : 'flex-grow-1'"
+          class="soft-card d-flex flex-column overflow-hidden request-list flex-grow-1"
         >
           <div class="pa-4 pb-2" style="flex-shrink: 0;">
             <v-text-field
@@ -365,359 +364,117 @@
             <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="primary"></v-pagination>
           </div>
         </v-card>
+      </div>
 
-        <!-- RIGHT: detail panel -->
-        <v-card
-          v-if="twoUp || selectedRequest"
-          elevation="0"
-          rounded="xl"
-          class="soft-card d-flex flex-column flex-grow-1 overflow-hidden"
-        >
-          <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
-            <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
-            <div class="text-body-1">Select a request to view details</div>
-            <div class="text-caption mt-1">Its description, attachments and dispatch options open here.</div>
-          </div>
-
-          <template v-else>
-            <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
-              <div class="d-flex align-center gap-3">
-                <!-- Stacked, the list is gone from the screen; without this the
-                     only way back to it is the browser's own back button. -->
-                <v-btn
-                  v-if="!twoUp"
-                  icon="mdi-arrow-left"
-                  variant="text"
-                  density="comfortable"
-                  aria-label="Back to the request list"
-                  @click="selectedRequest = null"
-                ></v-btn>
-                <v-avatar color="primary" variant="tonal" size="52">
-                  <span class="text-h6 font-weight-black">
-                    {{ requesterInitials(selectedRequest) }}
-                  </span>
-                </v-avatar>
-                <div>
-                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
-                  <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
-                </div>
+      <!-- Detail drawer: overlay at every breakpoint, not a persistent
+           side-by-side pane (MDRRMO feedback, 2026-09-18) — a full-width
+           table needs its own width, and squeezing it against a permanent
+           rail reproduced exactly the crowding the table was meant to fix.
+           Closing it (X, ESC, backdrop) clears selectedRequest through the
+           setter below; picking a different row just swaps this same
+           drawer's content via the same selectRequest() assignment as
+           always, so the dispatcher's place in the list is never lost. -->
+      <v-navigation-drawer
+        :model-value="!!selectedRequest"
+        @update:model-value="(v) => { if (!v) selectedRequest = null }"
+        location="right"
+        temporary
+        :width="drawerWidth"
+        class="detail-drawer"
+      >
+        <div v-if="selectedRequest" class="d-flex flex-column h-100">
+          <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
+            <div class="d-flex align-center gap-3 min-width-0">
+              <v-avatar color="primary" variant="tonal" size="52" class="flex-shrink-0">
+                <span class="text-h6 font-weight-black">
+                  {{ requesterInitials(selectedRequest) }}
+                </span>
+              </v-avatar>
+              <div class="min-width-0">
+                <div class="text-h6 font-weight-bold text-truncate" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ requesterBarangay(selectedRequest) }}</div>
               </div>
+            </div>
+            <div class="d-flex align-center gap-2 flex-shrink-0">
               <span class="status-pill" :class="outcomePillClass(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)">
                 {{ outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason) }}
               </span>
+              <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="selectedRequest = null"></v-btn>
+            </div>
+          </div>
+
+          <v-divider></v-divider>
+
+          <div class="pa-6 overflow-y-auto flex-grow-1">
+            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+
+            <!-- One alert, title from the same sub-label the row shows —
+                 "Awaiting unit" / "Unit assigned" / "…late — not
+                 dispatched" (MDRRMO feedback, 2026-09-18). Only the body
+                 and the alert's own color differ between overdue and
+                 upcoming. -->
+            <v-alert
+              v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
+              :type="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at) ? 'warning' : 'info'"
+              variant="tonal"
+              class="mb-4"
+              density="compact"
+              :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
+            >
+              {{ isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)
+                ? 'Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.'
+                : `Scheduled for ${formatDateTime(selectedRequest.scheduled_at)}.` }}
+            </v-alert>
+
+            <!-- Pending's own age — no scheduled_at to build a countdown
+                 from, so created_at is what says how long this call has
+                 sat untouched (MDRRMO feedback, 2026-09-18). -->
+            <v-alert
+              v-if="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
+              type="info"
+              variant="tonal"
+              class="mb-4"
+              density="compact"
+              :title="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
+            >
+              Filed {{ formatDateTime(selectedRequest.created_at) }}, no action taken yet.
+            </v-alert>
+
+            <!-- Section 1: Action. Time, unit, the decision itself — lead
+                 with what the dispatcher acts on, in reading order, not
+                 just visual weight (MDRRMO feedback, 2026-09-18). These
+                 buttons used to be a pinned footer at the bottom of a
+                 much longer scroll. -->
+            <h3 class="section-title">Action</h3>
+
+            <div v-if="selectedRequest.scheduled_at" class="detail-group">
+              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Scheduled</div>
+              <div class="font-weight-medium text-body-2">
+                {{ formatDateTime(selectedRequest.scheduled_at) }}
+                <template v-if="selectedRequest.scheduled_end"> – {{ formatTime(selectedRequest.scheduled_end) }}</template>
+              </div>
             </div>
 
-            <v-divider></v-divider>
-
-            <!-- flex-grow-1 forced this to fill all remaining panel height
-                 regardless of content, pinning the footer at the fixed
-                 bottom edge with dead space above it (impeccable ui-audit,
-                 2026-08-30). Dropped: short content now hugs its own size
-                 and the footer follows directly after it — verified via
-                 exact pixel offsets, not just visually. Verified separately
-                 with a synthetic several-thousand-character description:
-                 unusually long content grows the card (bounded by the
-                 outer container's own fixed max height and overflow:hidden,
-                 unchanged by this edit) rather than triggering an internal
-                 scrollbar here — that is pre-existing overflow-y-auto
-                 behavior this change did not alter, and real admin remarks
-                 are short operational notes, not thousands of characters. -->
-            <div
-              class="pa-6 overflow-y-auto"
-            >
-              <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
-
-              <!-- One alert, title from the same sub-label the row shows —
-                   "Awaiting unit" / "Unit assigned" / "…late — not
-                   dispatched" (MDRRMO feedback, 2026-09-18). Only the body
-                   and the alert's own color differ between overdue and
-                   upcoming. -->
-              <v-alert
-                v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
-                :type="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at) ? 'warning' : 'info'"
-                variant="tonal"
-                class="mb-4"
-                density="compact"
-                :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
-              >
-                {{ isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)
-                  ? 'Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.'
-                  : `Scheduled for ${formatDateTime(selectedRequest.scheduled_at)}.` }}
-              </v-alert>
-
-              <!-- Pending's own age — no scheduled_at to build a countdown
-                   from, so created_at is what says how long this call has
-                   sat untouched (MDRRMO feedback, 2026-09-18). -->
-              <v-alert
-                v-if="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
-                type="info"
-                variant="tonal"
-                class="mb-4"
-                density="compact"
-                :title="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
-              >
-                Filed {{ formatDateTime(selectedRequest.created_at) }}, no action taken yet.
-              </v-alert>
-
-              <v-row class="detail-group">
-                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
-                  <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'Other' }}</div>
-                </v-col>
-                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>
-                  <div class="font-weight-medium text-body-2">{{ formatDateTime(selectedRequest.created_at) }}</div>
-                </v-col>
-                <v-col v-if="selectedRequest.scheduled_at" cols="12" sm="4" md="3">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Scheduled</div>
-                  <div class="font-weight-medium text-body-2">
-                    {{ formatDateTime(selectedRequest.scheduled_at) }}
-                    <template v-if="selectedRequest.scheduled_end"> – {{ formatTime(selectedRequest.scheduled_end) }}</template>
-                  </div>
-                </v-col>
-                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
-                  <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
-                </v-col>
-              </v-row>
-
-              <!-- Structured ambulance intake (C3's columns: patient_name,
-                   patient_age, patient_address, pickup_location, destination,
-                   condition_notes) shown as its own labeled fields when
-                   present, instead of only the server-composed `description`
-                   text those exact columns generate. The Log Service Request
-                   form (below) already asks for these fields separately; the
-                   detail view showed them nowhere individually, only folded
-                   back into one paragraph. -->
-              <v-row v-if="selectedRequest.patient_name" class="detail-group">
-                <v-col cols="12" sm="6" md="4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Patient</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_name }}</div>
-                </v-col>
-                <v-col cols="6" sm="3" md="4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Age</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_age ?? 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="6" md="4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Address</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_address || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Pickup</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.pickup_location || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Destination</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.destination || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.condition_notes || 'N/A' }}</div>
-                </v-col>
-              </v-row>
-
-              <!-- Fallback: a non-ambulance service (still just typed as one
-                   free-text description) or a pre-C3 ambulance record the
-                   backfill couldn't fully read. -->
-              <div v-else class="detail-group">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
-                <!-- One element per line. The description arrives newline-
-                     separated and was rendered as a single interpolation, so
-                     every break collapsed to a space and the whole thing read
-                     as one run-on sentence. -->
-                <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <template v-if="descriptionLines.length > 0">
-                    <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
-                  </template>
-                  <template v-else>No description provided by the Head of the Family.</template>
-                </v-card>
-              </div>
-
-              <!-- One group, two tiles, site photo first: it is what the
-                   resident is reporting and what decides whether a unit is
-                   sent, and the ID answers a different question after it.
-                   `attachments` keeps that order.
-
-                   These were full-width boxes holding a contained image. A
-                   square 240px source in a 1005px-wide frame painted at
-                   198x198 with roughly 400px of flat tint either side, which
-                   reads as a broken image rather than a small one. Fixed
-                   180x140 tiles, filled with `cover`, and the full picture is
-                   a click away. -->
-              <div class="detail-group" v-if="selectedRequest.landmark">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Landmark</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.landmark }}</div>
-              </div>
-
-              <div class="detail-group" v-if="attachments.length > 0">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
-
-                <!-- A flex row is a block box, so it stretches to the full
-                     detail-pane width by default regardless of how many
-                     180px tiles it actually holds -- one attachment left a
-                     measured 746px of empty space beside it (layout
-                     redesign follow-up, item 1). width: fit-content makes
-                     the row's own box only as wide as its tiles need, same
-                     as any other content-sized element here. -->
-                <div class="d-flex flex-wrap gap-3 attachments-row">
-                  <div v-for="a in attachments" :key="a.key">
-                    <v-skeleton-loader
-                      v-if="a.state.loading"
-                      type="image"
-                      height="140"
-                      width="180"
-                      class="rounded-lg"
-                    ></v-skeleton-loader>
-                    <v-alert
-                      v-else-if="a.state.error"
-                      type="error"
-                      variant="tonal"
-                      density="compact"
-                      class="attachment-error"
-                    >{{ a.state.error }}</v-alert>
-                    <button
-                      v-else-if="a.state.url"
-                      type="button"
-                      class="attachment-tile rounded-lg"
-                      :aria-label="`View the ${a.label.toLowerCase()} full size`"
-                      @click="openLightbox(a)"
-                    >
-                      <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
-                      <!-- Always drawn, not only on hover: a hover-only
-                           affordance tells a touch user nothing, and this is
-                           the only cue that the tile opens anything. -->
-                      <span class="attachment-badge" aria-hidden="true">
-                        <v-icon size="16">mdi-magnify-plus-outline</v-icon>
-                      </span>
-                      <span class="attachment-scrim" aria-hidden="true">
-                        <v-icon size="18">mdi-magnify-plus-outline</v-icon>
-                        View
-                      </span>
-                    </button>
-                    <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
-                  </div>
+            <div v-if="selectedRequest.status === 'Responding'" class="detail-group">
+              <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
+                <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
+                <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
+                <!-- Requests dispatched before the server owned the fleet
+                     carry no `vehicle_id` at all. Naming the absence beats
+                     "Vehicle Unknown", which read as a lookup that failed. -->
+                <div v-if="selectedRequest.vehicle" class="text-body-2">
+                  {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
                 </div>
-              </div>
-
-              <v-divider class="detail-rule"></v-divider>
-
-              <!-- The Dispatch Assignment card used to live here, and its only
-                   control was the button that enables the action pinned to the
-                   footer. The two now share the footer row, so the card would
-                   be a heading over a sentence. Its unit display went with the
-                   button rather than being left behind. -->
-
-              <div v-if="selectedRequest.status === 'Responding'" class="detail-group">
-                <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
-                  <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
-                  <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
-                  <!-- Requests dispatched before the server owned the fleet
-                       carry no `vehicle_id` at all. Naming the absence beats
-                       "Vehicle Unknown", which read as a lookup that failed. -->
-                  <div v-if="selectedRequest.vehicle" class="text-body-2">
-                    {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
-                  </div>
-                  <div v-else class="text-body-2">No unit is recorded against this request.</div>
-                </v-alert>
-              </div>
-
-              <!-- The trip record C5 creates the moment this request went
-                   Responding (ServiceRequestController::createConductionStub)
-                   — surfaced here rather than rebuilt here: "Open Trip
-                   Record" jumps to the Trip Logs tab's own dialog, which
-                   already has every field (checkpoints, odometer, drivers,
-                   passengers, relatives) rather than a second, thinner copy
-                   of the same form living in this panel. Resolving is
-                   refused server-side without an arrival time, both
-                   odometer readings and a driver — the error surfaces
-                   through the alert above the fields, same as any other
-                   apiError, naming exactly what's missing. -->
-              <!-- Alert type is state-driven, not fixed warning: a completed
-                   trip (returned_office_at set — trip_status 'Completed') is
-                   the request working as intended, not something to flag.
-                   Warning is reserved for what actually needs attention: no
-                   trip record at all, or one still open ('Not dispatched' /
-                   'In transit'). -->
-              <!-- density="compact" only — same type/variant/border/copy,
-                   just Vuetify's own smaller padding scale, so this card
-                   stops overflowing the now-bounded canvas (layout redesign
-                   follow-up, item 3). -->
-              <div v-if="scope === 'ambulance'" class="detail-group">
-                <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
-                  <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
-                  <template v-if="respondingTrip">
-                    <div class="text-body-2">
-                      {{ tripDriverNames || 'No driver recorded yet' }}
-                      <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
-                    </div>
-                    <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
-                      <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
-                    </div>
-                    <div class="text-caption text-medium-emphasis mb-2">
-                      Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
-                    </div>
-                    <v-btn
-                      variant="outlined" size="small" class="text-none font-weight-bold"
-                      @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
-                    >Open Trip Record</v-btn>
-                  </template>
-                  <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
-                    No trip record found for this request.
-                  </div>
-                  <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
-                    This request resolved with no trip record on file — likely older data.
-                  </div>
-                  <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
-                    Closed before a trip was ever started.
-                  </div>
-                  <div v-else class="text-body-2">
-                    No trip record yet — one is created automatically once this request is dispatched.
-                  </div>
-                </v-alert>
-              </div>
-
-              <!-- Staff-only scratch pad. Deliberately never pre-fills the
-                   approve/decline dialog below (reasonDialog) — that field
-                   goes to the requester, this one never does, and the two
-                   sharing a column used to mean an internal shorthand could
-                   reach a resident's phone unedited. Visible regardless of
-                   status: a note about what happened is still useful to read
-                   on a Resolved request, not just a Pending one. -->
-              <v-textarea
-                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
-                placeholder="e.g. Called twice, no answer — retrying after lunch"
-                hint="Never shown to the requester — for staff reading this request later."
-                persistent-hint
-              ></v-textarea>
-              <!-- Its own save path, not the reasonDialog's: a terminal
-                   request (Resolved, Disapproved, Cancelled) shows no
-                   approve/decline action at all, so this is the only way a
-                   note typed here ever reaches the server. update() already
-                   accepts a partial body — no status, no vehicle_id — so this
-                   PATCH touches nothing else on the request. -->
-              <div class="d-flex align-center gap-3 mb-2">
-                <v-btn
-                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
-                  :loading="noteSaving"
-                  @click="saveInternalNote"
-                >Save note</v-btn>
-                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
-              </div>
+                <div v-else class="text-body-2">No unit is recorded against this request.</div>
+              </v-alert>
             </div>
 
-            <v-divider v-if="showActions"></v-divider>
-            <div
-              v-if="showActions"
-              class="d-flex justify-end align-center pa-4 gap-3 flex-wrap"
-              style="flex-shrink: 0;"
-            >
+            <div v-if="showActions" class="detail-group d-flex align-center flex-wrap gap-3">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <!-- The unit and the button it unlocks now sit in one row. They
-                     used to be a scroll apart — the picker was a card up in the
-                     body, the action it gated was pinned down here — so an
-                     operator reading a greyed-out "Approve & Dispatch" had to go
-                     hunting for the reason. The gate itself has always been
-                     real; only the distance was the problem. -->
+                <!-- The unit and the button it unlocks sit in one row,
+                     right next to the decision itself now — they used to
+                     be a scroll apart, the picker up in the body and the
+                     action it gated pinned in a separate footer. -->
                 <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
                   <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
                     <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
@@ -771,18 +528,15 @@
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
                 <!-- Confirmed, not immediate: resolving stamps a terminal
-                     status the panel offers no way back from, and this used
-                     to be one click with nothing between it and the request. -->
+                     status the panel offers no way back from. -->
                 <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="openResolveConfirm">
                   Mark as Resolved
                 </v-btn>
               </template>
               <template v-else-if="selectedRequest.status === 'Booked'">
-                <!-- Not yet approved: assigning a unit and approving used to
-                     be two separate controls (a picker dialog plus a button
-                     here that only unlocked once it closed) — both steps now
-                     live inside the one dialog this button opens (MDRRMO
-                     feedback, 2026-09-18). Reject reuses the existing
+                <!-- Assigning a unit and approving used to be two separate
+                     controls; both steps now live inside the one dialog
+                     this button opens. Reject reuses the existing
                      Disapprove flow untouched. -->
                 <template v-if="!selectedRequest.vehicle_id">
                   <v-btn
@@ -815,9 +569,213 @@
                 </template>
               </template>
             </div>
-          </template>
-        </v-card>
-      </div>
+
+            <div v-if="!showActions && selectedRequest.status !== 'Responding' && !selectedRequest.scheduled_at" class="text-caption text-medium-emphasis detail-group">
+              This request is closed — no action needed.
+            </div>
+
+            <!-- Section 2: Route. Only for a request that actually has one
+                 of these fields — a non-ambulance service has none of them
+                 at all. -->
+            <template v-if="selectedRequest.pickup_location || selectedRequest.landmark || selectedRequest.destination">
+              <h3 class="section-title">Route</h3>
+              <div class="detail-group">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Pickup</div>
+                <div class="font-weight-medium text-body-1">{{ selectedRequest.pickup_location || selectedRequest.landmark || 'N/A' }}</div>
+                <!-- Real de-dupe, not a relabel: ADDRESS, LANDMARK and
+                     PICKUP used to show the same text three times under
+                     three different labels (MDRRMO feedback, 2026-09-18).
+                     A landmark only earns its own line when it says
+                     something Pickup does not already say. -->
+                <div
+                  v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)"
+                  class="text-caption text-medium-emphasis mt-1"
+                >Landmark: {{ selectedRequest.landmark }}</div>
+                <div class="mt-3">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Destination</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.destination || 'N/A' }}</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Section 3: Patient & Requester. -->
+            <h3 class="section-title">Patient &amp; Requester</h3>
+
+            <!-- Structured ambulance intake (C3's columns) shown as its own
+                 labeled fields when present, instead of only the
+                 server-composed `description` text those exact columns
+                 generate. -->
+            <v-row v-if="selectedRequest.patient_name" class="detail-group">
+              <v-col cols="12" sm="6" md="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Patient</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_name }}</div>
+              </v-col>
+              <v-col cols="6" sm="3" md="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Age</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_age ?? 'N/A' }}</div>
+              </v-col>
+              <v-col cols="12" sm="6" md="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Address</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_address || 'N/A' }}</div>
+              </v-col>
+              <v-col cols="12">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.condition_notes || 'N/A' }}</div>
+              </v-col>
+            </v-row>
+
+            <!-- Fallback: a non-ambulance service (still just typed as one
+                 free-text description) or a pre-C3 ambulance record the
+                 backfill couldn't fully read. -->
+            <div v-else class="detail-group">
+              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
+              <!-- One element per line. The description arrives newline-
+                   separated and was rendered as a single interpolation, so
+                   every break collapsed to a space and the whole thing read
+                   as one run-on sentence. -->
+              <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
+                <template v-if="descriptionLines.length > 0">
+                  <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
+                </template>
+                <template v-else>No description provided by the Head of the Family.</template>
+              </v-card>
+            </div>
+
+            <v-row class="detail-group">
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
+                <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'Other' }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>
+                <div class="font-weight-medium text-body-2">{{ formatDateTime(selectedRequest.created_at) }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
+                <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
+              </v-col>
+            </v-row>
+
+            <!-- Section 4: Notes & Attachments. Lowest priority, reference
+                 material rather than something the dispatcher acts on
+                 first. -->
+            <h3 class="section-title">Notes &amp; Attachments</h3>
+
+            <!-- The trip record C5 creates the moment this request went
+                 Responding (ServiceRequestController::createConductionStub)
+                 — surfaced here rather than rebuilt here: "Open Trip
+                 Record" jumps to the Trip Logs tab's own dialog, which
+                 already has every field. Alert type is state-driven: a
+                 completed trip is the request working as intended, not
+                 something to flag. -->
+            <div v-if="scope === 'ambulance'" class="detail-group">
+              <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
+                <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
+                <template v-if="respondingTrip">
+                  <div class="text-body-2">
+                    {{ tripDriverNames || 'No driver recorded yet' }}
+                    <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
+                  </div>
+                  <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
+                    <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
+                  </div>
+                  <div class="text-caption text-medium-emphasis mb-2">
+                    Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
+                  </div>
+                  <v-btn
+                    variant="outlined" size="small" class="text-none font-weight-bold"
+                    @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
+                  >Open Trip Record</v-btn>
+                </template>
+                <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
+                  No trip record found for this request.
+                </div>
+                <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
+                  This request resolved with no trip record on file — likely older data.
+                </div>
+                <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
+                  Closed before a trip was ever started.
+                </div>
+                <div v-else class="text-body-2">
+                  No trip record yet — one is created automatically once this request is dispatched.
+                </div>
+              </v-alert>
+            </div>
+
+            <!-- Staff-only scratch pad. Deliberately never pre-fills the
+                 approve/decline dialog below (reasonDialog) — that field
+                 goes to the requester, this one never does. Visible
+                 regardless of status: a note about what happened is still
+                 useful to read on a Resolved request, not just a Pending
+                 one. -->
+            <div class="detail-group">
+              <v-textarea
+                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
+                placeholder="e.g. Called twice, no answer — retrying after lunch"
+                hint="Never shown to the requester — for staff reading this request later."
+                persistent-hint
+              ></v-textarea>
+              <!-- Its own save path, not the reasonDialog's: a terminal
+                   request (Resolved, Disapproved, Cancelled) shows no
+                   approve/decline action at all, so this is the only way a
+                   note typed here ever reaches the server. -->
+              <div class="d-flex align-center gap-3 mt-2">
+                <v-btn
+                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
+                  :loading="noteSaving"
+                  @click="saveInternalNote"
+                >Save note</v-btn>
+                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
+              </div>
+            </div>
+
+            <!-- One group, two tiles, site photo first: it is what the
+                 resident is reporting and what decides whether a unit is
+                 sent, and the ID answers a different question after it. -->
+            <div class="detail-group" v-if="attachments.length > 0">
+              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
+              <div class="d-flex flex-wrap gap-3 attachments-row">
+                <div v-for="a in attachments" :key="a.key">
+                  <v-skeleton-loader
+                    v-if="a.state.loading"
+                    type="image"
+                    height="140"
+                    width="180"
+                    class="rounded-lg"
+                  ></v-skeleton-loader>
+                  <v-alert
+                    v-else-if="a.state.error"
+                    type="error"
+                    variant="tonal"
+                    density="compact"
+                    class="attachment-error"
+                  >{{ a.state.error }}</v-alert>
+                  <button
+                    v-else-if="a.state.url"
+                    type="button"
+                    class="attachment-tile rounded-lg"
+                    :aria-label="`View the ${a.label.toLowerCase()} full size`"
+                    @click="openLightbox(a)"
+                  >
+                    <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
+                    <!-- Always drawn, not only on hover: a hover-only
+                         affordance tells a touch user nothing, and this is
+                         the only cue that the tile opens anything. -->
+                    <span class="attachment-badge" aria-hidden="true">
+                      <v-icon size="16">mdi-magnify-plus-outline</v-icon>
+                    </span>
+                    <span class="attachment-scrim" aria-hidden="true">
+                      <v-icon size="18">mdi-magnify-plus-outline</v-icon>
+                      View
+                    </span>
+                  </button>
+                  <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </v-navigation-drawer>
     </div>
 
     <!-- Attachment lightbox. Same shape as the vehicle picker below: v-dialog,
@@ -1488,19 +1446,17 @@ const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-c
 
 const route = useRoute()
 
-// The split view needs a real breakpoint, not a media query in CSS: below it
-// the two panes are rendered one at a time rather than merely restyled, so the
-// list is not sitting offscreen holding focusable rows.
-//
-// `lg`, not `md`. Vuetify 4 moved the breakpoints (display.js: sm 600, md 840,
-// lg 1145 — v3 was 960/1280), so mdAndUp turned the split on at an 840px
-// viewport. The drawer is `permanent` at 260px and the shell adds 24px of
-// padding, so that left ~556px for two columns: the list rail's clamp(360px…)
-// floor lost to `flex-shrink` and the rail rendered 175px wide against a
-// scrollWidth of 218. lgAndUp leaves ~861px, which fits the 360px rail and a
-// detail pane that can still show a full field row.
-const { lgAndUp, height: windowHeight } = useDisplay()
-const twoUp = lgAndUp
+// windowWidth sizes the detail drawer (see drawerWidth below); windowHeight
+// already sized the table's itemsPerPage. No breakpoint-gated split anymore
+// — the drawer is a temporary overlay at every width (MDRRMO feedback,
+// 2026-09-18), not a permanent side-by-side pane above some breakpoint.
+const { width: windowWidth, height: windowHeight } = useDisplay()
+
+// Capped at 520 — wide enough for a full field row without becoming a
+// second list. min() against the viewport itself (less 32px of margin) is
+// what keeps this from overflowing a phone-width screen, where a fixed
+// 520px would run off the right edge.
+const drawerWidth = computed(() => Math.min(520, windowWidth.value - 32))
 
 const requests = ref([])
 const vehicles = ref([])
@@ -1936,6 +1892,19 @@ const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_c
 const requesterBarangay = (item) => {
   if (item?.resident) return item.resident.barangay?.barangay_name || 'Unknown Barangay'
   return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
+}
+
+// A real comparison, not a relabel: ADDRESS/LANDMARK/PICKUP used to show
+// the same text three times under three different labels (MDRRMO feedback,
+// 2026-09-18). Whitespace-normalized equality or containment either way —
+// "beside the barangay hall" typed as the whole pickup value and again as
+// just the landmark note should still count as the same fact, not two.
+const isLandmarkRedundant = (landmark, pickup) => {
+  if (!landmark || !pickup) return false
+  const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ')
+  const a = normalize(landmark)
+  const b = normalize(pickup)
+  return a === b || a.includes(b) || b.includes(a)
 }
 
 const requestCounts = computed(() => {
@@ -2894,13 +2863,19 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .detail-group { margin-bottom: 28px; }
 .detail-group:last-child { margin-bottom: 0; }
 
-/* 40, and it has to exceed 28 rather than merely differ from it: adjacent
-   margins collapse to the larger of the two, so anything under the group
-   spacing above it renders as that group spacing and the break disappears. */
-.detail-rule {
-  margin-top: 40px;
-  margin-bottom: 40px;
+/* Section headers (Action / Route / Patient & Requester / Notes &
+   Attachments) — same treatment ConductionRequestView.vue's create/trip-log
+   dialogs already use, reused rather than inventing a second convention
+   (MDRRMO feedback, 2026-09-18). */
+.section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary-strong));
+  margin: 28px 0 12px;
 }
+.section-title:first-child { margin-top: 0; }
 
 /* The unit summary holds the left end of the action row. It needs a floor so
    a long unit name truncates instead of squeezing the buttons, and a width it
@@ -3031,13 +3006,6 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
-}
-
-/* A rail, not a fixed 400px. The old width truncated service names mid-word on
-   every screen while the pane beside it ran mostly empty. */
-.request-list--rail {
-  flex: 0 1 clamp(360px, 26vw, 560px);
-  min-width: 0;
 }
 
 /* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ConductionRequestView.vue). */
