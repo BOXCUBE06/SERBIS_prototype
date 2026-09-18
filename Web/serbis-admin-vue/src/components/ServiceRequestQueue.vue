@@ -118,7 +118,7 @@
               density="compact"
               hide-details
               clearable
-              class="mb-3"
+              class="search-field mb-3"
             ></v-text-field>
 
             <!-- Typing narrows the list but leaves the status counts alone, so
@@ -2789,6 +2789,8 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-width-0 { min-width: 0; }
+
+.search-field { width: 320px; max-width: 100%; }
 
 /* Centred modal, capped so it never exceeds the viewport — the body below
    (pa-6 overflow-y-auto flex-grow-1) is what actually scrolls. */
