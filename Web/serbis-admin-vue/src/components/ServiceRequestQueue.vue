@@ -170,6 +170,49 @@
               </v-chip>
             </v-chip-group>
             <v-skeleton-loader v-else type="chip" width="100%" height="32"></v-skeleton-loader>
+
+            <!-- Barangay/unit/date-range filters, separate from the status
+                 chips above — those are the board's own primary triage
+                 states, these are cross-cutting narrows a dispatcher reaches
+                 for less often (MDRRMO feedback, 2026-09-18). -->
+            <div v-if="!initialLoad" class="d-flex flex-wrap gap-2 mt-3">
+              <v-select
+                v-model="filters.barangay"
+                :items="barangayOptions"
+                label="Barangay"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="filter-field"
+              ></v-select>
+              <v-select
+                v-model="filters.unit"
+                :items="unitOptions"
+                label="Unit"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="filter-field"
+              ></v-select>
+              <v-text-field
+                v-model="dateFrom"
+                type="date"
+                label="From"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="filter-field"
+              ></v-text-field>
+              <v-text-field
+                v-model="dateTo"
+                type="date"
+                label="To"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="filter-field"
+              ></v-text-field>
+            </div>
           </div>
 
           <!-- Bulk action bar. This was already wired to bulkDisapprove(), but
@@ -201,105 +244,118 @@
           <v-divider></v-divider>
 
           <div class="flex-grow-1 overflow-y-auto">
-            <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
+            <v-skeleton-loader v-if="initialLoad" type="table-row@6"></v-skeleton-loader>
 
-            <div v-else-if="pagedRequests.length === 0" class="text-center text-caption text-medium-emphasis py-10">
-              {{ emptyListMessage }}
-            </div>
-
-            <div v-else>
-              <!-- Selecting a request is the entry point to every other action
-                   on this page, and it was a bare div with a click handler: not
-                   in the tab order, not announced as interactive, unreachable
-                   without a mouse. Space is prevented explicitly or it scrolls
-                   the list instead of opening the row. -->
-              <div
-                v-for="item in pagedRequests" :key="item.request_id || item.id"
-                class="d-flex align-center px-4 py-3 request-row"
-                :class="[`row-${(item.status || 'Pending').toLowerCase()}`, { 'row-selected': isSelected(item) }]"
-                role="button"
-                tabindex="0"
-                :aria-current="isSelected(item) ? 'true' : undefined"
-                :aria-label="`${requesterName(item)}, ${item.service?.service_name || 'Other'}, ${item.status || 'Pending'}`"
-                @click="selectRequest(item)"
-                @keydown.enter.prevent="selectRequest(item)"
-                @keydown.space.prevent="selectRequest(item)"
-              >
-                <!-- flex-shrink-0 alone let this GROW into whatever space the
-                     row had left, which is why the avatars beside it sat at a
-                     different x on every row. It is a fixed-size control. -->
+            <!-- Full-width table, not a card list (MDRRMO feedback,
+                 2026-09-18) — this is a dispatch console, and a table is
+                 what lets Status/Scheduled/Requester/Barangay/Patient/Unit
+                 all scan at once instead of hiding behind a click.
+                 hide-default-footer: the existing v-pagination below stays
+                 the one pager, bound to the same page/itemsPerPage so the
+                 two never disagree. sort-by starts empty, which leaves
+                 filteredAndSortedRequests' own curated order (Pending/
+                 overdue first) as the default — clicking a column header
+                 only overrides it for as long as sort-by stays set. -->
+            <v-data-table
+              v-model:page="page"
+              v-model:sort-by="sortBy"
+              :headers="tableHeaders"
+              :items="filteredAndSortedRequests"
+              :items-per-page="itemsPerPage"
+              item-value="request_id"
+              hide-default-footer
+              density="comfortable"
+              :no-data-text="emptyListMessage"
+              class="request-table"
+              @click:row="(_event, { item }) => selectRequest(item)"
+              :row-props="(ctx) => ({
+                class: [`row-${(ctx.item.status || 'Pending').toLowerCase()}`, isSelected(ctx.item) ? 'row-selected' : ''],
+                role: 'button',
+                tabindex: 0,
+                'aria-current': isSelected(ctx.item) ? 'true' : undefined,
+                'aria-label': `${ctx.item._requesterName}, ${ctx.item._secondary}, ${ctx.item.status || 'Pending'}`,
+              })"
+            >
+              <template v-slot:item.select="{ item }">
                 <v-checkbox-btn
                   :model-value="selectedIds.has(itemId(item))"
-                  class="mr-1"
-                  style="flex: 0 0 auto;"
                   density="compact"
-                  :aria-label="`Select ${requesterName(item)}'s request`"
+                  :aria-label="`Select ${item._requesterName}'s request`"
                   @click.stop="toggleSelect(item)"
                 ></v-checkbox-btn>
-                <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
-                  <span class="font-weight-bold text-caption">
-                    {{ requesterInitials(item) }}
-                  </span>
-                </v-avatar>
-                <!-- The date is the half of this line that survives truncation
-                     worst, and it is the half that decides what is urgent, so
-                     it gets its own column instead of trailing the service
-                     name off the end of the row. -->
-                <div class="flex-grow-1 min-width-0">
-                  <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
-                  <!-- Ambulance-scope rows are all the same one service —
-                       "Ambulance/Medical Response", truncated, told nothing
-                       an operator didn't already know from being on this
-                       page at all. Barangay is what actually distinguishes
-                       one row from the next here. The other board (scope
-                       'other') genuinely varies by service, so it keeps
-                       showing that instead. -->
-                  <div class="d-flex align-center text-caption text-medium-emphasis">
-                    <span class="text-truncate">{{ scope === 'ambulance' ? requesterBarangay(item) : (item.service?.service_name || 'Other') }}</span>
-                    <!-- A Booked row's own scheduled time is the date an operator
-                         actually needs here, not when it was filed — created_at
-                         stays as the fallback for every other status. -->
-                    <template v-if="item.scheduled_at">
-                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
-                      <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
-                      <!-- One label, one pill — "Awaiting unit" / "Unit
-                           assigned" / "…late — not dispatched" (MDRRMO
-                           feedback, 2026-09-18). Overdue only changes which
-                           pill color this reuses, not a separate branch. -->
-                      <span
-                        v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
-                        class="status-pill status-pill--sm ml-2"
-                        :class="isBookingOverdue(item.status, item.scheduled_at) ? 'pill-disapproved' : 'pill-booked'"
-                      >{{ bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at) }}</span>
-                    </template>
-                    <span v-else class="d-flex align-center ms-2 min-width-0">
-                      <span class="row-date">{{ formatDate(item.created_at) }}</span>
-                      <!-- The one status with no scheduled_at at all — an
-                           untriaged call's own age is the signal here
-                           (MDRRMO feedback, 2026-09-18). -->
-                      <span
-                        v-if="pendingWaitLabel(item.status, item.created_at)"
-                        class="status-pill status-pill--sm pill-pending ml-2"
-                      >{{ pendingWaitLabel(item.status, item.created_at) }}</span>
-                    </span>
-                  </div>
-                </div>
-                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)">{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
-              </div>
+              </template>
 
-              <!-- itemsPerPage is sized off windowHeight so a full page fills
-                   the panel with no gap (see the computed above) — that
-                   leaves this blank whenever a filter/search genuinely has
-                   fewer results than a page holds, which reads as broken
-                   rather than as "this is everything" (impeccable ui-audit,
-                   2026-08-30). pagedRequests.length < itemsPerPage only ever
-                   true on the last page, so this can't appear mid-list. -->
-              <div
-                v-if="pagedRequests.length < itemsPerPage"
-                class="text-center text-caption text-medium-emphasis py-6"
-              >
-                Showing all {{ filteredAndSortedRequests.length }} {{ filteredAndSortedRequests.length === 1 ? 'result' : 'results' }}
-              </div>
+              <template v-slot:item.status="{ item }">
+                <span
+                  class="status-pill status-pill--sm"
+                  :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)"
+                >{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
+              </template>
+
+              <!-- A Booked row's own scheduled time is the date an operator
+                   actually needs here, not when it was filed — created_at
+                   stays as the fallback for every other status. -->
+              <template v-slot:item.scheduled_at="{ item }">
+                <template v-if="item.scheduled_at">
+                  <div class="d-flex align-center">
+                    <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
+                    <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
+                  </div>
+                  <!-- One label, one pill — "Awaiting unit" / "Unit
+                       assigned" / "…late — not dispatched" (MDRRMO
+                       feedback, 2026-09-18). Overdue only changes which
+                       pill color this reuses, not a separate branch. -->
+                  <span
+                    v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                    class="status-pill status-pill--sm mt-1"
+                    :class="isBookingOverdue(item.status, item.scheduled_at) ? 'pill-disapproved' : 'pill-booked'"
+                  >{{ bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at) }}</span>
+                </template>
+                <div v-else>
+                  <span class="row-date">{{ formatDate(item.created_at) }}</span>
+                  <!-- The one status with no scheduled_at at all — an
+                       untriaged call's own age is the signal here (MDRRMO
+                       feedback, 2026-09-18). -->
+                  <span
+                    v-if="pendingWaitLabel(item.status, item.created_at)"
+                    class="status-pill status-pill--sm pill-pending ml-2"
+                  >{{ pendingWaitLabel(item.status, item.created_at) }}</span>
+                </div>
+              </template>
+
+              <template v-slot:item._requesterName="{ item }">
+                <div class="d-flex align-center">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-2 flex-shrink-0">
+                    <span class="font-weight-bold text-caption">{{ requesterInitials(item) }}</span>
+                  </v-avatar>
+                  <span class="text-body-2 font-weight-bold">{{ item._requesterName }}</span>
+                </div>
+              </template>
+
+              <template v-slot:item._secondary="{ item }">
+                <span class="text-medium-emphasis">{{ item._secondary }}</span>
+              </template>
+
+              <template v-slot:item.patient_name="{ item }">
+                <span :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
+              </template>
+
+              <template v-slot:item._unit="{ item }">
+                <span :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+              </template>
+            </v-data-table>
+
+            <!-- itemsPerPage is sized off windowHeight so a full page fills
+                 the panel with no gap (see the computed above) — that
+                 leaves this blank whenever a filter/search genuinely has
+                 fewer results than a page holds, which reads as broken
+                 rather than as "this is everything" (impeccable ui-audit,
+                 2026-08-30). -->
+            <div
+              v-if="!initialLoad && filteredAndSortedRequests.length > 0 && filteredAndSortedRequests.length <= itemsPerPage"
+              class="text-center text-caption text-medium-emphasis py-6"
+            >
+              Showing all {{ filteredAndSortedRequests.length }} {{ filteredAndSortedRequests.length === 1 ? 'result' : 'results' }}
             </div>
           </div>
 
@@ -1486,7 +1542,13 @@ const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
 const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
-const filters = reactive({ status: 'All' })
+const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
+// Plain <input type="date"> strings (YYYY-MM-DD), compared as dates below —
+// never Date objects here, since a v-model on a native date input only ever
+// round-trips the string shape.
+const dateFrom = ref('')
+const dateTo = ref('')
+const sortBy = ref([])
 const vehicleModal = ref({ isOpen: false })
 const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
@@ -1812,6 +1874,40 @@ const statusTabs = computed(() => props.scope === 'ambulance'
   ? ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
   : ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled'])
 
+// Read off the requests actually on screen, not a barangay master list —
+// this filter should only ever offer a value that narrows the result to
+// something, never a barangay with zero requests sitting in the dropdown.
+const barangayOptions = computed(() => {
+  const names = new Set(requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean))
+  return ['All', ...Array.from(names).sort()]
+})
+
+// Same fleet split requesterBarangay/availableVehicles already use: an
+// ambulance board only ever assigns an Ambulance, the other board only ever
+// assigns something else. 'Unassigned' is its own option, not folded into
+// 'All' — "show me the ones nobody has dispatched yet" is a real question a
+// dispatcher asks.
+const unitOptions = computed(() => {
+  const pool = props.scope === 'ambulance'
+    ? vehicles.value.filter(v => v.type === 'Ambulance')
+    : vehicles.value.filter(v => v.type !== 'Ambulance')
+  return ['All', 'Unassigned', ...pool.map(v => v.unit_identifier)]
+})
+
+// Column keys point at plain string fields (added below in
+// filteredAndSortedRequests's own map step) rather than accessor functions,
+// so v-data-table's native sort-by can compare them directly without a
+// Vuetify-version-specific function-value API.
+const tableHeaders = computed(() => [
+  { title: '', key: 'select', sortable: false, width: 48 },
+  { title: 'Status', key: 'status' },
+  { title: 'Scheduled', key: 'scheduled_at' },
+  { title: 'Requester', key: '_requesterName' },
+  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary' },
+  { title: 'Patient', key: 'patient_name' },
+  { title: 'Unit', key: '_unit' },
+])
+
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
 // arrival so the operator lands on the filtered view, not "All".
 if (statusTabs.value.includes(route.query.status)) filters.status = route.query.status
@@ -2020,15 +2116,45 @@ const descriptionLines = computed(() => {
 const filteredAndSortedRequests = computed(() => {
   const searchLower = search.value.toLowerCase()
   const currentStatus = filters.status
+  const from = dateFrom.value ? new Date(dateFrom.value) : null
+  // End-of-day: a bare date input's own value is midnight, and "to Sep 20"
+  // should still include everything scheduled during the 20th, not just its
+  // first instant.
+  const to = dateTo.value ? new Date(`${dateTo.value}T23:59:59.999`) : null
 
   return requests.value.filter(r => {
     if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) return false
+
+    if (filters.barangay !== 'All' && (r.resident?.barangay?.barangay_name || '') !== filters.barangay) return false
+
+    if (filters.unit !== 'All') {
+      const unit = r.vehicle?.unit_identifier || ''
+      if (filters.unit === 'Unassigned' ? unit : unit !== filters.unit) return false
+    }
+
+    if (from || to) {
+      // scheduled_at when there is one (a booking's own window is what a
+      // date-range filter means there), created_at otherwise — the same
+      // fallback the row's own date column already uses.
+      const raw = r.scheduled_at || r.created_at
+      if (!raw) return false
+      const d = new Date(raw)
+      if (from && d < from) return false
+      if (to && d > to) return false
+    }
 
     if (!searchLower) return true
     return requesterName(r).toLowerCase().includes(searchLower) ||
            (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
            (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
-  }).sort((a, b) => {
+  }).map(r => ({
+    ...r,
+    // Plain fields so the table's native column sort can compare them
+    // directly — see tableHeaders.
+    _requesterName: requesterName(r),
+    _secondary: props.scope === 'ambulance' ? requesterBarangay(r) : (r.service?.service_name || 'Other'),
+    _unit: r.vehicle?.unit_identifier || '',
+  })).sort((a, b) => {
     const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
     if (statusA === 'Pending' && statusB !== 'Pending') return -1
     if (statusB === 'Pending' && statusA !== 'Pending') return 1
@@ -2037,11 +2163,6 @@ const filteredAndSortedRequests = computed(() => {
 })
 
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage.value)))
-
-const pagedRequests = computed(() => {
-  const start = (page.value - 1) * itemsPerPage.value
-  return filteredAndSortedRequests.value.slice(start, start + itemsPerPage.value)
-})
 
 // Names which of the two reasons the list is empty. A status chip reading
 // zero and a search with no hits are different facts: one says nothing of
@@ -2207,7 +2328,7 @@ const fetchRequests = async () => {
 
 const selectDefaultOrRefreshSelection = () => {
   if (!selectedRequest.value && requests.value.length > 0) {
-    selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
+    selectRequest(filteredAndSortedRequests.value[0])
   } else if (selectedRequest.value) {
     // Keep the panel in sync with the freshly-fetched copy of the selected request
     const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
@@ -2713,6 +2834,9 @@ watch(selectedRequest, () => { lightbox.value = { open: false, key: null } })
 
 watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
+watch(() => filters.barangay, () => { page.value = 1 })
+watch(() => filters.unit, () => { page.value = 1 })
+watch([dateFrom, dateTo], () => { page.value = 1 })
 
 onMounted(fetchData)
 onUnmounted(releaseAttachments)
