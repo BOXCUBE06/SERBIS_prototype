@@ -95,10 +95,9 @@
       <!-- Full-width list. Detail used to sit beside this as a permanent
            rail-width sibling; that squeezed a six-column table into a
            fixed narrow width, reproducing exactly the crowding the table
-           was meant to fix. Detail now opens in an overlay drawer
-           (v-navigation-drawer below) instead of a sibling pane, at every
-           breakpoint — see the drawer's own comment (MDRRMO feedback,
-           2026-09-18). -->
+           was meant to fix. Detail now opens in a centred modal (v-dialog
+           below) instead of a sibling pane — see the modal's own comment
+           (MDRRMO feedback, 2026-09-18). -->
       <div
         class="d-flex flex-grow-1 overflow-hidden"
         style="min-height: 0;"
@@ -366,23 +365,21 @@
         </v-card>
       </div>
 
-      <!-- Detail drawer: overlay at every breakpoint, not a persistent
-           side-by-side pane (MDRRMO feedback, 2026-09-18) — a full-width
-           table needs its own width, and squeezing it against a permanent
-           rail reproduced exactly the crowding the table was meant to fix.
-           Closing it (X, ESC, backdrop) clears selectedRequest through the
-           setter below; picking a different row just swaps this same
-           drawer's content via the same selectRequest() assignment as
+      <!-- Detail modal, centred rather than a right-hand drawer (MDRRMO
+           feedback, 2026-09-18) — the drawer was `temporary`, meaning it
+           already blocked the list behind its own scrim while open, so
+           centring it costs nothing the flush-right position was actually
+           protecting. Closing it (X, ESC, backdrop) clears selectedRequest
+           through the setter below; picking a different row just swaps this
+           same modal's content via the same selectRequest() assignment as
            always, so the dispatcher's place in the list is never lost. -->
-      <v-navigation-drawer
+      <v-dialog
         :model-value="!!selectedRequest"
         @update:model-value="(v) => { if (!v) selectedRequest = null }"
-        location="right"
-        temporary
-        :width="drawerWidth"
-        class="detail-drawer"
+        max-width="720"
+        class="detail-modal"
       >
-        <div v-if="selectedRequest" class="d-flex flex-column h-100">
+        <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
           <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
             <div class="d-flex align-center gap-3 min-width-0">
               <v-avatar color="primary" variant="tonal" size="52" class="flex-shrink-0">
@@ -774,8 +771,8 @@
               </div>
             </div>
           </div>
-        </div>
-      </v-navigation-drawer>
+        </v-card>
+      </v-dialog>
     </div>
 
     <!-- Attachment lightbox. Same shape as the vehicle picker below: v-dialog,
@@ -1446,17 +1443,7 @@ const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-c
 
 const route = useRoute()
 
-// windowWidth sizes the detail drawer (see drawerWidth below); windowHeight
-// already sized the table's itemsPerPage. No breakpoint-gated split anymore
-// — the drawer is a temporary overlay at every width (MDRRMO feedback,
-// 2026-09-18), not a permanent side-by-side pane above some breakpoint.
-const { width: windowWidth, height: windowHeight } = useDisplay()
-
-// Capped at 520 — wide enough for a full field row without becoming a
-// second list. min() against the viewport itself (less 32px of margin) is
-// what keeps this from overflowing a phone-width screen, where a fixed
-// 520px would run off the right edge.
-const drawerWidth = computed(() => Math.min(520, windowWidth.value - 32))
+const { height: windowHeight } = useDisplay()
 
 const requests = ref([])
 const vehicles = ref([])
@@ -2828,6 +2815,12 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .min-width-0 { min-width: 0; }
+
+/* Centred modal, capped so it never exceeds the viewport — the body below
+   (pa-6 overflow-y-auto flex-grow-1) is what actually scrolls. */
+.detail-modal-card {
+  max-height: 90vh;
+}
 
 .soft-card {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
