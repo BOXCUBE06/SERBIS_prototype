@@ -283,6 +283,10 @@
                 ></v-checkbox-btn>
               </template>
 
+              <template v-slot:item.rowNumber="{ item }">
+                <span class="text-medium-emphasis">{{ rowNumberByRequestId.get(itemId(item)) }}</span>
+              </template>
+
               <template v-slot:item.status="{ item }">
                 <span
                   class="status-pill status-pill--sm"
@@ -1843,6 +1847,7 @@ const unitOptions = computed(() => {
 // Vuetify-version-specific function-value API.
 const tableHeaders = computed(() => [
   { title: '', key: 'select', sortable: false, width: 48 },
+  { title: '#', key: 'rowNumber', sortable: false, width: 56 },
   { title: 'Status', key: 'status' },
   { title: 'Scheduled', key: 'scheduled_at' },
   { title: 'Requester', key: '_requesterName' },
@@ -1850,6 +1855,15 @@ const tableHeaders = computed(() => [
   { title: 'Patient', key: 'patient_name' },
   { title: 'Unit', key: '_unit' },
 ])
+
+// Position in the filtered/sorted list, not the table's own internal
+// per-page index — this way row 1 on page 2 correctly reads as row 11
+// rather than resetting to 1 every page.
+const rowNumberByRequestId = computed(() => {
+  const map = new Map()
+  filteredAndSortedRequests.value.forEach((r, i) => map.set(itemId(r), i + 1))
+  return map
+})
 
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
 // arrival so the operator lands on the filtered view, not "All".
