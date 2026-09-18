@@ -48,3 +48,15 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // The integration_test plugin (Flutter SDK) pulls espresso-core via a
+    // "3.2+" constraint that resolves to the literal 3.2.0 release, which
+    // pairs with espresso-idling-resource:3.2.0 — two artifacts declaring the
+    // same manifest namespace, which AGP 9's stricter merge check rejects
+    // outright (":app:processDebugMainManifest" fails, since integration_test
+    // lands this on the main debug classpath, not just androidText's).
+    // Fixed upstream past 3.2.0; pinning here wins Gradle's default
+    // highest-version resolution over the transitive request.
+    implementation("androidx.test.espresso:espresso-core:3.5.1")
+}
