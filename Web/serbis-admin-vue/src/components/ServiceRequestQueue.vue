@@ -308,24 +308,24 @@
               </template>
 
               <template v-slot:item._requesterName="{ item }">
-                <div class="d-flex align-center">
+                <div class="d-flex align-center min-width-0">
                   <v-avatar color="primary" variant="tonal" size="32" class="mr-2 flex-shrink-0">
                     <span class="font-weight-bold text-caption">{{ requesterInitials(item) }}</span>
                   </v-avatar>
-                  <span class="text-body-2 font-weight-bold">{{ item._requesterName }}</span>
+                  <span class="text-body-2 font-weight-bold text-truncate">{{ item._requesterName }}</span>
                 </div>
               </template>
 
               <template v-slot:item._secondary="{ item }">
-                <span class="text-medium-emphasis">{{ item._secondary }}</span>
+                <span class="text-medium-emphasis text-truncate d-block">{{ item._secondary }}</span>
               </template>
 
               <template v-slot:item.patient_name="{ item }">
-                <span :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
+                <span class="text-truncate d-block" :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
               </template>
 
               <template v-slot:item._unit="{ item }">
-                <span :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+                <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
               </template>
             </v-data-table>
 
@@ -1822,15 +1822,19 @@ const unitOptions = computed(() => {
 // filteredAndSortedRequests's own map step) rather than accessor functions,
 // so v-data-table's native sort-by can compare them directly without a
 // Vuetify-version-specific function-value API.
+// Every column carries a fixed width, paired with `table-layout: fixed` in
+// this component's <style> — without both, the table sizes each column off
+// whatever text happens to be in view, so it visibly jumps every time a
+// filter or search changes which rows show (MDRRMO feedback, 2026-09-18).
 const tableHeaders = computed(() => [
   { title: '', key: 'select', sortable: false, width: 48 },
   { title: '#', key: 'rowNumber', sortable: false, width: 56 },
-  { title: 'Status', key: 'status' },
-  { title: 'Scheduled', key: 'scheduled_at' },
-  { title: 'Requester', key: '_requesterName' },
-  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary' },
-  { title: 'Patient', key: 'patient_name' },
-  { title: 'Unit', key: '_unit' },
+  { title: 'Status', key: 'status', width: 130 },
+  { title: 'Scheduled', key: 'scheduled_at', width: 170 },
+  { title: 'Requester', key: '_requesterName', width: 220 },
+  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary', width: 170 },
+  { title: 'Patient', key: 'patient_name', width: 160 },
+  { title: 'Unit', key: '_unit', width: 130 },
 ])
 
 // Position in the filtered/sorted list, not the table's own internal
@@ -2937,6 +2941,22 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .attachments-row {
   width: fit-content;
   max-width: 100%;
+}
+
+/* Fixed column widths (tableHeaders' own width values) only take effect
+   with table-layout: fixed — without it the browser still measures each
+   column's content and the table jumps every time a filter/search changes
+   which rows are in view (MDRRMO feedback, 2026-09-18). Row height gets the
+   same fixed treatment: ROW_HEIGHT above already assumes every row is 73px
+   for the itemsPerPage math, so this is that assumption made real rather
+   than a coincidence of whatever content happened to be one line. */
+.request-table :deep(table) {
+  table-layout: fixed;
+  width: 100%;
+}
+.request-table :deep(td) {
+  height: 73px;
+  overflow: hidden;
 }
 
 .request-row {
