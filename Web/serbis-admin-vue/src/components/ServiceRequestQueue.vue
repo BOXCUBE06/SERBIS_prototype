@@ -169,10 +169,10 @@
             </v-chip-group>
             <v-skeleton-loader v-else type="chip" width="100%" height="32"></v-skeleton-loader>
 
-            <!-- Barangay/unit/date-range filters, separate from the status
-                 chips above — those are the board's own primary triage
-                 states, these are cross-cutting narrows a dispatcher reaches
-                 for less often (MDRRMO feedback, 2026-09-18). -->
+            <!-- Barangay/unit filters, separate from the status chips above
+                 — those are the board's own primary triage states, these are
+                 cross-cutting narrows a dispatcher reaches for less often
+                 (MDRRMO feedback, 2026-09-18). -->
             <div v-if="!initialLoad" class="d-flex flex-wrap gap-2 mt-3">
               <v-select
                 v-model="filters.barangay"
@@ -192,24 +192,6 @@
                 hide-details
                 class="filter-field"
               ></v-select>
-              <v-text-field
-                v-model="dateFrom"
-                type="date"
-                label="From"
-                variant="outlined"
-                density="compact"
-                hide-details
-                class="filter-field"
-              ></v-text-field>
-              <v-text-field
-                v-model="dateTo"
-                type="date"
-                label="To"
-                variant="outlined"
-                density="compact"
-                hide-details
-                class="filter-field"
-              ></v-text-field>
             </div>
           </div>
 
@@ -1490,11 +1472,6 @@ const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
 const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
-// Plain <input type="date"> strings (YYYY-MM-DD), compared as dates below —
-// never Date objects here, since a v-model on a native date input only ever
-// round-trips the string shape.
-const dateFrom = ref('')
-const dateTo = ref('')
 const sortBy = ref([])
 const vehicleModal = ref({ isOpen: false })
 const selectedRequest = ref(null)
@@ -2086,11 +2063,6 @@ const descriptionLines = computed(() => {
 const filteredAndSortedRequests = computed(() => {
   const searchLower = search.value.toLowerCase()
   const currentStatus = filters.status
-  const from = dateFrom.value ? new Date(dateFrom.value) : null
-  // End-of-day: a bare date input's own value is midnight, and "to Sep 20"
-  // should still include everything scheduled during the 20th, not just its
-  // first instant.
-  const to = dateTo.value ? new Date(`${dateTo.value}T23:59:59.999`) : null
 
   return requests.value.filter(r => {
     if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) return false
@@ -2100,17 +2072,6 @@ const filteredAndSortedRequests = computed(() => {
     if (filters.unit !== 'All') {
       const unit = r.vehicle?.unit_identifier || ''
       if (filters.unit === 'Unassigned' ? unit : unit !== filters.unit) return false
-    }
-
-    if (from || to) {
-      // scheduled_at when there is one (a booking's own window is what a
-      // date-range filter means there), created_at otherwise — the same
-      // fallback the row's own date column already uses.
-      const raw = r.scheduled_at || r.created_at
-      if (!raw) return false
-      const d = new Date(raw)
-      if (from && d < from) return false
-      if (to && d > to) return false
     }
 
     if (!searchLower) return true
@@ -2806,7 +2767,6 @@ watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
 watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
-watch([dateFrom, dateTo], () => { page.value = 1 })
 
 onMounted(fetchData)
 onUnmounted(releaseAttachments)
