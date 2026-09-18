@@ -262,15 +262,26 @@
                     <template v-if="item.scheduled_at">
                       <v-icon size="12" class="ml-2 mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
                       <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
-                      <span v-if="isBookingOverdue(item.status, item.scheduled_at)" class="status-pill status-pill--sm pill-disapproved ml-2">Overdue</span>
-                      <!-- Same box treatment the equipment due countdown has
-                           — MDRRMO feedback, 2026-09-18. -->
+                      <!-- One label, one pill — "Awaiting unit" / "Unit
+                           assigned" / "…late — not dispatched" (MDRRMO
+                           feedback, 2026-09-18). Overdue only changes which
+                           pill color this reuses, not a separate branch. -->
                       <span
-                        v-else-if="bookingCountdownLabel(item.status, item.scheduled_at)"
-                        class="status-pill status-pill--sm pill-booked ml-2"
-                      >{{ bookingCountdownLabel(item.status, item.scheduled_at) }}</span>
+                        v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                        class="status-pill status-pill--sm ml-2"
+                        :class="isBookingOverdue(item.status, item.scheduled_at) ? 'pill-disapproved' : 'pill-booked'"
+                      >{{ bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at) }}</span>
                     </template>
-                    <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
+                    <span v-else class="d-flex align-center ms-2 min-width-0">
+                      <span class="row-date">{{ formatDate(item.created_at) }}</span>
+                      <!-- The one status with no scheduled_at at all — an
+                           untriaged call's own age is the signal here
+                           (MDRRMO feedback, 2026-09-18). -->
+                      <span
+                        v-if="pendingWaitLabel(item.status, item.created_at)"
+                        class="status-pill status-pill--sm pill-pending ml-2"
+                      >{{ pendingWaitLabel(item.status, item.created_at) }}</span>
+                    </span>
                   </div>
                 </div>
                 <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)">{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
@@ -359,30 +370,37 @@
               class="pa-6 overflow-y-auto"
             >
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+
+              <!-- One alert, title from the same sub-label the row shows —
+                   "Awaiting unit" / "Unit assigned" / "…late — not
+                   dispatched" (MDRRMO feedback, 2026-09-18). Only the body
+                   and the alert's own color differ between overdue and
+                   upcoming. -->
               <v-alert
-                v-if="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)"
-                type="warning"
+                v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
+                :type="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at) ? 'warning' : 'info'"
                 variant="tonal"
                 class="mb-4"
                 density="compact"
+                :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
               >
-                Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.
+                {{ isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)
+                  ? 'Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.'
+                  : `Scheduled for ${formatDateTime(selectedRequest.scheduled_at)}.` }}
               </v-alert>
 
-              <!-- Confirmed and still upcoming — same box treatment the
-                   equipment due countdown has (MDRRMO feedback, 2026-09-18).
-                   Mutually exclusive with the overdue alert above by
-                   construction: bookingCountdownLabel returns null once
-                   isBookingOverdue is true. -->
+              <!-- Pending's own age — no scheduled_at to build a countdown
+                   from, so created_at is what says how long this call has
+                   sat untouched (MDRRMO feedback, 2026-09-18). -->
               <v-alert
-                v-else-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at)"
-                :type="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at) === 'Scheduled today' ? 'warning' : 'info'"
+                v-if="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
+                type="info"
                 variant="tonal"
                 class="mb-4"
                 density="compact"
-                :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at)"
+                :title="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
               >
-                Scheduled for {{ formatDateTime(selectedRequest.scheduled_at) }}.
+                Filed {{ formatDateTime(selectedRequest.created_at) }}, no action taken yet.
               </v-alert>
 
               <v-row class="detail-group">
@@ -1387,7 +1405,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, outcomePillClass, isBookingOverdue, bookingCountdownLabel } from '@/composables/adminUi'
+import { outcomeLabel, outcomePillClass, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
