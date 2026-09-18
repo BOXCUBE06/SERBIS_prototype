@@ -472,6 +472,7 @@ final class StructuredFormData extends ServiceFormData {
   StructuredFormData._(
     this.spec, {
     this.contactNumber = '',
+    this.offersFulfillment = false,
     Map<String, String> prefill = const {},
   }) {
     for (final field in spec.fields) {
@@ -496,6 +497,7 @@ final class StructuredFormData extends ServiceFormData {
       StructuredFormData._(
         _reliefSpec,
         contactNumber: contactNumber,
+        offersFulfillment: true,
         prefill: {'household_head': headName},
       );
 
@@ -504,6 +506,23 @@ final class StructuredFormData extends ServiceFormData {
 
   final ServiceFormSpec spec;
   final String contactNumber;
+
+  /// True only for [relief] — pickup/delivery beyond equipment borrowing
+  /// (MDRRMO feedback, 2026-09-18). Ambulance and conduction don't map onto
+  /// this at all, and road/generic weren't asked for it, so this stays a
+  /// per-instance flag rather than something every StructuredFormData shows.
+  final bool offersFulfillment;
+
+  /// 'Pickup' or 'Delivery' — sent as its own field, not folded into
+  /// [metaLines]/description, the same way AmbulanceFormData.scheduledAt
+  /// isn't: this is a real column on tbl_service_request
+  /// (fulfillment_method), not prose for a dispatcher to re-parse.
+  String fulfillmentMethod = 'Pickup';
+
+  /// Meaningful only when [fulfillmentMethod] is 'Delivery' — dropped on the
+  /// way out otherwise, same as the server does, so an address typed in and
+  /// then switched back to Pickup cannot survive as a delivery instruction.
+  final TextEditingController deliveryAddress = TextEditingController();
 
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String> _choices = {};
@@ -557,5 +576,6 @@ final class StructuredFormData extends ServiceFormData {
     for (final controller in _controllers.values) {
       controller.dispose();
     }
+    deliveryAddress.dispose();
   }
 }

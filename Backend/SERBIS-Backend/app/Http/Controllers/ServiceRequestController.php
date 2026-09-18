@@ -240,6 +240,14 @@ class ServiceRequestController extends Controller
             // Free-text companion to site_photo — a landmark the resident can
             // type faster than they can stop to photograph one.
             'landmark' => 'nullable|string|max:255',
+            // Offered on every service, same as landmark above, but only the
+            // relief goods form actually sends it (MDRRMO feedback,
+            // 2026-09-18) — ambulance and conduction don't map onto "pickup
+            // or delivery" at all, so nothing else in the app populates
+            // this. Mirrors tbl_equipment_borrowing's own fulfillment_method
+            // / delivery_address pair.
+            'fulfillment_method' => 'sometimes|in:Pickup,Delivery',
+            'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
@@ -413,6 +421,8 @@ class ServiceRequestController extends Controller
                     }
                 }
 
+                $fulfillmentMethod = $validated['fulfillment_method'] ?? null;
+
                 $newServiceRequest = ServiceRequest::create([
                     'resident_id' => $request->user()->getKey(),
                     'service_id' => $serviceId,
@@ -420,6 +430,12 @@ class ServiceRequestController extends Controller
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
                     'landmark' => $validated['landmark'] ?? null,
+                    'fulfillment_method' => $fulfillmentMethod,
+                    // Dropped rather than stored on Pickup, same reason
+                    // EquipmentBorrowingController does it: an address typed
+                    // in and then switched away from must not survive as a
+                    // delivery instruction nobody is delivering against.
+                    'delivery_address' => $fulfillmentMethod === 'Delivery' ? ($validated['delivery_address'] ?? null) : null,
                     // A scheduled booking is approved capacity, not a request
                     // waiting on staff triage — 'Pending' would queue it next to
                     // a report nobody has looked at yet. scheduled_end and

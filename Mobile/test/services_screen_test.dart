@@ -165,6 +165,8 @@ class FakeApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {

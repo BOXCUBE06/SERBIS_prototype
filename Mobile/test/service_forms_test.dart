@@ -117,6 +117,34 @@ void main() {
       expect(description, contains(kAssistanceTypes.first));
     });
 
+    testWidgets('relief offers pickup/delivery; road and generic do not', (tester) async {
+      final relief = StructuredFormData.relief();
+      final road = StructuredFormData.road();
+      final generic = StructuredFormData.generic();
+      addTearDown(() {
+        relief.dispose();
+        road.dispose();
+        generic.dispose();
+      });
+
+      expect(relief.offersFulfillment, isTrue);
+      expect(road.offersFulfillment, isFalse);
+      expect(generic.offersFulfillment, isFalse);
+
+      await _pump(tester, relief);
+      expect(find.text('How should this reach you?'), findsOneWidget);
+      // Defaults to Pickup, so the address field starts hidden.
+      expect(find.text('Delivery address'), findsNothing);
+
+      await tester.tap(find.text('How should this reach you?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delivery').last);
+      await tester.pumpAndSettle();
+
+      expect(relief.fulfillmentMethod, 'Delivery');
+      expect(find.text('Delivery address'), findsOneWidget);
+    });
+
     testWidgets('generic', (tester) async {
       final form = StructuredFormData.generic();
       addTearDown(form.dispose);

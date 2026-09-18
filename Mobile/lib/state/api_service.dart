@@ -715,6 +715,11 @@ class ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
+    // 2026-09-18) — offered on every service the same way landmark is, but
+    // only the relief goods form actually sends it.
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) {
@@ -756,6 +761,16 @@ class ApiService {
     }
     if (landmark != null && landmark.isNotEmpty) {
       request.fields['landmark'] = landmark;
+    }
+    if (fulfillmentMethod != null && fulfillmentMethod.isNotEmpty) {
+      request.fields['fulfillment_method'] = fulfillmentMethod;
+    }
+    // Dropped rather than sent when there is no fulfillment method at all,
+    // same "absent means unset" contract every other optional field here
+    // follows — mirrors the server's own drop-on-Pickup behavior for the
+    // case a resident typed one in and switched back before submitting.
+    if (fulfillmentMethod == 'Delivery' && deliveryAddress != null && deliveryAddress.isNotEmpty) {
+      request.fields['delivery_address'] = deliveryAddress;
     }
     // UTC with a 'Z' suffix, never a naive local string. The server honours an
     // offset-carrying string as the real instant it names; a bare
@@ -802,6 +817,8 @@ class ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
@@ -814,6 +831,8 @@ class ApiService {
       sitePhotoBytes: sitePhotoBytes,
       sitePhotoFileName: sitePhotoFileName,
       landmark: landmark,
+      fulfillmentMethod: fulfillmentMethod,
+      deliveryAddress: deliveryAddress,
       scheduledAt: scheduledAt,
       intake: intake,
     );

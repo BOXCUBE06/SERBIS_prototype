@@ -35,6 +35,8 @@ class _RecordingApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
   }) async {
@@ -188,6 +190,34 @@ void main() {
       expect(request.fields['description'], 'Fallen tree blocking the road');
       expect(request.fields.containsKey('patient_name'), isFalse);
       expect(request.fields.containsKey('destination'), isFalse);
+    });
+
+    test('a delivery request carries the address', () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 2,
+        description: 'Household head: Juan Dela Cruz',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        fulfillmentMethod: 'Delivery',
+        deliveryAddress: 'Purok 2, San Fabian',
+      );
+
+      expect(request.fields['fulfillment_method'], 'Delivery');
+      expect(request.fields['delivery_address'], 'Purok 2, San Fabian');
+    });
+
+    test('a pickup request omits the delivery address', () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 2,
+        description: 'Household head: Juan Dela Cruz',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        fulfillmentMethod: 'Pickup',
+        deliveryAddress: 'Purok 2, San Fabian',
+      );
+
+      expect(request.fields['fulfillment_method'], 'Pickup');
+      expect(request.fields.containsKey('delivery_address'), isFalse);
     });
 
     test('an "Others" request omits service_id rather than sending it empty',

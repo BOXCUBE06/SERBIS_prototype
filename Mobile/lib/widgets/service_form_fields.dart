@@ -197,6 +197,30 @@ class ServiceFormFields extends StatelessWidget {
                       ),
                 ],
               ),
+            // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
+            // 2026-09-18) — a real field on the request, not spec-driven
+            // prose, so it lives outside the section loop above.
+            if (form.offersFulfillment)
+              FormSection(
+                label: 'Pickup or delivery',
+                children: [
+                  AppDropdown(
+                    label: 'How should this reach you?',
+                    items: const ['Pickup', 'Delivery'],
+                    value: form.fulfillmentMethod,
+                    onChanged: (v) {
+                      form.fulfillmentMethod = v;
+                      onChanged();
+                    },
+                  ),
+                  if (form.fulfillmentMethod == 'Delivery')
+                    AppTextField(
+                      label: 'Delivery address',
+                      hint: 'Purok / street, barangay',
+                      controller: form.deliveryAddress,
+                    ),
+                ],
+              ),
           ],
         ),
     };

@@ -324,6 +324,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
         // entirely and re-checks availability under a lock at approval
         // instead — sending it here is harmless either way.
         requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
+        // Relief goods only (StructuredFormData.offersFulfillment) — pickup/
+        // delivery beyond equipment borrowing, MDRRMO feedback, 2026-09-18.
+        fulfillmentMethod: form is StructuredFormData && form.offersFulfillment
+            ? form.fulfillmentMethod
+            : null,
+        deliveryAddress: form is StructuredFormData && form.offersFulfillment
+            ? form.deliveryAddress.text.trim()
+            : null,
         // Ambulance only. Its presence is what tells the request builder to
         // send the structured columns and omit `description` entirely — the
         // server composes that from these same values, and a client-composed
