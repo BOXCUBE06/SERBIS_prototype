@@ -54,6 +54,8 @@
       class="mb-3"
     />
 
+    <slot name="before-table" />
+
     <v-card
       elevation="0"
       border
@@ -74,6 +76,7 @@
         class="dtp-table flex-grow-1"
         style="min-height: 0;"
         @click:row="(event, ctx) => $emit('click:row', event, ctx)"
+        @update:page="$emit('update:page', $event)"
       >
         <template v-for="(_, slotName) in $slots" v-slot:[slotName]="slotProps" :key="slotName">
           <slot :name="slotName" v-bind="slotProps ?? {}" />

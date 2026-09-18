@@ -107,73 +107,43 @@
         <v-card
           elevation="0"
           rounded="xl"
-          class="soft-card d-flex flex-column overflow-hidden request-list flex-grow-1"
+          class="soft-card d-flex flex-column overflow-hidden request-list flex-grow-1 pa-4"
         >
-          <div class="pa-4 pb-2" style="flex-shrink: 0;">
-            <v-text-field
-              v-model="search"
-              prepend-inner-icon="mdi-magnify"
-              placeholder="Search by name, service, barangay..."
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-              class="search-field mb-3"
-            ></v-text-field>
+          <v-skeleton-loader v-if="initialLoad" type="table-row@6"></v-skeleton-loader>
 
-            <!-- Typing narrows the list but leaves the status counts alone, so
-                 without this the operator cannot tell an empty result from a
-                 filter that is hiding it. -->
-            <div v-if="search" class="text-caption text-medium-emphasis mb-2" aria-live="polite">
-              {{ filteredAndSortedRequests.length }}
-              {{ filteredAndSortedRequests.length === 1 ? 'request matches' : 'requests match' }} "{{ search }}"
-            </div>
-
-            <!-- Every status, always — including a Disapproved or Cancelled
-                 reading zero. Hiding an empty status read as "this queue has
-                 nothing named Disapproved" rather than "nothing is disapproved
-                 right now"; the chip staying put and the list explaining the
-                 zero is the honest version. -->
-            <!-- The group owns the selection, via v-model + :value on each chip.
-                 It used to have neither: the chips drove `filters.status` from
-                 their own @click while VChipGroup ran a second, independent
-                 useGroup selection that nothing ever set. VChip only applies its
-                 `color` when the GROUP considers it selected, so the active chip
-                 got `variant="flat"` from the ternary and then no `bg-primary`
-                 to go with it — it rendered plain grey, telling active from
-                 inactive by lightness alone. `mandatory` keeps one always on, so
-                 clicking the selected chip cannot clear the filter to nothing. -->
-            <!-- `column` (dropped) wraps chips to as many rows as it takes —
-                 seven statuses, half of them reading zero most of the time,
-                 wrapped to two rows every time. Without it VChipGroup falls
-                 back to its VSlideGroup base: one row, and if it still
-                 doesn't fit at the rail's narrowest it scrolls horizontally
-                 with its own prev/next arrows rather than wrapping.
-                 status-filter-chip--muted (zero-count, not the active
-                 filter) drops to a plain outline so an all-zero status
-                 reads as available-but-empty rather than competing on the
-                 same visual weight as a populated one — the chip itself
-                 still always renders (see the comment above this), only its
-                 weight changes. -->
-            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory>
-              <v-chip
-                v-for="status in statusTabs" :key="status"
-                :value="status"
-                size="small" class="font-weight-bold"
-                :class="{ 'status-filter-chip--muted': status !== filters.status && !requestCounts[status] }"
-                color="primary"
-                :variant="status === filters.status ? 'flat' : (requestCounts[status] ? 'tonal' : 'outlined')"
-              >
-                {{ status }} <span class="ml-1 font-weight-black">{{ requestCounts[status] }}</span>
-              </v-chip>
-            </v-chip-group>
-            <v-skeleton-loader v-else type="chip" width="100%" height="32"></v-skeleton-loader>
-
-            <!-- Barangay/unit filters, separate from the status chips above
-                 — those are the board's own primary triage states, these are
-                 cross-cutting narrows a dispatcher reaches for less often
-                 (MDRRMO feedback, 2026-09-18). -->
-            <div v-if="!initialLoad" class="d-flex flex-wrap gap-2 mt-3">
+          <!-- Every status tab always renders, including a Disapproved or
+               Cancelled reading zero — hiding an empty status read as "this
+               queue has nothing named Disapproved" rather than "nothing is
+               disapproved right now" (MDRRMO feedback, 2026-09-18). -->
+          <DataTablePage
+            v-else
+            v-model:search="search"
+            search-placeholder="Search by name, service, barangay..."
+            :tabs="statusTabItems"
+            :status="filters.status"
+            @update:status="filters.status = $event"
+            :headers="tableHeaders"
+            :items="filteredAndSortedRequests"
+            item-value="request_id"
+            :no-data-text="emptyListMessage"
+            :page="page"
+            @update:page="page = $event"
+            :items-per-page="itemsPerPage"
+            @update:items-per-page="itemsPerPage = $event"
+            result-noun="requests"
+            class="flex-grow-1"
+            :row-props="(ctx) => ({
+              class: [`row-${(ctx.item.status || 'Pending').toLowerCase()}`, isSelected(ctx.item) ? 'row-selected' : ''],
+              role: 'button',
+              tabindex: 0,
+              'aria-current': isSelected(ctx.item) ? 'true' : undefined,
+              'aria-label': `${ctx.item._requesterName}, ${ctx.item._secondary}, ${ctx.item.status || 'Pending'}`,
+            })"
+            @click:row="(_event, { item }) => selectRequest(item)"
+          >
+            <template v-slot:filters>
+              <!-- Cross-cutting narrows a dispatcher reaches for less often
+                   than the status tabs above (MDRRMO feedback, 2026-09-18). -->
               <v-select
                 v-model="filters.barangay"
                 :items="barangayOptions"
@@ -181,6 +151,7 @@
                 variant="outlined"
                 density="compact"
                 hide-details
+                rounded="lg"
                 class="filter-field"
               ></v-select>
               <v-select
@@ -190,164 +161,104 @@
                 variant="outlined"
                 density="compact"
                 hide-details
+                rounded="lg"
                 class="filter-field"
               ></v-select>
-            </div>
-          </div>
+            </template>
 
-          <!-- Bulk action bar. This was already wired to bulkDisapprove(), but
-               both controls were text buttons at the same weight, so the one
-               action the checkboxes exist for read as a caption sitting beside
-               "3 selected" rather than as the thing to press. The count moves
-               into the label — the button now names what it does and to how
-               many — and the destructive action takes the rightmost slot, the
-               same order the confirm dialog below uses. -->
-          <div v-if="selectedIds.size > 0" class="d-flex align-center justify-space-between px-4 py-2 subtle-surface" style="flex-shrink: 0;">
-            <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
-            <div class="d-flex align-center gap-2">
-              <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
-              <v-btn
-                color="error"
-                variant="flat"
-                size="small"
-                height="36"
-                class="text-none font-weight-bold"
-                :loading="bulkLoading"
-                @click="openReason('bulk')"
-              >
-                Disapprove {{ selectedIds.size }}
-                <span class="d-sr-only">selected requests</span>
-              </v-btn>
-            </div>
-          </div>
-
-          <v-divider></v-divider>
-
-          <div class="flex-grow-1 overflow-y-auto">
-            <v-skeleton-loader v-if="initialLoad" type="table-row@6"></v-skeleton-loader>
-
-            <!-- Full-width table, not a card list (MDRRMO feedback,
-                 2026-09-18) — this is a dispatch console, and a table is
-                 what lets Status/Scheduled/Requester/Barangay/Patient/Unit
-                 all scan at once instead of hiding behind a click.
-                 hide-default-footer: the existing v-pagination below stays
-                 the one pager, bound to the same page/itemsPerPage so the
-                 two never disagree. sort-by starts empty, which leaves
-                 filteredAndSortedRequests' own curated order (Pending/
-                 overdue first) as the default — clicking a column header
-                 only overrides it for as long as sort-by stays set. -->
-            <v-data-table
-              v-model:page="page"
-              v-model:sort-by="sortBy"
-              :headers="tableHeaders"
-              :items="filteredAndSortedRequests"
-              :items-per-page="itemsPerPage"
-              item-value="request_id"
-              hide-default-footer
-              density="comfortable"
-              :no-data-text="emptyListMessage"
-              class="request-table"
-              @click:row="(_event, { item }) => selectRequest(item)"
-              :row-props="(ctx) => ({
-                class: [`row-${(ctx.item.status || 'Pending').toLowerCase()}`, isSelected(ctx.item) ? 'row-selected' : ''],
-                role: 'button',
-                tabindex: 0,
-                'aria-current': isSelected(ctx.item) ? 'true' : undefined,
-                'aria-label': `${ctx.item._requesterName}, ${ctx.item._secondary}, ${ctx.item.status || 'Pending'}`,
-              })"
-            >
-              <template v-slot:item.select="{ item }">
-                <v-checkbox-btn
-                  :model-value="selectedIds.has(itemId(item))"
-                  density="compact"
-                  :aria-label="`Select ${item._requesterName}'s request`"
-                  @click.stop="toggleSelect(item)"
-                ></v-checkbox-btn>
-              </template>
-
-              <template v-slot:item.rowNumber="{ item }">
-                <span class="text-medium-emphasis">{{ rowNumberByRequestId.get(itemId(item)) }}</span>
-              </template>
-
-              <template v-slot:item.status="{ item }">
-                <span
-                  class="status-pill status-pill--sm"
-                  :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)"
-                >{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
-              </template>
-
-              <!-- A Booked row's own scheduled time is the date an operator
-                   actually needs here, not when it was filed — created_at
-                   stays as the fallback for every other status. -->
-              <template v-slot:item.scheduled_at="{ item }">
-                <template v-if="item.scheduled_at">
-                  <div class="d-flex align-center">
-                    <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
-                    <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
-                  </div>
-                  <!-- One label, one pill — "Awaiting unit" / "Unit
-                       assigned" / "…late — not dispatched" (MDRRMO
-                       feedback, 2026-09-18). Overdue only changes which
-                       pill color this reuses, not a separate branch. -->
-                  <span
-                    v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
-                    class="status-pill status-pill--sm mt-1"
-                    :class="isBookingOverdue(item.status, item.scheduled_at) ? 'pill-disapproved' : 'pill-booked'"
-                  >{{ bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at) }}</span>
-                </template>
-                <div v-else>
-                  <span class="row-date">{{ formatDate(item.created_at) }}</span>
-                  <!-- The one status with no scheduled_at at all — an
-                       untriaged call's own age is the signal here (MDRRMO
-                       feedback, 2026-09-18). -->
-                  <span
-                    v-if="pendingWaitLabel(item.status, item.created_at)"
-                    class="status-pill status-pill--sm pill-pending ml-2"
-                  >{{ pendingWaitLabel(item.status, item.created_at) }}</span>
+            <!-- Bulk action bar. Count in the label — the button names what
+                 it does and to how many — destructive action rightmost, the
+                 same order the confirm dialog below uses. -->
+            <template v-if="selectedIds.size > 0" v-slot:before-table>
+              <div class="d-flex align-center justify-space-between px-4 py-2 subtle-surface rounded-lg mb-3">
+                <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
+                <div class="d-flex align-center gap-2">
+                  <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+                  <v-btn
+                    color="error"
+                    variant="flat"
+                    size="small"
+                    height="36"
+                    class="text-none font-weight-bold"
+                    :loading="bulkLoading"
+                    @click="openReason('bulk')"
+                  >
+                    Disapprove {{ selectedIds.size }}
+                    <span class="d-sr-only">selected requests</span>
+                  </v-btn>
                 </div>
-              </template>
+              </div>
+            </template>
 
-              <template v-slot:item._requesterName="{ item }">
-                <div class="d-flex align-center min-width-0">
-                  <v-avatar color="primary" variant="tonal" size="32" class="mr-2 flex-shrink-0">
-                    <span class="font-weight-bold text-caption">{{ requesterInitials(item) }}</span>
-                  </v-avatar>
-                  <span class="text-body-2 font-weight-bold text-truncate">{{ item._requesterName }}</span>
+            <template v-slot:item.select="{ item }">
+              <v-checkbox-btn
+                :model-value="selectedIds.has(itemId(item))"
+                density="compact"
+                :aria-label="`Select ${item._requesterName}'s request`"
+                @click.stop="toggleSelect(item)"
+              ></v-checkbox-btn>
+            </template>
+
+            <template v-slot:item.rowNumber="{ item }">
+              <span class="text-medium-emphasis">{{ rowNumberByRequestId.get(itemId(item)) }}</span>
+            </template>
+
+            <template v-slot:item.status="{ item }">
+              <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
+            </template>
+
+            <!-- A Booked row's own scheduled time is the date an operator
+                 actually needs here, not when it was filed — created_at
+                 stays as the fallback for every other status. -->
+            <template v-slot:item.scheduled_at="{ item }">
+              <template v-if="item.scheduled_at">
+                <div class="d-flex align-center">
+                  <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
+                  <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
                 </div>
+                <!-- One label, one pill — "Awaiting unit" / "Unit assigned" /
+                     "…late — not dispatched" (MDRRMO feedback, 2026-09-18).
+                     Overdue only changes which pill color this reuses, not a
+                     separate branch. -->
+                <StatusPill
+                  v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                  small
+                  class="mt-1"
+                  :status="isBookingOverdue(item.status, item.scheduled_at) ? 'Disapproved' : 'Booked'"
+                  :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                />
               </template>
+              <div v-else>
+                <span class="row-date">{{ formatDate(item.created_at) }}</span>
+                <!-- The one status with no scheduled_at at all — an
+                     untriaged call's own age is the signal here (MDRRMO
+                     feedback, 2026-09-18). -->
+                <StatusPill
+                  v-if="pendingWaitLabel(item.status, item.created_at)"
+                  small
+                  status="Pending"
+                  :label="pendingWaitLabel(item.status, item.created_at)"
+                  class="ml-2"
+                />
+              </div>
+            </template>
 
-              <template v-slot:item._secondary="{ item }">
-                <span class="text-medium-emphasis text-truncate d-block">{{ item._secondary }}</span>
-              </template>
+            <template v-slot:item._requesterName="{ item }">
+              <PersonCell :name="item._requesterName" :initials="requesterInitials(item)" />
+            </template>
 
-              <template v-slot:item.patient_name="{ item }">
-                <span class="text-truncate d-block" :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
-              </template>
+            <template v-slot:item._secondary="{ item }">
+              <span class="text-medium-emphasis text-truncate d-block">{{ item._secondary }}</span>
+            </template>
 
-              <template v-slot:item._unit="{ item }">
-                <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
-              </template>
-            </v-data-table>
+            <template v-slot:item.patient_name="{ item }">
+              <span class="text-truncate d-block" :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
+            </template>
 
-            <!-- itemsPerPage is sized off windowHeight so a full page fills
-                 the panel with no gap (see the computed above) — that
-                 leaves this blank whenever a filter/search genuinely has
-                 fewer results than a page holds, which reads as broken
-                 rather than as "this is everything" (impeccable ui-audit,
-                 2026-08-30). -->
-            <div
-              v-if="!initialLoad && filteredAndSortedRequests.length > 0 && filteredAndSortedRequests.length <= itemsPerPage"
-              class="text-center text-caption text-medium-emphasis py-6"
-            >
-              Showing all {{ filteredAndSortedRequests.length }} {{ filteredAndSortedRequests.length === 1 ? 'result' : 'results' }}
-            </div>
-          </div>
-
-          <div class="d-flex justify-center pa-2" style="flex-shrink: 0;">
-            <!-- active-color was `secondary` (#0A2620), which is 1.07:1 on the
-                 dark surface — the current page number simply was not there. -->
-            <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="primary"></v-pagination>
-          </div>
+            <template v-slot:item._unit="{ item }">
+              <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+            </template>
+          </DataTablePage>
         </v-card>
       </div>
 
@@ -379,9 +290,7 @@
               </div>
             </div>
             <div class="d-flex align-center gap-2 flex-shrink-0">
-              <span class="status-pill" :class="outcomePillClass(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)">
-                {{ outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason) }}
-              </span>
+              <StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)" />
               <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="selectedRequest = null"></v-btn>
             </div>
           </div>
@@ -1144,7 +1053,7 @@
               <div class="day-view-unit">
                 <div class="font-weight-bold text-body-2 text-truncate">{{ unit.unit_identifier }}</div>
                 <div class="text-caption text-medium-emphasis text-truncate">{{ unit.specification || '&nbsp;' }}</div>
-                <span v-if="unit.is_maintenance" class="status-pill status-pill--sm pill-disapproved mt-1">Maintenance</span>
+                <StatusPill v-if="unit.is_maintenance" small status="Disapproved" label="Maintenance" class="mt-1" />
               </div>
               <div class="day-view-track" :class="{ 'day-view-track--maintenance': unit.is_maintenance }">
                 <div v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-hourline" :style="{ left: mark.left }"></div>
@@ -1399,13 +1308,15 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, outcomePillClass, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel } from '@/composables/adminUi'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import PersonCell from '@/components/PersonCell.vue'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
 // Bookings tab on the Ambulance Dispatch Requests page. 'other': every
@@ -1429,8 +1340,6 @@ const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-c
 
 const route = useRoute()
 
-const { height: windowHeight } = useDisplay()
-
 const requests = ref([])
 const vehicles = ref([])
 const residents = ref([])
@@ -1441,28 +1350,9 @@ const loading = ref(false)
 const bulkLoading = ref(false)
 const apiError = ref('')
 const page = ref(1)
-// Ten was a fixed number against a variable amount of room, so a 1080px screen
-// showed ten rows and a band of empty card below them, with pagination under
-// that. Fill the space that exists.
-//
-// Both constants are measured off the rendered panel, not guessed: a row is
-// 73px (two lines of text plus 12px of vertical padding and a hairline), and
-// the search field, the wrapped status chips and the pager take 348px between
-// them. The old 58/360 pair overshot by two rows, which put a scrollbar inside
-// a list that also paginates -- the one arrangement this computed exists to
-// prevent. At 1080 this now yields exactly the 10 rows that fit.
-// The floor is 5, not 8. Eight rows need 584px and a 860px-tall window leaves
-// 512px, so the old floor put the scrollbar straight back on any laptop screen
-// -- it was defending against a uselessly short list and instead guaranteed the
-// thing the whole computed exists to avoid. Five still reads as a list, and
-// below roughly a 713px window the list scrolls, which is the honest trade.
-const ROW_HEIGHT = 73
-const LIST_CHROME = 348
-
-const itemsPerPage = computed(() => {
-  const rowsFit = Math.floor((windowHeight.value - LIST_CHROME) / ROW_HEIGHT)
-  return Math.min(20, Math.max(5, rowsFit))
-})
+// Fixed 10/25/50 options, not the old window-height-fitted computed — see
+// the DataTablePage commit this replaced it with.
+const itemsPerPage = ref(25)
 
 // Same exact-code match as the mobile app's formKindForServiceCode: only this
 // one service carries a scheduling concept server-side today, and it's the
@@ -1472,7 +1362,6 @@ const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
 const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
-const sortBy = ref([])
 const vehicleModal = ref({ isOpen: false })
 const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
@@ -1798,6 +1687,13 @@ const statusTabs = computed(() => props.scope === 'ambulance'
   ? ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
   : ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled'])
 
+// SegmentedTabs' own {value, label, count} shape, built off statusTabs and
+// requestCounts (declared further down — safe to reference here since this
+// only runs when the computed is first read, after the whole script has run).
+const statusTabItems = computed(() =>
+  statusTabs.value.map((status) => ({ value: status, label: status, count: requestCounts.value[status] })),
+)
+
 // Read off the requests actually on screen, not a barangay master list —
 // this filter should only ever offer a value that narrows the result to
 // something, never a barangay with zero requests sitting in the dropdown.
@@ -2096,8 +1992,6 @@ const filteredAndSortedRequests = computed(() => {
     return new Date(b.created_at) - new Date(a.created_at)
   })
 })
-
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage.value)))
 
 // Names which of the two reasons the list is empty. A status chip reading
 // zero and a search with no hits are different facts: one says nothing of
@@ -2794,8 +2688,6 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .gap-4 { gap: 16px; }
 .min-width-0 { min-width: 0; }
 
-.search-field { width: 320px; max-width: 100%; }
-
 /* Centred modal, capped so it never exceeds the viewport — the body below
    (pa-6 overflow-y-auto flex-grow-1) is what actually scrolls. */
 .detail-modal-card {
@@ -2809,14 +2701,6 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
-}
-
-/* Outlined variant alone already reads quieter than tonal's colored fill;
-   this drops the label itself a step further so a zero-count status is
-   unambiguously the lightest thing in the row, not just a different border
-   style at the same boldness as a populated chip beside it. */
-.status-filter-chip--muted {
-  opacity: 0.6;
 }
 
 /* One unit per row in the picker, separated rather than floated. */
@@ -2943,21 +2827,8 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   max-width: 100%;
 }
 
-/* Fixed column widths (tableHeaders' own width values) only take effect
-   with table-layout: fixed — without it the browser still measures each
-   column's content and the table jumps every time a filter/search changes
-   which rows are in view (MDRRMO feedback, 2026-09-18). Row height gets the
-   same fixed treatment: ROW_HEIGHT above already assumes every row is 73px
-   for the itemsPerPage math, so this is that assumption made real rather
-   than a coincidence of whatever content happened to be one line. */
-.request-table :deep(table) {
-  table-layout: fixed;
-  width: 100%;
-}
-.request-table :deep(td) {
-  height: 73px;
-  overflow: hidden;
-}
+/* Fixed column widths (tableHeaders' own width values) — DataTablePage's own
+   .dtp-table :deep(table) rule now supplies table-layout: fixed. */
 
 .request-row {
   cursor: pointer;
