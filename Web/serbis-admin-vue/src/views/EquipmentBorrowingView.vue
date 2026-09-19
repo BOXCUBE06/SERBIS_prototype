@@ -109,6 +109,23 @@
         ></v-select>
       </template>
 
+      <!-- Terminal outcomes are structurally excluded from this table (see
+           activeItems' STAGE_RANK filter) — this is the only trace of them
+           on the Active pipeline pane, a jump straight to the History row
+           that already carries them. -->
+      <template v-if="terminalOutcomeCounts.length" v-slot:before-table>
+        <div class="text-caption text-medium-emphasis mb-3">
+          <template v-for="(o, i) in terminalOutcomeCounts" :key="o.status">
+            <a
+              href="#"
+              class="text-primary font-weight-bold text-decoration-none"
+              @click.prevent="goToOutcome(o.status)"
+            >{{ o.count }} {{ o.label }}</a><span v-if="i < terminalOutcomeCounts.length - 1"> &middot; </span>
+          </template>
+          — View in History
+        </div>
+      </template>
+
       <template v-slot:item.avatar="{ item }">
         <v-avatar size="40" class="avatar-tint">
           <span class="avatar-initials">{{ initials(item.resident) }}</span>
@@ -927,6 +944,26 @@ const matchesBarangay = (b) =>
 // counts. Status/outcome are not among them — each segment needs the count
 // as if it, specifically, were the only one applied.
 const matchesFilters = (b) => matchesItem(b) && matchesBarangay(b) && matchesSearch(b)
+
+const countByStatus = (status) =>
+  borrowings.value.filter((b) => b.status === status && matchesFilters(b)).length
+
+// Returned/Denied/Cancelled rows never appear in the Active pipeline table —
+// they're terminal, so a link here jumps to History pre-filtered to that
+// outcome rather than pretending to filter a table that structurally
+// excludes them. Hidden at zero, same rule the segmented tabs already
+// follow, so a shortcut never points at an empty History view.
+const terminalOutcomeCounts = computed(() =>
+  columns
+    .filter((c) => c.terminal)
+    .map((c) => ({ status: c.status, label: c.label, count: countByStatus(c.status) }))
+    .filter((c) => c.count > 0),
+)
+
+const goToOutcome = (status) => {
+  activeTab.value = 'history'
+  outcomeFilter.value = status
+}
 
 // Overdue-first, then pipeline stage, then oldest-waiting first: the request
 // that has sat longest is the one due for a decision, not the newest one to
