@@ -344,6 +344,14 @@
               </v-col>
 
               <v-col cols="12">
+                <PurokAutocomplete
+                  v-model="formData.street_address"
+                  :barangay-id="formData.barangay_id"
+                  :error-messages="fieldErrors.street_address"
+                />
+              </v-col>
+
+              <v-col cols="12">
                 <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-2">Account Status</div>
                 <!-- Active and Deactivated only. 'Inactive' — shown elsewhere as
                      "Pending" — is still a real stored value and still what
@@ -494,6 +502,7 @@ import {
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import PurokAutocomplete from '@/components/PurokAutocomplete.vue'
 
 const { mdAndUp } = useDisplay()
 
@@ -551,7 +560,8 @@ const statusToggleLoading = ref(false)
 
 const formData = ref({
   first_name: '', middle_name: '', last_name: '', phone_number: '',
-  email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
+  email_address: '', password: '', barangay_id: null, street_address: '',
+  status: RESIDENT_STATUS.active,
 })
 
 // The rail is open exactly when a resident is selected. There is no second
@@ -764,7 +774,8 @@ const openAddModal = () => {
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
-    email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
+    email_address: '', password: '', barangay_id: null, street_address: '',
+    status: RESIDENT_STATUS.active,
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
 }
@@ -781,6 +792,7 @@ const openExistingEditModal = (item) => {
     email_address: item.email_address,
     password: '',
     barangay_id: item.barangay_id,
+    street_address: item.street_address ?? '',
     status: item.status,
   }
   modal.value = { isOpen: true, isEditing: true, targetId: idOf(item) }
@@ -921,6 +933,10 @@ const toggleStatus = async (item) => {
         phone_number: item.phone_number,
         email_address: item.email_address,
         barangay_id: item.barangay_id,
+        // Omitted, ResidentController::update() would default this back to
+        // null — a status toggle must not silently wipe the resident's
+        // street address (MDRRMO feedback, 2026-09-19).
+        street_address: item.street_address ?? null,
         status: next,
       }),
     })

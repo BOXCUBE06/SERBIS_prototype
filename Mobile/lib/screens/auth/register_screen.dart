@@ -8,6 +8,7 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/purok_field.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -262,11 +263,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // purok/street is exactly the detail a resident might not
                     // have memorized while filling this in — editable later
                     // from the profile either way (MDRRMO feedback, 2026-09-19).
-                    AuthTextField(
-                      label: 'Street / Purok (optional)',
-                      hint: 'e.g. Purok 3',
+                    // Suggestions come from what other residents of the picked
+                    // barangay have already typed — see PurokAutocompleteField.
+                    PurokAutocompleteField(
                       controller: _streetCtrl,
-                      prefixIcon: Icons.signpost_outlined,
+                      userStore: widget.userStore,
+                      barangayId: _barangayId,
                     ),
 
                     AuthTextField(

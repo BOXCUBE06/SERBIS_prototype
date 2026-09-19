@@ -14,6 +14,7 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/purok_field.dart';
 import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
 
@@ -1211,10 +1212,13 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               errorText: _errors['last'],
               enabled: !_saving,
             ),
-            AppTextField(
-              label: _tr('profile.street_address'),
-              hint: 'e.g. Purok 3',
+            // Suggestions come from what other residents of this account's
+            // barangay have already typed — see PurokAutocompleteField.
+            PurokAutocompleteField(
               controller: _street,
+              userStore: widget.userStore,
+              barangayId: widget.user.barangayId,
+              label: _tr('profile.street_address'),
               enabled: !_saving,
             ),
             AppTextField.phone(

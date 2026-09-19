@@ -34,6 +34,7 @@ class ResidentController extends Controller
         // until a feature reads the column, then a hole that predates it.
         $validated = $request->validate([
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+            'street_address' => 'nullable|string|max:255',
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
@@ -56,6 +57,7 @@ class ResidentController extends Controller
         // and activating a resident is the admin's job.
         $resident = Resident::create([
             'barangay_id' => $validated['barangay_id'],
+            'street_address' => $validated['street_address'] ?? null,
             'first_name' => $validated['first_name'],
             'middle_name' => $validated['middle_name'] ?? null,
             'last_name' => $validated['last_name'],
@@ -97,6 +99,7 @@ class ResidentController extends Controller
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             'email_address' => 'required|email|unique:tbl_residents,email_address,'.$id.',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+            'street_address' => 'nullable|string|max:255',
             // Same three values as store(). Both admin write paths reach this
             // method — the list's status toggle and the edit form's radio —
             // and the vocabulary is mirrored in the panel at
@@ -116,6 +119,7 @@ class ResidentController extends Controller
             'phone_number' => $validated['phone_number'],
             'email_address' => $validated['email_address'],
             'barangay_id' => $validated['barangay_id'],
+            'street_address' => $validated['street_address'] ?? null,
             'status' => $validated['status'],
         ];
 

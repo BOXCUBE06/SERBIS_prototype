@@ -32,6 +32,7 @@ import 'package:serbis/screens/auth/register_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/theme/app_theme.dart';
+import 'package:serbis/widgets/form_inputs.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
 // ---------------------------------------------------------------------------
@@ -746,7 +747,15 @@ void main() {
       final api = await _pumpRegister(tester);
 
       await _fillValidRegistration(tester);
-      await tester.enterText(_field('Street / Purok (optional)'), '  Purok 3  ');
+      // Not an AuthTextField like the fields above — PurokAutocompleteField
+      // wraps a plain AppTextField/TextField so RawAutocomplete can drive its
+      // focus, so this is found by label rather than through `_field()`.
+      final streetField = find.descendant(
+        of: find.byWidgetPredicate(
+            (w) => w is AppTextField && w.label == 'Street / Purok (optional)'),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(streetField, '  Purok 3  ');
       await _agree(tester);
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();

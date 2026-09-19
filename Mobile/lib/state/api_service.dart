@@ -571,6 +571,16 @@ class ApiService {
     return listFrom(data);
   }
 
+  /// Type-ahead source for the purok/street field (MDRRMO feedback,
+  /// 2026-09-19) — every distinct purok a resident of [barangayId] has
+  /// already entered. Public, same as [getBarangays]: the register screen
+  /// needs suggestions before there is an account.
+  Future<List<String>> getPuroks(int barangayId) async {
+    final data = await _get('/barangays/$barangayId/puroks');
+    final rows = (data['data'] as List?) ?? const [];
+    return rows.map((row) => row.toString()).toList();
+  }
+
   /// Upserts by [token] — the same call for a first registration and a later
   /// refresh. See push_messaging.dart for who calls this and when.
   Future<void> registerDeviceToken(String token, String platform) async {
