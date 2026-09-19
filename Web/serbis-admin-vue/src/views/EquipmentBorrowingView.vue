@@ -157,15 +157,15 @@
               </div>
             </template>
           </v-tooltip>
-          <!-- Says why there is no stock figure beside this row, rather
-               than leaving a blank where every other row has one. -->
-          <div v-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic">
-            Not in the inventory
-          </div>
-          <div v-if="shortStock(item)" class="text-caption font-weight-bold" style="color: rgb(var(--v-theme-error-strong));">
+          <!-- One secondary line — rows are a fixed height. A stock shortfall
+               outranks the uncatalogued note, which outranks the purpose. -->
+          <div v-if="shortStock(item)" class="text-caption font-weight-bold cell-truncate" style="color: rgb(var(--v-theme-error-strong));">
             Only {{ item.equipment?.available_quantity ?? 0 }} in stock
           </div>
-          <v-tooltip v-if="item.purpose" :text="item.purpose" location="bottom" max-width="360">
+          <div v-else-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic cell-truncate">
+            Not in the inventory
+          </div>
+          <v-tooltip v-else-if="item.purpose" :text="item.purpose" location="bottom" max-width="360">
             <template v-slot:activator="{ props }">
               <div v-bind="props" class="text-caption text-medium-emphasis cell-truncate">{{ item.purpose }}</div>
             </template>
@@ -831,9 +831,9 @@ const barangayFilter = ref(ALL_BARANGAYS)
 const statusFilter = ref(ALL_STATUS)
 const outcomeFilter = ref(ALL_OUTCOMES)
 const activePage = ref(1)
-const activeItemsPerPage = ref(25)
+const activeItemsPerPage = ref(10)
 const historyPage = ref(1)
-const historyItemsPerPage = ref(25)
+const historyItemsPerPage = ref(10)
 
 watch([search, itemFilter, barangayFilter, statusFilter], () => { activePage.value = 1 })
 watch([search, itemFilter, barangayFilter, outcomeFilter], () => { historyPage.value = 1 })
@@ -874,24 +874,27 @@ const notify = (text, color = 'success') => {
 
 const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
 
+// `value` gives each composite column something to sort on; the key still
+// names the cell slot.
+const residentSortValue = (b) => `${b.resident?.last_name || ''} ${b.resident?.first_name || ''}`
+const barangaySortValue = (b) => b.resident?.barangay?.barangay_name || ''
+
 const activeHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'avatar', sortable: false, align: 'center', width: '60px' },
-  { title: 'Head of the Family', key: 'resident', width: '20%' },
-  { title: 'Barangay', key: 'barangay', width: '12%' },
-  { title: 'Equipment', key: 'equipment', width: '22%' },
-  { title: 'Status', key: 'status', align: 'center', width: '13%' },
-  { title: 'Timeline', key: 'timeline', width: '13%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '11%' },
+  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
+  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '13%' },
+  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '23%' },
+  { title: 'Status', key: 'status', width: '13%' },
+  { title: 'Timeline', key: 'timeline', value: 'due_date', width: '14%' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '16%' },
 ]
 
 const historyHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Head of the Family', key: 'resident', width: '21%' },
-  { title: 'Barangay', key: 'barangay', width: '15%' },
-  { title: 'Equipment', key: 'equipment', width: '24%' },
-  { title: 'Requested', key: 'created_at', width: '17%' },
-  { title: 'Outcome', key: 'status', align: 'center', width: '16%' },
+  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },
+  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '17%' },
+  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '25%' },
+  { title: 'Requested', key: 'created_at', width: '18%' },
+  { title: 'Outcome', key: 'status', width: '16%' },
 ]
 
 // Sourced from the master lists (/equipments, /barangays — same endpoints
@@ -1616,11 +1619,6 @@ onMounted(() => {
    the same as every other page's header-to-content gap, not a third
    page-local value. */
 .page-tabs { margin-bottom: 24px; }
-
-.filter-field { width: 220px; max-width: 100%; }
-@media (max-width: 599px) {
-  .filter-field { flex: 1 1 100%; width: 100%; }
-}
 
 /* DataTablePage's own .dtp-table rule already sets table-layout: fixed and
    the header/row styling; this only adds the page-specific min-width floor

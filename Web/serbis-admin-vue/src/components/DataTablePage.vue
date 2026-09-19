@@ -1,32 +1,44 @@
 <!--
   DataTablePage.vue
 
-  The list-page shell every data table in the admin panel now shares:
-  toolbar (search left, filters slot, actions slot right) + segmented
-  status tabs + a fixed-layout table card + a numbered-pagination footer
-  with a 10/25/50 rows-per-page selector. Built from the ui-consistency
-  audit (2026-09) that found five tables — Resident Requests, Bookings,
-  Trip Logs, Equipment Borrowing's Active pipeline and History — each with
-  their own toolbar, footer and status-filter control, no two alike.
+  The one list panel shared by Resident Requests, Bookings, Trip Logs and
+  Equipment Borrowing's Active pipeline and History. Top to bottom, inside a
+  single bordered card: segmented status tabs, toolbar (search, filters,
+  the page's own actions), active-filter chips, table, footer (result count
+  left; rows-per-page and numbered pagination right).
 
-  Column cells stay the caller's own: every `item.*`/`no-data`/etc. slot
-  Vuetify's v-data-table recognizes is forwarded straight through via the
-  `v-for="(_, slotName) in $slots"` loop below, so a page defines its cell
-  markup exactly as it did with a bare v-data-table.
+  Everything sits at the card's one inner padding, so the toolbar and the
+  table share the same left and right edges on every page — callers must
+  not wrap this in a card or padding of their own.
 
-  Deliberately NOT included: search debouncing (none of the five source
-  pages had it, and this is not the place to add new behavior), a "show
-  everything" rows-per-page option (dropped on purpose — see the commit
-  this shipped in), and any table-specific state (selection, sort) — those
-  stay on the caller.
+  Column cells stay the caller's own: every `item.*`/`no-data`/`header.*`
+  slot is forwarded straight to v-data-table.
 -->
 <template>
-  <div class="data-table-page d-flex flex-column" style="min-height: 0;">
+  <v-card
+    elevation="0"
+    border
+    rounded="lg"
+    class="data-table-page bg-surface pa-4"
+    :style="{
+      '--dtp-row-height': ROW_HEIGHT + 'px',
+      '--dtp-header-height': HEADER_HEIGHT + 'px',
+      '--dtp-body-height': tableBodyHeight + 'px',
+    }"
+  >
+    <SegmentedTabs
+      v-if="tabs && tabs.length"
+      :model-value="status"
+      @update:model-value="$emit('update:status', $event)"
+      :items="tabs"
+      class="mb-4"
+    />
+
     <div class="dtp-toolbar d-flex flex-wrap align-center gap-3 mb-3">
       <v-text-field
         v-if="searchable"
         :model-value="search"
-        @update:model-value="$emit('update:search', $event)"
+        @update:model-value="$emit('update:search', $event ?? '')"
         prepend-inner-icon="mdi-magnify"
         :placeholder="searchPlaceholder"
         variant="outlined"
@@ -37,30 +49,18 @@
         class="dtp-search"
       ></v-text-field>
 
-      <div v-if="$slots.filters" class="d-flex flex-wrap align-center gap-3">
+      <div v-if="$slots.filters" class="dtp-filters d-flex flex-wrap align-center gap-3">
         <slot name="filters" />
       </div>
 
-      <div v-if="$slots.actions" class="ml-auto d-flex align-center flex-wrap gap-3">
+      <div v-if="$slots.actions" class="ml-auto d-flex align-center flex-wrap gap-2">
         <slot name="actions" />
       </div>
     </div>
 
-    <SegmentedTabs
-      v-if="tabs && tabs.length"
-      :model-value="status"
-      @update:model-value="$emit('update:status', $event)"
-      :items="tabs"
-      class="mb-3"
-    />
-
-    <!-- Reserved whether or not a filter is active — sized off itself (not
-         v-if'd away) so applying the first filter of a session doesn't push
-         the table down a row the way an appearing-from-nothing chip row
-         would. Search folds in here too (a caller never needs to pass its
-         own search text back as one of `activeFilters`), everything else
-         comes from the caller since DataTablePage has no idea what a
-         `filters`-slot control's current value means. -->
+    <!-- Always rendered at one chip-row's height, active filters or not, so
+         applying the first filter never pushes the table down. Search's chip
+         comes from `search` itself; every other filter from the caller. -->
     <div class="dtp-filter-row d-flex align-center flex-wrap gap-2 mb-3">
       <template v-if="allFilters.length">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
@@ -85,17 +85,7 @@
 
     <slot name="before-table" />
 
-    <v-card
-      elevation="0"
-      border
-      rounded="lg"
-      class="bg-surface overflow-hidden flex-grow-1 d-flex flex-column dtp-table-card"
-      :style="{
-        minHeight: tableMinHeight + 'px',
-        '--dtp-row-height': ROW_HEIGHT + 'px',
-        '--dtp-body-height': tableBodyHeight + 'px',
-      }"
-    >
+    <div class="dtp-table-wrap" :style="{ minHeight: tableMinHeight + 'px' }">
       <v-data-table
         :headers="headers"
         :items="items"
@@ -105,49 +95,36 @@
         hide-default-footer
         :no-data-text="noDataText"
         :row-props="rowProps"
-        class="dtp-table flex-grow-1"
-        style="min-height: 0;"
+        class="dtp-table"
         @click:row="(event, ctx) => $emit('click:row', event, ctx)"
         @update:page="$emit('update:page', $event)"
       >
-        <!-- Named explicitly, ahead of the generic forwarding loop below, so
-             a caller with a `#rowNumber` header gets numbering for free — the
-             shared numbering every page used to reimplement via
-             composables/rowNumber.ts's useRowNumbers (position in the full
-             filtered list, not the page-local index v-data-table's own
-             slot scope offers, which would restart at 1 on page 2). A
-             caller that still provides its own `item.rowNumber` template
-             overrides this fallback, same as any other Vue slot default. -->
-        <template v-slot:item.rowNumber="{ item, index }">
-          <slot name="item.rowNumber" :item="item" :index="index">
-            <span class="text-medium-emphasis">{{ rowNumberOf(item) }}</span>
-          </slot>
-        </template>
-
         <template v-for="slotName in forwardSlotNames" :key="slotName" v-slot:[slotName]="slotProps">
           <slot :name="slotName" v-bind="slotProps ?? {}" />
         </template>
       </v-data-table>
-    </v-card>
+    </div>
 
     <div class="dtp-footer d-flex align-center justify-space-between flex-wrap gap-3 pt-3">
-      <div class="text-caption text-medium-emphasis">
+      <div class="text-body-2 text-medium-emphasis">
         <slot name="summary">{{ defaultSummary }}</slot>
       </div>
       <div class="d-flex align-center flex-wrap gap-4">
-        <v-select
-          :model-value="itemsPerPage"
-          @update:model-value="onItemsPerPage"
-          :items="itemsPerPageOptions"
-          label="Rows"
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="dtp-rows-select"
-        ></v-select>
+        <div class="d-flex align-center gap-2">
+          <span class="text-body-2 text-medium-emphasis">Rows per page</span>
+          <v-select
+            :model-value="itemsPerPage"
+            @update:model-value="onItemsPerPage"
+            :items="itemsPerPageOptions"
+            aria-label="Rows per page"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            class="dtp-rows-select"
+          ></v-select>
+        </div>
         <v-pagination
-          v-if="pageCount > 1"
           :model-value="page"
           @update:model-value="$emit('update:page', $event)"
           :length="pageCount"
@@ -157,7 +134,7 @@
         ></v-pagination>
       </div>
     </div>
-  </div>
+  </v-card>
 </template>
 
 <script setup>
@@ -165,34 +142,27 @@ import { computed, useSlots } from 'vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 
 const props = defineProps({
-  // Toolbar
   searchable: { type: Boolean, default: true },
   search: { type: String, default: '' },
   searchPlaceholder: { type: String, default: 'Search' },
 
-  // Segmented status tabs — omitted entirely when `tabs` is empty/undefined.
+  // Segmented status tabs — omitted entirely when `tabs` is empty.
   tabs: { type: Array, default: () => [] },
   status: { type: [String, Number], default: '' },
 
-  // Table
   headers: { type: Array, required: true },
   items: { type: Array, required: true },
   itemValue: { type: String, default: 'id' },
   rowProps: { type: [Function, Object], default: undefined },
   noDataText: { type: String, default: 'No results' },
 
-  // Footer
   page: { type: Number, default: 1 },
   itemsPerPage: { type: Number, default: 10 },
   itemsPerPageOptions: { type: Array, default: () => [10, 25, 50] },
   resultNoun: { type: String, default: 'results' },
 
-  // Active-filter chip row. Each entry is `{ key, label }` for whatever the
-  // caller's own `filters`-slot controls (or status/tabs) currently narrow
-  // the list by — search is not included here, DataTablePage adds that chip
-  // itself since it already owns `search`. Closing a chip or hitting Clear
-  // all only tells the caller which key to reset; DataTablePage holds no
-  // filter state of its own beyond search.
+  // `{ key, label }` per active filter, search excluded (added here). Closing
+  // a chip or Clear all only tells the caller which key to reset.
   activeFilters: { type: Array, default: () => [] },
 })
 
@@ -206,44 +176,24 @@ const emit = defineEmits([
   'clear-all',
 ])
 
+// This component's own slots are not v-data-table's; forwarding `actions` or
+// `summary` down would collide with any same-named table slot.
+const OWN_SLOTS = ['filters', 'actions', 'summary', 'before-table']
 const slots = useSlots()
-// `item.rowNumber` gets its own explicit template above (with a built-in
-// fallback) — forwarding it again here would register the same slot name on
-// v-data-table twice.
-const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => name !== 'item.rowNumber'))
-
-// Numbered by position in the full items list this instance was handed, not
-// v-data-table's own per-page slot index — see the template comment above.
-const rowNumberById = computed(() => {
-  const map = new Map()
-  props.items.forEach((item, i) => {
-    const id = item?.[props.itemValue]
-    if (id !== undefined && id !== null) map.set(id, i + 1)
-  })
-  return map
-})
-const rowNumberOf = (item) => rowNumberById.value.get(item?.[props.itemValue]) ?? ''
+const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => !OWN_SLOTS.includes(name)))
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
 
-// Fixed row height, not density="comfortable" — a row that grows with its
-// own content is exactly the layout shift this component exists to remove
-// (matches the 73px the pre-refactor ServiceRequestQueue fixed rows to, see
-// `fix table column widths and row heights`, 1212d04). itemsPerPage is now a
-// fixed 10/25/50 choice rather than sized off window height, so the table's
-// own reserved area is itemsPerPage rows tall regardless of how many rows
-// the current page actually has — a partial page or a zero-row/no-data
-// result still reserves a full page's height, so the footer below it never
-// jumps.
-const ROW_HEIGHT = 73
+// One fixed height for every row, never density — a row sized off its own
+// content is the layout shift this component exists to remove. The table
+// area reserves a full page of rows even when the page is partial or empty,
+// so switching tabs or filters never moves the footer.
+const ROW_HEIGHT = 48
 const HEADER_HEIGHT = 44
 const tableBodyHeight = computed(() => props.itemsPerPage * ROW_HEIGHT)
 const tableMinHeight = computed(() => tableBodyHeight.value + HEADER_HEIGHT)
 
-// Changing the page size mid-list can strand the current page past the new
-// last page (25 rows at 50/page = page 1 of 1; switch to 10/page and page 1
-// is still valid, but the reverse isn't) — reset to page 1 rather than
-// leaving the table showing an out-of-range page silently.
+// A smaller page size can strand the current page past the new last page.
 const onItemsPerPage = (value) => {
   emit('update:itemsPerPage', value)
   emit('update:page', 1)
@@ -251,9 +201,7 @@ const onItemsPerPage = (value) => {
 
 const defaultSummary = computed(() => `${props.items.length} ${props.resultNoun}`)
 
-// Internal-only key for the chip DataTablePage generates from its own
-// `search` prop — never collides with a caller's own filter keys, which name
-// a page-local ref (`item`, `barangay`, `status`, ...).
+// Internal key for the search chip; never collides with a caller's own keys.
 const SEARCH_FILTER_KEY = '__search'
 const allFilters = computed(() => {
   const q = (props.search || '').trim()
@@ -275,50 +223,70 @@ const clearAll = () => {
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
-.dtp-search {
+/* v-input grows by default, which stretched search across the whole row. */
+.data-table-page .dtp-search {
+  flex: 0 1 320px;
   width: 320px;
   max-width: 100%;
 }
-.dtp-rows-select {
-  width: 100px;
+/* Wide enough that a label plus its "All …" value never truncates. */
+.data-table-page .dtp-filters :deep(.v-input) {
+  flex: 0 0 200px;
+  width: 200px;
+}
+.data-table-page .dtp-rows-select {
+  flex: 0 0 88px;
+  width: 88px;
+}
+@media (max-width: 599px) {
+  .data-table-page .dtp-search,
+  .data-table-page .dtp-filters,
+  .data-table-page .dtp-filters :deep(.v-input) {
+    flex: 1 1 100%;
+    width: 100%;
+  }
 }
 
-/* Sized to one row of small chips whether or not any are actually showing —
-   the reservation this row exists for. */
 .dtp-filter-row {
   min-height: 32px;
 }
-/* Outlined chip on the page surface, not a tonal fill — base `primary` text
-   on a tonal chip's own tint measures 4.40:1 and fails WCAG AA at this
-   weight; `-strong` is the token built for text at this weight, here against
-   the plain surface behind an outlined chip. */
+/* Outlined, so the label sits on the surface; -strong for AA at this weight. */
 .dtp-filter-chip {
   color: rgb(var(--v-theme-primary-strong));
   border-color: rgba(var(--v-theme-primary), 0.45);
 }
 
-/* Fixed layout, same reasoning every table in this app already relies on
-   (ServiceRequestQueue's own comment on this): without it the browser
-   re-measures every column off whatever rows are in view and the table
-   visibly jumps on every filter/search/page change. */
+.dtp-table-wrap {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Fixed layout: otherwise columns re-measure off the visible rows and the
+   table jumps on every filter, search or page change. */
 .dtp-table :deep(table) {
   table-layout: fixed;
   width: 100%;
+}
+.dtp-table :deep(thead th) {
+  height: var(--dtp-header-height) !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 .dtp-table :deep(tbody tr) {
   cursor: pointer;
   height: var(--dtp-row-height);
 }
-.dtp-table :deep(td) {
-  height: var(--dtp-row-height);
+.dtp-table :deep(tbody td) {
+  height: var(--dtp-row-height) !important;
   overflow: hidden;
 }
-/* The no-data row is the only row in the table when items is empty — sized
-   to the full reserved row area (not one row's worth) and centered, so an
-   empty result fills the same box a full page of rows would rather than
-   collapsing to header + one short row. */
+/* Empty result: the lone no-data cell fills the whole reserved body. */
 .dtp-table :deep(tr.v-data-table-rows-no-data td) {
-  height: var(--dtp-body-height);
+  height: var(--dtp-body-height) !important;
   text-align: center;
   vertical-align: middle;
 }
@@ -326,11 +294,12 @@ const clearAll = () => {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
 }
-.dtp-table :deep(thead th) {
-  font-size: 0.72rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
+/* Vuetify hides the sort arrow until hover; keep it visible on every sortable
+   column so sortability is discoverable, full strength once sorted. */
+.dtp-table :deep(.v-data-table-header__sort-icon) {
+  opacity: 0.35 !important;
+}
+.dtp-table :deep(.v-data-table__th--sorted .v-data-table-header__sort-icon) {
+  opacity: 1 !important;
 }
 </style>

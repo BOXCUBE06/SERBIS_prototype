@@ -1,103 +1,36 @@
 <template>
-  <!-- height:100% + flex column, matching /manage-requests' own canvas now
-       that this route is fixedHeight too (router/index.ts) — the shell's
-       .inner-wrapper is the one bounded, non-scrolling ancestor everything
-       below sizes against, the same way ServiceRequestQueue.vue's own
-       standalone=true path already works. Header and tabs take their
-       natural height; v-window gets what's left. -->
-  <v-container fluid class="pa-6 bg-background d-flex flex-column" style="height: 100%;">
-    <!-- Right slot used to sit empty -- Bookings' own toolbar buttons lived
-         in a separate row inside ServiceRequestQueue.vue instead, and Trip
-         Logs' "+ Ambulance Trip Record" in one of its own below the filter
-         bar. Both moved here (layout redesign follow-up): one shared header
-         row instead of a header plus a second, mostly-empty button row per
-         tab, reclaiming that row's full height. Bookings' three buttons
-         call back into the child via bookingsQueueRef's exposed actions —
-         see ServiceRequestQueue.vue's own defineExpose — since it still
-         owns that state privately (the same reason "Open Booking" already
-         reaches in via a ref rather than duplicating state here). -->
-    <!-- 16px, not the mb-6/24px most other headers use: this row sits directly
-         above the tab bar, not a card with its own breathing room, and 24px
-         read as oversized once the action buttons moved inline with the
-         title (layout redesign follow-up, kept through the PageHeader
-         extraction). -->
+  <!-- Scrolls with the page like every other list route. Each tab's actions
+       live in its own DataTablePage panel, not this header. -->
+  <v-container fluid class="pa-6 bg-background">
     <PageHeader
       title="Ambulance Dispatch Requests"
       subtitle="MDRRMO Conduction Request Form — Echague Rescue EMS"
-      style="flex-shrink: 0; margin-bottom: 16px;"
-    >
-      <template v-slot:actions>
-        <template v-if="activeTab === 'bookings'">
-          <v-btn
-            color="secondary"
-            variant="flat"
-            class="text-none font-weight-bold px-6 text-white"
-            height="48"
-            @click="bookingsQueueRef?.openCreateDialog()"
-          >
-            <v-icon start size="small">mdi-account-plus-outline</v-icon>
-            Log Service Request
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="text"
-            class="text-none font-weight-bold px-6"
-            height="48"
-            @click="bookingsQueueRef?.openDayView()"
-          >
-            <v-icon start size="small">mdi-calendar-clock</v-icon>
-            Ambulance Day View
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="text"
-            class="text-none font-weight-bold px-6"
-            height="48"
-            :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
-            @click="bookingsQueueRef?.exportCsv()"
-          >
-            <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-            {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
-            <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
-          </v-btn>
-        </template>
-        <v-btn
-          v-else-if="activeTab === 'trip-logs'"
-          color="primary"
-          variant="flat"
-          class="text-none font-weight-bold px-6"
-          height="48"
-          @click="openCreate()"
-        >
-          <v-icon start size="small">mdi-plus</v-icon>
-          Ambulance Trip Record
-        </v-btn>
-      </template>
-    </PageHeader>
+      class="mb-4"
+    />
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
          Ambulance/Medical Response — moved here from Resident Requests so
          staff have one place for everything ambulance. Trip Logs: the
          dispatch record itself, unchanged, for a unit that is actually
          rolling. -->
-    <v-tabs v-model="activeTab" color="primary" class="mb-5" style="flex-shrink: 0;">
+    <v-tabs v-model="activeTab" color="primary" class="mb-5">
       <v-tab value="bookings" class="text-none font-weight-bold">Bookings</v-tab>
       <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
     </v-tabs>
 
-    <v-window v-model="activeTab" class="flex-grow-1" style="min-height: 0;">
-      <v-window-item value="bookings" class="h-100">
+    <v-window v-model="activeTab">
+      <v-window-item value="bookings">
         <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
       </v-window-item>
 
-      <v-window-item value="trip-logs" class="h-100 d-flex flex-column">
-        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" style="flex-shrink: 0;" @click:close="apiError = ''">
+      <v-window-item value="trip-logs">
+        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
           {{ apiError }}
         </v-alert>
 
-        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg flex-grow-1"></v-skeleton-loader>
+        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface flex-grow-1">
+        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
             <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
@@ -129,12 +62,25 @@
           :items-per-page="itemsPerPage"
           @update:items-per-page="itemsPerPage = $event"
           result-noun="trip records"
-          class="conduction-table flex-grow-1"
+          class="conduction-table"
           :active-filters="activeFilters"
           @clear-filter="clearFilter"
           @clear-all="clearAllFilters"
           @click:row="(_e, { item }) => openDetail(item)"
         >
+          <template v-slot:actions>
+            <v-btn
+              color="primary"
+              variant="flat"
+              class="text-none font-weight-bold"
+              height="40"
+              @click="openCreate()"
+            >
+              <v-icon start size="small">mdi-plus</v-icon>
+              Ambulance Trip Record
+            </v-btn>
+          </template>
+
           <template v-slot:item.patient="{ item }">
             <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
             <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
@@ -610,7 +556,7 @@ const items = ref([])
 const search = ref('')
 const statusFilter = ref(ALL_STATUS)
 const page = ref(1)
-const itemsPerPage = ref(25)
+const itemsPerPage = ref(10)
 const initialLoad = ref(true)
 const reloading = ref(false)
 const loading = ref(false)
@@ -618,12 +564,13 @@ const apiError = ref('')
 const loadError = ref('')
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
+// `value` gives the composite columns something to sort on; the key still
+// names the cell slot.
 const headers = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Patient', key: 'patient', width: '24%' },
-  { title: 'Status', key: 'trip_status', align: 'center', width: '17%' },
-  { title: 'From → To', key: 'trip', width: '28%' },
-  { title: 'Filed', key: 'created_at', width: '17%' },
+  { title: 'Patient', key: 'patient', value: 'patient_name', width: '28%' },
+  { title: 'Status', key: 'trip_status', width: '18%' },
+  { title: 'From → To', key: 'trip', value: (r) => `${r.origin || ''} ${r.destination || ''}`, width: '34%' },
+  { title: 'Filed', key: 'created_at', width: '20%' },
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }

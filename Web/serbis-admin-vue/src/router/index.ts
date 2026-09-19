@@ -10,19 +10,12 @@ const routes = [
   { path: '/users', component: () => import('../views/UsersView.vue') },
   { path: '/staff', component: () => import('../views/StaffView.vue') },
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue') },
-  // `fixedHeight` opts a route out of the shell's page scrolling — a
-  // fixed-height split pane that scrolls inside its own columns instead,
-  // matching a native app screen rather than a document. Every other view
-  // is a scrolling page (`align-start` + `min-height: 100vh`, or no
-  // `fill-height` at all), so making the shell `overflow: hidden` globally
-  // would clip the rest of them.
-  { path: '/manage-requests', component: () => import('../views/ManageRequestView.vue'), meta: { fixedHeight: true } },
-  // Both tabs (Bookings' split pane, Trip Logs' table) now match
-  // /manage-requests' canvas instead of scrolling the page underneath them
-  // (layout redesign follow-up, 2026-08-31: the page-scroll approach tried
-  // first fought Vuetify's own sticky-positioning internals and still left
-  // the action bar reachable only by scrolling on a tall request).
-  { path: '/conduction-requests', component: () => import('../views/ConductionRequestView.vue'), meta: { fixedHeight: true } },
+  // `meta: { fixedHeight: true }` opts a route out of the shell's page
+  // scrolling (App.vue). No route uses it now: the two that did held a split
+  // pane, which became a modal, and inside the capped height their shared
+  // DataTablePage lost its status tabs and footer to flex shrinking.
+  { path: '/manage-requests', component: () => import('../views/ManageRequestView.vue') },
+  { path: '/conduction-requests', component: () => import('../views/ConductionRequestView.vue') },
   { path: '/sms', component: () => import('../views/SmsView.vue') },
   { path: '/files', component: () => import('../views/FilesView.vue') },
   { path: '/logs', component: () => import('../views/LogsView.vue') },

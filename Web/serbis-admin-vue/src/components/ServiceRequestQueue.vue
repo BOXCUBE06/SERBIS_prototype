@@ -1,115 +1,23 @@
 <template>
-  <!-- height:100% + overflow-hidden apply either way now: the embedded case
-       (standalone=false, the Ambulance Dispatch Requests tab) used to fall
-       back to a guessed fixed height here because its route scrolled the
-       page underneath it — that route is fixedHeight now too
-       (router/index.ts), so this component's real ancestor chain gives it
-       an actual height to fill, the same way the standalone case already
-       worked. Only the outer padding still differs: pa-5 owns its own
-       margin as a whole route, pa-0 sits flush inside the tab it's
-       embedded in. -->
+  <!-- Scrolls with the page like every other list: the split pane that
+       needed a fixed-height canvas is gone (detail is a modal now). pa-5 owns
+       its own margin as a whole route; pa-0 sits flush inside the Ambulance
+       Dispatch tab it's embedded in. -->
   <v-container
     fluid
-    class="dashboard-bg overflow-hidden"
+    class="dashboard-bg"
     :class="[standalone ? 'pa-5' : 'pa-0']"
-    style="height: 100%; min-height: 480px;"
   >
-    <div class="d-flex flex-column w-100 h-100">
+    <div class="d-flex flex-column w-100">
 
-      <!-- Toolbar. Standalone only (Resident Requests, which owns its whole
-           route and has no page-level header of its own to put this in).
-           Embedded (the Ambulance Dispatch Requests tab), ConductionRequestView.vue
-           renders this same button group in its own page-header instead, via
-           the exposed actions below -- this row would otherwise duplicate
-           that page's title and waste a whole row's height on redundant
-           "Ambulance Bookings" text the page-header's own title already
-           covers (layout redesign follow-up). -->
       <PageHeader
         v-if="standalone"
         :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
         :subtitle="`${requestCounts.All} ${scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays'}`"
         class="mb-6"
-      >
-        <template v-slot:actions>
-        <!-- The adviser's ask: someone who shows up at the office in person
-             rather than through the app, with or without an account. A
-             separate button rather than folding this into the export/filter
-             row, since filing a request is a different kind of action from
-             everything else up here. -->
-        <v-btn
-          color="secondary"
-          variant="flat"
-          class="text-none font-weight-bold px-6 text-white"
-          height="48"
-          @click="openCreateDialog"
-        >
-          <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Service Request
-        </v-btn>
-        <!-- text, not outlined: outlined still reads as a near-peer of Log
-             Service Request's filled button sitting right beside it — two
-             bordered, bold-labelled buttons plus a filled one is still three
-             things competing, just with one slightly heavier. Only Log
-             Service Request is the page's actual decision; this and Export
-             below are both supporting views, so both drop to the lightest
-             tier (item 8 of the layout redesign). Ambulance-only: the fleet
-             schedule this shows has nothing to say about a road-clearing
-             crew's queue. -->
-        <v-btn
-          v-if="scope === 'ambulance'"
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="48"
-          @click="openDayView"
-        >
-          <v-icon start size="small">mdi-calendar-clock</v-icon>
-          Ambulance Day View
-        </v-btn>
-        <!-- This used to be a button with no handler and no export function
-             behind it, styled larger than either real action on the page. It
-             now writes what the operator is actually looking at: the current
-             filter and search, in the order shown, not all 30 rows. -->
-        <!-- text, not outlined — see the comment on Ambulance Day View
-             above; the same reasoning demoted this from its earlier
-             outlined treatment. Count dropped from the label itself (item
-             8): "Export 29" read as a fourth number competing with the
-             page's own counts (bookings total, per-status chips) for
-             attention it didn't need — the sr-only text and the disabled
-             "Nothing to export" state already say what it does without it. -->
-        <v-btn
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="48"
-          :disabled="filteredAndSortedRequests.length === 0"
-          @click="exportCsv"
-        >
-          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
-          <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
-        </v-btn>
-        </template>
-      </PageHeader>
+      />
 
-      <!-- Full-width list. Detail used to sit beside this as a permanent
-           rail-width sibling; that squeezed a six-column table into a
-           fixed narrow width, reproducing exactly the crowding the table
-           was meant to fix. Detail now opens in a centred modal (v-dialog
-           below) instead of a sibling pane — see the modal's own comment
-           (MDRRMO feedback, 2026-09-18). -->
-      <div
-        class="d-flex flex-grow-1 overflow-hidden"
-        style="min-height: 0;"
-      >
-
-        <!-- The request list -->
-        <v-card
-          elevation="0"
-          rounded="xl"
-          class="soft-card d-flex flex-column overflow-hidden request-list flex-grow-1 pa-4"
-        >
-          <v-skeleton-loader v-if="initialLoad" type="table-row@6"></v-skeleton-loader>
+          <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
           <!-- Every status tab always renders, including a Disapproved or
                Cancelled reading zero — hiding an empty status read as "this
@@ -131,7 +39,6 @@
             :items-per-page="itemsPerPage"
             @update:items-per-page="itemsPerPage = $event"
             result-noun="requests"
-            class="flex-grow-1"
             :row-props="(ctx) => ({
               class: [`row-${(ctx.item.status || 'Pending').toLowerCase()}`, isSelected(ctx.item) ? 'row-selected' : ''],
               role: 'button',
@@ -169,6 +76,52 @@
               ></v-select>
             </template>
 
+            <!-- Both scopes render their own actions now; the Ambulance
+                 Dispatch page used to host Bookings' copy in its page header,
+                 outside this panel. Log Service Request is the one decision
+                 here, so it alone is filled; Day View and Export are
+                 supporting views at text weight. Day View is ambulance-only:
+                 the fleet schedule says nothing about a road-clearing queue. -->
+            <template v-slot:actions>
+              <v-btn
+                v-if="scope === 'ambulance'"
+                color="primary"
+                variant="text"
+                class="text-none font-weight-bold"
+                height="40"
+                @click="openDayView"
+              >
+                <v-icon start size="small">mdi-calendar-clock</v-icon>
+                Day View
+              </v-btn>
+              <!-- Writes what the operator is looking at: current filter and
+                   search, in the order shown. -->
+              <v-btn
+                color="primary"
+                variant="text"
+                class="text-none font-weight-bold"
+                height="40"
+                :disabled="filteredAndSortedRequests.length === 0"
+                @click="exportCsv"
+              >
+                <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+                {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
+                <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
+              </v-btn>
+              <!-- Someone who shows up at the office in person rather than
+                   through the app, with or without an account. -->
+              <v-btn
+                color="secondary"
+                variant="flat"
+                class="text-none font-weight-bold text-white"
+                height="40"
+                @click="openCreateDialog"
+              >
+                <v-icon start size="small">mdi-account-plus-outline</v-icon>
+                Log Service Request
+              </v-btn>
+            </template>
+
             <!-- Bulk action bar. Count in the label — the button names what
                  it does and to how many — destructive action rightmost, the
                  same order the confirm dialog below uses. -->
@@ -200,10 +153,6 @@
                 :aria-label="`Select ${item._requesterName}'s request`"
                 @click.stop="toggleSelect(item)"
               ></v-checkbox-btn>
-            </template>
-
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="text-medium-emphasis">{{ rowNumberByRequestId.get(itemId(item)) }}</span>
             </template>
 
             <template v-slot:item.status="{ item }">
@@ -262,8 +211,6 @@
               <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
             </template>
           </DataTablePage>
-        </v-card>
-      </div>
 
       <!-- Detail modal, centred rather than a right-hand drawer (MDRRMO
            feedback, 2026-09-18) — the drawer was `temporary`, meaning it
@@ -1353,9 +1300,7 @@ const loading = ref(false)
 const bulkLoading = ref(false)
 const apiError = ref('')
 const page = ref(1)
-// Fixed 10/25/50 options, not the old window-height-fitted computed — see
-// the DataTablePage commit this replaced it with.
-const itemsPerPage = ref(25)
+const itemsPerPage = ref(10)
 
 // Same exact-code match as the mobile app's formKindForServiceCode: only this
 // one service carries a scheduling concept server-side today, and it's the
@@ -1727,7 +1672,6 @@ const unitOptions = computed(() => {
 // filter or search changes which rows show (MDRRMO feedback, 2026-09-18).
 const tableHeaders = computed(() => [
   { title: '', key: 'select', sortable: false, width: 48 },
-  { title: '#', key: 'rowNumber', sortable: false, width: 56 },
   { title: 'Status', key: 'status', width: 130 },
   { title: 'Scheduled', key: 'scheduled_at', width: 170 },
   { title: 'Requester', key: '_requesterName', width: 220 },
@@ -1735,15 +1679,6 @@ const tableHeaders = computed(() => [
   { title: 'Patient', key: 'patient_name', width: 160 },
   { title: 'Unit', key: '_unit', width: 130 },
 ])
-
-// Position in the filtered/sorted list, not the table's own internal
-// per-page index — this way row 1 on page 2 correctly reads as row 11
-// rather than resetting to 1 every page.
-const rowNumberByRequestId = computed(() => {
-  const map = new Map()
-  filteredAndSortedRequests.value.forEach((r, i) => map.set(itemId(r), i + 1))
-  return map
-})
 
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
 // arrival so the operator lands on the filtered view, not "All".
@@ -2697,14 +2632,9 @@ onMounted(fetchData)
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
 
-// Everything ConductionRequestView.vue's page-header needs to render this
-// component's own toolbar buttons externally when embedded (standalone=
-// false, toolbar hidden above) -- actions plus the one piece of reactive
-// state the Export button's label/disabled state depends on. Grouped at
-// the bottom, after every referenced const's own declaration, since
-// defineExpose runs inline during setup (not deferred like a template) and
-// openDayView in particular is declared well after where this used to sit.
-defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filteredAndSortedRequests })
+// Trip Logs' "Open Booking" reaches in through this. Last in setup because
+// defineExpose runs inline, after every referenced const is declared.
+defineExpose({ selectRequestById })
 </script>
 
 <style scoped>
