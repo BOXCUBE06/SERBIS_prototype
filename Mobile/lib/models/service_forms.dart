@@ -132,11 +132,18 @@ class AmbulanceFormData extends ServiceFormData {
   /// answer for; both stay fully editable, because the account answers for the
   /// requester and the request is often about someone else.
   ///
-  /// The patient's name is deliberately NOT among them. The account holder is
-  /// the likeliest patient, not the certain one — a head of the family files
-  /// for the household — and a name already sitting in the field is a default
-  /// nobody chose, submitted unchecked.
-  AmbulanceFormData({this.contactNumber = '', String accountAddress = ''}) {
+  /// The patient's name is deliberately NOT prefilled the same way. The
+  /// account holder is the likeliest patient, not the certain one — a head of
+  /// the family files for the household — and a name already sitting in the
+  /// field is a default nobody chose, submitted unchecked. [accountName] is
+  /// kept only for [setPatientIsAccountHolder], which fills the name field on
+  /// an explicit, unchecked-by-default confirmation instead (MDRRMO feedback,
+  /// 2026-09-19).
+  AmbulanceFormData({
+    this.contactNumber = '',
+    this.accountName = '',
+    String accountAddress = '',
+  }) {
     patientAddress.text = accountAddress;
     patientContact.text = contactNumber;
   }
@@ -145,6 +152,26 @@ class AmbulanceFormData extends ServiceFormData {
   /// registration and NOT NULL, so this is only ever empty if the profile has
   /// not loaded.
   final String contactNumber;
+
+  /// The account holder's name, for [setPatientIsAccountHolder] to copy into
+  /// [patient] — never written to the field on its own.
+  final String accountName;
+
+  /// Whether the "Patient is myself" checkbox is ticked. Read by the screen
+  /// to draw the checkbox's own state; setting [patient] happens in
+  /// [setPatientIsAccountHolder], not here, so this stays a plain flag.
+  bool patientIsAccountHolder = false;
+
+  /// Fills [patient] from the account holder's name when [value] is true.
+  /// Unchecking afterward does not clear the field — the name stays fully
+  /// editable either way, the same as every other prefilled field on this
+  /// form.
+  void setPatientIsAccountHolder(bool value) {
+    patientIsAccountHolder = value;
+    if (value) {
+      patient.text = accountName;
+    }
+  }
 
   final TextEditingController patient = TextEditingController();
   final TextEditingController age = TextEditingController();

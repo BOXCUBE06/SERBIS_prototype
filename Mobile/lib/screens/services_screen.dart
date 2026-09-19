@@ -149,6 +149,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       _forms.putIfAbsent(kind, () => switch (kind) {
             ServiceFormKind.ambulance => AmbulanceFormData(
                 contactNumber: widget.user.phone,
+                accountName: widget.user.fullName,
                 // `AppUser.address` is the barangay relation, not a street —
                 // tbl_residents carries no address column. A starting point
                 // the resident is expected to narrow, not a doorstep.

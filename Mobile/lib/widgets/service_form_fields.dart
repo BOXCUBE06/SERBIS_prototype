@@ -43,7 +43,23 @@ class ServiceFormFields extends StatelessWidget {
             FormSection(
               label: tr(f, 'form_section.patient'),
               children: [
-                // Never prefilled — see AmbulanceFormData's constructor.
+                // Off by default — see AmbulanceFormData.setPatientIsAccountHolder.
+                // Checking it fills the name below once; the field stays fully
+                // editable either way.
+                CheckboxListTile(
+                  value: form.patientIsAccountHolder,
+                  onChanged: (checked) {
+                    form.setPatientIsAccountHolder(checked ?? false);
+                    onChanged();
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Patient is myself',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'Patient name',
                   hint: 'e.g. Maria Santos',

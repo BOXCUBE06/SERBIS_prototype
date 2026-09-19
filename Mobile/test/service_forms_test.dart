@@ -256,6 +256,47 @@ void main() {
     });
   });
 
+  group('the "patient is myself" checkbox', () {
+    test('is off by default and the name stays blank', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      expect(form.patientIsAccountHolder, isFalse);
+      expect(form.patient.text, isEmpty);
+    });
+
+    test('checking it fills the patient name from the account', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      form.setPatientIsAccountHolder(true);
+
+      expect(form.patientIsAccountHolder, isTrue);
+      expect(form.patient.text, 'Maria Santos');
+    });
+
+    test('the filled name is still editable afterward', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      form.setPatientIsAccountHolder(true);
+      form.patient.text = 'Juan Dela Cruz';
+
+      expect(form.patient.text, 'Juan Dela Cruz');
+    });
+
+    test('unchecking does not clear whatever is currently in the field', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      form.setPatientIsAccountHolder(true);
+      form.setPatientIsAccountHolder(false);
+
+      expect(form.patientIsAccountHolder, isFalse);
+      expect(form.patient.text, 'Maria Santos');
+    });
+  });
+
   group('the relatives repeater', () {
     test('starts with exactly one empty slot', () {
       final form = AmbulanceFormData();
@@ -466,6 +507,35 @@ void main() {
       // correct rather than a question to answer.
       expect(find.widgetWithText(TextField, '09XXXXXXXXX'), findsOneWidget);
       expect(find.widgetWithText(TextField, '09171234567'), findsOneWidget);
+    });
+
+    testWidgets(
+        'checking "Patient is myself" fills the name field on screen',
+        (tester) async {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+      var changes = 0;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ServiceFormFields(
+              data: form,
+              onChanged: () => changes++,
+              appState: _appState,
+              filipino: false,
+            ),
+          ),
+        ),
+      ));
+
+      expect(find.widgetWithText(TextField, 'Maria Santos'), findsNothing);
+
+      await tester.tap(find.text('Patient is myself'));
+      await tester.pump();
+
+      expect(changes, 1);
+      expect(find.widgetWithText(TextField, 'Maria Santos'), findsOneWidget);
     });
 
     testWidgets('the ambulance form lays out at real phone widths',
