@@ -1,19 +1,16 @@
 <!--
   StatusPill.vue
 
-  Small, solid-fill, fully-rounded status badge — the one pill rendering
-  used by every list/detail view (ServiceRequestQueue, ConductionRequestView,
-  EquipmentBorrowingView), replacing three independent renderings: the
-  tint-background .status-pill/.pill-* CSS classes, EquipmentBorrowingView's
-  own inline-styled v-chip, and (nowhere yet, but the same shape) any future
-  one-off. Color comes from composables/statusPill.ts's shared accent table,
-  never a local palette.
+  Small, fully-rounded status badge used by every list/detail view. A light
+  tint of the status accent with darkened accent text, normal case — the
+  earlier solid uppercase fill read heavier than the data around it. Color
+  comes from composables/statusPill.ts's shared accent table.
 -->
 <template>
   <span
-    class="status-pill-solid"
-    :class="{ 'status-pill-solid--sm': small }"
-    :style="{ backgroundColor: accent }"
+    class="tint-pill"
+    :class="{ 'tint-pill--sm': small }"
+    :style="{ '--pill-accent': accent }"
   >
     <v-icon v-if="icon" start :size="small ? 12 : 14">{{ icon }}</v-icon>
     <slot>{{ label ?? status }}</slot>
@@ -35,21 +32,27 @@ const accent = computed(() => pillAccent(props.status))
 </script>
 
 <style scoped>
-.status-pill-solid {
+/* Text is the accent darkened 25%: the plain accent on its own 12% tint
+   drops to ~4.3:1 for the amber and fails AA at this size. */
+.tint-pill {
   display: inline-flex;
   align-items: center;
-  padding: 5px 12px;
+  padding: 3px 10px;
   border-radius: 999px;
   font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 600;
+  line-height: 1.25;
   white-space: nowrap;
-  color: #fff;
+  background: color-mix(in srgb, var(--pill-accent) 12%, rgb(var(--v-theme-surface)));
+  color: color-mix(in srgb, var(--pill-accent) 75%, #000);
 }
-.status-pill-solid--sm {
-  padding: 2px 10px;
+.tint-pill--sm {
+  padding: 1px 8px;
   font-size: 0.6875rem;
-  letter-spacing: 0.04em;
+}
+/* On a dark surface the darkened text would vanish; lighten it instead. */
+:global(.v-theme--dark) .tint-pill {
+  background: color-mix(in srgb, var(--pill-accent) 22%, rgb(var(--v-theme-surface)));
+  color: color-mix(in srgb, var(--pill-accent) 45%, #fff);
 }
 </style>

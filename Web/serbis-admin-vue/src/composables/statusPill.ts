@@ -1,5 +1,8 @@
 /**
- * One accent-color table for every solid-fill status pill in the admin
+ * StatusPill now renders these as a light tint with darkened text (see
+ * StatusPill.vue); the contrast notes below date from the solid fill.
+ *
+ * One accent-color table for every status pill in the admin
  * panel — the ServiceRequest family (Pending/Booked/Responding/Resolved/
  * Disapproved/Cancelled, the Resolved-no-arrival split, and Trip Logs' own
  * Awaiting departure/In transit/Completed labels from adminUi.ts's
