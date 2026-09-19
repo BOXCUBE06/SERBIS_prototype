@@ -32,8 +32,11 @@ const accent = computed(() => pillAccent(props.status))
 </script>
 
 <style scoped>
-/* Text is the accent darkened 25%: the plain accent on its own 12% tint
-   drops to ~4.3:1 for the amber and fails AA at this size. */
+/* Text is the accent pulled 40% toward the theme's own text color: darker on
+   light surfaces, lighter on dark ones, from one rule. The plain accent on its
+   own tint fails AA for amber in light theme and vanishes in dark. (A
+   `:global(.v-theme--dark)` override was tried; Vue's scoped compiler drops
+   everything after `:global(...)`, so it never matched.) */
 .tint-pill {
   display: inline-flex;
   align-items: center;
@@ -43,16 +46,11 @@ const accent = computed(() => pillAccent(props.status))
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--pill-accent) 12%, rgb(var(--v-theme-surface)));
-  color: color-mix(in srgb, var(--pill-accent) 75%, #000);
+  background: color-mix(in srgb, var(--pill-accent) 16%, rgb(var(--v-theme-surface)));
+  color: color-mix(in srgb, var(--pill-accent) 60%, rgb(var(--v-theme-on-surface)));
 }
 .tint-pill--sm {
   padding: 1px 8px;
   font-size: 0.6875rem;
-}
-/* On a dark surface the darkened text would vanish; lighten it instead. */
-:global(.v-theme--dark) .tint-pill {
-  background: color-mix(in srgb, var(--pill-accent) 22%, rgb(var(--v-theme-surface)));
-  color: color-mix(in srgb, var(--pill-accent) 45%, #fff);
 }
 </style>
