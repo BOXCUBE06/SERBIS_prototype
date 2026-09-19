@@ -20,6 +20,13 @@ class AppUser {
   final String phone;
   final String address;
 
+  /// Purok/street — `tbl_residents.street_address`, added because the
+  /// barangay relation alone is not enough for a dispatcher to find a
+  /// household (MDRRMO feedback, 2026-09-19). Optional, and editable through
+  /// `PATCH /me` the same as every other contact field. An empty string means
+  /// the resident has none on file.
+  final String streetAddress;
+
   /// Whether a profile photo has been uploaded. The path is never sent to a
   /// client — the server answers this flag and serves the image from
   /// `GET /residents/{id}/photo`.
@@ -38,6 +45,7 @@ class AppUser {
     required this.email,
     this.phone = '',
     required this.address,
+    this.streetAddress = '',
     this.hasPhoto = false,
     this.smsOptIn = true,
   });
@@ -59,6 +67,7 @@ class AppUser {
     String? lastName,
     String? email,
     String? phone,
+    String? streetAddress,
     bool? hasPhoto,
     bool? smsOptIn,
   }) {
@@ -70,13 +79,15 @@ class AppUser {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       address: address,
+      streetAddress: streetAddress ?? this.streetAddress,
       hasPhoto: hasPhoto ?? this.hasPhoto,
       smsOptIn: smsOptIn ?? this.smsOptIn,
     );
   }
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
-    // tbl_residents has no address column; location is the barangay relation.
+    // The barangay relation, not a street — tbl_residents' own street_address
+    // column is read separately below.
     final barangay = json['barangay'];
     final barangayName =
         barangay is Map<String, dynamic> ? barangay['barangay_name'] as String? : null;
@@ -89,6 +100,7 @@ class AppUser {
       email: json['email_address'] as String? ?? '',
       phone: json['phone_number'] as String? ?? '',
       address: barangayName ?? '',
+      streetAddress: json['street_address'] as String? ?? '',
       hasPhoto: json['has_photo'] == true,
       // Absent falls back to true, matching the column's own default. Reading a
       // missing key as false would show a resident an "off" switch and tell
@@ -145,6 +157,7 @@ class UserStore {
     String? middleName,
     required String lastName,
     required int barangayId,
+    String? streetAddress,
     required String phoneNumber,
     required String email,
     required String password,
@@ -154,6 +167,7 @@ class UserStore {
       middleName: middleName,
       lastName: lastName,
       barangayId: barangayId,
+      streetAddress: streetAddress,
       phoneNumber: phoneNumber,
       email: email,
       password: password,
@@ -220,6 +234,7 @@ class UserStore {
     String? lastName,
     String? phoneNumber,
     String? email,
+    String? streetAddress,
     bool? smsOptIn,
     String? currentPassword,
   }) async {
@@ -229,6 +244,7 @@ class UserStore {
       lastName: lastName,
       phoneNumber: phoneNumber,
       email: email,
+      streetAddress: streetAddress,
       smsOptIn: smsOptIn,
       currentPassword: currentPassword,
     );

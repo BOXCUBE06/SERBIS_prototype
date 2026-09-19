@@ -62,6 +62,28 @@ class ResidentProfileUpdateTest extends TestCase
         $this->assertSame('Santos', $this->resident->last_name);
     }
 
+    /**
+     * Unlike barangay_id, this is exactly the kind of self-correctable detail
+     * a profile edit exists for (MDRRMO feedback, 2026-09-19) — no password
+     * required, since it changes nothing about where a login code is sent.
+     */
+    public function test_a_resident_can_set_and_change_their_street_address(): void
+    {
+        $this->actingAs($this->resident)->patchJson('/api/me', [
+            'street_address' => 'Purok 3',
+        ])->assertOk()->assertJsonPath('user.street_address', 'Purok 3');
+
+        $this->resident->refresh();
+        $this->assertSame('Purok 3', $this->resident->street_address);
+
+        $this->actingAs($this->resident)->patchJson('/api/me', [
+            'street_address' => 'Purok 7, near the covered court',
+        ])->assertOk();
+
+        $this->resident->refresh();
+        $this->assertSame('Purok 7, near the covered court', $this->resident->street_address);
+    }
+
     public function test_barangay_status_role_and_photo_cannot_be_set_by_the_resident(): void
     {
         $originalPassword = $this->resident->password;

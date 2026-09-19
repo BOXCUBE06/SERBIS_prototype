@@ -69,6 +69,11 @@ class AuthController extends Controller
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+            // Purok/street — the one thing barangay_id cannot answer (MDRRMO
+            // feedback, 2026-09-19). Optional at registration, same as every
+            // other field a resident might not have on hand yet; editable
+            // later from the profile either way.
+            'street_address' => 'nullable|string|max:255',
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             // Still checked against the table, but the table now only holds
             // accounts that finished verifying, so this refuses a real account
@@ -84,6 +89,7 @@ class AuthController extends Controller
         $entry = $this->issueSignupCode([
             'attributes' => [
                 'barangay_id' => $validated['barangay_id'],
+                'street_address' => $validated['street_address'] ?? null,
                 'first_name' => $validated['first_name'],
                 'middle_name' => $validated['middle_name'] ?? null,
                 'last_name' => $validated['last_name'],
@@ -587,6 +593,10 @@ class AuthController extends Controller
             'first_name' => 'sometimes|required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'sometimes|required|string|max:255',
+            // Purok/street. Unlike barangay_id below, this is exactly the kind
+            // of self-correctable detail a profile edit is for — MDRRMO
+            // dispatches on the barangay relation, not on this string.
+            'street_address' => 'sometimes|nullable|string|max:255',
             'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
             'email_address' => [
                 'sometimes',
@@ -643,7 +653,7 @@ class AuthController extends Controller
         //                POST /me/photo owns it — see ResidentController.
         //   password     a change needs the current password, which is a separate
         //                endpoint, not a field on a profile PATCH.
-        foreach (['first_name', 'middle_name', 'last_name', 'phone_number', 'email_address'] as $field) {
+        foreach (['first_name', 'middle_name', 'last_name', 'street_address', 'phone_number', 'email_address'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }

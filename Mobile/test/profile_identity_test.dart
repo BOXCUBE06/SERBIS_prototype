@@ -115,8 +115,8 @@ void main() {
     await tester.tap(find.text('Account details'));
     await tester.pumpAndSettle();
 
-    // First, middle, last, phone, email — and nothing for the barangay.
-    expect(find.byType(TextField), findsNWidgets(5));
+    // First, middle, last, street, phone, email — and nothing for the barangay.
+    expect(find.byType(TextField), findsNWidgets(6));
     expect(find.text('Save changes'), findsOneWidget);
 
     // The barangay is still shown, still read-only, and now says why.

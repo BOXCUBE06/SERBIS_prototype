@@ -39,6 +39,7 @@ class _FakeApi extends ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    String? streetAddress,
     bool? smsOptIn,
     String? currentPassword,
   }) async {
@@ -48,6 +49,7 @@ class _FakeApi extends ApiService {
       'last_name': lastName,
       'phone_number': phoneNumber,
       'email_address': email,
+      'street_address': streetAddress,
       'sms_opt_in': smsOptIn,
       'current_password': currentPassword,
     });
@@ -62,6 +64,7 @@ class _FakeApi extends ApiService {
       'last_name': lastName ?? 'Santos',
       'phone_number': phoneNumber ?? '09171111111',
       'email_address': email ?? 'maria@example.com',
+      'street_address': streetAddress ?? '',
       'sms_opt_in': smsOptIn ?? true,
       'barangay': {'barangay_name': 'San Fabian'},
     };
@@ -113,18 +116,19 @@ Future<_FakeApi> _openSheet(
   return api;
 }
 
-/// Fields are positional in the sheet: first, middle, last, phone, email, and —
-/// only once the email or phone has been edited — the current password at 5.
+/// Fields are positional in the sheet: first, middle, last, street, phone,
+/// email, and — only once the email or phone has been edited — the current
+/// password at 6.
 Finder _field(int index) => find.byType(TextField).at(index);
 
 /// Types into the current-password field.
 ///
 /// It does not exist until an edit to the email or phone brings it into the
-/// tree, so the pump between the two is load-bearing: without it `_field(5)`
-/// resolves against a five-field sheet and throws.
+/// tree, so the pump between the two is load-bearing: without it `_field(6)`
+/// resolves against a six-field sheet and throws.
 Future<void> _enterPassword(WidgetTester tester, String value) async {
   await tester.pump();
-  await tester.enterText(_field(5), value);
+  await tester.enterText(_field(6), value);
 }
 
 void main() {
@@ -144,7 +148,7 @@ void main() {
     // nowhere.
     final api = await _openSheet(tester);
 
-    await tester.enterText(_field(3), '0917-123-4567abc');
+    await tester.enterText(_field(4), '0917-123-4567abc');
     // The number is a login-code destination, so moving it now needs the
     // password before the sheet will send anything.
     await _enterPassword(tester, 'password123');
@@ -207,7 +211,7 @@ void main() {
   testWidgets('a malformed email blocks the request', (tester) async {
     final api = await _openSheet(tester);
 
-    await tester.enterText(_field(4), 'maria@');
+    await tester.enterText(_field(5), 'maria@');
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
@@ -218,7 +222,7 @@ void main() {
   testWidgets('a short mobile number blocks the request', (tester) async {
     final api = await _openSheet(tester);
 
-    await tester.enterText(_field(3), '0917');
+    await tester.enterText(_field(4), '0917');
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
@@ -245,7 +249,7 @@ void main() {
       statusCode: 422,
     );
 
-    await tester.enterText(_field(4), 'taken@example.com');
+    await tester.enterText(_field(5), 'taken@example.com');
     await _enterPassword(tester, 'password123');
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
@@ -261,12 +265,12 @@ void main() {
   testWidgets('the barangay cannot be edited from here', (tester) async {
     await _openSheet(tester);
 
-    // Five fields: first, middle, last, phone, email. A sixth would mean the
-    // barangay became writable — it is what every request is dispatched on, and
-    // the endpoint refuses it, so a field here could only ever fail. The
-    // current-password field is the one legitimate sixth, and it is absent
-    // until a contact is edited — see the group below.
-    expect(find.byType(TextField), findsNWidgets(5));
+    // Six fields: first, middle, last, street, phone, email. A seventh would
+    // mean the barangay became writable — it is what every request is
+    // dispatched on, and the endpoint refuses it, so a field here could only
+    // ever fail. The current-password field is the one legitimate seventh,
+    // and it is absent until a contact is edited — see the group below.
+    expect(find.byType(TextField), findsNWidgets(6));
   });
 
   // The backend requires `current_password` to move `email_address` or
@@ -285,31 +289,31 @@ void main() {
       await tester.pump();
 
       expect(find.text('Current password'), findsNothing);
-      expect(find.byType(TextField), findsNWidgets(5));
+      expect(find.byType(TextField), findsNWidgets(6));
     });
 
     testWidgets('appears when the email is edited and goes away when it is put back',
         (tester) async {
       await _openSheet(tester);
 
-      await tester.enterText(_field(4), 'new@example.com');
+      await tester.enterText(_field(5), 'new@example.com');
       await tester.pump();
 
       expect(find.text('Current password'), findsOneWidget);
-      expect(find.byType(TextField), findsNWidgets(6));
+      expect(find.byType(TextField), findsNWidgets(7));
 
       // Undoing the edit takes the requirement away with it.
-      await tester.enterText(_field(4), 'maria@example.com');
+      await tester.enterText(_field(5), 'maria@example.com');
       await tester.pump();
 
       expect(find.text('Current password'), findsNothing);
-      expect(find.byType(TextField), findsNWidgets(5));
+      expect(find.byType(TextField), findsNWidgets(6));
     });
 
     testWidgets('appears when the phone is edited', (tester) async {
       await _openSheet(tester);
 
-      await tester.enterText(_field(3), '09179999999');
+      await tester.enterText(_field(4), '09179999999');
       await tester.pump();
 
       expect(find.text('Current password'), findsOneWidget);
@@ -318,7 +322,7 @@ void main() {
     testWidgets('a blank password blocks the request entirely', (tester) async {
       final api = await _openSheet(tester);
 
-      await tester.enterText(_field(4), 'new@example.com');
+      await tester.enterText(_field(5), 'new@example.com');
       await tester.pump();
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
@@ -333,7 +337,7 @@ void main() {
     testWidgets('is sent with a contact change', (tester) async {
       final api = await _openSheet(tester);
 
-      await tester.enterText(_field(4), 'new@example.com');
+      await tester.enterText(_field(5), 'new@example.com');
       await _enterPassword(tester, 'password123');
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
@@ -366,7 +370,7 @@ void main() {
         },
       );
 
-      await tester.enterText(_field(4), 'new@example.com');
+      await tester.enterText(_field(5), 'new@example.com');
       await _enterPassword(tester, 'wrong-password');
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
@@ -374,7 +378,7 @@ void main() {
       // Read off the field's own decoration, not with find.text: the banner
       // renders the identical sentence, so a text finder passes whether the
       // message landed on the field or in the banner and proves neither.
-      final password = tester.widget<TextField>(_field(5));
+      final password = tester.widget<TextField>(_field(6));
       expect(
         password.decoration?.errorText,
         'Enter your current password to change the email address or phone number on this account.',
@@ -401,7 +405,7 @@ void main() {
         },
       );
 
-      await tester.enterText(_field(4), 'taken@example.com');
+      await tester.enterText(_field(5), 'taken@example.com');
       await _enterPassword(tester, 'password123');
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();

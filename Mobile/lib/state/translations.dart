@@ -223,6 +223,7 @@ const Map<String, (String, String)> _strings = {
   'profile.first_name': ('First name', 'Pangalan'),
   'profile.middle_name_optional': ('Middle name (optional)', 'Gitnang Pangalan (opsyonal)'),
   'profile.last_name': ('Last name', 'Apelyido'),
+  'profile.street_address': ('Street / Purok (optional)', 'Kalye / Purok (opsyonal)'),
   'profile.phone': ('Mobile number', 'Numero ng Telepono'),
   'profile.save': ('Save changes', 'I-save ang Pagbabago'),
   'profile.saved': ('Profile updated.', 'Na-update ang profile.'),

@@ -127,6 +127,7 @@ class _FakeAuthApi extends ApiService {
     String? middleName,
     required String lastName,
     required int barangayId,
+    String? streetAddress,
     required String phoneNumber,
     required String email,
     required String password,
@@ -136,6 +137,8 @@ class _FakeAuthApi extends ApiService {
       'first_name': firstName,
       'last_name': lastName,
       'barangay_id': barangayId,
+      if (streetAddress != null && streetAddress.isNotEmpty)
+        'street_address': streetAddress,
       'phone_number': phoneNumber,
       'email_address': email,
       'password': password,
@@ -736,6 +739,20 @@ void main() {
         'email_address': 'juan@example.com',
         'password': 'Pasada123',
       });
+    });
+
+    testWidgets('sends the street address when filled in, optional otherwise',
+        (tester) async {
+      final api = await _pumpRegister(tester);
+
+      await _fillValidRegistration(tester);
+      await tester.enterText(_field('Street / Purok (optional)'), '  Purok 3  ');
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(api.registerCalls, 1);
+      expect(api.lastRegister!['street_address'], 'Purok 3');
     });
 
     testWidgets('ticking the consent box is visible, not just recorded',

@@ -34,6 +34,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey       = GlobalKey<FormState>();
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl  = TextEditingController();
+  final _streetCtrl    = TextEditingController();
   final _phoneCtrl     = TextEditingController();
   final _emailCtrl     = TextEditingController();
   final _passwordCtrl  = TextEditingController();
@@ -97,6 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
+    _streetCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
@@ -137,12 +139,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final outcome = await widget.userStore.register(
-        firstName:   _firstNameCtrl.text.trim(),
-        lastName:    _lastNameCtrl.text.trim(),
-        barangayId:  barangayId,
-        phoneNumber: _phoneCtrl.text.trim(),
-        email:       _emailCtrl.text.trim(),
-        password:    _passwordCtrl.text,
+        firstName:     _firstNameCtrl.text.trim(),
+        lastName:      _lastNameCtrl.text.trim(),
+        barangayId:    barangayId,
+        streetAddress: _streetCtrl.text.trim(),
+        phoneNumber:   _phoneCtrl.text.trim(),
+        email:         _emailCtrl.text.trim(),
+        password:      _passwordCtrl.text,
       );
 
       if (!mounted) return;
@@ -253,6 +256,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       failed: _barangaysFailed,
                       onRetry: _loadBarangays,
                       onChanged: (id) => setState(() => _barangayId = id),
+                    ),
+
+                    // Optional. The barangay picker above is required, but the
+                    // purok/street is exactly the detail a resident might not
+                    // have memorized while filling this in — editable later
+                    // from the profile either way (MDRRMO feedback, 2026-09-19).
+                    AuthTextField(
+                      label: 'Street / Purok (optional)',
+                      hint: 'e.g. Purok 3',
+                      controller: _streetCtrl,
+                      prefixIcon: Icons.signpost_outlined,
                     ),
 
                     AuthTextField(

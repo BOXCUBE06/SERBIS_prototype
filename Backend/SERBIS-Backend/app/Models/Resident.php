@@ -21,7 +21,7 @@ use Laravel\Sanctum\HasApiTokens;
 // client can ask for — so clients get `has_photo` and the image itself comes
 // from GET /api/residents/{id}/photo.
 #[Table('tbl_residents', key: 'resident_id')]
-#[Fillable(['barangay_id', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'sms_opt_in', 'email_address'])]
+#[Fillable(['barangay_id', 'street_address', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'sms_opt_in', 'email_address'])]
 // There is no verification code on this model. A code is a short-lived
 // credential that grants an account, and tbl_residents is what the admin
 // panel's Users view serialises — a code in that payload is a code any

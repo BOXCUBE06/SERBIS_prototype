@@ -351,6 +351,7 @@ class ApiService {
     String? middleName,
     required String lastName,
     required int barangayId,
+    String? streetAddress,
     required String phoneNumber,
     required String email,
     required String password,
@@ -358,6 +359,8 @@ class ApiService {
     try {
       // No 'role': it is not a column on tbl_residents and the server assigns
       // status itself. barangay_id and phone_number are both required there.
+      // street_address is optional — a resident who does not have their
+      // purok on hand yet can still register and fill it in later.
       final data = await _post(
         '/register',
         {
@@ -366,6 +369,8 @@ class ApiService {
             'middle_name': middleName,
           'last_name': lastName,
           'barangay_id': barangayId,
+          if (streetAddress != null && streetAddress.isNotEmpty)
+            'street_address': streetAddress,
           'phone_number': phoneNumber,
           'email_address': email,
           'password': password,
@@ -495,6 +500,7 @@ class ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    String? streetAddress,
     bool? smsOptIn,
     String? currentPassword,
   }) async {
@@ -506,6 +512,7 @@ class ApiService {
         lastName: lastName,
         phoneNumber: phoneNumber,
         email: email,
+        streetAddress: streetAddress,
         smsOptIn: smsOptIn,
         currentPassword: currentPassword,
       ),
@@ -527,6 +534,7 @@ class ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    String? streetAddress,
     bool? smsOptIn,
     String? currentPassword,
   }) {
@@ -536,6 +544,12 @@ class ApiService {
       if (lastName != null) 'last_name': lastName,
       if (phoneNumber != null) 'phone_number': phoneNumber,
       if (email != null) 'email_address': email,
+      // Same "empty string means none" shape as middleName above —
+      // street_address is nullable on the resident row, so clearing the
+      // field on screen has to be a real value the server can write, not an
+      // omitted key that leaves the old one in place.
+      if (streetAddress != null)
+        'street_address': streetAddress.isEmpty ? null : streetAddress,
       // Proof of knowledge, not a column. The endpoint requires it only when
       // `email_address` or `phone_number` actually moves — those are where a
       // login code is delivered, so a bearer token alone must not be enough to

@@ -365,7 +365,7 @@ class ResidentEmailVerificationTest extends TestCase
 
     public function test_the_created_account_carries_the_registered_details(): void
     {
-        $code = $this->registerAndCaptureCode(['middle_name' => 'Lim']);
+        $code = $this->registerAndCaptureCode(['middle_name' => 'Lim', 'street_address' => 'Purok 3']);
 
         $this->postJson('/api/resident/verify-email', [
             'email_address' => 'grace@test.local',
@@ -379,10 +379,28 @@ class ResidentEmailVerificationTest extends TestCase
         $this->assertSame('Reyes', $resident->last_name);
         $this->assertSame('09171234567', $resident->phone_number);
         $this->assertSame($this->barangay->barangay_id, $resident->barangay_id);
+        $this->assertSame('Purok 3', $resident->street_address);
         // Still Inactive: activation is the MDRRMO's call and gates paid SMS.
         $this->assertSame('Inactive', $resident->status);
         // The password survived the cache round trip as the same hash.
         $this->assertTrue(Hash::check('Password123', $resident->password));
+    }
+
+    /**
+     * The one field on this form barangay_id cannot answer for (MDRRMO
+     * feedback, 2026-09-19). Optional: a resident who does not have it on
+     * hand yet can still register.
+     */
+    public function test_street_address_is_optional_at_registration(): void
+    {
+        $code = $this->registerAndCaptureCode();
+
+        $this->postJson('/api/resident/verify-email', [
+            'email_address' => 'grace@test.local',
+            'code' => $code,
+        ])->assertStatus(200);
+
+        $this->assertNull(Resident::where('email_address', 'grace@test.local')->first()->street_address);
     }
 
     public function test_verifying_spends_the_code_so_it_cannot_be_used_twice(): void

@@ -981,6 +981,8 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       TextEditingController(text: widget.user.middleName);
   late final TextEditingController _last =
       TextEditingController(text: widget.user.lastName);
+  late final TextEditingController _street =
+      TextEditingController(text: widget.user.streetAddress);
   late final TextEditingController _phone =
       TextEditingController(text: widget.user.phone);
   late final TextEditingController _email =
@@ -1032,6 +1034,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     _first.dispose();
     _middle.dispose();
     _last.dispose();
+    _street.dispose();
     _phone.dispose();
     _email.dispose();
     _password.dispose();
@@ -1095,6 +1098,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     diff('first', _first.text.trim(), widget.user.firstName);
     diff('middle', _middle.text.trim(), widget.user.middleName);
     diff('last', _last.text.trim(), widget.user.lastName);
+    diff('street', _street.text.trim(), widget.user.streetAddress);
     diff('phone', _phone.text.trim(), widget.user.phone);
     diff('email', _email.text.trim(), widget.user.email);
 
@@ -1121,6 +1125,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
         firstName: changes['first'],
         middleName: changes['middle'],
         lastName: changes['last'],
+        streetAddress: changes['street'],
         phoneNumber: changes['phone'],
         email: changes['email'],
         // Sent only when it is actually needed. Passing it on every save would
@@ -1204,6 +1209,12 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               hint: 'e.g. Delacruz',
               controller: _last,
               errorText: _errors['last'],
+              enabled: !_saving,
+            ),
+            AppTextField(
+              label: _tr('profile.street_address'),
+              hint: 'e.g. Purok 3',
+              controller: _street,
               enabled: !_saving,
             ),
             AppTextField.phone(
