@@ -1164,20 +1164,6 @@ onMounted(() => {
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 
-/* v-window's own internal wrapper (.v-window__container, the flex row that
-   holds every window-item side by side for the slide transition) sizes
-   itself to its content's natural height, not to v-window's own — v-window
-   is built for a horizontal carousel where that's the right default, not
-   for filling a fixed-height parent. Without this, v-window-item's h-100
-   resolves against an indeterminate parent (auto, not 100%), so the
-   Bookings detail pane's real content height leaks straight past
-   v-window's own overflow:hidden instead of being capped by it — found by
-   walking the ancestor chain and comparing rectHeight at each level, not by
-   reading the CSS and assuming it would work. */
-:deep(.v-window__container) {
-  height: 100%;
-}
-
 .section-title {
   font-size: 0.78rem;
   font-weight: 800;

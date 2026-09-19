@@ -146,7 +146,10 @@ useAppTheme().init()
   overflow: hidden;
 }
 
-.v-main .v-container {
+/* Each route's own root container only. `.v-main .v-container` also caught
+   ServiceRequestQueue's container nested inside Ambulance Dispatch → Bookings,
+   overriding its pa-0 and insetting that panel 40px/24px past its siblings. */
+.inner-wrapper > .v-container {
   padding-left: 40px !important;
   padding-right: 24px !important;
 }

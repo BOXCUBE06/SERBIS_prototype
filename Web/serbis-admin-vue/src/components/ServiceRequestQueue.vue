@@ -1670,18 +1670,18 @@ const unitOptions = computed(() => {
 // filteredAndSortedRequests's own map step) rather than accessor functions,
 // so v-data-table's native sort-by can compare them directly without a
 // Vuetify-version-specific function-value API.
-// Every column carries a fixed width, paired with `table-layout: fixed` in
-// this component's <style> — without both, the table sizes each column off
-// whatever text happens to be in view, so it visibly jumps every time a
-// filter or search changes which rows show (MDRRMO feedback, 2026-09-18).
+// Every column carries a declared width, paired with DataTablePage's
+// `table-layout: fixed` — without both, columns size off the visible text and
+// jump on every filter or search (MDRRMO feedback, 2026-09-18). Percentages,
+// not px: the px set summed to 1028px and overflowed the panel below ~1450px.
 const tableHeaders = computed(() => [
-  { title: '', key: 'select', sortable: false, width: 48 },
-  { title: 'Status', key: 'status', width: 130 },
-  { title: 'Scheduled', key: 'scheduled_at', width: 170 },
-  { title: 'Requester', key: '_requesterName', width: 220 },
-  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary', width: 170 },
-  { title: 'Patient', key: 'patient_name', width: 160 },
-  { title: 'Unit', key: '_unit', width: 130 },
+  { title: '', key: 'select', sortable: false, width: '48px' },
+  { title: 'Status', key: 'status', width: '13%' },
+  { title: 'Scheduled', key: 'scheduled_at', width: '18%' },
+  { title: 'Requester', key: '_requesterName', width: '22%' },
+  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary', width: '16%' },
+  { title: 'Patient', key: 'patient_name', width: '15%' },
+  { title: 'Unit', key: '_unit', width: '12%' },
 ])
 
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
