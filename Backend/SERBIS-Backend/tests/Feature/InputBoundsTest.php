@@ -440,7 +440,10 @@ class InputBoundsTest extends TestCase
 
         Sanctum::actingAs($this->admin);
 
-        $this->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Returned',
+            'return_condition_note' => 'Came back in working order.',
+        ])
             ->assertOk();
 
         $this->assertSame('Returned', $borrowing->fresh()->status);

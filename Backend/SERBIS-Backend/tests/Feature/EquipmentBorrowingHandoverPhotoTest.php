@@ -310,7 +310,10 @@ class EquipmentBorrowingHandoverPhotoTest extends TestCase
 
         $this->patchJson("/api/borrowings/{$borrowing->borrow_id}", ['status' => 'Released'])
             ->assertOk();
-        $this->patchJson("/api/borrowings/{$borrowing->borrow_id}", ['status' => 'Returned'])
+        $this->patchJson("/api/borrowings/{$borrowing->borrow_id}", [
+            'status' => 'Returned',
+            'return_condition_note' => 'Came back in working order.',
+        ])
             ->assertOk();
 
         $borrowing = $borrowing->fresh();
@@ -348,6 +351,7 @@ class EquipmentBorrowingHandoverPhotoTest extends TestCase
 
         $this->patchJson("/api/borrowings/{$borrowing->borrow_id}", [
             'status' => 'Returned',
+            'return_condition_note' => 'Came back in working order.',
             'release_photo_path' => 'valid-ids/1/someone-elses-government-id.jpg',
         ])->assertOk();
 

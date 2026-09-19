@@ -280,16 +280,18 @@ class EquipmentBorrowingDueDateTest extends TestCase
         );
     }
 
-    public function test_a_return_without_a_condition_note_is_still_accepted(): void
+    /** MDRRMO feedback, 2026-09-19: a return with no note at all is refused, condition unstated or not. */
+    public function test_a_return_without_a_condition_note_is_refused(): void
     {
         $borrowing = $this->pendingBorrowing();
         $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])
-            ->assertOk();
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['return_condition_note']);
 
-        $this->assertNull($borrowing->fresh()->return_condition_note);
+        $this->assertSame('Released', $borrowing->fresh()->status);
     }
 
     public function test_a_bad_return_condition_requires_a_note(): void
@@ -326,7 +328,8 @@ class EquipmentBorrowingDueDateTest extends TestCase
         $this->assertSame('Motor housing cracked, unusable.', $fresh->return_condition_note);
     }
 
-    public function test_a_good_return_condition_needs_no_note(): void
+    /** MDRRMO feedback, 2026-09-19: a Good return now needs a note too, same as a Bad one. */
+    public function test_a_good_return_condition_still_requires_a_note(): void
     {
         $borrowing = $this->pendingBorrowing();
         $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
@@ -336,8 +339,27 @@ class EquipmentBorrowingDueDateTest extends TestCase
                 'status' => 'Returned',
                 'return_condition' => 'Good',
             ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['return_condition_note']);
+
+        $this->assertSame('Released', $borrowing->fresh()->status);
+    }
+
+    public function test_a_good_return_condition_with_a_note_is_accepted_and_stored(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Good',
+                'return_condition_note' => 'Came back clean, all straps intact.',
+            ])
             ->assertOk();
 
-        $this->assertSame('Good', $borrowing->fresh()->return_condition);
+        $fresh = $borrowing->fresh();
+        $this->assertSame('Good', $fresh->return_condition);
+        $this->assertSame('Came back clean, all straps intact.', $fresh->return_condition_note);
     }
 }

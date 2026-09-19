@@ -162,7 +162,10 @@ class EquipmentBorrowingTransitionPushTest extends TestCase
     {
         $borrowing = $this->borrowingAt('Released', ['released_at' => now()]);
 
-        $this->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])->assertOk();
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Returned',
+            'return_condition_note' => 'Came back in working order.',
+        ])->assertOk();
 
         Http::assertNothingSent();
     }

@@ -714,11 +714,9 @@
 
             <v-textarea
               v-model="actionDialog.conditionNote"
-              :label="actionDialog.condition === 'Bad' ? 'What\'s wrong with it' : 'Condition note (optional)'"
+              :label="actionDialog.condition === 'Bad' ? 'What\'s wrong with it' : 'Condition note'"
               placeholder="e.g. Life jacket strap frayed, otherwise usable"
-              :hint="actionDialog.condition === 'Bad'
-                ? 'Required for a bad return — this is what the next person deciding whether to lend again reads.'
-                : 'What the item looked like coming back — alongside the return photo.'"
+              hint="Required on every return — this is what the next person deciding whether to lend again reads."
               persistent-hint
               variant="outlined"
               rows="3"
@@ -1525,10 +1523,10 @@ const confirmAction = () => {
     actionDialog.value.error = 'Give a reason — the resident is shown this'
     return
   }
-  // Good needs nothing beyond the toggle; Bad needs the note, same rule the
-  // server enforces (required_if:return_condition,Bad).
-  if (mode === 'return' && condition === 'Bad' && !conditionNote.trim()) {
-    actionDialog.value.error = "Say what's wrong with it — a bad return needs a note."
+  // Required on every return now, Good or Bad — same rule the server
+  // enforces (required_if:status,Returned). MDRRMO feedback, 2026-09-19.
+  if (mode === 'return' && !conditionNote.trim()) {
+    actionDialog.value.error = 'Say what condition it came back in — every return needs a note.'
     return
   }
   const extra = {}
@@ -1539,8 +1537,7 @@ const confirmAction = () => {
   }
   if (mode === 'return') {
     extra.return_condition = condition
-    // Optional on Good — unlike a bad return, nothing blocks it over the note.
-    if (conditionNote.trim()) extra.return_condition_note = conditionNote.trim()
+    extra.return_condition_note = conditionNote.trim()
   }
   return updateStatus(record, status, extra)
 }

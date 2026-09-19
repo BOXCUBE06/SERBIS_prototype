@@ -349,6 +349,37 @@ class EquipmentBorrowingController extends Controller
         $earliestDue = $officeToday->copy()->addDays(self::MIN_LOAN_DAYS);
         $latestDue = $officeToday->copy()->addDays(self::MAX_LOAN_DAYS);
 
+        // Checked ahead of the full validate() below, and only when the
+        // status sent is one of the five real values — a garbage value still
+        // falls through to the enum rule's own message. Moved here (it used
+        // to run after validate()) because return_condition_note's
+        // required_if:status,Returned would otherwise fire on an illegal
+        // Returned attempt too (e.g. a Cancelled or Pending row), masking
+        // "cannot be moved to Returned" behind a note prompt for a move that
+        // was never going to happen.
+        $requestedStatus = $request->input('status');
+        $oldStatus = $borrowing->status;
+
+        // The five values the `in:` rule below accepts — deliberately not
+        // array_key_exists() against the full TRANSITIONS table, which also
+        // carries a 'Cancelled' key so an already-cancelled row still gets a
+        // transition message (see that class docblock). 'Cancelled' was never
+        // a legal *target* here — only cancel() may write it — so a request
+        // for it must keep falling through to validate()'s own field error
+        // below, not this early, differently-worded response.
+        $updatableStatuses = ['Pending', 'Approved', 'Released', 'Returned', 'Denied'];
+
+        if (
+            is_string($requestedStatus)
+            && in_array($requestedStatus, $updatableStatuses, true)
+            && $requestedStatus !== $oldStatus
+            && ! in_array($requestedStatus, self::TRANSITIONS[$oldStatus] ?? [], true)
+        ) {
+            return response()->json([
+                'message' => "A borrowing that is {$oldStatus} cannot be moved to {$requestedStatus}.",
+            ], 422);
+        }
+
         $validated = $request->validate([
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
             // Both optional: a status change on its own is still a valid call,
@@ -377,37 +408,25 @@ class EquipmentBorrowingController extends Controller
             // later. Optional: an admin denying for a reason that is not
             // unavailability sends neither this nor anything to reconfirm.
             'denial_reason_code' => 'sometimes|nullable|in:Unavailable,Other',
-            // Good needs nothing beyond the flag itself; Bad needs the note
-            // to say what's wrong, or "bad" is a label with no information
-            // behind it for the next person deciding whether to lend again.
             'return_condition' => 'sometimes|nullable|in:Good,Bad',
-            // No `sometimes` here: that rule skips everything else when the
+            // MDRRMO feedback, 2026-09-19: required on every return, not just
+            // a Bad one — a Good return with no note is still one line staff
+            // typed nothing into for the next person deciding whether to lend
+            // again. Keyed on `status` rather than `return_condition`, so it
+            // fires whether or not the caller even sends a condition. No
+            // `sometimes` here: that rule skips everything else when the
             // field is absent, which would let required_if never fire at all
-            // for exactly the case it exists to catch — Bad sent with no
-            // note key in the payload, not just an empty one.
-            'return_condition_note' => 'nullable|string|max:500|required_if:return_condition,Bad',
+            // for exactly the case it exists to catch — a return with no note
+            // key in the payload, not just an empty one.
+            'return_condition_note' => 'nullable|string|max:500|required_if:status,Returned',
         ], [
             'due_date.date' => 'Pick a valid due date.',
             'due_date.after_or_equal' => 'A loan runs at least '.self::MIN_LOAN_DAYS.' day — pick '.$earliestDue->format('M j, Y').' or later.',
             'due_date.before_or_equal' => 'A loan runs at most '.self::MAX_LOAN_DAYS.' days — pick '.$latestDue->format('M j, Y').' or earlier.',
-            'return_condition_note.required_if' => 'Say what\'s wrong with it — a bad return needs a note.',
+            'return_condition_note.required_if' => 'Say what condition it came back in — every return needs a note.',
         ]);
 
         $newStatus = $validated['status'];
-        $oldStatus = $borrowing->status;
-
-        // Checked before the transaction opens, so an illegal move costs no
-        // lock and touches no stock. Resending the current status is a no-op
-        // rather than a transition: `status` is required, so a call that only
-        // edits `due_date` has to carry it, and no branch below fires when the
-        // two are equal. A row whose status is not one of the five falls
-        // through to an empty list and is rejected, which is the safe way to
-        // fail on data drift.
-        if ($newStatus !== $oldStatus && ! in_array($newStatus, self::TRANSITIONS[$oldStatus] ?? [], true)) {
-            return response()->json([
-                'message' => "A borrowing that is {$oldStatus} cannot be moved to {$newStatus}.",
-            ], 422);
-        }
 
         // An uncatalogued request has no equipment row, so there is no stock to
         // deduct and nothing to hand over that the inventory knows about.

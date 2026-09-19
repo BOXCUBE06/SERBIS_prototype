@@ -94,7 +94,10 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
         Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->actingAs($this->admin)
-            ->putJson("/api/borrowings/{$active->getKey()}", ['status' => 'Returned'])
+            ->putJson("/api/borrowings/{$active->getKey()}", [
+                'status' => 'Returned',
+                'return_condition_note' => 'Came back in working order.',
+            ])
             ->assertOk();
 
         $this->assertNotNull($waiting->fresh()->availability_reconfirm_sent_at);

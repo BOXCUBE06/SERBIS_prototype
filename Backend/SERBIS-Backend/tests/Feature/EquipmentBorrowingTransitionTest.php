@@ -92,7 +92,13 @@ class EquipmentBorrowingTransitionTest extends TestCase
     private function move(EquipmentBorrowing $borrowing, string $status)
     {
         return $this->actingAs($this->admin)
-            ->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => $status]);
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", array_merge(
+                ['status' => $status],
+                // Every return needs a note now, legal or not — an illegal
+                // one is still rejected by the transition check first, so
+                // this never masks what an illegal-move test is checking for.
+                $status === 'Returned' ? ['return_condition_note' => 'Came back in working order.'] : [],
+            ));
     }
 
     // ---------------------------------------------------------------- illegal
