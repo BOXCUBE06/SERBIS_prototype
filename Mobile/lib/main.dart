@@ -400,6 +400,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
 
   Timer? _poll;
   bool _foreground = true;
+  bool _showingOffline = false;
 
   @override
   void initState() {
@@ -469,8 +470,12 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Screens rebuild through their own [_TabSlot]; the shell itself only has
+  /// the offline banner to redraw, so it rebuilds only when that flips.
   void _onAppStateChanged() {
-    setState(() {});
+    if (_appState.isOffline != _showingOffline) {
+      setState(() => _showingOffline = _appState.isOffline);
+    }
 
     // Single drain point for store failures, so every screen reports them the
     // same way instead of each one swallowing its own.
@@ -520,50 +525,57 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         );
     final onOpenProfile = () => _goTo(4);
 
+    Widget slot(int index, WidgetBuilder builder, {Object? deps}) => _TabSlot(
+          active: _index == index,
+          listenable: _appState,
+          deps: deps,
+          builder: builder,
+        );
+
     final screens = [
-      HomeScreen(
-        appState: _appState,
-        onOpenTrack: () => _goTo(2),
-        onOpenLibrary: () => _goTo(3),
-        onOpenProfile: onOpenProfile,
-        onOpenNotifications: onOpenNotifications,
-        onOpenServices: () => _goTo(1),
-        onOpenService: _openService,
-      ),
-      ServicesScreen(
-        key: ValueKey(_serviceType),
-        appState: _appState,
-        user: widget.user,
-        initialType: _serviceType,
-        onSubmitted: () => _goTo(2),
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-      ),
-      TrackScreen(
-        appState: _appState,
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-      ),
-      LibraryScreen(
-        appState: _appState,
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-      ),
-      ProfileScreen(
-        appState: _appState,
-        // The cached rows name this resident's own requests. The next person to
-        // use the phone must not open the app onto them.
-        onLogout: () {
-          _appState.clearRequestCache();
-          _appState.clearBorrowCache();
-          widget.onLogout();
-        },
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-        userStore: widget.userStore,
-        user: widget.user,
-        onUserChanged: widget.onUserChanged,
-      ),
+      slot(0, (_) => HomeScreen(
+            appState: _appState,
+            onOpenTrack: () => _goTo(2),
+            onOpenLibrary: () => _goTo(3),
+            onOpenProfile: onOpenProfile,
+            onOpenNotifications: onOpenNotifications,
+            onOpenServices: () => _goTo(1),
+            onOpenService: _openService,
+          )),
+      slot(1, (_) => ServicesScreen(
+            key: ValueKey(_serviceType),
+            appState: _appState,
+            user: widget.user,
+            initialType: _serviceType,
+            onSubmitted: () => _goTo(2),
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+          ), deps: (_serviceType, widget.user)),
+      slot(2, (_) => TrackScreen(
+            appState: _appState,
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+          )),
+      slot(3, (_) => LibraryScreen(
+            appState: _appState,
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+          )),
+      slot(4, (_) => ProfileScreen(
+            appState: _appState,
+            // The cached rows name this resident's own requests. The next
+            // person to use the phone must not open the app onto them.
+            onLogout: () {
+              _appState.clearRequestCache();
+              _appState.clearBorrowCache();
+              widget.onLogout();
+            },
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+            userStore: widget.userStore,
+            user: widget.user,
+            onUserChanged: widget.onUserChanged,
+          ), deps: widget.user),
     ];
 
     return Scaffold(
@@ -587,6 +599,78 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: _BottomNav(index: _index, onTap: _goTo),
     );
+  }
+}
+
+/// One tab of the shell's IndexedStack, rebuilt only when its inputs change
+/// and only while it is showing.
+///
+/// The shell used to setState on every AppState notification and every tab
+/// switch, rebuilding all five screens — and on web, re-shaping every line of
+/// their text. An unchanged tab now returns its last widget (an identical
+/// instance, so Flutter skips the subtree); a tab whose data changed while it
+/// was off screen rebuilds when it is next shown. [deps] names the shell
+/// values a screen reads besides AppState; the callbacks it is handed are
+/// stable in meaning, so they are not inputs.
+class _TabSlot extends StatefulWidget {
+  final bool active;
+  final Listenable listenable;
+  final Object? deps;
+  final WidgetBuilder builder;
+
+  const _TabSlot({
+    required this.active,
+    required this.listenable,
+    required this.builder,
+    this.deps,
+  });
+
+  @override
+  State<_TabSlot> createState() => _TabSlotState();
+}
+
+class _TabSlotState extends State<_TabSlot> {
+  Widget? _built;
+  bool _stale = true;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TabSlot old) {
+    super.didUpdateWidget(old);
+    if (old.listenable != widget.listenable) {
+      old.listenable.removeListener(_onChanged);
+      widget.listenable.addListener(_onChanged);
+    }
+    if (old.deps != widget.deps) {
+      _stale = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    _stale = true;
+    if (widget.active && mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_built == null || (_stale && widget.active)) {
+      _built = widget.builder(context);
+      _stale = false;
+    }
+    return _built!;
   }
 }
 
