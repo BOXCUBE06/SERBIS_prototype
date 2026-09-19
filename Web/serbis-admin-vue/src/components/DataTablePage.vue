@@ -34,7 +34,7 @@
       class="mb-4"
     />
 
-    <div class="dtp-toolbar d-flex flex-wrap align-center gap-3 mb-3">
+    <div class="dtp-toolbar d-flex align-center gap-3 mb-3">
       <v-text-field
         v-if="searchable"
         :model-value="search"
@@ -53,7 +53,7 @@
         <slot name="filters" />
       </div>
 
-      <div v-if="$slots.actions" class="ml-auto d-flex align-center flex-wrap gap-2">
+      <div v-if="$slots.actions" class="dtp-actions ml-auto d-flex align-center gap-2">
         <slot name="actions" />
       </div>
     </div>
@@ -223,27 +223,47 @@ const clearAll = () => {
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
-/* v-input grows by default, which stretched search across the whole row. */
-.data-table-page .dtp-search {
-  flex: 0 1 320px;
-  width: 320px;
-  max-width: 100%;
+/* One toolbar row at 1280px and up, with Bookings' three buttons the widest
+   case (they need 422px of an 888px row). nowrap, because a wrapping row
+   breaks items onto a new line at full width before it ever shrinks them.
+   Buttons never shrink; search and the selects give way, each down to a
+   floor, and grow back toward full width on wider screens. The filter group
+   is display:contents so each select is its own flex item. */
+.data-table-page .dtp-toolbar {
+  flex-wrap: nowrap;
 }
-/* Wide enough that a label plus its "All …" value never truncates. */
+.data-table-page .dtp-actions {
+  flex: 0 0 auto;
+}
+.data-table-page .dtp-search {
+  flex: 1 1 320px;
+  min-width: 150px;
+  max-width: 320px;
+}
+.data-table-page .dtp-filters {
+  display: contents;
+}
+/* 128px still fits a full "Barangay" label; a long selected value ellipsizes. */
 .data-table-page .dtp-filters :deep(.v-input) {
-  flex: 0 0 200px;
-  width: 200px;
+  flex: 1 1 200px;
+  min-width: 128px;
+  max-width: 200px;
 }
 .data-table-page .dtp-rows-select {
   flex: 0 0 88px;
   width: 88px;
 }
+/* Below 1280 the floors no longer fit one row; wrap rather than overflow. */
+@media (max-width: 1279px) {
+  .data-table-page .dtp-toolbar {
+    flex-wrap: wrap;
+  }
+}
 @media (max-width: 599px) {
   .data-table-page .dtp-search,
-  .data-table-page .dtp-filters,
   .data-table-page .dtp-filters :deep(.v-input) {
     flex: 1 1 100%;
-    width: 100%;
+    max-width: 100%;
   }
 }
 
