@@ -126,20 +126,8 @@
         </div>
       </template>
 
-      <template v-slot:item.avatar="{ item }">
-        <v-avatar size="40" class="avatar-tint">
-          <span class="avatar-initials">{{ initials(item.resident) }}</span>
-        </v-avatar>
-      </template>
-
       <template v-slot:item.resident="{ item }">
-        <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
-          <template v-slot:activator="{ props }">
-            <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
-              {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-            </div>
-          </template>
-        </v-tooltip>
+        <PersonCell :name="personName(item)" :initials="initials(item.resident)" :secondary="personSecondary(item)" />
       </template>
 
       <template v-slot:item.barangay="{ item }">
@@ -283,13 +271,7 @@
       </template>
 
       <template v-slot:item.resident="{ item }">
-        <v-tooltip :text="`${item.resident?.last_name}, ${item.resident?.first_name}`" location="top">
-          <template v-slot:activator="{ props }">
-            <div v-bind="props" class="font-weight-bold text-high-emphasis cell-truncate">
-              {{ item.resident?.last_name }}, {{ item.resident?.first_name }}
-            </div>
-          </template>
-        </v-tooltip>
+        <PersonCell :name="personName(item)" :initials="initials(item.resident)" :secondary="personSecondary(item)" />
       </template>
 
       <template v-slot:item.barangay="{ item }">
@@ -801,6 +783,7 @@ import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import PersonCell from '@/components/PersonCell.vue'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -879,9 +862,13 @@ const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
 const residentSortValue = (b) => `${b.resident?.last_name || ''} ${b.resident?.first_name || ''}`
 const barangaySortValue = (b) => b.resident?.barangay?.barangay_name || ''
 
+// Barangay keeps its own column (it is filterable); the person cell's second
+// line is the contact number, falling back to barangay only when there is none.
+const personName = (b) => `${b.resident?.last_name || ''}, ${b.resident?.first_name || ''}`
+const personSecondary = (b) => b.resident?.phone_number || b.resident?.barangay?.barangay_name || null
+
 const activeHeaders = [
-  { title: '', key: 'avatar', sortable: false, align: 'center', width: '60px' },
-  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
+  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '13%' },
   { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '23%' },
   { title: 'Status', key: 'status', width: '13%' },

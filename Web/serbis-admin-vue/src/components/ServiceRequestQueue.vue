@@ -196,7 +196,11 @@
             </template>
 
             <template v-slot:item._requesterName="{ item }">
-              <PersonCell :name="item._requesterName" :initials="requesterInitials(item)" />
+              <PersonCell
+                :name="item._requesterName"
+                :initials="requesterInitials(item)"
+                :secondary="item.resident?.phone_number || item.walk_in_contact_number || requesterBarangay(item)"
+              />
             </template>
 
             <template v-slot:item._secondary="{ item }">

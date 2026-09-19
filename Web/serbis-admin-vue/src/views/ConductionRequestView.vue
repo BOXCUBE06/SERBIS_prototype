@@ -82,8 +82,11 @@
           </template>
 
           <template v-slot:item.patient="{ item }">
-            <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
-            <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
+            <PersonCell
+              :name="item.patient_name || 'Unnamed patient'"
+              :initials="nameInitials(item.patient_name)"
+              :secondary="item.patient_contact_number"
+            />
           </template>
 
           <template v-slot:item.trip="{ item }">
@@ -521,6 +524,7 @@ import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import PersonCell from '@/components/PersonCell.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
@@ -563,6 +567,12 @@ const loading = ref(false)
 const apiError = ref('')
 const loadError = ref('')
 const snackbar = ref({ show: false, text: '', color: 'success' })
+
+// patient_name is one free-text field, not first/last like a resident.
+const nameInitials = (name) => {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  return parts.length ? `${parts[0][0]}${parts.length > 1 ? parts.at(-1)[0] : ''}`.toUpperCase() : '?'
+}
 
 // `value` gives the composite columns something to sort on; the key still
 // names the cell slot.
