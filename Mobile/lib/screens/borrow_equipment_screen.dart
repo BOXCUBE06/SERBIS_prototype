@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../models/borrow_models.dart';
 import '../models/request_models.dart' show dueLabel, formatTimelineTime;
+import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -19,7 +20,16 @@ import '../widgets/shared_widgets.dart';
 class BorrowEquipmentScreen extends StatefulWidget {
   final AppState appState;
 
-  const BorrowEquipmentScreen({super.key, required this.appState});
+  /// The signed-in resident. Only used for the delivery-address "Same as my
+  /// address" checkbox (MDRRMO feedback, 2026-09-19) — everything else this
+  /// screen and its sheet do reads from [appState].
+  final AppUser user;
+
+  const BorrowEquipmentScreen({
+    super.key,
+    required this.appState,
+    required this.user,
+  });
 
   @override
   State<BorrowEquipmentScreen> createState() => _BorrowEquipmentScreenState();
@@ -74,7 +84,11 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _BorrowSheet(appState: widget.appState, item: item),
+      builder: (_) => _BorrowSheet(
+        appState: widget.appState,
+        user: widget.user,
+        item: item,
+      ),
     );
 
     if (filed == null || !mounted) return;
@@ -746,12 +760,17 @@ class _FieldLabel extends StatelessWidget {
 /// in-flight spinner without rebuilding the whole screen behind it.
 class _BorrowSheet extends StatefulWidget {
   final AppState appState;
+  final AppUser user;
 
   /// Null for an item the catalogue does not list, which is when the sheet
   /// asks for its name instead of showing one.
   final Equipment? item;
 
-  const _BorrowSheet({required this.appState, required this.item});
+  const _BorrowSheet({
+    required this.appState,
+    required this.user,
+    required this.item,
+  });
 
   @override
   State<_BorrowSheet> createState() => _BorrowSheetState();
@@ -780,6 +799,11 @@ class _BorrowSheetState extends State<_BorrowSheet> {
 
   bool _delivery = false;
   bool _organizationBorrower = false;
+
+  /// Off by default — checking it fills [_address] from the account's own
+  /// address once (MDRRMO feedback, 2026-09-19); the field stays editable
+  /// either way, since a delivery is often to somewhere else.
+  bool _deliveryAddressIsMyAddress = false;
 
   bool _submitting = false;
   String? _error;
@@ -972,6 +996,24 @@ class _BorrowSheetState extends State<_BorrowSheet> {
               ),
               if (_delivery) ...[
                 const SizedBox(height: 12),
+                CheckboxListTile(
+                  value: _deliveryAddressIsMyAddress,
+                  onChanged: _submitting
+                      ? null
+                      : (checked) => setState(() {
+                            _deliveryAddressIsMyAddress = checked ?? false;
+                            if (_deliveryAddressIsMyAddress) {
+                              _address.text = widget.user.fullAddress;
+                            }
+                          }),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Same as my address',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'Delivery address',
                   hint: 'House number, street, barangay',

@@ -71,9 +71,23 @@ class ServiceFormFields extends StatelessWidget {
                   keyboard: TextInputType.number,
                   controller: form.age,
                 ),
-                // Prefilled from the account and fully editable: the account
-                // answers for the requester, and the patient may live
-                // elsewhere.
+                // Off by default — see AmbulanceFormData.setPatientAddressIsMyAddress.
+                // The patient may live elsewhere, so this is a confirmation,
+                // not an assumption.
+                CheckboxListTile(
+                  value: form.patientAddressIsMyAddress,
+                  onChanged: (checked) {
+                    form.setPatientAddressIsMyAddress(checked ?? false);
+                    onChanged();
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Same as my address',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'Patient address',
                   hint: 'Purok / street, barangay',
@@ -88,6 +102,24 @@ class ServiceFormFields extends StatelessWidget {
             FormSection(
               label: tr(f, 'form_section.trip'),
               children: [
+                // Off by default — see AmbulanceFormData.setPickupIsMyAddress.
+                // Separate from the patient-address checkbox above: the
+                // pickup point and the patient's address are often the same,
+                // but not always.
+                CheckboxListTile(
+                  value: form.pickupIsMyAddress,
+                  onChanged: (checked) {
+                    form.setPickupIsMyAddress(checked ?? false);
+                    onChanged();
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Same as my address',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'From',
                   hint: 'e.g. Purok 3, Brgy. Malasin',
@@ -191,7 +223,26 @@ class ServiceFormFields extends StatelessWidget {
               FormSection(
                 label: tr(f, section.labelKey),
                 children: [
-                  for (final field in section.fields)
+                  for (final field in section.fields) ...[
+                    // Off by default — see StructuredFormData.setAddressIsMyAddress.
+                    // Relief goods are often requested for somewhere other
+                    // than the account holder's own address, so this is a
+                    // confirmation, not an assumption.
+                    if (field.key == 'address' && form.hasAddressField)
+                      CheckboxListTile(
+                        value: form.addressIsMyAddress,
+                        onChanged: (checked) {
+                          form.setAddressIsMyAddress(checked ?? false);
+                          onChanged();
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text(
+                          'Same as my address',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ),
                     if (field.isChoice)
                       AppDropdown(
                         label: field.label,
@@ -211,6 +262,7 @@ class ServiceFormFields extends StatelessWidget {
                         controller: form.field(field.key),
                         helpText: field.helpText,
                       ),
+                  ],
                 ],
               ),
             // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,

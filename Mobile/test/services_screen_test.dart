@@ -222,13 +222,16 @@ Future<void> _pump(
   // that the submit button never builds, which would make it unfindable for a
   // reason that has nothing to do with the code under test.
   //
-  // 8000, not 5600: the ambulance form grew from four inputs to nine plus a
-  // relatives repeater, and 5600 was already tuned tightly enough that the
-  // earlier schedule picker had pushed Submit below the fold. ensureVisible()
-  // ought to scroll to it regardless of height, but this screen was
-  // deliberately sized to avoid depending on that in the first place — keep it
-  // that way rather than debug why only some tests need the scroll to work.
-  tester.view.physicalSize = const Size(1080, 8000);
+  // 8600, not 8000: the "Same as my address" checkboxes on patient address
+  // and pickup (MDRRMO feedback, 2026-09-19) pushed Submit below the fold
+  // again at 8000. ensureVisible() ought to scroll to it regardless of
+  // height, but this screen was deliberately sized to avoid depending on
+  // that in the first place — keep it that way rather than debug why only
+  // some tests need the scroll to work. Previously 8000, not 5600: the
+  // ambulance form grew from four inputs to nine plus a relatives repeater,
+  // and 5600 was already tuned tightly enough that the schedule picker
+  // before that had pushed Submit below the fold too.
+  tester.view.physicalSize = const Size(1080, 8600);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 
@@ -576,18 +579,22 @@ void main() {
       expect(api.lastIntake?.toFields()['patient_contact_number'], '09171234567');
     });
 
-    testWidgets("the account's address prefills the patient address",
+    testWidgets(
+        'checking "Same as my address" sends the account address as the patient address',
         (tester) async {
-      // Same shape as the number above: never typed here, carried by
-      // `_testUser`, and editable once it is on screen.
+      // Unlike the callback number, the address is never prefilled
+      // automatically (MDRRMO feedback, 2026-09-19) — the checkbox is what
+      // carries `_testUser`'s address onto the field.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
 
       await _fillRequiredAmbulanceFields(tester);
+      await tester.tap(find.text('Same as my address').first);
+      await tester.pump();
       await _attachValidId(tester);
       await _submit(tester);
 
-      expect(api.lastIntake?.patientAddress, _testUser.address);
+      expect(api.lastIntake?.patientAddress, _testUser.fullAddress);
     });
 
     testWidgets('an ambulance request sends the structured fields, not a description',

@@ -535,6 +535,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     final screens = [
       slot(0, (_) => HomeScreen(
             appState: _appState,
+            user: widget.user,
             onOpenTrack: () => _goTo(2),
             onOpenLibrary: () => _goTo(3),
             onOpenProfile: onOpenProfile,

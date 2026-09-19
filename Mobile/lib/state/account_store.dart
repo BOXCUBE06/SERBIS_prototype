@@ -52,6 +52,18 @@ class AppUser {
 
   String get fullName => '$firstName $lastName'.trim();
 
+  /// The purok/street and barangay together, for the "Same as my address"
+  /// checkboxes on the request forms (MDRRMO feedback, 2026-09-19) — the
+  /// fuller answer [address] alone cannot give, now that [streetAddress]
+  /// exists to ask for it. Falls back to just the barangay when the resident
+  /// has not set a street address yet, and to empty when there is no
+  /// barangay either (profile not yet loaded).
+  String get fullAddress {
+    if (streetAddress.isEmpty) return address;
+    if (address.isEmpty) return streetAddress;
+    return '$streetAddress, $address';
+  }
+
   /// Two letters for the avatar when there is no photo. Empty when the profile
   /// carries no name at all, so nothing invented appears in the circle.
   String get initials {

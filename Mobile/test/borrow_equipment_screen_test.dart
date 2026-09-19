@@ -27,6 +27,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/screens/borrow_equipment_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -130,8 +131,16 @@ Map<String, dynamic> _equipmentRow(int id, String name, int qty) => <String, dyn
       'available_quantity': qty,
     };
 
+const _resident = AppUser(
+  id: '1',
+  firstName: 'Maria',
+  lastName: 'Santos',
+  email: 'maria@example.com',
+  address: 'San Fabian',
+);
+
 Widget _host(AppState state) => MaterialApp(
-      home: BorrowEquipmentScreen(appState: state),
+      home: BorrowEquipmentScreen(appState: state, user: _resident),
     );
 
 void main() {
@@ -512,6 +521,23 @@ void main() {
 
       await tapVisible(tester, find.text('Pickup'));
       expect(find.text('Delivery address'), findsNothing);
+    });
+
+    testWidgets(
+        'checking "Same as my address" fills the delivery address from the account',
+        (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await tapVisible(tester, find.text('Delivery'));
+
+      expect(find.widgetWithText(TextField, _resident.address), findsNothing);
+
+      await tapVisible(tester, find.text('Same as my address'));
+
+      expect(find.widgetWithText(TextField, _resident.address), findsOneWidget);
     });
 
     testWidgets('a Delivery with no address is refused before it is sent', (tester) async {

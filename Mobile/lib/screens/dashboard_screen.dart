@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/request_models.dart';
+import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -8,6 +9,10 @@ import 'borrow_equipment_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final AppState appState;
+
+  /// Threaded through to [BorrowEquipmentScreen] for its delivery-address
+  /// "Same as my address" checkbox — nothing else on this screen reads it.
+  final AppUser user;
   final VoidCallback onOpenTrack;
   final VoidCallback onOpenLibrary;
   final VoidCallback onOpenProfile;
@@ -18,6 +23,7 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     required this.appState,
+    required this.user,
     required this.onOpenTrack,
     required this.onOpenLibrary,
     required this.onOpenProfile,
@@ -200,8 +206,8 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) =>
-                                BorrowEquipmentScreen(appState: appState)),
+                            builder: (_) => BorrowEquipmentScreen(
+                                appState: appState, user: user)),
                       ),
                     ),
                   ),

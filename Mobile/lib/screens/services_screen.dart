@@ -150,15 +150,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ServiceFormKind.ambulance => AmbulanceFormData(
                 contactNumber: widget.user.phone,
                 accountName: widget.user.fullName,
-                // `AppUser.address` is the barangay relation, not a street —
-                // tbl_residents carries no address column. A starting point
-                // the resident is expected to narrow, not a doorstep.
-                accountAddress: widget.user.address,
+                accountFullAddress: widget.user.fullAddress,
               ),
             ServiceFormKind.road => StructuredFormData.road(),
             ServiceFormKind.relief => StructuredFormData.relief(
                 headName: widget.user.fullName,
                 contactNumber: widget.user.phone,
+                accountFullAddress: widget.user.fullAddress,
               ),
             ServiceFormKind.generic =>
               StructuredFormData.generic(contactNumber: widget.user.phone),
@@ -413,7 +411,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => BorrowEquipmentScreen(appState: widget.appState),
+                builder: (_) => BorrowEquipmentScreen(
+                  appState: widget.appState,
+                  user: widget.user,
+                ),
               ),
             ),
           ),

@@ -128,23 +128,24 @@ class AmbulanceIntake {
 }
 
 class AmbulanceFormData extends ServiceFormData {
-  /// [accountAddress] and [contactNumber] seed the two fields the account can
-  /// answer for; both stay fully editable, because the account answers for the
-  /// requester and the request is often about someone else.
+  /// [contactNumber] seeds the one field the account can answer for
+  /// unconditionally; it stays fully editable, because the account answers
+  /// for the requester and the request is often about someone else.
   ///
-  /// The patient's name is deliberately NOT prefilled the same way. The
-  /// account holder is the likeliest patient, not the certain one — a head of
-  /// the family files for the household — and a name already sitting in the
-  /// field is a default nobody chose, submitted unchecked. [accountName] is
-  /// kept only for [setPatientIsAccountHolder], which fills the name field on
-  /// an explicit, unchecked-by-default confirmation instead (MDRRMO feedback,
+  /// The patient's name and the two address fields are deliberately NOT
+  /// prefilled the same way. The account holder is the likeliest patient and
+  /// the likeliest address, not the certain one — a head of the family files
+  /// for the household, and a request is often about someone or somewhere
+  /// else — so a value already sitting in the field is a default nobody
+  /// chose, submitted unchecked. [accountName] and [accountFullAddress] are
+  /// kept only for the three "same as mine" setters below, which fill on an
+  /// explicit, unchecked-by-default confirmation instead (MDRRMO feedback,
   /// 2026-09-19).
   AmbulanceFormData({
     this.contactNumber = '',
     this.accountName = '',
-    String accountAddress = '',
+    this.accountFullAddress = '',
   }) {
-    patientAddress.text = accountAddress;
     patientContact.text = contactNumber;
   }
 
@@ -156,6 +157,12 @@ class AmbulanceFormData extends ServiceFormData {
   /// The account holder's name, for [setPatientIsAccountHolder] to copy into
   /// [patient] — never written to the field on its own.
   final String accountName;
+
+  /// The account holder's purok/street and barangay together
+  /// (`AppUser.fullAddress`), for [setPatientAddressIsMyAddress] and
+  /// [setPickupIsMyAddress] to copy from — never written to either field on
+  /// its own.
+  final String accountFullAddress;
 
   /// Whether the "Patient is myself" checkbox is ticked. Read by the screen
   /// to draw the checkbox's own state; setting [patient] happens in
@@ -173,13 +180,39 @@ class AmbulanceFormData extends ServiceFormData {
     }
   }
 
+  /// Whether the "Same as my address" checkbox next to [patientAddress] is
+  /// ticked.
+  bool patientAddressIsMyAddress = false;
+
+  /// Fills [patientAddress] from the account's full address when [value] is
+  /// true. Same shape as [setPatientIsAccountHolder]: unchecking does not
+  /// clear whatever is now in the field.
+  void setPatientAddressIsMyAddress(bool value) {
+    patientAddressIsMyAddress = value;
+    if (value) {
+      patientAddress.text = accountFullAddress;
+    }
+  }
+
+  /// Whether the "Same as my address" checkbox next to [pickup] is ticked.
+  /// Separate from [patientAddressIsMyAddress] — the pickup point and the
+  /// patient's own address are often the same, but a request filed for
+  /// someone at a different location must be able to say so independently.
+  bool pickupIsMyAddress = false;
+
+  void setPickupIsMyAddress(bool value) {
+    pickupIsMyAddress = value;
+    if (value) {
+      pickup.text = accountFullAddress;
+    }
+  }
+
   final TextEditingController patient = TextEditingController();
   final TextEditingController age = TextEditingController();
 
-  /// Where the patient lives — `patient_address`. Prefilled from the account,
-  /// which on this schema is the barangay name and nothing finer
-  /// (`tbl_residents` has a `barangay_id` and no street column), so the
-  /// resident is expected to add the purok themselves.
+  /// Where the patient lives — `patient_address`. See
+  /// [setPatientAddressIsMyAddress] for how the account's own address reaches
+  /// this field.
   final TextEditingController patientAddress = TextEditingController();
 
   /// `patient_contact_number` — the number to ring about this patient, which
@@ -187,6 +220,8 @@ class AmbulanceFormData extends ServiceFormData {
   /// household. Prefilled with the account number as the common case.
   final TextEditingController patientContact = TextEditingController();
 
+  /// See [setPickupIsMyAddress] for how the account's own address reaches
+  /// this field.
   final TextEditingController pickup = TextEditingController();
   final TextEditingController destination = TextEditingController();
 
@@ -500,8 +535,9 @@ final class StructuredFormData extends ServiceFormData {
     this.spec, {
     this.contactNumber = '',
     this.offersFulfillment = false,
+    this.accountFullAddress = '',
     Map<String, String> prefill = const {},
-  }) {
+  }) : hasAddressField = spec.fields.any((field) => field.key == 'address') {
     for (final field in spec.fields) {
       if (field.isChoice) {
         _choices[field.key] = field.options.first;
@@ -516,15 +552,20 @@ final class StructuredFormData extends ServiceFormData {
 
   /// The household head is the account holder by definition — the app is
   /// distributed one account per household — so the name is prefilled for the
-  /// same reason the patient name is, with more confidence.
+  /// same reason the patient name is, with more confidence. The location
+  /// [address] itself is not prefilled the same way — see
+  /// [setAddressIsMyAddress] — because relief goods are often requested for
+  /// somewhere other than the account holder's own address.
   static StructuredFormData relief({
     String headName = '',
     String contactNumber = '',
+    String accountFullAddress = '',
   }) =>
       StructuredFormData._(
         _reliefSpec,
         contactNumber: contactNumber,
         offersFulfillment: true,
+        accountFullAddress: accountFullAddress,
         prefill: {'household_head': headName},
       );
 
@@ -539,6 +580,30 @@ final class StructuredFormData extends ServiceFormData {
   /// this at all, and road/generic weren't asked for it, so this stays a
   /// per-instance flag rather than something every StructuredFormData shows.
   final bool offersFulfillment;
+
+  /// The account holder's purok/street and barangay together
+  /// (`AppUser.fullAddress`), for [setAddressIsMyAddress] to copy from — only
+  /// ever non-empty when [hasAddressField] is true (relief).
+  final String accountFullAddress;
+
+  /// True when this form has a field keyed `'address'` — relief only, road
+  /// and generic don't collect a location the same way. Drives whether the
+  /// "Same as my address" checkbox is shown at all.
+  final bool hasAddressField;
+
+  /// Whether the "Same as my address" checkbox next to the address field is
+  /// ticked. Meaningless when [hasAddressField] is false.
+  bool addressIsMyAddress = false;
+
+  /// Fills the `'address'` field from the account's full address when
+  /// [value] is true. Same shape as AmbulanceFormData's "same as mine"
+  /// setters: unchecking does not clear whatever is now in the field.
+  void setAddressIsMyAddress(bool value) {
+    addressIsMyAddress = value;
+    if (value) {
+      field('address').text = accountFullAddress;
+    }
+  }
 
   /// 'Pickup' or 'Delivery' — sent as its own field, not folded into
   /// [metaLines]/description, the same way AmbulanceFormData.scheduledAt
