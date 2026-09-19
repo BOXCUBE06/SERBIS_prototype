@@ -13,8 +13,8 @@ use Illuminate\Database\Seeder;
  *
  * What is here is the data the MDRRMO supplied — their barangays, services,
  * equipment and vehicles — plus the single admin account without which nobody
- * can log into the panel. Everything else starts empty and fills up from real
- * use.
+ * can log into the panel, and the one code without which nobody can send a
+ * text blast. Everything else starts empty and fills up from real use.
  *
  * Every seeder below skips a table that already has rows, so re-running this on
  * a redeploy is safe and does nothing.
@@ -26,6 +26,7 @@ class ProductionSeeder extends Seeder
         $this->call([
             BarangaySeeder::class,
             ProductionAdminSeeder::class,
+            ProductionSmsBlastCodeSeeder::class,
             ServiceSeeder::class,
             EquipmentSeeder::class,
             VehicleSeeder::class,

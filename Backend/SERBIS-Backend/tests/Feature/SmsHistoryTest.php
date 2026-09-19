@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Barangay;
 use App\Models\Resident;
+use App\Models\SmsBlastCode;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -43,6 +44,11 @@ class SmsHistoryTest extends TestCase
             'role' => 'Admin',
         ]);
 
+        SmsBlastCode::create([
+            'code_hash' => Hash::make('123456'),
+            'updated_by' => $this->admin->admin_id,
+        ]);
+
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }
 
@@ -65,7 +71,7 @@ class SmsHistoryTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => $message,
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }

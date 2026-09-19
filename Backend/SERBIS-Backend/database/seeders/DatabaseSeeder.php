@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             // 1. Independent Tables
             BarangaySeeder::class,
             AdminSeeder::class,
+            SmsBlastCodeSeeder::class,
             ServiceSeeder::class,
             EquipmentSeeder::class,
             VehicleSeeder::class,

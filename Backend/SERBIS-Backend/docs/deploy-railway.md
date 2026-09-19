@@ -121,6 +121,7 @@ every start regardless of which service triggered it.
 | `DB_PASSWORD` | **required** | **yes** | `${{MySQL.MYSQLPASSWORD}}` |
 | `MYSQL_ATTR_SSL_CA` | leave unset | — | private network, no TLS — see §1 |
 | `ADMIN_SEED_PASSWORD` | **required** | **yes** | chosen at deploy time, typed directly into the Railway variable |
+| `SMS_BLAST_CODE_SEED` | **required** | **yes** | the shared 6-digit text-blast code, chosen at deploy time, typed directly into the Railway variable |
 | `SESSION_DRIVER` | optional | no | fixed: `database` |
 | `CACHE_STORE` | optional | no | `file` — `throttleApi()` in `bootstrap/app.php` applies to every route, so a database-backed limiter is two extra round trips per request on a single-instance deploy; move to Redis only if this is ever scaled past one instance |
 | `QUEUE_CONNECTION` | optional | no | fixed: `database` — inert, nothing queues a job |

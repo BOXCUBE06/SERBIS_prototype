@@ -147,6 +147,13 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // The only endpoint that spends money: PhilSMS bills per message and has no
     // sandbox, so a repeated submit is real pesos, not a retry. 3/hour per admin.
     Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:sms-blast');
+    // The shared 6-digit code that gates a blast (MDRRMO feedback,
+    // 2026-09-19 — there is no role system, so this is the only thing that
+    // distinguishes "may send" from "any admin token"). Rotating requires
+    // the current code, so both share sendBlast's rate limit — see
+    // SmsController::assertCurrentCode().
+    Route::get('/sms/blast-code', [SmsController::class, 'blastCodeStatus']);
+    Route::post('/sms/blast-code', [SmsController::class, 'rotateBlastCode']);
     // Read-only and unbilled — but it is still an outbound vendor call on
     // every visit to the page, not free.
     Route::get('/sms/balance', [SmsController::class, 'balance'])->middleware('throttle:30,1');

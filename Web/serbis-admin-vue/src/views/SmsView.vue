@@ -13,6 +13,14 @@
                  "every resident" would overstate who actually receives this. -->
             <PageHeader title="Text Blast (SMS)" subtitle="One message to the active, opted-in residents of the barangays you pick" />
 
+            <!-- Reachable from the header rather than buried in a settings page —
+                 the two people who know the code are the ones who need this. -->
+            <v-btn
+              variant="text" size="small" class="text-none flex-shrink-0"
+              prepend-icon="mdi-key-outline"
+              @click="openManageCode"
+            >Text blast code</v-btn>
+
             <!-- Pushed right, and deliberately quiet. The balance is context for
                  a decision, not a call to action — and it must never read as a
                  blocker, because a failed lookup does not stop a send.
@@ -225,8 +233,10 @@
     </v-row>
 
     <!-- Replaces a native confirm(). The scale and the cost still read the
-         same; what is new is the password, which the server re-checks against
-         the signed-in account before it spends anything. -->
+         same; what is new is the shared blast code, which the server checks
+         before it spends anything. There is no role system, so this proves
+         the sender was told the code, not that they are any particular
+         admin. -->
     <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
@@ -240,15 +250,17 @@
           <p class="text-body-1 mb-3">{{ confirmDialog.summary }}</p>
           <p v-if="confirmDialog.cost" class="text-body-2 text-medium-emphasis mb-4">{{ confirmDialog.cost }}</p>
           <v-text-field
-            v-model="confirmDialog.password"
-            label="Your password"
-            placeholder="Re-enter your account password"
-            type="password"
+            v-model="confirmDialog.code"
+            label="Text blast code"
+            placeholder="Enter the 6-digit code"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
             variant="outlined"
             density="comfortable"
             rounded="lg"
-            autocomplete="current-password"
-            :error-messages="fieldErrors.password"
+            autocomplete="off"
+            :error-messages="fieldErrors.code"
             :disabled="loading"
             @keyup.enter="confirmSend"
           ></v-text-field>
@@ -270,6 +282,74 @@
             :loading="loading"
             @click="confirmSend"
           >Send Blast</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Rotation requires the current code, so no admin can reset it without
+         already knowing it (MDRRMO feedback, 2026-09-19). -->
+    <v-dialog v-model="manageCodeDialog.open" max-width="480" persistent>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
+          <span>Text blast code</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="manageCodeDialog.loading" @click="closeManageCode"
+          ></v-btn>
+        </v-card-title>
+        <v-card-text class="px-6">
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            <template v-if="codeStatus.configured">Last set by {{ codeStatus.updatedBy }} on {{ codeStatus.updatedAtLabel }}.</template>
+            <template v-else>No code has been set yet — no admin can send a blast until one is.</template>
+          </p>
+          <v-text-field
+            v-model="manageCodeDialog.currentCode"
+            label="Current code"
+            placeholder="Leave the code with someone who knows it"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            autocomplete="off"
+            class="mb-2"
+            :error-messages="manageCodeDialog.errors.currentCode"
+            :disabled="manageCodeDialog.loading"
+          ></v-text-field>
+          <v-text-field
+            v-model="manageCodeDialog.newCode"
+            label="New code"
+            placeholder="6 digits"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            autocomplete="off"
+            :error-messages="manageCodeDialog.errors.newCode"
+            :disabled="manageCodeDialog.loading"
+            @keyup.enter="rotateBlastCode"
+          ></v-text-field>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
+          <v-btn
+            variant="text"
+            class="text-none font-weight-bold"
+            height="44"
+            :disabled="manageCodeDialog.loading"
+            @click="closeManageCode"
+          >Cancel</v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-6"
+            height="44"
+            :loading="manageCodeDialog.loading"
+            @click="rotateBlastCode"
+          >Set code</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -296,9 +376,9 @@ const alert = ref({
   message: ''
 })
 
-// The send confirmation. `password` lives only as long as the dialog is open —
+// The send confirmation. `code` lives only as long as the dialog is open —
 // cleared on cancel, on a successful send, and on any failure that closes it.
-const confirmDialog = ref({ open: false, summary: '', cost: '', password: '' })
+const confirmDialog = ref({ open: false, summary: '', cost: '', code: '' })
 
 // Starting text, not a fill-in form. There are deliberately no [AREA]-style
 // tokens: a token that survives editing goes out to a real handset with the
@@ -374,19 +454,19 @@ const getHeaders = () => ({
 // Server-side errors, keyed by field, so a 422 lands on the input it belongs
 // to instead of being concatenated into the banner above the form. Mirrors
 // VehiclesView's/StaffView's applyServerErrors.
-const fieldErrors = ref({ message: '', barangays: '', password: '' })
-const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '', password: '' } }
+const fieldErrors = ref({ message: '', barangays: '', code: '' })
+const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '', code: '' } }
 
 const applyServerErrors = (data) => {
   if (data?.errors && typeof data.errors === 'object') {
-    const mapped = { message: '', barangays: '', password: '' }
+    const mapped = { message: '', barangays: '', code: '' }
     const leftovers = []
     for (const [key, messages] of Object.entries(data.errors)) {
       const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
       // barangays.* validation failures report as "barangays.0", not "barangays".
       if (key === 'message') mapped.message = text
       else if (key === 'barangays' || key.startsWith('barangays.')) mapped.barangays = text
-      else if (key === 'password') mapped.password = text
+      else if (key === 'code') mapped.code = text
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
@@ -597,20 +677,20 @@ const sendSmsBlast = async () => {
     ? ''
     : `${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
 
-  confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, password: '' }
+  confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, code: '' }
 }
 
 const cancelSend = () => {
   confirmDialog.value.open = false
-  confirmDialog.value.password = ''
-  fieldErrors.value.password = ''
+  confirmDialog.value.code = ''
+  fieldErrors.value.code = ''
 }
 
-// The dialog stays open on a rejected password so the wrong one can be
-// corrected in place, and the send is retried against the same message and
-// barangay selection rather than composed again.
+// The dialog stays open on a rejected code so the wrong one can be corrected
+// in place, and the send is retried against the same message and barangay
+// selection rather than composed again.
 const confirmSend = async () => {
-  fieldErrors.value.password = ''
+  fieldErrors.value.code = ''
   loading.value = true
   alert.value.show = false
 
@@ -621,7 +701,7 @@ const confirmSend = async () => {
       body: JSON.stringify({
         message: message.value,
         barangays: selectedBarangays.value,
-        password: confirmDialog.value.password
+        code: confirmDialog.value.code
       })
     })
 
@@ -629,8 +709,8 @@ const confirmSend = async () => {
 
     if (!res.ok) throw new Error(applyServerErrors(data))
 
-    // Sent. The password is dropped here rather than held for a second blast.
-    confirmDialog.value = { open: false, summary: '', cost: '', password: '' }
+    // Sent. The code is dropped here rather than held for a second blast.
+    confirmDialog.value = { open: false, summary: '', cost: '', code: '' }
 
     // A 202 with `unconfirmed` means the vendor never answered, so res.ok is
     // true but the send is not confirmed. Branching on it matters more than it
@@ -658,15 +738,99 @@ const confirmSend = async () => {
       message: error.message
     }
 
-    // A rejected password keeps the dialog open to be retyped. Any other
-    // failure closes it, because the alert explaining that failure renders on
-    // the page behind this overlay and would otherwise not be readable.
-    if (!fieldErrors.value.password) {
+    // A rejected code keeps the dialog open to be retyped. Any other failure
+    // closes it, because the alert explaining that failure renders on the
+    // page behind this overlay and would otherwise not be readable.
+    if (!fieldErrors.value.code) {
       confirmDialog.value.open = false
-      confirmDialog.value.password = ''
+      confirmDialog.value.code = ''
     }
   } finally {
     loading.value = false
+  }
+}
+
+// Who set the current code and when — never the code itself, which the
+// status endpoint never returns.
+const codeStatus = ref({ configured: false, updatedBy: '', updatedAtLabel: '' })
+
+const fetchCodeStatus = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/sms/blast-code`, { headers: getHeaders() })
+    const data = await res.json()
+
+    codeStatus.value = {
+      configured: !!data.configured,
+      updatedBy: data.updated_by || '',
+      updatedAtLabel: data.updated_at ? new Date(data.updated_at).toLocaleString() : '',
+    }
+  } catch {
+    // Swallowed like the balance lookup above — a failed status read must not
+    // block sending, and the dialog re-fetches on every open anyway.
+  }
+}
+
+const manageCodeDialog = ref({
+  open: false,
+  currentCode: '',
+  newCode: '',
+  loading: false,
+  errors: { currentCode: '', newCode: '' },
+})
+
+const openManageCode = () => {
+  manageCodeDialog.value = {
+    open: true,
+    currentCode: '',
+    newCode: '',
+    loading: false,
+    errors: { currentCode: '', newCode: '' },
+  }
+  fetchCodeStatus()
+}
+
+const closeManageCode = () => {
+  manageCodeDialog.value.open = false
+}
+
+const rotateBlastCode = async () => {
+  manageCodeDialog.value.errors = { currentCode: '', newCode: '' }
+  manageCodeDialog.value.loading = true
+
+  try {
+    const res = await fetch(`${API_BASE}/sms/blast-code`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        current_code: manageCodeDialog.value.currentCode,
+        new_code: manageCodeDialog.value.newCode,
+      })
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      if (data?.errors && typeof data.errors === 'object') {
+        const mapped = { currentCode: '', newCode: '' }
+        for (const [key, messages] of Object.entries(data.errors)) {
+          const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+          if (key === 'current_code') mapped.currentCode = text
+          else if (key === 'new_code') mapped.newCode = text
+        }
+        manageCodeDialog.value.errors = mapped
+      }
+      throw new Error(data?.message || 'Failed to update the code')
+    }
+
+    manageCodeDialog.value.open = false
+    alert.value = { show: true, type: 'success', message: 'Text blast code updated.' }
+    fetchCodeStatus()
+  } catch (error) {
+    if (!manageCodeDialog.value.errors.currentCode && !manageCodeDialog.value.errors.newCode) {
+      alert.value = { show: true, type: 'error', message: error.message }
+    }
+  } finally {
+    manageCodeDialog.value.loading = false
   }
 }
 </script>

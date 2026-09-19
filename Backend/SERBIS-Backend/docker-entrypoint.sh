@@ -72,7 +72,8 @@ for var in \
     DB_DATABASE \
     DB_USERNAME \
     DB_PASSWORD \
-    ADMIN_SEED_PASSWORD
+    ADMIN_SEED_PASSWORD \
+    SMS_BLAST_CODE_SEED
 do
     if [ -z "${!var:-}" ]; then
         fail "$var is not set. Set it on the Railway service and redeploy."

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Barangay;
 use App\Models\Recipient;
 use App\Models\Resident;
+use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,6 +42,11 @@ class ResidentSmsPreferenceTest extends TestCase
             'email_address' => 'admin@test.local',
             'password' => Hash::make('password123'),
             'role' => 'Admin',
+        ]);
+
+        SmsBlastCode::create([
+            'code_hash' => Hash::make('123456'),
+            'updated_by' => $this->admin->admin_id,
         ]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
@@ -159,7 +165,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertOk()->assertJson(['sent' => 1, 'failed' => 0]);
 
@@ -185,7 +191,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertOk();
 
@@ -205,7 +211,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Nobody wants this one.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertStatus(422);
 

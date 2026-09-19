@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Recipient;
 use App\Models\Resident;
+use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Services\PhilSms;
 use App\Traits\PaginatesLists;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -26,17 +28,20 @@ class SmsController extends Controller
             'message' => 'required|string|max:160',
             'barangays' => 'required|array|min:1',
             'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
-            'password' => 'required|string',
+            'code' => 'required|string',
         ]);
 
         // Before anything is resolved or sent. This endpoint is the only one in
         // the application that spends money, and until now the sole thing
         // standing in front of it was a client-side dialog — see the route
         // definition, which notes that dialog does not survive a second tab, a
-        // reload mid-request, or a token replayed by hand. Re-entering the
-        // password proves the sender is the account holder at this moment,
-        // rather than whoever is holding a token issued eight hours ago.
-        $this->assertCurrentPassword($request);
+        // reload mid-request, or a token replayed by hand. There is no role
+        // system (five admins, equal privileges — MDRRMO feedback,
+        // 2026-09-19), so this checks a code shared between the two staff who
+        // are supposed to know it, not the caller's own account password:
+        // any admin token can reach this route, but only someone who was
+        // told the code can make it actually send.
+        $this->assertCurrentCode($request);
 
         $residents = $this->resolveRecipients($validated['barangays']);
 
@@ -218,76 +223,158 @@ class SmsController extends Controller
      * @param  array<int, int>  $barangayIds
      */
     /**
-     * How many wrong passwords this gate accepts, and for how long.
+     * How many wrong codes this gate accepts, and for how long.
      *
      * Five matches the tight tier of the 'login' limiter in AppServiceProvider,
-     * so the number a password check allows is the same one everywhere in this
+     * so the number this check allows is the same one everywhere in this
      * application. The window is fifteen minutes rather than login's one,
      * because the two endpoints are used at completely different rates: an
      * office signs in repeatedly through a day, but sends a blast rarely, so a
-     * long decay costs a legitimate sender nothing and leaves an online guess
-     * at twenty tries an hour — useless against the 8-character mixed-case
-     * password this application already requires.
+     * long decay costs a legitimate sender nothing.
      *
      * Only FAILURES are counted, and a success clears the tally, so an admin
      * sending several blasts in a row is never throttled by this. The route
      * itself is deliberately not throttled — that would cap legitimate sends.
      */
-    private const PASSWORD_ATTEMPTS = 5;
+    private const CODE_ATTEMPTS = 5;
 
-    private const PASSWORD_DECAY_SECONDS = 900;
+    private const CODE_DECAY_SECONDS = 900;
 
     /**
-     * Proves the caller knows the password of the account they are sending as,
-     * rather than merely holding a token issued for it.
+     * Proves the caller knows the shared text-blast code, not their own
+     * account password — there is no role system in this application (five
+     * admin accounts, equal privileges), so "knows the code" is the only
+     * distinction between "may send a blast" and "may not" that exists.
      *
-     * Checked with Hash::check against the row, not with Laravel's
-     * `current_password` rule: that rule resolves the user from the default
-     * auth guard, which is `web`, while this request authenticates through
-     * `auth:sanctum` — so it would compare against a null user and reject a
-     * correct password. AuthController::assertCurrentPassword checks the same
-     * way, for the same reason.
+     * $inputKey lets rotateBlastCode() reuse this same check against its own
+     * `current_code` field rather than duplicating the rate limit, the hash
+     * check and the logging.
+     *
+     * Every attempt is logged with the admin who made it — success and
+     * failure both — because this gate is the one thing standing between an
+     * admin token and a billed vendor call, and "who tried the code, and did
+     * it work" is exactly what gets asked about afterwards.
      */
-    private function assertCurrentPassword(Request $request): void
+    private function assertCurrentCode(Request $request, string $inputKey = 'code'): void
     {
         $admin = $request->user();
-        $password = (string) $request->input('password', '');
+        $code = (string) $request->input($inputKey, '');
 
         if (! $admin) {
             throw ValidationException::withMessages([
-                'password' => 'Enter your password to send this blast.',
+                $inputKey => 'Enter the text blast code.',
             ]);
         }
 
         // Keyed on the account, not the IP: this route is behind auth:sanctum,
         // so there is always an account to key on, and an office on one CGNAT
         // address must not be able to lock its colleagues out of sending.
-        $key = 'sms-blast-password:'.$admin->admin_id;
+        // Shared across sendBlast() and rotateBlastCode() on purpose — both
+        // are "prove you know the code" checks, and a caller should not get a
+        // second guessing budget by rotating instead of sending.
+        $key = 'sms-blast-code:'.$admin->admin_id;
 
         // Checked BEFORE the hash comparison, so once the limit is reached even
-        // the correct password is refused until the window passes. A gate that
-        // let a correct guess through on the sixth try would not be a limit.
-        if (RateLimiter::tooManyAttempts($key, self::PASSWORD_ATTEMPTS)) {
+        // the correct code is refused until the window passes. A gate that let
+        // a correct guess through on the sixth try would not be a limit.
+        if (RateLimiter::tooManyAttempts($key, self::CODE_ATTEMPTS)) {
+            Log::warning('SMS blast code attempt blocked: too many failures', [
+                'admin_id' => $admin->admin_id,
+            ]);
+
             throw new ThrottleRequestsException(
-                'Too many incorrect passwords. Try again in '
+                'Too many incorrect codes. Try again in '
                 .ceil(RateLimiter::availableIn($key) / 60).' minute(s).'
             );
         }
 
-        // One message for a missing password and a wrong one. The caller
-        // already holds a token for this account, so separating them discloses
-        // nothing and gains nothing.
-        if (! Hash::check($password, (string) $admin->password)) {
-            RateLimiter::hit($key, self::PASSWORD_DECAY_SECONDS);
+        $blastCode = SmsBlastCode::first();
+
+        // Distinct from a wrong code: nobody has set one yet (a fresh
+        // deployment with no seed, or the seed step was skipped), and no
+        // code the caller types is ever going to satisfy that. Same shape as
+        // Fcm::sendToDevice()'s "not configured" branch — a missing setup
+        // step must not look identical to "you typed it wrong" in the logs.
+        if (! $blastCode) {
+            Log::error('SMS blast code attempt failed: no code configured', [
+                'admin_id' => $admin->admin_id,
+            ]);
 
             throw ValidationException::withMessages([
-                'password' => 'Enter your password to send this blast.',
+                $inputKey => 'No text blast code has been set yet. Ask an administrator to set one.',
             ]);
         }
 
-        // Cleared on the way through, so a typo followed by the right password
+        if (! Hash::check($code, $blastCode->code_hash)) {
+            RateLimiter::hit($key, self::CODE_DECAY_SECONDS);
+
+            Log::warning('SMS blast code attempt failed: wrong code', [
+                'admin_id' => $admin->admin_id,
+            ]);
+
+            throw ValidationException::withMessages([
+                $inputKey => 'That code is not correct.',
+            ]);
+        }
+
+        // Cleared on the way through, so a typo followed by the right code
         // leaves nothing behind to count against the next legitimate blast.
         RateLimiter::clear($key);
+
+        Log::info('SMS blast code accepted', ['admin_id' => $admin->admin_id]);
+    }
+
+    /**
+     * Rotation requires the current code, so no admin can reset it without
+     * already knowing it — the same reasoning AuthController's password
+     * change applies to a user's own password, here applied to the one code
+     * five equal accounts share.
+     */
+    public function rotateBlastCode(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_code' => 'required|string',
+            'new_code' => ['required', 'string', 'regex:/^\d{6}$/'],
+        ], [
+            'new_code.regex' => 'The new code must be exactly 6 digits.',
+        ]);
+
+        $this->assertCurrentCode($request, 'current_code');
+
+        $admin = $request->user();
+
+        // firstOrNew, not firstOrFail: the very first rotation (replacing a
+        // seeded code, or setting one for the first time if the seed step was
+        // skipped) has no row to update yet.
+        $blastCode = SmsBlastCode::firstOrNew();
+        $blastCode->code_hash = Hash::make($validated['new_code']);
+        $blastCode->updated_by = $admin->admin_id;
+        $blastCode->save();
+
+        Log::info('SMS blast code rotated', ['admin_id' => $admin->admin_id]);
+
+        return response()->json(['message' => 'Text blast code updated.']);
+    }
+
+    /**
+     * What the admin panel shows on the rotation form: who set the current
+     * code and when — never the code, never its hash.
+     */
+    public function blastCodeStatus(): JsonResponse
+    {
+        $blastCode = SmsBlastCode::with('updatedByAdmin:admin_id,first_name,last_name')->first();
+
+        if (! $blastCode) {
+            return response()->json(['configured' => false]);
+        }
+
+        return response()->json([
+            'configured' => true,
+            'updated_by' => $blastCode->updatedByAdmin
+                ? $blastCode->updatedByAdmin->first_name.' '.$blastCode->updatedByAdmin->last_name
+                : 'Unknown',
+            'updated_at' => $blastCode->updated_at,
+        ]);
     }
 
     private function resolveRecipients(array $barangayIds)

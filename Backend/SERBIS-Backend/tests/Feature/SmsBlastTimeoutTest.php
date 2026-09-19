@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Barangay;
 use App\Models\Recipient;
 use App\Models\Resident;
+use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Models\User;
 use App\Services\PhilSms;
@@ -56,6 +57,11 @@ class SmsBlastTimeoutTest extends TestCase
             'status' => 'Active',
         ]);
 
+        SmsBlastCode::create([
+            'code_hash' => Hash::make('123456'),
+            'updated_by' => $this->admin->admin_id,
+        ]);
+
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
 
         Resident::create([
@@ -85,7 +91,7 @@ class SmsBlastTimeoutTest extends TestCase
 
         return $this->postJson('/api/sms/blast', [
             'message' => 'MDRRMO Echague weather advisory: heavy rain expected.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }
