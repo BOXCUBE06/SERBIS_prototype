@@ -54,6 +54,35 @@
       class="mb-3"
     />
 
+    <!-- Reserved whether or not a filter is active — sized off itself (not
+         v-if'd away) so applying the first filter of a session doesn't push
+         the table down a row the way an appearing-from-nothing chip row
+         would. Search folds in here too (a caller never needs to pass its
+         own search text back as one of `activeFilters`), everything else
+         comes from the caller since DataTablePage has no idea what a
+         `filters`-slot control's current value means. -->
+    <div class="dtp-filter-row d-flex align-center flex-wrap gap-2 mb-3">
+      <template v-if="allFilters.length">
+        <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
+        <v-chip
+          v-for="f in allFilters"
+          :key="f.key"
+          size="small"
+          variant="outlined"
+          closable
+          class="dtp-filter-chip font-weight-medium"
+          :close-label="`Remove filter: ${f.label}`"
+          @click:close="clearOne(f.key)"
+        >{{ f.label }}</v-chip>
+        <v-btn
+          variant="text"
+          size="small"
+          class="text-none font-weight-bold"
+          @click="clearAll"
+        >Clear all</v-btn>
+      </template>
+    </div>
+
     <slot name="before-table" />
 
     <v-card
@@ -157,9 +186,25 @@ const props = defineProps({
   itemsPerPage: { type: Number, default: 10 },
   itemsPerPageOptions: { type: Array, default: () => [10, 25, 50] },
   resultNoun: { type: String, default: 'results' },
+
+  // Active-filter chip row. Each entry is `{ key, label }` for whatever the
+  // caller's own `filters`-slot controls (or status/tabs) currently narrow
+  // the list by — search is not included here, DataTablePage adds that chip
+  // itself since it already owns `search`. Closing a chip or hitting Clear
+  // all only tells the caller which key to reset; DataTablePage holds no
+  // filter state of its own beyond search.
+  activeFilters: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['update:search', 'update:status', 'update:page', 'update:itemsPerPage', 'click:row'])
+const emit = defineEmits([
+  'update:search',
+  'update:status',
+  'update:page',
+  'update:itemsPerPage',
+  'click:row',
+  'clear-filter',
+  'clear-all',
+])
 
 const slots = useSlots()
 // `item.rowNumber` gets its own explicit template above (with a built-in
@@ -205,9 +250,28 @@ const onItemsPerPage = (value) => {
 }
 
 const defaultSummary = computed(() => `${props.items.length} ${props.resultNoun}`)
+
+// Internal-only key for the chip DataTablePage generates from its own
+// `search` prop — never collides with a caller's own filter keys, which name
+// a page-local ref (`item`, `barangay`, `status`, ...).
+const SEARCH_FILTER_KEY = '__search'
+const allFilters = computed(() => {
+  const q = (props.search || '').trim()
+  const searchChip = props.searchable && q ? [{ key: SEARCH_FILTER_KEY, label: `Search: "${q}"` }] : []
+  return [...searchChip, ...props.activeFilters]
+})
+const clearOne = (key) => {
+  if (key === SEARCH_FILTER_KEY) emit('update:search', '')
+  else emit('clear-filter', key)
+}
+const clearAll = () => {
+  if (props.searchable) emit('update:search', '')
+  emit('clear-all')
+}
 </script>
 
 <style scoped>
+.gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
@@ -217,6 +281,20 @@ const defaultSummary = computed(() => `${props.items.length} ${props.resultNoun}
 }
 .dtp-rows-select {
   width: 100px;
+}
+
+/* Sized to one row of small chips whether or not any are actually showing —
+   the reservation this row exists for. */
+.dtp-filter-row {
+  min-height: 32px;
+}
+/* Outlined chip on the page surface, not a tonal fill — base `primary` text
+   on a tonal chip's own tint measures 4.40:1 and fails WCAG AA at this
+   weight; `-strong` is the token built for text at this weight, here against
+   the plain surface behind an outlined chip. */
+.dtp-filter-chip {
+  color: rgb(var(--v-theme-primary-strong));
+  border-color: rgba(var(--v-theme-primary), 0.45);
 }
 
 /* Fixed layout, same reasoning every table in this app already relies on

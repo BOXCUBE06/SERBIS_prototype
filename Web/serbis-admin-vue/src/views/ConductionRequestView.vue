@@ -130,6 +130,9 @@
           @update:items-per-page="itemsPerPage = $event"
           result-noun="trip records"
           class="conduction-table flex-grow-1"
+          :active-filters="activeFilters"
+          @clear-filter="clearFilter"
+          @clear-all="clearAllFilters"
           @click:row="(_e, { item }) => openDetail(item)"
         >
           <template v-slot:item.patient="{ item }">
@@ -654,6 +657,16 @@ const statusTabItems = computed(() => {
     })),
   ]
 })
+
+// Search's own chip is DataTablePage's job. Status is the only other filter
+// this page has, but it still needs its own chip + Clear all target — the
+// active SegmentedTabs item shows the selection, not a way to jump back to
+// All in one click alongside a cleared search.
+const activeFilters = computed(() => (
+  statusFilter.value === ALL_STATUS ? [] : [{ key: 'status', label: `Status: ${tripStatusLabel(statusFilter.value)}` }]
+))
+const clearFilter = (key) => { if (key === 'status') statusFilter.value = ALL_STATUS }
+const clearAllFilters = () => { statusFilter.value = ALL_STATUS }
 
 // StatusPill's :status prop wants an accent-table key (Booked/Responding/
 // Resolved/'Resolved — no arrival') -- sharedStatusLabel() already maps a

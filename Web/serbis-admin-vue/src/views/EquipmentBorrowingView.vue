@@ -77,6 +77,9 @@
       @update:items-per-page="activeItemsPerPage = $event"
       result-noun="active requests"
       class="borrow-table"
+      :active-filters="activeFilters"
+      @clear-filter="clearFilter"
+      @clear-all="clearAllFilters"
       @click:row="(_event, { item }) => openDetail(item)"
     >
       <template v-slot:summary>{{ resultSummary }}</template>
@@ -226,6 +229,9 @@
       @update:items-per-page="historyItemsPerPage = $event"
       result-noun="completed requests"
       class="borrow-table"
+      :active-filters="activeFilters"
+      @clear-filter="clearFilter"
+      @clear-all="clearAllFilters"
       @click:row="(_event, { item }) => openDetail(item)"
     >
       <template v-slot:summary>{{ resultSummary }}</template>
@@ -1004,6 +1010,36 @@ const resultSummary = computed(() => {
   if (shown === total) return `${total} ${noun} request${total === 1 ? '' : 's'}`
   return `Showing ${shown} of ${total} ${noun} requests`
 })
+
+// Search's own chip is DataTablePage's job (it already owns that prop); this
+// only covers the two selects plus whichever tab is active on the current
+// pipeline. Status and outcome are mutually exclusive with each other (one
+// tab strip per pane, never both), so at most one of them ever appears.
+const activeFilters = computed(() => {
+  const out = []
+  if (itemFilter.value !== ALL_ITEMS) out.push({ key: 'item', label: `Equipment: ${itemFilter.value}` })
+  if (barangayFilter.value !== ALL_BARANGAYS) out.push({ key: 'barangay', label: `Barangay: ${barangayFilter.value}` })
+  if (activeTab.value === 'board') {
+    if (statusFilter.value !== ALL_STATUS) out.push({ key: 'status', label: `Status: ${statusFilter.value}` })
+  } else if (outcomeFilter.value !== ALL_OUTCOMES) {
+    out.push({ key: 'outcome', label: `Outcome: ${outcomeFilter.value}` })
+  }
+  return out
+})
+
+const clearFilter = (key) => {
+  if (key === 'item') itemFilter.value = ALL_ITEMS
+  else if (key === 'barangay') barangayFilter.value = ALL_BARANGAYS
+  else if (key === 'status') statusFilter.value = ALL_STATUS
+  else if (key === 'outcome') outcomeFilter.value = ALL_OUTCOMES
+}
+
+const clearAllFilters = () => {
+  itemFilter.value = ALL_ITEMS
+  barangayFilter.value = ALL_BARANGAYS
+  statusFilter.value = ALL_STATUS
+  outcomeFilter.value = ALL_OUTCOMES
+}
 
 // Now uppercased, matching every other avatar in the panel — the same
 // resident used to read "MS" on Residents and "mS" here. See

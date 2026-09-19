@@ -139,6 +139,9 @@
               'aria-current': isSelected(ctx.item) ? 'true' : undefined,
               'aria-label': `${ctx.item._requesterName}, ${ctx.item._secondary}, ${ctx.item.status || 'Pending'}`,
             })"
+            :active-filters="activeFilters"
+            @clear-filter="clearFilter"
+            @clear-all="clearAllFilters"
             @click:row="(_event, { item }) => selectRequest(item)"
           >
             <template v-slot:filters>
@@ -2001,6 +2004,30 @@ const emptyListMessage = computed(() => {
   if (filters.status !== 'All') return `No ${filters.status.toLowerCase()} requests`
   return 'No requests yet'
 })
+
+// Search's own chip is DataTablePage's job. Status is included even though
+// the active SegmentedTabs item already shows it — Clear all needs a single
+// place that knows every filter this page has, and a status left off this
+// list would silently survive a Clear all click.
+const activeFilters = computed(() => {
+  const out = []
+  if (filters.status !== 'All') out.push({ key: 'status', label: `Status: ${filters.status}` })
+  if (filters.barangay !== 'All') out.push({ key: 'barangay', label: `Barangay: ${filters.barangay}` })
+  if (filters.unit !== 'All') out.push({ key: 'unit', label: `Unit: ${filters.unit}` })
+  return out
+})
+
+const clearFilter = (key) => {
+  if (key === 'status') filters.status = 'All'
+  else if (key === 'barangay') filters.barangay = 'All'
+  else if (key === 'unit') filters.unit = 'All'
+}
+
+const clearAllFilters = () => {
+  filters.status = 'All'
+  filters.barangay = 'All'
+  filters.unit = 'All'
+}
 
 const showActions = computed(() =>
   selectedRequest.value && (
