@@ -629,6 +629,16 @@ class ApiService {
     return listFrom(data);
   }
 
+  /// The ambulance form's destination dropdown (MDRRMO feedback,
+  /// 2026-09-19) — a short, hand-maintained list. See
+  /// AmbulanceDestinationSeeder for why it starts at one entry; the form's
+  /// "Others" option is the fallback for everywhere else.
+  Future<List<String>> getAmbulanceDestinations() async {
+    final data = await _get('/ambulance-destinations');
+    final rows = (data['data'] as List?) ?? const [];
+    return rows.map((row) => row.toString()).toList();
+  }
+
   Future<List<Map<String, dynamic>>> getInfoMaterials() async {
     final data = await _get('/info-materials');
     return listFrom(data);

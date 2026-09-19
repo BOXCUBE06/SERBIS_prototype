@@ -223,7 +223,34 @@ class AmbulanceFormData extends ServiceFormData {
   /// See [setPickupIsMyAddress] for how the account's own address reaches
   /// this field.
   final TextEditingController pickup = TextEditingController();
+
+  /// The value actually sent as `destination` — free text either way. See
+  /// [destinationChoice]/[setDestinationChoice] for how the dropdown feeds
+  /// it (MDRRMO feedback, 2026-09-19).
   final TextEditingController destination = TextEditingController();
+
+  /// The sentinel [destinationChoice] holds when the resident is typing
+  /// their own destination rather than picking a seeded one. A value, not
+  /// null, so it can sit directly in the dropdown's own item list.
+  static const destinationOthers = 'Others';
+
+  /// The destination dropdown's own selection — a seeded name, or
+  /// [destinationOthers] for free text. Starts on [destinationOthers]: there
+  /// is no default destination to assume, the same reasoning behind every
+  /// other field on this form that isn't prefilled.
+  String destinationChoice = destinationOthers;
+
+  /// Picking a seeded destination copies it into [destination] — the field
+  /// the request actually sends — so the dropdown is a shortcut onto the
+  /// same free-text column, not a second source of truth. Picking
+  /// [destinationOthers] leaves whatever is already typed alone, the same
+  /// "unchecking doesn't clear" shape as the checkboxes above.
+  void setDestinationChoice(String value) {
+    destinationChoice = value;
+    if (value != destinationOthers) {
+      destination.text = value;
+    }
+  }
 
   /// Labelled "Medical diagnosis" on screen and stored in `condition_notes`.
   /// One field, not two: the column has always held exactly this, and adding a

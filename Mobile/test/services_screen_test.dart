@@ -284,7 +284,7 @@ Finder _patientNameField() {
 /// Mirrors the server's own required set for this service
 /// (ServiceRequestController::store): patient_name and destination.
 Future<void> _fillRequiredAmbulanceFields(WidgetTester tester) async {
-  for (final entry in const {'Patient name': 'Maria Santos', 'To': 'Echague District Hospital'}.entries) {
+  for (final entry in const {'Patient name': 'Maria Santos', 'Destination': 'Echague District Hospital'}.entries) {
     final field = find.descendant(
       of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
       matching: find.byType(TextField),

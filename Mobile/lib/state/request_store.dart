@@ -54,6 +54,11 @@ class AppState extends ChangeNotifier {
   final List<ServiceRequest> requests = [];
   final List<ServiceCatalogItem> services = [];
 
+  /// The ambulance form's destination dropdown (MDRRMO feedback,
+  /// 2026-09-19). Loaded once per screen visit, same as [services] — see
+  /// [loadAmbulanceDestinations].
+  final List<String> ambulanceDestinations = [];
+
   static const String _borrowLogArea = 'borrowing';
 
   /// `GET /equipments` — the borrowing catalogue.
@@ -204,6 +209,23 @@ class AppState extends ChangeNotifier {
           reason: 'catalogue emptied');
       services.clear();
       notifyListeners();
+    }
+  }
+
+  /// Best-effort, unlike [loadServices]: a failed fetch just means the
+  /// destination field falls back to "Others" only — free text, exactly
+  /// what the field already was before this list existed. Nothing here
+  /// blocks filing a request.
+  Future<void> loadAmbulanceDestinations() async {
+    try {
+      final list = await _api.getAmbulanceDestinations();
+      ambulanceDestinations
+        ..clear()
+        ..addAll(list);
+      notifyListeners();
+    } catch (error) {
+      AppLog.error(_logArea, 'load ambulance destinations', error: error,
+          reason: 'destination dropdown falls back to Others only');
     }
   }
 

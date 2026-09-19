@@ -52,6 +52,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
   bool _loadingServices = true;
   ServiceCatalogItem? _selected;
 
+  /// The ambulance form's destination dropdown (MDRRMO feedback,
+  /// 2026-09-19). A local copy, same as [_services] and for the same
+  /// reason — `setState` is what makes the fetch visible on screen.
+  List<String> _ambulanceDestinations = [];
+
   /// One form per kind, kept for the life of the screen: switching services and
   /// switching back must not silently empty what the resident already typed.
   final Map<ServiceFormKind, ServiceFormData> _forms = {};
@@ -81,6 +86,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
   void initState() {
     super.initState();
     _loadServices();
+    _loadAmbulanceDestinations();
+  }
+
+  Future<void> _loadAmbulanceDestinations() async {
+    await widget.appState.loadAmbulanceDestinations();
+    if (!mounted) return;
+    setState(() => _ambulanceDestinations = List.of(widget.appState.ambulanceDestinations));
   }
 
   Future<void> _loadServices() async {
@@ -434,6 +446,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   data: _formFor(selection.formKind),
                   onChanged: () => setState(() {}),
                   appState: widget.appState,
+                  ambulanceDestinations: _ambulanceDestinations,
                   filipino: f,
                 ),
                 FormSection(

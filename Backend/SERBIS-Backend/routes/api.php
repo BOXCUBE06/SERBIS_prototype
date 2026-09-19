@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AmbulanceAvailabilityController;
+use App\Http\Controllers\AmbulanceDestinationController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
@@ -70,6 +71,9 @@ Route::middleware('throttle:api')->group(function () {
         // Endpoints requiring read/write access from the mobile application
         Route::get('equipments', [EquipmentController::class, 'index']);
         Route::get('services', [ServiceController::class, 'index']);
+        // The ambulance form's destination dropdown (MDRRMO feedback,
+        // 2026-09-19). Read-only — see AmbulanceDestinationSeeder.
+        Route::get('ambulance-destinations', [AmbulanceDestinationController::class, 'index']);
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
         Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
         Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto']);

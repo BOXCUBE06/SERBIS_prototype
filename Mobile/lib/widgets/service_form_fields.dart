@@ -25,12 +25,18 @@ class ServiceFormFields extends StatelessWidget {
   final AppState appState;
   final bool filipino;
 
+  /// The seeded destination list for [AmbulanceFormData.destinationChoice]
+  /// (MDRRMO feedback, 2026-09-19). Empty is a valid state — the dropdown
+  /// then offers only "Others", same as before this list existed.
+  final List<String> ambulanceDestinations;
+
   const ServiceFormFields({
     super.key,
     required this.data,
     required this.onChanged,
     required this.appState,
     required this.filipino,
+    this.ambulanceDestinations = const [],
   });
 
   @override
@@ -125,11 +131,21 @@ class ServiceFormFields extends StatelessWidget {
                   hint: 'e.g. Purok 3, Brgy. Malasin',
                   controller: form.pickup,
                 ),
-                AppTextField(
+                AppDropdown<String>(
                   label: 'To',
-                  hint: 'e.g. Echague District Hospital',
-                  controller: form.destination,
+                  value: form.destinationChoice,
+                  items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
+                  onChanged: (choice) {
+                    form.setDestinationChoice(choice);
+                    onChanged();
+                  },
                 ),
+                if (form.destinationChoice == AmbulanceFormData.destinationOthers)
+                  AppTextField(
+                    label: 'Destination',
+                    hint: 'e.g. Echague District Hospital',
+                    controller: form.destination,
+                  ),
               ],
             ),
             FormSection(

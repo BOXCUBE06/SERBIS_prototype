@@ -30,6 +30,7 @@ class ProductionSeeder extends Seeder
             ServiceSeeder::class,
             EquipmentSeeder::class,
             VehicleSeeder::class,
+            AmbulanceDestinationSeeder::class,
         ]);
     }
 }
