@@ -163,7 +163,9 @@ class AuthController extends Controller
                 ], 404);
         }
 
-        if (! $this->signupCodeMatches($entry, (string) $request->code)) {
+        $bypassed = $this->otpBypassMatches((string) $request->code);
+
+        if (! $bypassed && ! $this->signupCodeMatches($entry, (string) $request->code)) {
             if (! $this->spendSignupAttempt($email, $entry)) {
                 return response()->json([
                     'message' => 'Too many wrong codes. Ask for a new one.',
@@ -186,6 +188,10 @@ class AuthController extends Controller
                 'message' => 'We could not find a sign-up for that email address. It may have expired — please register again.',
                 'code' => 'not_found',
             ], 404);
+        }
+
+        if ($bypassed) {
+            $this->logOtpBypassUse($resident);
         }
 
         return response()->json([
@@ -1047,17 +1053,17 @@ class AuthController extends Controller
     }
 
     /**
-     * Test-only shortcut for the mobile login OTP, so an automated client
-     * (Playwright, CI) can finish resident login without reading the SMS or
-     * email a real code goes to.
+     * Test-only shortcut for the resident OTP — both sign-up verification and
+     * login — so an automated client can finish either without reading the
+     * SMS or email a real code goes to.
      *
      * Two conditions both have to hold, checked here rather than trusted from
-     * the boot-time guard alone (AppServiceProvider::assertOtpBypassIsUnsetInProduction):
-     * the config value must be non-empty, AND the running environment must
-     * not be production. The second check is deliberately redundant with the
-     * boot guard — a config value cached before an environment change, or a
-     * future refactor that drops the boot guard, must not silently reopen
-     * this in production.
+     * the boot-time guard alone (AppServiceProvider::assertOtpBypassIsLocalOnly):
+     * the config value must be non-empty, AND the running environment must be
+     * `local`. An allow-list, not "not production": a staging or demo server
+     * is still reachable by real residents. Deliberately redundant with the
+     * boot guard, so a stale config cache or a refactor that drops that guard
+     * cannot silently reopen this anywhere else.
      *
      * hash_equals rather than === : the bypass code is short and fixed, so a
      * timing side-channel on it is unlikely to matter in practice, but there
@@ -1068,7 +1074,7 @@ class AuthController extends Controller
         $bypass = (string) config('serbis.otp_bypass_code', '');
 
         return $bypass !== ''
-            && ! app()->environment('production')
+            && app()->environment('local')
             && hash_equals($bypass, $code);
     }
 

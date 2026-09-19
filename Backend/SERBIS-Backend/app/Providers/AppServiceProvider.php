@@ -25,7 +25,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         self::assertDebugIsOffInProduction();
-        self::assertOtpBypassIsUnsetInProduction();
+        self::assertOtpBypassIsLocalOnly();
         self::assertSmsFakeIsUnsetInProduction();
 
         // Replaces the old flat throttleApi('60,1') (bootstrap/app.php used to
@@ -180,21 +180,18 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Refuse to run a production deployment with the test-only OTP bypass
+     * Refuse to run anywhere but `local` with the test-only OTP bypass
      * configured (config/serbis.php, AuthController::otpBypassMatches()).
      *
-     * That method already refuses the bypass on its own by checking
-     * app()->environment() at request time — this guard exists so a
-     * misconfigured production server fails loudly at boot instead of
-     * depending on that request-time check never being changed or bypassed
-     * by a future edit. Same shape as assertDebugIsOffInProduction() above,
-     * for the same reason: quietly clearing the config would leave the
-     * variable still set in the .env on the server, so the next person to
-     * read it learns the wrong thing about what is running.
+     * That method already refuses the bypass outside `local` at request time;
+     * this guard makes a misconfigured server fail loudly at boot instead of
+     * depending on that check never being edited. Same shape as
+     * assertDebugIsOffInProduction() above: quietly clearing the config would
+     * leave the variable set in the server's .env, misleading the next reader.
      */
-    public static function assertOtpBypassIsUnsetInProduction(): void
+    public static function assertOtpBypassIsLocalOnly(): void
     {
-        if (! app()->environment('production')) {
+        if (app()->environment('local')) {
             return;
         }
 
@@ -204,9 +201,9 @@ class AppServiceProvider extends ServiceProvider
 
         throw new RuntimeException(
             'REFUSING TO START: SERBIS_OTP_BYPASS_CODE is set while APP_ENV is '
-            .'production. This bypass exists only so local development and CI '
-            .'test automation (Playwright) can skip real OTP delivery, and must '
-            .'never be reachable in production. '
+            .app()->environment().'. This bypass exists only so local development '
+            .'can skip real OTP delivery, and must never be reachable on a server '
+            .'residents can use. '
             .'Unset SERBIS_OTP_BYPASS_CODE in the .env on this server, then run '
             .'`php artisan config:clear` (or `config:cache`) and start again.'
         );
@@ -216,7 +213,7 @@ class AppServiceProvider extends ServiceProvider
      * Refuse to run a production deployment with the test-only SMS
      * suppression flag configured (config/serbis.php, PhilSms::send()).
      *
-     * Same shape as assertOtpBypassIsUnsetInProduction() above, for the same
+     * Same shape as assertOtpBypassIsLocalOnly() above, for the same
      * reason: that flag already refuses itself at request time
      * (PhilSms::fakingEnabled() checks app()->environment() too), and this
      * guard exists so a misconfigured production server fails loudly at boot
