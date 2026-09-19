@@ -70,6 +70,20 @@ class Fcm
     }
 
     /**
+     * Pushes a title/body to every device any resident has registered —
+     * unscoped, unlike notifyResident(). Built for the info-materials
+     * publish notice (MDRRMO feedback, 2026-09-19): a new safety material is
+     * for every resident, not one. Each device is sent to independently, so
+     * one dead or rejected token never stops the rest of the broadcast —
+     * same isolation sendToDevice() already gives a per-resident push.
+     */
+    public function notifyAllResidents(string $title, string $body, array $data = []): void
+    {
+        DeviceToken::all()
+            ->each(fn (DeviceToken $deviceToken) => $this->sendToDevice($deviceToken, $title, $body, $data));
+    }
+
+    /**
      * One push to one device. Best-effort, like every other notification
      * channel in this app: a missing config, a network error, or FCM
      * rejecting the request is logged and swallowed, never thrown — the
