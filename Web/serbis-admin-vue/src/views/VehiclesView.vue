@@ -5,7 +5,6 @@
 
         <PageHeader
           title="Vehicles"
-          subtitle="Which units are available and which are currently dispatched"
           class="mb-6"
         >
           <template v-slot:actions>

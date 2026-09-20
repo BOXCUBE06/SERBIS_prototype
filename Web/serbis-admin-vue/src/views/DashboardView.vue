@@ -3,7 +3,6 @@
 
     <PageHeader
       title="Dashboard"
-      subtitle="Request volume, barangay spread and fleet status. Each card sets its own period."
       class="mb-6"
     >
       <template v-slot:actions>
@@ -158,11 +157,11 @@
       <v-col cols="12">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 7 }">
           <v-card-item>
-            <!-- min-width-0 + wrapping subtitle: at 430px this row measured
+            <!-- min-width-0 + wrapping title: at 430px this row measured
                  315px inside a 295px card and clipped, because v-card-title
-                 and v-card-subtitle are both nowrap by default. -->
+                 is nowrap by default. -->
             <div class="d-flex justify-space-between align-center flex-wrap gap-2">
-              <div class="min-width-0">
+              <div class="min-width-0 d-flex align-center gap-1">
                 <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-text">Open Requests by Age</v-card-title>
                 <!-- Names the statuses outright. The KPI strip above reads
                      "Pending Service Requests: 8" while this card reads 32,
@@ -170,7 +169,23 @@
                      status that is not an ending. Unlabelled, the two numbers
                      look like a contradiction to whoever has to put one of
                      them in a monthly report. -->
-                <v-card-subtitle class="pa-0 wrap-text">Pending, booked or being responded to</v-card-subtitle>
+                <v-tooltip
+                  text="Pending, booked or being responded to. Ignores the period selectors on purpose, so an old request cannot hide."
+                  location="top"
+                  max-width="320"
+                >
+                  <template #activator="{ props: tip }">
+                    <v-icon
+                      v-bind="tip"
+                      size="16"
+                      class="text-medium-emphasis"
+                      tabindex="0"
+                      aria-label="Pending, booked or being responded to. Ignores the period selectors on purpose, so an old request cannot hide."
+                    >
+                      mdi-information-outline
+                    </v-icon>
+                  </template>
+                </v-tooltip>
               </div>
               <v-btn
                 variant="text"

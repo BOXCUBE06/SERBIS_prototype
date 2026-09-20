@@ -13,7 +13,6 @@
       <PageHeader
         v-if="standalone"
         :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
-        :subtitle="`${requestCounts.All} ${scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays'}`"
         class="mb-6"
       />
 

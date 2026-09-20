@@ -4,7 +4,6 @@
   <v-container fluid class="pa-6 bg-background">
     <PageHeader
       title="Ambulance Dispatch Requests"
-      subtitle="MDRRMO Conduction Request Form — Echague Rescue EMS"
       class="mb-4"
     />
 

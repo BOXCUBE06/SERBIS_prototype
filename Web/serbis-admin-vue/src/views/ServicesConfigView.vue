@@ -5,7 +5,6 @@
 
         <PageHeader
           title="Manage Services"
-          subtitle="What residents can request from the MDRRMO, and how each one appears in the app"
           class="mb-6"
         />
 

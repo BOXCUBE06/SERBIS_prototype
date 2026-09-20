@@ -5,7 +5,6 @@
 
         <PageHeader
           title="Resource Management"
-          subtitle="How much of each item is on hand, and how much is out on loan"
           class="mb-6"
         >
           <template v-slot:actions>

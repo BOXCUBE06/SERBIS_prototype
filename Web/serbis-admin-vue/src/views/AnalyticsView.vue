@@ -3,7 +3,6 @@
 
     <PageHeader
       title="Analytics"
-      subtitle="Demand and backlog over a period. The Dashboard answers today; this answers the quarter."
       class="mb-6"
     />
 
@@ -131,7 +130,6 @@
       <v-col cols="12">
         <AnalyticsSection
           title="When requests are filed"
-          subtitle="Day and time of day a request was submitted, in Asia/Manila. This is when residents file, which is not the same as when the office is open."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && demand.total === 0"
@@ -180,24 +178,20 @@
       <v-col cols="12" lg="7">
         <AnalyticsSection
           title="Requests by month and service"
-          subtitle="What the office is asked for, and when."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && volume.total === 0"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
-          <template #subtitle>
-            <div class="d-flex align-center justify-space-between flex-wrap gap-2">
-              <span>What the office is asked for, and when.</span>
-              <!-- Three of the light-mode series sit under 3:1 on white, so a
-                   table view is required rather than optional. It doubles as
-                   the non-visual reading of the same numbers. -->
-              <v-btn-toggle v-model="volumeView" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
-                <v-btn value="chart" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as chart">Chart</v-btn>
-                <v-btn value="table" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as table">Table</v-btn>
-              </v-btn-toggle>
-            </div>
+          <template #actions>
+            <!-- Three of the light-mode series sit under 3:1 on white, so a
+                 table view is required rather than optional. It doubles as
+                 the non-visual reading of the same numbers. -->
+            <v-btn-toggle v-model="volumeView" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
+              <v-btn value="chart" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as chart">Chart</v-btn>
+              <v-btn value="table" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as table">Table</v-btn>
+            </v-btn-toggle>
           </template>
 
           <div v-if="volumeView === 'chart'" style="height: 300px;">
@@ -245,7 +239,6 @@
       <v-col cols="12" lg="5">
         <AnalyticsSection
           title="Outcomes by month"
-          subtitle="Share of each month's requests by where they ended up."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && outcomes.total === 0"
@@ -271,7 +264,7 @@
       <v-col id="open-request-age" cols="12">
         <AnalyticsSection
           title="Open Requests by Age"
-          subtitle="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
+          info="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && aging.total === 0"
@@ -303,7 +296,6 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment utilization"
-          subtitle="Times borrowed and quantity borrowed per item, in this range. Items never borrowed are listed at zero."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && equipmentUtilization.items.length === 0"
@@ -348,7 +340,6 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment returns"
-          subtitle="How often borrowed equipment comes back late, and what's still out."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && loans.returnedLate.of === 0 && loans.currentlyOverdue === 0"
@@ -384,27 +375,23 @@
            filter — the trip log carries no resident_id at all (filed by
            MDRRMO staff, not a resident) and every conduction request is the
            same one dispatch service, so neither filter has anything to
-           narrow. Only ambulances are actually dispatched through this flow
-           — see the subtitle. -->
+           narrow. Only ambulances are actually dispatched through this flow;
+           boats, fire trucks and rescue vehicles carry no trips here. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Most used vehicles"
-          subtitle="Trips per vehicle, highest first. Only ambulances are dispatched through this flow — boats, fire trucks and rescue vehicles carry no trips here."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && selectedVehicleTrips.every(v => v.trips === 0)"
           empty-text="No dispatch trips in this period"
           @retry="fetchReport"
         >
-          <template #subtitle>
-            <div class="d-flex align-center justify-space-between flex-wrap gap-2">
-              <span>Trips per vehicle, highest first. Only ambulances are dispatched through this flow — boats, fire trucks and rescue vehicles carry no trips here.</span>
-              <v-btn-toggle v-model="vehiclePeriod" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This month</v-btn>
-              </v-btn-toggle>
-            </div>
+          <template #actions>
+            <v-btn-toggle v-model="vehiclePeriod" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
+              <v-btn value="today" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">Today</v-btn>
+              <v-btn value="week" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This week</v-btn>
+              <v-btn value="month" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This month</v-btn>
+            </v-btn-toggle>
           </template>
 
           <div :style="{ height: Math.max(120, selectedVehicleTrips.length * 40) + 'px' }">
@@ -429,7 +416,6 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Barangay: residents vs requests"
-          subtitle="Registered accounts (all time) against requests filed in this range. A barangay with accounts but no requests, or neither, still appears at zero."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && barangayCoverage.barangays.length === 0"
@@ -479,7 +465,6 @@
       <v-col cols="12">
         <AnalyticsSection
           title="App adoption"
-          subtitle="Walk-in vs app-filed share of requests, by month."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && adoption.total === 0"

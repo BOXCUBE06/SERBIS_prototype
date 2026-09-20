@@ -1,8 +1,9 @@
 <!--
   AnalyticsSection.vue
 
-  One card on the Analytics page: title, subtitle, an optional sample-size
-  chip, and a body that is either loading, failed, empty or real.
+  One card on the Analytics page: title (with an optional info tooltip and
+  right-aligned `actions` slot), and a body that is either loading, failed,
+  empty or real.
 
   The states are per section rather than per page on purpose. This office
   runs on small numbers, and several sections are legitimately empty while
@@ -15,14 +16,18 @@
 <template>
   <v-card elevation="0" rounded="xl" class="soft-card h-100">
     <v-card-item>
-      <div class="min-w-0">
-        <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-subtitle">{{ title }}</v-card-title>
-        <!-- wrap-subtitle: v-card-subtitle ships nowrap + ellipsis, which
-             silently truncated these one-line explanations in the narrower
-             columns. The sentence is the point of the card; it wraps. -->
-        <v-card-subtitle class="pa-0 wrap-subtitle">
-          <slot name="subtitle">{{ subtitle }}</slot>
-        </v-card-subtitle>
+      <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+        <div class="d-flex align-center gap-1 min-w-0">
+          <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-title">{{ title }}</v-card-title>
+          <v-tooltip v-if="info" :text="info" location="top" max-width="320">
+            <template #activator="{ props: tip }">
+              <v-icon v-bind="tip" size="16" class="text-medium-emphasis" tabindex="0" :aria-label="info">
+                mdi-information-outline
+              </v-icon>
+            </template>
+          </v-tooltip>
+        </div>
+        <slot name="actions" />
       </div>
     </v-card-item>
 
@@ -50,7 +55,7 @@
 <script setup>
 defineProps({
   title: { type: String, required: true },
-  subtitle: { type: String, default: '' },
+  info: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
   empty: { type: Boolean, default: false },
@@ -73,10 +78,9 @@ defineEmits(['retry'])
   min-width: 0;
 }
 
-/* Applied to the title as well as the subtitle: both Vuetify components ship
-   nowrap + ellipsis, which clipped "Requests by month and service" inside its
-   own card at phone width. */
-.wrap-subtitle {
+/* v-card-title ships nowrap + ellipsis, which clipped "Requests by month and
+   service" inside its own card at phone width. */
+.wrap-title {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;

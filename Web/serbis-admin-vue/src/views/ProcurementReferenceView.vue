@@ -5,7 +5,6 @@
 
         <PageHeader
           title="Procurement Reference"
-          subtitle="Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC"
           class="mb-6"
         >
           <template v-slot:actions>

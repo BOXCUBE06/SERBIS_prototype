@@ -7,7 +7,7 @@
           <!-- Header -->
           <v-row class="mb-6" align="center" justify="space-between">
             <v-col cols="12" md="5">
-              <PageHeader title="Documents" :subtitle="`${files.length} published · residents receive these on the mobile app`" />
+              <PageHeader title="Documents" />
             </v-col>
 
             <v-col cols="12" md="7" class="d-flex justify-end align-center gap-4 flex-wrap">

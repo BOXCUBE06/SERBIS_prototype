@@ -4,7 +4,6 @@
       <v-col cols="12">
         <PageHeader
           title="Activity Logs"
-          subtitle="Who did what in this panel, and every text blast that was sent"
           class="mb-6"
         >
           <template v-slot:actions>

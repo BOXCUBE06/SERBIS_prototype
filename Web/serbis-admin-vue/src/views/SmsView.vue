@@ -11,7 +11,7 @@
             <!-- "active, opted-in" is exact: SmsController::sendBlast filters
                  status = Active AND sms_opt_in AND a non-null phone number, so
                  "every resident" would overstate who actually receives this. -->
-            <PageHeader title="Text Blast (SMS)" subtitle="One message to the active, opted-in residents of the barangays you pick" />
+            <PageHeader title="Text Blast (SMS)" />
 
             <!-- Reachable from the header rather than buried in a settings page —
                  the two people who know the code are the ones who need this. -->

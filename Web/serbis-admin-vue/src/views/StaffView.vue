@@ -5,7 +5,6 @@
 
         <PageHeader
           title="Staff Accounts"
-          subtitle="Who can sign in to this panel. Every admin can manage every other."
           class="mb-6"
         >
           <template v-slot:actions>

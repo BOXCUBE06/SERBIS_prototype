@@ -2,7 +2,6 @@
   <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
     <PageHeader
       title="Equipment Borrowing"
-      subtitle="Move each request through the pipeline — approve, release, then confirm its return"
       class="mb-6"
     />
 
@@ -443,10 +442,7 @@
                    backend refuses the upload, so offering it would be a button
                    that always fails. -->
               <template v-if="photoStages(selectedRecord).length > 0">
-                <h3 class="text-subtitle-1 font-weight-bold mb-1 text-high-emphasis text-uppercase">Condition Photos</h3>
-                <div class="text-caption text-medium-emphasis mb-4">
-                  Optional. A record of what the item looked like at handover — nothing here blocks a release or a return.
-                </div>
+                <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Condition Photos</h3>
                 <v-row class="mb-6">
                   <v-col
                     v-for="stage in photoStages(selectedRecord)"

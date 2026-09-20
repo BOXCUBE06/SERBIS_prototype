@@ -293,10 +293,7 @@
                      initials from the name being typed, so it is a preview, not
                      a picture that was ever uploadable from this form. -->
                 <div>
-                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Initials</div>
-                  <div class="text-caption text-medium-emphasis" style="max-width: 34ch;">
-                    Heads of the family add their own photo from the mobile app. It appears here once they do.
-                  </div>
+                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis">Initials</div>
                 </div>
               </v-col>
 
