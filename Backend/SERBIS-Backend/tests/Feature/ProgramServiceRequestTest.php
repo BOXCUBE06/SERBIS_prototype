@@ -199,6 +199,45 @@ class ProgramServiceRequestTest extends TestCase
         $this->actingAs($other)->get("/api/service-requests/{$id}/letter")->assertNotFound();
     }
 
+    public function test_certification_needs_no_date_letter_or_valid_id(): void
+    {
+        $this->actingAs($this->barangay)
+            ->postJson('/api/service-requests', [
+                'service_id' => $this->certification->service_id,
+                'description' => "Purpose: Grant application\nCertification type: Certificate of no pending case",
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('preferred_date', null)
+            ->assertJsonPath('has_letter', false)
+            ->assertJsonPath('has_valid_id', false);
+    }
+
+    public function test_certification_keeps_an_optional_attachment_and_ignores_a_date(): void
+    {
+        $this->actingAs($this->barangay)
+            ->postJson('/api/service-requests', [
+                'service_id' => $this->certification->service_id,
+                'description' => 'Purpose: Grant application',
+                'letter' => UploadedFile::fake()->create('support.pdf', 200, 'application/pdf'),
+                'preferred_date' => $this->date(30),
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('has_letter', true)
+            ->assertJsonPath('preferred_date', null);
+    }
+
+    public function test_certification_still_refuses_an_attachment_type_we_do_not_accept(): void
+    {
+        $this->actingAs($this->barangay)
+            ->postJson('/api/service-requests', [
+                'service_id' => $this->certification->service_id,
+                'description' => 'Purpose: Grant application',
+                'letter' => UploadedFile::fake()->create('support.exe', 100),
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['letter']);
+    }
+
     public function test_the_stored_path_is_never_in_a_response(): void
     {
         $response = $this->actingAs($this->barangay)

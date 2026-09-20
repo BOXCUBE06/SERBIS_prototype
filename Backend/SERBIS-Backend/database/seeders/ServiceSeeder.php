@@ -54,6 +54,7 @@ class ServiceSeeder extends Seeder
             ['service_name' => 'Sandbagging', 'description' => 'Provision and placement of sandbags for flood prevention.'],
             ['service_name' => 'DRRM Trainings and Seminars', 'description' => 'Disaster risk reduction and management trainings and seminars (IEC) for barangays and organizations.'],
             ['service_name' => 'Simulation Drills / NSED', 'description' => 'Simulation drills, including the Nationwide Simultaneous Earthquake Drill (NSED), for barangays and organizations.'],
+            ['service_name' => 'MDRRMO Certification', 'description' => 'Certification issued by the MDRRMO.'],
         ];
 
         foreach ($services as $service) {

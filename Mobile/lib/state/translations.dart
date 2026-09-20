@@ -164,6 +164,7 @@ const Map<String, (String, String)> _strings = {
   'form_section.details': ('Details', 'Detalye'),
   'form_section.attachments': ('Attachments', 'Mga Kalakip'),
   'form_section.event': ('Event', 'Kaganapan'),
+  'form_section.certification': ('Certification', 'Sertipikasyon'),
 
   // ---- Ambulance scheduling ----
   'ambulance_schedule.title': ('When', 'Kailan'),

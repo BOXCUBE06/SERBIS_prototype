@@ -111,6 +111,37 @@ void main() {
     });
   });
 
+  group('MDRRMO Certification', () {
+    test('is recognised by its service code', () {
+      expect(formKindForServiceCode('mdrrmo-certification'), ServiceFormKind.certification);
+    });
+
+    test('has no date, and the attachment is optional', () {
+      final form = StructuredFormData.certification();
+
+      expect(form.spec.fields.any((field) => field.isDate), isFalse);
+      expect(form.spec.attachments, ServiceAttachments.letterOptional);
+      expect(form.preferredDate, isNull);
+    });
+
+    test('every field the resident fills in reaches the description', () {
+      final form = StructuredFormData.certification(contactNumber: '09171234567');
+      form.field('certification_type').text = 'Certificate of no pending case';
+      form.field('purpose').text = 'Grant application';
+
+      expect(
+        form.metaLines(serviceName: 'MDRRMO Certification', submittedLabel: 'Today, 9:00 AM'),
+        [
+          'MDRRMO Certification',
+          'Certification type: Certificate of no pending case',
+          'Purpose: Grant application',
+          'Contact: 09171234567',
+          'Submitted Today, 9:00 AM',
+        ],
+      );
+    });
+  });
+
   group('the submit request', () {
     test('leaves the valid ID out when there is none and carries the letter and date', () {
       final request = ApiService().buildSubmitRequest(

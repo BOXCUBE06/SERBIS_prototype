@@ -671,6 +671,37 @@ const _drillSpec = ServiceFormSpec(
   ],
 );
 
+/// MDRRMO Certification. No date and no scheduling: the resident says what the
+/// certificate is for and which one they need, and may attach a supporting
+/// document. The certification type is free text because the office has not
+/// given a fixed list.
+const _certificationSpec = ServiceFormSpec(
+  carriesContact: true,
+  attachments: ServiceAttachments.letterOptional,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.certification',
+      fields: [
+        ServiceFormField.text(
+          key: 'certification_type',
+          label: 'Certification type',
+          hint: 'Which certificate do you need?',
+          metaPrefix: 'Certification type: ',
+          metaFallback: 'Not specified',
+        ),
+        ServiceFormField.text(
+          key: 'purpose',
+          label: 'Purpose',
+          hint: 'What is the certificate for?',
+          lines: 3,
+          metaPrefix: 'Purpose: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+  ],
+);
+
 const _genericSpec = ServiceFormSpec(
   carriesContact: true,
   sections: [
@@ -753,6 +784,9 @@ final class StructuredFormData extends ServiceFormData {
 
   static StructuredFormData drill({String contactNumber = ''}) =>
       StructuredFormData._(_drillSpec, contactNumber: contactNumber);
+
+  static StructuredFormData certification({String contactNumber = ''}) =>
+      StructuredFormData._(_certificationSpec, contactNumber: contactNumber);
 
   final ServiceFormSpec spec;
   final String contactNumber;
