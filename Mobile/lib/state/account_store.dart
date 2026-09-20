@@ -43,6 +43,18 @@ class AppUser {
   /// false here means no blast reaches this number at all.
   final bool smsOptIn;
 
+  /// `head_of_family` (an individual, the default), `organization` or
+  /// `barangay`. A server that predates the column sends none, which reads as
+  /// an individual.
+  final String accountType;
+
+  /// The organization's name; empty for every other type.
+  final String organizationName;
+
+  /// `tbl_residents.status`: Active, Inactive (pending) or Deactivated. Only
+  /// consulted for [isAwaitingApproval]. Empty when the payload has none.
+  final String status;
+
   const AppUser({
     required this.id,
     required this.firstName,
@@ -55,7 +67,34 @@ class AppUser {
     this.streetAddress = '',
     this.hasPhoto = false,
     this.smsOptIn = true,
+    this.accountType = 'head_of_family',
+    this.organizationName = '',
+    this.status = '',
   });
+
+  bool get isOrganization => accountType == 'organization';
+  bool get isBarangay => accountType == 'barangay';
+
+  /// An organization that registered itself and has not been activated. It
+  /// cannot file anything (the server answers 403 account_pending), so the app
+  /// shows an approval screen instead of the service list. An individual in the
+  /// same status can file, so this is specific to organizations.
+  bool get isAwaitingApproval => isOrganization && status.toLowerCase() == 'inactive';
+
+  /// Who this account is, for the top of the home screen: the organization's
+  /// name, "Barangay <name>" for a barangay hall, or the person's own name.
+  String get accountName {
+    if (isOrganization && organizationName.isNotEmpty) return organizationName;
+    if (isBarangay) return 'Barangay $address'.trim();
+    return fullName;
+  }
+
+  /// A `translations.dart` key for the account type's label.
+  String get accountTypeKey => isOrganization
+      ? 'account.organization'
+      : isBarangay
+          ? 'account.barangay'
+          : 'account.individual';
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -102,6 +141,9 @@ class AppUser {
       streetAddress: streetAddress ?? this.streetAddress,
       hasPhoto: hasPhoto ?? this.hasPhoto,
       smsOptIn: smsOptIn ?? this.smsOptIn,
+      accountType: accountType,
+      organizationName: organizationName,
+      status: status,
     );
   }
 
@@ -129,6 +171,9 @@ class AppUser {
       // missing key as false would show a resident an "off" switch and tell
       // them they are receiving nothing while the server still sends to them.
       smsOptIn: json['sms_opt_in'] as bool? ?? true,
+      accountType: json['account_type'] as String? ?? 'head_of_family',
+      organizationName: json['organization_name'] as String? ?? '',
+      status: json['status'] as String? ?? '',
     );
   }
 }

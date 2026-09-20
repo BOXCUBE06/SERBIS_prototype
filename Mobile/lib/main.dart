@@ -12,6 +12,7 @@ import 'screens/auth/verify_login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/awaiting_approval_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'state/api_service.dart';
@@ -543,15 +544,31 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
             onOpenServices: () => _goTo(1),
             onOpenService: _openService,
           )),
-      slot(1, (_) => ServicesScreen(
-            key: ValueKey(_serviceType),
-            appState: _appState,
-            user: widget.user,
-            initialType: _serviceType,
-            onSubmitted: () => _goTo(2),
-            onOpenNotifications: onOpenNotifications,
-            onOpenProfile: onOpenProfile,
-          ), deps: (_serviceType, widget.user)),
+      slot(1, (_) => widget.user.isAwaitingApproval
+          // An organization MDRRMO has not activated yet cannot file anything,
+          // so it gets the reason instead of a service list it could not use.
+          ? AwaitingApprovalScreen(
+              user: widget.user,
+              filipino: _appState.language == AppLanguage.filipino,
+              onOpenNotifications: onOpenNotifications,
+              onOpenProfile: onOpenProfile,
+              // Reloads the profile; the shell rebuilds with the service list
+              // the moment the account is Active.
+              onCheckAgain: () async {
+                final fresh = await widget.userStore.currentUser();
+                widget.onUserChanged(fresh);
+                return fresh.isAwaitingApproval;
+              },
+            )
+          : ServicesScreen(
+              key: ValueKey(_serviceType),
+              appState: _appState,
+              user: widget.user,
+              initialType: _serviceType,
+              onSubmitted: () => _goTo(2),
+              onOpenNotifications: onOpenNotifications,
+              onOpenProfile: onOpenProfile,
+            ), deps: (_serviceType, widget.user)),
       slot(2, (_) => TrackScreen(
             appState: _appState,
             onOpenNotifications: onOpenNotifications,

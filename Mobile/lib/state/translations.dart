@@ -26,6 +26,19 @@ const Map<String, (String, String)> _strings = {
   'status.booked': ('Booked', 'Nakabook'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
   'status.approved': ('Approved', 'Aprubado'),
+  'account.individual': ('Individual', 'Indibidwal'),
+  'account.organization': ('Organization', 'Organisasyon'),
+  'account.barangay': ('Barangay', 'Barangay'),
+  'awaiting.title': ('Awaiting MDRRMO approval', 'Naghihintay ng pag-apruba ng MDRRMO'),
+  'awaiting.body': (
+    'MDRRMO checks every organization account before it can request services. '
+        "You'll be able to use the app as soon as it is approved.",
+    'Sinusuri ng MDRRMO ang bawat account ng organisasyon bago ito makahiling ng serbisyo. '
+        'Magagamit mo na ang app kapag naaprubahan ito.',
+  ),
+  'awaiting.check': ('Check again', 'Suriin muli'),
+  'awaiting.still': ('Still waiting for approval.', 'Naghihintay pa rin ng pag-apruba.'),
+  'awaiting.failed': ('Could not check right now. Try again.', 'Hindi masuri ngayon. Subukan muli.'),
   'status.completed': ('Completed', 'Natapos'),
   'status.cancelled': ('Cancelled', 'Kinansela'),
   'status.disapproved': ('Not approved', 'Hindi inaprubahan'),
