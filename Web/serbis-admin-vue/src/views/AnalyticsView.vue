@@ -1,9 +1,8 @@
 <template>
-  <v-container fluid class="pa-6 analytics-bg">
+  <v-container fluid class="analytics-bg">
 
     <PageHeader
       title="Analytics"
-      class="mb-6"
     />
 
     <!-- Filter bar. Governs every section below, so it sits above all of them

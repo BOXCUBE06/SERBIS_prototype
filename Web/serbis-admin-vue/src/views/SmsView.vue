@@ -1,18 +1,16 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
-    <v-row justify="center" class="ma-0 w-100 mt-4">
+  <v-container fluid class="fill-height align-start bg-background">
+    <div class="w-100">
+    <PageHeader title="Text Blast (SMS)" />
+
+    <v-row justify="center" class="ma-0 w-100">
       <v-col cols="12" md="10" lg="8" xl="6" class="pa-0">
-        
+
         <v-card elevation="4" rounded="lg" class="bg-surface fade-in w-100">
           <div class="pa-8 border-b bg-surface d-flex align-center gap-4">
             <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
-            <!-- "active, opted-in" is exact: SmsController::sendBlast filters
-                 status = Active AND sms_opt_in AND a non-null phone number, so
-                 "every resident" would overstate who actually receives this. -->
-            <PageHeader title="Text Blast (SMS)" />
-
             <!-- Reachable from the header rather than buried in a settings page —
                  the two people who know the code are the ones who need this. -->
             <v-btn
@@ -60,6 +58,10 @@
 
             <v-form ref="form" @submit.prevent="sendSmsBlast">
               
+              <!-- The audience is exactly the active, opted-in residents:
+                   SmsController::sendBlast filters status = Active AND
+                   sms_opt_in AND a non-null phone number, so "every
+                   resident" would overstate who actually receives this. -->
               <div class="mb-6">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Target Audience</div>
                 <v-select
@@ -231,6 +233,7 @@
         </v-card>
       </v-col>
     </v-row>
+    </div>
 
     <!-- Replaces a native confirm(). The scale and the cost still read the
          same; what is new is the shared blast code, which the server checks

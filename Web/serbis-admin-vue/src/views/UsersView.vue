@@ -1,11 +1,7 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
-    <div class="residents-layout" :style="rowStyle">
-
-      <div class="residents-main">
-        <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
-
-          <PageHeader title="Residents" class="residents-toolbar px-6 py-3 border-b flex-shrink-0">
+  <v-container fluid class="fill-height align-start bg-background">
+    <div class="w-100">
+      <PageHeader title="Residents" class="residents-toolbar">
             <!-- Says "of" only when something is being hidden. The permanent
                  "N of N" read as a standing accusation that a filter was on.
                  ("residents" here is deliberate and ruled on; the heading
@@ -22,30 +18,6 @@
             </template>
 
             <template v-slot:actions>
-              <v-text-field
-                v-model="search"
-                prepend-inner-icon="mdi-magnify"
-                label="Search residents"
-                placeholder="Name or email"
-                clearable
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                rounded="lg"
-                class="search-field"
-              ></v-text-field>
-
-              <v-select
-                v-model="filters.status"
-                :items="RESIDENT_STATUS_FILTER_ITEMS"
-                label="Status"
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                rounded="lg"
-                class="status-field"
-              ></v-select>
-
               <v-btn
                 color="primary"
                 elevation="0"
@@ -57,7 +29,38 @@
                 <v-icon start>mdi-plus</v-icon> Add Head of the Family
               </v-btn>
             </template>
-          </PageHeader>
+      </PageHeader>
+
+    <div class="residents-layout" :style="rowStyle">
+
+      <div class="residents-main">
+        <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
+
+          <div class="residents-toolbar px-6 py-3 border-b d-flex align-center flex-wrap gap-3 flex-shrink-0">
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              label="Search residents"
+              placeholder="Name or email"
+              clearable
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              rounded="lg"
+              class="search-field"
+            ></v-text-field>
+
+            <v-select
+              v-model="filters.status"
+              :items="RESIDENT_STATUS_FILTER_ITEMS"
+              label="Status"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              rounded="lg"
+              class="status-field"
+            ></v-select>
+          </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
                all without sight: the selected barangay was carried by colour
@@ -261,6 +264,7 @@
         </div>
       </aside>
 
+    </div>
     </div>
 
     <!-- Add / Edit -->
@@ -608,10 +612,12 @@ const onDocumentClick = (event) => {
 }
 
 // The table shares the row with the rail, so its height is the page less the
-// container's padding, and the table body is that less the card's header, the
-// barangay tabs and the table's own header.
-const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 96px);' : ''))
-const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 292px)' : '60vh'))
+// shell and container padding and the page header above the card (80px: a
+// 56px title-and-count block plus its 24px margin). The table body is that
+// less the card’s search toolbar (73px), the barangay tabs and the table’s
+// own header. Worked out by hand from those heights, not measured in a browser.
+const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 176px);' : ''))
+const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 364px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')

@@ -1,16 +1,14 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-8 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row>
       <v-col cols="12">
+        <PageHeader title="Documents" />
+
         <v-card elevation="2" rounded="xl" class="pa-6 border-0">
 
-          <!-- Header -->
-          <v-row class="mb-6" align="center" justify="space-between">
-            <v-col cols="12" md="5">
-              <PageHeader title="Documents" />
-            </v-col>
-
-            <v-col cols="12" md="7" class="d-flex justify-end align-center gap-4 flex-wrap">
+          <!-- Filters -->
+          <v-row class="mb-6" align="center" justify="end">
+            <v-col cols="12" class="d-flex justify-end align-center gap-4 flex-wrap">
               <v-slide-group v-model="typeFilter" class="type-filter" show-arrows mandatory>
                 <v-slide-group-item
                   v-for="f in typeFilters"

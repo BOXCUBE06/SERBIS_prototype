@@ -1,11 +1,10 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
         <PageHeader
           title="Staff Accounts"
-          class="mb-6"
         >
           <template v-slot:actions>
             <v-btn

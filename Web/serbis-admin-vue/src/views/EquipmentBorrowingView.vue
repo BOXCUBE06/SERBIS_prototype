@@ -1,8 +1,7 @@
 <template>
-  <v-container fluid class="align-start pa-6 bg-background" style="min-height: 100vh;">
+  <v-container fluid class="align-start bg-background" style="min-height: 100vh;">
     <PageHeader
       title="Equipment Borrowing"
-      class="mb-6"
     />
 
     <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">

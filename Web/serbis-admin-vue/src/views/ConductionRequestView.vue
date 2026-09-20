@@ -1,10 +1,9 @@
 <template>
   <!-- Scrolls with the page like every other list route. Each tab's actions
        live in its own DataTablePage panel, not this header. -->
-  <v-container fluid class="pa-6 bg-background">
+  <v-container fluid class="bg-background">
     <PageHeader
       title="Ambulance Dispatch Requests"
-      class="mb-4"
     />
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to

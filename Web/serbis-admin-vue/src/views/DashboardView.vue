@@ -1,9 +1,8 @@
 <template>
-  <v-container fluid class="pa-6 dashboard-bg">
+  <v-container fluid class="dashboard-bg">
 
     <PageHeader
       title="Dashboard"
-      class="mb-6"
     >
       <template v-slot:actions>
         <v-menu location="bottom end">

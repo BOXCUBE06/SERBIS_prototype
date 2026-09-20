@@ -1,11 +1,10 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
         <PageHeader
           title="Manage Services"
-          class="mb-6"
         />
 
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">

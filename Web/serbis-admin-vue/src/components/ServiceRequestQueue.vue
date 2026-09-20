@@ -1,19 +1,18 @@
 <template>
   <!-- Scrolls with the page like every other list: the split pane that
-       needed a fixed-height canvas is gone (detail is a modal now). pa-5 owns
-       its own margin as a whole route; pa-0 sits flush inside the Ambulance
-       Dispatch tab it's embedded in. -->
+       needed a fixed-height canvas is gone (detail is a modal now). As a whole
+       route the shell sets the padding (App.vue); pa-0 sits flush inside the
+       Ambulance Dispatch tab it's embedded in. -->
   <v-container
     fluid
     class="dashboard-bg"
-    :class="[standalone ? 'pa-5' : 'pa-0']"
+    :class="{ 'pa-0': !standalone }"
   >
     <div class="d-flex flex-column w-100">
 
       <PageHeader
         v-if="standalone"
         :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
-        class="mb-6"
       />
 
           <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>

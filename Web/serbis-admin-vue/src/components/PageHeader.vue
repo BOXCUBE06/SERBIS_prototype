@@ -12,13 +12,11 @@
   structure before this component existed; every other view had assembled
   its own slightly different version by hand.
 
+  The header owns its min-height (48px) and its 24px bottom margin, and the
+  shell owns page padding (App.vue), so the title lands in the same spot on
+  every page. Callers must not add mb-* or pa-* of their own.
+
   Deliberately NOT included:
-  - Outer margin-bottom. Every page still owns its own spacing below the
-    header via whatever class it puts on the component tag (`class="mb-6"`,
-    matching what almost every view already used) — Conduction's height-
-    locked flex-column layout is `flex-shrink: 0` for a real structural
-    reason (routes/index.ts's `fixedHeight`) and nothing here should risk
-    that math.
   - Action button styling. What goes in the `actions` slot keeps its own
     classes/colors exactly as each page already had them — a "Log Service
     Request" button and an "Add Unit" button are different actions on
@@ -45,7 +43,7 @@
   reads as noise).
 -->
 <template>
-  <div class="d-flex justify-space-between align-center flex-wrap gap-3">
+  <div class="page-header d-flex justify-space-between align-center flex-wrap gap-3">
     <div class="min-w-0">
       <h2 class="page-title text-high-emphasis">{{ title }}</h2>
       <div v-if="$slots.subtitle" class="page-subtitle text-medium-emphasis">
@@ -64,3 +62,14 @@ defineProps({
   title: { type: String, required: true },
 })
 </script>
+
+<style scoped>
+/* 48px is the tallest thing that goes in the actions slot (a 48px button or
+   outlined field), so a title-only page and a page with actions have the
+   same header height and the title sits at the same place on both. The
+   bottom margin lives here, not on each caller. */
+.page-header {
+  min-height: 48px;
+  margin-bottom: 24px;
+}
+</style>

@@ -1,10 +1,9 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-8 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row>
       <v-col cols="12">
         <PageHeader
           title="Activity Logs"
-          class="mb-6"
         >
           <template v-slot:actions>
             <v-text-field

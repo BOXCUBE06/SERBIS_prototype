@@ -1,5 +1,5 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-card elevation="3" rounded="lg" class="bg-surface w-100 empty-state">
       <v-icon size="56" class="text-medium-emphasis mb-4">mdi-compass-off-outline</v-icon>
 
