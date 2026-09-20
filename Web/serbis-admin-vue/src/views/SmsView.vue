@@ -20,22 +20,25 @@
             >Text blast code</v-btn>
 
             <!-- Pushed right, and deliberately quiet. The balance is context for
-                 a decision, not a call to action — and it must never read as a
-                 blocker, because a failed lookup does not stop a send.
+                 a decision, not a call to action — except when the account is
+                 out of credits, which is the one case that stops every send.
 
-                 Both fields are printed exactly as PhilSMS sent them. The peso
-                 figure arrives carrying its own currency symbol and the expiry
-                 in a format no Date constructor reads twice the same way, so
-                 neither is parsed or reformatted here. -->
+                 SkySMS has no balance lookup. The figure is the credits left
+                 after the last message that went out, so it says "as of". -->
             <div class="ml-auto text-right flex-shrink-0">
-              <!-- Each line is nowrap and the block refuses to shrink: at this
-                   card width the expiry is long enough to wrap mid-phrase into
-                   "expires 21st / Aug 27", which reads as two separate facts. -->
               <template v-if="balance.available">
                 <div class="text-h6 font-weight-bold text-high-emphasis" style="white-space: nowrap;">{{ balance.remaining }}</div>
-                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">SMS credit</div>
-                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">expires {{ balance.expiresOn }}</div>
+                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">SMS credits left</div>
+                <div v-if="balance.asOf" class="text-caption text-medium-emphasis" style="white-space: nowrap;">as of {{ balance.asOf }}</div>
               </template>
+              <div
+                v-else-if="balance.outOfCredits"
+                class="text-caption font-weight-bold text-error"
+                style="max-width: 200px;"
+                role="alert"
+              >
+                {{ balance.message }}
+              </div>
               <div v-else-if="balance.checked" class="text-caption text-medium-emphasis" style="max-width: 180px;">
                 {{ balance.message }}
               </div>
@@ -141,7 +144,8 @@
                   class="font-weight-medium text-body-1"
                   :rules="[
                     v => !!v || 'A message is required.',
-                    v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
+                    v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.',
+                    v => !findLink(v) || linkMessage
                   ]"
                   :error-messages="fieldErrors.message"
                 ></v-textarea>
@@ -152,7 +156,7 @@
                    different kinds: the recipient count is exact for the moment
                    it was fetched, but the roll can change before Send; the
                    segment count is derived from the GSM 03.38 tables because
-                   PhilSMS has no sandbox to confirm it against. -->
+                   SkySMS has no sandbox to confirm it against. -->
               <div class="mt-6 pa-4 rounded-lg bg-grey-lighten-5 border">
                 <div class="d-flex align-center justify-space-between flex-wrap gap-3">
                   <div class="d-flex align-center gap-2">
@@ -206,6 +210,31 @@
                     Caused by {{ offendingSummary }}.
                     Swapping {{ sms.offendingCharacters.length === 1 ? 'it for its' : 'them for their' }} plain-ASCII equivalent brings the cost back down.
                   </span>
+                  <!-- Only offered when the swap would actually change something:
+                       an emoji has no plain twin, and a button that does nothing
+                       reads as broken. -->
+                  <template v-if="canSimplifyCharacters" #append>
+                    <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="simplifyCharacters">
+                      Use plain characters
+                    </v-btn>
+                  </template>
+                </v-alert>
+
+                <!-- Blocking, unlike the warning above: the provider charges
+                     10 to 50 credits a recipient for a link and does not deliver
+                     the message. The server refuses it as well. -->
+                <v-alert
+                  v-if="messageLink"
+                  type="error"
+                  variant="tonal"
+                  density="compact"
+                  rounded="lg"
+                  class="mt-3"
+                  role="alert"
+                >
+                  <span class="text-body-2">
+                    “{{ messageLink }}” looks like a link or web address. {{ linkMessage }}
+                  </span>
                 </v-alert>
               </div>
               <div class="pt-6 mt-4 border-t">
@@ -218,6 +247,7 @@
                   height="64"
                   type="submit"
                   :loading="loading"
+                  :disabled="!!messageLink"
                   elevation="2"
                 >
                   <v-icon start size="24" class="mr-2">mdi-send</v-icon>
@@ -362,7 +392,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { describeSms, nameCharacter } from '@/composables/smsSegments'
+import { describeSms, findLink, nameCharacter, toGsmSafe } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -438,6 +468,15 @@ const sms = computed(() => describeSms(message.value))
 const offendingSummary = computed(() =>
   sms.value.offendingCharacters.map(nameCharacter).join(', '))
 
+// SkySMS charges 10 to 50 credits a recipient for a link or domain and does not
+// deliver the message, so one blocks the send here and on the server.
+const linkMessage = 'Links, web addresses and domains cannot be sent in a text blast — the SMS provider penalises them and does not deliver the message. Remove it.'
+const messageLink = computed(() => findLink(message.value))
+
+// The swap only helps when it changes the text — an emoji has no plain twin.
+const canSimplifyCharacters = computed(() => toGsmSafe(message.value) !== message.value)
+const simplifyCharacters = () => { message.value = toGsmSafe(message.value) }
+
 const recipientCount = ref(null)
 const recipientCountLoading = ref(false)
 const recipientCountError = ref('')
@@ -493,7 +532,7 @@ const toggleAllBarangays = () => {
 
 // Deliberately asks the server rather than counting client-side. The set is
 // not derivable from anything this page holds: it turns on status, on the
-// resident's own sms_opt_in, and on whether PhilSms::normalize() accepts the
+// resident's own sms_opt_in, and on whether PhoneNumber::normalize() accepts the
 // stored number — the last of which is PHP, not SQL. SmsController resolves
 // the preview through the identical code path the send uses, so the number
 // shown here is the number that will be billed.
@@ -623,11 +662,18 @@ const fetchBarangays = async () => {
 // Account-level rather than per-message, so it is read once on mount and never
 // again while the page is open.
 //
-// PhilSMS returns a peso balance, not a unit count — there is no "messages
-// remaining" figure to display, and the page must not imply one. Converting
-// pesos to segments would need a per-segment rate hardcoded here, which is a
-// confident wrong number next to Send the first time the vendor reprices.
-const balance = ref({ available: false, checked: false, remaining: '', expiresOn: '', message: '' })
+// SkySMS bills credits (one per 160-character message) and has no balance
+// lookup: the server reports the credits left after the last accepted send, or
+// that the account is out. So this is "as of the last message", not live, and
+// it is read again after every send. The call touches no vendor.
+const balance = ref({ available: false, checked: false, outOfCredits: false, remaining: '', asOf: '', message: '' })
+
+const formatAsOf = (iso) => {
+  const date = iso ? new Date(iso) : null
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : ''
+}
 
 const fetchBalance = async () => {
   try {
@@ -637,15 +683,16 @@ const fetchBalance = async () => {
     balance.value = {
       available: !!data.available,
       checked: true,
-      remaining: data.data?.remaining_balance ?? '',
-      expiresOn: data.data?.expired_on ?? '',
+      outOfCredits: !!data.out_of_credits,
+      remaining: data.data?.remaining_credits ?? '',
+      asOf: formatAsOf(data.data?.as_of),
       message: data.message ?? 'SMS credit unavailable',
     }
   } catch {
     // Swallowed on purpose. GET /sms/balance already answers 200 on every
     // failure path it knows about, so this catches only a dead network — and a
     // missing balance is not a reason to redden a form that still sends.
-    balance.value = { available: false, checked: true, remaining: '', expiresOn: '', message: 'SMS credit unavailable' }
+    balance.value = { available: false, checked: true, outOfCredits: false, remaining: '', asOf: '', message: 'SMS credit unavailable' }
   }
 }
 
@@ -720,7 +767,10 @@ const confirmSend = async () => {
     // looks: without this the server's "do NOT send it again" is discarded and
     // the box reads "Success: 0 messages dispatched", which is worse than the
     // error it replaced.
-    alert.value = data.unconfirmed
+    // A blast that went out in several requests can end part way: some
+    // recipients were sent it and some were not. The server's own sentence
+    // says so, and says not to resend the whole message.
+    alert.value = data.unconfirmed || data.failed > 0
       ? { show: true, type: 'warning', message: data.message }
       : {
           show: true,
@@ -750,6 +800,8 @@ const confirmSend = async () => {
     }
   } finally {
     loading.value = false
+    // The credits left changed, or ran out. Local read, no vendor call.
+    fetchBalance()
   }
 }
 
