@@ -6,13 +6,17 @@ use App\Models\Recipient;
 use App\Models\Resident;
 use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
-use App\Services\PhilSms;
+use App\Services\Sms\SkySmsGateway;
+use App\Services\Sms\SmsGateway;
+use App\Services\Sms\SmsMessagePolicy;
+use App\Services\Sms\SmsResult;
 use App\Support\PhoneNumber;
 use App\Traits\PaginatesLists;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -23,10 +27,29 @@ class SmsController extends Controller
 {
     use PaginatesLists;
 
-    public function sendBlast(Request $request, PhilSms $philSms)
+    /**
+     * Residents per bulk request. The vendor's own cap; a bigger audience goes
+     * out as several requests, each recorded on its own.
+     */
+    private const BULK_CHUNK = SkySmsGateway::MAX_BULK;
+
+    public function sendBlast(Request $request, SmsGateway $gateway)
     {
         $validated = $request->validate([
-            'message' => 'required|string|max:160',
+            'message' => [
+                'required',
+                'string',
+                'max:160',
+                // The vendor penalises a link or domain (10 to 50 credits per
+                // recipient) and reports the message as sent without delivering
+                // it. The panel refuses these before this point; this is the
+                // check that holds when the request did not come from the panel.
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if (SmsMessagePolicy::containsLink((string) $value)) {
+                        $fail('A text blast cannot contain a link, web address or domain. The SMS provider penalises them and does not deliver the message. Remove it and send again.');
+                    }
+                },
+            ],
             'barangays' => 'required|array|min:1',
             'barangays.*' => 'integer|exists:tbl_barangay,barangay_id',
             'code' => 'required|string',
@@ -55,82 +78,141 @@ class SmsController extends Controller
             ], 422);
         }
 
-        $recipients = $residents
-            ->pluck('phone_number')
-            ->values()
-            ->all();
+        // Several bulk requests, and each may wait on a rate limit: the default
+        // 30 seconds is not enough for a municipality.
+        @set_time_limit(180);
 
-        try {
-            $response = $philSms->send($recipients, $validated['message'], PhilSms::BLAST_TIMEOUT);
-        } catch (ConnectionException $e) {
-            // The request left and the reply never came back. cURL 28 with zero
-            // bytes received means PhilSMS almost certainly accepted, processed
-            // and billed it — we stopped listening; the send did not stop.
-            //
-            // Recorded rather than rolled back, and deliberately NOT as
-            // 'Failed'. Rolling back leaves no trace of a blast that reached
-            // real handsets, and a 'Failed' row invites someone to send it
-            // again and pay again — which is the exact behaviour this exists to
-            // prevent.
-            Log::warning('PhilSMS send timed out — delivery unconfirmed', [
-                'recipients' => count($recipients),
-                'error' => $e->getMessage(),
-            ]);
+        $groups = [];
+        $firstFailure = null;
+        $outOfCredits = false;
 
-            $this->recordBlast(
-                $request->user()->admin_id,
-                $residents,
-                $validated['message'],
-                'Unconfirmed',
-                // No response, so no job id. Nothing to reconcile this against
-                // later except the vendor's own dashboard.
-                null,
-            );
+        foreach ($residents->chunk(self::BULK_CHUNK) as $chunk) {
+            // Credits ran out on an earlier chunk: nothing more can go, so the
+            // rest are recorded as not sent instead of asking the vendor again.
+            $result = $outOfCredits
+                ? SmsResult::rejected(SmsResult::REASON_OUT_OF_CREDITS)
+                : $this->sendChunk($gateway, $chunk->pluck('phone_number')->all(), $validated['message']);
 
+            $outOfCredits = $outOfCredits || $result->isOutOfCredits();
+
+            if (! $result->isAccepted() && ! $result->isUnknown()) {
+                $firstFailure ??= $result;
+            }
+
+            $groups[] = [
+                'residents' => $chunk->values(),
+                // Unknown is not failed: the request left and nothing came back,
+                // so the messages may well have gone. Recorded as Unconfirmed so
+                // nobody sends them again and pays twice.
+                'status' => match (true) {
+                    $result->isAccepted() => 'Sent',
+                    $result->isUnknown() => 'Unconfirmed',
+                    default => 'Failed',
+                },
+                'job' => $result->queueId,
+            ];
+        }
+
+        $this->recordBlast($request->user()->admin_id, $groups, $validated['message']);
+
+        $count = fn (string $status) => collect($groups)
+            ->where('status', $status)
+            ->sum(fn ($group) => $group['residents']->count());
+
+        $sent = $count('Sent');
+        $unconfirmed = $count('Unconfirmed');
+        $failed = $count('Failed');
+
+        if ($unconfirmed > 0) {
             // 202, not 200 and not 5xx. We cannot confirm delivery, so this is
-            // not success; but a 5xx is what staff are currently retrying.
+            // not success; but a 5xx is what staff are currently retrying, and a
+            // retry of a message that probably went out is a second bill.
             return response()->json([
-                'message' => 'PhilSMS did not answer in time, but the message was most likely sent and billed. Do NOT send it again — check the PhilSMS dashboard, or ask a recipient, before resending.',
+                'message' => 'SkySMS did not answer in time for '.$unconfirmed.' recipient(s), but the messages were most likely sent and billed. Do NOT send them again — check with a recipient before resending.',
                 'unconfirmed' => true,
-                'sent' => 0,
-                'failed' => 0,
-                'recipients' => count($recipients),
+                'sent' => $sent,
+                'failed' => $failed,
+                'unconfirmed_count' => $unconfirmed,
+                'recipients' => $residents->count(),
             ], 202);
         }
 
-        $succeeded = PhilSms::accepted($response);
-
-        // Recorded either way. A failed blast is the more important of the two to
-        // have written down — it is the one somebody will ask about afterwards —
-        // and the advisory feed withholds only Failed rows, so a blast that
-        // never left cannot masquerade as a warning that went out. (Unconfirmed
-        // is a third case and is shown; see advisories().)
-        $this->recordBlast(
-            $request->user()->admin_id,
-            $residents,
-            $validated['message'],
-            $succeeded ? 'Sent' : 'Failed',
-            $response->json('data.uid') ?? $response->json('job_id') ?? $response->json('id'),
-        );
-
-        if ($succeeded) {
+        if ($failed === 0) {
             return response()->json([
                 'message' => 'Text blast completed.',
-                'sent' => count($recipients),
+                'sent' => $sent,
                 'failed' => 0,
             ]);
         }
 
-        Log::error('PhilSMS send failed', [
-            'status' => $response->status(),
-            'response' => $response->body(),
+        Log::error('SkySMS text blast had failures', [
+            'sent' => $sent,
+            'failed' => $failed,
+            'reason' => $firstFailure?->reason,
+            'status' => $firstFailure?->httpStatus,
         ]);
 
-        return response()->json([
-            'message' => 'Failed to send blast.',
-            'sent' => 0,
-            'failed' => count($recipients),
-        ], 500);
+        // Some chunks went out before one failed: report the split rather than
+        // an error, so the desk knows part of the audience already has it.
+        if ($sent > 0) {
+            return response()->json([
+                'message' => 'Part of the blast went out: '.$sent.' sent, '.$failed.' failed. Do not resend the whole message — the recipients that were sent it would get it twice.',
+                'sent' => $sent,
+                'failed' => $failed,
+            ]);
+        }
+
+        return $this->blastFailureResponse($firstFailure, $failed);
+    }
+
+    /**
+     * One bulk request, retried while the vendor answers 429. Waits for the
+     * Retry-After it gives, or a doubling wait from the configured base, and
+     * gives up after a few tries so a stuck rate limit cannot hold the request
+     * open indefinitely.
+     *
+     * @param  array<int, string>  $phones
+     */
+    private function sendChunk(SmsGateway $gateway, array $phones, string $message): SmsResult
+    {
+        $base = (float) config('services.skysms.retry_base_seconds', 2);
+        $maxRetries = (int) config('services.skysms.max_retries', 3);
+
+        $result = $gateway->sendBulk($phones, $message);
+
+        for ($attempt = 0; $attempt < $maxRetries && $result->isRateLimited(); $attempt++) {
+            $wait = max((float) ($result->retryAfter ?? 0), $base * (2 ** $attempt));
+
+            if ($wait > 0) {
+                usleep((int) ($wait * 1_000_000));
+            }
+
+            $result = $gateway->sendBulk($phones, $message);
+        }
+
+        return $result;
+    }
+
+    /** What the admin is told when nothing at all went out, by why. */
+    private function blastFailureResponse(?SmsResult $failure, int $failed): JsonResponse
+    {
+        $body = ['sent' => 0, 'failed' => $failed];
+
+        return match ($failure?->reason) {
+            SmsResult::REASON_OUT_OF_CREDITS => response()->json($body + [
+                'message' => 'The SMS credits are used up, so nothing was sent. Top up the SkySMS account, then send again.',
+                'code' => 'out_of_credits',
+            ], 402),
+            SmsResult::REASON_WARNING => response()->json($body + [
+                'message' => 'The SMS provider flagged this message'.($failure->detail ? ' ("'.$failure->detail.'")' : '').' and will not deliver it. Reword it and send again.',
+                'code' => 'flagged',
+            ], 422),
+            SmsResult::REASON_RATE_LIMITED => response()->json($body + [
+                'message' => 'The SMS provider is limiting how fast this account can send. Wait a minute, then send again.',
+                'code' => 'rate_limited',
+            ], 429, array_filter(['Retry-After' => $failure->retryAfter])),
+            default => response()->json($body + ['message' => 'Failed to send blast.'], 500),
+        };
     }
 
     /**
@@ -158,51 +240,47 @@ class SmsController extends Controller
      *
      * Always 200, including on every failure path. The balance is decoration on
      * a page whose actual job is sending: a 500 here would surface as a red
-     * alert on a form that works fine, and an unreachable vendor dashboard is
-     * not a reason to hold back an advisory. Callers branch on `available`,
-     * never on the status code.
+     * alert on a form that works fine, and an unreachable vendor is not a
+     * reason to hold back an advisory. Callers branch on `available`, never on
+     * the status code.
      *
-     * `data` is passed through untouched. PhilSMS documents it only as "sms unit
-     * with all details", so this endpoint refuses to reshape a body whose shape
-     * is not actually pinned down.
+     * SkySMS documents no balance endpoint. Every accepted send reports
+     * `credits_remaining`, and the gateway remembers the latest one — so this
+     * is the balance as of the last message, not a live read, and says so.
+     * An empty account (a 402) is remembered too, and shown as out of credits.
      */
-    public function balance(PhilSms $philSms)
+    public function balance(SmsGateway $gateway)
     {
-        if (! PhilSms::configured()) {
+        if (! $gateway->configured()) {
             return response()->json([
                 'available' => false,
-                'message' => 'No PhilSMS token is configured on this server.',
+                'message' => 'No SkySMS API key is configured on this server.',
             ]);
         }
 
-        try {
-            $response = $philSms->balance();
-        } catch (\Throwable $e) {
-            Log::warning('PhilSMS balance lookup failed', ['error' => $e->getMessage()]);
-
+        if (Cache::get(SkySmsGateway::CACHE_OUT_OF_CREDITS)) {
             return response()->json([
                 'available' => false,
-                'message' => 'Could not reach PhilSMS to read the credit balance.',
+                'out_of_credits' => true,
+                'message' => 'Out of SMS credits. Top up the SkySMS account before sending.',
             ]);
         }
 
-        // A 200 carrying status "error" is a refusal, not a balance — the same
-        // trap PhilSms::accepted() exists for on the send path.
-        if (! PhilSms::accepted($response)) {
-            Log::warning('PhilSMS balance refused', [
-                'status' => $response->status(),
-                'response' => $response->body(),
-            ]);
+        $credits = Cache::get(SkySmsGateway::CACHE_CREDITS);
 
+        if ($credits === null) {
             return response()->json([
                 'available' => false,
-                'message' => $response->json('message') ?? 'PhilSMS refused the balance request.',
+                'message' => 'The credit balance appears after the next message is sent.',
             ]);
         }
 
         return response()->json([
             'available' => true,
-            'data' => $response->json('data'),
+            'data' => [
+                'remaining_credits' => (int) $credits,
+                'as_of' => Cache::get(SkySmsGateway::CACHE_CREDITS_AT),
+            ],
         ]);
     }
 
@@ -541,36 +619,38 @@ class SmsController extends Controller
     }
 
     /**
-     * One log row per barangay, and one recipient row per resident under it. The
-     * vendor call is a single request for everyone, but "what was sent to my
-     * barangay" is the question the record has to answer.
+     * One log row per barangay per outcome, and one recipient row per resident
+     * under it. The vendor call is one request per chunk of recipients, but
+     * "what was sent to my barangay" is the question the record has to answer —
+     * and because a large audience is several requests that can end
+     * differently, a barangay can appear twice: once for the chunk that went
+     * out and once for the chunk that did not.
+     *
+     * @param  array<int, array{residents: Collection, status: string, job: ?string}>  $groups
      */
-    private function recordBlast(
-        int $senderId,
-        $residents,
-        string $message,
-        string $status,
-        ?string $apiJobId,
-    ): void {
-        DB::transaction(function () use ($senderId, $residents, $message, $status, $apiJobId) {
-            foreach ($residents->groupBy('barangay_id') as $barangayId => $group) {
-                $log = SmsLog::create([
-                    'sender_id' => $senderId,
-                    'target_area_id' => $barangayId,
-                    'api_job_id' => $apiJobId,
-                    'message_body' => $message,
-                    'status' => $status,
-                ]);
+    private function recordBlast(int $senderId, array $groups, string $message): void
+    {
+        DB::transaction(function () use ($senderId, $groups, $message) {
+            foreach ($groups as $group) {
+                foreach ($group['residents']->groupBy('barangay_id') as $barangayId => $residents) {
+                    $log = SmsLog::create([
+                        'sender_id' => $senderId,
+                        'target_area_id' => $barangayId,
+                        'api_job_id' => $group['job'],
+                        'message_body' => $message,
+                        'status' => $group['status'],
+                    ]);
 
-                Recipient::insert(
-                    $group->map(fn ($resident) => [
-                        'sms_log_id' => $log->sms_log_id,
-                        'resident_id' => $resident->resident_id,
-                        'status' => $status,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ])->all(),
-                );
+                    Recipient::insert(
+                        $residents->map(fn ($resident) => [
+                            'sms_log_id' => $log->sms_log_id,
+                            'resident_id' => $resident->resident_id,
+                            'status' => $group['status'],
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ])->all(),
+                    );
+                }
             }
         });
     }

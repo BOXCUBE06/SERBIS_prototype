@@ -8,7 +8,7 @@ use App\Models\Resident;
 use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Models\User;
-use App\Services\PhilSms;
+use App\Services\Sms\SkySmsGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Hash;
@@ -18,7 +18,7 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * What happens when PhilSMS accepts a blast and never answers.
+ * What happens when SkySMS accepts a blast and never answers.
  *
  * Production, 2026-09-03: cURL error 28, timed out after 6002ms with 0 bytes
  * received. The message was delivered and billed — the vendor processed the
@@ -31,7 +31,7 @@ use Tests\TestCase;
  * outcome is unknown, and the expensive mistake is treating unknown as "nothing
  * happened".
  *
- * PhilSMS has no sandbox, so preventStrayRequests() is what makes this safe to
+ * SkySMS has no sandbox, so preventStrayRequests() is what makes this safe to
  * run — a request escaping the fake fails the test instead of costing money.
  */
 class SmsBlastTimeoutTest extends TestCase
@@ -79,7 +79,7 @@ class SmsBlastTimeoutTest extends TestCase
     private function fakeTimeout(): void
     {
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => throw new ConnectionException(
+            'skysms.skyio.site/*' => fn () => throw new ConnectionException(
                 'cURL error 28: Operation timed out after 6002 milliseconds with 0 bytes received',
             ),
         ]);
@@ -106,7 +106,7 @@ class SmsBlastTimeoutTest extends TestCase
 
         // The wording is the whole point of the response — staff act on this
         // sentence, not on the status code.
-        $this->assertStringContainsString('Do NOT send it again', $response->json('message'));
+        $this->assertStringContainsString('Do NOT send them again', $response->json('message'));
     }
 
     /**
@@ -170,11 +170,9 @@ class SmsBlastTimeoutTest extends TestCase
      */
     public function test_the_blast_uses_the_longer_timeout_and_not_the_otp_default(): void
     {
-        $this->assertSame(20, PhilSms::BLAST_TIMEOUT);
+        $gateway = new \ReflectionClass(SkySmsGateway::class);
 
-        $reflected = new \ReflectionMethod(PhilSms::class, 'send');
-        $default = $reflected->getParameters()[2]->getDefaultValue();
-
-        $this->assertSame(6, $default, 'The OTP paths must keep the short timeout.');
+        $this->assertSame(20, $gateway->getConstant('BULK_TIMEOUT'));
+        $this->assertSame(6, $gateway->getConstant('SINGLE_TIMEOUT'), 'The OTP paths must keep the short timeout.');
     }
 }

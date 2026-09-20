@@ -24,7 +24,7 @@ use Tests\TestCase;
  *
  * preventStrayRequests() is on regardless — most tests here never configure
  * Fcm, so notifyResidentDevices() no-ops before any HTTP call, same as it
- * did for PhilSMS before push replaced it.
+ * did for SkySMS before push replaced it.
  */
 class ServiceRequestRescheduleTest extends TestCase
 {
@@ -191,7 +191,7 @@ class ServiceRequestRescheduleTest extends TestCase
     }
 
     /**
-     * PhilSMS bills per segment and has no sandbox, so the length of this body
+     * SkySMS bills per segment and has no sandbox, so the length of this body
      * is a cost, not a cosmetic detail. `remarks` was `required|string` with no
      * ceiling while SmsController::sendBlast had capped its own message at 160
      * from the start — the two paths that text one resident simply never got

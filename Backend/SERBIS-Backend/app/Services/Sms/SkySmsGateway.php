@@ -31,6 +31,8 @@ class SkySmsGateway implements SmsGateway
     /** Cache keys read by SmsController::balance() — there is no balance endpoint to ask. */
     public const CACHE_CREDITS = 'sms:credits_remaining';
 
+    public const CACHE_CREDITS_AT = 'sms:credits_remaining_at';
+
     public const CACHE_OUT_OF_CREDITS = 'sms:out_of_credits';
 
     private const CACHE_BULK_SHAPE_LOGGED = 'sms:bulk_shape_logged';
@@ -211,6 +213,7 @@ class SkySmsGateway implements SmsGateway
 
         if ($credits !== null) {
             Cache::forever(self::CACHE_CREDITS, $credits);
+            Cache::forever(self::CACHE_CREDITS_AT, now()->toIso8601String());
         }
 
         Cache::forget(self::CACHE_OUT_OF_CREDITS);
