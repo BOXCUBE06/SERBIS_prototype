@@ -340,7 +340,6 @@ const getVehicleIcon = (type) => ({
   'fire truck': 'mdi-fire-truck',
   'rescue vehicle': 'mdi-car-emergency',
   boat: 'mdi-ferry',
-  'dump truck': 'mdi-dump-truck',
 }[type?.toLowerCase()] || 'mdi-car')
 
 const fetchVehicles = async () => {

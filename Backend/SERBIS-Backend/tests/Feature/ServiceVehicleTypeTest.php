@@ -16,8 +16,8 @@ use Tests\TestCase;
 
 /**
  * Which kinds of unit may be sent on which service. The seeded mapping is the
- * office's own (road clearing takes a Dump Truck or a Rescue Vehicle, animal
- * rescue a Rescue Vehicle or a Boat, ...); the panel can change it without a
+ * office's own (road clearing takes a Rescue Vehicle, animal rescue a Rescue
+ * Vehicle or a Boat, ...); the panel can change it without a
  * deploy, and PUT /service-requests/{id} enforces it whatever the picker shows.
  */
 class ServiceVehicleTypeTest extends TestCase
