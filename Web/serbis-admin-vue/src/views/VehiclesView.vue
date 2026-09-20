@@ -241,7 +241,7 @@ import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']
-const VEHICLE_TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat', 'Dump Truck']
+const VEHICLE_TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat']
 
 // Available = primary green (success tracks primary), Dispatched = warning, Maintenance = error.
 const statusMeta = {

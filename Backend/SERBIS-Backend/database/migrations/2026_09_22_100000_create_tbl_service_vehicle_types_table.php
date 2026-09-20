@@ -38,10 +38,10 @@ return new class extends Migration
 
         $mapping = [
             'animal-rescue' => ['Rescue Vehicle', 'Boat'],
-            'relief-goods-distribution' => ['Rescue Vehicle', 'Dump Truck'],
-            'road-clearing' => ['Dump Truck', 'Rescue Vehicle'],
-            'debris-removal' => ['Dump Truck', 'Rescue Vehicle'],
-            'sandbagging' => ['Dump Truck', 'Rescue Vehicle'],
+            'relief-goods-distribution' => ['Rescue Vehicle'],
+            'road-clearing' => ['Rescue Vehicle'],
+            'debris-removal' => ['Rescue Vehicle'],
+            'sandbagging' => ['Rescue Vehicle'],
         ];
 
         $now = now();

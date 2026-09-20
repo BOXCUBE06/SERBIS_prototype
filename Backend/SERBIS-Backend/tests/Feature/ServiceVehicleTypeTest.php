@@ -89,10 +89,10 @@ class ServiceVehicleTypeTest extends TestCase
 
     public function test_the_migration_seeds_the_offices_mapping(): void
     {
-        $this->assertEqualsCanonicalizing(['Dump Truck', 'Rescue Vehicle'], ServiceVehicleType::typesFor('road-clearing'));
-        $this->assertEqualsCanonicalizing(['Dump Truck', 'Rescue Vehicle'], ServiceVehicleType::typesFor('debris-removal'));
-        $this->assertEqualsCanonicalizing(['Dump Truck', 'Rescue Vehicle'], ServiceVehicleType::typesFor('sandbagging'));
-        $this->assertEqualsCanonicalizing(['Rescue Vehicle', 'Dump Truck'], ServiceVehicleType::typesFor('relief-goods-distribution'));
+        $this->assertSame(['Rescue Vehicle'], ServiceVehicleType::typesFor('road-clearing'));
+        $this->assertSame(['Rescue Vehicle'], ServiceVehicleType::typesFor('debris-removal'));
+        $this->assertSame(['Rescue Vehicle'], ServiceVehicleType::typesFor('sandbagging'));
+        $this->assertSame(['Rescue Vehicle'], ServiceVehicleType::typesFor('relief-goods-distribution'));
         $this->assertEqualsCanonicalizing(['Rescue Vehicle', 'Boat'], ServiceVehicleType::typesFor('animal-rescue'));
         $this->assertSame([], ServiceVehicleType::typesFor('power-line-repair'));
     }
@@ -101,12 +101,12 @@ class ServiceVehicleTypeTest extends TestCase
 
     public function test_a_mapped_unit_type_is_accepted(): void
     {
-        $truck = $this->unit('Dump Truck', 'TRK-01');
+        $rescue = $this->unit('Rescue Vehicle', 'RES-01');
         $request = $this->request($this->roadClearing);
 
-        $this->dispatch($request, $truck)->assertOk();
+        $this->dispatch($request, $rescue)->assertOk();
 
-        $this->assertSame($truck->vehicle_id, $request->fresh()->vehicle_id);
+        $this->assertSame($rescue->vehicle_id, $request->fresh()->vehicle_id);
     }
 
     public function test_an_unmapped_unit_type_is_refused_and_nothing_changes(): void
@@ -141,10 +141,10 @@ class ServiceVehicleTypeTest extends TestCase
 
     public function test_a_program_takes_no_vehicle(): void
     {
-        $truck = $this->unit('Dump Truck', 'TRK-01');
+        $rescue = $this->unit('Rescue Vehicle', 'RES-01');
         $request = $this->request($this->program);
 
-        $this->dispatch($request, $truck)->assertStatus(422)->assertJsonValidationErrors('vehicle_id');
+        $this->dispatch($request, $rescue)->assertStatus(422)->assertJsonValidationErrors('vehicle_id');
 
         $this->assertNull($request->fresh()->vehicle_id);
     }
@@ -181,7 +181,7 @@ class ServiceVehicleTypeTest extends TestCase
 
         $this->getJson('/api/service-vehicle-types')
             ->assertOk()
-            ->assertJsonPath('types', ['Rescue Vehicle', 'Fire Truck', 'Boat', 'Dump Truck']);
+            ->assertJsonPath('types', ['Rescue Vehicle', 'Fire Truck', 'Boat']);
     }
 
     public function test_an_empty_list_clears_the_mapping_back_to_any_non_ambulance_unit(): void
@@ -226,13 +226,13 @@ class ServiceVehicleTypeTest extends TestCase
 
     // ------------------------------------------------------- fleet types
 
-    public function test_dump_truck_is_a_valid_fleet_type(): void
+    public function test_only_the_known_kinds_are_valid_fleet_types(): void
     {
         Sanctum::actingAs($this->admin);
 
         $this->postJson('/api/vehicles', [
-            'unit_identifier' => 'TRK-02',
-            'type' => 'Dump Truck',
+            'unit_identifier' => 'RES-09',
+            'type' => 'Rescue Vehicle',
             'status' => 'Available',
         ])->assertCreated();
 

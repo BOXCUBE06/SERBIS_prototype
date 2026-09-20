@@ -17,7 +17,7 @@ class Vehicle extends Model
      * adding a kind is a change here, in VehicleController's rules through this
      * constant, and in the panel's Fleet form — not a migration.
      */
-    public const TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat', 'Dump Truck'];
+    public const TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat'];
 
     protected $table = 'tbl_vehicles';
 
