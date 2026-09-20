@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Sms\SkySmsGateway;
+use App\Services\Sms\SmsGateway;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The one SMS vendor. Callers ask for the interface, so a provider
+        // change is this line and one class.
+        $this->app->singleton(SmsGateway::class, SkySmsGateway::class);
     }
 
     /**

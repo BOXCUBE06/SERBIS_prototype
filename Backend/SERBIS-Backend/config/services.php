@@ -36,6 +36,21 @@ return [
         'sender_id' => env('PHILSMS_SENDER_ID', 'PhilSMS'),
     ],
 
+    // SkySMS. Credits, not a subscription: one credit is one 160-character
+    // message, and links or profanity cost 10-50 each while not being
+    // delivered — see App\Services\Sms\SmsMessagePolicy. The account allows
+    // 30 messages a minute and 3 a second, shared by every key on it.
+    'skysms' => [
+        'api_key' => env('SKYSMS_API_KEY'),
+        'base_url' => env('SKYSMS_BASE_URL', 'https://skysms.skyio.site/api/v1'),
+        // Loops that text people one by one (reminders, availability notices)
+        // wait this long between sends, which holds them at 30 a minute, and
+        // retry a 429 with a doubling wait starting from the base below.
+        'pace_seconds' => (float) env('SKYSMS_PACE_SECONDS', 2),
+        'retry_base_seconds' => (float) env('SKYSMS_RETRY_BASE_SECONDS', 2),
+        'max_retries' => (int) env('SKYSMS_MAX_RETRIES', 3),
+    ],
+
     'firebase' => [
         // Absolute path to the service-account JSON downloaded from Firebase
         // Console -> Project Settings -> Service Accounts. The file itself
