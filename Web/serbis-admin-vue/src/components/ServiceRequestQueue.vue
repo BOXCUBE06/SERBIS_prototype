@@ -299,7 +299,14 @@
               </div>
             </div>
 
-            <div v-if="selectedRequest.status === 'Responding'" class="detail-group">
+            <div v-if="selectedRequest.status === 'Responding' && isProgramRequest(selectedRequest)" class="detail-group">
+              <v-alert type="success" variant="tonal" border="start" rounded="lg">
+                <div class="text-subtitle-2 font-weight-bold">Approved</div>
+                <div class="text-body-2">Mark it resolved once the office has carried it out.</div>
+              </v-alert>
+            </div>
+
+            <div v-else-if="selectedRequest.status === 'Responding'" class="detail-group">
               <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
                 <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
                 <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
@@ -319,7 +326,7 @@
                      right next to the decision itself now — they used to
                      be a scroll apart, the picker up in the body and the
                      action it gated pinned in a separate footer. -->
-                <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
+                <div v-if="!isProgramRequest(selectedRequest)" class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
                   <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
                     <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
                       {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
@@ -343,6 +350,7 @@
                      green that works as a fill under a white label and vanishes
                      as an outline on the dark theme's own dark surface. -->
                 <v-btn
+                  v-if="!isProgramRequest(selectedRequest)"
                   color="primary"
                   variant="outlined"
                   class="text-none font-weight-bold"
@@ -351,7 +359,7 @@
                 >
                   {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
                 </v-btn>
-                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+                <v-btn color="error" variant="text" class="text-none font-weight-bold" :class="{ 'ml-auto': isProgramRequest(selectedRequest) }" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
                 <v-btn
@@ -364,7 +372,7 @@
                   :aria-describedby="scope === 'ambulance' && !formData.vehicle_id ? 'dispatch-gate' : undefined"
                   @click="openReason('approve')"
                 >
-                  Approve &amp; Dispatch
+                  {{ isProgramRequest(selectedRequest) ? 'Approve' : 'Approve & Dispatch' }}
                 </v-btn>
                 <span v-if="scope === 'ambulance' && !formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
                   Disabled until a vehicle is chosen with the Select Vehicle button beside it.
@@ -1324,6 +1332,13 @@ const itemsPerPage = ref(10)
 // one thing that decides which of the two boards a request belongs on.
 const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
 const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
+
+// The MDRRMO programs (trainings, drills, certification). No unit ever goes out
+// for one, so the queue shows a plain Approve/Disapprove instead of the
+// dispatch panel. Matched on the stable service code, like the line above, and
+// not on the Programs category label, which is only derived from the name.
+const PROGRAM_SERVICE_CODES = ['drrm-trainings-and-seminars', 'simulation-drills-nsed', 'mdrrmo-certification']
+const isProgramRequest = (r) => PROGRAM_SERVICE_CODES.includes(r?.service?.code)
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
 const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
@@ -1503,6 +1518,16 @@ const reasonCopy = computed(() => {
       // unit "will be sent" there promised something nobody was sending.
       const unit = getSelectedVehicleName()
       const note = { label: 'Note for the Head of the Family (optional)', hint: appHint, showField: hasAccount }
+      // A program has no unit to send, so it gets no "without a vehicle" wording.
+      if (req && isProgramRequest(req)) {
+        return {
+          ...note,
+          title: 'Approve this request',
+          body: `This approves the request for ${what}. Nothing is dispatched.`,
+          placeholder: 'e.g. We will confirm the schedule with your office',
+          confirm: 'Approve',
+        }
+      }
       return unit
         ? {
             ...note,
