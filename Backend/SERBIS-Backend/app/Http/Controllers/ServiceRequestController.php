@@ -134,6 +134,22 @@ class ServiceRequestController extends Controller
     private const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response';
 
     /**
+     * The MDRRMO programs that are booked for a day and need a request letter.
+     * Matched on `tbl_services.code`, which never changes, not on the name an
+     * admin can edit. They differ from every other service in three ways: no
+     * valid ID (the requester is a barangay or an organization), a
+     * `preferred_date` that must be far enough out for the office to plan, and
+     * a `letter`.
+     */
+    private const SCHEDULED_PROGRAM_CODES = ['drrm-trainings-and-seminars', 'simulation-drills-nsed'];
+
+    /** Certification takes no date. A supporting attachment is optional. */
+    private const CERTIFICATION_SERVICE_CODE = 'mdrrmo-certification';
+
+    /** Days between filing and the earliest date a scheduled program can be asked for. */
+    private const PROGRAM_LEAD_DAYS = 14;
+
+    /**
      * The columns update() must route to AmbulanceBooking rather than write
      * onto this row. update() does not currently validate scheduled_at,
      * scheduled_end or approved_at as input — reschedule()/approve() are the
@@ -224,6 +240,14 @@ class ServiceRequestController extends Controller
             );
         }
 
+        // The three programs are shaped differently from every other service, so
+        // their code decides which upload and date rules apply. Read from the
+        // request before it is validated: whether valid_id is required depends
+        // on which service was asked for.
+        $programCode = $this->serviceCodeFor($request->input('service_id'));
+        $isScheduledProgram = in_array($programCode, self::SCHEDULED_PROGRAM_CODES, true);
+        $isProgram = $isScheduledProgram || $programCode === self::CERTIFICATION_SERVICE_CODE;
+
         $validated = $request->validate([
             // Nullable: the "Others" tile has no catalogue row to point at —
             // mirrors tbl_equipment_borrowing.equipment_id, which is nullable
@@ -238,7 +262,17 @@ class ServiceRequestController extends Controller
             // client sends under this key for an ambulance request is ignored
             // rather than trusted. Every other service still types it by hand.
             'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
-            'valid_id' => 'required|file|mimes:jpg,jpeg,png|max:2048',
+            // Not asked of the programs: the requester is a barangay or an
+            // organization, which has no government ID to photograph.
+            'valid_id' => [$isProgram ? 'nullable' : 'required', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
+            // The day a training or drill is wanted. Enforced here, not only by
+            // the date picker, so a hand-built request cannot skip the 14 days.
+            'preferred_date' => $isScheduledProgram
+                ? ['bail', 'required', 'date_format:Y-m-d', $this->atLeastDaysAhead(self::PROGRAM_LEAD_DAYS)]
+                : ['nullable', 'date_format:Y-m-d'],
+            // The request letter. Required for a training or drill, optional
+            // supporting document for a certification. A scan or a photo.
+            'letter' => [$isScheduledProgram ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
             // Optional second upload: a photo of the site, for the road-clearing
             // form. Not required, because most requests are filed in conditions
             // where stopping to photograph anything is the wrong advice.
@@ -374,6 +408,19 @@ class ServiceRequestController extends Controller
             );
         }
 
+        // Only kept for the three programs; on any other service a stray upload
+        // is ignored rather than stored against a request that never asked for it.
+        $letterPath = null;
+        if ($isProgram && $request->hasFile('letter')) {
+            $letter = $request->file('letter');
+
+            $letterPath = $letter->storeAs(
+                'letters/'.$request->user()->getKey(),
+                (string) Str::uuid().'.'.$letter->extension(),
+                self::privateDisk()
+            );
+        }
+
         // The upload has to happen before the transaction — it is a filesystem
         // write, so a rollback does not undo it. Every path out of here that does
         // not create a row must therefore delete the file by hand, or a failed
@@ -381,7 +428,7 @@ class ServiceRequestController extends Controller
         // nothing ever cleans up. The no-vehicle path below is not an edge case:
         // it fires whenever the fleet is busy, which is exactly when people file.
         try {
-            $serviceRequest = DB::transaction(function () use ($request, $validated, $serviceId, $filePath, $sitePhotoPath, $scheduledAt, $description, $isAmbulance) {
+            $serviceRequest = DB::transaction(function () use ($request, $validated, $serviceId, $filePath, $sitePhotoPath, $letterPath, $isScheduledProgram, $scheduledAt, $description, $isAmbulance) {
                 $vehicle = null;
                 $vehicleId = null;
 
@@ -435,6 +482,8 @@ class ServiceRequestController extends Controller
                     'description' => $description,
                     'valid_id' => $filePath,
                     'site_photo' => $sitePhotoPath,
+                    'letter' => $letterPath,
+                    'preferred_date' => $isScheduledProgram ? $validated['preferred_date'] : null,
                     'landmark' => $validated['landmark'] ?? null,
                     'fulfillment_method' => $fulfillmentMethod,
                     // Dropped rather than stored on Pickup, same reason
@@ -481,6 +530,7 @@ class ServiceRequestController extends Controller
         } catch (\Throwable $e) {
             $this->discardUpload($filePath);
             $this->discardUpload($sitePhotoPath);
+            $this->discardUpload($letterPath);
 
             throw $e;
         }
@@ -488,6 +538,7 @@ class ServiceRequestController extends Controller
         if ($serviceRequest === false) {
             $this->discardUpload($filePath);
             $this->discardUpload($sitePhotoPath);
+            $this->discardUpload($letterPath);
 
             return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
@@ -978,9 +1029,45 @@ class ServiceRequestController extends Controller
         return Storage::disk(self::privateDisk())->response($serviceRequest->{$column});
     }
 
+    /**
+     * The code of the service a request names, or null for none (the "Others"
+     * request has no row) or an unknown id.
+     */
+    private function serviceCodeFor(mixed $serviceId): ?string
+    {
+        if (! is_numeric($serviceId)) {
+            return null;
+        }
+
+        return Service::whereKey((int) $serviceId)->value('code');
+    }
+
+    /**
+     * A rule that a YYYY-MM-DD date is at least $days from today, counted on
+     * Manila's calendar: the office and the residents are both there, and the
+     * server clock is UTC, which is a day behind for eight hours of every day.
+     */
+    private function atLeastDaysAhead(int $days): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($days): void {
+            $earliest = now('Asia/Manila')->addDays($days)->toDateString();
+
+            if ((string) $value < $earliest) {
+                $fail("Choose a date at least {$days} days from today.");
+            }
+        };
+    }
+
     public function validId(Request $request, $id)
     {
         return $this->servePrivateColumn($request, $id, 'valid_id', 'Valid ID');
+    }
+
+    // The request letter. Same ownership rules as validId(): it names the
+    // requesting barangay or organization and the event it wants.
+    public function letter(Request $request, $id)
+    {
+        return $this->servePrivateColumn($request, $id, 'letter', 'Letter');
     }
 
     // Same ownership rules as validId(). A site photo is less sensitive than a

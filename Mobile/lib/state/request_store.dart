@@ -807,6 +807,10 @@ class AppState extends ChangeNotifier {
     /// `description` from it and `request.description` is not sent at all —
     /// the optimistic row still carries its own copy for the Track screen.
     AmbulanceIntake? intake,
+    // The MDRRMO programs (trainings, drills, certification).
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     // request.scheduledAt, if any, rides along on `request` itself — the
     // optimistic row already carries it, and it is read off there below
@@ -842,6 +846,9 @@ class AppState extends ChangeNotifier {
         deliveryAddress: deliveryAddress,
         scheduledAt: request.scheduledAt,
         intake: intake,
+        preferredDate: preferredDate,
+        letterBytes: letterBytes,
+        letterFileName: letterFileName,
       );
 
       final confirmed = _resolveService(ServiceRequest.fromJson(result));

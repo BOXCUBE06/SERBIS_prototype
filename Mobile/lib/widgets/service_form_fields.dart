@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import 'ambulance_schedule_field.dart';
 import 'form_inputs.dart';
 import 'form_section.dart';
+import 'program_date_field.dart';
 
 /// Renders whichever of the four guided forms the resident picked.
 ///
@@ -259,7 +260,16 @@ class ServiceFormFields extends StatelessWidget {
                           style: TextStyle(fontSize: 14),
                         ),
                       ),
-                    if (field.isChoice)
+                    if (field.isDate)
+                      ProgramDateField(
+                        field: field,
+                        value: form.date(field.key),
+                        onPicked: (picked) {
+                          form.setDate(field.key, picked);
+                          onChanged();
+                        },
+                      )
+                    else if (field.isChoice)
                       AppDropdown(
                         label: field.label,
                         items: field.options,

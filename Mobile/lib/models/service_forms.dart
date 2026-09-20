@@ -31,6 +31,16 @@ sealed class ServiceFormData {
   void dispose();
 }
 
+const _programMonths = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// "5 Oct 2026". English on purpose, like every other line of the description:
+/// it is read by an admin, not shown back to the resident.
+String formatProgramDate(DateTime date) =>
+    '${date.day} ${_programMonths[date.month - 1]} ${date.year}';
+
 String _text(TextEditingController controller) => controller.text.trim();
 
 String _or(TextEditingController controller, String fallback) {
@@ -356,7 +366,9 @@ class ServiceFormField {
     this.keyboard = TextInputType.text,
     this.metaPrefix,
     this.helpText,
-  }) : options = const [];
+  })  : options = const [],
+        isDate = false,
+        minDaysAhead = 0;
 
   /// A closed list, so it always has an answer — there is no fallback because
   /// there is no blank state to fall back from.
@@ -369,7 +381,25 @@ class ServiceFormField {
         lines = 1,
         keyboard = TextInputType.text,
         metaFallback = '',
-        helpText = null;
+        helpText = null,
+        isDate = false,
+        minDaysAhead = 0;
+
+  /// A day picked from a calendar, at least [minDaysAhead] days from today.
+  /// Held as a [DateTime], not typed, so it can be sent as a real field and
+  /// checked against the same lead time the server enforces.
+  const ServiceFormField.date({
+    required this.key,
+    required this.label,
+    required this.metaPrefix,
+    required this.metaFallback,
+    this.minDaysAhead = 0,
+  })  : hint = '',
+        lines = 1,
+        keyboard = TextInputType.text,
+        options = const [],
+        helpText = null,
+        isDate = true;
 
   /// Stable id, and the key the controller is stored under — so a renamed
   /// field breaks in one place rather than drifting apart between the widget
@@ -397,6 +427,12 @@ class ServiceFormField {
   /// gap in the block reads as a field that was never asked for.
   final String metaFallback;
 
+  /// True for a calendar day; see [ServiceFormField.date].
+  final bool isDate;
+
+  /// Only meaningful when [isDate].
+  final int minDaysAhead;
+
   bool get isChoice => options.isNotEmpty;
 }
 
@@ -411,9 +447,27 @@ class ServiceFormSection {
   final List<ServiceFormField> fields;
 }
 
+/// Which uploads a service asks for. Every response service asks for a photo
+/// of a valid ID and offers a site photo; the MDRRMO programs are requested by
+/// a barangay or an organization, which has no ID, and ask for a request
+/// letter instead.
+enum ServiceAttachments { standard, letterRequired, letterOptional }
+
+/// Days between filing and the earliest date a scheduled program can be asked
+/// for. Mirrors the server's own `PROGRAM_LEAD_DAYS`; duplicated rather than
+/// fetched because it is a fixed policy, and catching it here saves the round
+/// trip.
+const kProgramLeadDays = 14;
+
 /// What one service's form is made of.
 class ServiceFormSpec {
-  const ServiceFormSpec({required this.sections, required this.carriesContact});
+  const ServiceFormSpec({
+    required this.sections,
+    required this.carriesContact,
+    this.attachments = ServiceAttachments.standard,
+  });
+
+  final ServiceAttachments attachments;
 
   final List<ServiceFormSection> sections;
 
@@ -524,6 +578,50 @@ const _reliefSpec = ServiceFormSpec(
   ],
 );
 
+/// DRRM Trainings and Seminars (IEC). Everything except the date goes into the
+/// description like the other forms; the date is a real field so the server can
+/// enforce the lead time.
+const _trainingSpec = ServiceFormSpec(
+  carriesContact: true,
+  attachments: ServiceAttachments.letterRequired,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.event',
+      fields: [
+        ServiceFormField.date(
+          key: 'preferred_date',
+          label: 'Preferred date',
+          metaPrefix: 'Preferred date: ',
+          metaFallback: 'Not specified',
+          minDaysAhead: kProgramLeadDays,
+        ),
+        ServiceFormField.text(
+          key: 'location',
+          label: 'Location',
+          hint: 'Venue, purok, barangay',
+          metaPrefix: 'Location: ',
+          metaFallback: 'Location not specified',
+        ),
+        ServiceFormField.text(
+          key: 'participants',
+          label: 'Expected number of participants',
+          hint: 'e.g. 40',
+          keyboard: TextInputType.number,
+          metaPrefix: 'Participants: ',
+          metaFallback: 'Not specified',
+        ),
+        ServiceFormField.text(
+          key: 'topic',
+          label: 'Training topic',
+          hint: 'e.g. Basic life support, fire safety',
+          metaPrefix: 'Topic: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+  ],
+);
+
 const _genericSpec = ServiceFormSpec(
   carriesContact: true,
   sections: [
@@ -566,7 +664,9 @@ final class StructuredFormData extends ServiceFormData {
     Map<String, String> prefill = const {},
   }) : hasAddressField = spec.fields.any((field) => field.key == 'address') {
     for (final field in spec.fields) {
-      if (field.isChoice) {
+      if (field.isDate) {
+        _dates[field.key] = null;
+      } else if (field.isChoice) {
         _choices[field.key] = field.options.first;
       } else {
         _controllers[field.key] =
@@ -598,6 +698,9 @@ final class StructuredFormData extends ServiceFormData {
 
   static StructuredFormData generic({String contactNumber = ''}) =>
       StructuredFormData._(_genericSpec, contactNumber: contactNumber);
+
+  static StructuredFormData training({String contactNumber = ''}) =>
+      StructuredFormData._(_trainingSpec, contactNumber: contactNumber);
 
   final ServiceFormSpec spec;
   final String contactNumber;
@@ -645,6 +748,23 @@ final class StructuredFormData extends ServiceFormData {
 
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String> _choices = {};
+  final Map<String, DateTime?> _dates = {};
+
+  /// The day picked on a [ServiceFormField.date] field, or null before one is.
+  DateTime? date(String key) {
+    if (!_dates.containsKey(key)) {
+      throw ArgumentError.value(key, 'key', 'not a date field on this form');
+    }
+    return _dates[key];
+  }
+
+  void setDate(String key, DateTime? value) {
+    date(key);
+    _dates[key] = value == null ? null : DateTime(value.year, value.month, value.day);
+  }
+
+  /// What goes out as `preferred_date`. Null on every form without one.
+  DateTime? get preferredDate => _dates['preferred_date'];
 
   /// Throws rather than creating one on demand, which is the failure the old
   /// `_ctrl(key)` map had: a typo produced an empty controller that rendered
@@ -683,9 +803,15 @@ final class StructuredFormData extends ServiceFormData {
       ];
 
   String _lineFor(ServiceFormField field) {
-    final value = field.isChoice
-        ? _choices[field.key]!
-        : _or(_controllers[field.key]!, field.metaFallback);
+    final String value;
+    if (field.isDate) {
+      final picked = _dates[field.key];
+      value = picked == null ? field.metaFallback : formatProgramDate(picked);
+    } else if (field.isChoice) {
+      value = _choices[field.key]!;
+    } else {
+      value = _or(_controllers[field.key]!, field.metaFallback);
+    }
 
     return field.metaPrefix == null ? value : '${field.metaPrefix}$value';
   }

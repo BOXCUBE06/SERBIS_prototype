@@ -498,6 +498,10 @@
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
                 <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
               </v-col>
+              <v-col v-if="selectedRequest.preferred_date" cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Preferred date</div>
+                <div class="font-weight-medium text-body-2">{{ formatPreferredDate(selectedRequest.preferred_date) }}</div>
+              </v-col>
             </v-row>
 
             <!-- Section 4: Notes & Attachments. Lowest priority, reference
@@ -594,6 +598,17 @@
                     density="compact"
                     class="attachment-error"
                   >{{ a.state.error }}</v-alert>
+                  <a
+                    v-else-if="a.state.url && a.state.type === 'application/pdf'"
+                    :href="a.state.url"
+                    target="_blank"
+                    rel="noopener"
+                    class="attachment-tile attachment-tile--file rounded-lg"
+                    :aria-label="`Open the ${a.label.toLowerCase()} (PDF) in a new tab`"
+                  >
+                    <v-icon size="40" color="primary">mdi-file-pdf-box</v-icon>
+                    <span class="text-body-2 font-weight-bold mt-1">Open PDF</span>
+                  </a>
                   <button
                     v-else-if="a.state.url"
                     type="button"
@@ -1589,11 +1604,12 @@ const tripRecordAlertType = computed(() => {
 // factory rather than a second hand-written copy — the copy is where the rule
 // that every early return must release the previous blob gets forgotten.
 const createAttachment = (segment, failureMessage) => {
-  const state = reactive({ url: '', loading: false, error: '', for: null })
+  const state = reactive({ url: '', type: '', loading: false, error: '', for: null })
 
   const release = () => {
     if (state.url) URL.revokeObjectURL(state.url)
     state.url = ''
+    state.type = ''
   }
 
   const load = async (item, present) => {
@@ -1613,6 +1629,7 @@ const createAttachment = (segment, failureMessage) => {
       // The selection moved on while this was in flight; the blob belongs to a
       // request that is no longer on screen.
       if (state.for !== id) return
+      state.type = blob.type
       state.url = URL.createObjectURL(blob)
     } catch (error) {
       if (state.for === id) state.error = error.message
@@ -1626,10 +1643,20 @@ const createAttachment = (segment, failureMessage) => {
 
 const lightbox = ref({ open: false, key: null })
 
+// preferred_date is a bare YYYY-MM-DD, so it is read as a local date rather than
+// through Date's UTC parsing, which would show the day before in Manila.
+const formatPreferredDate = (value) => {
+  const [y, m, d] = String(value).split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
 // The route segment and the `site_photo` column keep their names -- this is a
 // label change, not an API one.
 const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
+// The request letter of a training or drill. A scan (image) or a PDF; a PDF
+// opens in a new tab instead of the lightbox.
+const letter = createAttachment('letter', 'Could not load the request letter.')
 
 // Booked is a status only an ambulance booking can ever reach — showing the
 // chip on the 'other' board would be a filter that always reads zero.
@@ -1848,6 +1875,13 @@ const attachments = computed(() => {
       alt: 'Landmark photo attached by the Head of the Family',
     },
     {
+      key: 'letter',
+      label: 'Request letter',
+      present: !!req.has_letter,
+      state: letter.state,
+      alt: 'Request letter attached by the requesting barangay or organization',
+    },
+    {
       key: 'valid-id',
       label: 'Valid ID',
       present: !!req.has_valid_id,
@@ -2054,11 +2088,13 @@ const getHeaders = () => ({
 const loadAttachments = (item) => {
   validId.load(item, !!item?.has_valid_id)
   sitePhoto.load(item, !!item?.has_site_photo)
+  letter.load(item, !!item?.has_letter)
 }
 
 const releaseAttachments = () => {
   validId.release()
   sitePhoto.release()
+  letter.release()
 }
 
 // Aborted on unmount (below) so a component torn down mid-request — a quick
@@ -2781,6 +2817,17 @@ defineExpose({ selectRequestById })
   max-width: 320px;
 }
 
+.attachment-tile--file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 140px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  text-decoration: none;
+  color: inherit;
+}
 .attachments-row {
   width: fit-content;
   max-width: 100%;

@@ -40,6 +40,9 @@ class _RecordingApi extends ApiService {
     String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     this.validIdFileBytes = validIdFileBytes;
     this.sitePhotoBytes = sitePhotoBytes;

@@ -15,9 +15,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Table('tbl_service_request', key: 'request_id')]
-#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'landmark', 'fulfillment_method', 'delivery_address', 'status', 'remarks', 'internal_notes', 'vehicle_id'])]
-#[Hidden(['valid_id', 'site_photo'])]
-#[Appends(['has_valid_id', 'has_site_photo'])]
+#[Fillable(['resident_id', 'walk_in_name', 'walk_in_contact_number', 'service_id', 'processed_by', 'description', 'valid_id', 'site_photo', 'letter', 'preferred_date', 'landmark', 'fulfillment_method', 'delivery_address', 'status', 'remarks', 'internal_notes', 'vehicle_id'])]
+#[Hidden(['valid_id', 'site_photo', 'letter'])]
+#[Appends(['has_valid_id', 'has_site_photo', 'has_letter'])]
 class ServiceRequest extends Model
 {
     use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
@@ -48,6 +48,7 @@ class ServiceRequest extends Model
      * still needs them cast to Carbon when it does.
      */
     protected $casts = [
+        'preferred_date' => 'date:Y-m-d',
         'scheduled_at' => 'datetime',
         'scheduled_end' => 'datetime',
         'approved_at' => 'datetime',
@@ -171,6 +172,16 @@ class ServiceRequest extends Model
     public function getHasSitePhotoAttribute(): bool
     {
         return ! empty($this->site_photo);
+    }
+
+    /**
+     * Whether a request letter was uploaded (trainings, drills, certification).
+     * Same contract as has_valid_id: the path never leaves the server, it is
+     * served by GET /api/service-requests/{id}/letter.
+     */
+    public function getHasLetterAttribute(): bool
+    {
+        return ! empty($this->letter);
     }
 
     public function resident(): BelongsTo

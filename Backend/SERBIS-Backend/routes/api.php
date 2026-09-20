@@ -77,6 +77,7 @@ Route::middleware('throttle:api')->group(function () {
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
         Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
         Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto']);
+        Route::get('service-requests/{id}/letter', [ServiceRequestController::class, 'letter']);
         // What the MDRRMO has texted to this resident's barangay. Scoped to blasts
         // they were actually a recipient of, not to their barangay membership.
         Route::get('advisories', [SmsController::class, 'advisories']);

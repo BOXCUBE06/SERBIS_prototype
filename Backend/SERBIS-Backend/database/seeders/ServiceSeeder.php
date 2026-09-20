@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 class ServiceSeeder extends Seeder
 {
     /**
-     * The seven services the MDRRMO offers. Runs on production; this is their
-     * data, not test data.
+     * The services the MDRRMO offers: the seven response services, then the
+     * programs it runs. Runs on production; this is their data, not test data.
      *
      * Flood Evacuation, Fire Rescue and Search and Rescue were removed
      * deliberately. Each is a life-threatening event that belongs on a phone
@@ -52,6 +52,7 @@ class ServiceSeeder extends Seeder
             ['service_name' => 'Debris Removal', 'description' => 'Removal of hazardous debris from public areas.'],
             ['service_name' => 'Animal Rescue', 'description' => 'Rescue operations for stranded or injured animals.'],
             ['service_name' => 'Sandbagging', 'description' => 'Provision and placement of sandbags for flood prevention.'],
+            ['service_name' => 'DRRM Trainings and Seminars', 'description' => 'Disaster risk reduction and management trainings and seminars (IEC) for barangays and organizations.'],
         ];
 
         foreach ($services as $service) {

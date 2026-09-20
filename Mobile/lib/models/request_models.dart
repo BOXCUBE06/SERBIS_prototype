@@ -318,7 +318,7 @@ class ServiceCatalogItem {
 /// the service codes below; anything else — a service the MDRRMO adds in the
 /// panel, or a payload from an API too old to send a code — gets the generic
 /// description form, so the app files it correctly without a code change.
-enum ServiceFormKind { ambulance, road, relief, generic }
+enum ServiceFormKind { ambulance, road, relief, generic, training }
 
 /// Exact match on `tbl_services.code`. Deliberately not substring matching, and
 /// deliberately with no fall-through to the display name: the name is
@@ -334,6 +334,8 @@ ServiceFormKind formKindForServiceCode(String code) {
     case 'relief-goods-distribution':
     case 'sandbagging':
       return ServiceFormKind.relief;
+    case 'drrm-trainings-and-seminars':
+      return ServiceFormKind.training;
     // power-line-repair and animal-rescue have no guided form of their own and
     // take the generic one, which is what the keyword matching resolved them
     // to as well.
@@ -366,6 +368,8 @@ IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
       return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
     case 'sandbagging':
       return (icon: Icons.shield_rounded, bg: AppColors.green50, fg: AppColors.green700);
+    case 'drrm-trainings-and-seminars':
+      return (icon: Icons.school_rounded, bg: AppColors.green50, fg: AppColors.green700);
     case 'others':
       return (icon: Icons.more_horiz_rounded, bg: AppColors.grey50, fg: AppColors.inkMuted);
     default:
@@ -385,6 +389,7 @@ ServiceType serviceTypeForServiceCode(String code) {
     case ServiceFormKind.relief:
       return ServiceType.relief;
     case ServiceFormKind.generic:
+    case ServiceFormKind.training:
       return ServiceType.inquiry;
   }
 }

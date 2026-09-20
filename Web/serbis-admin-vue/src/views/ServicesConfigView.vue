@@ -276,6 +276,9 @@ const categories = {
   medical: { key: 'medical', label: 'Medical', color: 'info', icon: 'mdi-medical-bag' },
   relief: { key: 'relief', label: 'Relief', color: 'primary', icon: 'mdi-hand-heart-outline' },
   infrastructure: { key: 'infrastructure', label: 'Infrastructure', color: 'warning', icon: 'mdi-road-variant' },
+  // Trainings, drills and certification: things the office runs or issues,
+  // not a response to an event.
+  programs: { key: 'programs', label: 'Programs', color: 'success', icon: 'mdi-school-outline' },
 }
 
 const headers = [
@@ -318,6 +321,7 @@ const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type
 
 const categoryOf = (item) => {
   const n = (item.service_name || '').toLowerCase()
+  if (/(training|seminar|drill|nsed|certif)/.test(n)) return categories.programs
   if (/(medical|ambulance|health|first aid)/.test(n)) return categories.medical
   if (/(rescue|evacuat|search|fire|sandbag)/.test(n)) return categories.rescue
   if (/(road|power|line|debris|clearing|repair|water|infrastructure)/.test(n)) return categories.infrastructure
@@ -325,10 +329,13 @@ const categoryOf = (item) => {
 }
 const category = categoryOf
 
-const categoryOptions = ['All', 'Rescue', 'Medical', 'Relief', 'Infrastructure']
+const categoryOptions = ['All', 'Rescue', 'Medical', 'Relief', 'Infrastructure', 'Programs']
 
 const serviceIcon = (name) => {
   const n = (name || '').toLowerCase()
+  if (n.includes('training') || n.includes('seminar')) return 'mdi-school-outline'
+  if (n.includes('drill') || n.includes('nsed')) return 'mdi-alarm-light-outline'
+  if (n.includes('certif')) return 'mdi-certificate-outline'
   if (n.includes('flood')) return 'mdi-home-flood'
   if (n.includes('fire')) return 'mdi-fire-truck'
   if (n.includes('ambulance') || n.includes('medical')) return 'mdi-ambulance'
@@ -524,6 +531,7 @@ onMounted(fetchServices)
 .iconbg-medical { background: rgba(var(--v-theme-info), 0.14); }
 .iconbg-relief { background: rgba(var(--v-theme-primary), 0.12); }
 .iconbg-infrastructure { background: rgba(var(--v-theme-warning), 0.16); }
+.iconbg-programs { background: rgba(var(--v-theme-success), 0.14); }
 
 .category-pill {
   display: inline-flex;
@@ -543,6 +551,7 @@ onMounted(fetchServices)
 .pill-medical { background: rgba(var(--v-theme-info), 0.14); color: rgb(var(--v-theme-info-strong)); }
 .pill-relief { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
 .pill-infrastructure { background: rgba(var(--v-theme-warning), 0.18); color: rgb(var(--v-theme-warning-strong)); }
+.pill-programs { background: rgba(var(--v-theme-success), 0.14); color: rgb(var(--v-theme-success-strong)); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

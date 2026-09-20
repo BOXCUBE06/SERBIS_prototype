@@ -756,6 +756,10 @@ class ApiService {
     String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    // The MDRRMO programs: a day, and a request letter instead of an ID.
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) {
     final uri = Uri.parse('$baseUrl/service-requests');
     final request = http.MultipartRequest('POST', uri);
@@ -815,13 +819,33 @@ class ApiService {
       request.fields['scheduled_at'] = scheduledAt.toUtc().toIso8601String();
     }
 
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'valid_id',
-        validIdFileBytes,
-        filename: validIdFileName,
-      ),
-    );
+    // The programs are requested by a barangay or an organization, which has
+    // no ID to photograph: empty bytes mean "none", and the part is left out
+    // (the server does not ask for it on those services).
+    if (validIdFileBytes.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'valid_id',
+          validIdFileBytes,
+          filename: validIdFileName,
+        ),
+      );
+    }
+
+    if (preferredDate != null) {
+      final month = preferredDate.month.toString().padLeft(2, '0');
+      final day = preferredDate.day.toString().padLeft(2, '0');
+      request.fields['preferred_date'] = '${preferredDate.year}-$month-$day';
+    }
+
+    if (letterBytes != null &&
+        letterBytes.isNotEmpty &&
+        letterFileName != null &&
+        letterFileName.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes('letter', letterBytes, filename: letterFileName),
+      );
+    }
 
     // Optional, and the part must be absent rather than empty when there is no
     // photo: `site_photo` is `nullable|file` server-side, so a zero-byte part
@@ -855,6 +879,9 @@ class ApiService {
     String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     final request = buildSubmitRequest(
       serviceId: serviceId,
@@ -869,6 +896,9 @@ class ApiService {
       deliveryAddress: deliveryAddress,
       scheduledAt: scheduledAt,
       intake: intake,
+      preferredDate: preferredDate,
+      letterBytes: letterBytes,
+      letterFileName: letterFileName,
     );
 
     http.Response response;

@@ -69,6 +69,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// carry a photo is one the resident would have to discover by its absence.
   fp.PlatformFile? _sitePhotoFile;
 
+  /// The request letter of a training or drill (jpg, png or pdf), the upload
+  /// that stands in for the valid ID on those services.
+  fp.PlatformFile? _letterFile;
+
   /// Optional free-text companion to the site photo — faster to type than to
   /// stop and photograph.
   final _landmarkController = TextEditingController();
@@ -150,9 +154,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
       case ServiceFormKind.relief:
         return ServiceType.relief;
       case ServiceFormKind.generic:
+      case ServiceFormKind.training:
         return ServiceType.inquiry;
     }
   }
+
+  /// Which uploads a kind of service asks for. The response services take a
+  /// photo of a valid ID; the programs take a request letter instead.
+  ServiceAttachments _attachmentsFor(ServiceFormKind kind) => switch (kind) {
+        ServiceFormKind.training => ServiceAttachments.letterRequired,
+        _ => ServiceAttachments.standard,
+      };
 
   /// `putIfAbsent`, so the prefill happens once per kind. A resident who
   /// overwrites the name and switches services must not find their own name
@@ -172,6 +184,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
               ),
             ServiceFormKind.generic =>
               StructuredFormData.generic(contactNumber: widget.user.phone),
+            ServiceFormKind.training =>
+              StructuredFormData.training(contactNumber: widget.user.phone),
           });
 
   @override
@@ -226,6 +240,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
   }
 
+  Future<void> _pickLetter() async {
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    setState(() => _letterFile = result.files.first);
+  }
+
   Future<fp.PlatformFile?> _pickImage() async {
     final result = await fp.FilePicker.platform.pickFiles(
       type: fp.FileType.custom,
@@ -246,7 +272,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return;
     }
 
-    if (_validIdFile == null || _validIdFile!.bytes == null) {
+    final attachments = _selected == null
+        ? ServiceAttachments.standard
+        : _attachmentsFor(_selected!.formKind);
+
+    if (attachments == ServiceAttachments.standard &&
+        (_validIdFile == null || _validIdFile!.bytes == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
       );
@@ -288,6 +319,34 @@ class _ServicesScreenState extends State<ServicesScreen> {
       }
     }
 
+    // The programs are booked for a day and need the office's lead time, so the
+    // date and the letter are checked here; the server checks them again.
+    if (form is StructuredFormData) {
+      final dateField = form.spec.fields.where((field) => field.isDate).firstOrNull;
+      if (dateField != null) {
+        final picked = form.date(dateField.key);
+        final today = DateTime.now();
+        final earliest = DateTime(today.year, today.month, today.day)
+            .add(Duration(days: dateField.minDaysAhead));
+        if (picked == null || picked.isBefore(earliest)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(picked == null
+                ? 'Please choose a preferred date.'
+                : 'Choose a date at least ${dateField.minDaysAhead} days from today.')),
+          );
+          return;
+        }
+      }
+
+      if (form.spec.attachments == ServiceAttachments.letterRequired &&
+          (_letterFile == null || _letterFile!.bytes == null)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please attach your request letter before submitting.')),
+        );
+        return;
+      }
+    }
+
     final metaLines = form.metaLines(
       serviceName: service.name,
       submittedLabel: _nowLabel(),
@@ -320,8 +379,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       confirmed = await widget.appState.addRequest(
         request,
-        validIdFileBytes: _validIdFile!.bytes!,
-        validIdFileName: _validIdFile!.name,
+        // Empty for the programs, which ask for a letter instead of an ID.
+        validIdFileBytes: _validIdFile?.bytes ?? const <int>[],
+        validIdFileName: _validIdFile?.name ?? '',
+        preferredDate: form is StructuredFormData ? form.preferredDate : null,
+        letterBytes: _letterFile?.bytes,
+        letterFileName: _letterFile?.bytes == null ? null : _letterFile?.name,
         // `bytes` is null when the picker returns a path-only file, which is
         // what happens if `withData` ever stops holding. Sending the name
         // without the bytes would be a 422 on an upload the resident is not
@@ -375,6 +438,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     setState(() {
       _submitFailed = false;
       _sitePhotoFile = null;
+      _letterFile = null;
       _landmarkController.clear();
     });
 
@@ -452,6 +516,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 FormSection(
                   label: tr(f, 'form_section.attachments'),
                   children: [
+                    if (_attachmentsFor(selection.formKind) != ServiceAttachments.standard)
+                      AttachmentUploadField(
+                        label: _attachmentsFor(selection.formKind) == ServiceAttachments.letterRequired
+                            ? 'Request letter (required)'
+                            : 'Supporting document (optional)',
+                        hint: 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)',
+                        fileName: _letterFile?.name,
+                        onTap: _pickLetter,
+                        onClear: _attachmentsFor(selection.formKind) == ServiceAttachments.letterOptional
+                            ? () => setState(() => _letterFile = null)
+                            : null,
+                      )
+                    else ...[
                     AttachmentUploadField(
                       label: 'Valid ID (required)',
                       hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
@@ -465,6 +542,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       onTap: _pickSitePhoto,
                       onClear: () => setState(() => _sitePhotoFile = null),
                     ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 12),
