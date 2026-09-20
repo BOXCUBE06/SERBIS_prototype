@@ -274,6 +274,7 @@
               @close="closeDetail"
               @edit="openExistingEditModal"
               @toggle-status="askToggleStatus"
+              @reject="askReject"
               @delete="askDelete"
               @clear-filters="clearFilters"
             />
@@ -485,11 +486,18 @@
     <!-- Deactivate confirm -->
     <v-dialog v-model="statusDialog.show" max-width="460">
       <v-card rounded="xl" class="pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Deactivate this account?</v-card-title>
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">
+          {{ statusDialog.reject ? 'Reject this organization?' : 'Deactivate this account?' }}
+        </v-card-title>
         <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
-          <strong class="text-high-emphasis">{{ statusDialog.item ? fullName(statusDialog.item) : '' }}</strong>
-          will lose access to sign in and file requests, and will stop receiving MDRRMO text blasts.
-          It can be reactivated later.
+          <strong class="text-high-emphasis">{{ statusDialog.item ? (statusDialog.item.organization_name || fullName(statusDialog.item)) : '' }}</strong>
+          <template v-if="statusDialog.reject">
+            will not be able to sign in or request services. You can approve it later from this page.
+          </template>
+          <template v-else>
+            will lose access to sign in and file requests, and will stop receiving MDRRMO text blasts.
+            It can be reactivated later.
+          </template>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
           <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
@@ -499,7 +507,7 @@
             color="warning" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
             :loading="statusDialog.loading" @click="confirmDeactivate"
           >
-            Deactivate account
+            {{ statusDialog.reject ? 'Reject organization' : 'Deactivate account' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -605,7 +613,9 @@ const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
-const statusDialog = ref({ show: false, item: null, loading: false })
+// `reject` is set when the dialog is refusing a pending organization rather than
+// deactivating an active account; both end in Deactivated.
+const statusDialog = ref({ show: false, item: null, loading: false, reject: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 const statusToggleLoading = ref(false)
 
@@ -967,19 +977,25 @@ const askToggleStatus = (item) => {
   toggleStatus(item)
 }
 
-const confirmDeactivate = async () => {
-  const item = statusDialog.value.item
-  statusDialog.value.loading = true
-  await toggleStatus(item)
-  statusDialog.value = { show: false, item: null, loading: false }
+const askReject = (item) => {
+  statusDialog.value = { show: true, item, loading: false, reject: true }
 }
 
-const toggleStatus = async (item) => {
+const confirmDeactivate = async () => {
+  const { item, reject } = statusDialog.value
+  statusDialog.value.loading = true
+  await toggleStatus(item, reject ? RESIDENT_STATUS.deactivated : null)
+  statusDialog.value = { show: false, item: null, loading: false, reject: false }
+}
+
+const toggleStatus = async (item, forcedNext = null) => {
   // Pending and Deactivated both toggle to Active — activating a new signup and
-  // re-enabling a suspended account are the same write.
-  const next = item.status === RESIDENT_STATUS.active
+  // re-enabling a suspended account are the same write. `forcedNext` is for
+  // rejecting a pending organization, which goes straight to Deactivated.
+  const next = forcedNext ?? (item.status === RESIDENT_STATUS.active
     ? RESIDENT_STATUS.deactivated
-    : RESIDENT_STATUS.active
+    : RESIDENT_STATUS.active)
+  const isOrganization = item.account_type === ACCOUNT_TYPE.organization
   statusToggleLoading.value = true
   try {
     const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
@@ -1001,7 +1017,11 @@ const toggleStatus = async (item) => {
     })
     if (!res.ok) throw new Error(await errorFrom(res))
     await fetchResidents()
-    notify(next === RESIDENT_STATUS.active ? 'Account activated' : 'Account deactivated')
+    if (next === RESIDENT_STATUS.active) {
+      notify(isOrganization ? 'Organization approved' : 'Account activated')
+    } else {
+      notify(forcedNext ? 'Organization rejected' : 'Account deactivated')
+    }
   } catch (error) {
     notify(error.message, 'error')
   } finally {
