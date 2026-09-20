@@ -231,8 +231,8 @@ class AmbulanceRequestContractTest extends TestCase
         Sanctum::actingAs($this->admin);
 
         $row = $this->patchJson("/api/service-requests/{$this->ambulanceRequest->getKey()}/reschedule", [
-            'scheduled_at' => '2026-09-20 08:00:00',
-            'scheduled_end' => '2026-09-20 10:00:00',
+            'scheduled_at' => now()->addDays(2)->setTime(8, 0)->toDateTimeString(),
+            'scheduled_end' => now()->addDays(2)->setTime(10, 0)->toDateTimeString(),
             'remarks' => 'Moved per resident request',
         ])->assertOk()->json();
 

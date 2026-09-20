@@ -35,6 +35,7 @@ class BarangayController extends Controller
 
         $puroks = DB::table('tbl_residents')
             ->where('barangay_id', $id)
+            ->where('account_type', 'head_of_family')
             ->whereNotNull('street_address')
             ->where('street_address', '!=', '')
             ->distinct()

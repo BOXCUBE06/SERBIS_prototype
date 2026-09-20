@@ -49,8 +49,6 @@ class _FakeApi extends ApiService {
     required String purpose,
     String fulfillmentMethod = 'Pickup',
     String? deliveryAddress,
-    String borrowerType = 'Resident',
-    String? organizationName,
   }) async {
     submitCalls++;
     lastPurpose = purpose;

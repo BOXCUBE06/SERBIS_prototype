@@ -678,6 +678,7 @@ class AnalyticsReport
         $placedByName = collect($counts['barangays'])->keyBy('name');
 
         $residentCounts = DB::table('tbl_residents')
+            ->where('account_type', 'head_of_family')
             ->whereNotNull('barangay_id')
             ->groupBy('barangay_id')
             ->selectRaw('barangay_id, COUNT(*) as total')

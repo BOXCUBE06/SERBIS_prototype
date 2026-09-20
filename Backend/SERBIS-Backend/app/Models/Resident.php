@@ -62,6 +62,25 @@ class Resident extends Authenticatable
     ];
 
     /**
+     * `account_type` is absent from #[Fillable] on purpose: it decides which
+     * services an account may request and whether it is texted, so a
+     * mass-assigned array must never be able to set it. Only the admin CRUD in
+     * ResidentController assigns it, one attribute at a time; sign-up gets the
+     * column default.
+     */
+    public const TYPE_HEAD_OF_FAMILY = 'head_of_family';
+
+    public const TYPE_BARANGAY = 'barangay';
+
+    public const TYPE_ORGANIZATION = 'organization';
+
+    public const ACCOUNT_TYPES = [
+        self::TYPE_HEAD_OF_FAMILY,
+        self::TYPE_BARANGAY,
+        self::TYPE_ORGANIZATION,
+    ];
+
+    /**
      * How long an issued code stays usable, and how long a resident must wait
      * before asking for another. Both are read by AuthController, which owns
      * the codes themselves — they live here because the mail template and the
@@ -70,6 +89,15 @@ class Resident extends Authenticatable
     public const CODE_TTL_MINUTES = 15;
 
     public const RESEND_COOLDOWN_SECONDS = 60;
+
+    protected $attributes = [
+        'account_type' => self::TYPE_HEAD_OF_FAMILY,
+    ];
+
+    public function isHeadOfFamily(): bool
+    {
+        return $this->account_type === self::TYPE_HEAD_OF_FAMILY;
+    }
 
     /**
      * Mirrors User::isDeactivated() in shape and deliberately not in value.

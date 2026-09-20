@@ -9,11 +9,11 @@
             <template v-slot:subtitle>
               <template v-if="filteredAndSortedResidents.length === residents.length">
                 <strong class="text-high-emphasis">{{ residents.length }}</strong>
-                {{ residents.length === 1 ? 'resident' : 'residents' }}
+                {{ residents.length === 1 ? 'account' : 'accounts' }}
               </template>
               <template v-else>
                 <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
-                of {{ residents.length }} residents
+                of {{ residents.length }} accounts
               </template>
             </template>
 
@@ -26,7 +26,7 @@
                 class="px-5 text-none font-weight-bold text-white transition-btn"
                 @click="openAddModal"
               >
-                <v-icon start>mdi-plus</v-icon> Add Head of the Family
+                <v-icon start>mdi-plus</v-icon> Add account
               </v-btn>
             </template>
       </PageHeader>
@@ -59,6 +59,17 @@
               hide-details
               rounded="lg"
               class="status-field"
+            ></v-select>
+
+            <v-select
+              v-model="filters.type"
+              :items="ACCOUNT_TYPE_FILTER_ITEMS"
+              label="Account type"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              rounded="lg"
+              class="type-field"
             ></v-select>
           </div>
 
@@ -180,6 +191,12 @@
               </v-tooltip>
             </template>
 
+            <template v-slot:item.account_type="{ item }">
+              <span class="type-pill" :class="accountTypePillClass(item.account_type)">
+                {{ item.account_type === ACCOUNT_TYPE.organization && item.organization_name ? item.organization_name : accountTypeLabel(item.account_type) }}
+              </span>
+            </template>
+
             <template v-slot:item.barangay_name="{ item }">
               <span class="font-weight-medium text-body-1 text-high-emphasis cell-truncate">
                 {{ barangayOf(item) }}
@@ -272,7 +289,7 @@
       <v-card rounded="lg" elevation="10">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <span class="text-h6 font-weight-bold text-high-emphasis">
-            {{ modal.isEditing ? 'Edit Head of the Family' : 'New Head of the Family' }}
+            {{ modal.isEditing ? 'Edit account' : 'New account' }}
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
@@ -301,14 +318,39 @@
                 </div>
               </v-col>
 
+              <v-col cols="12" :md="isOrganization ? 5 : 12">
+                <v-select
+                  v-model="formData.account_type"
+                  :items="ACCOUNT_TYPE_ITEMS"
+                  label="Account type *"
+                  :error-messages="fieldErrors.account_type"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-select>
+              </v-col>
+
+              <v-col v-if="isOrganization" cols="12" md="7">
+                <v-text-field
+                  v-model="formData.organization_name"
+                  label="Organization name *"
+                  placeholder="Isabela State University"
+                  :rules="[requiredRule('Organization name')]"
+                  :error-messages="fieldErrors.organization_name"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-text-field>
+              </v-col>
+
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.first_name" label="First Name *" placeholder="Juan" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
+                <v-text-field v-model="formData.first_name" :label="isHead ? 'First Name *' : 'Contact first name *'" placeholder="Juan" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
                 <v-text-field v-model="formData.middle_name" label="Middle Name" placeholder="Santos" :error-messages="fieldErrors.middle_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.last_name" label="Last Name *" placeholder="Dela Cruz" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
+                <v-text-field v-model="formData.last_name" :label="isHead ? 'Last Name *' : 'Contact last name *'" placeholder="Dela Cruz" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6">
@@ -490,6 +532,13 @@ import {
   residentPhotoUrl,
 } from '@/composables/residentPhoto'
 import {
+  ACCOUNT_TYPE,
+  ACCOUNT_TYPE_FILTER_ITEMS,
+  ACCOUNT_TYPE_ITEMS,
+  accountTypeLabel,
+  accountTypePillClass,
+} from '@/composables/accountType'
+import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_FILTER_ITEMS,
   residentSmsDotClass,
@@ -526,6 +575,7 @@ const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
   { title: 'Full Name', key: 'fullName', width: '17%' },
+  { title: 'Type', key: 'account_type', width: '160px' },
   // The longest real barangay name in the data is "San Antonio Ugad", which
   // was still clipping when this column was 15% of a narrower table.
   { title: 'Barangay', key: 'barangay_name', width: '14%' },
@@ -552,7 +602,7 @@ const showPassword = ref(false)
 const form = ref(null)
 
 const selectedResident = ref(null)
-const filters = ref({ status: 'All', barangay: 'All' })
+const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
 const statusDialog = ref({ show: false, item: null, loading: false })
@@ -562,8 +612,11 @@ const statusToggleLoading = ref(false)
 const formData = ref({
   first_name: '', middle_name: '', last_name: '', phone_number: '',
   email_address: '', password: '', barangay_id: null, street_address: '',
-  status: RESIDENT_STATUS.active,
+  status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
 })
+
+const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
+const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
 
 // The rail is open exactly when a resident is selected. There is no second
 // piece of state that can disagree with the first.
@@ -640,6 +693,7 @@ const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type
 const filteredAndSortedResidents = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
+  if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
   if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
   // Trimmed: a leading space is trivially common when pasting from a list, and
   // it used to return zero rows with no explanation.
@@ -666,7 +720,7 @@ const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
 
 const clearFilters = () => {
   search.value = ''
-  filters.value = { status: 'All', barangay: 'All' }
+  filters.value = { status: 'All', barangay: 'All', type: 'All' }
 }
 
 // True when the open profile is not in the list behind it — filter to one
@@ -778,7 +832,7 @@ const openAddModal = () => {
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
     email_address: '', password: '', barangay_id: null, street_address: '',
-    status: RESIDENT_STATUS.active,
+    status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
 }
@@ -797,6 +851,8 @@ const openExistingEditModal = (item) => {
     barangay_id: item.barangay_id,
     street_address: item.street_address ?? '',
     status: item.status,
+    account_type: item.account_type || ACCOUNT_TYPE.head,
+    organization_name: item.organization_name ?? '',
   }
   modal.value = { isOpen: true, isEditing: true, targetId: idOf(item) }
 }
@@ -1163,6 +1219,24 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-on-surface), 0.25);
   border-radius: 4px;
 }
+
+/* Account-type pill. Barangay and organization accounts are the exceptions
+   worth spotting in a list of households, so they get the tint; a head of the
+   family stays plain text. */
+.type-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.type-pill--institution { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
+.type-pill--plain { color: rgba(var(--v-theme-on-surface), 0.82); padding-left: 0; }
+.type-field { width: 170px; max-width: 100%; }
 
 /* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
 .status-pill {

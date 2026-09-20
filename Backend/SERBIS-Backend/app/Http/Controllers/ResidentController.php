@@ -10,7 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class ResidentController extends Controller
 {
@@ -48,14 +50,17 @@ class ResidentController extends Controller
             // status dropped the resident out of every blast with nothing
             // logged and nothing visibly wrong in the admin list.
             'status' => 'required|in:Active,Inactive,Deactivated',
+            ...$this->accountTypeRules(),
         ]);
+
+        $this->assertOneBarangayAccount($validated);
 
         // Columns assigned one at a time, never a splat of $validated. A splat
         // makes every future addition to the rules — or to $fillable — silently
         // client-settable, which is how the dead 'role' rule reached
         // /api/register. 'status' is deliberately here: this is the admin CRUD,
         // and activating a resident is the admin's job.
-        $resident = Resident::create([
+        $resident = new Resident([
             'barangay_id' => $validated['barangay_id'],
             'street_address' => $validated['street_address'] ?? null,
             'first_name' => $validated['first_name'],
@@ -69,8 +74,61 @@ class ResidentController extends Controller
             // has no file to attach and no business naming one.
             'status' => $validated['status'],
         ]);
+        $this->applyAccountType($resident, $validated);
+        $resident->save();
 
         return response()->json($resident, 201);
+    }
+
+    /**
+     * Shared by store() and update(). Only an admin can choose the type; the
+     * column default (head_of_family) is what every self-registered account
+     * gets, because /register never reads this key.
+     */
+    private function accountTypeRules(): array
+    {
+        return [
+            'account_type' => ['sometimes', 'required', Rule::in(Resident::ACCOUNT_TYPES)],
+            'organization_name' => 'required_if:account_type,organization|nullable|string|max:150',
+        ];
+    }
+
+    /**
+     * One shared account per barangay. MySQL has no partial unique index, so
+     * this is checked here rather than in the schema.
+     */
+    private function assertOneBarangayAccount(array $validated, ?int $ignoreId = null): void
+    {
+        if (($validated['account_type'] ?? null) !== Resident::TYPE_BARANGAY) {
+            return;
+        }
+
+        $taken = Resident::where('account_type', Resident::TYPE_BARANGAY)
+            ->where('barangay_id', $validated['barangay_id'])
+            ->when($ignoreId, fn ($q) => $q->where('resident_id', '!=', $ignoreId))
+            ->exists();
+
+        if ($taken) {
+            throw ValidationException::withMessages([
+                'account_type' => 'This barangay already has its account.',
+            ]);
+        }
+    }
+
+    /**
+     * Assigned attribute by attribute: account_type is not fillable. An update
+     * that omits it leaves the stored type alone.
+     */
+    private function applyAccountType(Resident $resident, array $validated): void
+    {
+        if (isset($validated['account_type'])) {
+            $resident->account_type = $validated['account_type'];
+        }
+
+        // Only an organization has a name to keep; switching type clears it.
+        $resident->organization_name = $resident->account_type === Resident::TYPE_ORGANIZATION
+            ? ($validated['organization_name'] ?? $resident->organization_name)
+            : null;
     }
 
     public function show($id)
@@ -106,7 +164,11 @@ class ResidentController extends Controller
             // Web/serbis-admin-vue/src/composables/residentStatus.ts.
             'status' => 'required|in:Active,Inactive,Deactivated',
             'password' => ['nullable', 'string', Password::min(8)->mixedCase()->numbers()], // Must be nullable on update
+            ...$this->accountTypeRules(),
         ]);
+
+        $this->assertOneBarangayAccount($validated, $resident->getKey());
+        $this->applyAccountType($resident, $validated);
 
         // Explicit, for the same reason as store(). This method never accepted
         // the OTP columns, but it splatted whatever the rules happened to

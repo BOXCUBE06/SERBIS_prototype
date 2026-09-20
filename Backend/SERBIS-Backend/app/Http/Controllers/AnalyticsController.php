@@ -84,7 +84,9 @@ class AnalyticsController extends Controller
         // load instead of up to five minutes later.
         return response()->json(Cache::remember(AnalyticsCache::DASHBOARD_KEY, AnalyticsCache::TTL_SECONDS, function () {
             // 1. Calculate KPI Stats
-            $totalResidents = Resident::count();
+            // Heads of the family only: a barangay or organization account is an
+            // institution, not a household, and would inflate the headline count.
+            $totalResidents = Resident::where('account_type', Resident::TYPE_HEAD_OF_FAMILY)->count();
             $pendingService = ServiceRequest::where('status', 'Pending')->count();
             $pendingBorrow = EquipmentBorrowing::where('status', 'Pending')->count();
             $availableVehicles = Vehicle::where('status', 'Available')->count();

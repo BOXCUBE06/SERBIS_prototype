@@ -73,6 +73,13 @@
       <h4 class="text-subtitle-2 font-weight-bold text-medium-emphasis text-uppercase mb-4 mt-6">Registration</h4>
 
       <div class="mb-4">
+        <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Account type</div>
+        <div class="text-body-1 font-weight-medium text-high-emphasis">
+          {{ accountTypeLabel(resident.account_type) }}<template v-if="resident.organization_name"> · {{ resident.organization_name }}</template>
+        </div>
+      </div>
+
+      <div class="mb-4">
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Barangay</div>
         <div class="text-body-1 font-weight-medium text-high-emphasis">{{ barangayName }}</div>
       </div>
@@ -132,6 +139,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { accountTypeLabel } from '@/composables/accountType'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {

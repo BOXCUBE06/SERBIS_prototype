@@ -781,11 +781,10 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   /// finding that out only after a round trip loses what was typed past 255.
   static const _purposeMaxLength = 255;
 
-  /// `other_equipment_text` and `delivery_address` are both varchar(255);
-  /// `organization_name` is varchar(150). Same reasoning as above.
+  /// `other_equipment_text` and `delivery_address` are both varchar(255). Same
+  /// reasoning as above.
   static const _otherItemMaxLength = 255;
   static const _addressMaxLength = 255;
-  static const _organizationMaxLength = 150;
 
   /// Only bounds the uncatalogued path, where there is no stock figure to stop
   /// at. The stepper is one tap per unit, so it needs an end somewhere.
@@ -795,10 +794,8 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   final TextEditingController _purpose = TextEditingController();
   final TextEditingController _otherItem = TextEditingController();
   final TextEditingController _address = TextEditingController();
-  final TextEditingController _organization = TextEditingController();
 
   bool _delivery = false;
-  bool _organizationBorrower = false;
 
   /// Off by default — checking it fills [_address] from the account's own
   /// address once (MDRRMO feedback, 2026-09-19); the field stays editable
@@ -810,7 +807,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   String? _purposeError;
   String? _otherItemError;
   String? _addressError;
-  String? _organizationError;
 
   bool get _uncatalogued => widget.item == null;
 
@@ -824,7 +820,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     _purpose.addListener(() => _clearIfFilled(_purpose, _purposeError, () => _purposeError = null));
     _otherItem.addListener(() => _clearIfFilled(_otherItem, _otherItemError, () => _otherItemError = null));
     _address.addListener(() => _clearIfFilled(_address, _addressError, () => _addressError = null));
-    _organization.addListener(() => _clearIfFilled(_organization, _organizationError, () => _organizationError = null));
   }
 
   void _clearIfFilled(TextEditingController field, String? error, VoidCallback clear) {
@@ -836,7 +831,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     _purpose.dispose();
     _otherItem.dispose();
     _address.dispose();
-    _organization.dispose();
     super.dispose();
   }
 
@@ -855,18 +849,15 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     final purpose = _purpose.text.trim();
     final otherItem = _otherItem.text.trim();
     final address = _address.text.trim();
-    final organization = _organization.text.trim();
 
     final missingItem = _uncatalogued && otherItem.isEmpty;
     final missingAddress = _delivery && address.isEmpty;
-    final missingOrganization = _organizationBorrower && organization.isEmpty;
 
-    if (purpose.isEmpty || missingItem || missingAddress || missingOrganization) {
+    if (purpose.isEmpty || missingItem || missingAddress) {
       setState(() {
         _purposeError = purpose.isEmpty ? 'Tell MDRRMO what you need this for.' : null;
         _otherItemError = missingItem ? 'Name the item you need.' : null;
         _addressError = missingAddress ? 'Where should MDRRMO deliver it?' : null;
-        _organizationError = missingOrganization ? 'Name the organization you are borrowing for.' : null;
       });
       return;
     }
@@ -885,8 +876,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
       // Sent only with the method it belongs to. A resident who types an
       // address and then switches back to Pickup must not still be delivered to.
       deliveryAddress: _delivery ? address : null,
-      borrowerType: _organizationBorrower ? 'Organization' : 'Resident',
-      organizationName: _organizationBorrower ? organization : null,
     );
 
     if (!mounted) return;
@@ -1021,30 +1010,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                   lines: 2,
                   maxLength: _addressMaxLength,
                   errorText: _addressError,
-                  enabled: !_submitting,
-                ),
-              ],
-              const SizedBox(height: 20),
-              _FieldLabel('Who is borrowing?'),
-              const SizedBox(height: 8),
-              _SegmentedToggle(
-                leftLabel: 'Myself',
-                rightLabel: 'An organization',
-                rightSelected: _organizationBorrower,
-                enabled: !_submitting,
-                onChanged: (organization) => setState(() {
-                  _organizationBorrower = organization;
-                  if (!organization) _organizationError = null;
-                }),
-              ),
-              if (_organizationBorrower) ...[
-                const SizedBox(height: 12),
-                AppTextField(
-                  label: 'Organization name',
-                  hint: 'e.g. Barangay San Fabian BDRRMC',
-                  controller: _organization,
-                  maxLength: _organizationMaxLength,
-                  errorText: _organizationError,
                   enabled: !_submitting,
                 ),
               ],

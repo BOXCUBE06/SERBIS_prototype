@@ -380,6 +380,10 @@ class SmsController extends Controller
     private function resolveRecipients(array $barangayIds)
     {
         $residents = Resident::whereIn('barangay_id', $barangayIds)
+            // Barangay and organization accounts are institutions, not
+            // households: a blast to "the residents of San Miguel" does not
+            // text the barangay hall's shared account.
+            ->where('account_type', Resident::TYPE_HEAD_OF_FAMILY)
             ->where('status', 'Active')
             // The resident's own choice, set from the mobile app via PATCH /me.
             // Compared against the column rather than the model's boolean cast

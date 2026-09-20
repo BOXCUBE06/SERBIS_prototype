@@ -1015,8 +1015,6 @@ class ApiService {
     required String purpose,
     String fulfillmentMethod = 'Pickup',
     String? deliveryAddress,
-    String borrowerType = 'Resident',
-    String? organizationName,
   }) async {
     assert(
       (equipmentId == null) != (otherEquipmentText == null),
@@ -1036,8 +1034,6 @@ class ApiService {
       // Omitted rather than sent null on a pickup: the server drops the column
       // anyway, and `required_if` only reads it when the method is Delivery.
       if (fulfillmentMethod == 'Delivery') 'delivery_address': deliveryAddress,
-      'borrower_type': borrowerType,
-      if (borrowerType == 'Organization') 'organization_name': organizationName,
     });
   }
 

@@ -393,8 +393,6 @@ class AppState extends ChangeNotifier {
     required String purpose,
     String fulfillmentMethod = 'Pickup',
     String? deliveryAddress,
-    String borrowerType = 'Resident',
-    String? organizationName,
   }) async {
     final optimistic = _resolveBorrow(BorrowRequest(
       equipmentId: item?.id,
@@ -417,8 +415,6 @@ class AppState extends ChangeNotifier {
         purpose: purpose,
         fulfillmentMethod: fulfillmentMethod,
         deliveryAddress: deliveryAddress,
-        borrowerType: borrowerType,
-        organizationName: organizationName,
       );
 
       final confirmed = _resolveBorrow(BorrowRequest.fromJson(result));
