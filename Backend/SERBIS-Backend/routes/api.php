@@ -62,11 +62,6 @@ Route::middleware('throttle:api')->group(function () {
     // before the resident has an account, and barangay_id is required to sign up.
     // The row is nothing but an id and a name, and the write routes stay admin-only.
     Route::get('barangays', [BarangayController::class, 'index']);
-    // Purok/street type-ahead (MDRRMO feedback, 2026-09-19) — public for the
-    // same reason: registration needs suggestions before there is an account.
-    // Registered before the admin apiResource below so the literal segment is
-    // never read as barangays/{barangay}.
-    Route::get('barangays/{id}/puroks', [BarangayController::class, 'puroks']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);

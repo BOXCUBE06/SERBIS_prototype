@@ -380,9 +380,11 @@
               </v-col>
 
               <v-col cols="12">
-                <PurokAutocomplete
+                <!-- Keyed on the dialog: the picker reads its value once, and this
+                     form is reused for every resident. -->
+                <PurokSelect
+                  :key="`${modal.isOpen}-${modal.targetId ?? 'new'}`"
                   v-model="formData.street_address"
-                  :barangay-id="formData.barangay_id"
                   :error-messages="fieldErrors.street_address"
                 />
               </v-col>
@@ -553,7 +555,7 @@ import {
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
-import PurokAutocomplete from '@/components/PurokAutocomplete.vue'
+import PurokSelect from '@/components/PurokSelect.vue'
 
 const { mdAndUp } = useDisplay()
 
