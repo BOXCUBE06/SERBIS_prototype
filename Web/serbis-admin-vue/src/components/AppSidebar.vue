@@ -166,6 +166,7 @@ const mainMenu = [
 const systemMenu = [
   { to: '/services-config', icon: 'mdi-wrench-outline', title: 'Manage Services' },
   { to: '/service-audience', icon: 'mdi-account-check-outline', title: 'Service Audience' },
+  { to: '/service-vehicles', icon: 'mdi-truck-outline', title: 'Service Vehicles' },
   { to: '/users', icon: 'mdi-account-group-outline', title: 'Residents' },
   { to: '/staff', icon: 'mdi-shield-account-outline', title: 'Staff Accounts' },
   { to: '/files', icon: 'mdi-folder-outline', title: 'Documents' },

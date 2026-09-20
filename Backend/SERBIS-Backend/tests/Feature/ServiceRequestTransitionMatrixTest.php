@@ -97,7 +97,7 @@ class ServiceRequestTransitionMatrixTest extends TestCase
 
         $this->vehicle = Vehicle::create([
             'unit_identifier' => 'PAT-01',
-            'type' => 'Patrol Car',
+            'type' => 'Rescue Vehicle',
             'specification' => null,
             'status' => 'Available',
         ]);
@@ -295,7 +295,7 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     public function test_resending_the_current_status_is_not_treated_as_a_transition(): void
     {
         $other = Vehicle::create([
-            'unit_identifier' => 'PAT-02', 'type' => 'Patrol Car', 'status' => 'Available',
+            'unit_identifier' => 'PAT-02', 'type' => 'Rescue Vehicle', 'status' => 'Available',
         ]);
 
         $request = $this->requestWithStatus('Responding', ['vehicle_id' => $this->vehicle->vehicle_id]);

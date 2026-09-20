@@ -241,7 +241,7 @@ import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']
-const VEHICLE_TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat']
+const VEHICLE_TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat', 'Dump Truck']
 
 // Available = primary green (success tracks primary), Dispatched = warning, Maintenance = error.
 const statusMeta = {
@@ -340,6 +340,7 @@ const getVehicleIcon = (type) => ({
   'fire truck': 'mdi-fire-truck',
   'rescue vehicle': 'mdi-car-emergency',
   boat: 'mdi-ferry',
+  'dump truck': 'mdi-dump-truck',
 }[type?.toLowerCase()] || 'mdi-car')
 
 const fetchVehicles = async () => {

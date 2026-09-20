@@ -17,6 +17,7 @@ use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ServiceAudienceController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceRequestController;
+use App\Http\Controllers\ServiceVehicleTypeController;
 use App\Http\Controllers\SmsController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\VehicleController;
@@ -216,6 +217,11 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // others) — see the tbl_service_audience migration.
     Route::get('service-audience', [ServiceAudienceController::class, 'index']);
     Route::put('service-audience/{code}', [ServiceAudienceController::class, 'update']);
+    // Which kinds of unit may be sent on each service. The dispatch picker reads
+    // it and ServiceRequestController::update enforces it — see the
+    // tbl_service_vehicle_types migration.
+    Route::get('service-vehicle-types', [ServiceVehicleTypeController::class, 'index']);
+    Route::put('service-vehicle-types/{code}', [ServiceVehicleTypeController::class, 'update']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
     // Their own routes, not update(): both re-check ambulance availability
     // under a lock, which update()/syncFleet() were never built to do.

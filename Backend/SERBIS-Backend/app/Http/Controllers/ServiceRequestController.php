@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Models\ServiceAudience;
 use App\Models\ServiceRequest;
 use App\Models\ServiceRequestRelative;
+use App\Models\ServiceVehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
@@ -1514,6 +1515,28 @@ class ServiceRequestController extends Controller
                         ? 'That unit is not an Ambulance.'
                         : 'An Ambulance is only assigned to an ambulance request.',
                 ]);
+            }
+
+            if (! $isAmbulanceRequest) {
+                $service = $serviceRequest->service;
+
+                // Programs are approved plainly, with no unit; the panel never
+                // offers one, so this only refuses a hand-built request.
+                if ($service?->category === 'programs') {
+                    throw ValidationException::withMessages([
+                        'vehicle_id' => 'This service does not use a vehicle.',
+                    ]);
+                }
+
+                // No mapping means any non-ambulance unit, as before the mapping
+                // existed; a request with no service (Others) is unmapped too.
+                $allowedTypes = $service ? ServiceVehicleType::typesFor($service->code) : [];
+
+                if ($allowedTypes !== [] && ! in_array($incomingVehicle->type, $allowedTypes, true)) {
+                    throw ValidationException::withMessages([
+                        'vehicle_id' => $service->service_name.' does not use a '.$incomingVehicle->type.'. Choose: '.implode(', ', $allowedTypes).'.',
+                    ]);
+                }
             }
 
             if ($incomingVehicle->status === 'Maintenance') {

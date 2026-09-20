@@ -783,7 +783,7 @@
             <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
             <div class="text-h6 font-weight-bold">No Vehicles Available</div>
             <div class="text-body-2">
-              All fleet vehicles are currently dispatched or under maintenance.
+              No free unit of a type this service uses. Units are either dispatched, under maintenance, or of a type set aside for other services.
             </div>
           </div>
         </v-card-text>
@@ -1847,10 +1847,35 @@ const availableVehicles = computed(() => {
   // board is the mirror image: it dispatches everything BUT an ambulance,
   // since ambulance requests never reach this board at all (scope='ambulance'
   // handles those on their own).
-  return props.scope === 'ambulance'
-    ? vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
-    : vehicles.value.filter(v => v.status === 'Available' && v.type !== 'Ambulance')
+  //
+  // The other board also narrows to the unit types the office mapped to this
+  // service (Service Vehicles page). No mapping, or a mapping that failed to
+  // load, means every non-ambulance unit — the server enforces the same list, so
+  // this only saves the dispatcher a refusal.
+  if (props.scope === 'ambulance') {
+    return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
+  }
+
+  const allowed = vehicleTypesByService.value[selectedRequest.value?.service?.code] ?? []
+  return vehicles.value.filter(v =>
+    v.status === 'Available' && v.type !== 'Ambulance' && (allowed.length === 0 || allowed.includes(v.type)),
+  )
 })
+
+// service code -> the unit types the office allows on it. Best effort: it only
+// narrows the picker, and the server refuses a wrong unit either way.
+const vehicleTypesByService = ref({})
+const fetchVehicleTypes = async () => {
+  if (props.scope === 'ambulance') return
+  try {
+    const res = await fetch(`${API_BASE}/service-vehicle-types`, { headers: getHeaders(), signal: listAbortController.signal })
+    if (!res.ok) return
+    const body = await res.json()
+    vehicleTypesByService.value = Object.fromEntries((body.data || []).map(row => [row.code, row.vehicle_types]))
+  } catch (error) {
+    if (error.name !== 'AbortError') console.error('Failed to fetch vehicle types:', error)
+  }
+}
 
 /**
  * The Booked/approve picker's own list — every Ambulance unit, not just the
@@ -2256,6 +2281,7 @@ const vehicleIcon = (type) => ({
   'fire truck': 'mdi-fire-truck',
   'rescue vehicle': 'mdi-car-emergency',
   boat: 'mdi-ferry',
+  'dump truck': 'mdi-dump-truck',
 }[(type || '').toLowerCase()] || 'mdi-car')
 
 const getSelectedVehicleName = () => {
@@ -2707,6 +2733,7 @@ watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
 
 onMounted(fetchData)
+onMounted(fetchVehicleTypes)
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
 
