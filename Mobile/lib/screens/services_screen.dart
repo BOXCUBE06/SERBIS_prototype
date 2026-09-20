@@ -309,7 +309,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     // the account, where `phone_number` is required at registration and NOT
     // NULL, so there is nothing left to be blank.
 
-    // The same two the server requires for an ambulance request, and only
+    // The same three the server requires for an ambulance request, and only
     // those — refused here so the resident is told which field is missing
     // instead of reading a 422 the app would surface as a generic failure.
     // Everything else on this form is optional on purpose: a resident filing
@@ -319,11 +319,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
       final missing = <String>[
         if (form.patient.text.trim().isEmpty) 'the patient name',
         if (form.destination.text.trim().isEmpty) 'where the ambulance should go',
+        if (form.relativeNames.isEmpty) 'at least one relative going with the patient',
       ];
 
       if (missing.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please fill in ${missing.join(' and ')}.')),
+          SnackBar(
+            content: Text(
+              'Please fill in ${missing.length > 1 ? '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}' : missing.single}.',
+            ),
+          ),
         );
         return;
       }

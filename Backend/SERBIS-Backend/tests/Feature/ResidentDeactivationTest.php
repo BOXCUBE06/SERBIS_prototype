@@ -100,6 +100,7 @@ class ResidentDeactivationTest extends TestCase
         $this->postJson('/api/service-requests', [
             'service_id' => $service->service_id,
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
         ])
@@ -122,6 +123,7 @@ class ResidentDeactivationTest extends TestCase
         $this->postJson('/api/service-requests', [
             'service_id' => $service->service_id,
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
         ])->assertSuccessful();
@@ -138,6 +140,7 @@ class ResidentDeactivationTest extends TestCase
             'resident_id' => $resident->resident_id,
             'service_id' => $service->service_id,
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'patient_address' => 'Purok 1, San Fabian',
             'pickup_location' => 'Purok 1, San Fabian',
             'destination' => 'Echague District Hospital',
@@ -165,6 +168,7 @@ class ResidentDeactivationTest extends TestCase
             'walk_in_contact_number' => '09171111111',
             'service_id' => $service->service_id,
             'patient_name' => 'Maria Santos',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'patient_address' => 'Purok 1, San Fabian',
             'pickup_location' => 'Purok 1, San Fabian',
             'destination' => 'Echague District Hospital',

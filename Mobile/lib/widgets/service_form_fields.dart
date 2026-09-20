@@ -172,7 +172,7 @@ class ServiceFormFields extends StatelessWidget {
                     children: [
                       Expanded(
                         child: AppTextField(
-                          label: 'Relative ${i + 1}',
+                          label: i == 0 ? 'Relative 1 (required)' : 'Relative ${i + 1}',
                           hint: 'e.g. Juan Dela Cruz',
                           controller: form.relatives[i],
                         ),

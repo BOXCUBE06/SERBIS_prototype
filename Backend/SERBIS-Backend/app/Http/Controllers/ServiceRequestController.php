@@ -68,6 +68,10 @@ class ServiceRequestController extends Controller
      */
     private const MAX_RELATIVES = 2;
 
+    private const RELATIVES_MESSAGES = [
+        'patient_relatives.required' => 'Name at least one relative or companion going with the patient.',
+    ];
+
     /**
      * The window an availability check uses for a booking, until approval sets
      * a real scheduled_end. Public: App\Services\AmbulanceAvailability reads
@@ -318,11 +322,12 @@ class ServiceRequestController extends Controller
             'pickup_location' => 'nullable|string|max:255',
             'condition_notes' => 'nullable|string|max:5000',
             // Who is coming with the patient, named at intake rather than at
-            // dispatch. Optional on every service: nobody is required to bring
-            // anyone, and a non-ambulance request simply never sends them.
-            'patient_relatives' => ['nullable', 'array', $this->relativesCountRule()],
+            // dispatch. Required for an ambulance request — the hospital asks for
+            // a companion (MDRRMO, 2026-09-20) — and never sent by any other
+            // service.
+            'patient_relatives' => $this->relativesRules($this->isAmbulanceInput($request, $ambulanceServiceId)),
             'patient_relatives.*' => 'nullable|string|max:255',
-        ]);
+        ], self::RELATIVES_MESSAGES);
 
         // Disabling, not deleting, is how a service goes away (the intake
         // form logic is hardcoded against tbl_services.code, so a delete
@@ -611,18 +616,44 @@ class ServiceRequestController extends Controller
     }
 
     /**
+     * The rules for the intake relative list: one to MAX_RELATIVES named
+     * companions on an ambulance request, optional (and unused) on anything
+     * else.
+     *
+     * @return list<mixed>
+     */
+    private function relativesRules(bool $isAmbulance): array
+    {
+        return [$isAmbulance ? 'required' : 'nullable', 'array', $this->relativesCountRule($isAmbulance)];
+    }
+
+    /** Whether the request being validated names the ambulance service. */
+    private function isAmbulanceInput(Request $request, mixed $ambulanceServiceId): bool
+    {
+        return $ambulanceServiceId !== null
+            && is_numeric($request->input('service_id'))
+            && (int) $request->input('service_id') === (int) $ambulanceServiceId;
+    }
+
+    /**
      * MAX_RELATIVES applies to named companions, not raw array slots — a
      * blank slot beside a filled one (the form's own default state) must not
      * count against the cap, for the same reason storeRelatives() filters
      * blanks rather than rejecting them.
      */
-    private function relativesCountRule(): \Closure
+    private function relativesCountRule(bool $required = false): \Closure
     {
-        return function (string $attribute, $value, \Closure $fail): void {
+        return function (string $attribute, $value, \Closure $fail) use ($required): void {
             $named = array_filter(
                 array_map(static fn ($name) => trim((string) $name), $value ?? []),
                 static fn (string $name) => $name !== ''
             );
+
+            // An array of only blank slots is present but names nobody, which is
+            // the form's default state and must not satisfy "required".
+            if ($required && count($named) < 1) {
+                $fail('Name at least one relative or companion going with the patient.');
+            }
 
             if (count($named) > self::MAX_RELATIVES) {
                 $fail('The patient relatives field must not have more than '.self::MAX_RELATIVES.' named entries.');
@@ -814,12 +845,13 @@ class ServiceRequestController extends Controller
             // Same "absent means as soon as possible" contract as store() — a
             // walk-in ambulance request can be booked for a future slot too.
             'scheduled_at' => 'nullable|date|before_or_equal:'.self::BOOKING_HORIZON,
-            // Same optional intake list as store(). Collected at the counter
-            // now rather than waited for until dispatch, when the trip record
-            // that used to be their only home is finally created.
-            'patient_relatives' => ['nullable', 'array', $this->relativesCountRule()],
+            // Same intake list as store(), and required for an ambulance request
+            // for the same reason. Collected at the counter now rather than
+            // waited for until dispatch, when the trip record that used to be
+            // their only home is finally created.
+            'patient_relatives' => $this->relativesRules($this->isAmbulanceInput($request, $ambulanceServiceId)),
             'patient_relatives.*' => 'nullable|string|max:255',
-        ]);
+        ], self::RELATIVES_MESSAGES);
 
         // Disabling, not deleting, is how a service goes away (the intake
         // form logic is hardcoded against tbl_services.code, so a delete

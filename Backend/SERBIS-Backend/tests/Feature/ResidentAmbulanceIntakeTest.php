@@ -90,6 +90,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
         return array_merge([
             'service_id' => $this->ambulance->getKey(),
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => $this->validId(),
         ], $overrides);

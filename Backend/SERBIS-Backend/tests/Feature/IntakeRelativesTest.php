@@ -96,6 +96,7 @@ class IntakeRelativesTest extends TestCase
             'pickup_location' => 'Purok 2, San Fabian',
             'destination' => 'Echague District Hospital',
             'condition_notes' => 'Fractured leg',
+            'patient_relatives' => ['Lalaine Ferrer'],
         ], $overrides);
     }
 
@@ -160,12 +161,53 @@ class IntakeRelativesTest extends TestCase
         $this->assertSame([0], $request->relatives()->pluck('position')->all());
     }
 
-    public function test_a_request_filed_with_no_relatives_stores_none(): void
+    public function test_an_ambulance_request_with_no_relative_is_refused_on_both_intake_paths(): void
     {
-        $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $this->walkInPayload())
-            ->assertStatus(201);
+        // Required since 2026-09-20: the hospital asks for a companion. A slot
+        // that is present but blank names nobody, so it does not count.
+        foreach ([null, [], [''], ['', '   ']] as $relatives) {
+            $body = $this->walkInPayload($relatives === null ? [] : ['patient_relatives' => $relatives]);
+            if ($relatives === null) {
+                unset($body['patient_relatives']);
+            }
 
-        $this->assertSame(0, ServiceRequestRelative::count());
+            $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $body)
+                ->assertStatus(422)->assertJsonValidationErrors(['patient_relatives']);
+
+            $this->actingAs($this->resident)->postJson('/api/service-requests', [
+                'service_id' => $this->ambulance->getKey(),
+                'patient_name' => 'Juan Dela Cruz',
+                'destination' => 'Echague District Hospital',
+                'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
+            ] + ($relatives === null ? [] : ['patient_relatives' => $relatives]))
+                ->assertStatus(422)->assertJsonValidationErrors(['patient_relatives']);
+        }
+
+        $this->assertSame(0, ServiceRequest::count());
+    }
+
+    public function test_one_or_two_relatives_are_accepted_and_three_are_not(): void
+    {
+        foreach ([['Lalaine Ferrer'], ['Lalaine Ferrer', 'Rosa Dela Cruz']] as $relatives) {
+            $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $this->walkInPayload([
+                'patient_relatives' => $relatives,
+            ]))->assertStatus(201);
+        }
+
+        $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $this->walkInPayload([
+            'patient_relatives' => ['A', 'B', 'C'],
+        ]))->assertStatus(422)->assertJsonValidationErrors(['patient_relatives']);
+    }
+
+    public function test_a_request_that_is_not_an_ambulance_never_needs_one(): void
+    {
+        $road = Service::create(['service_name' => 'Road Clearing', 'description' => 'Debris removal.']);
+
+        $this->actingAs($this->resident)->postJson('/api/service-requests', [
+            'service_id' => $road->getKey(),
+            'description' => 'Fallen tree on the road',
+            'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
+        ])->assertStatus(201);
     }
 
     public function test_an_over_long_relative_name_is_rejected(): void
@@ -194,12 +236,15 @@ class IntakeRelativesTest extends TestCase
         $this->assertSame(['Lalaine Ferrer', 'Rosa Dela Cruz'], $this->relativeNamesOn($trip));
     }
 
-    public function test_dispatch_still_works_when_no_relatives_were_named(): void
+    public function test_dispatch_still_works_for_a_request_filed_before_relatives_were_required(): void
     {
-        $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $this->walkInPayload())
-            ->assertStatus(201);
+        $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $this->walkInPayload([
+            'patient_relatives' => ['Lalaine Ferrer'],
+        ]))->assertStatus(201);
 
         $request = ServiceRequest::first();
+        // Requests already on file predate the rule and carry no relatives.
+        ServiceRequestRelative::query()->delete();
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',

@@ -78,6 +78,7 @@ class ScheduledServiceRequestTest extends TestCase
         return array_merge([
             'service_id' => $this->service->service_id,
             'patient_name' => 'Maria Santos',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
         ], $overrides);

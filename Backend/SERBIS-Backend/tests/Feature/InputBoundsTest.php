@@ -97,6 +97,7 @@ class InputBoundsTest extends TestCase
         return array_merge([
             'service_id' => $this->ambulance->service_id,
             'patient_name' => 'Maria Santos',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             // create(), not image(): image() needs the GD extension, which is
             // not installed on either dev box. Same pattern as

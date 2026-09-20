@@ -1199,7 +1199,9 @@
                  dispatch. The trip record these used to live on does not
                  exist until the request reaches Responding, so anyone named
                  at the counter had nowhere to be written down until now.
-                 Optional throughout: nobody has to bring anyone. -->
+                 At least one is required (MDRRMO, 2026-09-20: the hospital
+                 asks for a companion), and the server refuses more than
+                 two. -->
             <div class="mb-2">
               <div class="d-flex align-center justify-space-between mb-1">
                 <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Patient / Relatives</span>
@@ -1214,7 +1216,7 @@
               >
                 <v-text-field
                   v-model="createDialog.form.patient_relatives[idx]"
-                  :label="`Relative ${idx + 1}`"
+                  :label="idx === 0 ? 'Relative 1 *' : `Relative ${idx + 1}`"
                   placeholder="e.g. Ana Santos"
                   variant="outlined"
                   density="compact"
@@ -2592,6 +2594,10 @@ const submitWalkIn = async () => {
     if (!form.patient_name.trim() || !form.patient_address.trim() || !form.pickup_location.trim()
         || !form.destination.trim() || !form.condition_notes.trim()) {
       createDialog.value.error = 'Patient name, address, pickup, destination and condition are required'
+      return
+    }
+    if (!form.patient_relatives.some(name => name.trim())) {
+      createDialog.value.error = 'Name at least one relative or companion going with the patient'
       return
     }
   } else if (!form.description.trim()) {

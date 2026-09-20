@@ -267,10 +267,11 @@ class AmbulanceFormData extends ServiceFormData {
   /// separate `medical_diagnosis` would give the same fact two homes.
   final TextEditingController diagnosis = TextEditingController();
 
-  /// Companions travelling with the patient, capped at two per MDRRMO policy
-  /// — optional here, but the hospital requires them to be named. Starts with
-  /// one empty slot, the same as the walk-in dialog's repeater. Blank slots
-  /// are dropped when read, not rejected.
+  /// Companions travelling with the patient: at least one is required and two
+  /// is the cap, per MDRRMO policy (the hospital asks for a companion), and the
+  /// server enforces both. Starts with one empty slot, the same as the walk-in
+  /// dialog's repeater. Blank slots are dropped when read, not rejected — a
+  /// form whose only slot is blank simply names nobody.
   static const maxRelatives = 2;
 
   final List<TextEditingController> relatives = [TextEditingController()];

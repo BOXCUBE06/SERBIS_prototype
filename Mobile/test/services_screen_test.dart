@@ -287,7 +287,11 @@ Finder _patientNameField() {
 /// Mirrors the server's own required set for this service
 /// (ServiceRequestController::store): patient_name and destination.
 Future<void> _fillRequiredAmbulanceFields(WidgetTester tester) async {
-  for (final entry in const {'Patient name': 'Maria Santos', 'Destination': 'Echague District Hospital'}.entries) {
+  for (final entry in const {
+    'Patient name': 'Maria Santos',
+    'Destination': 'Echague District Hospital',
+    'Relative 1 (required)': 'Lalaine Ferrer',
+  }.entries) {
     final field = find.descendant(
       of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
       matching: find.byType(TextField),
@@ -558,6 +562,32 @@ void main() {
       await _submit(tester);
 
       expect(find.textContaining('the patient name'), findsOneWidget);
+      expect(api.submitCount, 0, reason: 'nothing may reach the server');
+    });
+
+    testWidgets('an ambulance request naming no relative is refused with a reason',
+        (tester) async {
+      // MDRRMO, 2026-09-20: the hospital asks for a companion, so at least one
+      // relative is required. The server refuses it too; this is the half that
+      // tells the resident which field.
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      for (final entry in const {
+        'Patient name': 'Maria Santos',
+        'Destination': 'Echague District Hospital',
+      }.entries) {
+        final field = find.descendant(
+          of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
+          matching: find.byType(TextField),
+        );
+        await tester.ensureVisible(field);
+        await tester.enterText(field, entry.value);
+      }
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(find.textContaining('at least one relative'), findsOneWidget);
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 

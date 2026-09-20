@@ -701,7 +701,7 @@ void main() {
         'From',
         'To',
         'Medical diagnosis',
-        'Relative 1',
+        'Relative 1 (required)',
       ]) {
         expect(find.text(label), findsOneWidget,
             reason: '$label is missing from the ambulance form');
@@ -739,7 +739,7 @@ void main() {
         ),
       ));
 
-      expect(find.text('Relative 1'), findsOneWidget);
+      expect(find.text('Relative 1 (required)'), findsOneWidget);
       expect(find.text('Relative 2'), findsNothing);
 
       await tester.ensureVisible(find.text('Add relative'));
