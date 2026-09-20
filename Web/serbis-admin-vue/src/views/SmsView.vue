@@ -3,12 +3,15 @@
     <div class="w-100">
     <PageHeader title="Text Blast (SMS)" />
 
-    <v-row justify="center" class="ma-0 w-100">
-      <v-col cols="12" md="10" lg="8" xl="6" class="pa-0">
+    <!-- Form left, history right from 1360px; one column below that. The
+         other admin pages fill the width, but a short form stretched across
+         1500px gives a message box far wider than an SMS, so the form column is
+         capped and the history, which is the data worth reading, takes the rest. -->
+    <div class="blast-layout">
 
-        <v-card elevation="4" rounded="lg" class="bg-surface fade-in w-100">
-          <div class="pa-8 border-b bg-surface d-flex align-center gap-4">
-            <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
+        <v-card elevation="0" rounded="xl" class="blast-card fade-in">
+          <div class="blast-pad border-b bg-surface d-flex flex-wrap align-center gap-4">
+            <v-avatar color="red-lighten-5" size="72" class="rounded-lg blast-avatar">
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
             <!-- Reachable from the header rather than buried in a settings page —
@@ -45,7 +48,7 @@
             </div>
           </div>
 
-          <v-card-text class="pa-8">
+          <v-card-text class="blast-pad">
             <v-alert 
               v-if="alert.show" 
               :type="alert.type" 
@@ -268,8 +271,8 @@
              click to reach. No auto-refresh — SkySMS's rate limit is shared with
              every send, and a stuck message will not resolve faster for being
              polled. -->
-        <v-card elevation="4" rounded="lg" class="bg-surface fade-in w-100 mt-6">
-          <div class="px-8 py-5 border-b d-flex align-center gap-3">
+        <v-card elevation="0" rounded="xl" class="blast-card fade-in">
+          <div class="blast-row border-b d-flex align-center gap-3">
             <v-icon color="primary" size="28">mdi-message-check-outline</v-icon>
             <div>
               <div class="text-h6 font-weight-bold">Recent blasts</div>
@@ -286,17 +289,17 @@
           </div>
 
           <v-card-text class="pa-0">
-            <div v-if="deliveries.error" class="pa-8 text-error" role="alert">{{ deliveries.error }}</div>
-            <div v-else-if="!deliveries.rows.length && !deliveries.loading" class="pa-8 text-medium-emphasis">
+            <div v-if="deliveries.error" class="blast-pad text-error" role="alert">{{ deliveries.error }}</div>
+            <div v-else-if="!deliveries.rows.length && !deliveries.loading" class="blast-pad text-medium-emphasis">
               No blasts have been sent yet.
             </div>
 
             <div
               v-for="row in deliveries.rows" :key="row.sms_log_id"
-              class="px-8 py-5 delivery-row"
+              class="blast-row delivery-row"
             >
-              <div class="d-flex align-start gap-3">
-                <div class="flex-grow-1" style="min-width: 0;">
+              <div class="d-flex flex-wrap align-start gap-3">
+                <div style="flex: 1 1 240px; min-width: 0;">
                   <div class="text-body-2 font-weight-bold">
                     {{ row.barangay }}
                     <span class="font-weight-regular text-medium-emphasis"> · {{ formatWhen(row.created_at) }} · {{ row.sender }}</span>
@@ -306,7 +309,7 @@
 
                 <v-tooltip :disabled="row.checkable" location="top" text="No SkySMS message ids were stored for this blast, so its delivery can't be checked.">
                   <template #activator="{ props: tip }">
-                    <span v-bind="tip" class="flex-shrink-0">
+                    <span v-bind="tip" class="blast-check flex-shrink-0">
                       <v-btn
                         variant="tonal" size="small" class="text-none"
                         prepend-icon="mdi-cloud-sync-outline"
@@ -341,8 +344,7 @@
             </div>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
+    </div>
     </div>
 
     <!-- Replaces a native confirm(). The scale and the cost still read the
@@ -1039,6 +1041,47 @@ const rotateBlastCode = async () => {
 </script>
 
 <style scoped>
+/* Both cards share one border and the panel's newer card shape (see
+   ServicesConfigView's .table-card). Padding is one pair of variables so the
+   header, the form body and the history rows always agree, and it steps down
+   with the shell: 32px, 24px once the drawer becomes an overlay, 16px on a
+   phone. */
+.blast-card {
+  --blast-x: 32px;
+  --blast-y: 20px;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+  overflow: hidden;
+  min-width: 0;
+}
+.blast-pad { padding: var(--blast-x); }
+.blast-row { padding: var(--blast-y) var(--blast-x); }
+
+.blast-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+}
+
+/* 1360px is where the history gets 540px or more once the form takes its 440.
+   The form column stops growing at 600px: past that it only makes the message
+   box wider than any SMS needs. */
+@media (min-width: 1360px) {
+  .blast-layout { grid-template-columns: clamp(440px, 40%, 600px) minmax(0, 1fr); }
+}
+
+@media (max-width: 959px) {
+  .blast-card { --blast-x: 24px; }
+}
+
+@media (max-width: 599px) {
+  .blast-card { --blast-x: 16px; --blast-y: 16px; }
+  .blast-avatar { display: none !important; }
+  .blast-check, .blast-check :deep(.v-btn) { width: 100%; }
+}
+
 .delivery-row + .delivery-row { border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
 
 .gap-2 { gap: 8px; }
