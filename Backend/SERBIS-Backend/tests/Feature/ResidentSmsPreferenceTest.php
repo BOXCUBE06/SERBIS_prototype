@@ -167,7 +167,7 @@ class ResidentSmsPreferenceTest extends TestCase
             'message' => 'Evacuate low-lying areas immediately.',
             'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
-        ])->assertOk()->assertJson(['sent' => 1, 'failed' => 0]);
+        ])->assertOk()->assertJson(['queued' => 1, 'failed' => 0]);
 
         // Both halves matter. The recipient row is the record of who the agency
         // says it warned, so an opted-out resident must be absent from it...

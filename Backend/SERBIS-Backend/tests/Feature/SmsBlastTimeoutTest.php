@@ -139,7 +139,7 @@ class SmsBlastTimeoutTest extends TestCase
         $this->blast();
 
         $this->assertSame(0, SmsLog::where('status', 'Failed')->count());
-        $this->assertSame(0, SmsLog::where('status', 'Sent')->count());
+        $this->assertSame(0, SmsLog::where('status', 'Queued')->count());
     }
 
     /**

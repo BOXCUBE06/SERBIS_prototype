@@ -89,7 +89,7 @@ class SmsHistoryTest extends TestCase
             ->assertJsonPath('data.0.user.name', 'MDRRMO Admin')
             ->assertJsonPath('data.0.barangay', 'San Fabian')
             ->assertJsonPath('data.0.recipient_count', 2)
-            ->assertJsonPath('data.0.status', 'Sent');
+            ->assertJsonPath('data.0.status', 'Queued');
     }
 
     public function test_a_failed_blast_appears_in_the_history(): void

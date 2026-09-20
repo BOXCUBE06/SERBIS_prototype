@@ -83,7 +83,7 @@ class SmsBlastLoggingTest extends TestCase
             'barangays' => [$this->barangayA->barangay_id, $this->barangayB->barangay_id],
         ]);
 
-        $response->assertOk()->assertJson(['sent' => 3, 'failed' => 0]);
+        $response->assertOk()->assertJson(['queued' => 3, 'failed' => 0]);
 
         // One log per barangay, not one per blast: "what was sent to my barangay"
         // is the question a resident asks.
@@ -91,7 +91,7 @@ class SmsBlastLoggingTest extends TestCase
         $this->assertSame(3, Recipient::count());
 
         $logA = SmsLog::where('target_area_id', $this->barangayA->barangay_id)->firstOrFail();
-        $this->assertSame('Sent', $logA->status);
+        $this->assertSame('Queued', $logA->status);
         $this->assertSame('job-123', $logA->api_job_id);
         $this->assertSame('Evacuate low-lying areas immediately.', $logA->message_body);
         $this->assertEqualsCanonicalizing(
@@ -118,7 +118,7 @@ class SmsBlastLoggingTest extends TestCase
             'message' => 'Test advisory.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
-        ])->assertOk()->assertJson(['sent' => 1]);
+        ])->assertOk()->assertJson(['queued' => 1]);
 
         $this->assertSame([$active->resident_id], Recipient::pluck('resident_id')->all());
     }
@@ -419,7 +419,7 @@ class SmsBlastLoggingTest extends TestCase
             'message' => 'Evacuate low-lying areas immediately.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
-        ])->assertOk()->assertJson(['sent' => 2, 'failed' => 0]);
+        ])->assertOk()->assertJson(['queued' => 2, 'failed' => 0]);
 
         $log = SmsLog::firstOrFail();
 

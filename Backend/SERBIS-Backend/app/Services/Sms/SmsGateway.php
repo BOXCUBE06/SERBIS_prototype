@@ -35,4 +35,17 @@ interface SmsGateway
      * @param  array<int, string>  $phones
      */
     public function sendBulk(array $phones, string $message): SmsResult;
+
+    /**
+     * True when sends are suppressed locally (SERBIS_SMS_FAKE), so there is no
+     * vendor state to read back.
+     */
+    public function faking(): bool;
+
+    /**
+     * One page of the vendor's message list, read-only and unbilled.
+     *
+     * @return array{data: list<array<string, mixed>>, last_page: int}|null null when the list could not be read
+     */
+    public function messages(string $from, string $to, int $page = 1): ?array;
 }

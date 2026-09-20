@@ -25,6 +25,11 @@ class SkySmsGateway implements SmsGateway
     /** A bulk request carries up to MAX_BULK recipients and nobody is waiting on it. */
     private const BULK_TIMEOUT = 20;
 
+    /** An admin is watching a button while the message list loads. */
+    private const MESSAGES_TIMEOUT = 10;
+
+    public const MESSAGES_PER_PAGE = 100;
+
     public const MAX_BULK = 1000;
 
     public const MAX_MESSAGE_LENGTH = 1000;
@@ -107,6 +112,60 @@ class SkySmsGateway implements SmsGateway
             self::BULK_TIMEOUT,
             true,
         );
+    }
+
+    public function faking(): bool
+    {
+        return self::fakingEnabled();
+    }
+
+    /**
+     * GET /sms/messages, the only place SkySMS says what became of a message it
+     * queued. Read-only and no credits. The list has no lookup by id, only
+     * status and a from/to date filter, so a caller pages through a date window
+     * and picks out the ids it stored.
+     *
+     * Nothing about the reply is logged: each item carries a phone number and
+     * the message text, and an OTP text carries the code.
+     */
+    public function messages(string $from, string $to, int $page = 1): ?array
+    {
+        if (! $this->configured() || self::fakingEnabled()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'X-API-Key' => (string) config('services.skysms.api_key'),
+                'User-Agent' => 'SERBIS/1.0',
+                'Accept' => 'application/json',
+            ])
+                ->timeout(self::MESSAGES_TIMEOUT)
+                ->connectTimeout(3)
+                ->get(rtrim((string) config('services.skysms.base_url'), '/').'/sms/messages', [
+                    'from' => $from,
+                    'to' => $to,
+                    'per_page' => self::MESSAGES_PER_PAGE,
+                    'page' => $page,
+                ]);
+        } catch (ConnectionException $e) {
+            Log::warning('SkySMS message list did not answer', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        $body = $response->json();
+
+        if (! $response->successful() || ! is_array($body) || ! is_array($body['data'] ?? null)) {
+            Log::warning('SkySMS message list refused', ['status' => $response->status()]);
+
+            return null;
+        }
+
+        return [
+            'data' => array_values(array_filter($body['data'], 'is_array')),
+            'last_page' => max(1, (int) ($body['pagination']['last_page'] ?? 1)),
+        ];
     }
 
     /**

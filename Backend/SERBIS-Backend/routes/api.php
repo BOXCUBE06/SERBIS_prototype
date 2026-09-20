@@ -19,6 +19,7 @@ use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\ServiceVehicleTypeController;
 use App\Http\Controllers\SmsController;
+use App\Http\Controllers\SmsDeliveryController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\VehicleController;
 use Illuminate\Http\Request;
@@ -193,6 +194,12 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // far more often than the send it previews. Touches only the local
     // database; no vendor call, nothing billed.
     Route::get('/sms/recipient-count', [SmsController::class, 'recipientCount'])->middleware('throttle:120,1');
+    // What became of a blast after SkySMS queued it. The list is local; the
+    // check reads SkySMS's GET /sms/messages, which is unbilled but is an
+    // outbound call on a rate limit the sends share, so it is capped per admin
+    // and the controller answers a repeat press from what it already stored.
+    Route::get('/sms/deliveries', [SmsDeliveryController::class, 'index'])->middleware('throttle:60,1');
+    Route::post('/sms/deliveries/{smsLog}/check', [SmsDeliveryController::class, 'check'])->middleware('throttle:20,1');
     Route::apiResource('vehicles', VehicleController::class);
     // Read-only, for the resident detail panel. Registered before the
     // apiResource so the literal segment is never read as another {id} action.

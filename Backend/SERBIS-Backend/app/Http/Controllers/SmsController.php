@@ -102,13 +102,16 @@ class SmsController extends Controller
 
             $groups[] = [
                 'residents' => $chunk->values(),
+                // Accepted is Queued, never Sent: SkySMS billed the messages when it
+                // took them and has said nothing about delivery. Only a later read
+                // of GET /sms/messages (SmsDeliveryController) may say Sent.
                 // Unknown is not failed: the request left and nothing came back,
                 // so the messages may well have gone. Recorded as Unconfirmed so
                 // nobody sends them again and pays twice.
                 'status' => match (true) {
-                    $result->isAccepted() => 'Sent',
-                    $result->isUnknown() => 'Unconfirmed',
-                    default => 'Failed',
+                    $result->isAccepted() => Recipient::QUEUED,
+                    $result->isUnknown() => Recipient::UNCONFIRMED,
+                    default => Recipient::FAILED,
                 },
                 'job' => $result->queueId,
                 'queue_ids' => $result->queueIds,
@@ -121,9 +124,9 @@ class SmsController extends Controller
             ->where('status', $status)
             ->sum(fn ($group) => $group['residents']->count());
 
-        $sent = $count('Sent');
-        $unconfirmed = $count('Unconfirmed');
-        $failed = $count('Failed');
+        $queued = $count(Recipient::QUEUED);
+        $unconfirmed = $count(Recipient::UNCONFIRMED);
+        $failed = $count(Recipient::FAILED);
 
         if ($unconfirmed > 0) {
             // 202, not 200 and not 5xx. We cannot confirm delivery, so this is
@@ -132,7 +135,7 @@ class SmsController extends Controller
             return response()->json([
                 'message' => 'SkySMS did not answer in time for '.$unconfirmed.' recipient(s), but the messages were most likely sent and billed. Do NOT send them again — check with a recipient before resending.',
                 'unconfirmed' => true,
-                'sent' => $sent,
+                'queued' => $queued,
                 'failed' => $failed,
                 'unconfirmed_count' => $unconfirmed,
                 'recipients' => $residents->count(),
@@ -141,25 +144,25 @@ class SmsController extends Controller
 
         if ($failed === 0) {
             return response()->json([
-                'message' => 'Text blast completed.',
-                'sent' => $sent,
+                'message' => 'Text blast queued. SkySMS has accepted it and billed the credits; delivery is not confirmed yet. Check status under Recent blasts.',
+                'queued' => $queued,
                 'failed' => 0,
             ]);
         }
 
         Log::error('SkySMS text blast had failures', [
-            'sent' => $sent,
+            'queued' => $queued,
             'failed' => $failed,
             'reason' => $firstFailure?->reason,
             'status' => $firstFailure?->httpStatus,
         ]);
 
-        // Some chunks went out before one failed: report the split rather than
-        // an error, so the desk knows part of the audience already has it.
-        if ($sent > 0) {
+        // Some chunks were queued before one failed: report the split rather than
+        // an error, so the desk knows part of the audience is already queued.
+        if ($queued > 0) {
             return response()->json([
-                'message' => 'Part of the blast went out: '.$sent.' sent, '.$failed.' failed. Do not resend the whole message — the recipients that were sent it would get it twice.',
-                'sent' => $sent,
+                'message' => 'Part of the blast was queued: '.$queued.' queued, '.$failed.' failed. Do not resend the whole message — the recipients that were queued would get it twice.',
+                'queued' => $queued,
                 'failed' => $failed,
             ]);
         }
@@ -501,13 +504,17 @@ class SmsController extends Controller
         }
 
         $advisories = SmsLog::query()
-            // 'Unconfirmed' included on purpose. It means SkySMS never
-            // answered, not that nothing was sent — the handset most likely has
-            // the message, and a feed that omits it would contradict the phone
-            // the resident is holding. Only 'Failed' is withheld, which is the
-            // case where nothing went out at all.
-            ->whereIn('status', ['Sent', 'Unconfirmed'])
-            ->whereHas('recipients', fn ($query) => $query->where('resident_id', $user->getKey()))
+            // The feed shows what MDRRMO issued, not proof of delivery, so a
+            // Queued blast is here as well as a Sent one. 'Unconfirmed' means
+            // SkySMS never answered, not that nothing was sent — the handset most
+            // likely has the message, and a feed that omits it would contradict
+            // the phone the resident is holding. A blast that failed outright is
+            // withheld, and so is one the vendor reported failed for THIS
+            // resident's own number.
+            ->whereIn('status', [Recipient::QUEUED, Recipient::SENT, Recipient::UNCONFIRMED])
+            ->whereHas('recipients', fn ($query) => $query
+                ->where('resident_id', $user->getKey())
+                ->where('status', '!=', Recipient::FAILED))
             ->with('barangay:barangay_id,barangay_name')
             ->latest()
             ->get(['sms_log_id', 'target_area_id', 'message_body', 'status', 'created_at']);
@@ -566,7 +573,7 @@ class SmsController extends Controller
             'barangay' => $log->barangay?->barangay_name ?? 'Unknown barangay',
             'message' => $log->message_body,
             'recipient_count' => $log->recipients_count,
-            // 'Sent' or 'Failed'. Failed rows are shown here on purpose — this is
+            // Queued, Sent, Unconfirmed or Failed. Failed rows are shown here on purpose — this is
             // the record somebody consults after a blast did not arrive. Only the
             // resident-facing advisory feed filters them out.
             'status' => $log->status,

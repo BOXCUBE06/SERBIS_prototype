@@ -261,6 +261,86 @@
             </v-form>
           </v-card-text>
         </v-card>
+
+        <!-- What became of the blasts after SkySMS took them. Below the form
+             rather than in a tab or a collapsed panel: this is the thing to
+             watch after pressing Send, so it should not be hidden or take a
+             click to reach. No auto-refresh — SkySMS's rate limit is shared with
+             every send, and a stuck message will not resolve faster for being
+             polled. -->
+        <v-card elevation="4" rounded="lg" class="bg-surface fade-in w-100 mt-6">
+          <div class="px-8 py-5 border-b d-flex align-center gap-3">
+            <v-icon color="primary" size="28">mdi-message-check-outline</v-icon>
+            <div>
+              <div class="text-h6 font-weight-bold">Recent blasts</div>
+              <div class="text-caption text-medium-emphasis">
+                Queued means SkySMS accepted it and billed the credits. A message is delivered only when it shows Sent.
+              </div>
+            </div>
+            <v-btn
+              variant="text" size="small" class="text-none ml-auto flex-shrink-0"
+              prepend-icon="mdi-refresh"
+              :loading="deliveries.loading"
+              @click="fetchDeliveries"
+            >Refresh list</v-btn>
+          </div>
+
+          <v-card-text class="pa-0">
+            <div v-if="deliveries.error" class="pa-8 text-error" role="alert">{{ deliveries.error }}</div>
+            <div v-else-if="!deliveries.rows.length && !deliveries.loading" class="pa-8 text-medium-emphasis">
+              No blasts have been sent yet.
+            </div>
+
+            <div
+              v-for="row in deliveries.rows" :key="row.sms_log_id"
+              class="px-8 py-5 delivery-row"
+            >
+              <div class="d-flex align-start gap-3">
+                <div class="flex-grow-1" style="min-width: 0;">
+                  <div class="text-body-2 font-weight-bold">
+                    {{ row.barangay }}
+                    <span class="font-weight-regular text-medium-emphasis"> · {{ formatWhen(row.created_at) }} · {{ row.sender }}</span>
+                  </div>
+                  <div class="text-body-2 text-medium-emphasis text-truncate" :title="row.message">{{ row.message }}</div>
+                </div>
+
+                <v-tooltip :disabled="row.checkable" location="top" text="No SkySMS message ids were stored for this blast, so its delivery can't be checked.">
+                  <template #activator="{ props: tip }">
+                    <span v-bind="tip" class="flex-shrink-0">
+                      <v-btn
+                        variant="tonal" size="small" class="text-none"
+                        prepend-icon="mdi-cloud-sync-outline"
+                        :disabled="!row.checkable"
+                        :loading="!!checking[row.sms_log_id]"
+                        @click="checkDelivery(row)"
+                      >Check status</v-btn>
+                    </span>
+                  </template>
+                </v-tooltip>
+              </div>
+
+              <!-- The four states SkySMS documents are always drawn, zero
+                   included and muted, so a missing chip never reads as "not
+                   tracked". Unconfirmed and Other appear only when there is
+                   one: they are not delivery states, they are things to look at. -->
+              <div class="d-flex flex-wrap gap-2 mt-3">
+                <v-chip
+                  v-for="state in visibleStates(row)" :key="state.key"
+                  size="small" class="font-weight-bold"
+                  :color="row.counts[state.key] > 0 ? state.color : undefined"
+                  :variant="row.counts[state.key] > 0 ? 'tonal' : 'outlined'"
+                  :class="{ 'text-medium-emphasis': row.counts[state.key] === 0 }"
+                >{{ row.counts[state.key] }} {{ state.label }}</v-chip>
+              </div>
+
+              <div class="text-caption text-medium-emphasis mt-2">
+                <template v-if="row.delivery_checked_at">Checked {{ formatWhen(row.delivery_checked_at) }}.</template>
+                <template v-else>Not checked yet. The numbers above are what was recorded when it was sent.</template>
+                <span v-if="notes[row.sms_log_id]" role="status"> {{ notes[row.sms_log_id] }}</span>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
     </div>
@@ -696,9 +776,73 @@ const fetchBalance = async () => {
   }
 }
 
+// Recent blasts and what SkySMS says became of them. Pending and Queued are
+// not delivery: the API keeps them apart from Sent, and so does this list.
+const deliveries = ref({ rows: [], loading: false, error: '' })
+const checking = ref({})
+const notes = ref({})
+
+const DELIVERY_STATES = [
+  { key: 'queued', label: 'Queued', color: 'info', always: true },
+  { key: 'pending', label: 'Pending', color: 'warning', always: true },
+  { key: 'sent', label: 'Sent', color: 'success', always: true },
+  { key: 'failed', label: 'Failed', color: 'error', always: true },
+  { key: 'unconfirmed', label: 'Unconfirmed', color: 'warning', always: false },
+  { key: 'other', label: 'Other status', color: 'warning', always: false },
+]
+
+const visibleStates = (row) =>
+  DELIVERY_STATES.filter(state => state.always || row.counts[state.key] > 0)
+
+const formatWhen = (value) => (value ? new Date(value).toLocaleString() : '')
+
+const fetchDeliveries = async () => {
+  deliveries.value.loading = true
+  deliveries.value.error = ''
+
+  try {
+    const res = await fetch(`${API_BASE}/sms/deliveries`, { headers: getHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Failed to load recent blasts')
+    deliveries.value.rows = data.data
+  } catch (error) {
+    deliveries.value.error = error.message
+  } finally {
+    deliveries.value.loading = false
+  }
+}
+
+const checkDelivery = async (row) => {
+  checking.value = { ...checking.value, [row.sms_log_id]: true }
+  notes.value = { ...notes.value, [row.sms_log_id]: '' }
+
+  try {
+    const res = await fetch(`${API_BASE}/sms/deliveries/${row.sms_log_id}/check`, {
+      method: 'POST',
+      headers: getHeaders(),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Failed to check the status')
+
+    const index = deliveries.value.rows.findIndex(r => r.sms_log_id === row.sms_log_id)
+    if (index !== -1) deliveries.value.rows[index] = data.data
+
+    let note = data.message || ''
+    if (data.checked && data.not_found > 0) {
+      note = `${data.not_found} recipient(s) are not in SkySMS's list yet, so they still show what was recorded at send.`
+    }
+    notes.value = { ...notes.value, [row.sms_log_id]: note }
+  } catch (error) {
+    notes.value = { ...notes.value, [row.sms_log_id]: error.message }
+  } finally {
+    checking.value = { ...checking.value, [row.sms_log_id]: false }
+  }
+}
+
 onMounted(() => {
   fetchBarangays()
   fetchBalance()
+  fetchDeliveries()
 })
 
 const sendSmsBlast = async () => {
@@ -770,13 +914,17 @@ const confirmSend = async () => {
     // A blast that went out in several requests can end part way: some
     // recipients were sent it and some were not. The server's own sentence
     // says so, and says not to resend the whole message.
+    // A 201 from SkySMS is "queued and billed", not "delivered", so this is
+    // an info box, not a success one. Delivery shows under Recent blasts.
     alert.value = data.unconfirmed || data.failed > 0
       ? { show: true, type: 'warning', message: data.message }
       : {
           show: true,
-          type: 'success',
-          message: `Success: ${data.sent} messages dispatched. ${data.failed} failed.`
+          type: 'info',
+          message: `${data.queued} messages queued at SkySMS and billed. Delivery is not confirmed yet — use Check status under Recent blasts.`
         }
+
+    fetchDeliveries()
 
     message.value = ''
     selectedTemplate.value = null
@@ -891,6 +1039,8 @@ const rotateBlastCode = async () => {
 </script>
 
 <style scoped>
+.delivery-row + .delivery-row { border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }

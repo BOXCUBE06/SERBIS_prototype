@@ -93,11 +93,15 @@
                          would have rendered orange — a failed blast and a
                          delivered one looking alike is the one distinction this
                          table exists to make. -->
-                    <!-- Three values now. 'Unconfirmed' is amber and not red:
-                         the vendor never answered, which is not the same as
-                         nothing having been sent, and colouring it as a failure
-                         is what would prompt a duplicate blast. -->
-                    <v-chip :color="item.status === 'Sent' ? 'green' : (item.status === 'Unconfirmed' ? 'amber-darken-2' : 'red')" size="small" variant="tonal" class="font-weight-bold">
+                    <!-- 'Queued' is what SkySMS accepting a blast is recorded as:
+                         billed, not delivered, so it is blue and never green.
+                         'Pending' is SkySMS holding it. 'Unconfirmed' is amber
+                         and not red: the vendor never answered, which is not
+                         the same as nothing having been sent, and colouring it
+                         as a failure is what would prompt a duplicate blast.
+                         Anything unrecognised falls back to grey, not red — red
+                         is for Failed only. -->
+                    <v-chip :color="smsStatusColor(item.status)" size="small" variant="tonal" class="font-weight-bold">
                       {{ item.status }}
                     </v-chip>
                   </template>
@@ -121,6 +125,16 @@ import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+
+// The SMS History status chip. Sent is the only green: it is set only after
+// SkySMS's own message list says every recipient's message was sent.
+const smsStatusColor = (status) => ({
+  Sent: 'green',
+  Queued: 'blue',
+  Pending: 'amber-darken-2',
+  Unconfirmed: 'amber-darken-2',
+  Failed: 'red',
+}[status] || 'grey')
 
 const activeTab = ref('system')
 const search = ref('')

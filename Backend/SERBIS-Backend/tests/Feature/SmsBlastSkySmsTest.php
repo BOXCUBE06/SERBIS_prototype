@@ -127,7 +127,7 @@ class SmsBlastSkySmsTest extends TestCase
         Http::fake([self::HOST => Http::response(['success' => true, 'batch_id' => 'b-1'], 200)]);
         $this->residents(2500);
 
-        $this->blast()->assertOk()->assertJson(['sent' => 2500, 'failed' => 0]);
+        $this->blast()->assertOk()->assertJson(['queued' => 2500, 'failed' => 0]);
 
         $sizes = Http::recorded()
             ->map(fn ($pair) => count($pair[0]['recipients']))
@@ -165,7 +165,7 @@ class SmsBlastSkySmsTest extends TestCase
         $this->assertStringContainsString('Content penalty applied', $response->json('message'));
         $this->assertSame('Failed', SmsLog::firstOrFail()->status);
         // The advisory feed must not show a warning as received.
-        $this->assertSame(0, SmsLog::where('status', 'Sent')->count());
+        $this->assertSame(0, SmsLog::where('status', 'Queued')->count());
     }
 
     public function test_a_429_is_retried_and_the_blast_then_goes_through(): void
@@ -175,7 +175,7 @@ class SmsBlastSkySmsTest extends TestCase
             ->push(['success' => true, 'batch_id' => 'b-2'], 200)]);
         $this->residents(2);
 
-        $this->blast()->assertOk()->assertJson(['sent' => 2, 'failed' => 0]);
+        $this->blast()->assertOk()->assertJson(['queued' => 2, 'failed' => 0]);
 
         Http::assertSentCount(2);
         $this->assertSame('b-2', SmsLog::firstOrFail()->api_job_id);
@@ -200,13 +200,13 @@ class SmsBlastSkySmsTest extends TestCase
             ->push(['message' => 'Insufficient credits'], 402)]);
         $this->residents(2500);
 
-        $response = $this->blast()->assertOk()->assertJson(['sent' => 1000, 'failed' => 1500]);
+        $response = $this->blast()->assertOk()->assertJson(['queued' => 1000, 'failed' => 1500]);
 
-        $this->assertStringContainsString('Part of the blast went out', $response->json('message'));
+        $this->assertStringContainsString('Part of the blast was queued', $response->json('message'));
         // The third chunk was not even attempted once credits were gone.
         Http::assertSentCount(2);
 
-        $this->assertSame(1000, Recipient::where('status', 'Sent')->count());
+        $this->assertSame(1000, Recipient::where('status', 'Queued')->count());
         $this->assertSame(1500, Recipient::where('status', 'Failed')->count());
         $this->assertSame(2500, Recipient::count());
     }
@@ -220,7 +220,7 @@ class SmsBlastSkySmsTest extends TestCase
 
         $response = $this->blast()->assertStatus(202)->assertJsonPath('unconfirmed', true);
 
-        $response->assertJsonPath('sent', 1000)->assertJsonPath('unconfirmed_count', 500)->assertJsonPath('failed', 0);
+        $response->assertJsonPath('queued', 1000)->assertJsonPath('unconfirmed_count', 500)->assertJsonPath('failed', 0);
         $this->assertSame(500, Recipient::where('status', 'Unconfirmed')->count());
         $this->assertSame(0, Recipient::where('status', 'Failed')->count());
     }
