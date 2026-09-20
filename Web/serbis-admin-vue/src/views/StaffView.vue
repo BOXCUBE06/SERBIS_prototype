@@ -154,9 +154,21 @@
               </v-col>
             </v-row>
 
+            <!-- Staff sign in with a made-up username on the office domain; no mail
+                 is ever sent to it. Only the name part is typed. An account made
+                 before this rule keeps its full address and shows it as-is. -->
             <v-text-field
-              v-model="form.email_address" label="Email address *" placeholder="juan.delacruz@echague.gov.ph" type="email" variant="outlined"
-              density="comfortable" rounded="lg" autocomplete="email" class="mb-1"
+              v-if="!legacyEmail"
+              :model-value="form.email_address" label="Username *" placeholder="juan.delacruz" variant="outlined"
+              density="comfortable" rounded="lg" autocomplete="off" class="mb-1"
+              suffix="@serbis.com" hint="Lowercase letters, digits and dots." persistent-hint
+              :rules="[requiredRule('Username'), usernameRule]" :error-messages="fieldErrors.email_address"
+              @update:model-value="onUsernameInput"
+            ></v-text-field>
+            <v-text-field
+              v-else
+              v-model="form.email_address" label="Email address *" type="email" variant="outlined"
+              density="comfortable" rounded="lg" autocomplete="off" class="mb-1"
               :rules="[requiredRule('Email address')]" :error-messages="fieldErrors.email_address"
             ></v-text-field>
 
@@ -277,7 +289,7 @@ const myId = ref(null)
 const showPassword = ref(false)
 const liveMessage = ref('')
 
-const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null })
+const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null, legacyEmail: false })
 const form = ref({ first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' })
 const closeDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -293,6 +305,22 @@ const requiredRule = (label) => (v) =>
 // both password fields blank to keep the current one.
 const passwordRequiredRule = (v) =>
   modal.value.editing || (v && String(v).trim() !== '') || 'A password is required for a new account.'
+
+const EMAIL_SUFFIX = '@serbis.com'
+
+// Editing an account made before the @serbis.com rule: its address is kept and
+// shown in full. Everything else types just the name part.
+const legacyEmail = computed(() => modal.value.editing && !!modal.value.legacyEmail)
+
+// Same shape the server enforces: letters, digits and single dots between them.
+const usernameRule = (v) =>
+  /^[a-z0-9]+(\.[a-z0-9]+)*$/.test(String(v || '')) || 'Use lowercase letters, digits and single dots only.'
+
+// Lowercases and drops anything the address cannot hold as it is typed. A pasted
+// full address loses everything from the @ on, so the suffix is never doubled.
+const onUsernameInput = (v) => {
+  form.value.email_address = String(v || '').toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9.]/g, '')
+}
 
 const passwordConfirmRule = (v) =>
   String(v || '') === String(form.value.password || '') || 'The two passwords do not match.'
@@ -390,21 +418,22 @@ const fetchMe = async () => {
 const openAdd = () => {
   form.value = { first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' }
   showPassword.value = false
-  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
+  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null, legacyEmail: false }
   clearFieldErrors()
   formRef.value?.resetValidation()
 }
 
 const openEdit = (item) => {
+  const legacy = !String(item.email_address).endsWith(EMAIL_SUFFIX)
   form.value = {
     first_name: item.first_name,
     last_name: item.last_name,
-    email_address: item.email_address,
+    email_address: legacy ? item.email_address : item.email_address.slice(0, -EMAIL_SUFFIX.length),
     password: '',
     password_confirmation: '',
   }
   showPassword.value = false
-  modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item) }
+  modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item), legacyEmail: legacy }
   clearFieldErrors()
   formRef.value?.resetValidation()
 }
@@ -425,7 +454,9 @@ const save = async () => {
   const payload = {
     first_name: form.value.first_name.trim(),
     last_name: form.value.last_name.trim(),
-    email_address: form.value.email_address.trim(),
+    email_address: legacyEmail.value
+      ? form.value.email_address.trim()
+      : `${form.value.email_address.trim()}${EMAIL_SUFFIX}`,
   }
   if (form.value.password) {
     payload.password = form.value.password
