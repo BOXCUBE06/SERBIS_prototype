@@ -43,9 +43,11 @@ class LibraryArticle {
 }
 
 /// All readable materials available in the Safety Library, grouped by the
-/// section they appear in. Content is general safety guidance — replace or
-/// expand with official MDRRMO-reviewed materials when available.
+/// section they appear in. Each entry carries a "Source:" comment naming the
+/// official body its content follows. None of it has been reviewed by MDRRMO
+/// yet, and the wording has not been checked verbatim against the originals.
 final libraryArticles = <String, LibraryArticle>{
+  // Source: Philippine Red Cross Basic Life Support (BLS) guidelines. Numbers checked against published summaries; wording not verified against the original.
   'cpr': const LibraryArticle(
     title: 'CPR — Step by Step',
     titleFil: 'CPR — Hakbang-hakbang',
@@ -57,81 +59,99 @@ final libraryArticles = <String, LibraryArticle>{
     sections: [
       ArticleSection(
         heading: 'Before you start',
-        body: 'Check the scene for safety, then check if the person responds. '
-            'Tap their shoulder and shout. If there is no response and they are '
-            'not breathing normally, call for help immediately and ask someone '
-            'to bring an AED if one is available.',
+        body: 'Check that the scene is safe. Then check if the person '
+            'responds: tap their shoulders and shout. If there is no response '
+            'and they are not breathing, or are only gasping, call for '
+            'emergency help (911) or ask someone to call, and send someone to '
+            'get an AED if one is nearby. Begin with chest compressions — the '
+            'sequence is Circulation, Airway, Breathing (C-A-B).',
       ),
       ArticleSection(
         heading: 'Hand placement',
         bullets: [
+          'Lay the person on their back on a firm, flat surface and kneel beside them.',
           'Place the heel of one hand on the center of the chest, between the nipples.',
           'Place your other hand on top and interlock your fingers.',
-          'Keep your arms straight and shoulders directly above your hands.',
+          'Keep your arms straight and your shoulders directly above your hands.',
         ],
       ),
       ArticleSection(
         heading: 'Chest compressions',
         bullets: [
-          'Push hard and fast — at least 5 cm (2 in) deep for adults.',
+          'Push hard and fast — 5 to 6 cm (2 to 2.4 in) deep for adults.',
           'Aim for a rate of 100–120 compressions per minute.',
-          'Allow the chest to fully recoil between compressions.',
-          'Give 30 compressions, then 2 rescue breaths if trained to do so.',
+          'Allow the chest to fully recoil between compressions, and keep interruptions as short as you can.',
+          'Give 30 compressions, then 2 rescue breaths if you are trained to do so (30:2). If you are not trained, keep giving compressions without stopping.',
         ],
       ),
       ArticleSection(
         heading: 'For children and infants',
-        body: 'Use one hand (or two fingers for infants) and compress about '
-            'one-third the depth of the chest. The rate and ratio of '
-            'compressions to breaths stays the same as for adults.',
+        body: 'For a child, use one or two hands and compress about '
+            'one-third the depth of the chest (about 5 cm). For an infant, use '
+            'two fingers, or two thumbs with your hands around the chest, and '
+            'compress about 4 cm. The rate (100–120 per minute) and the 30:2 '
+            'ratio stay the same when you are alone. If you are alone with a '
+            'child or infant, give about 2 minutes of CPR before leaving to '
+            'call for help.',
       ),
       ArticleSection(
         heading: 'When to stop',
-        body: 'Continue CPR until the person starts breathing normally, '
-            'emergency responders arrive and take over, or you are too '
-            'exhausted to continue safely.',
+        body: 'Continue CPR until the person shows signs of life, such as '
+            'breathing normally; trained responders or medical personnel '
+            'arrive and take over; you are too exhausted to continue safely; '
+            'or the scene becomes unsafe.',
       ),
     ],
     sectionsFil: [
       ArticleSection(
         heading: 'Bago Magsimula',
-        body: 'Suriin muna kung ligtas ang paligid, tapos tingnan kung tumutugon '
-            'ang biktima. Tapikin ang balikat at tawagin nang malakas. Kung '
-            'walang tugon at hindi normal ang paghinga, humingi agad ng tulong '
-            'at magpadala ng AED kung meron.',
+        body: 'Tiyaking ligtas ang paligid. Pagkatapos, tingnan kung '
+            'tumutugon ang biktima: tapikin ang balikat at tawagin nang '
+            'malakas. Kung walang tugon at hindi humihinga, o hingal lamang, '
+            'humingi ng tulong sa emergency (911) o magpatawag sa iba, at '
+            'magpakuha ng AED kung meron sa malapit. Magsimula sa chest '
+            'compressions — ang pagkakasunod-sunod ay Circulation, Airway, '
+            'Breathing (C-A-B).',
       ),
       ArticleSection(
         heading: 'Pwesto ng Kamay',
         bullets: [
+          'Ihiga ang biktima nang nakatihaya sa matigas at patag na ibabaw at lumuhod sa tabi niya.',
           'Ilagay ang bahagi ng palad sa gitna ng dibdib, sa pagitan ng dalawang utong.',
           'Ipatong ang isang kamay sa ibabaw ng kamay na nasa dibdib at ikawing ang mga daliri.',
-          'Panatilihing tuwid ang braso at ang balikat ay direktang ibabaw ng kamay.',
+          'Panatilihing tuwid ang braso at ang balikat ay direktang nasa ibabaw ng kamay.',
         ],
       ),
       ArticleSection(
         heading: 'Compressions sa Dibdib',
         bullets: [
-          'Itulak nang malakas at mabilis — hindi bababa sa 5 cm (2 in) ang lalim para sa matatanda.',
+          'Itulak nang malakas at mabilis — 5 hanggang 6 cm (2 hanggang 2.4 in) ang lalim para sa matatanda.',
           'Layunin ang 100–120 compressions kada minuto.',
-          'Hayaang bumalik nang husto ang dibdib sa pagitan ng bawat compression.',
-          'Gumawa ng 30 compressions, sundan ng 2 rescue breaths kung sanay.',
+          'Hayaang bumalik nang husto ang dibdib sa pagitan ng bawat compression, at paikliin hangga\'t maaari ang mga pagtigil.',
+          'Gumawa ng 30 compressions, sundan ng 2 rescue breaths kung sanay (30:2). Kung hindi sanay, ituloy lang ang compressions nang walang tigil.',
         ],
       ),
       ArticleSection(
         heading: 'Para sa Mga Bata at Sanggol',
-        body: 'Gumamit ng isang kamay (o dalawang daliri para sa sanggol) at '
-            'i-compress ang humigit-kumulang ikatlong bahagi ng lalim ng dibdib. '
-            'Pareho lang ang bilis at ratio ng compressions sa breaths gaya ng '
-            'sa matatanda.',
+        body: 'Para sa bata, gumamit ng isa o dalawang kamay at i-compress ang '
+            'humigit-kumulang ikatlong bahagi ng lalim ng dibdib (mga 5 cm). '
+            'Para sa sanggol, gumamit ng dalawang daliri, o dalawang hinlalaki '
+            'habang nakayakap ang mga kamay sa dibdib, at i-compress nang mga '
+            '4 cm. Pareho pa rin ang bilis (100–120 kada minuto) at ang 30:2 '
+            'kung nag-iisa ka. Kung nag-iisa ka sa bata o sanggol, magbigay '
+            'muna ng CPR nang mga 2 minuto bago umalis para tumawag ng tulong.',
       ),
       ArticleSection(
         heading: 'Kailan Dapat Tumigil',
-        body: 'Ipagpatuloy ang CPR hanggang sa magsimulang huminga nang normal '
-            'ang biktima, may dumating na rescue team na papalit, o kapag pagod '
-            'na kayo at hindi na kayang ipagpatuloy nang ligtas.',
+        body: 'Ipagpatuloy ang CPR hanggang may makitang senyales ng buhay, '
+            'gaya ng paghinga nang normal; may dumating na rescue team o '
+            'medical personnel na papalit; kapag pagod na kayo at hindi na '
+            'kayang ipagpatuloy nang ligtas; o kapag hindi na ligtas ang '
+            'paligid.',
       ),
     ],
   ),
+  // Source: DOH / Philippine Red Cross first aid guidelines (burns). Wording not verified against the originals.
   'burns': const LibraryArticle(
     title: 'Treating Burns',
     titleFil: 'Pag-alaga sa Paso (Burns)',
@@ -144,18 +164,19 @@ final libraryArticles = <String, LibraryArticle>{
       ArticleSection(
         heading: 'First steps for any burn',
         bullets: [
-          'Remove the person from the source of the burn.',
-          'Cool the burn under cool (not ice-cold) running water for 10–20 minutes.',
-          'Remove tight clothing and jewelry near the burn before swelling starts.',
-          'Cover loosely with a clean, non-fluffy cloth or dressing.',
+          'Make sure it is safe, then move the person away from the source of the burn.',
+          'Cool the burn right away under cool or cold running water for 20 minutes. Do not use ice or ice-cold water.',
+          'Gently remove rings, watches, and tight clothing near the burn before swelling starts. Do not pull off clothing that is stuck to the skin.',
+          'Cover loosely with a clean, non-fluffy cloth or a burn dressing.',
         ],
       ),
       ArticleSection(
         heading: 'Minor burns',
         body: 'Small burns that only affect the top layer of skin (redness, '
             'mild swelling, pain) can usually be treated at home. After '
-            'cooling, apply a clean dressing and avoid breaking any blisters '
-            'that form.',
+            'cooling, cover with a clean dressing and do not break any '
+            'blisters that form. If you are unsure, have the burn checked at '
+            'the nearest health facility.',
       ),
       ArticleSection(
         heading: 'Seek medical help if...',
@@ -163,7 +184,7 @@ final libraryArticles = <String, LibraryArticle>{
           'The burn is larger than the person\'s palm.',
           'It is on the face, hands, feet, joints, or genitals.',
           'The skin looks white, leathery, or charred.',
-          'The burn was caused by chemicals, electricity, or an explosion.',
+          'The burn was caused by chemicals, electricity, fireworks, or an explosion.',
           'The person is a child, elderly, or has other medical conditions.',
         ],
       ),
@@ -171,7 +192,7 @@ final libraryArticles = <String, LibraryArticle>{
         heading: 'What not to do',
         bullets: [
           'Do not apply ice directly — it can damage tissue further.',
-          'Do not apply butter, toothpaste, or other home remedies.',
+          'Do not apply butter, toothpaste, oil, or other home remedies.',
           'Do not pop blisters, as this increases infection risk.',
         ],
       ),
@@ -180,10 +201,10 @@ final libraryArticles = <String, LibraryArticle>{
       ArticleSection(
         heading: 'Unang Gagawin sa Anumang Paso',
         bullets: [
-          'Ilayo ang biktima sa pinagmulan ng init o sunog.',
-          'Patubigan ang sugat ng malamig (hindi yelo) na tubig sa loob ng 10–20 minuto.',
-          'Tanggalin ang masikip na damit at alahas malapit sa paso bago ito mamaga.',
-          'Takpan nang maluwag gamit ang malinis na tela o dressing na hindi maraming hibla.',
+          'Tiyaking ligtas, tapos ilayo ang biktima sa pinagmulan ng init o sunog.',
+          'Agad na patubigan ang paso ng malamig na umaagos na tubig sa loob ng 20 minuto. Huwag gumamit ng yelo o tubig na may yelo.',
+          'Dahan-dahang tanggalin ang singsing, relo, at masikip na damit malapit sa paso bago ito mamaga. Huwag hilahin ang damit na nakadikit sa balat.',
+          'Takpan nang maluwag gamit ang malinis na tela na hindi maraming hibla o burn dressing.',
         ],
       ),
       ArticleSection(
@@ -191,7 +212,8 @@ final libraryArticles = <String, LibraryArticle>{
         body: 'Maliliit na pasong umaapekto lamang sa pinakaibabaw na balat '
             '(pamumula, bahagyang pamamaga, sakit) ay maaaring gamutin sa '
             'bahay. Pagkatapos patubigan, takpan ng malinis na dressing at '
-            'iwasang butasin ang anumang paltos na mabuo.',
+            'huwag butasin ang anumang paltos na mabuo. Kung hindi sigurado, '
+            'ipatingin ang paso sa pinakamalapit na health facility.',
       ),
       ArticleSection(
         heading: 'Kumonsulta Agad sa Doktor Kung...',
@@ -199,7 +221,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Mas malaki ang paso kaysa sa palad ng biktima.',
           'Nasa mukha, kamay, paa, kasukasuan, o ari ito.',
           'Ang balat ay mukhang puti, parang katad, o nasunog.',
-          'Sanhi ng kemikal, kuryente, o pagsabog ang paso.',
+          'Sanhi ng kemikal, kuryente, paputok, o pagsabog ang paso.',
           'Bata, matanda, o may iba pang sakit ang biktima.',
         ],
       ),
@@ -207,12 +229,13 @@ final libraryArticles = <String, LibraryArticle>{
         heading: 'Mga Bawal Gawin',
         bullets: [
           'Huwag maglagay ng yelo direkta — maaari pa itong magpalala ng sugat.',
-          'Huwag maglagay ng mantikilya, toothpaste, o ibang lunas-bahay.',
+          'Huwag maglagay ng mantikilya, toothpaste, mantika, o ibang lunas-bahay.',
           'Huwag butasin ang paltos dahil madaling magka-impeksyon.',
         ],
       ),
     ],
   ),
+  // Source: DOH / Philippine Red Cross first aid guidelines (wounds and bleeding). Wording not verified against the originals.
   'wound_care': const LibraryArticle(
     title: 'Wound Care Basics',
     titleFil: 'Mga Pangunahing Hakbang sa Pag-alaga ng Sugat',
@@ -224,16 +247,19 @@ final libraryArticles = <String, LibraryArticle>{
     sections: [
       ArticleSection(
         heading: 'Step 1 — Stop the bleeding',
-        body: 'Apply firm, direct pressure to the wound with a clean cloth or '
-            'dressing. Keep pressing until the bleeding slows or stops. If '
-            'blood soaks through, add another layer on top rather than '
-            'removing the first one.',
+        body: 'Press firmly and directly on the wound with a clean cloth or '
+            'dressing, and keep pressing until the bleeding slows or stops. '
+            'If blood soaks through, add another layer on top rather than '
+            'removing the first one. If a broken bone is not suspected, raise '
+            'the injured part above the level of the heart. If the bleeding '
+            'is heavy or does not stop, keep pressing and get emergency help.',
       ),
       ArticleSection(
         heading: 'Step 2 — Clean the wound',
         bullets: [
           'Wash your hands before touching the wound.',
-          'Rinse the wound gently with clean water to remove dirt and debris.',
+          'Rinse the wound gently with clean running water to remove dirt and debris.',
+          'Wash the skin around the wound with mild soap and water.',
           'Avoid using alcohol or hydrogen peroxide directly on open wounds — they can damage healthy tissue.',
         ],
       ),
@@ -251,22 +277,28 @@ final libraryArticles = <String, LibraryArticle>{
             'swollen, warm, or painful, if pus develops, or if the person '
             'develops a fever. Deep cuts, puncture wounds, and animal bites '
             'should be checked by a health worker, especially if tetanus '
-            'vaccination status is unknown.',
+            'vaccination status is unknown. For an animal bite, wash the '
+            'wound right away with soap and running water and go to the '
+            'nearest health facility or animal bite center.',
       ),
     ],
     sectionsFil: [
       ArticleSection(
         heading: 'Hakbang 1 — Patigilin ang Pagdurugo',
         body: 'Idiin nang mahigpit at direkta ang sugat gamit ang malinis na '
-            'tela o dressing. Ipagpatuloy ang pagdiin hanggang humina o tumigil '
-            'ang dugo. Kung tumagos ang dugo, magdagdag ng isa pang layer sa '
-            'ibabaw imbes na alisin ang una.',
+            'tela o dressing, at ipagpatuloy ang pagdiin hanggang humina o '
+            'tumigil ang dugo. Kung tumagos ang dugo, magdagdag ng isa pang '
+            'layer sa ibabaw imbes na alisin ang una. Kung hindi pinaghihinalaang '
+            'may baling buto, itaas ang nasugatang bahagi nang mas mataas sa '
+            'puso. Kung malakas ang dugo o hindi tumitigil, ituloy ang pagdiin '
+            'at humingi ng emergency na tulong.',
       ),
       ArticleSection(
         heading: 'Hakbang 2 — Linisin ang Sugat',
         bullets: [
           'Maghugas ng kamay bago hawakan ang sugat.',
-          'Banlawan nang dahan-dahan ang sugat gamit ang malinis na tubig para alisin ang dumi.',
+          'Banlawan nang dahan-dahan ang sugat gamit ang malinis na umaagos na tubig para alisin ang dumi.',
+          'Hugasan ng banayad na sabon at tubig ang balat sa paligid ng sugat.',
           'Iwasang gamitin ang alcohol o hydrogen peroxide direkta sa bukas na sugat dahil maaari itong makasira sa malusog na tisyu.',
         ],
       ),
@@ -283,10 +315,14 @@ final libraryArticles = <String, LibraryArticle>{
         body: 'Kumonsulta sa health worker kung lumalala ang pamumula, '
             'pamamaga, init, o sakit ng sugat, may nana, o nilagnat ang '
             'biktima. Ang malalim na hiwa, tusok, at kagat ng hayop ay dapat '
-            'ipatingin, lalo na kung hindi sigurado ang bakuna sa tetano.',
+            'ipatingin, lalo na kung hindi sigurado ang bakuna sa tetano. Sa '
+            'kagat ng hayop, hugasan agad ang sugat ng sabon at umaagos na '
+            'tubig at pumunta sa pinakamalapit na health facility o animal '
+            'bite center.',
       ),
     ],
   ),
+  // Source: NDRRMC public preparedness guidance. Wording not verified against the original.
   'before': const LibraryArticle(
     title: 'Before a Disaster',
     titleFil: 'Bago ang Sakuna',
@@ -303,6 +339,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Identify the nearest evacuation center for your barangay.',
           'Save MDRRMO, barangay, and emergency hotline numbers in every phone.',
           'Know the evacuation routes from your home and workplace.',
+          'Practice the plan with your family, including barangay drills.',
         ],
       ),
       ArticleSection(
@@ -314,6 +351,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Copies of important documents (IDs, land titles, insurance) in a waterproof bag.',
           'Cash, whistle, face masks, and a battery-powered radio.',
           'Extra clothes, blankets, and hygiene items.',
+          'Anything special your household needs, such as items for infants, older persons, or persons with disabilities.',
         ],
       ),
       ArticleSection(
@@ -326,10 +364,11 @@ final libraryArticles = <String, LibraryArticle>{
       ),
       ArticleSection(
         heading: 'Stay informed',
-        body: 'Monitor official MDRRMO and PAGASA advisories regularly, '
-            'especially during typhoon season. Sign up for SMS alerts in the '
-            'app so you receive announcements even with limited internet '
-            'access.',
+        body: 'Know the hazards in your area and follow official advisories '
+            'from PAGASA (weather), PHIVOLCS (earthquakes and volcanoes), '
+            'NDRRMC, the MDRRMO, and your barangay, especially during typhoon '
+            'season. Keep MDRRMO text alerts turned on in your profile so you '
+            'receive announcements even with limited internet access.',
       ),
     ],
     sectionsFil: [
@@ -340,6 +379,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Alamin ang pinakamalapit na evacuation center sa inyong barangay.',
           'I-save ang mga numero ng MDRRMO, barangay, at emergency hotlines sa lahat ng cellphone.',
           'Alamin ang ruta ng evacuation mula sa tahanan at lugar ng trabaho.',
+          'Isagawa ang plano kasama ang pamilya, pati ang mga drill ng barangay.',
         ],
       ),
       ArticleSection(
@@ -351,6 +391,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Kopya ng mahahalagang dokumento (ID, titulo ng lupa, insurance) sa waterproof bag.',
           'Pera, pito, face mask, at radyo na de-baterya.',
           'Ekstrang damit, kumot, at gamit sa kalinisan.',
+          'Anumang espesyal na kailangan ng inyong sambahayan, gaya ng gamit para sa sanggol, nakatatanda, o PWD.',
         ],
       ),
       ArticleSection(
@@ -363,12 +404,15 @@ final libraryArticles = <String, LibraryArticle>{
       ),
       ArticleSection(
         heading: 'Manatiling May Alam',
-        body: 'Subaybayan ang mga opisyal na advisory ng MDRRMO at PAGASA, '
-            'lalo na sa tag-bagyo. Mag-sign up para sa SMS alerts sa app para '
-            'makatanggap ng abiso kahit limitado ang internet.',
+        body: 'Alamin ang mga panganib sa inyong lugar at sundan ang mga '
+            'opisyal na advisory ng PAGASA (panahon), PHIVOLCS (lindol at '
+            'bulkan), NDRRMC, MDRRMO, at inyong barangay, lalo na sa tag-bagyo. '
+            'Panatilihing naka-on ang text alerts ng MDRRMO sa inyong profile '
+            'para makatanggap ng abiso kahit limitado ang internet.',
       ),
     ],
   ),
+  // Source: NDRRMC public preparedness guidance; the earthquake section follows DOST-PHIVOLCS "Duck, Cover, and Hold". Wording not verified against the originals.
   'during': const LibraryArticle(
     title: 'During a Disaster',
     titleFil: 'Habang Nagaganap ang Sakuna',
@@ -381,7 +425,7 @@ final libraryArticles = <String, LibraryArticle>{
       ArticleSection(
         heading: 'When an alert or warning is issued',
         bullets: [
-          'Stay calm and follow instructions from MDRRMO and barangay officials.',
+          'Stay calm and follow instructions and evacuation orders from MDRRMO and barangay officials.',
           'Move to higher ground early if you are in a flood- or landslide-prone area — don\'t wait for water to rise.',
           'Unplug appliances and turn off the main power and water supply before leaving.',
           'Bring your go-bag, important documents, and any needed medication.',
@@ -404,19 +448,24 @@ final libraryArticles = <String, LibraryArticle>{
           'Avoid using candles if there is a gas leak risk — use flashlights instead.',
         ],
       ),
+      // Earthquake: DOST-PHIVOLCS guidance. "Duck, Cover, and Hold" is their
+      // exact phrase — do not reword it to "Drop, cover, and hold on".
       ArticleSection(
-        heading: 'During an earthquake',
-        body: 'Drop, cover, and hold on. Get under a sturdy table or against '
-            'an interior wall, away from windows and heavy furniture. If '
-            'outdoors, move to an open area away from buildings, trees, and '
-            'power lines. Do not run outside during the shaking.',
+        heading: 'During an earthquake — Duck, Cover, and Hold',
+        bullets: [
+          'Duck, Cover, and Hold: get down, take cover under a sturdy table or desk (or protect your head and neck with your arms), and hold on until the shaking stops.',
+          'If you are indoors and the structure is sound, stay inside. Do not leave the building while it is still shaking.',
+          'Stay away from glass windows, shelves, cabinets, and heavy objects that could fall.',
+          'If you are in bed, stay there and protect your head with a pillow.',
+          'If you are outdoors, move to an open area away from buildings, trees, and power lines.',
+        ],
       ),
     ],
     sectionsFil: [
       ArticleSection(
         heading: 'Kapag May Inilabas na Alerto o Babala',
         bullets: [
-          'Manatiling kalmado at sundin ang tagubilin ng MDRRMO at barangay officials.',
+          'Manatiling kalmado at sundin ang tagubilin at utos sa paglikas ng MDRRMO at barangay officials.',
           'Lumikas papuntang mataas na lugar agad kung ikaw ay sa flood- o landslide-prone area — huwag hintayin tumaas ang tubig.',
           'I-unplug ang appliances at isara ang main power at water supply bago umalis.',
           'Dalhin ang go-bag, mahahalagang dokumento, at gamot na kailangan.',
@@ -440,15 +489,18 @@ final libraryArticles = <String, LibraryArticle>{
         ],
       ),
       ArticleSection(
-        heading: 'Habang Lumilindol',
-        body: 'Dapa, sumilong, at humawak nang mahigpit. Pumasok sa ilalim ng '
-            'matibay na mesa o sa tabi ng panloob na pader, palayo sa bintana '
-            'at mabibigat na kasangkapan. Kung sa labas, lumayo sa gusali, '
-            'puno, at poste ng kuryente. Huwag tumakbo sa labas habang '
-            'yumayanig.',
+        heading: 'Habang Lumilindol — Duck, Cover, and Hold',
+        bullets: [
+          'Duck, Cover, and Hold: yumuko, sumilong sa ilalim ng matibay na mesa o desk (o protektahan ang ulo at leeg gamit ang mga braso), at kumapit hanggang tumigil ang pagyanig.',
+          'Kung nasa loob ka at matibay ang gusali, manatili sa loob. Huwag lumabas ng gusali habang yumayanig pa.',
+          'Lumayo sa mga salamin na bintana, estante, kabinet, at mabibigat na bagay na maaaring mahulog.',
+          'Kung nasa kama ka, manatili roon at protektahan ang ulo gamit ang unan.',
+          'Kung nasa labas, pumunta sa bukas na lugar, malayo sa mga gusali, puno, at poste ng kuryente.',
+        ],
       ),
     ],
   ),
+  // Source: NDRRMC public preparedness guidance. Wording not verified against the original.
   'after': const LibraryArticle(
     title: 'After a Disaster',
     titleFil: 'Pagkatapos ng Sakuna',
@@ -464,6 +516,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Check yourself and family members for injuries before checking property.',
           'Watch for hazards: downed power lines, broken glass, gas leaks, and structural damage.',
           'Avoid floodwater — it may be contaminated or carry electrical hazards.',
+          'After an earthquake, expect aftershocks and stay out of damaged buildings.',
           'Do not return home until local officials say it is safe to do so.',
         ],
       ),
@@ -471,6 +524,7 @@ final libraryArticles = <String, LibraryArticle>{
         heading: 'Getting help',
         bullets: [
           'Report damage and injuries to your barangay or MDRRMO using the Service Request feature.',
+          'Tell your barangay officials that your household was affected so it can be included in relief and assistance.',
           'Visit designated relief distribution points for food, water, and hygiene kits.',
           'Keep records (photos) of damage to your home or belongings for assistance applications.',
         ],
@@ -499,6 +553,7 @@ final libraryArticles = <String, LibraryArticle>{
           'Tingnan kung may sugat ang sarili at pamilya bago tingnan ang ari-arian.',
           'Mag-ingat sa mga panganib: putol na linya ng kuryente, basag na salamin, gas leak, at sirang istruktura.',
           'Iwasan ang tubig-baha — maaaring kontaminado o may electrical hazard.',
+          'Pagkatapos ng lindol, asahan ang aftershocks at lumayo sa mga nasirang gusali.',
           'Huwag bumalik sa bahay hangga\'t hindi pinapayagan ng mga opisyal.',
         ],
       ),
@@ -506,6 +561,7 @@ final libraryArticles = <String, LibraryArticle>{
         heading: 'Paghingi ng Tulong',
         bullets: [
           'I-report ang pinsala at sugat sa barangay o MDRRMO gamit ang Service Request feature.',
+          'Ipaalam sa barangay officials na naapektuhan ang inyong sambahayan para maisama ito sa relief at tulong.',
           'Pumunta sa mga itinalagang relief distribution point para sa pagkain, tubig, at hygiene kit.',
           'Kumuha ng litrato ng pinsala sa bahay o gamit para sa application ng tulong.',
         ],
@@ -528,6 +584,7 @@ final libraryArticles = <String, LibraryArticle>{
       ),
     ],
   ),
+  // Source: UNVERIFIED. A summary of a local Echague DRRM plan that could not be checked; not rewritten. MDRRMO must confirm it against the plan.
   'drrm_plan': const LibraryArticle(
     title: 'Echague DRRM Plan 2026',
     titleFil: 'Echague DRRM Plan 2026',
@@ -610,11 +667,12 @@ final libraryArticles = <String, LibraryArticle>{
       ),
     ],
   ),
+  // Source: general NDRRMC / MDRRMO evacuation guidance. No center names on purpose: assignments come from the barangay.
   'evacuation_map': const LibraryArticle(
     title: 'Evacuation Map & Centers',
     titleFil: 'Mapa at Sentro ng Evacuation',
-    subtitle: 'Designated centers in Echague',
-    subtitleFil: 'Itinalagang sentro sa Echague',
+    subtitle: 'Confirm yours with your barangay',
+    subtitleFil: 'Kumpirmahin sa inyong barangay',
     icon: Icons.description_outlined,
     iconBg: AppColors.grey50,
     iconFg: AppColors.inkMuted,
@@ -628,13 +686,12 @@ final libraryArticles = <String, LibraryArticle>{
             'the type of hazard.',
       ),
       ArticleSection(
-        heading: 'Sample designated centers',
+        heading: 'Confirm your assigned center',
         bullets: [
-          'Echague Central School Covered Court',
-          'Echague National Comprehensive High School',
-          'Barangay Angancasilian Multi-Purpose Hall',
-          'Barangay Malasin Covered Court',
-          'Echague Municipal Gymnasium',
+          'Ask your barangay officials which evacuation center is assigned to your household.',
+          'Ask whether there is an alternate center for different hazards, such as flood, earthquake, or storm surge.',
+          'Learn the route to it and how long it takes to get there.',
+          'Share the center and the route with everyone in your household.',
         ],
       ),
       ArticleSection(
@@ -664,13 +721,12 @@ final libraryArticles = <String, LibraryArticle>{
             'maaari itong baguhin depende sa uri ng sakuna.',
       ),
       ArticleSection(
-        heading: 'Mga Halimbawang Itinalagang Sentro',
+        heading: 'Kumpirmahin ang Inyong Itinalagang Sentro',
         bullets: [
-          'Echague Central School Covered Court',
-          'Echague National Comprehensive High School',
-          'Barangay Angancasilian Multi-Purpose Hall',
-          'Barangay Malasin Covered Court',
-          'Echague Municipal Gymnasium',
+          'Itanong sa barangay officials kung aling evacuation center ang itinalaga sa inyong sambahayan.',
+          'Itanong kung may alternatibong sentro para sa iba\'t ibang sakuna, gaya ng baha, lindol, o storm surge.',
+          'Alamin ang ruta papunta roon at kung gaano katagal makarating.',
+          'Ibahagi ang sentro at ang ruta sa lahat ng miyembro ng sambahayan.',
         ],
       ),
       ArticleSection(
