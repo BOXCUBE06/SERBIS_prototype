@@ -145,6 +145,13 @@ class EquipmentBorrowingController extends Controller
         // the check that holds for a hand-built request.
         $account = $request->user();
 
+        if ($account instanceof Resident && $account->isAwaitingApproval()) {
+            return response()->json([
+                'message' => 'Your organization account is awaiting MDRRMO approval. You can borrow equipment once it is activated.',
+                'code' => 'account_pending',
+            ], 403);
+        }
+
         if ($account instanceof Resident
             && ! ServiceAudience::allows(ServiceAudience::EQUIPMENT_BORROWING, $account->account_type)) {
             return response()->json([

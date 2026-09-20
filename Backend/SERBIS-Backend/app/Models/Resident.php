@@ -100,6 +100,20 @@ class Resident extends Authenticatable
     }
 
     /**
+     * An organization that signed itself up and has not been activated yet.
+     * `Inactive` is the "pending" status here (see isDeactivated()), and an
+     * individual in that state may still file, so this is specific to
+     * organizations: MDRRMO checks who they are before they can request
+     * anything. A Deactivated organization is refused at login and filing
+     * already, so it is not this.
+     */
+    public function isAwaitingApproval(): bool
+    {
+        return $this->account_type === self::TYPE_ORGANIZATION
+            && strtolower((string) $this->status) === 'inactive';
+    }
+
+    /**
      * Mirrors User::isDeactivated() in shape and deliberately not in value.
      *
      * `tbl_user.status` uses 'Inactive' for the closed state. `tbl_residents`

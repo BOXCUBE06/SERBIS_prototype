@@ -367,6 +367,14 @@ class ServiceRequestController extends Controller
             ], 403);
         }
 
+        // An organization that registered itself waits for MDRRMO to activate it.
+        if ($resident instanceof Resident && $resident->isAwaitingApproval()) {
+            return response()->json([
+                'message' => 'Your organization account is awaiting MDRRMO approval. You can request services once it is activated.',
+                'code' => 'account_pending',
+            ], 403);
+        }
+
         // Whether this kind of account may ask for this service at all. The
         // mobile list is already filtered, so this is the check that holds when
         // a client is hand-built. Refused before anything is written to disk.

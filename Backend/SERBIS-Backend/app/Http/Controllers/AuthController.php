@@ -80,7 +80,14 @@ class AuthController extends Controller
             // and never an abandoned attempt.
             'email_address' => 'required|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+            // An individual (head of the family, the default) or an organization.
+            // Barangay accounts are made by MDRRMO staff and are refused here, so
+            // nobody can sign themselves up as one.
+            'account_type' => ['sometimes', Rule::in([Resident::TYPE_HEAD_OF_FAMILY, Resident::TYPE_ORGANIZATION])],
+            'organization_name' => 'required_if:account_type,'.Resident::TYPE_ORGANIZATION.'|nullable|string|max:150',
         ]);
+
+        $accountType = $validated['account_type'] ?? Resident::TYPE_HEAD_OF_FAMILY;
 
         // Every column is assigned explicitly rather than splatting $validated, so
         // no extra key in the payload can reach a column. Two matter in particular:
@@ -104,6 +111,14 @@ class AuthController extends Controller
                 // phone number into paid SMS until an admin activates it from the
                 // Users view.
                 'status' => 'Inactive',
+                // Inactive is also what keeps an organization from filing: the
+                // filing endpoints refuse an organization that is not Active
+                // (Resident::isAwaitingApproval), so it waits for an admin to
+                // activate it. An individual is Inactive too and files as before.
+                'account_type' => $accountType,
+                'organization_name' => $accountType === Resident::TYPE_ORGANIZATION
+                    ? $validated['organization_name']
+                    : null,
             ],
             // Set only when an existing unverified row is being finished off —
             // see adoptUnverifiedResident(). A fresh sign-up has no row yet.
