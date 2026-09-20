@@ -31,9 +31,21 @@ export function installSessionExpiryHandler(router: Router): void {
   window.fetch = async (input, init) => {
     const response = await originalFetch(input, init)
 
-    if (response.status !== 401) return response
-
     const url = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url)
+
+    // A temporary password was handed out for this account: the server refuses
+    // everything but /me, /logout and /admin/change-password until it is
+    // replaced. Send the visitor to the one page that can fix it, whichever
+    // view made the call. Read from a clone so the caller still gets its body.
+    if (response.status === 403 && url.startsWith(API_BASE)) {
+      const body = await response.clone().json().catch(() => null)
+      if (body?.code === 'password_change_required' && router.currentRoute.value.path !== '/change-password') {
+        router.push('/change-password')
+      }
+      return response
+    }
+
+    if (response.status !== 401) return response
 
     if (!url.startsWith(API_BASE)) return response
     if (CREDENTIAL_ROUTES.some((route) => url.startsWith(`${API_BASE}${route}`))) return response

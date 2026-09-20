@@ -72,7 +72,43 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            // Not in #[Fillable]: only the reset paths set it, one attribute
+            // at a time, so no request payload can clear or raise it.
+            'must_change_password' => 'boolean',
         ];
+    }
+
+    /**
+     * A one-time password for a staff account whose owner cannot sign in.
+     * Shown once to whoever resets it, so it avoids characters that read alike
+     * (0/O, 1/l/I), and always satisfies the panel's own password rule
+     * (8+ characters, upper and lower case, a digit).
+     */
+    public static function generateTemporaryPassword(int $length = 12): string
+    {
+        $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $lower = 'abcdefghijkmnopqrstuvwxyz';
+        $digits = '23456789';
+        $all = $upper.$lower.$digits;
+
+        $chars = [
+            $upper[random_int(0, strlen($upper) - 1)],
+            $lower[random_int(0, strlen($lower) - 1)],
+            $digits[random_int(0, strlen($digits) - 1)],
+        ];
+
+        while (count($chars) < $length) {
+            $chars[] = $all[random_int(0, strlen($all) - 1)];
+        }
+
+        // Fisher-Yates with random_int, so the three guaranteed characters do
+        // not always sit at the front.
+        for ($i = count($chars) - 1; $i > 0; $i--) {
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
+        }
+
+        return implode('', $chars);
     }
 
     /**

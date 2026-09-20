@@ -3,6 +3,9 @@ import { getToken } from '../composables/authToken'
 
 const routes = [
   { path: '/login', component: () => import('../views/LoginView.vue') },
+  // Signed in, but shown without the shell: an account holding a temporary
+  // password reaches nothing else until it has replaced it.
+  { path: '/change-password', component: () => import('../views/ChangePasswordView.vue') },
   { path: '/', component: () => import('../views/DashboardView.vue') },
   // A scrolling page, like every route except the two marked fixedHeight —
   // the sections stack and the filter bar sticks to the top of the scroll.

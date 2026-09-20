@@ -27,15 +27,16 @@
           </template>
         </v-alert>
 
-        <!-- There is no password reset by email: MAIL_MAILER=log means a reset
-             link would be sent to a log file. Saying so here is cheaper than an
-             admin discovering it while locked out. -->
+        <!-- No mail is sent to a staff username, so a reset cannot be emailed.
+             Saying so here is cheaper than an admin discovering it while a
+             colleague is locked out. -->
         <v-alert
           type="info" variant="tonal" density="comfortable" rounded="lg" class="mb-6"
           icon="mdi-information-outline"
         >
-          Forgotten passwords are reset here, not by email. Open the account, set a new
-          password, and pass it on in person — there is no mail transport configured.
+          Forgotten passwords are reset here, not by email. Choose “Reset password” on the
+          account, then pass the temporary password on in person. They will be asked to set
+          their own before they can use the panel.
         </v-alert>
 
         <v-skeleton-loader v-if="initialLoad" type="table" rounded="xl"></v-skeleton-loader>
@@ -88,6 +89,16 @@
                   @click="openEdit(item)"
                 >
                   Edit
+                </v-btn>
+                <!-- Never on your own row, and never on a closed account: the
+                     server refuses both, this only spares the round trip. -->
+                <v-btn
+                  v-if="!isClosed(item) && !isSelf(item)"
+                  variant="text" size="small" class="text-none font-weight-bold"
+                  :aria-label="`Reset the password of ${fullName(item)}`"
+                  @click="askReset(item)"
+                >
+                  Reset password
                 </v-btn>
                 <v-btn
                   v-if="isClosed(item)"
@@ -260,6 +271,56 @@
       </v-card>
     </v-dialog>
 
+    <!-- Reset password: confirm first, because it signs the person out everywhere. -->
+    <v-dialog v-model="resetDialog.show" max-width="460">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Reset this password?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          <strong class="text-high-emphasis">{{ fullName(resetDialog.item) }}</strong>
+          will be signed out everywhere and given a temporary password. They must set
+          their own the next time they sign in.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="resetDialog.loading" @click="resetDialog.show = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            :loading="resetDialog.loading" @click="confirmReset"
+          >
+            Reset password
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- The temporary password, shown once. Persistent: it is not stored
+         anywhere the panel can show it again, so an accidental click outside
+         must not lose it. -->
+    <v-dialog v-model="tempDialog.show" max-width="460" persistent>
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Temporary password</v-card-title>
+        <v-card-text class="px-6 py-4">
+          <div class="text-body-2 text-medium-emphasis mb-3">
+            Give this to <strong class="text-high-emphasis">{{ tempDialog.name }}</strong> in person.
+            It is shown only once — closing this window discards it.
+          </div>
+          <div class="temp-password" data-testid="temporary-password">{{ tempDialog.password }}</div>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" @click="copyTemporary">
+            {{ tempDialog.copied ? 'Copied' : 'Copy' }}
+          </v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            @click="closeTemporary"
+          >
+            Done
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Announced, not just shown. The snackbar is mounted on show and is not
          reliably read out; this region is permanent and is blanked before each
          message so an unchanged string is still announced. -->
@@ -292,6 +353,8 @@ const liveMessage = ref('')
 const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null, legacyEmail: false })
 const form = ref({ first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' })
 const closeDialog = ref({ show: false, item: null, loading: false })
+const resetDialog = ref({ show: false, item: null, loading: false })
+const tempDialog = ref({ show: false, name: '', password: '', copied: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 // Template ref for the Add/Edit <v-form> -- named formRef, not form, because
@@ -334,7 +397,7 @@ const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Name', key: 'name', sortable: false, width: '55%' },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '220px' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '340px' },
 ]
 
 const getHeaders = () => ({
@@ -506,6 +569,42 @@ const confirmClose = async () => {
   }
 }
 
+const askReset = (item) => { resetDialog.value = { show: true, item, loading: false } }
+
+const confirmReset = async () => {
+  const item = resetDialog.value.item
+  resetDialog.value.loading = true
+  try {
+    const res = await fetch(`${API}/${idOf(item)}/reset-password`, { method: 'POST', headers: getHeaders() })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(messageFrom(data, 'Could not reset the password'))
+
+    resetDialog.value.show = false
+    // Held only in this dialog's state. Nothing else keeps it.
+    tempDialog.value = { show: true, name: fullName(item), password: data.temporary_password, copied: false }
+  } catch (error) {
+    resetDialog.value.show = false
+    announce(error.message, 'error')
+  } finally {
+    resetDialog.value.loading = false
+  }
+}
+
+const copyTemporary = async () => {
+  try {
+    await navigator.clipboard.writeText(tempDialog.value.password)
+    tempDialog.value.copied = true
+  } catch {
+    // Clipboard blocked (insecure origin, permissions). The password is on
+    // screen to read out or type, which is the fallback that always works.
+    announce('Could not copy. Read the password from the window instead.', 'warning')
+  }
+}
+
+const closeTemporary = () => {
+  tempDialog.value = { show: false, name: '', password: '', copied: false }
+}
+
 const reactivate = async (item) => {
   busyId.value = idOf(item)
   try {
@@ -565,6 +664,19 @@ onMounted(() => {
 }
 
 .subtle-surface { background: rgba(var(--v-theme-on-surface), 0.04); }
+
+/* Monospace and spaced so a password read aloud is not misheard. */
+.temp-password {
+  padding: 14px 16px;
+  border-radius: 10px;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  user-select: all;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
 
 /* Read by a screen reader, invisible to everything else. clip-path rather than
    display:none, which removes it from the accessibility tree as well. */

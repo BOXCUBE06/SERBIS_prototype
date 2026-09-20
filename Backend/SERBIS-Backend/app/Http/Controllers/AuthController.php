@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -828,6 +829,55 @@ class AuthController extends Controller
             'role' => 'admin',
             'user' => $admin,
         ], 200);
+    }
+
+    /**
+     * A staff member replaces their own password.
+     *
+     * This is the one thing an account flagged `must_change_password` can do
+     * besides read /me and log out (IsAdmin blocks the rest), so it sits outside
+     * the is.admin group and does its own checks. It asks for the current
+     * password even though the caller holds a token: the token may have come
+     * from a temporary password an admin read aloud.
+     */
+    public function adminChangePassword(Request $request)
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof User || ! $admin->isAdmin() || $admin->isDeactivated()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password' => ['required', 'string', 'confirmed', 'different:current_password', Password::min(8)->mixedCase()->numbers()],
+        ]);
+
+        // Hash::check against the row, not the `current_password` rule, which
+        // resolves the user from the default guard rather than sanctum — see
+        // assertCurrentPassword().
+        if (! Hash::check($validated['current_password'], (string) $admin->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => 'That is not your current password.',
+            ]);
+        }
+
+        $admin->password = $validated['password'];
+        $admin->must_change_password = false;
+        $admin->save();
+
+        // Every other session ends; this one stays, so the panel does not throw
+        // them back to the login form the moment they finish.
+        $current = $admin->currentAccessToken();
+        $others = $admin->tokens();
+
+        if ($current instanceof PersonalAccessToken) {
+            $others->where('id', '!=', $current->getKey());
+        }
+
+        $others->delete();
+
+        return response()->json(['user' => $admin]);
     }
 
     private function issueAdminToken(User $admin): string

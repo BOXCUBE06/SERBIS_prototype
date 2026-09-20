@@ -21,10 +21,11 @@ use Illuminate\Validation\Rules\Password;
  * ever holds one value is a tier nobody administers, and the alternative is a
  * permission model this office does not need.
  *
- * There is still no self-serve password reset. `MAIL_MAILER=log` means mail
- * goes to a log file, so a reset link would be sent to nobody. Recovery is
- * another admin setting the password from the panel, which is a real path and
- * needs no mail transport. See the panel's Staff view.
+ * There is no emailed reset: staff addresses are made-up @serbis.com usernames
+ * and no mail is sent. Recovery is another admin choosing "Reset password" in
+ * the panel (resetPassword()), which hands back a temporary password and forces
+ * its owner to replace it. When no admin can sign in at all, the
+ * `staff:reset-password` command does the same from the server.
  *
  * **Closing an account is deactivation, not deletion.** `tbl_system_logs`
  * carries a foreign key to this table, so an admin who has ever done anything
@@ -218,6 +219,53 @@ class AdminController extends Controller
         $admin->save();
 
         return response()->json($admin);
+    }
+
+    /**
+     * Hands a staff member a temporary password when they cannot sign in.
+     *
+     * No mail is involved: the password comes back in this one response, for
+     * the admin to pass on in person, and is never stored or logged in the
+     * clear. The account is flagged so its owner must replace it before the
+     * panel lets them do anything (IsAdmin), and every session it held ends,
+     * since a reset is what you do when a credential may have leaked.
+     *
+     * Refused for yourself: your own password changes through
+     * /admin/change-password, which asks for the current one. Otherwise a
+     * hijacked session could reset its way to a password the owner never saw.
+     */
+    public function resetPassword(Request $request, $id)
+    {
+        $admin = User::find($id);
+
+        if (! $admin) {
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        if ((int) $admin->getKey() === (int) $request->user()->getKey()) {
+            return response()->json([
+                'message' => 'You cannot reset your own password this way. Ask another admin to do it.',
+            ], 422);
+        }
+
+        if ($admin->isDeactivated()) {
+            return response()->json([
+                'message' => 'This account is deactivated. Reactivate it before resetting its password.',
+            ], 422);
+        }
+
+        $temporary = User::generateTemporaryPassword();
+
+        // Assigned key by key: neither column is mass-assignable. The model
+        // casts `password`, so it is hashed on save.
+        $admin->password = $temporary;
+        $admin->must_change_password = true;
+        $admin->save();
+        $admin->tokens()->delete();
+
+        return response()->json([
+            'temporary_password' => $temporary,
+        ])->header('Cache-Control', 'no-store');
     }
 
     /**

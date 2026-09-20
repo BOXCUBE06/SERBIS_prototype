@@ -57,6 +57,11 @@ Route::middleware('throttle:api')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        // Outside is.admin on purpose: a staff account holding a temporary
+        // password reaches nothing else until it has used this (IsAdmin). Named
+        // limiter, per the 'sms-blast' note in AppServiceProvider.
+        Route::post('/admin/change-password', [AuthController::class, 'adminChangePassword'])
+            ->middleware('throttle:password-change');
         // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
         // see the controller for why each one is excluded.
         Route::patch('/me', [AuthController::class, 'updateMe']);
@@ -180,6 +185,9 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     Route::apiResource('admins', AdminController::class);
     // Registered after the resource so `admins/{id}` never shadows it.
     Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
+    // Temporary password for a colleague who cannot sign in; refused for
+    // yourself. See AdminController::resetPassword().
+    Route::post('admins/{id}/reset-password', [AdminController::class, 'resetPassword']);
 
     // Admin-only write access for shared resources
     Route::apiResource('barangays', BarangayController::class)->except(['index', 'show']);

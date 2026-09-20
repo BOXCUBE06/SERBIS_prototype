@@ -31,6 +31,18 @@ class IsAdmin
             return response()->json(['message' => 'This account has been deactivated.'], 403);
         }
 
+        // A temporary password proves who is signing in and nothing else. Until
+        // it is replaced the account reaches only /me, /logout and
+        // /admin/change-password, which sit outside this middleware. Enforced
+        // here rather than in the panel so a hand-rolled request gets no
+        // further than the browser does.
+        if ($user->must_change_password) {
+            return response()->json([
+                'message' => 'Set a new password before continuing.',
+                'code' => 'password_change_required',
+            ], 403);
+        }
+
         return $next($request);
     }
 }

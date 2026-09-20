@@ -128,6 +128,12 @@ class AppServiceProvider extends ServiceProvider
         // hour became closer to one. Keyed on the account for the reason
         // SmsController::assertCurrentPassword is: an office on one CGNAT address
         // must not be able to spend a colleague's allowance.
+        // POST /admin/change-password checks the current password, so it is a
+        // guessing target for anyone holding a token. Keyed on the account.
+        RateLimiter::for('password-change', function (Request $request) {
+            return Limit::perMinute(5)->by('password-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
+        });
+
         RateLimiter::for('sms-blast', function (Request $request) {
             return Limit::perHour(3)->by('admin:'.$request->user()->admin_id);
         });

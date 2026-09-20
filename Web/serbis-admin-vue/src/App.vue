@@ -29,7 +29,7 @@ import { useAppTheme } from '@/composables/useAppTheme'
 
 const route = useRoute()
 
-const isAuthPage = computed(() => route?.path === '/login')
+const isAuthPage = computed(() => route?.path === '/login' || route?.path === '/change-password')
 
 // Set by the route, not sniffed from the path — see the note in router/index.ts.
 const isFixedHeight = computed(() => route?.meta?.fixedHeight === true)

@@ -314,7 +314,8 @@ const handleLogin = async () => {
 
     if (response.ok) {
       setToken(data.token, rememberMe.value)
-      router.push('/')
+      // A temporary password gets no further than the page that replaces it.
+      router.push(data.user?.must_change_password ? '/change-password' : '/')
     } else if (response.status === 401) {
       errorMessage.value = 'Invalid email or password. Please try again.'
     } else if (response.status === 403 && data.code === 'mfa_required') {
