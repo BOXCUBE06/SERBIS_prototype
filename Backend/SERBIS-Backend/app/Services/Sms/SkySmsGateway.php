@@ -3,6 +3,7 @@
 namespace App\Services\Sms;
 
 use App\Support\PhoneNumber;
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -37,6 +38,16 @@ class SkySmsGateway implements SmsGateway
 
     private const CACHE_BULK_SHAPE_LOGGED = 'sms:bulk_shape_logged';
 
+    /** The longest Retry-After an OTP will sit through; past this the person is better told to try again. */
+    public const OTP_MAX_WAIT_SECONDS = 5;
+
+    private readonly Closure $sleeper;
+
+    public function __construct(?Closure $sleeper = null)
+    {
+        $this->sleeper = $sleeper ?? static fn (float $seconds) => usleep((int) ($seconds * 1_000_000));
+    }
+
     public function configured(): bool
     {
         return filled(config('services.skysms.api_key'));
@@ -51,6 +62,23 @@ class SkySmsGateway implements SmsGateway
         }
 
         return $this->dispatch('/sms/send', ['phone_number' => $number, 'message' => $message], $message, self::SINGLE_TIMEOUT, false);
+    }
+
+    public function sendOtp(string $phone, string $message): SmsResult
+    {
+        $result = $this->sendOne($phone, $message);
+
+        // Once, and only for a short, stated wait. No Retry-After means we do not
+        // know how long, and a longer one is not something to hold a phone on.
+        if ($result->isRateLimited() && $result->retryAfter !== null && $result->retryAfter <= self::OTP_MAX_WAIT_SECONDS) {
+            if ($result->retryAfter > 0) {
+                ($this->sleeper)((float) $result->retryAfter);
+            }
+
+            $result = $this->sendOne($phone, $message);
+        }
+
+        return $result;
     }
 
     public function sendBulk(array $phones, string $message): SmsResult

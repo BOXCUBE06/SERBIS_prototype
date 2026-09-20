@@ -36,9 +36,11 @@ return [
         'api_key' => env('SKYSMS_API_KEY'),
         'base_url' => env('SKYSMS_BASE_URL', 'https://skysms.skyio.site/api/v1'),
         // Loops that text people one by one (reminders, availability notices)
-        // wait this long between sends, which holds them at 30 a minute, and
-        // retry a 429 with a doubling wait starting from the base below.
-        'pace_seconds' => (float) env('SKYSMS_PACE_SECONDS', 2),
+        // wait this long between sends. Three seconds is 20 a minute, which
+        // leaves ten of the account's 30 a minute free so a sign-in code is
+        // never stuck behind a batch. A 429 in such a loop is retried with a
+        // doubling wait starting from the base below.
+        'pace_seconds' => (float) env('SKYSMS_PACE_SECONDS', 3),
         'retry_base_seconds' => (float) env('SKYSMS_RETRY_BASE_SECONDS', 2),
         'max_retries' => (int) env('SKYSMS_MAX_RETRIES', 3),
     ],

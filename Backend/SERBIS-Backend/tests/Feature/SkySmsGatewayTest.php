@@ -208,6 +208,124 @@ class SkySmsGatewayTest extends TestCase
         $this->assertSame([2.0, 2.0], $slept);
     }
 
+    // ---- headroom for OTPs -----------------------------------------------
+
+    public function test_loops_default_to_twenty_sends_a_minute_leaving_ten_for_codes(): void
+    {
+        $this->assertSame(20, PacedSender::MAX_PER_MINUTE);
+
+        // The shipped default, read from the file: phpunit.xml pins the pace to
+        // zero so the rest of the suite does not wait, which hides it.
+        $this->assertMatchesRegularExpression(
+            "/'pace_seconds' => \\(float\\) env\\('SKYSMS_PACE_SECONDS', 3\\)/",
+            file_get_contents(config_path('services.php')),
+        );
+    }
+
+    public function test_a_paced_loop_never_exceeds_twenty_sends_in_a_minute(): void
+    {
+        config(['services.skysms.pace_seconds' => 3, 'services.skysms.retry_base_seconds' => 0]);
+        $slept = [];
+
+        Http::fake([self::HOST => Http::response($this->ok(), 200)]);
+
+        $sender = new PacedSender($this->gateway(), function (float $seconds) use (&$slept) {
+            $slept[] = $seconds;
+        });
+
+        // 21 sends make 20 gaps of three seconds: the 21st cannot start until
+        // a full minute after the first, so at most 20 land inside any minute.
+        for ($i = 1; $i <= 21; $i++) {
+            $sender->send('0917'.str_pad((string) $i, 7, '0', STR_PAD_LEFT), 'Hello');
+        }
+
+        $this->assertCount(20, $slept);
+        $this->assertSame(60.0, array_sum($slept));
+    }
+
+    public function test_a_retry_in_a_loop_is_spaced_like_any_other_send(): void
+    {
+        // A short Retry-After and a tiny backoff must not let the retry jump
+        // the queue: it is a send, and it counts against the twenty.
+        config(['services.skysms.pace_seconds' => 3, 'services.skysms.retry_base_seconds' => 0]);
+        $slept = [];
+
+        Http::fake([self::HOST => Http::sequence()
+            ->push(['message' => 'slow'], 429, ['Retry-After' => '1'])
+            ->push($this->ok(), 200)]);
+
+        $sender = new PacedSender($this->gateway(), function (float $seconds) use (&$slept) {
+            $slept[] = $seconds;
+        });
+
+        $this->assertTrue($sender->send('09171234567', 'Hello')->isAccepted());
+        $this->assertSame([3.0], $slept);
+    }
+
+    public function test_an_otp_that_gets_a_short_429_waits_once_and_retries(): void
+    {
+        $slept = [];
+        $gateway = new SkySmsGateway(function (float $seconds) use (&$slept) {
+            $slept[] = $seconds;
+        });
+
+        Http::fake([self::HOST => Http::sequence()
+            ->push(['message' => 'slow down'], 429, ['Retry-After' => '3'])
+            ->push($this->ok(), 200)]);
+
+        $result = $gateway->sendOtp('09171234567', 'Your SERBIS login code is 123456.');
+
+        $this->assertTrue($result->isAccepted());
+        Http::assertSentCount(2);
+        $this->assertSame([3.0], $slept);
+    }
+
+    public function test_an_otp_retries_only_once(): void
+    {
+        $slept = [];
+        $gateway = new SkySmsGateway(function (float $seconds) use (&$slept) {
+            $slept[] = $seconds;
+        });
+
+        Http::fake([self::HOST => Http::response(['message' => 'slow down'], 429, ['Retry-After' => '2'])]);
+
+        $result = $gateway->sendOtp('09171234567', 'Hello');
+
+        $this->assertTrue($result->isRateLimited());
+        Http::assertSentCount(2);
+        $this->assertSame([2.0], $slept);
+    }
+
+    public function test_an_otp_with_a_long_or_missing_retry_after_is_not_held_or_retried(): void
+    {
+        $slept = [];
+        $gateway = new SkySmsGateway(function (float $seconds) use (&$slept) {
+            $slept[] = $seconds;
+        });
+
+        Http::fake([self::HOST => Http::sequence()
+            ->push(['message' => 'slow down'], 429, ['Retry-After' => '6'])
+            ->push(['message' => 'slow down'], 429)]);
+
+        $this->assertTrue($gateway->sendOtp('09171234567', 'Hello')->isRateLimited());
+        $this->assertTrue($gateway->sendOtp('09171234567', 'Hello')->isRateLimited());
+
+        // One request each: 6 is over the five-second ceiling, and no header
+        // means we do not know how long.
+        Http::assertSentCount(2);
+        $this->assertSame([], $slept);
+    }
+
+    public function test_an_otp_that_is_not_rate_limited_is_sent_once_as_before(): void
+    {
+        Http::fake([self::HOST => Http::response(['message' => 'Insufficient credits'], 402)]);
+
+        $gateway = new SkySmsGateway(fn (float $seconds) => $this->fail('nothing to wait for'));
+
+        $this->assertTrue($gateway->sendOtp('09171234567', 'Hello')->isOutOfCredits());
+        Http::assertSentCount(1);
+    }
+
     // ---- content policy --------------------------------------------------
 
     public function test_a_message_with_a_url_or_domain_is_refused_before_any_request(): void

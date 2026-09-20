@@ -20,6 +20,14 @@ interface SmsGateway
     public function sendOne(string $phone, string $message): SmsResult;
 
     /**
+     * A code someone is waiting on (an OTP). Like sendOne(), plus one short
+     * retry: a 429 that says to wait five seconds or less is waited out once,
+     * because a person is looking at the screen. Anything longer, or no
+     * Retry-After at all, comes straight back as the rate-limited rejection.
+     */
+    public function sendOtp(string $phone, string $message): SmsResult;
+
+    /**
      * One message to many numbers in a single request. The caller chunks:
      * more than the vendor's bulk limit is a programming error, not a delivery
      * one.

@@ -60,6 +60,12 @@ class ResidentEmailVerificationTest extends TestCase
     /** Makes the faked host answer 402, as an empty credit balance does. */
     private bool $smsOutOfCredits = false;
 
+    /** How many of the next sends answer 429 with Retry-After: 0 before one is accepted. */
+    private int $smsRateLimits = 0;
+
+    /** How many of the next sends answer 429 with a Retry-After too long to wait for. */
+    private int $smsLongRateLimits = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,6 +76,18 @@ class ResidentEmailVerificationTest extends TestCase
             'skysms.skyio.site/*' => function () {
                 if ($this->smsTimesOut) {
                     throw new ConnectionException('cURL error 28: timed out');
+                }
+
+                if ($this->smsRateLimits > 0) {
+                    $this->smsRateLimits--;
+
+                    return Http::response(['message' => 'slow down'], 429, ['Retry-After' => '0']);
+                }
+
+                if ($this->smsLongRateLimits > 0) {
+                    $this->smsLongRateLimits--;
+
+                    return Http::response(['message' => 'slow down'], 429, ['Retry-After' => '30']);
                 }
 
                 if ($this->smsOutOfCredits) {
@@ -354,6 +372,31 @@ class ResidentEmailVerificationTest extends TestCase
             ->once();
         // Never recorded as delivered.
         Log::shouldNotHaveReceived('warning', fn ($message) => str_contains($message, 'treating as delivered'));
+    }
+
+    public function test_a_code_that_hits_a_short_rate_limit_is_retried_and_still_goes_by_text(): void
+    {
+        $this->smsRateLimits = 1;
+
+        $this->postJson('/api/register', $this->payload())
+            ->assertStatus(201)
+            ->assertJsonPath('channel', 'sms');
+
+        // The first send was refused, the retry went through; one code in flight.
+        Http::assertSentCount(2);
+        Mail::assertNothingSent();
+    }
+
+    public function test_a_code_that_hits_a_long_rate_limit_is_not_held_and_takes_the_existing_fallback(): void
+    {
+        $this->smsLongRateLimits = 1;
+
+        $this->postJson('/api/register', $this->payload())
+            ->assertStatus(201)
+            ->assertJsonPath('channel', 'email');
+
+        // No second request: 30 seconds is not something to hold a phone on.
+        Http::assertSentCount(1);
     }
 
     public function test_an_out_of_credits_text_falls_back_to_email(): void

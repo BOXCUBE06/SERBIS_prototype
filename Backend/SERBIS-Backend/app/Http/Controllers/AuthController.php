@@ -417,7 +417,7 @@ class AuthController extends Controller
             return false;
         }
 
-        $result = app(SmsGateway::class)->sendOne(
+        $result = app(SmsGateway::class)->sendOtp(
             $phone,
             "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
         );
@@ -1257,7 +1257,7 @@ class AuthController extends Controller
         }
 
         if ($this->smsIsUsable($resident->phone_number)) {
-            $result = app(SmsGateway::class)->sendOne(
+            $result = app(SmsGateway::class)->sendOtp(
                 $resident->phone_number,
                 "Your SERBIS login code is {$code}. It expires in 5 minutes.",
             );
