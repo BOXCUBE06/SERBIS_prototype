@@ -45,7 +45,7 @@ class ResidentController extends Controller
             // officer who is also a head of the family needs a second number for
             // the institutional account, hence the plain message.
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable(null, 'This number is already used by another account. Give this account a different number.')],
-            'email_address' => 'required|email|unique:tbl_residents,email_address',
+            'email_address' => 'nullable|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
             // The column carries exactly three values and 'required|string'
             // accepted every other one, 'banana' included. That was not
@@ -71,7 +71,7 @@ class ResidentController extends Controller
             'middle_name' => $validated['middle_name'] ?? null,
             'last_name' => $validated['last_name'],
             'phone_number' => $validated['phone_number'],
-            'email_address' => $validated['email_address'],
+            'email_address' => $validated['email_address'] ?? null,
             'password' => bcrypt($validated['password']),
             // No 'photo'. It is the resident's own face, uploaded from the
             // mobile app by POST /api/me/photo; an admin creating the account
@@ -79,6 +79,11 @@ class ResidentController extends Controller
             'status' => $validated['status'],
         ]);
         $this->applyAccountType($resident, $validated);
+        // An account made here is vouched for by the admin who made it — a
+        // barangay hall, an organization, a walk-in — so its number counts as
+        // verified and it signs in like any other. forceFill: the column is
+        // deliberately not mass-assignable.
+        $resident->forceFill(['phone_verified_at' => now()]);
         $resident->save();
 
         return response()->json($resident, 201);
@@ -159,7 +164,7 @@ class ResidentController extends Controller
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable((int) $id, 'This number is already used by another account. Give this account a different number.')],
-            'email_address' => 'required|email|unique:tbl_residents,email_address,'.$id.',resident_id',
+            'email_address' => 'nullable|email|unique:tbl_residents,email_address,'.$id.',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
             'street_address' => 'nullable|string|max:255',
             // Same three values as store(). Both admin write paths reach this
@@ -183,7 +188,7 @@ class ResidentController extends Controller
             'middle_name' => $validated['middle_name'] ?? null,
             'last_name' => $validated['last_name'],
             'phone_number' => $validated['phone_number'],
-            'email_address' => $validated['email_address'],
+            'email_address' => $validated['email_address'] ?? null,
             'barangay_id' => $validated['barangay_id'],
             'street_address' => $validated['street_address'] ?? null,
             'status' => $validated['status'],

@@ -39,14 +39,16 @@ class RegisterThrottleTest extends TestCase
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }
 
-    private function payload(string $email): array
+    // $tag only labels the call in the test; a sign-up is keyed on the phone number
+    // now, and registering the same number again is allowed and simply reissues
+    // a code, so the throttle is what these tests exercise.
+    private function payload(string $tag): array
     {
         return [
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '09171234567',
-            'email_address' => $email,
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ];

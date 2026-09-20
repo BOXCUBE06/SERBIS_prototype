@@ -7,6 +7,7 @@ use App\Models\Equipment;
 use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
+use App\Support\PhoneNumber;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -45,7 +46,6 @@ class RegisterAccountTypeTest extends TestCase
             'last_name' => 'Uy',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '09171234567',
-            'email_address' => 'isu@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ], $overrides);
@@ -66,17 +66,17 @@ class RegisterAccountTypeTest extends TestCase
             })
             ->filter()->last();
 
-        $this->postJson('/api/resident/verify-email', [
-            'email_address' => $body['email_address'],
+        $this->postJson('/api/resident/verify-phone', [
+            'phone_number' => $body['phone_number'],
             'code' => $code,
         ])->assertOk();
 
-        return Resident::where('email_address', $body['email_address'])->firstOrFail();
+        return Resident::where('phone_number', PhoneNumber::normalize($body['phone_number']))->firstOrFail();
     }
 
     public function test_an_individual_is_the_default(): void
     {
-        $resident = $this->registerAndVerify(['email_address' => 'juan@test.local']);
+        $resident = $this->registerAndVerify(['phone_number' => '09171110001']);
 
         $this->assertSame('head_of_family', $resident->account_type);
         $this->assertNull($resident->organization_name);
@@ -112,14 +112,14 @@ class RegisterAccountTypeTest extends TestCase
         $this->postJson('/api/register', $this->payload(['account_type' => 'office']))
             ->assertStatus(422)->assertJsonValidationErrors(['account_type']);
 
-        $this->assertNull(Cache::get('signup:pending:'.hash('sha256', 'isu@test.local')));
+        $this->assertNull(Cache::get('signup:pending:'.hash('sha256', '+639171234567')));
         $this->assertSame(0, Resident::count());
     }
 
     public function test_an_organization_name_is_ignored_for_an_individual(): void
     {
         $resident = $this->registerAndVerify([
-            'email_address' => 'juan@test.local',
+            'phone_number' => '09171110001',
             'account_type' => 'head_of_family',
             'organization_name' => 'Should Not Stick',
         ]);
@@ -176,7 +176,7 @@ class RegisterAccountTypeTest extends TestCase
         Service::create(['service_name' => 'Ambulance/Medical Response', 'description' => 'x']);
         $road = Service::create(['service_name' => 'Road Clearing', 'description' => 'x']);
 
-        $juan = $this->registerAndVerify(['email_address' => 'juan@test.local']);
+        $juan = $this->registerAndVerify(['phone_number' => '09171110001']);
         $this->assertSame('Inactive', $juan->status);
 
         $this->actingAs($juan)->postJson('/api/service-requests', [

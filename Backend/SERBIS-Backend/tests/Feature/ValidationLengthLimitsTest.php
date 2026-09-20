@@ -120,7 +120,6 @@ class ValidationLengthLimitsTest extends TestCase
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '09171111111',
-            'email_address' => 'reg@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(422)->assertJsonValidationErrors('middle_name');
@@ -262,8 +261,8 @@ class ValidationLengthLimitsTest extends TestCase
 
     public function test_a_verification_code_that_is_not_six_characters_is_rejected(): void
     {
-        $this->postJson('/api/resident/verify-email', [
-            'email_address' => 'nobody@test.local',
+        $this->postJson('/api/resident/verify-phone', [
+            'phone_number' => '09179999999',
             'code' => '12345',
         ])->assertStatus(422)->assertJsonValidationErrors('code');
     }
@@ -290,7 +289,6 @@ class ValidationLengthLimitsTest extends TestCase
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => 'not-a-phone-number',
-            'email_address' => 'badphone@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(422)->assertJsonValidationErrors('phone_number');
@@ -305,7 +303,6 @@ class ValidationLengthLimitsTest extends TestCase
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '(078) 305 1234',
-            'email_address' => 'landline@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(422)->assertJsonValidationErrors('phone_number');
@@ -338,17 +335,6 @@ class ValidationLengthLimitsTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('phone_number');
     }
 
-    public function test_a_resident_editing_their_own_phone_number_is_rejected_if_malformed(): void
-    {
-        $resident = $this->resident();
-
-        Sanctum::actingAs($resident);
-
-        $this->patchJson('/api/me', [
-            'phone_number' => 'abc123',
-        ])->assertStatus(422)->assertJsonValidationErrors('phone_number');
-    }
-
     public function test_registration_accepts_the_local_09_shape(): void
     {
         $this->postJson('/api/register', [
@@ -356,7 +342,6 @@ class ValidationLengthLimitsTest extends TestCase
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '09171234567',
-            'email_address' => 'shape09@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);
@@ -369,7 +354,6 @@ class ValidationLengthLimitsTest extends TestCase
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '639171234567',
-            'email_address' => 'shape639@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);
@@ -382,7 +366,6 @@ class ValidationLengthLimitsTest extends TestCase
             'last_name' => 'Santos',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '+639171234567',
-            'email_address' => 'shapeplus639@test.local',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);

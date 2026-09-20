@@ -153,7 +153,7 @@ class SmsBlastTimeoutTest extends TestCase
         $this->blast();
 
         $resident = Resident::firstOrFail();
-        $resident->markEmailAsVerified();
+        $resident->markPhoneAsVerified();
 
         Sanctum::actingAs($resident->fresh());
 

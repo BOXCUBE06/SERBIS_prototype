@@ -64,7 +64,7 @@ class ResidentDeactivationTest extends TestCase
             'status' => $status,
         ]);
 
-        $resident->markEmailAsVerified();
+        $resident->markPhoneAsVerified();
 
         return $resident->fresh();
     }
@@ -240,7 +240,7 @@ class ResidentDeactivationTest extends TestCase
         $resident = $this->resident('Deactivated');
 
         $this->postJson('/api/resident/login', [
-            'email_address' => $resident->email_address,
+            'phone_number' => $resident->phone_number,
             'password' => 'Password123',
         ])
             ->assertStatus(403)

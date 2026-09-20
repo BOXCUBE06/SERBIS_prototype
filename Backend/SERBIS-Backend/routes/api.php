@@ -35,15 +35,21 @@ Route::middleware('throttle:api')->group(function () {
     Route::post('/admin/login/verify', [AuthController::class, 'adminLoginVerify'])->middleware('throttle:mfa');
     Route::post('/resident/login/verify', [AuthController::class, 'residentLoginVerify'])->middleware('throttle:mfa');
     Route::post('/resident/login/resend', [AuthController::class, 'resendLoginCode'])->middleware('throttle:mfa');
-    // Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
-    // the submitted email address as well as the IP.
+    // Resident sign-up for the mobile app. Its own 'register' limiter: every
+    // registration is a new number, so a limiter keyed on the number would
+    // never repeat.
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
-    // Second half of registration. Both share the 'login' limiter: verify is a
-    // guessing target (a million codes, six digits) and resend sends real mail.
-    // The per-account cooldown in resendVerificationCode is the other half of that
-    // — the limiter bounds one caller, the cooldown bounds one account.
-    Route::post('/resident/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:login');
-    Route::post('/resident/verify-email/resend', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:login');
+    // Second half of registration, by phone. Both share the 'login' limiter,
+    // which keys on the submitted number: verify is a guessing target (a million
+    // codes, six digits) and resend sends a billed text. The per-sign-up cooldown
+    // in resendVerificationCode is the other half of that — the limiter bounds
+    // one caller, the cooldown bounds one number.
+    Route::post('/resident/verify-phone', [AuthController::class, 'verifyPhone'])->middleware('throttle:login');
+    Route::post('/resident/verify-phone/resend', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:login');
+    // The email routes the app before phone login called. Answer 410 with an
+    // "update the app" message in both languages; remove in a later release.
+    Route::post('/resident/verify-email', [AuthController::class, 'emailVerificationRemoved']);
+    Route::post('/resident/verify-email/resend', [AuthController::class, 'emailVerificationRemoved']);
     // Public on purpose: the mobile register screen must show a barangay picker
     // before the resident has an account, and barangay_id is required to sign up.
     // The row is nothing but an id and a name, and the write routes stay admin-only.

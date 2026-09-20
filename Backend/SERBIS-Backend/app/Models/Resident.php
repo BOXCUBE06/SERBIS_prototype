@@ -29,11 +29,11 @@ use Laravel\Sanctum\HasApiTokens;
 // panel's Users view serialises — a code in that payload is a code any
 // signed-in admin can read off the wire and use. It lives in the cache instead,
 // alongside the rest of the pending sign-up; see AuthController::register().
-// `email_verified_at` stays visible: the panel shows it as a badge, and it
-// discloses nothing. A row only exists once it is set, so it is never null on
-// anything registered through the app.
+// `phone_verified_at` stays visible: the panel shows it as a badge, and it
+// discloses nothing. A row that finished sign-up has it set, and so does an
+// account an admin created (the admin vouches for the number).
 #[Hidden(['password', 'remember_token', 'photo'])]
-#[Appends(['has_photo', 'is_email_verified'])]
+#[Appends(['has_photo', 'is_phone_verified'])]
 class Resident extends Authenticatable
 {
     // 2. Add TracksHistory to the used traits list
@@ -49,8 +49,8 @@ class Resident extends Authenticatable
         // updated_at does not, and logging it copies a path we keep off every
         // response into a second table.
         'photo',
-        // `email_verified_at` is deliberately NOT ignored — an address
-        // becoming verified is exactly the change worth recording.
+        // `phone_verified_at` is deliberately NOT ignored — a number becoming
+        // verified is exactly the change worth recording.
     ];
 
     /**
@@ -170,25 +170,9 @@ class Resident extends Authenticatable
         return strtolower((string) $this->status) === 'deactivated';
     }
 
-    public function hasVerifiedEmail(): bool
+    public function getIsPhoneVerifiedAttribute(): bool
     {
-        return $this->email_verified_at !== null;
-    }
-
-    /**
-     * Only reached for a row that already exists and has not been claimed: one
-     * written before the sign-up flow moved into the cache, or one the admin
-     * panel created. A self-registration is inserted with the timestamp already
-     * set, because its row is not created until the code comes back.
-     */
-    public function markEmailAsVerified(): void
-    {
-        $this->forceFill(['email_verified_at' => now()])->save();
-    }
-
-    public function getIsEmailVerifiedAttribute(): bool
-    {
-        return $this->hasVerifiedEmail();
+        return $this->hasVerifiedPhone();
     }
 
     /**

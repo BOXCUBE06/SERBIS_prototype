@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 /**
  * The test-only OTP bypass for /resident/login/verify and
- * /resident/verify-email (config/serbis.php,
+ * /resident/verify-phone (config/serbis.php,
  * AuthController::otpBypassMatches()/logOtpBypassUse()) and the boot-time
  * guard that refuses to start anywhere but `local` with it configured
  * (AppServiceProvider::assertOtpBypassIsLocalOnly()).
@@ -72,7 +72,7 @@ class OtpBypassTest extends TestCase
             'status' => 'Active',
         ]);
 
-        $resident->markEmailAsVerified();
+        $resident->markPhoneAsVerified();
 
         return $resident->fresh();
     }
@@ -87,7 +87,7 @@ class OtpBypassTest extends TestCase
     private function beginLogin(Resident $resident): string
     {
         $response = $this->postJson('/api/resident/login', [
-            'email_address' => $resident->email_address,
+            'phone_number' => $resident->phone_number,
             'password' => 'Password123',
         ]);
 
@@ -165,14 +165,13 @@ class OtpBypassTest extends TestCase
         }
     }
 
-    private function beginSignup(string $email = 'new@test.local'): void
+    private function beginSignup(): void
     {
         $this->postJson('/api/register', [
             'first_name' => 'Lito',
             'last_name' => 'Garcia',
             'barangay_id' => $this->barangay->barangay_id,
             'phone_number' => '09171234568',
-            'email_address' => $email,
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);
@@ -185,15 +184,15 @@ class OtpBypassTest extends TestCase
 
         $this->beginSignup();
 
-        $this->postJson('/api/resident/verify-email', [
-            'email_address' => 'new@test.local',
+        $this->postJson('/api/resident/verify-phone', [
+            'phone_number' => '09171234568',
             'code' => '555555',
         ])->assertStatus(200)
             ->assertJsonStructure(['token'])
             ->assertJsonPath('role', 'resident');
 
-        $resident = Resident::where('email_address', 'new@test.local')->firstOrFail();
-        $this->assertTrue($resident->hasVerifiedEmail());
+        $resident = Resident::where('phone_number', '+639171234568')->firstOrFail();
+        $this->assertTrue($resident->hasVerifiedPhone());
         $this->assertDatabaseHas('tbl_system_logs', [
             'action_type' => 'otp_bypass_used',
             'auditable_id' => $resident->resident_id,
@@ -207,12 +206,12 @@ class OtpBypassTest extends TestCase
 
         $this->beginSignup();
 
-        $this->postJson('/api/resident/verify-email', [
-            'email_address' => 'new@test.local',
+        $this->postJson('/api/resident/verify-phone', [
+            'phone_number' => '09171234568',
             'code' => '555555',
         ])->assertStatus(422)->assertJsonPath('code', 'invalid_code');
 
-        $this->assertDatabaseMissing('tbl_residents', ['email_address' => 'new@test.local']);
+        $this->assertDatabaseMissing('tbl_residents', ['phone_number' => '+639171234568']);
     }
 
     public function test_signup_bypass_is_rejected_outside_local(): void
@@ -222,12 +221,59 @@ class OtpBypassTest extends TestCase
 
         $this->beginSignup();
 
-        $this->postJson('/api/resident/verify-email', [
-            'email_address' => 'new@test.local',
+        $this->postJson('/api/resident/verify-phone', [
+            'phone_number' => '09171234568',
             'code' => '555555',
         ])->assertStatus(422)->assertJsonPath('code', 'invalid_code');
 
         $this->assertDatabaseMissing('tbl_system_logs', ['action_type' => 'otp_bypass_used']);
+    }
+
+    /**
+     * A developer machine has no SMS key. Without the bypass that would be
+     * `sms_unavailable` on every sign-up, so on a local machine with the bypass
+     * code set the missing key is not a failure — the bypass code is how that
+     * setup finishes a sign-up. Local only, and only for that one reason.
+     */
+    public function test_a_local_machine_with_no_sms_key_and_the_bypass_set_still_reaches_the_code_screen(): void
+    {
+        $this->asLocal();
+        config(['serbis.otp_bypass_code' => '555555', 'services.skysms.api_key' => null]);
+        Http::fake();
+
+        $this->beginSignup();
+
+        $this->postJson('/api/resident/verify-phone', ['phone_number' => '09171234568', 'code' => '555555'])
+            ->assertStatus(200)
+            ->assertJsonStructure(['token']);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_no_sms_key_without_the_bypass_is_sms_unavailable_even_locally(): void
+    {
+        $this->asLocal();
+        config(['serbis.otp_bypass_code' => null, 'services.skysms.api_key' => null]);
+
+        $this->postJson('/api/register', [
+            'first_name' => 'Lito', 'last_name' => 'Garcia',
+            'barangay_id' => $this->barangay->barangay_id,
+            'phone_number' => '09171234568',
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertStatus(503)->assertJsonPath('code', 'sms_unavailable');
+    }
+
+    public function test_no_sms_key_is_sms_unavailable_in_production_even_with_the_bypass_configured(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['serbis.otp_bypass_code' => '555555', 'services.skysms.api_key' => null]);
+
+        $this->postJson('/api/register', [
+            'first_name' => 'Lito', 'last_name' => 'Garcia',
+            'barangay_id' => $this->barangay->barangay_id,
+            'phone_number' => '09171234568',
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertStatus(503)->assertJsonPath('code', 'sms_unavailable');
     }
 
     public function test_real_code_still_works_when_bypass_is_configured(): void

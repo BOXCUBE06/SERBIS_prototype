@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\Sms\SkySmsGateway;
 use App\Services\Sms\SmsGateway;
+use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -82,10 +83,16 @@ class AppServiceProvider extends ServiceProvider
         // IP can front an entire subscriber pool, and an IP-only limit would lock those
         // residents out of a disaster-response system.
         RateLimiter::for('login', function (Request $request) {
-            $email = Str::lower((string) $request->input('email_address'));
+            // The account being attacked: a resident's phone number (in canonical
+            // form, so "0917…" and "+63917…" share one bucket), or a staff
+            // member's email address on the admin login.
+            $phone = PhoneNumber::normalize((string) $request->input('phone_number'));
+            $account = $phone !== ''
+                ? 'phone:'.$phone
+                : 'email:'.Str::lower((string) $request->input('email_address'));
 
             return [
-                Limit::perMinute(5)->by('email:'.$email.'|'.$request->ip()),
+                Limit::perMinute(5)->by($account.'|'.$request->ip()),
                 Limit::perMinute(20)->by('ip:'.$request->ip()),
             ];
         });

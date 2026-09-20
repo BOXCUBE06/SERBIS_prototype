@@ -79,12 +79,13 @@ class ResidentAccountPayloadTest extends TestCase
 
     public function test_the_verify_step_of_a_new_organization_returns_the_same_payload(): void
     {
+        $phone = '09'.random_int(100000000, 999999999);
+
         $this->postJson('/api/register', [
             'first_name' => 'Ian',
             'last_name' => 'Uy',
             'barangay_id' => $this->barangay->barangay_id,
-            'phone_number' => '09'.random_int(100000000, 999999999),
-            'email_address' => 'isu@test.local',
+            'phone_number' => $phone,
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
             'account_type' => 'organization',
@@ -99,7 +100,7 @@ class ResidentAccountPayloadTest extends TestCase
             })
             ->filter()->last();
 
-        $this->postJson('/api/resident/verify-email', ['email_address' => 'isu@test.local', 'code' => $code])
+        $this->postJson('/api/resident/verify-phone', ['phone_number' => $phone, 'code' => $code])
             ->assertOk()
             ->assertJsonPath('user.account_type', 'organization')
             ->assertJsonPath('user.organization_name', 'Isabela State University')

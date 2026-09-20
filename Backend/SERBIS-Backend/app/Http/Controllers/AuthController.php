@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\ResidentLoginCode;
-use App\Mail\ResidentVerificationCode;
 use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
 use App\Rules\PhoneAvailable;
 use App\Services\Sms\SmsGateway;
+use App\Services\Sms\SmsResult;
 use App\Services\Totp;
 use App\Support\PhoneNumber;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -46,27 +46,68 @@ class AuthController extends Controller
      */
     private const MAX_SIGNUP_ATTEMPTS = 5;
 
+    /**
+     * What an old app is told, in both languages, because the old app shows the
+     * server's `message` as-is on any failed request. The app that ships with
+     * phone login never sends an email address, so an email in the body is the
+     * tell that this is the old one.
+     */
+    private const APP_UPDATE_MESSAGE = 'Please update the SERBIS app to continue. / Paki-update ang SERBIS app para magpatuloy.';
+
+    private const SMS_UNAVAILABLE_MESSAGE = 'We could not send the text message. Check the number and try again in a minute, or visit the MDRRMO office.';
+
+    /**
+     * 410 for a client that predates phone login. Sent by the routes that used
+     * to take an email address, and removed in a later release once no such app
+     * is still in use.
+     */
+    private function appUpdateRequired(): JsonResponse
+    {
+        return response()->json([
+            'message' => self::APP_UPDATE_MESSAGE,
+            'code' => 'app_update_required',
+        ], 410);
+    }
+
+    /**
+     * The two email-verification routes the old app called. The new app uses
+     * /resident/verify-phone; nothing sensible remains for these to do.
+     */
+    public function emailVerificationRemoved(): JsonResponse
+    {
+        return $this->appUpdateRequired();
+    }
+
+    /** 503 when the code could not be texted, with the pending sign-up or challenge left in place. */
+    private function smsUnavailable(): JsonResponse
+    {
+        return response()->json([
+            'message' => self::SMS_UNAVAILABLE_MESSAGE,
+            'code' => 'sms_unavailable',
+        ], 503);
+    }
+
     // Resident self-registration for the mobile app. Admins live in tbl_user and
     // are deliberately not creatable here — there is no public route that writes
     // to that table.
     //
-    // Nothing is written to tbl_residents here. A sign-up that has not proved it
-    // controls the address it claimed lives entirely in the cache until the code
-    // comes back, and only verifyEmail() inserts the row. The old flow inserted
-    // first and verified afterwards, which meant an abandoned or hostile sign-up
-    // permanently held an email address and a phone number — the `unique` rule
-    // below would then refuse the real owner, with nothing to release it but an
-    // admin deleting the row by hand. A pending sign-up instead lapses on its own.
+    // A phone number is the login, so it is what a sign-up is keyed on and what
+    // the code is texted to. Nothing is written to tbl_residents here: a sign-up
+    // that has not proved it controls the number lives entirely in the cache
+    // until the code comes back, and only verifyPhone() inserts the row. An
+    // abandoned or hostile sign-up therefore never holds a number — the unique
+    // index only ever sees accounts that finished — and it lapses on its own.
     //
-    // This is the same shape the MFA login challenge already uses: short-lived
-    // state that nothing needs to query or keep, held in cache and consumed once.
-    //
-    // The SMS spend is unchanged: this route sends exactly one code per call and
-    // the 'register' limiter (AppServiceProvider) caps it at 5/minute and
-    // 15/hour per IP. Re-registering the same address is now allowed and simply
-    // issues a fresh code, retiring the outstanding one.
+    // The SMS spend: this route sends exactly one code per call and the
+    // 'register' limiter (AppServiceProvider) caps it at 5/minute and 15/hour per
+    // IP. Registering the same number again is allowed and simply issues a fresh
+    // code, retiring the outstanding one.
     public function register(Request $request)
     {
+        if ($request->has('email_address')) {
+            return $this->appUpdateRequired();
+        }
+
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
@@ -77,11 +118,10 @@ class AuthController extends Controller
             // other field a resident might not have on hand yet; editable
             // later from the profile either way.
             'street_address' => 'nullable|string|max:255',
+            // Refused here when a real account already holds the number, in any
+            // spelling. That does tell a stranger the number is registered; the
+            // route's per-IP limiter is what bounds using it to enumerate.
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable],
-            // Still checked against the table, but the table now only holds
-            // accounts that finished verifying, so this refuses a real account
-            // and never an abandoned attempt.
-            'email_address' => 'required|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
             // An individual (head of the family, the default) or an organization.
             // Barangay accounts are made by MDRRMO staff and are refused here, so
@@ -91,11 +131,11 @@ class AuthController extends Controller
         ]);
 
         $accountType = $validated['account_type'] ?? Resident::TYPE_HEAD_OF_FAMILY;
+        $phone = PhoneNumber::normalize($validated['phone_number']);
 
         // Every column is assigned explicitly rather than splatting $validated, so
         // no extra key in the payload can reach a column. Two matter in particular:
-        // `status` (see below) and `role`, which the mobile client currently sends
-        // and which must never be client-settable.
+        // `status` (see below) and `role`, which a client must never set.
         $entry = $this->issueSignupCode([
             'attributes' => [
                 'barangay_id' => $validated['barangay_id'],
@@ -103,8 +143,7 @@ class AuthController extends Controller
                 'first_name' => $validated['first_name'],
                 'middle_name' => $validated['middle_name'] ?? null,
                 'last_name' => $validated['last_name'],
-                'phone_number' => $validated['phone_number'],
-                'email_address' => $validated['email_address'],
+                'phone_number' => $phone,
                 // Hashed here rather than at insert time: the plain password must
                 // not sit in the cache store for the life of the pending sign-up.
                 'password' => Hash::make($validated['password']),
@@ -123,74 +162,63 @@ class AuthController extends Controller
                     ? $validated['organization_name']
                     : null,
             ],
-            // Set only when an existing unverified row is being finished off —
-            // see adoptUnverifiedResident(). A fresh sign-up has no row yet.
-            'resident_id' => null,
         ]);
 
+        if ($entry['delivery'] === 'failed') {
+            return $this->smsUnavailable();
+        }
+
         // Still no token and still no 'message' key — the mobile client reads any
-        // `message` on this response as an error to show the resident. There is
-        // no `resident` key any more either: there is no row to return, and the
-        // client never read one. `verification_required` is what sends it to the
-        // code screen, and `email_address` is what that screen verifies against.
+        // `message` on this response as an error to show the resident.
+        // `verification_required` is what sends it to the code screen, and
+        // `phone_number` is what that screen verifies against.
         return response()->json([
             'verification_required' => true,
-            'email_address' => $entry['attributes']['email_address'],
+            'phone_number' => $phone,
         ] + $this->signupDeliveryPayload($entry), 201);
     }
 
     /**
-     * Second half of registration: the code from the message comes back here and
+     * Second half of registration: the code from the text comes back here and
      * the account is created, already verified. A token is issued on success so
      * the resident lands signed in rather than being handed to a login form.
      */
-    public function verifyEmail(Request $request)
+    public function verifyPhone(Request $request)
     {
         $request->validate([
-            'email_address' => 'required|email',
+            'phone_number' => 'required|string|max:20',
             'code' => 'required|string|size:6',
         ]);
 
-        $email = $request->email_address;
+        $phone = PhoneNumber::normalize($request->phone_number);
 
         // Pulled, not read: a code is single-use, and two taps of Submit that
         // arrive together must not both go on to insert a row. The loser of that
         // race finds no entry and falls through to a branch below rather than
-        // hitting the unique index on email_address. A wrong guess must not spend
-        // the entry, so that path puts it straight back.
-        $entry = Cache::pull($this->pendingSignupKey($email));
-        $resident = Resident::where('email_address', $email)->first();
+        // hitting the unique index. A wrong guess must not spend the entry, so
+        // that path puts it straight back.
+        $entry = $phone === '' ? null : Cache::pull($this->pendingSignupKey($phone));
 
-        if ($resident && $resident->hasVerifiedEmail()) {
+        if ($phone !== '' && Resident::where('phone_number', $phone)->exists()) {
             // Deliberately not a success. Returning a token here would mean any
-            // string verifies an already-verified account.
+            // string verifies an already-registered number.
             return response()->json([
-                'message' => 'This email address is already verified. Please log in.',
+                'message' => 'This number is already registered. Please log in.',
                 'code' => 'already_verified',
             ], 422);
         }
 
         if (! is_array($entry)) {
-            // An unverified row with no code in flight is a sign-up written
-            // before this flow moved into the cache, whose code has since
-            // lapsed. It is told what an expired code is told, because that is
-            // exactly what happened. No row and no entry means there is nothing
-            // here to finish at all.
-            return $resident
-                ? response()->json([
-                    'message' => 'That code is not right, or it has expired. Ask for a new one.',
-                    'code' => 'invalid_code',
-                ], 422)
-                : response()->json([
-                    'message' => 'We could not find a sign-up for that email address. It may have expired — please register again.',
-                    'code' => 'not_found',
-                ], 404);
+            return response()->json([
+                'message' => 'We could not find a sign-up for that number. It may have expired — please register again.',
+                'code' => 'not_found',
+            ], 404);
         }
 
         $bypassed = $this->otpBypassMatches((string) $request->code);
 
         if (! $bypassed && ! $this->signupCodeMatches($entry, (string) $request->code)) {
-            if (! $this->spendSignupAttempt($email, $entry)) {
+            if (! $this->spendSignupAttempt($phone, $entry)) {
                 return response()->json([
                     'message' => 'Too many wrong codes. Ask for a new one.',
                     'code' => 'too_many_attempts',
@@ -205,13 +233,15 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $resident = $this->completeSignup($entry, $resident);
-
-        if (! $resident) {
+        try {
+            $resident = $this->completeSignup($entry);
+        } catch (UniqueConstraintViolationException) {
+            // Someone else finished registering this number between the
+            // register call and now. The unique index is what decides.
             return response()->json([
-                'message' => 'We could not find a sign-up for that email address. It may have expired — please register again.',
-                'code' => 'not_found',
-            ], 404);
+                'message' => 'This number is already registered. Please log in.',
+                'code' => 'already_verified',
+            ], 422);
         }
 
         if ($bypassed) {
@@ -227,40 +257,35 @@ class AuthController extends Controller
 
     /**
      * Issues a replacement code. Two limits apply: the route's rate limiter, and
-     * a per-sign-up cooldown so one address cannot be used to send messages on a
+     * a per-sign-up cooldown so one number cannot be used to send messages on a
      * timer.
      */
     public function resendVerificationCode(Request $request)
     {
         $request->validate([
-            'email_address' => 'required|email',
+            'phone_number' => 'required|string|max:20',
         ]);
 
-        $email = $request->email_address;
-        $resident = Resident::where('email_address', $email)->first();
+        $phone = PhoneNumber::normalize($request->phone_number);
 
-        if ($resident && $resident->hasVerifiedEmail()) {
+        if ($phone !== '' && Resident::where('phone_number', $phone)->exists()) {
             return response()->json([
-                'message' => 'This email address is already verified. Please log in.',
+                'message' => 'This number is already registered. Please log in.',
                 'code' => 'already_verified',
             ], 422);
         }
 
-        $entry = $this->pendingSignup($email);
+        $entry = $phone === '' ? null : $this->pendingSignup($phone);
 
-        // A 404 here says only that no sign-up is in flight for the address,
+        // A 404 here says only that no sign-up is in flight for the number,
         // which registering would reveal anyway. Staying silent instead would
-        // leave a resident who mistyped their own address waiting for a message
-        // that is never coming.
+        // leave a resident who mistyped their own number waiting for a text that
+        // is never coming.
         if ($entry === null) {
-            if (! $resident) {
-                return response()->json([
-                    'message' => 'We could not find a sign-up for that email address. It may have expired — please register again.',
-                    'code' => 'not_found',
-                ], 404);
-            }
-
-            $entry = $this->adoptUnverifiedResident($resident);
+            return response()->json([
+                'message' => 'We could not find a sign-up for that number. It may have expired — please register again.',
+                'code' => 'not_found',
+            ], 404);
         }
 
         if (($wait = $this->signupResendWait($entry)) > 0) {
@@ -273,6 +298,10 @@ class AuthController extends Controller
 
         $entry = $this->issueSignupCode($entry);
 
+        if ($entry['delivery'] === 'failed') {
+            return $this->smsUnavailable();
+        }
+
         return response()->json([
             'message' => 'A new code is on its way.',
             'code' => 'code_sent',
@@ -280,19 +309,19 @@ class AuthController extends Controller
     }
 
     /**
-     * Where a pending sign-up lives. Keyed by a hash of the address rather than
-     * the address itself: the cache store is a file tree in production and a
+     * Where a pending sign-up lives. Keyed by a hash of the number rather than
+     * the number itself: the cache store is a file tree in production and a
      * table in development, and neither is a place to leave a list of every
-     * email that has ever started registering.
+     * phone number that has ever started registering.
      */
-    private function pendingSignupKey(string $email): string
+    private function pendingSignupKey(string $phone): string
     {
-        return 'signup:pending:'.hash('sha256', mb_strtolower(trim($email)));
+        return 'signup:pending:'.hash('sha256', $phone);
     }
 
-    private function pendingSignup(string $email): ?array
+    private function pendingSignup(string $phone): ?array
     {
-        $entry = Cache::get($this->pendingSignupKey($email));
+        $entry = Cache::get($this->pendingSignupKey($phone));
 
         return is_array($entry) ? $entry : null;
     }
@@ -302,42 +331,63 @@ class AuthController extends Controller
      * window. Re-storing an entry — after a wrong guess, say — must move
      * nothing, or handling a sign-up would keep it alive indefinitely.
      */
-    private function putPendingSignup(string $email, array $entry): void
+    private function putPendingSignup(string $phone, array $entry): void
     {
         $seconds = ($entry['signup_expires_at'] ?? 0) - now()->getTimestamp();
 
         if ($seconds <= 0) {
-            Cache::forget($this->pendingSignupKey($email));
+            Cache::forget($this->pendingSignupKey($phone));
 
             return;
         }
 
-        Cache::put($this->pendingSignupKey($email), $entry, $seconds);
+        Cache::put($this->pendingSignupKey($phone), $entry, $seconds);
     }
 
     /**
-     * Builds a pending sign-up around an existing unverified row.
+     * Texts a one-time code and says how it went, without the caller having to
+     * know the vendor:
      *
-     * Two things still produce one. Rows written before this flow moved into
-     * the cache, whose owners have no other way to finish; and every resident
-     * the admin panel creates — ResidentController::store() writes no
-     * `email_verified_at`, so an account made for someone at the MDRRMO office
-     * proves the address on its first login, exactly as a self-registration
-     * proves it before the row exists.
+     * - 'accepted': the vendor took it.
+     * - 'unknown': the request timed out. The code screen still opens, with
+     *   Resend, because the text may well be on its way; it is logged as
+     *   UNKNOWN, never as delivered.
+     * - 'failed': nothing went out (out of credits, rate limited past the short
+     *   wait, refused number). There is no email to fall back to, so the caller
+     *   answers 503 sms_unavailable and the screen says so.
      *
-     * The entry carries the row's id, so verifying marks that row rather than
-     * inserting a second one against the unique index on email_address.
+     * On a developer machine with no SMS key and the OTP bypass code set, the
+     * absence of a key is not a failure — the bypass code is how that setup
+     * finishes a sign-up. Local only, and only for that one reason.
      */
-    private function adoptUnverifiedResident(Resident $resident): array
+    private function sendOtpText(string $phone, string $message): string
     {
-        return [
-            'attributes' => [
-                'first_name' => $resident->first_name,
-                'phone_number' => $resident->phone_number,
-                'email_address' => $resident->email_address,
-            ],
-            'resident_id' => $resident->resident_id,
-        ];
+        $result = app(SmsGateway::class)->sendOtp($phone, $message);
+
+        if ($result->isAccepted()) {
+            return 'accepted';
+        }
+
+        if ($result->isUnknown()) {
+            Log::warning('OTP SMS send outcome unknown (timed out); showing the code screen, delivery unconfirmed');
+
+            return 'unknown';
+        }
+
+        if ($result->reason === SmsResult::REASON_NOT_CONFIGURED
+            && app()->environment('local')
+            && filled(config('serbis.otp_bypass_code'))) {
+            Log::info('OTP SMS skipped: no SMS key on a local machine with the OTP bypass code set');
+
+            return 'accepted';
+        }
+
+        Log::warning('OTP SMS rejected', [
+            'reason' => $result->reason,
+            'status' => $result->httpStatus,
+        ]);
+
+        return 'failed';
     }
 
     /**
@@ -347,105 +397,55 @@ class AuthController extends Controller
      * Issuing replaces any outstanding code rather than adding a second valid
      * one — otherwise every resend widens the window instead of moving it.
      *
-     * Returns the stored entry, which now knows where the code went. The channel
-     * is not knowable in advance, because delivery falls back to mail when the
-     * vendor cannot dial the number, so the screen that says "check your
-     * messages" has to be told after the fact rather than assuming.
-     *
      * Every value written here is a scalar. config/cache.php sets
      * 'serializable_classes' => false, so a stored object comes back as
      * __PHP_Incomplete_Class — the trap sendLoginCode() documents at length.
      * Times are Unix timestamps for that reason, never Carbon.
+     *
+     * Returns the stored entry plus `delivery` (accepted | unknown | failed).
+     * A failed send leaves the entry — and the code, which nobody has — in place
+     * so Resend can issue another straight away, and starts no cooldown: nothing
+     * was billed, so there is nothing to protect.
      */
     private function issueSignupCode(array $entry): array
     {
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
         $phone = (string) ($entry['attributes']['phone_number'] ?? '');
-        $email = (string) ($entry['attributes']['email_address'] ?? '');
 
         $entry['code_hash'] = Hash::make($code);
-        $entry['sent_at'] = now()->getTimestamp();
         $entry['expires_at'] = now()->addMinutes(Resident::CODE_TTL_MINUTES)->getTimestamp();
         // A new code is a new secret, so it gets a fresh budget of guesses —
         // the same reset sendLoginCode() performs on a resent login code. What
         // stops that being a way around MAX_SIGNUP_ATTEMPTS is the resend
         // cooldown (Resident::RESEND_COOLDOWN_SECONDS) plus the route limiter:
-        // buying another five guesses costs a minute's wait and a real message
-        // to the address being attacked.
+        // buying another five guesses costs a minute's wait and a real text to
+        // the number being attacked.
         $entry['attempts'] = 0;
         // Set once and carried through every reissue: resending moves the code's
         // clock, not the sign-up's, so a resident cannot hold an unfinished
         // sign-up open forever by tapping Resend.
         $entry['signup_expires_at'] ??= now()->addHours(self::SIGNUP_WINDOW_HOURS)->getTimestamp();
-        $entry['channel'] = $this->textSignupCode($phone, $code) ? 'sms' : 'email';
 
-        // `sent_to` is the last four digits for SMS and the full address for
-        // mail: enough for a resident to recognise which of their own contacts
-        // it is, without writing a whole phone number into a response body.
-        // Recorded now rather than derived later, so a screen shown inside the
-        // cooldown names the contact the outstanding code actually went to.
-        $entry['sent_to'] = $entry['channel'] === 'sms'
-            ? substr(preg_replace('/\D/', '', $phone), -4)
-            : $email;
-
-        $this->putPendingSignup($email, $entry);
-
-        if ($entry['channel'] === 'email') {
-            Mail::to($email)->send(new ResidentVerificationCode(
-                (string) ($entry['attributes']['first_name'] ?? ''),
-                $code,
-            ));
-        }
-
-        return $entry;
-    }
-
-    /**
-     * The SMS leg of delivery. True when the code is on its way by text, false
-     * when the caller should fall back to mail.
-     *
-     * SMS is the primary channel: a resident registering on a phone reads the
-     * code without leaving the handset, and the deployment has an SMS vendor
-     * configured before it has a mail one. Email is the fallback for a number
-     * the vendor cannot dial — the column is still email_verified_at either way,
-     * because what is being proven is ownership of the account, not of a
-     * particular channel.
-     */
-    private function textSignupCode(string $phone, string $code): bool
-    {
-        if (! $this->smsIsUsable($phone)) {
-            return false;
-        }
-
-        $result = app(SmsGateway::class)->sendOtp(
+        $delivery = $this->sendOtpText(
             $phone,
             "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
         );
 
-        if ($result->isAccepted()) {
-            return true;
+        if ($delivery === 'failed') {
+            unset($entry['sent_at']);
+        } else {
+            $entry['sent_at'] = now()->getTimestamp();
         }
 
-        if ($result->isUnknown()) {
-            // See sendLoginCode() for why this still opens the code screen
-            // rather than falling to the (production-dead, MAIL_MAILER=log)
-            // email path. It is recorded as UNKNOWN, not delivered: the
-            // request timing out does not mean the vendor never sent it, and
-            // it does not mean it did.
-            Log::warning('OTP SMS send outcome unknown (timed out); showing the code screen, delivery unconfirmed');
+        // Stored so a screen shown inside the cooldown still knows how the
+        // outstanding code went out.
+        $entry['sent_delivery'] = $delivery;
 
-            return true;
-        }
+        $this->putPendingSignup($phone, $entry);
 
-        // No resident_id to log: there is no row yet, and the address is not
-        // going in a log line to make up for it.
-        Log::warning('OTP SMS rejected, falling back to email', [
-            'reason' => $result->reason,
-            'status' => $result->httpStatus,
-        ]);
+        $entry['delivery'] = $delivery;
 
-        return false;
+        return $entry;
     }
 
     /**
@@ -460,18 +460,16 @@ class AuthController extends Controller
      *
      * This entry is not only a credential. It also holds the registration
      * itself — the name, the barangay, the hashed password — for
-     * SIGNUP_WINDOW_HOURS, and for a fresh self-registration there is no
-     * tbl_residents row behind it yet. Destroying it would leave the code
-     * screen with a Resend button that answers 404, and the resident retyping
-     * the whole form. So the CODE is retired and the draft is kept: Resend
-     * issues a new one against the same sign-up, which is what
-     * verify_email_screen.dart already does with any error it is handed.
+     * SIGNUP_WINDOW_HOURS, and there is no tbl_residents row behind it. Destroying
+     * it would leave the code screen with a Resend button that answers 404, and
+     * the resident retyping the whole form. So the CODE is retired and the draft
+     * is kept: Resend issues a new one against the same sign-up.
      *
      * Retiring rather than merely counting also means the spent code cannot be
      * guessed after the cap — the hash is dropped from the cache store, not
      * just marked.
      */
-    private function spendSignupAttempt(string $email, array $entry): bool
+    private function spendSignupAttempt(string $phone, array $entry): bool
     {
         $attempts = (int) ($entry['attempts'] ?? 0) + 1;
         $entry['attempts'] = $attempts;
@@ -489,7 +487,7 @@ class AuthController extends Controller
         // Written back either way, and putPendingSignup() re-stores it with the
         // time the SIGN-UP has left rather than a fresh window — so a run of
         // wrong guesses cannot hold the draft open past its own day.
-        $this->putPendingSignup($email, $entry);
+        $this->putPendingSignup($phone, $entry);
 
         return $survived;
     }
@@ -518,58 +516,49 @@ class AuthController extends Controller
     }
 
     /**
-     * Turns a verified pending sign-up into a usable account.
+     * Turns a verified pending sign-up into a usable account: the row is
+     * inserted already verified — its first appearance in the table is as a
+     * claimed account, so the system log records one `created`.
      *
-     * Two shapes reach here. A sign-up carries the whole column set and gets a
-     * row inserted, already verified — the row's first appearance in the table
-     * is as a claimed account, so the system log records one `created` rather
-     * than a create-then-verify pair. An adopted row (see
-     * adoptUnverifiedResident) already exists and is only marked.
+     * forceFill, not create(): `phone_verified_at` is deliberately absent from
+     * the model's Fillable so no request payload can ever reach it. `password`
+     * in the entry is already hashed. There is no email; the column is null.
      */
-    private function completeSignup(array $entry, ?Resident $resident): ?Resident
+    private function completeSignup(array $entry): Resident
     {
-        if ($entry['resident_id'] ?? null) {
-            $resident ??= Resident::find($entry['resident_id']);
-
-            if (! $resident) {
-                return null;
-            }
-
-            $resident->markEmailAsVerified();
-
-            return $resident;
-        }
-
-        // forceFill, not create(): `email_verified_at` is deliberately absent
-        // from the model's Fillable so no request payload can ever reach it.
-        // `password` in the entry is already hashed.
         $new = new Resident;
-        $new->forceFill($entry['attributes'] + ['email_verified_at' => now()])->save();
+        $new->forceFill($entry['attributes'] + ['phone_verified_at' => now()])->save();
 
         return $new;
     }
 
     /**
-     * Whether the vendor could carry a code to this number at all. Only a send
-     * can prove it — the vendor can still reject a dialable number — so this is
-     * the question asked before trying, not a promise it worked.
-     */
-    private function smsIsUsable(?string $phone): bool
-    {
-        return app(SmsGateway::class)->configured()
-            && PhoneNumber::normalize((string) $phone) !== '';
-    }
-
-    /**
      * Tells a client where the code it is waiting for actually went, and how
      * long before another can be asked for.
+     *
+     * `sent_to` is the last four digits: enough for a resident to recognise
+     * their own number, without writing a whole phone number into a response.
+     * `delivery` is 'accepted' or 'unknown' — unknown means the request timed
+     * out and the text may or may not arrive, which the new app answers with a
+     * "Didn't get a text?" hint. `channel` stays for older screens.
      */
     private function signupDeliveryPayload(array $entry): array
     {
+        return $this->deliveryFields(
+            (string) ($entry['attributes']['phone_number'] ?? ''),
+            (string) ($entry['delivery'] ?? $entry['sent_delivery'] ?? 'accepted'),
+            $this->signupResendWait($entry),
+        );
+    }
+
+    /** The one shape every code-sending response carries. */
+    private function deliveryFields(string $phone, string $delivery, int $retryAfter): array
+    {
         return [
-            'channel' => $entry['channel'] ?? 'email',
-            'sent_to' => $entry['sent_to'] ?? ($entry['attributes']['email_address'] ?? ''),
-            'retry_after' => $this->signupResendWait($entry),
+            'channel' => 'sms',
+            'sent_to' => substr(preg_replace('/\D/', '', $phone), -4),
+            'retry_after' => $retryAfter,
+            'delivery' => $delivery === 'unknown' ? 'unknown' : 'accepted',
         ];
     }
 
@@ -598,6 +587,12 @@ class AuthController extends Controller
     // ResidentController::update(), which accepts status and barangay_id and is
     // reachable only behind is.admin — opening that to residents would hand every
     // resident the admin's own write surface.
+    //
+    // The phone number is the login now, so it is NOT editable here: moving it
+    // takes a code sent to the new number (POST /me/phone). Email is no longer
+    // collected at all. An old app that still sends either key gets the same 410
+    // the other retired routes answer, so it says why instead of silently
+    // dropping the edit.
     public function updateMe(Request $request)
     {
         $user = $request->user();
@@ -608,6 +603,10 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if ($request->hasAny(['email_address', 'phone_number'])) {
+            return $this->appUpdateRequired();
+        }
+
         $validated = $request->validate([
             'first_name' => 'sometimes|required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
@@ -616,58 +615,14 @@ class AuthController extends Controller
             // of self-correctable detail a profile edit is for — MDRRMO
             // dispatches on the barangay relation, not on this string.
             'street_address' => 'sometimes|nullable|string|max:255',
-            'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable($user->getKey())],
-            'email_address' => [
-                'sometimes',
-                'required',
-                'email',
-                Rule::unique('tbl_residents', 'email_address')->ignore($user->getKey(), 'resident_id'),
-            ],
             // The resident's own notification preference. Writable here — unlike
-            // the four columns below — because it decides only what this account
+            // the columns below — because it decides only what this account
             // receives, and there is nobody else who should be deciding it.
             'sms_opt_in' => 'sometimes|required|boolean',
-            // Not a column. Proof of knowledge, required below only when this
-            // call actually moves one of the two contacts a login code is sent
-            // to. Left out of the assignment loop for the same reason every
-            // other non-column key is.
-            'current_password' => 'nullable|string',
         ]);
 
-        // email_address and phone_number are where a login code is delivered:
-        // sendLoginCode() texts the number and falls back to the address, so
-        // whoever controls them controls every future sign-in. Moving one is a
-        // credential change wearing a profile edit's clothes, and a bearer
-        // token alone must not be enough to do it — otherwise a token lifted
-        // from a shared phone converts into a permanent takeover, with no
-        // self-serve reset for the real owner to take the account back.
-        //
-        // Compared against what is stored, not merely "was the key sent": the
-        // mobile client PATCHes only the fields its form actually changed, but
-        // a client that sends the whole profile every time must not be asked
-        // for a password to save an unchanged one. It is also what keeps
-        // resubmitting your own address working, which the unique rule above
-        // already goes out of its way to allow.
-        $contactChanges = [];
-
-        foreach (['email_address', 'phone_number'] as $field) {
-            // A number is compared as stored — canonical — so resubmitting the
-            // same one in the other spelling is not a change.
-            $incoming = $field === 'phone_number'
-                ? (PhoneNumber::normalize((string) ($validated[$field] ?? '')) ?: ($validated[$field] ?? null))
-                : ($validated[$field] ?? null);
-
-            if (array_key_exists($field, $validated) && $incoming !== $user->{$field}) {
-                $contactChanges[] = $field;
-            }
-        }
-
-        if ($contactChanges !== []) {
-            $this->assertCurrentPassword($request, $user);
-        }
-
-        // Assigned key by key, never a splat of $validated. Four columns are
-        // absent from the rules above and must stay that way:
+        // Assigned key by key, never a splat of $validated. Columns absent from
+        // the rules above and that must stay that way:
         //
         //   barangay_id  every service request is dispatched on it, so a resident
         //                who could move themselves could redirect their own
@@ -678,7 +633,8 @@ class AuthController extends Controller
         //                POST /me/photo owns it — see ResidentController.
         //   password     a change needs the current password, which is a separate
         //                endpoint, not a field on a profile PATCH.
-        foreach (['first_name', 'middle_name', 'last_name', 'street_address', 'phone_number', 'email_address'] as $field) {
+        //   phone_number the login; see the note above.
+        foreach (['first_name', 'middle_name', 'last_name', 'street_address'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }
@@ -693,23 +649,6 @@ class AuthController extends Controller
         // raw string would land in the column as 1 either way.
         if (array_key_exists('sms_opt_in', $validated)) {
             $user->sms_opt_in = $request->boolean('sms_opt_in');
-        }
-
-        // A new address has not been proved yet, so it does not inherit the old
-        // one's verified state. Assigned directly rather than in the loop above
-        // because `email_verified_at` is deliberately absent from the model's
-        // Fillable — completeSignup() forceFills it for the same reason.
-        //
-        // Nothing else has to be built to finish the job: residentLogin()
-        // already answers an unverified row by issuing a code and returning 403
-        // `email_unverified`, which the mobile client reads as "open the code
-        // screen", and adoptUnverifiedResident() already covers a row that
-        // exists but is unclaimed. So the next sign-in proves the new address
-        // through the flow that is there. The current session is deliberately
-        // left alive — it just proved the password, and ending it here would
-        // log the resident out of the edit they were making.
-        if (in_array('email_address', $contactChanges, true)) {
-            $user->email_verified_at = null;
         }
 
         $user->save();
@@ -958,19 +897,29 @@ class AuthController extends Controller
     // Endpoint specifically for the Mobile App
     public function residentLogin(Request $request)
     {
+        // The app that shipped before phone login sends an email address and no
+        // number. Told to update, in both languages, rather than "wrong
+        // credentials".
+        if ($request->has('email_address') && ! $request->filled('phone_number')) {
+            return $this->appUpdateRequired();
+        }
+
         $request->validate([
-            'email_address' => 'required|email',
+            'phone_number' => 'required|string|max:20',
             'password' => 'required',
         ]);
 
-        $email = $request->email_address;
-        $resident = Resident::where('email_address', $email)->first();
+        // A number that is not dialable cannot match anything. It is answered
+        // exactly like a wrong password below, so the route says nothing about
+        // which numbers have accounts.
+        $phone = PhoneNumber::normalize((string) $request->phone_number);
+        $resident = $phone === '' ? null : Resident::where('phone_number', $phone)->first();
 
         // A registration that has not been verified has no row, so a resident
         // who closed the app on the code screen would otherwise be told their
         // own password is wrong. The pending sign-up carries the same hash the
         // row would have, and answers the same way.
-        $pending = $resident ? null : $this->pendingSignup($email);
+        $pending = ($resident || $phone === '') ? null : $this->pendingSignup($phone);
         $hash = $resident->password ?? ($pending['attributes']['password'] ?? null);
 
         if ($hash === null || ! Hash::check($request->password, (string) $hash)) {
@@ -981,20 +930,11 @@ class AuthController extends Controller
 
         // 2026-08-05 quality-check finding 5 asked why residentLogin has no
         // `status` check when adminLogin has one. On 2026-08-08 that was
-        // answered deliberately — leave it open — and this comment said so at
-        // length, from just below the verification branch:
-        //
-        //     "There is deliberately NO `status` check here, unlike adminLogin
-        //      above. [...] An `Inactive` resident can log in and file service
-        //      requests. The only thing activation gates is who receives an
-        //      SMS blast. That is the intended behaviour for now."
-        //
-        // REVERSED 2026-09-03, for something that argument never addressed: the
-        // admin panel has a "Deactivate account" button, and it did nothing a
-        // person would call deactivation. The resident stayed signed in, kept
-        // filing requests, and merely stopped receiving text blasts. Staff were
-        // told the account was closed when it was not. The gap was in the
-        // promise, not in the reasoning.
+        // answered deliberately — leave it open — and REVERSED 2026-09-03, for
+        // something that argument never addressed: the admin panel has a
+        // "Deactivate account" button, and it did nothing a person would call
+        // deactivation. The resident stayed signed in, kept filing requests, and
+        // merely stopped receiving text blasts.
         //
         // What the 2026-08-08 reasoning got right is kept, and it is exactly
         // why this tests one named value instead of `!== 'Active'`:
@@ -1005,18 +945,10 @@ class AuthController extends Controller
         //  - 'Inactive' still signs in. It means "self-registered, awaiting
         //    activation", not "closed" — the account an admin has yet to get
         //    to, which is the worst one to lock out.
-        //  - There is still no self-serve reactivation, so this really does
-        //    make the office the only way back. That is now the intent rather
-        //    than the objection: it is what the button is for.
         //
-        // Placed here, above the verification branch, and not where the old
-        // comment sat below it. That branch calls issueSignupCode(), and
-        // SkySMS bills every send with no sandbox, so gating afterwards would
-        // let repeated logins against a closed account cost real money.
-        //
-        // STILL OUTSTANDING, mobile side: the login screen needs a branch for
-        // this `code`, or the resident sees a generic failure and retries
-        // forever.
+        // Placed above the code branches, and not after them: SkySMS bills
+        // every send with no sandbox, so gating afterwards would let repeated
+        // logins against a closed account cost real money.
         if ($resident && $resident->isDeactivated()) {
             return response()->json([
                 'message' => 'This account has been deactivated. Please visit the MDRRMO office.',
@@ -1024,63 +956,55 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Only an abandoned registration reaches this. Verification happens as
-        // the last step of signing up, so a resident who finished it never sees
-        // this refusal — and one who closed the app halfway can resume from the
-        // code screen instead of being told their password is wrong.
-        //
-        // Checked after the password on purpose: answering before it would turn
-        // this route into an oracle for which addresses have accounts.
-        if ($pending || ! $resident->hasVerifiedEmail()) {
+        // Only an abandoned registration reaches this: the sign-up proved
+        // nothing yet, so the resident resumes at the code screen instead of
+        // being told their password is wrong. Checked after the password on
+        // purpose — answering before it would turn this route into an oracle for
+        // which numbers are mid-registration.
+        if ($pending) {
             // The client answers this by opening the code screen, so a code has
-            // to be in flight by the time it gets there. Without this the
-            // resident waited on a message nobody had sent and only got one by
-            // tapping Resend.
-            //
-            // Guarded by the same per-sign-up cooldown the resend route uses,
-            // and for the same reason: SkySMS bills every send and has no
-            // sandbox. Login is retried far more often than Resend is tapped,
-            // so an unguarded send here would be the most expensive line in
-            // the app. Inside the cooldown the outstanding code is still valid
-            // and still has most of its 15 minutes left, so there is nothing
-            // to reissue — and the entry already records the contact it went
-            // to, so the code screen can still label itself correctly.
-            $entry = $pending ?? $this->pendingSignup($email) ?? $this->adoptUnverifiedResident($resident);
+            // to be in flight by the time it gets there. Guarded by the same
+            // per-sign-up cooldown the resend route uses, and for the same
+            // reason: SkySMS bills every send and has no sandbox. Login is
+            // retried far more often than Resend is tapped, so an unguarded send
+            // here would be the most expensive line in the app.
+            if ($this->signupResendWait($pending) === 0) {
+                $pending = $this->issueSignupCode($pending);
 
-            if ($this->signupResendWait($entry) === 0) {
-                $entry = $this->issueSignupCode($entry);
+                if ($pending['delivery'] === 'failed') {
+                    return $this->smsUnavailable();
+                }
             }
 
             return response()->json([
                 'message' => 'Please enter the code we just sent to finish creating your account.',
-                'code' => 'email_unverified',
-                'email_address' => $email,
-            ] + $this->signupDeliveryPayload($entry), 403);
+                'code' => 'phone_unverified',
+                'phone_number' => $phone,
+            ] + $this->signupDeliveryPayload($pending), 403);
         }
 
-        // The `status` gate this comment used to argue against now exists, above
-        // the verification branch — see there for the 2026-08-08 decision and
-        // the 2026-09-03 reversal. It refuses 'Deactivated' only; 'Inactive'
-        // still reaches this line, by design.
-
         // Password proven and the account is a real one. A token is not issued
-        // yet — a code goes to the resident's phone (or mail, same fallback
-        // issueSignupCode uses) and has to come back to /resident/login/verify
-        // first. This is deliberately a *different* code from the signup one:
-        // it lives under its own cache key, so a login attempt can never spend
-        // or clobber an in-flight signup code and vice versa.
-        ['channel' => $channel, 'challenge_id' => $challengeId] = $this->sendLoginCode($resident, null);
+        // yet — a code goes to the resident's phone and has to come back to
+        // /resident/login/verify first. This is deliberately a *different* code
+        // from the signup one: it lives under its own cache key, so a login
+        // attempt can never spend or clobber an in-flight signup code and vice
+        // versa.
+        $login = $this->sendLoginCode($resident, null);
+
+        if ($login['delivery'] === 'failed') {
+            return $this->smsUnavailable();
+        }
 
         return response()->json([
             'message' => 'Enter the code we just sent to finish signing in.',
             'code' => 'mfa_required',
-            'challenge_id' => $challengeId,
-        ] + $this->deliveryPayloadFor($resident, $channel, $challengeId), 403);
+            'challenge_id' => $login['challenge_id'],
+        ] + $this->loginDeliveryFields($resident, $login), 403);
     }
 
     /**
-     * Second half of resident login: the SMS (or email-fallback) code comes
-     * back here.
+     * Second half of resident login: the code texted to the resident's number
+     * comes back here.
      */
     public function residentLoginVerify(Request $request)
     {
@@ -1188,7 +1112,7 @@ class AuthController extends Controller
 
     /**
      * Issues a replacement login code against an existing challenge. Takes the
-     * challenge id, not the email/password — the resident already proved the
+     * challenge id, not the number/password — the resident already proved the
      * password once to get this challenge, and resend must not ask again.
      */
     public function resendLoginCode(Request $request)
@@ -1225,12 +1149,16 @@ class AuthController extends Controller
             ], 422);
         }
 
-        ['channel' => $channel, 'challenge_id' => $challengeId] = $this->sendLoginCode($resident, $request->challenge_id);
+        $login = $this->sendLoginCode($resident, $request->challenge_id);
+
+        if ($login['delivery'] === 'failed') {
+            return $this->smsUnavailable();
+        }
 
         return response()->json([
             'message' => 'A new code is on its way.',
             'code' => 'code_sent',
-        ] + $this->deliveryPayloadFor($resident, $channel, $challengeId), 200);
+        ] + $this->loginDeliveryFields($resident, $login), 200);
     }
 
     /**
@@ -1238,7 +1166,7 @@ class AuthController extends Controller
      * resident and stores its hash in the challenge — never in the pending
      * sign-up entry, which belongs to the signup gate alone.
      *
-     * @return array{channel: string, challenge_id: string}
+     * @return array{delivery: string, challenge_id: string}
      */
     private function sendLoginCode(Resident $resident, ?string $challengeId): array
     {
@@ -1263,46 +1191,23 @@ class AuthController extends Controller
             );
         }
 
-        if ($this->smsIsUsable($resident->phone_number)) {
-            $result = app(SmsGateway::class)->sendOtp(
-                $resident->phone_number,
-                "Your SERBIS login code is {$code}. It expires in 5 minutes.",
-            );
-
-            if ($result->isAccepted()) {
-                return ['channel' => 'sms', 'challenge_id' => $challengeId];
-            }
-
-            if ($result->isUnknown()) {
-                // Not a rejection — the request itself never completed (timeout,
-                // dropped connection), which means the vendor may have taken and
-                // sent the text before the response leg failed.
-                // MAIL_MAILER=log in production makes the email fallback below a
-                // dead end — it writes to a log file, not an inbox — so treating
-                // this as a rejection would tell a resident who may already have
-                // the code on their phone to go check an email that will never
-                // arrive. The code screen opens, with Resend; the send is
-                // recorded as UNKNOWN, not delivered. The code sent is the same
-                // one this response's challenge checks against either way.
-                Log::warning('Login OTP SMS send outcome unknown (timed out); showing the code screen, delivery unconfirmed', [
-                    'resident_id' => $resident->resident_id,
-                ]);
-
-                return ['channel' => 'sms', 'challenge_id' => $challengeId];
-            }
-
-            Log::warning('Login OTP SMS rejected, falling back to email', [
-                'resident_id' => $resident->resident_id,
-                'reason' => $result->reason,
-                'status' => $result->httpStatus,
-            ]);
-        }
-
-        Mail::to($resident->email_address)->send(
-            new ResidentLoginCode($resident, $code)
+        $delivery = $this->sendOtpText(
+            (string) $resident->phone_number,
+            "Your SERBIS login code is {$code}. It expires in 5 minutes.",
         );
 
-        return ['channel' => 'email', 'challenge_id' => $challengeId];
+        if ($delivery === 'failed') {
+            // No cooldown for a text that never went out, so the resident can
+            // try again straight away; the challenge itself lapses in five
+            // minutes.
+            Cache::put(
+                "mfa:challenge:{$challengeId}",
+                array_merge(Cache::get("mfa:challenge:{$challengeId}", []), ['sent_at' => null]),
+                now()->addMinutes(5),
+            );
+        }
+
+        return ['delivery' => $delivery, 'challenge_id' => $challengeId];
     }
 
     /**
@@ -1325,18 +1230,16 @@ class AuthController extends Controller
         return max(0, Resident::RESEND_COOLDOWN_SECONDS - (now()->getTimestamp() - $sentAt));
     }
 
-    private function deliveryPayloadFor(Resident $resident, string $channel, string $challengeId): array
+    /**
+     * @param  array{delivery: string, challenge_id: string}  $login
+     */
+    private function loginDeliveryFields(Resident $resident, array $login): array
     {
-        $digits = preg_replace('/\D/', '', (string) $resident->phone_number);
-        $wait = $this->mfaResendWait(Cache::get("mfa:challenge:{$challengeId}"));
-
-        return [
-            'channel' => $channel,
-            'sent_to' => $channel === 'sms'
-                ? substr($digits, -4)
-                : $resident->email_address,
-            'retry_after' => $wait,
-        ];
+        return $this->deliveryFields(
+            (string) $resident->phone_number,
+            $login['delivery'],
+            $this->mfaResendWait(Cache::get("mfa:challenge:{$login['challenge_id']}")),
+        );
     }
 
     public function logout(Request $request)

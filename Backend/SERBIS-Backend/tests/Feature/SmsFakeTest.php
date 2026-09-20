@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Mail\ResidentLoginCode;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Providers\AppServiceProvider;
@@ -10,7 +9,6 @@ use App\Services\Sms\SmsGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -65,7 +63,7 @@ class SmsFakeTest extends TestCase
             'status' => 'Active',
         ]);
 
-        $resident->markEmailAsVerified();
+        $resident->markPhoneAsVerified();
 
         return $resident->fresh();
     }
@@ -129,40 +127,36 @@ class SmsFakeTest extends TestCase
         $this->assertTrue(true, 'The guard allowed a correctly configured production boot.');
     }
 
-    public function test_mail_fallback_does_not_fire_on_a_faked_send(): void
+    public function test_a_faked_send_still_lets_a_login_reach_its_code_prompt(): void
     {
         $this->asLocal();
         config(['serbis.sms_fake' => true]);
-        Mail::fake();
         Http::fake();
 
         $resident = $this->verifiedResident();
 
         $this->postJson('/api/resident/login', [
-            'email_address' => $resident->email_address,
+            'phone_number' => $resident->phone_number,
             'password' => 'Password123',
         ])->assertStatus(403)->assertJsonPath('code', 'mfa_required');
 
         Http::assertNothingSent();
-        Mail::assertNothingSent();
     }
 
-    public function test_mail_fallback_still_fires_when_flag_is_unset_and_sms_is_rejected(): void
+    public function test_a_rejected_send_is_sms_unavailable_when_the_flag_is_unset(): void
     {
         $this->asLocal();
         config(['serbis.sms_fake' => false]);
-        Mail::fake();
         Http::fake([
             'skysms.skyio.site/*' => Http::response(['success' => false], 200),
         ]);
 
         $resident = $this->verifiedResident();
 
+        // There is no email to fall back to.
         $this->postJson('/api/resident/login', [
-            'email_address' => $resident->email_address,
+            'phone_number' => $resident->phone_number,
             'password' => 'Password123',
-        ])->assertStatus(403)->assertJsonPath('code', 'mfa_required');
-
-        Mail::assertSent(ResidentLoginCode::class);
+        ])->assertStatus(503)->assertJsonPath('code', 'sms_unavailable');
     }
 }
