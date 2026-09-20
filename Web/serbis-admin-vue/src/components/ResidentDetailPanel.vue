@@ -50,12 +50,14 @@
 
       <div class="mb-4">
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Phone number</div>
-        <a :href="`tel:${resident.phone_number}`" class="detail-link text-body-1 font-weight-medium">
-          <v-icon size="18" class="mr-2">mdi-phone</v-icon>{{ resident.phone_number }}
+        <a :href="`tel:${displayPhone(resident.phone_number)}`" class="detail-link text-body-1 font-weight-medium">
+          <v-icon size="18" class="mr-2">mdi-phone</v-icon>{{ displayPhone(resident.phone_number) }}
         </a>
       </div>
 
-      <div class="mb-4">
+      <!-- Email is no longer collected (a phone number is the login), so newer
+           accounts have none. Shown only for the accounts that gave one. -->
+      <div v-if="resident.email_address" class="mb-4">
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Email address</div>
         <a :href="`mailto:${resident.email_address}`" class="detail-link text-body-1 font-weight-medium">
           <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>{{ resident.email_address }}
@@ -176,6 +178,7 @@
 import { computed, ref, watch } from 'vue'
 import { ACCOUNT_TYPE, accountTypeLabel } from '@/composables/accountType'
 import { initials as computeInitials } from '@/composables/adminUi'
+import { displayPhone } from '@/composables/phoneNumber'
 import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   RESIDENT_STATUS,

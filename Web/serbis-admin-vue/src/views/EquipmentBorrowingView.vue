@@ -318,7 +318,7 @@
               <v-divider class="mb-4"></v-divider>
               <div class="mb-3">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone Number</div>
-                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedRecord?.resident?.phone_number || 'N/A' }}</div>
+                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ displayPhone(selectedRecord?.resident?.phone_number) || 'N/A' }}</div>
               </div>
               <div class="mb-3">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
@@ -770,6 +770,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
+import { displayPhone } from '@/composables/phoneNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
@@ -858,7 +859,7 @@ const barangaySortValue = (b) => b.resident?.barangay?.barangay_name || ''
 // Barangay keeps its own column (it is filterable); the person cell's second
 // line is the contact number, falling back to barangay only when there is none.
 const personName = (b) => `${b.resident?.last_name || ''}, ${b.resident?.first_name || ''}`
-const personSecondary = (b) => b.resident?.phone_number || b.resident?.barangay?.barangay_name || null
+const personSecondary = (b) => displayPhone(b.resident?.phone_number) || b.resident?.barangay?.barangay_name || null
 
 const activeHeaders = [
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },

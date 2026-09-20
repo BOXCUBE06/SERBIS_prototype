@@ -38,4 +38,25 @@ class PhoneNumber {
   /// inside the number, so accepting them here would put the disagreement
   /// straight back.
   static bool isValid(String? value) => pattern.hasMatch((value ?? '').trim());
+
+  /// How a number reads to a person here: `09171234567`.
+  ///
+  /// The server stores and returns E.164 (`+639171234567`) — it is the login and
+  /// the form the SMS vendor takes — but a resident writes and dials the
+  /// national form, so every place this app shows or edits a number goes through
+  /// this. `639…` is handled too, since that is a shape the server accepts on
+  /// the way in. Anything else is returned as it came, trimmed: an unfamiliar
+  /// value is better shown than blanked.
+  static String display(String? value) {
+    final v = (value ?? '').trim();
+    final e164 = RegExp(r'^\+?63(9\d{9})$').firstMatch(v);
+    return e164 != null ? '0${e164.group(1)}' : v;
+  }
+
+  /// The last four digits, for "the number ending in 4567". Empty when there
+  /// are fewer than four digits to show.
+  static String lastFour(String? value) {
+    final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+    return digits.length < 4 ? '' : digits.substring(digits.length - 4);
+  }
 }

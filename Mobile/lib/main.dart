@@ -5,9 +5,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'models/request_models.dart';
+import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/auth/verify_email_screen.dart';
+import 'screens/auth/verify_phone_screen.dart';
 import 'screens/auth/verify_login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
@@ -113,7 +114,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-enum _AuthView { login, register, verifyEmail, verifyLogin }
+enum _AuthView { login, register, verifyPhone, verifyLogin, forgotPassword }
 
 class _AuthGateState extends State<AuthGate> {
   late final ApiService _api = widget.api ?? ApiService();
@@ -124,9 +125,11 @@ class _AuthGateState extends State<AuthGate> {
   _AuthView _view = _AuthView.login;
   String? _loginInfoMessage;
 
-  /// The address whose registration is waiting on a code. Set by registering,
-  /// and by a login the server refused as unverified.
-  String? _pendingVerificationEmail;
+  /// The number whose sign-in or registration is waiting on a code. Set by
+  /// registering, by a login the server refused as unverified, and by a login
+  /// that reached its code prompt. Also seeds the forgot-password screen with
+  /// whatever the resident had typed.
+  String? _pendingPhone;
 
   /// Where the code the resident is about to type was sent, and how much of
   /// the resend cooldown is left. Null only if the server did not say.
@@ -236,13 +239,13 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   /// Registration now ends at the code screen rather than at the login form:
-  /// the account is not usable until the emailed code comes back, and verifying
+  /// the account is not usable until the texted code comes back, and verifying
   /// issues a token, so a resident who finishes never sees a login screen at
   /// all on their first run.
-  void _afterRegister(String email, VerificationDelivery? delivery) {
+  void _afterRegister(String phone, VerificationDelivery? delivery) {
     setState(() {
-      _view = _AuthView.verifyEmail;
-      _pendingVerificationEmail = email;
+      _view = _AuthView.verifyPhone;
+      _pendingPhone = phone;
       _pendingDelivery = delivery;
       _loginInfoMessage = null;
     });
@@ -291,20 +294,27 @@ class _AuthGateState extends State<AuthGate> {
             _loginInfoMessage = null;
           });
         },
-        onEmailUnverified: (email, delivery) {
+        onPhoneUnverified: (phone, delivery) {
           setState(() {
-            _view = _AuthView.verifyEmail;
-            _pendingVerificationEmail = email;
+            _view = _AuthView.verifyPhone;
+            _pendingPhone = phone;
             _pendingDelivery = delivery;
             _loginInfoMessage = null;
           });
         },
-        onMfaRequired: (email, challengeId, delivery) {
+        onMfaRequired: (phone, challengeId, delivery) {
           setState(() {
             _view = _AuthView.verifyLogin;
-            _pendingVerificationEmail = email;
+            _pendingPhone = phone;
             _pendingLoginChallengeId = challengeId;
             _pendingDelivery = delivery;
+            _loginInfoMessage = null;
+          });
+        },
+        onForgotPassword: (phone) {
+          setState(() {
+            _view = _AuthView.forgotPassword;
+            _pendingPhone = phone;
             _loginInfoMessage = null;
           });
         },
@@ -312,10 +322,30 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    if (_view == _AuthView.verifyEmail && _pendingVerificationEmail != null) {
-      return VerifyEmailScreen(
+    if (_view == _AuthView.forgotPassword) {
+      return ForgotPasswordScreen(
         userStore: _userStore,
-        email: _pendingVerificationEmail!,
+        initialPhone: _pendingPhone,
+        onGoToLogin: () {
+          setState(() {
+            _view = _AuthView.login;
+          });
+        },
+        // Not signed in: a reset ends every session, so the resident goes back
+        // to the login form, told what happened, and signs in as usual.
+        onReset: (message) {
+          setState(() {
+            _view = _AuthView.login;
+            _loginInfoMessage = message;
+          });
+        },
+      );
+    }
+
+    if (_view == _AuthView.verifyPhone && _pendingPhone != null) {
+      return VerifyPhoneScreen(
+        userStore: _userStore,
+        phone: _pendingPhone!,
         delivery: _pendingDelivery,
         // Verifying issues a token, so this is a real sign-in, not a hand-off
         // back to the login form.
@@ -323,25 +353,25 @@ class _AuthGateState extends State<AuthGate> {
         onGoToLogin: () {
           setState(() {
             _view = _AuthView.login;
-            _pendingVerificationEmail = null;
+            _pendingPhone = null;
           });
         },
       );
     }
 
     if (_view == _AuthView.verifyLogin &&
-        _pendingVerificationEmail != null &&
+        _pendingPhone != null &&
         _pendingLoginChallengeId != null) {
       return VerifyLoginScreen(
         userStore: _userStore,
-        email: _pendingVerificationEmail!,
+        phone: _pendingPhone!,
         challengeId: _pendingLoginChallengeId!,
         delivery: _pendingDelivery,
         onVerified: _login,
         onGoToLogin: () {
           setState(() {
             _view = _AuthView.login;
-            _pendingVerificationEmail = null;
+            _pendingPhone = null;
             _pendingLoginChallengeId = null;
           });
         },

@@ -41,7 +41,7 @@
               v-model="search"
               prepend-inner-icon="mdi-magnify"
               label="Search residents"
-              placeholder="Name or email"
+              placeholder="Name or mobile number"
               clearable
               variant="outlined"
               density="comfortable"
@@ -203,18 +203,9 @@
               </span>
             </template>
 
+            <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
             <template v-slot:item.phone_number="{ item }">
-              <span class="text-body-1 text-medium-emphasis cell-truncate">{{ item.phone_number }}</span>
-            </template>
-
-            <template v-slot:item.email_address="{ item }">
-              <v-tooltip :text="item.email_address" location="top">
-                <template v-slot:activator="{ props }">
-                  <span v-bind="props" class="text-body-1 text-medium-emphasis cell-truncate">
-                    {{ item.email_address }}
-                  </span>
-                </template>
-              </v-tooltip>
+              <span class="text-body-1 text-medium-emphasis cell-truncate">{{ displayPhone(item.phone_number) }}</span>
             </template>
 
             <template v-slot:item.status="{ item }">
@@ -355,10 +346,11 @@
               </v-col>
 
               <v-col cols="12" md="6">
-                <v-text-field v-model="formData.phone_number" label="Phone Number *" placeholder="09171234567" :rules="[requiredRule('Phone number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field v-model="formData.email_address" label="Email Address *" placeholder="juan.delacruz@gmail.com" :rules="[requiredRule('Email address'), emailRule]" :error-messages="fieldErrors.email_address" type="email" variant="outlined" density="comfortable" rounded="lg" autocomplete="email"></v-text-field>
+                <!-- The resident logs in with this number, and no two accounts may
+                     share one. A barangay or organization officer who is also a
+                     head of the family needs a different number for this account;
+                     the server says so on the field when it is taken. -->
+                <v-text-field v-model="formData.phone_number" label="Mobile Number (login) *" placeholder="09171234567" hint="They sign in with this number. It must be unique." persistent-hint :rules="[requiredRule('Mobile number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6" v-if="!modal.isEditing">
@@ -533,6 +525,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
+import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
 import { useRowNumbers } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
@@ -587,8 +580,7 @@ const headers = [
   // The longest real barangay name in the data is "San Antonio Ugad", which
   // was still clipping when this column was 15% of a narrower table.
   { title: 'Barangay', key: 'barangay_name', width: '14%' },
-  { title: 'Phone Number', key: 'phone_number', width: '10%' },
-  { title: 'Email', key: 'email_address', width: '14%' },
+  { title: 'Mobile Number', key: 'phone_number', width: '14%' },
   { title: 'Status', key: 'status', align: 'center', width: '160px' },
   { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
 ]
@@ -621,7 +613,7 @@ const statusToggleLoading = ref(false)
 
 const formData = ref({
   first_name: '', middle_name: '', last_name: '', phone_number: '',
-  email_address: '', password: '', barangay_id: null, street_address: '',
+  password: '', barangay_id: null, street_address: '',
   status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
 })
 
@@ -719,8 +711,10 @@ const filteredAndSortedResidents = computed(() => {
         `${last}, ${first}`.includes(q) ||
         `${last} ${first}`.includes(q) ||
         (r.middle_name || '').toLowerCase().includes(q) ||
-        (r.email_address || '').toLowerCase().includes(q) ||
-        (r.phone_number || '').toLowerCase().includes(q)
+        // Either spelling finds the number: staff type 0917… and the server
+        // holds +63917….
+        displayPhone(r.phone_number).includes(q) ||
+        (r.phone_number || '').includes(q)
     })
   }
   return [...result].sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
@@ -841,7 +835,7 @@ const openAddModal = () => {
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
-    email_address: '', password: '', barangay_id: null, street_address: '',
+    password: '', barangay_id: null, street_address: '',
     status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
@@ -855,8 +849,8 @@ const openExistingEditModal = (item) => {
     first_name: item.first_name,
     middle_name: item.middle_name,
     last_name: item.last_name,
-    phone_number: item.phone_number,
-    email_address: item.email_address,
+    // As staff read it (09…); the server accepts either spelling and stores +63….
+    phone_number: displayPhone(item.phone_number),
     password: '',
     barangay_id: item.barangay_id,
     street_address: item.street_address ?? '',
@@ -876,13 +870,10 @@ const closeModal = () => { modal.value.isOpen = false }
 const requiredRule = (label) => (v) =>
   (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
 
-const emailRule = (v) =>
-  !v || /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
-
-// Deliberately loose: 09xx, +639xx and landlines all reach residents here, and
-// a strict pattern would refuse numbers the office actually holds.
+// The number is the login and the SMS destination, so it has to be a real
+// Philippine mobile number — the same rule the server applies, and no landline.
 const phoneRule = (v) =>
-  !v || v.replace(/\D/g, '').length >= 7 || 'Enter a full phone number.'
+  !v || isMobileNumber(v) || 'Enter a mobile number like 09171234567.'
 
 // Mirrors the hint already printed under the field, and the backend's own rule.
 const passwordRule = (v) =>
@@ -1006,7 +997,6 @@ const toggleStatus = async (item, forcedNext = null) => {
         middle_name: item.middle_name,
         last_name: item.last_name,
         phone_number: item.phone_number,
-        email_address: item.email_address,
         barangay_id: item.barangay_id,
         // Omitted, ResidentController::update() would default this back to
         // null — a status toggle must not silently wipe the resident's

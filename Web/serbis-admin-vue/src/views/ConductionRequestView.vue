@@ -515,6 +515,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { getToken } from '@/composables/authToken'
+import { displayPhone } from '@/composables/phoneNumber'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
@@ -845,7 +846,7 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   // skipped booking.patient_contact_number entirely and opened at the filer's
   // number.
   form.patient_contact_number = booking.patient_contact_number
-    || booking.resident?.phone_number
+    || displayPhone(booking.resident?.phone_number)
     || booking.walk_in_contact_number
     || ''
   // patient_relatives is deliberately NOT prefilled, and must not be added.

@@ -21,10 +21,17 @@ class VerificationDelivery {
   /// Seconds left on the server's per-account resend cooldown.
   final int retryAfter;
 
+  /// True when the server timed out talking to the SMS provider: the request
+  /// left and no answer came back, so the text may or may not arrive. The code
+  /// screen still opens, with Resend, and adds a "Didn't get a text?" hint.
+  /// Absent from an older server, which reads as a normal send.
+  final bool unknown;
+
   const VerificationDelivery({
     required this.channel,
     required this.sentTo,
     required this.retryAfter,
+    this.unknown = false,
   });
 
   bool get bySms => channel == 'sms';
@@ -49,6 +56,7 @@ class VerificationDelivery {
       channel: channel,
       sentTo: sentTo is String ? sentTo : '',
       retryAfter: retryAfter is int ? retryAfter : fallbackCooldownSeconds,
+      unknown: json?['delivery'] == 'unknown',
     );
   }
 }

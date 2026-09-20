@@ -188,11 +188,19 @@ class ResidentController extends Controller
             'middle_name' => $validated['middle_name'] ?? null,
             'last_name' => $validated['last_name'],
             'phone_number' => $validated['phone_number'],
-            'email_address' => $validated['email_address'] ?? null,
             'barangay_id' => $validated['barangay_id'],
             'street_address' => $validated['street_address'] ?? null,
             'status' => $validated['status'],
         ];
+
+        // Email is no longer collected — a phone number is the login — but the
+        // column keeps what residents gave before. The panel's form does not
+        // send it any more, so an omitted key must leave the stored address
+        // alone; only a key that is actually present moves it (an explicit null
+        // clears it).
+        if (array_key_exists('email_address', $validated)) {
+            $changes['email_address'] = $validated['email_address'];
+        }
 
         // An omitted or blank password leaves the stored hash alone; assigning
         // null would lock the resident out of their own account.

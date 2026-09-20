@@ -362,7 +362,6 @@ void main() {
           lastName: 'Santos',
           barangayId: 1,
           phoneNumber: '09171234567',
-          email: 'maria@example.test',
           password: 'Secret123',
         ),
       );

@@ -16,7 +16,7 @@ class RegisterScreen extends StatefulWidget {
   final UserStore userStore;
   /// Carries the address the account was created with, and where the first
   /// code was sent — registration is not finished until that code comes back.
-  final void Function(String email, VerificationDelivery? delivery)
+  final void Function(String phone, VerificationDelivery? delivery)
       onRegisterSuccess;
   final VoidCallback onGoToLogin;
 
@@ -37,7 +37,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _lastNameCtrl  = TextEditingController();
   final _streetCtrl    = TextEditingController();
   final _phoneCtrl     = TextEditingController();
-  final _emailCtrl     = TextEditingController();
   final _passwordCtrl  = TextEditingController();
   final _confirmCtrl   = TextEditingController();
   final _orgNameCtrl   = TextEditingController();
@@ -106,7 +105,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _lastNameCtrl.dispose();
     _streetCtrl.dispose();
     _phoneCtrl.dispose();
-    _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     _orgNameCtrl.dispose();
@@ -151,7 +149,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         barangayId:    barangayId,
         streetAddress: _streetCtrl.text.trim(),
         phoneNumber:   _phoneCtrl.text.trim(),
-        email:         _emailCtrl.text.trim(),
         password:      _passwordCtrl.text,
         accountType:   _organization ? 'organization' : 'head_of_family',
         organizationName: _organization ? _orgNameCtrl.text.trim() : null,
@@ -163,15 +160,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _formError = outcome.error);
         return;
       }
-      // The account exists but is not usable yet — the code finishes it. The
-      // address goes with the callback so the verify screen never asks the
-      // resident to retype what they just entered.
-      widget.onRegisterSuccess(_emailCtrl.text.trim(), outcome.delivery);
+      // The account is not usable yet — the code finishes it. The number goes
+      // with the callback so the verify screen never asks the resident to
+      // retype what they just entered.
+      widget.onRegisterSuccess(_phoneCtrl.text.trim(), outcome.delivery);
     } catch (error) {
       // `UserStore.register` converts an ApiException into a returned message
       // rather than throwing, so anything arriving here escaped the HTTP layer
       // and has not been logged. No field values: this method holds the
-      // password, the phone number and the email.
+      // password and the phone number.
       AppLog.error('auth', 'register', error: error);
       if (mounted) {
         setState(() =>
@@ -305,22 +302,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _streetCtrl,
                       userStore: widget.userStore,
                       barangayId: _barangayId,
-                    ),
-
-                    AuthTextField(
-                      label: 'Email address',
-                      hint: 'yourname@email.com',
-                      controller: _emailCtrl,
-                      keyboard: TextInputType.emailAddress,
-                      prefixIcon: Icons.email_outlined,
-                      validator: (v) {
-                        final val = (v ?? '').trim();
-                        if (val.isEmpty) return 'Enter your email address';
-                        if (!val.contains('@') || !val.contains('.')) {
-                          return 'Enter a valid email address';
-                        }
-                        return null;
-                      },
                     ),
 
                     AuthTextField(

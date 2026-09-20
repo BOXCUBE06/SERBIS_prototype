@@ -19,7 +19,7 @@ class _DeactivatedApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> residentLogin({
-    required String email,
+    required String phoneNumber,
     required String password,
   }) async {
     loginCalls++;
@@ -57,13 +57,14 @@ void main() {
         userStore: UserStore(api),
         onLoginSuccess: (_) {},
         onGoToRegister: () {},
-        onEmailUnverified: (_, __) {},
+        onPhoneUnverified: (_, __) {},
+        onForgotPassword: (_) {},
         onMfaRequired: (_, __, ___) {},
       ),
     ));
 
     await tester.enterText(
-        find.byType(TextFormField).first, 'maria@test.local');
+        find.byType(TextFormField).first, '09171234567');
     await tester.enterText(find.byType(TextFormField).last, 'Password123');
 
     await tester.tap(find.text('Log in'));
@@ -99,14 +100,14 @@ void main() {
     expect(api.loginCalls, 1, reason: 'A closed account must not be retryable.');
   });
 
-  testWidgets('editing the email clears the block', (tester) async {
+  testWidgets('editing the number clears the block', (tester) async {
     await pumpAndSubmit(tester);
 
     expect(find.text(message), findsOneWidget);
 
     // A different account may be perfectly fine, so the screen must not become
     // a dead end that needs an app restart.
-    await tester.enterText(find.byType(TextFormField).first, 'other@test.local');
+    await tester.enterText(find.byType(TextFormField).first, '09179999999');
     await tester.pumpAndSettle();
 
     expect(find.text(message), findsNothing);

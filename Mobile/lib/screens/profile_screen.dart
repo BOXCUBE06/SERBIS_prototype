@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import '../data/safety_files.dart';
-import '../models/phone_number.dart';
 import '../state/account_store.dart';
 import '../state/api_service.dart';
 import '../state/material_cache.dart';
@@ -16,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
 import '../widgets/purok_field.dart';
 import '../widgets/shared_widgets.dart';
+import 'change_phone_sheet.dart';
 import 'library/article_reader_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -52,7 +52,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// that is not a barangay — and the barangay on the resident row is what
   /// every request is dispatched on. A missing value now says so.
   String get _name => widget.user.fullName.trim();
-  String get _email => widget.user.email.trim();
   String get _address => widget.user.address.trim();
 
   /// The decoded photo, held here rather than re-fetched on every rebuild. The
@@ -267,7 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 5),
-                  _detailRow(Icons.email_outlined, _email, filipino),
+                  _detailRow(Icons.phone_outlined, widget.user.phoneDisplay, filipino),
                   const SizedBox(height: 3),
                   _detailRow(Icons.place_outlined, _address, filipino),
                   const SizedBox(height: 16),
@@ -984,61 +983,17 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       TextEditingController(text: widget.user.lastName);
   late final TextEditingController _street =
       TextEditingController(text: widget.user.streetAddress);
-  late final TextEditingController _phone =
-      TextEditingController(text: widget.user.phone);
-  late final TextEditingController _email =
-      TextEditingController(text: widget.user.email);
-  final TextEditingController _password = TextEditingController();
 
   final Map<String, String> _errors = {};
   String? _formError;
   bool _saving = false;
 
-  /// Whether the email or mobile number differs from what is on file. The
-  /// endpoint requires the account password to move either — they are where a
-  /// login code is delivered — so this decides both whether the password field
-  /// is shown and whether it is required.
-  bool _contactChanged = false;
-
-  bool _passwordHidden = true;
-
-  @override
-  void initState() {
-    super.initState();
-    // Watched rather than checked at save time, so the field appears at the
-    // moment it becomes required instead of after a rejected save.
-    _phone.addListener(_syncContactChanged);
-    _email.addListener(_syncContactChanged);
-  }
-
-  void _syncContactChanged() {
-    final changed = _phone.text.trim() != widget.user.phone ||
-        _email.text.trim() != widget.user.email;
-
-    // Only on the transition. This runs on every keystroke in either field, and
-    // an unconditional setState would rebuild the sheet for each one.
-    if (changed == _contactChanged) return;
-
-    setState(() {
-      _contactChanged = changed;
-      // Undoing the edit takes the requirement away with it. Without this a
-      // "Required" would be left behind on a field that is no longer rendered,
-      // and _validate() would go on reading it.
-      if (!changed) _errors.remove('password');
-    });
-  }
-
   @override
   void dispose() {
-    _phone.removeListener(_syncContactChanged);
-    _email.removeListener(_syncContactChanged);
     _first.dispose();
     _middle.dispose();
     _last.dispose();
     _street.dispose();
-    _phone.dispose();
-    _email.dispose();
-    _password.dispose();
     super.dispose();
   }
 
@@ -1053,30 +1008,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     if (_first.text.trim().isEmpty) errors['first'] = _tr('profile.required');
     if (_last.text.trim().isEmpty) errors['last'] = _tr('profile.required');
 
-    final phone = _phone.text.trim();
-    if (phone.isEmpty) {
-      errors['phone'] = _tr('profile.required');
-    } else if (!PhoneNumber.isValid(phone)) {
-      // The server's own rule — see PhoneNumber. This was a hand-rolled
-      // "length 11 and starts 09", which is a strict subset: it refused the
-      // `+639…` shape the server accepts and registration allows, so a
-      // resident who signed up with one could not save their own profile.
-      errors['phone'] = _tr('profile.phone_invalid');
-    }
-
-    final email = _email.text.trim();
-    if (email.isEmpty) {
-      errors['email'] = _tr('profile.required');
-    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      errors['email'] = _tr('profile.email_invalid');
-    }
-
-    // Not trimmed, unlike every field above: a space is a legitimate password
-    // character, and trimming here would reject a correct one.
-    if (_contactChanged && _password.text.isEmpty) {
-      errors['password'] = _tr('profile.password_required');
-    }
-
     setState(() {
       _errors
         ..clear()
@@ -1086,10 +1017,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     return errors.isEmpty;
   }
 
-  /// Only what actually changed is sent. PATCH leaves an absent key alone, so an
-  /// unchanged email is never re-submitted — which matters because the backend's
-  /// unique rule would otherwise be checked against the resident's own row on
-  /// every save.
+  /// Only what actually changed is sent. PATCH leaves an absent key alone.
   Map<String, String?> _changes() {
     final changed = <String, String?>{};
     void diff(String key, String current, String original) {
@@ -1100,8 +1028,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     diff('middle', _middle.text.trim(), widget.user.middleName);
     diff('last', _last.text.trim(), widget.user.lastName);
     diff('street', _street.text.trim(), widget.user.streetAddress);
-    diff('phone', _phone.text.trim(), widget.user.phone);
-    diff('email', _email.text.trim(), widget.user.email);
 
     return changed;
   }
@@ -1127,11 +1053,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
         middleName: changes['middle'],
         lastName: changes['last'],
         streetAddress: changes['street'],
-        phoneNumber: changes['phone'],
-        email: changes['email'],
-        // Sent only when it is actually needed. Passing it on every save would
-        // put the resident's password on the wire for a surname correction.
-        currentPassword: _contactChanged ? _password.text : null,
       );
 
       if (!mounted) return;
@@ -1141,29 +1062,37 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       widget.onSaved(updated);
     } on ApiException catch (e) {
       if (!mounted) return;
-      // The server's message is shown as-is. A 422 here is a real rejection the
-      // resident has to act on — a duplicate email is the common one — and the
-      // field-level checks above cannot know about it.
-      //
-      // A rejected password is put under the password field instead of in the
-      // banner, so the resident's eye lands on the input they have to fix. Only
-      // when that field is on screen: a `current_password` error while the
-      // field is hidden would otherwise be shown nowhere at all.
-      final passwordError = e.fieldErrors['current_password'];
-
-      setState(() {
-        if (passwordError != null && _contactChanged) {
-          _errors['password'] = passwordError;
-          // Not also in the banner — the same sentence twice reads as two
-          // separate problems.
-          _formError = null;
-        } else {
-          _formError = e.message;
-        }
-      });
+      // The server's message is shown as-is: a 422 here is a real rejection
+      // the resident has to act on, and the field-level checks above cannot
+      // know about it.
+      setState(() => _formError = e.message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Opens the two-step number change on top of this sheet. It pops with the
+  /// refreshed profile only once the code has been accepted, and this sheet
+  /// closes with it: whatever was typed in the other fields is not carried, and
+  /// the parent reports the save.
+  Future<void> _changePhone() async {
+    final updated = await showModalBottomSheet<AppUser>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: ChangePhoneSheet(
+          user: widget.user,
+          userStore: widget.userStore,
+          filipino: widget.filipino,
+        ),
+      ),
+    );
+
+    if (updated == null || !mounted) return;
+    Navigator.pop(context);
+    widget.onSaved(updated);
   }
 
   @override
@@ -1221,61 +1150,35 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               label: _tr('profile.street_address'),
               enabled: !_saving,
             ),
-            AppTextField.phone(
+            // The number is the login and where every code goes, so it is shown
+            // here and moved by its own two-step flow, not edited inline.
+            _ReadOnlyField(
               label: _tr('profile.phone'),
-              controller: _phone,
-              errorText: _errors['phone'],
-              enabled: !_saving,
+              value: widget.user.phoneDisplay,
+              filipino: widget.filipino,
             ),
-            AppTextField(
-              label: _tr('profile.email'),
-              hint: 'yourname@email.com',
-              controller: _email,
-              keyboard: TextInputType.emailAddress,
-              errorText: _errors['email'],
-              enabled: !_saving,
-            ),
-            // Appears the moment either contact field is edited, directly under
-            // the two that triggered it, and disappears again if the edit is
-            // undone.
-            if (_contactChanged) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.shield_outlined,
-                      size: 15, color: AppColors.inkFaint),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      _tr('profile.password_why'),
-                      style: AppText.body(
-                          size: 12, color: AppColors.inkMuted, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              AppTextField(
-                label: _tr('profile.password_current'),
-                hint: '',
-                controller: _password,
-                obscure: _passwordHidden,
-                errorText: _errors['password'],
-                enabled: !_saving,
-                suffixIcon: IconButton(
-                  onPressed: _saving
-                      ? null
-                      : () => setState(() => _passwordHidden = !_passwordHidden),
-                  icon: Icon(
-                    _passwordHidden
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 18,
-                    color: AppColors.inkFaint,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.shield_outlined,
+                    size: 15, color: AppColors.inkFaint),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    _tr('profile.phone_locked'),
+                    style: AppText.body(
+                        size: 12, color: AppColors.inkMuted, height: 1.5),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            AppButton(
+              label: _tr('phonechange.button'),
+              style: AppButtonStyle.outline,
+              onPressed: _saving ? null : _changePhone,
+            ),
+            const SizedBox(height: 14),
             _ReadOnlyField(
               label: _tr('profile.barangay'),
               value: widget.barangay,

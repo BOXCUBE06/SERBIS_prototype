@@ -1,9 +1,10 @@
-library serbis.screens.auth.verify_email;
+library serbis.screens.auth.verify_phone;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../models/phone_number.dart';
 import '../../state/api_service.dart';
 import '../../state/account_store.dart';
 import '../../state/app_log.dart';
@@ -14,36 +15,35 @@ import '../../widgets/form_inputs.dart';
 ///
 /// Reached two ways — straight after registering, and from the login screen
 /// when the server refuses an unverified account. Both send a code on the way
-/// here and both hand over the address, so the resident never retypes it and
-/// the code can only ever be checked against the account it was issued for.
-class VerifyEmailScreen extends StatefulWidget {
+/// here and both hand over the number, so the resident never retypes it and the
+/// code can only ever be checked against the account it was issued for.
+class VerifyPhoneScreen extends StatefulWidget {
   final UserStore userStore;
-  final String email;
+  final String phone;
 
-  /// Which channel carried the code and how long is left on the resend
-  /// cooldown, as reported by whichever call sent it. Null when the server did
-  /// not say, and the screen then falls back to naming the email address and
-  /// assuming a full cooldown.
+  /// How the send went and how long is left on the resend cooldown, as reported
+  /// by whichever call sent it. Null when the server did not say, and the
+  /// screen then assumes a full cooldown.
   final VerificationDelivery? delivery;
 
   final void Function(AppUser user) onVerified;
   final VoidCallback onGoToLogin;
 
-  const VerifyEmailScreen({
+  const VerifyPhoneScreen({
     super.key,
     required this.userStore,
-    required this.email,
+    required this.phone,
     required this.delivery,
     required this.onVerified,
     required this.onGoToLogin,
   });
 
   @override
-  State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
+  State<VerifyPhoneScreen> createState() => _VerifyPhoneScreenState();
 }
 
-class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
-  static const _logArea = 'verify-email';
+class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
+  static const _logArea = 'verify-phone';
 
   final _codeController = TextEditingController();
 
@@ -53,8 +53,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   String? _notice;
 
   /// Starts as whatever brought the resident here reported, and is replaced on
-  /// every resend: a text the vendor rejects falls back to mail, so the channel
-  /// can change under a screen that is already open.
+  /// every resend: a send that timed out once can go through the next time, so
+  /// how it went can change under a screen that is already open.
   VerificationDelivery? _delivery;
 
   /// Mirrors the server's per-account cooldown so the resident sees a counter
@@ -114,8 +114,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
 
     try {
-      final user = await widget.userStore.verifyEmail(
-        email: widget.email,
+      final user = await widget.userStore.verifyPhone(
+        phoneNumber: widget.phone,
         code: code,
       );
       if (!mounted) return;
@@ -141,13 +141,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
 
     try {
-      final delivery =
-          await widget.userStore.resendVerificationCode(email: widget.email);
+      final delivery = await widget.userStore
+          .resendVerificationCode(phoneNumber: widget.phone);
       if (!mounted) return;
       setState(() {
         _notice = 'A new code is on its way.';
-        // Relabels the screen when the channel changed — a number the vendor
-        // could not text this time falls back to mail.
         if (delivery != null) _delivery = delivery;
       });
       _startCooldown(
@@ -172,28 +170,30 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
   }
 
-  /// Names the channel the code actually went out on. Falls back to the email
-  /// address, which is the one contact detail this screen is always given.
+  /// Names where the code went. Always a text now — there is no email — so the
+  /// number's last four digits are all a resident needs to recognise it. Falls
+  /// back to the number they typed when the server did not say.
   String get _sentToLine {
     final delivery = _delivery;
+    final shown = PhoneNumber.display(widget.phone);
 
     if (delivery == null) {
-      return 'We sent a 6-digit code to ${widget.email}.';
+      return 'We sent a 6-digit code by text message to $shown.';
     }
-    if (delivery.bySms) {
-      return delivery.sentTo.isEmpty
-          ? 'We sent a 6-digit code by text message to your phone.'
-          : 'We sent a 6-digit code by text message to the number ending in '
-              '${delivery.sentTo}.';
-    }
-    return 'We sent a 6-digit code to '
-        '${delivery.sentTo.isEmpty ? widget.email : delivery.sentTo}.';
+    return delivery.sentTo.isEmpty
+        ? 'We sent a 6-digit code by text message to $shown.'
+        : 'We sent a 6-digit code by text message to the number ending in '
+            '${delivery.sentTo}.';
   }
+
+  /// Shown when the server timed out talking to the SMS provider, so the text
+  /// may or may not be on its way. The screen is open and Resend is counting
+  /// down; this says why a wait is reasonable and what to do after it.
+  bool get _deliveryUnknown => _delivery?.unknown ?? false;
 
   @override
   Widget build(BuildContext context) {
     final canResend = _resendIn <= 0 && !_resending && !_submitting;
-    final bySms = _delivery?.bySms ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -205,7 +205,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             children: [
               const SizedBox(height: 24),
               Text(
-                bySms ? 'Check your messages' : 'Check your email',
+                'Check your messages',
                 style:
                     const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
@@ -230,6 +230,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 Text(
                   _notice!,
                   style: const TextStyle(color: AppColors.green700),
+                ),
+              ],
+              if (_deliveryUnknown) ...[
+                const SizedBox(height: 8),
+                Text(
+                  "Didn't get a text? It can take a minute. If it hasn't come "
+                  'when the timer ends, tap Send a new code.',
+                  key: const Key('delivery-unknown-hint'),
+                  style: const TextStyle(color: AppColors.inkMuted, height: 1.4),
                 ),
               ],
               const SizedBox(height: 24),

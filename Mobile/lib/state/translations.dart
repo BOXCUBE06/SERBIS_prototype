@@ -235,7 +235,6 @@ const Map<String, (String, String)> _strings = {
   // The sheet is read-only until a resident-scoped PATCH exists on the backend,
   // so the button no longer promises an update it cannot perform.
   'profile.account_details': ('Account details', 'Mga Detalye ng Account'),
-  'profile.email': ('Email address', 'Email Address'),
   'profile.barangay': ('Barangay', 'Barangay'),
   // The barangay stays read-only: it is the field every service request is
   // dispatched on, so moving is an MDRRMO operation, not a self-service edit.
@@ -254,17 +253,42 @@ const Map<String, (String, String)> _strings = {
   'profile.required': ('Required', 'Kailangan'),
   'profile.password_current': ('Current password', 'Kasalukuyang password'),
   'profile.password_required': (
-    'Enter your current password to save this change.',
-    'Ilagay ang iyong kasalukuyang password para ma-save ito.',
+    'Enter your current password to change your number.',
+    'Ilagay ang iyong kasalukuyang password para mapalitan ang numero.',
   ),
-  // Shown only once the email or mobile number has actually been edited, so it
-  // explains a field that has just appeared rather than one that was always
-  // there.
-  'profile.password_why': (
-    'Your login codes are sent to your email and mobile number, so changing either one needs your password.',
-    'Ang iyong mga login code ay ipinapadala sa iyong email at numero, kaya kailangan ng password para mapalitan ang alinman sa mga ito.',
+  // The mobile number is the login and where every code goes, so it is not
+  // edited inline with the other details.
+  'profile.phone_locked': (
+    'Your mobile number is how you log in. Changing it needs your password and a code sent to the new number.',
+    'Ang iyong mobile number ang ginagamit mo sa pag-login. Kailangan ang password mo at isang code na ipapadala sa bagong numero para mapalitan ito.',
   ),
-  'profile.email_invalid': ('Enter a valid email address.', 'Maglagay ng wastong email address.'),
+  'phonechange.button': ('Change number', 'Palitan ang numero'),
+  'phonechange.title': ('Change your mobile number', 'Palitan ang iyong mobile number'),
+  'phonechange.new_number': ('New mobile number', 'Bagong mobile number'),
+  'phonechange.same': ('That is already your number.', 'Iyan na ang iyong numero.'),
+  'phonechange.send': ('Send code', 'Magpadala ng code'),
+  'phonechange.code_title': ('Enter the code', 'Ilagay ang code'),
+  'phonechange.sent_to': (
+    'We sent a 6-digit code by text message to the new number ending in',
+    'Nagpadala kami ng 6-digit na code sa text sa bagong numerong nagtatapos sa',
+  ),
+  'phonechange.enter_below': ('Enter it below.', 'Ilagay ito sa ibaba.'),
+  'phonechange.code': ('Verification code', 'Verification code'),
+  'phonechange.code_length': ('Enter the 6-digit code.', 'Ilagay ang 6-digit na code.'),
+  'phonechange.confirm': ('Confirm new number', 'Kumpirmahin ang bagong numero'),
+  'phonechange.resend': ('Send a new code', 'Magpadala ng bagong code'),
+  'phonechange.resend_in': ('Resend code in', 'Ulitin ang pagpapadala sa loob ng'),
+  'phonechange.new_code': ('A new code is on its way.', 'Papunta na ang bagong code.'),
+  'phonechange.unknown_hint': (
+    "Didn't get a text? It can take a minute. If it hasn't come when the timer ends, tap Send a new code.",
+    'Walang dumating na text? Maaaring abutin ng isang minuto. Kung wala pa rin pagkatapos ng timer, pindutin ang Magpadala ng bagong code.',
+  ),
+  // Replaces the server's English for code `sms_unavailable`, so it reads in the
+  // resident's own language. There is no email to fall back to.
+  'phonechange.sms_unavailable': (
+    'We could not send the text message. Check the number and try again in a minute, or visit the MDRRMO office.',
+    'Hindi naipadala ang text message. Suriin ang numero at subukang muli pagkalipas ng isang minuto, o pumunta sa opisina ng MDRRMO.',
+  ),
   'profile.phone_invalid': (
     'Enter a valid mobile number.',
     'Maglagay ng wastong numero ng telepono.',

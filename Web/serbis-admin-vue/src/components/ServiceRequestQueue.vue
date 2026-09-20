@@ -206,7 +206,7 @@
               <PersonCell
                 :name="item._requesterName"
                 :initials="requesterInitials(item)"
-                :secondary="item.resident?.phone_number || item.walk_in_contact_number || requesterBarangay(item)"
+                :secondary="displayPhone(item.resident?.phone_number) || item.walk_in_contact_number || requesterBarangay(item)"
               />
             </template>
 
@@ -1296,6 +1296,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
+import { displayPhone } from '@/composables/phoneNumber'
 import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
@@ -1768,7 +1769,7 @@ const requesterInitials = (item) => {
   const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
   return parts.length > 0 ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
 }
-const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_contact_number || 'N/A'
+const requesterPhone = (item) => displayPhone(item?.resident?.phone_number) || item?.walk_in_contact_number || 'N/A'
 const requesterBarangay = (item) => {
   if (item?.resident) return item.resident.barangay?.barangay_name || 'Unknown Barangay'
   return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'

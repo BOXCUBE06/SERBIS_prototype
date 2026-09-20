@@ -2,6 +2,8 @@
 library serbis.screens.auth.login;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../models/phone_number.dart';
 import '../../state/api_service.dart';
 import '../../state/account_store.dart';
 import '../../state/app_log.dart';
@@ -14,19 +16,24 @@ class LoginScreen extends StatefulWidget {
   final void Function(AppUser user) onLoginSuccess;
   final VoidCallback onGoToRegister;
 
-  /// The credentials were right but the address is unverified. Carries it so
+  /// The credentials were right but the number was never verified. Carries it so
   /// the verify screen can resume a registration that was left half-finished.
-  final void Function(String email, VerificationDelivery? delivery)
-      onEmailUnverified;
+  final void Function(String phone, VerificationDelivery? delivery)
+      onPhoneUnverified;
 
-  /// The password was right; an SMS (or mail-fallback) code is what's left.
-  /// `challengeId` goes straight to `/resident/login/verify` — the login
-  /// screen never inspects it.
+  /// The password was right; a text-message code is what's left. `challengeId`
+  /// goes straight to `/resident/login/verify` — the login screen never
+  /// inspects it.
   final void Function(
-    String email,
+    String phone,
     String challengeId,
     VerificationDelivery? delivery,
   ) onMfaRequired;
+
+  /// "Forgot password?" — opens the reset flow, carrying whatever number was
+  /// typed so it need not be typed twice. There is no email to send a link to; it
+  /// is a code texted to the number.
+  final void Function(String phone) onForgotPassword;
   final String? infoMessage;
 
   const LoginScreen({
@@ -34,8 +41,9 @@ class LoginScreen extends StatefulWidget {
     required this.userStore,
     required this.onLoginSuccess,
     required this.onGoToRegister,
-    required this.onEmailUnverified,
+    required this.onPhoneUnverified,
     required this.onMfaRequired,
+    required this.onForgotPassword,
     this.infoMessage,
   });
 
@@ -45,7 +53,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey    = GlobalKey<FormState>();
-  final _emailCtrl  = TextEditingController();
+  final _phoneCtrl  = TextEditingController();
   final _passCtrl   = TextEditingController();
   bool    _loading   = false;
   String? _formError;
@@ -59,21 +67,21 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Clears the block when the email changes — a different account may be
+    // Clears the block when the number changes — a different account may be
     // perfectly fine, and without this the screen is a dead end needing an app
     // restart. Editing the password alone does not clear it: the password was
     // never the problem.
-    _emailCtrl.addListener(_clearBlockOnEmailChange);
+    _phoneCtrl.addListener(_clearBlockOnPhoneChange);
   }
 
-  void _clearBlockOnEmailChange() {
+  void _clearBlockOnPhoneChange() {
     if (_blockedMessage != null) setState(() => _blockedMessage = null);
   }
 
   @override
   void dispose() {
-    _emailCtrl.removeListener(_clearBlockOnEmailChange);
-    _emailCtrl.dispose();
+    _phoneCtrl.removeListener(_clearBlockOnPhoneChange);
+    _phoneCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -86,27 +94,35 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final user = await widget.userStore.login(
-        email:    _emailCtrl.text.trim(),
-        password: _passCtrl.text,
+        phoneNumber: _phoneCtrl.text.trim(),
+        password:    _passCtrl.text,
       );
       if (!mounted) return;
       widget.onLoginSuccess(user);
     } on ApiException catch (e) {
-      // An abandoned registration: the password was right, the address was
+      // An abandoned registration: the password was right, the number was
       // never verified. Sending them to the code screen is the only useful
       // answer — an error on this form leaves them with nothing to do.
       //
       // The refusal sent a fresh code on its way out, so the delivery details
-      // ride along: without them the code screen would have to guess which
-      // channel it went by and start its cooldown from zero.
-      if (e.isEmailUnverified) {
-        widget.onEmailUnverified(_emailCtrl.text.trim(), e.delivery);
+      // ride along: without them the code screen would have to start its
+      // cooldown from zero.
+      if (e.isPhoneUnverified) {
+        widget.onPhoneUnverified(_phoneCtrl.text.trim(), e.delivery);
         return;
       }
       // Password proven; a code is on its way. challengeId is always present
       // when the server sends mfa_required — the server never omits it.
       if (e.isMfaRequired && e.challengeId != null) {
-        widget.onMfaRequired(_emailCtrl.text.trim(), e.challengeId!, e.delivery);
+        widget.onMfaRequired(_phoneCtrl.text.trim(), e.challengeId!, e.delivery);
+        return;
+      }
+      // An old build talking to a server that has moved to phone login. Retrying
+      // cannot help — only updating the app can — so it is shown like a closed
+      // account: as a block with the log-in button off. The server's message
+      // already asks, in English and Filipino, for the update.
+      if (e.isAppUpdateRequired) {
+        setState(() => _blockedMessage = e.message);
         return;
       }
       // A closed account. Deliberately NOT routed to _formError: the password
@@ -119,9 +135,10 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       // Already resident-readable: "Invalid resident credentials." on a bad
-      // password, the connection message when the server is unreachable.
-      // Already logged by ApiService with its status; the email is deliberately
-      // not added here.
+      // password, the connection message when the server is unreachable, the
+      // "could not send the text" sentence when there was no way to deliver a
+      // code. Already logged by ApiService with its status; the number is
+      // deliberately not added here.
       setState(() => _formError = e.message);
     } catch (error) {
       // Anything that is not an ApiException got past the HTTP layer's own
@@ -192,16 +209,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 24),
                     AuthTextField(
-                      label: 'Email address',
-                      hint: 'yourname@email.com',
-                      controller: _emailCtrl,
-                      keyboard: TextInputType.emailAddress,
-                      prefixIcon: Icons.email_outlined,
+                      label: 'Mobile number',
+                      hint: '09XXXXXXXXX',
+                      controller: _phoneCtrl,
+                      keyboard: TextInputType.phone,
+                      prefixIcon: Icons.phone_outlined,
+                      maxLength: PhoneNumber.maxLength,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                      ],
                       validator: (v) {
                         final val = (v ?? '').trim();
-                        if (val.isEmpty) return 'Enter your email address';
-                        if (!val.contains('@') || !val.contains('.')) {
-                          return 'Enter a valid email address';
+                        if (val.isEmpty) return 'Enter your mobile number';
+                        if (!PhoneNumber.isValid(val)) {
+                          return 'Enter a valid mobile number';
                         }
                         return null;
                       },
@@ -264,8 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: GestureDetector(
-                        onTap: () => showAppSnackBar(
-                            context, 'Contact MDRRMO to reset your password.'),
+                        onTap: () => widget.onForgotPassword(_phoneCtrl.text.trim()),
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Text('Forgot password?',

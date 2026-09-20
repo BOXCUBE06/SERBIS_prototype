@@ -1,6 +1,7 @@
 
 library serbis.state.user_store;
 
+import '../models/phone_number.dart';
 import 'api_service.dart';
 import 'user_cache.dart';
 
@@ -12,11 +13,15 @@ class AppUser {
   /// resident has none on file, which is different from not having loaded it.
   final String middleName;
   final String lastName;
+  /// Kept because the server still returns it for accounts that gave one. New
+  /// accounts have none (a phone number is the login), so this is usually empty
+  /// and nothing in the app asks for it.
   final String email;
 
-  /// The number the MDRRMO calls back on. Editable by the resident through
-  /// `PATCH /me`; it is not the number SMS blasts are keyed on being correct,
-  /// so a typo here costs the resident a callback, not an alert.
+  /// The number the resident signs in with, as the server stores it
+  /// (`+639171234567`). It moves only through the two-step code flow
+  /// ([UserStore.requestPhoneChange]); read it through [phoneDisplay] for
+  /// anything a person sees.
   final String phone;
   final String address;
 
@@ -60,7 +65,7 @@ class AppUser {
     required this.firstName,
     this.middleName = '',
     required this.lastName,
-    required this.email,
+    this.email = '',
     this.phone = '',
     required this.address,
     this.barangayId,
@@ -71,6 +76,9 @@ class AppUser {
     this.organizationName = '',
     this.status = '',
   });
+
+  /// The number the way a person writes it, `09171234567`.
+  String get phoneDisplay => PhoneNumber.display(phone);
 
   bool get isOrganization => accountType == 'organization';
   bool get isBarangay => accountType == 'barangay';
@@ -227,7 +235,6 @@ class UserStore {
     required int barangayId,
     String? streetAddress,
     required String phoneNumber,
-    required String email,
     required String password,
     String accountType = 'head_of_family',
     String? organizationName,
@@ -239,28 +246,27 @@ class UserStore {
       barangayId: barangayId,
       streetAddress: streetAddress,
       phoneNumber: phoneNumber,
-      email: email,
       password: password,
       accountType: accountType,
       organizationName: organizationName,
     );
   }
 
-  /// Finishes registration with the emailed code. Returns the signed-in
-  /// resident: the server issues a token here, so there is no second trip
-  /// through the login screen.
-  Future<AppUser> verifyEmail({
-    required String email,
+  /// Finishes registration with the code texted to the number. Returns the
+  /// signed-in resident: the server issues a token here, so there is no second
+  /// trip through the login screen.
+  Future<AppUser> verifyPhone({
+    required String phoneNumber,
     required String code,
   }) async {
-    final json = await _api.verifyEmail(email: email, code: code);
+    final json = await _api.verifyPhone(phoneNumber: phoneNumber, code: code);
     return _remember(json);
   }
 
   Future<VerificationDelivery?> resendVerificationCode({
-    required String email,
+    required String phoneNumber,
   }) {
-    return _api.resendVerificationCode(email: email);
+    return _api.resendVerificationCode(phoneNumber: phoneNumber);
   }
 
   Future<List<BarangayOption>> barangays() async {
@@ -276,10 +282,11 @@ class UserStore {
   }
 
   Future<AppUser> login({
-    required String email,
+    required String phoneNumber,
     required String password,
   }) async {
-    final json = await _api.residentLogin(email: email, password: password);
+    final json =
+        await _api.residentLogin(phoneNumber: phoneNumber, password: password);
     return _remember(json);
   }
 
@@ -300,29 +307,74 @@ class UserStore {
     return _api.resendLoginCode(challengeId: challengeId);
   }
 
-  /// Saves the resident's own contact details and returns the refreshed
-  /// profile, so the caller does not have to re-fetch `/me` to see the result.
+  /// Saves the resident's own details and returns the refreshed profile, so
+  /// the caller does not have to re-fetch `/me` to see the result. The phone
+  /// number is not among them: it moves through [requestPhoneChange] and
+  /// [verifyPhoneChange].
   Future<AppUser> updateProfile({
     String? firstName,
     String? middleName,
     String? lastName,
-    String? phoneNumber,
-    String? email,
     String? streetAddress,
     bool? smsOptIn,
-    String? currentPassword,
   }) async {
     final json = await _api.updateProfile(
       firstName: firstName,
       middleName: middleName,
       lastName: lastName,
-      phoneNumber: phoneNumber,
-      email: email,
       streetAddress: streetAddress,
       smsOptIn: smsOptIn,
-      currentPassword: currentPassword,
     );
     return _remember(json);
+  }
+
+  // --- Moving the phone number --------------------------------------------
+
+  /// The new number and the current password; a code is texted to the NEW
+  /// number. Nothing on the account changes until [verifyPhoneChange].
+  Future<VerificationDelivery?> requestPhoneChange({
+    required String phoneNumber,
+    required String currentPassword,
+  }) {
+    return _api.requestPhoneChange(
+      phoneNumber: phoneNumber,
+      currentPassword: currentPassword,
+    );
+  }
+
+  Future<VerificationDelivery?> resendPhoneChangeCode() {
+    return _api.resendPhoneChangeCode();
+  }
+
+  /// The code that came back. Returns the refreshed profile with the new
+  /// number, which also becomes tomorrow's offline launch.
+  Future<AppUser> verifyPhoneChange({required String code}) async {
+    return _remember(await _api.verifyPhoneChange(code: code));
+  }
+
+  // --- Forgotten password -------------------------------------------------
+
+  Future<int> forgotPassword({required String phoneNumber}) {
+    return _api.forgotPassword(phoneNumber: phoneNumber);
+  }
+
+  Future<String> verifyPasswordReset({
+    required String phoneNumber,
+    required String code,
+  }) {
+    return _api.verifyPasswordReset(phoneNumber: phoneNumber, code: code);
+  }
+
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String password,
+  }) {
+    return _api.resetPassword(
+      phoneNumber: phoneNumber,
+      resetToken: resetToken,
+      password: password,
+    );
   }
 
   /// Uploads a new profile photo and returns the refreshed profile.
