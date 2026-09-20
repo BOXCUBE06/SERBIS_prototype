@@ -130,4 +130,9 @@ onMounted(load)
 .service-cell {
   width: 40%;
 }
+
+/* The box sits in the middle of its column, under its header. */
+.audience-table td :deep(.v-selection-control) {
+  justify-content: center;
+}
 </style>
