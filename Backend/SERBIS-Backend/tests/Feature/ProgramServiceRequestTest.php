@@ -96,6 +96,33 @@ class ProgramServiceRequestTest extends TestCase
         $this->assertSame(1, ServiceRequest::count());
     }
 
+    public function test_a_drill_follows_the_same_fourteen_day_rule(): void
+    {
+        $this->actingAs($this->barangay)
+            ->postJson('/api/service-requests', $this->scheduled($this->drills, ['preferred_date' => $this->date(13)]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['preferred_date']);
+
+        $this->actingAs($this->barangay)
+            ->postJson('/api/service-requests', $this->scheduled($this->drills, ['preferred_date' => $this->date(14)]))
+            ->assertStatus(201)
+            ->assertJsonPath('preferred_date', $this->date(14))
+            ->assertJsonPath('has_letter', true)
+            ->assertJsonPath('has_valid_id', false);
+    }
+
+    public function test_a_drill_needs_a_letter(): void
+    {
+        $this->actingAs($this->barangay)
+            ->postJson('/api/service-requests', [
+                'service_id' => $this->drills->service_id,
+                'description' => 'Drill type: Fire',
+                'preferred_date' => $this->date(20),
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['letter']);
+    }
+
     public function test_a_training_thirteen_days_out_is_refused(): void
     {
         $this->actingAs($this->barangay)

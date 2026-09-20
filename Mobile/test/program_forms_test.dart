@@ -72,6 +72,45 @@ void main() {
     });
   });
 
+  group('Simulation Drills / NSED', () {
+    test('is recognised by its service code', () {
+      expect(formKindForServiceCode('simulation-drills-nsed'), ServiceFormKind.drill);
+    });
+
+    test('has the same date rule and letter as the training form', () {
+      final form = StructuredFormData.drill();
+      final date = form.spec.fields.singleWhere((field) => field.isDate);
+
+      expect(date.minDaysAhead, 14);
+      expect(form.spec.attachments, ServiceAttachments.letterRequired);
+    });
+
+    test('every field the resident fills in reaches the description', () {
+      final form = StructuredFormData.drill(contactNumber: '09171234567')
+        ..setDate('preferred_date', DateTime(2026, 11, 2));
+      form.field('location').text = 'Echague Central School';
+      form.select('drill_type', 'Fire');
+      form.field('participants').text = '250';
+
+      expect(
+        form.metaLines(serviceName: 'Simulation Drills / NSED', submittedLabel: 'Today, 9:00 AM'),
+        [
+          'Simulation Drills / NSED',
+          'Preferred date: 2 Nov 2026',
+          'Location: Echague Central School',
+          'Drill type: Fire',
+          'Participants: 250',
+          'Contact: 09171234567',
+          'Submitted Today, 9:00 AM',
+        ],
+      );
+    });
+
+    test('the drill type starts on the NSED earthquake drill', () {
+      expect(StructuredFormData.drill().choice('drill_type'), 'Earthquake (NSED)');
+    });
+  });
+
   group('the submit request', () {
     test('leaves the valid ID out when there is none and carries the letter and date', () {
       final request = ApiService().buildSubmitRequest(

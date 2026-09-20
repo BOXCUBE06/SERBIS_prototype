@@ -581,6 +581,13 @@ const _reliefSpec = ServiceFormSpec(
 /// DRRM Trainings and Seminars (IEC). Everything except the date goes into the
 /// description like the other forms; the date is a real field so the server can
 /// enforce the lead time.
+const kDrillTypes = [
+  'Earthquake (NSED)',
+  'Fire',
+  'Flood',
+  'Other',
+];
+
 const _trainingSpec = ServiceFormSpec(
   carriesContact: true,
   attachments: ServiceAttachments.letterRequired,
@@ -615,6 +622,48 @@ const _trainingSpec = ServiceFormSpec(
           label: 'Training topic',
           hint: 'e.g. Basic life support, fire safety',
           metaPrefix: 'Topic: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+  ],
+);
+
+/// Simulation Drills / NSED. Same shape as the training form with a drill type
+/// where the topic was, and the same 14 day lead time and request letter.
+const _drillSpec = ServiceFormSpec(
+  carriesContact: true,
+  attachments: ServiceAttachments.letterRequired,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.event',
+      fields: [
+        ServiceFormField.date(
+          key: 'preferred_date',
+          label: 'Preferred date',
+          metaPrefix: 'Preferred date: ',
+          metaFallback: 'Not specified',
+          minDaysAhead: kProgramLeadDays,
+        ),
+        ServiceFormField.text(
+          key: 'location',
+          label: 'Location',
+          hint: 'Venue, purok, barangay',
+          metaPrefix: 'Location: ',
+          metaFallback: 'Location not specified',
+        ),
+        ServiceFormField.choice(
+          key: 'drill_type',
+          label: 'Drill type',
+          options: kDrillTypes,
+          metaPrefix: 'Drill type: ',
+        ),
+        ServiceFormField.text(
+          key: 'participants',
+          label: 'Expected number of participants',
+          hint: 'e.g. 40',
+          keyboard: TextInputType.number,
+          metaPrefix: 'Participants: ',
           metaFallback: 'Not specified',
         ),
       ],
@@ -701,6 +750,9 @@ final class StructuredFormData extends ServiceFormData {
 
   static StructuredFormData training({String contactNumber = ''}) =>
       StructuredFormData._(_trainingSpec, contactNumber: contactNumber);
+
+  static StructuredFormData drill({String contactNumber = ''}) =>
+      StructuredFormData._(_drillSpec, contactNumber: contactNumber);
 
   final ServiceFormSpec spec;
   final String contactNumber;

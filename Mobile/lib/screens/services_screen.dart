@@ -155,6 +155,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         return ServiceType.relief;
       case ServiceFormKind.generic:
       case ServiceFormKind.training:
+      case ServiceFormKind.drill:
         return ServiceType.inquiry;
     }
   }
@@ -162,7 +163,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// Which uploads a kind of service asks for. The response services take a
   /// photo of a valid ID; the programs take a request letter instead.
   ServiceAttachments _attachmentsFor(ServiceFormKind kind) => switch (kind) {
-        ServiceFormKind.training => ServiceAttachments.letterRequired,
+        ServiceFormKind.training || ServiceFormKind.drill => ServiceAttachments.letterRequired,
         _ => ServiceAttachments.standard,
       };
 
@@ -186,6 +187,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
               StructuredFormData.generic(contactNumber: widget.user.phone),
             ServiceFormKind.training =>
               StructuredFormData.training(contactNumber: widget.user.phone),
+            ServiceFormKind.drill =>
+              StructuredFormData.drill(contactNumber: widget.user.phone),
           });
 
   @override
