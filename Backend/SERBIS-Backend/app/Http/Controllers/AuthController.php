@@ -6,6 +6,7 @@ use App\Mail\ResidentLoginCode;
 use App\Mail\ResidentVerificationCode;
 use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
+use App\Rules\PhoneAvailable;
 use App\Services\Sms\SmsGateway;
 use App\Services\Totp;
 use App\Support\PhoneNumber;
@@ -76,7 +77,7 @@ class AuthController extends Controller
             // other field a resident might not have on hand yet; editable
             // later from the profile either way.
             'street_address' => 'nullable|string|max:255',
-            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable],
             // Still checked against the table, but the table now only holds
             // accounts that finished verifying, so this refuses a real account
             // and never an abandoned attempt.
@@ -615,7 +616,7 @@ class AuthController extends Controller
             // of self-correctable detail a profile edit is for — MDRRMO
             // dispatches on the barangay relation, not on this string.
             'street_address' => 'sometimes|nullable|string|max:255',
-            'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
+            'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable($user->getKey())],
             'email_address' => [
                 'sometimes',
                 'required',
@@ -650,7 +651,13 @@ class AuthController extends Controller
         $contactChanges = [];
 
         foreach (['email_address', 'phone_number'] as $field) {
-            if (array_key_exists($field, $validated) && $validated[$field] !== $user->{$field}) {
+            // A number is compared as stored — canonical — so resubmitting the
+            // same one in the other spelling is not a change.
+            $incoming = $field === 'phone_number'
+                ? (PhoneNumber::normalize((string) ($validated[$field] ?? '')) ?: ($validated[$field] ?? null))
+                : ($validated[$field] ?? null);
+
+            if (array_key_exists($field, $validated) && $incoming !== $user->{$field}) {
                 $contactChanges[] = $field;
             }
         }

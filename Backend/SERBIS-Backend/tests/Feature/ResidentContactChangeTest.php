@@ -80,7 +80,7 @@ class ResidentContactChangeTest extends TestCase
             'phone_number' => '09179999999',
         ])->assertStatus(422)->assertJsonValidationErrors('current_password');
 
-        $this->assertSame('09171111111', $this->resident->fresh()->phone_number);
+        $this->assertSame('+639171111111', $this->resident->fresh()->phone_number);
     }
 
     public function test_a_wrong_password_is_refused(): void
@@ -90,7 +90,7 @@ class ResidentContactChangeTest extends TestCase
             'current_password' => 'not-the-password',
         ])->assertStatus(422)->assertJsonValidationErrors('current_password');
 
-        $this->assertSame('09171111111', $this->resident->fresh()->phone_number);
+        $this->assertSame('+639171111111', $this->resident->fresh()->phone_number);
     }
 
     /**
@@ -118,7 +118,7 @@ class ResidentContactChangeTest extends TestCase
         $fresh = $this->resident->fresh();
 
         $this->assertSame('maria.clara@test.local', $fresh->email_address);
-        $this->assertSame('09179999999', $fresh->phone_number);
+        $this->assertSame('+639179999999', $fresh->phone_number);
     }
 
     /**

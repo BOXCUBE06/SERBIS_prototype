@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
 use App\Services\Fcm;
+use App\Support\PhoneNumber;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
@@ -407,7 +408,7 @@ class ServiceRequestController extends Controller
 
             $description = self::composeAmbulanceDescription(
                 $validated,
-                $validated['patient_contact_number'] ?? ($resident->phone_number ?? '')
+                $validated['patient_contact_number'] ?? PhoneNumber::display((string) ($resident->phone_number ?? ''))
             );
         } else {
             $description = $validated['description'] ?? null;
@@ -910,7 +911,7 @@ class ServiceRequestController extends Controller
                 $validated,
                 $validated['patient_contact_number']
                     ?? ($residentId
-                        ? (Resident::find($residentId)->phone_number ?? '')
+                        ? PhoneNumber::display((string) (Resident::find($residentId)->phone_number ?? ''))
                         : ($walkInContact ?? ''))
             );
         }
@@ -1639,7 +1640,7 @@ class ServiceRequestController extends Controller
         // The derivation below is unchanged and still covers every row filed
         // before this column existed.
         $contactNumber = $booking?->patient_contact_number
-            ?: $serviceRequest->resident?->phone_number
+            ?: PhoneNumber::display((string) $serviceRequest->resident?->phone_number)
             ?: $serviceRequest->walk_in_contact_number
             ?: 'See resident profile';
 

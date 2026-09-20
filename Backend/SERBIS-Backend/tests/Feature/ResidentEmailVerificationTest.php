@@ -465,7 +465,7 @@ class ResidentEmailVerificationTest extends TestCase
         $this->assertSame('Grace', $resident->first_name);
         $this->assertSame('Lim', $resident->middle_name);
         $this->assertSame('Reyes', $resident->last_name);
-        $this->assertSame('09171234567', $resident->phone_number);
+        $this->assertSame('+639171234567', $resident->phone_number);
         $this->assertSame($this->barangay->barangay_id, $resident->barangay_id);
         $this->assertSame('Purok 3', $resident->street_address);
         // Still Inactive: activation is the MDRRMO's call and gates paid SMS.

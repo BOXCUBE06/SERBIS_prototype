@@ -28,6 +28,18 @@ class PhoneNumber
      * +639171234567 — and returns an empty string for anything else so the
      * caller drops it rather than paying for a guaranteed failure.
      */
+    /**
+     * How a number reads to a person here: 09171234567. Storage and the SMS
+     * vendor use +639171234567, but staff and residents write and dial the
+     * national form, so anything the server composes for them to read — a
+     * trip record's contact line, say — goes through this. A value that is not
+     * a canonical number is returned unchanged.
+     */
+    public static function display(string $number): string
+    {
+        return preg_match('/^\+639(\d{9})$/', $number, $m) === 1 ? '09'.$m[1] : $number;
+    }
+
     public static function normalize(string $number): string
     {
         $digits = preg_replace('/\D/', '', $number) ?? '';

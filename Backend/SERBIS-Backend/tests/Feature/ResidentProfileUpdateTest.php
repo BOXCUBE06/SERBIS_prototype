@@ -56,7 +56,7 @@ class ResidentProfileUpdateTest extends TestCase
         $this->resident->refresh();
 
         $this->assertSame('Maria Clara', $this->resident->first_name);
-        $this->assertSame('09179999999', $this->resident->phone_number);
+        $this->assertSame('+639179999999', $this->resident->phone_number);
         $this->assertSame('maria.clara@test.local', $this->resident->email_address);
         // Untouched fields stay untouched — a PATCH is not a replace.
         $this->assertSame('Santos', $this->resident->last_name);

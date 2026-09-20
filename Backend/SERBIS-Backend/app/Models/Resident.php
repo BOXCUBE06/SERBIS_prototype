@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Support\PhoneNumber;
 use App\Traits\InvalidatesAnalyticsCache;
 use App\Traits\TracksHistory; // 1. Import the trait
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -59,7 +61,37 @@ class Resident extends Authenticatable
     protected $casts = [
         'sms_opt_in' => 'boolean',
         'email_verified_at' => 'datetime',
+        'phone_verified_at' => 'datetime',
     ];
+
+    /**
+     * The phone number is the login, so it is stored in one form only —
+     * +639XXXXXXXXX — whichever way it was typed (09…, 639…, +639…). Every
+     * write path gets this for free, which is what keeps the unique index
+     * meaningful.
+     *
+     * A value that is not a dialable number is stored as given rather than
+     * blanked: the validation rules refuse such a value at the API, and
+     * quietly replacing it here would hide a bug instead of surfacing it.
+     */
+    protected function phoneNumber(): Attribute
+    {
+        return Attribute::set(function ($value) {
+            $canonical = is_string($value) ? PhoneNumber::normalize($value) : '';
+
+            return $canonical !== '' ? $canonical : $value;
+        });
+    }
+
+    public function hasVerifiedPhone(): bool
+    {
+        return $this->phone_verified_at !== null;
+    }
+
+    public function markPhoneAsVerified(): void
+    {
+        $this->forceFill(['phone_verified_at' => now()])->save();
+    }
 
     /**
      * `account_type` is absent from #[Fillable] on purpose: it decides which

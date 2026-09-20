@@ -129,7 +129,7 @@ class RateLimitTest extends TestCase
             'barangay_id' => $barangay->barangay_id,
             'first_name' => 'Maria',
             'last_name' => 'Santos',
-            'phone_number' => '09171111111',
+            'phone_number' => '09'.random_int(100000000, 999999999),
             'email_address' => $email,
             'password' => Hash::make('Password123'),
             'status' => 'Active',
