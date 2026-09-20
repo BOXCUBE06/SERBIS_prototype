@@ -321,7 +321,7 @@ class ResidentEmailVerificationTest extends TestCase
     public function test_a_number_the_vendor_cannot_dial_falls_back_to_email(): void
     {
         // 2026-08-31: registration requires a real mobile shape (see
-        // ValidationLengthLimitsTest and PhilSms::PHONE_REGEX), so a landline
+        // ValidationLengthLimitsTest and PhoneNumber::REGEX), so a landline
         // can no longer reach this state through POST /register. It can still
         // exist on a row written before that rule — created directly here to
         // stand in for one — and AuthController::smsIsUsable() must still fall

@@ -108,7 +108,7 @@ class AuthController extends Controller
                 // not sit in the cache store for the life of the pending sign-up.
                 'password' => Hash::make($validated['password']),
                 // Starts Inactive on purpose. SmsController only blasts residents
-                // with status 'Active', and PhilSMS bills per real send with no
+                // with status 'Active', and SkySMS bills per real send with no
                 // sandbox, so a self-registered account must not opt an unverified
                 // phone number into paid SMS until an admin activates it from the
                 // Users view.
@@ -1004,7 +1004,7 @@ class AuthController extends Controller
         //
         // Placed here, above the verification branch, and not where the old
         // comment sat below it. That branch calls issueSignupCode(), and
-        // PhilSMS bills every send with no sandbox, so gating afterwards would
+        // SkySMS bills every send with no sandbox, so gating afterwards would
         // let repeated logins against a closed account cost real money.
         //
         // STILL OUTSTANDING, mobile side: the login screen needs a branch for
@@ -1031,7 +1031,7 @@ class AuthController extends Controller
             // tapping Resend.
             //
             // Guarded by the same per-sign-up cooldown the resend route uses,
-            // and for the same reason: PhilSMS bills every send and has no
+            // and for the same reason: SkySMS bills every send and has no
             // sandbox. Login is retried far more often than Resend is tapped,
             // so an unguarded send here would be the most expensive line in
             // the app. Inside the cooldown the outstanding code is still valid

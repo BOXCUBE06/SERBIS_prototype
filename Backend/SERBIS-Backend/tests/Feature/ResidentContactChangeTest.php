@@ -39,7 +39,7 @@ class ResidentContactChangeTest extends TestCase
 
         Mail::fake();
         // test_the_next_login_has_to_verify_the_new_address reaches
-        // issueSignupCode(), and phpunit.xml sets a PHILSMS_TOKEN precisely so
+        // issueSignupCode(), and phpunit.xml sets a SKYSMS_API_KEY precisely so
         // the OTP takes its real SMS path. SkySMS has no sandbox, so an
         // escaped request is a real call to the vendor — preventStrayRequests()
         // turns that into a test failure instead.

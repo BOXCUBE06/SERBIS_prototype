@@ -37,13 +37,9 @@
         <env name="DB_PASSWORD" value=""/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
-        <!-- A token so the OTP takes its real SMS path. Every test that can reach
-             a send fakes the host; PhilSMS has no sandbox. -->
-        <env name="PHILSMS_TOKEN" value="testing-token"/>
-        <env name="PHILSMS_SENDER_ID" value="PhilSMS"/>
-        <!-- SkySMS: a key so the send path is taken, no waiting between sends so
-             the reminder loops run at full speed. Every test that can reach a
-             send fakes the host; SkySMS has no sandbox either. -->
+        <!-- A key so the OTP takes its real SMS path, and no waiting between
+             sends so the reminder loops run at full speed. Every test that can
+             reach a send fakes the host; SkySMS has no sandbox. -->
         <env name="SKYSMS_API_KEY" value="testing-key"/>
         <env name="SKYSMS_BASE_URL" value="https://skysms.skyio.site/api/v1"/>
         <env name="SKYSMS_PACE_SECONDS" value="0"/>
@@ -51,7 +47,7 @@
         <!-- Pinned false regardless of the developer's own .env (which may set
              this true for local E2E runs): most of this suite asserts against a
              real, Http::fake()'d send, and SERBIS_SMS_FAKE short-circuits
-             PhilSms::send() before it ever reaches Http. SmsFakeTest is the only
+             SkySmsGateway before it ever reaches Http. SmsFakeTest is the only
              file that turns it on, and it does so per-test via config(). -->
         <env name="SERBIS_SMS_FAKE" value="false"/>
         <!-- Pinned empty regardless of the developer's own .env (which may set

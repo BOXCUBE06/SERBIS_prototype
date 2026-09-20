@@ -34,10 +34,10 @@ return [
     | Test-only SMS suppression
     |--------------------------------------------------------------------------
     |
-    | When true, PhilSms::send() skips the real HTTP call entirely and returns
+    | When true, SkySmsGateway skips the real HTTP call entirely and returns
     | a synthetic success response instead, so an E2E run (Playwright, CI)
     | never bills a real handset. Every caller — the admin text blast and the
-    | OTP paths — goes through PhilSms::send(), so this one flag covers all of
+    | OTP paths — goes through SkySmsGateway, so this one flag covers all of
     | them without touching AuthController or SmsController.
     |
     | Defaults false via env('SERBIS_SMS_FAKE', false), not just env() with no
@@ -47,7 +47,7 @@ return [
     | job's environment.
     |
     | Refused outright in production regardless of this value — see
-    | PhilSms::send(), which also checks app()->environment(), and
+    | SkySmsGateway, which also checks app()->environment(), and
     | AppServiceProvider::assertSmsFakeIsUnsetInProduction(), which stops the
     | app booting at all if the variable is set there. Same two-guard shape as
     | otp_bypass_code above, for the same reason.

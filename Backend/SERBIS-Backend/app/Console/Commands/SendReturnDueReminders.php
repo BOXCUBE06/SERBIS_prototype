@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\Mail;
  *   is itself a best-effort boundary (never throws, logs and swallows any
  *   failure), so it cannot affect what happens to the SMS side below it.
  * - Marked reminded (return_reminder_sent_at / scheduled_reminder_sent_at
- *   set) only once PhilSMS actually accepts the send — a successful push
+ *   set) only once SkySMS actually accepts the send — a successful push
  *   never sets it on its own, and a rejected SMS response or a thrown
  *   exception leaves the row unmarked so the next run retries it, bounded by
  *   the date window above (at most today and tomorrow ever match, so a
@@ -95,8 +95,8 @@ class SendReturnDueReminders extends Command
             ->whereHas('serviceRequest', fn ($q) => $q->where('status', 'Booked')->whereNotNull('resident_id'))
             ->get();
 
-        // Independent of the PhilSMS gate below on purpose: the admin email
-        // has nothing to do with SMS being configured, and a PhilSMS outage
+        // Independent of the SkySMS gate below on purpose: the admin email
+        // has nothing to do with SMS being configured, and a SkySMS outage
         // must not also silence the office's own copy of this reminder.
         $this->notifyAdminsOfDueTomorrow(
             $borrowings->filter(fn (EquipmentBorrowing $b) => $b->due_date->toDateString() === $tomorrow)
@@ -148,7 +148,7 @@ class SendReturnDueReminders extends Command
      * borrowing, and best-effort like every other channel here: a mail
      * failure is logged and swallowed, never thrown, so it cannot affect
      * whether the resident's own push/SMS gets sent or marked. Independent
-     * in the other direction too — called before the PhilSms::configured()
+     * in the other direction too — called before the SmsGateway::configured()
      * gate, so an SMS outage does not also silence this.
      *
      * Deliberately not marked anywhere: unlike return_reminder_sent_at,

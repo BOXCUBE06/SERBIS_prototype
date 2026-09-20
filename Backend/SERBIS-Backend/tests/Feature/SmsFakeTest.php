@@ -6,7 +6,7 @@ use App\Mail\ResidentLoginCode;
 use App\Models\Barangay;
 use App\Models\Resident;
 use App\Providers\AppServiceProvider;
-use App\Services\PhilSms;
+use App\Services\Sms\SmsGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -15,7 +15,7 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * The test-only SMS suppression flag (config/serbis.php, PhilSms::send()) and
+ * The test-only SMS suppression flag (config/serbis.php, SkySmsGateway) and
  * the boot-time guard that refuses to start a production deployment with it
  * configured (AppServiceProvider::assertSmsFakeIsUnsetInProduction()).
  *
@@ -76,10 +76,22 @@ class SmsFakeTest extends TestCase
         config(['serbis.sms_fake' => true]);
         Http::fake();
 
-        $response = app(PhilSms::class)->send(['09171234567'], 'Test message');
+        $result = app(SmsGateway::class)->sendOne('09171234567', 'Test message');
 
         Http::assertNothingSent();
-        $this->assertTrue(PhilSms::accepted($response));
+        $this->assertTrue($result->isAccepted());
+    }
+
+    public function test_faked_bulk_send_makes_no_http_call_either(): void
+    {
+        $this->asLocal();
+        config(['serbis.sms_fake' => true]);
+        Http::fake();
+
+        $result = app(SmsGateway::class)->sendBulk(['09171234567', '09171234568'], 'Test message');
+
+        Http::assertNothingSent();
+        $this->assertTrue($result->isAccepted());
     }
 
     public function test_real_send_unaffected_when_flag_is_unset(): void
@@ -87,13 +99,13 @@ class SmsFakeTest extends TestCase
         $this->asLocal();
         config(['serbis.sms_fake' => false]);
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['success' => true], 200),
         ]);
 
-        $response = app(PhilSms::class)->send(['09171234567'], 'Test message');
+        $result = app(SmsGateway::class)->sendOne('09171234567', 'Test message');
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), 'dashboard.philsms.com'));
-        $this->assertTrue(PhilSms::accepted($response));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'skysms.skyio.site'));
+        $this->assertTrue($result->isAccepted());
     }
 
     public function test_flag_is_rejected_in_production_even_if_configured(): void
@@ -141,7 +153,7 @@ class SmsFakeTest extends TestCase
         config(['serbis.sms_fake' => false]);
         Mail::fake();
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200),
+            'skysms.skyio.site/*' => Http::response(['success' => false], 200),
         ]);
 
         $resident = $this->verifiedResident();

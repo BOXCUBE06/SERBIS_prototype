@@ -140,12 +140,12 @@ envVarGroups:
         value: SERBIS
 
       # A hard deploy blocker. Registration OTPs go by SMS, so without this
-      # token nobody can complete a signup. PhilSMS has no sandbox: every send
+      # key nobody can complete a signup. SkySMS has no sandbox: every send
       # costs real credit.
-      - key: PHILSMS_TOKEN
+      - key: SKYSMS_API_KEY
         sync: false
-      - key: PHILSMS_SENDER_ID
-        value: PhilSMS
+      - key: SKYSMS_BASE_URL
+        value: https://skysms.skyio.site/api/v1
 
       - key: SANCTUM_ADMIN_EXPIRATION
         value: 480

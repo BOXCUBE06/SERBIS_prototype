@@ -139,8 +139,8 @@ every start regardless of which service triggered it.
 | `MAIL_MAILER` | optional | no | fixed: `log` — fallback only; **never `ses`**, `config/services.php` reads the same `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` R2 now uses |
 | `MAIL_FROM_ADDRESS` | optional | no | placeholder — mail never actually sends with `MAIL_MAILER=log` |
 | `MAIL_FROM_NAME` | optional | no | fixed: `SERBIS` |
-| `PHILSMS_TOKEN` | **required** | **yes** | PhilSMS dashboard — a hard deploy blocker, registration OTP has no other channel |
-| `PHILSMS_SENDER_ID` | optional | no | fixed: `PhilSMS`, the shared default |
+| `SKYSMS_API_KEY` | **required** | **yes** | SkySMS dashboard — a hard deploy blocker, registration OTP has no other channel. Credits, not a subscription: an empty balance answers 402 and stops every send |
+| `SKYSMS_BASE_URL` | optional | no | fixed: `https://skysms.skyio.site/api/v1` |
 | `FIREBASE_CREDENTIALS_BASE64` | **required for push** | **yes** | base64 of the downloaded service-account JSON — see the callout below |
 | `FIREBASE_CREDENTIALS` | set by the boot sequence, not by hand | no (the path, not the file) | written from the variable above — see below |
 | `SANCTUM_ADMIN_EXPIRATION` | optional | no | fixed: `480` |

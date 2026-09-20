@@ -58,10 +58,10 @@ void main() {
   });
 
   /// The whole point of the shared constant. If the backend's
-  /// PhilSms::PHONE_REGEX is ever edited, this is what says the app did not
+  /// PhoneNumber::REGEX is ever edited, this is what says the app did not
   /// follow — the two live in different codebases and nothing else compares
   /// them.
-  test('the pattern is the backend PhilSms::PHONE_REGEX verbatim', () {
+  test('the pattern is the backend PhoneNumber::REGEX verbatim', () {
     expect(PhoneNumber.pattern.pattern, r'^(09\d{9}|639\d{9}|\+639\d{9})$');
   });
 

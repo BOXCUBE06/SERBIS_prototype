@@ -160,7 +160,7 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // was written; the route simply never existed.
     Route::get('/logs/sms', [SmsController::class, 'history']);
 
-    // The only endpoint that spends money: PhilSMS bills per message and has no
+    // The only endpoint that spends money: SkySMS bills per credit and has no
     // sandbox, so a repeated submit is real pesos, not a retry. 3/hour per admin.
     Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:sms-blast');
     // The shared 6-digit code that gates a blast (MDRRMO feedback,

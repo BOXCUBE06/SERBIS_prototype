@@ -2,9 +2,9 @@ library serbis.models.phone_number;
 
 /// What this app considers a dialable Philippine mobile number.
 ///
-/// Mirrors `PhilSms::PHONE_REGEX` (`app/Services/PhilSms.php`) character for
+/// Mirrors `PhoneNumber::REGEX` (`app/Support/PhoneNumber.php`) character for
 /// character, and has to. The server applies that pattern to registration, to
-/// the admin's own resident edits and to `PATCH /me`, and `PhilSms::normalize()`
+/// the admin's own resident edits and to `PATCH /me`, and `PhoneNumber::normalize()`
 /// drops anything that does not match before a send — so a number this app
 /// accepts and the server does not is a number that either 422s at submit or
 /// silently never receives an OTP.

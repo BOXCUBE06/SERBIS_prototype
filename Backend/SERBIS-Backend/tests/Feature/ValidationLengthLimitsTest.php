@@ -30,7 +30,7 @@ use Tests\TestCase;
  * fallback path is now unreachable through validated input, though
  * AuthController::smsIsUsableFor() still honours it for any row written
  * before this rule (see ResidentEmailVerificationTest's two tests that
- * construct such a row directly). PhilSms::PHONE_REGEX is the single
+ * construct such a row directly). PhoneNumber::REGEX is the single
  * definition; every rule below references it rather than re-typing it.
  */
 class ValidationLengthLimitsTest extends TestCase

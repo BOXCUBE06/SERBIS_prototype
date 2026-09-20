@@ -98,7 +98,7 @@ class AppServiceProvider extends ServiceProvider
         // being per-minute it resets forever, so a script sitting at 20/min
         // could create an unbounded number of accounts over a day. Each
         // registration also creates a `tbl_residents` row immediately and, if
-        // the phone number is a real one, bills a real PhilSMS send before
+        // the phone number is a real one, bills a real SkySMS send before
         // anyone confirms the address — so both the row-spam and the billing
         // exposure scale with how long a script is left running, not with any
         // single burst. The per-hour tier is the actual fix; per-minute stays
@@ -221,11 +221,11 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Refuse to run a production deployment with the test-only SMS
-     * suppression flag configured (config/serbis.php, PhilSms::send()).
+     * suppression flag configured (config/serbis.php, SkySmsGateway).
      *
      * Same shape as assertOtpBypassIsLocalOnly() above, for the same
      * reason: that flag already refuses itself at request time
-     * (PhilSms::fakingEnabled() checks app()->environment() too), and this
+     * (SkySmsGateway::fakingEnabled() checks app()->environment() too), and this
      * guard exists so a misconfigured production server fails loudly at boot
      * instead of depending on that request-time check never being changed.
      */
@@ -242,7 +242,7 @@ class AppServiceProvider extends ServiceProvider
         throw new RuntimeException(
             'REFUSING TO START: SERBIS_SMS_FAKE is set while APP_ENV is '
             .'production. This flag exists only so local development and CI '
-            .'test automation (Playwright) can skip real, billed PhilSMS '
+            .'test automation (Playwright) can skip real, billed SkySMS '
             .'sends, and must never be reachable in production. '
             .'Unset SERBIS_SMS_FAKE in the .env on this server, then run '
             .'`php artisan config:clear` (or `config:cache`) and start again.'

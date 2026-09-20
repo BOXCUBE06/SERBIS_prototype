@@ -138,7 +138,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_a_rejected_response_leaves_the_row_unmarked_for_retry(): void
     {
-        // A 200 carrying status "error" — PhilSms::accepted() treats this as
+        // A 200 carrying status "error" — SmsResult::isAccepted() treats this as
         // a rejection, not a success, same as ServiceRequestController's own
         // sends.
         Http::fake(['skysms.skyio.site/*' => Http::response(['success' => false], 200)]);
@@ -167,7 +167,7 @@ class SendReturnRemindersTest extends TestCase
         Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         // Bypasses the registration-time PHONE_REGEX rule on purpose — see
-        // PhilSms::PHONE_REGEX's own note that rows written before the rule
+        // PhoneNumber::REGEX's own note that rows written before the rule
         // can still hold an undialable number.
         $borrowing = $this->released($this->resident('not-a-phone'), now()->addDay()->format('Y-m-d'));
 

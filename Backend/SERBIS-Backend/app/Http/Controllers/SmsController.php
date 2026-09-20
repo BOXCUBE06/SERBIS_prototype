@@ -499,7 +499,7 @@ class SmsController extends Controller
         }
 
         $advisories = SmsLog::query()
-            // 'Unconfirmed' included on purpose. It means PhilSMS never
+            // 'Unconfirmed' included on purpose. It means SkySMS never
             // answered, not that nothing was sent — the handset most likely has
             // the message, and a feed that omits it would contradict the phone
             // the resident is holding. Only 'Failed' is withheld, which is the

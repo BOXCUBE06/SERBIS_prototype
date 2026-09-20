@@ -1385,10 +1385,10 @@ class ServiceRequestController extends Controller
             // having already typed something into the request beforehand.
             //
             // 160 is a leftover cap from when this string was pasted into a
-            // billed PhilSMS body; the SMS is gone but the column is still a
+            // billed SkySMS body; the SMS is gone but the column is still a
             // TEXT that took anything before this existed, so the cap stays.
             'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
-            // Staff-only, never sent to PhilSMS and never returned to a resident
+            // Staff-only, never sent to SkySMS and never returned to a resident
             // (see index()/show()) — so it carries no per-segment SMS cap.
             'internal_notes' => 'nullable|string|max:1000',
             // Same types as store()/adminStore(). Routed to AmbulanceBooking

@@ -132,7 +132,7 @@ class SendReturnRemindersAdminEmailTest extends TestCase
     public function test_the_admin_email_still_sends_when_skysms_is_not_configured(): void
     {
         Mail::fake();
-        // No Http::fake for SkySMS and no token configured — PhilSms::configured() is false.
+        // No Http::fake for SkySMS and no token configured — SmsGateway::configured() is false.
         config(['services.skysms.api_key' => null]);
 
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
