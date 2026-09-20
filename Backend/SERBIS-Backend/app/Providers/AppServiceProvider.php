@@ -141,6 +141,23 @@ class AppServiceProvider extends ServiceProvider
         // must not be able to spend a colleague's allowance.
         // POST /admin/change-password checks the current password, so it is a
         // guessing target for anyone holding a token. Keyed on the account.
+        // Forgotten password (three public steps). Keyed on the canonical phone
+        // number, NOT on whether an account holds it: a limit that only bit real
+        // accounts would be a way to find them. The per-hour tier is per number
+        // whatever the caller's address, since a text to one number is a text to
+        // one person however many addresses ask; the IP tier bounds one caller
+        // across many numbers (SMS is billed).
+        RateLimiter::for('password-reset', function (Request $request) {
+            $phone = PhoneNumber::normalize((string) $request->input('phone_number'));
+            $number = $phone !== '' ? hash('sha256', $phone) : 'malformed';
+
+            return [
+                Limit::perMinute(5)->by('pwreset-minute:'.$number.'|'.$request->ip()),
+                Limit::perHour(10)->by('pwreset-hour:'.$number),
+                Limit::perHour(30)->by('pwreset-ip:'.$request->ip()),
+            ];
+        });
+
         // The three steps of moving a resident's phone number. Keyed on the
         // account: an office or a CGNAT address must not share a budget, and the
         // per-code attempt cap is the real brake on guessing.

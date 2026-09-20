@@ -11,6 +11,7 @@ use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\InfoMaterialController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PhoneChangeController;
 use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ServiceAudienceController;
@@ -47,6 +48,12 @@ Route::middleware('throttle:api')->group(function () {
     // one caller, the cooldown bounds one number.
     Route::post('/resident/verify-phone', [AuthController::class, 'verifyPhone'])->middleware('throttle:login');
     Route::post('/resident/verify-phone/resend', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:login');
+    // Forgotten password, by text. Public, and keyed on the phone number by the
+    // 'password-reset' limiter so a number with an account and one without are
+    // limited — and answered — the same way.
+    Route::post('/resident/password/forgot', [PasswordResetController::class, 'forgot'])->middleware('throttle:password-reset');
+    Route::post('/resident/password/verify', [PasswordResetController::class, 'verify'])->middleware('throttle:password-reset');
+    Route::post('/resident/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:password-reset');
     // The email routes the app before phone login called. Answer 410 with an
     // "update the app" message in both languages; remove in a later release.
     Route::post('/resident/verify-email', [AuthController::class, 'emailVerificationRemoved']);
