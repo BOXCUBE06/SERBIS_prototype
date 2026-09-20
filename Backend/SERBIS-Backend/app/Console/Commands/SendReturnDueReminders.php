@@ -8,6 +8,7 @@ use App\Models\EquipmentBorrowing;
 use App\Models\User;
 use App\Services\Fcm;
 use App\Services\PhilSms;
+use App\Support\PhoneNumber;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -218,7 +219,7 @@ class SendReturnDueReminders extends Command
 
         // PhilSms::configured() is checked once in handle(), before this is
         // ever called — a missing token is a fact about the run, not this row.
-        $number = PhilSms::normalize((string) $borrowing->resident->phone_number);
+        $number = PhoneNumber::normalize((string) $borrowing->resident->phone_number);
 
         if ($number === '') {
             return self::OUTCOME_SKIPPED;
@@ -268,7 +269,7 @@ class SendReturnDueReminders extends Command
             ],
         );
 
-        $number = PhilSms::normalize((string) $booking->serviceRequest->resident->phone_number);
+        $number = PhoneNumber::normalize((string) $booking->serviceRequest->resident->phone_number);
 
         if ($number === '') {
             return self::OUTCOME_SKIPPED;

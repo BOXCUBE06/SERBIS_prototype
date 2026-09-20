@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\PhoneNumber;
 use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -48,15 +49,6 @@ class PhilSms
     // the public docs use, so one vendor DNS or host change moves both together.
     private const BALANCE_ENDPOINT = 'https://dashboard.philsms.com/api/v3/balance';
 
-    // The three shapes normalize() accepts below, spelled out so a validation
-    // rule can require a real mobile number at the point of entry instead of
-    // accepting anything and failing silently later. 2026-08-31: the user
-    // decided registration and every admin-facing edit MUST require a real
-    // mobile number — no landline/undialable fallback going forward. Existing
-    // rows written before this rule still fall back to email in
-    // AuthController::smsIsUsableFor(); this only closes the door on new ones.
-    public const PHONE_REGEX = '/^(09\d{9}|639\d{9}|\+639\d{9})$/';
-
     /**
      * @param  array<int, string>  $numbers
      */
@@ -65,7 +57,7 @@ class PhilSms
         // PhilSMS takes many recipients as one comma-separated string, not as a
         // list of objects the way the previous vendor did.
         $recipients = collect($numbers)
-            ->map(fn (string $number) => self::normalize($number))
+            ->map(fn (string $number) => PhoneNumber::normalize($number))
             ->filter()
             ->unique()
             ->implode(',');
@@ -132,25 +124,6 @@ class PhilSms
             ->timeout(6)
             ->connectTimeout(3)
             ->get(self::BALANCE_ENDPOINT);
-    }
-
-    /**
-     * PhilSMS rejects anything that is not an E.164 Philippine number, while
-     * tbl_residents.phone_number is a free string a resident typed. Accepts the
-     * three shapes people actually enter — 09171234567, 639171234567,
-     * +639171234567 — and returns an empty string for anything else so the
-     * caller drops it rather than paying for a guaranteed failure.
-     */
-    public static function normalize(string $number): string
-    {
-        $digits = preg_replace('/\D/', '', $number) ?? '';
-
-        return match (true) {
-            str_starts_with($digits, '639') && strlen($digits) === 12 => '+'.$digits,
-            str_starts_with($digits, '09') && strlen($digits) === 11 => '+63'.substr($digits, 1),
-            str_starts_with($digits, '9') && strlen($digits) === 10 => '+63'.$digits,
-            default => '',
-        };
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
 use App\Services\PhilSms;
 use App\Services\Totp;
+use App\Support\PhoneNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -75,7 +76,7 @@ class AuthController extends Controller
             // other field a resident might not have on hand yet; editable
             // later from the profile either way.
             'street_address' => 'nullable|string|max:255',
-            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             // Still checked against the table, but the table now only holds
             // accounts that finished verifying, so this refuses a real account
             // and never an abandoned attempt.
@@ -554,7 +555,7 @@ class AuthController extends Controller
     private function smsIsUsable(?string $phone): bool
     {
         return PhilSms::configured()
-            && PhilSms::normalize((string) $phone) !== '';
+            && PhoneNumber::normalize((string) $phone) !== '';
     }
 
     /**
@@ -613,7 +614,7 @@ class AuthController extends Controller
             // of self-correctable detail a profile edit is for — MDRRMO
             // dispatches on the barangay relation, not on this string.
             'street_address' => 'sometimes|nullable|string|max:255',
-            'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
+            'phone_number' => ['sometimes', 'required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             'email_address' => [
                 'sometimes',
                 'required',

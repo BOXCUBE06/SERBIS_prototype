@@ -7,6 +7,7 @@ use App\Models\Resident;
 use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Services\PhilSms;
+use App\Support\PhoneNumber;
 use App\Traits\PaginatesLists;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
@@ -211,7 +212,7 @@ class SmsController extends Controller
      *
      * Extracted rather than copied because the last filter is PHP, not SQL. A
      * preview written as a ->count() would count residents whose stored number
-     * PhilSms::normalize() rejects, and so quote a number the send would never
+     * PhoneNumber::normalize() rejects, and so quote a number the send would never
      * match. Anything added here has to stay in one place for the two to keep
      * agreeing.
      *
@@ -399,7 +400,7 @@ class SmsController extends Controller
         // the message actually went to, and a resident whose number cannot be
         // dialled did not receive it.
         return $residents->filter(
-            fn ($resident) => PhilSms::normalize($resident->phone_number) !== ''
+            fn ($resident) => PhoneNumber::normalize($resident->phone_number) !== ''
         )->values();
     }
 

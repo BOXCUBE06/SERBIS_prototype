@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -65,7 +66,7 @@ class EquipmentAvailabilityNotifier
             return;
         }
 
-        $number = PhilSms::normalize((string) $borrowing->resident?->phone_number);
+        $number = PhoneNumber::normalize((string) $borrowing->resident?->phone_number);
         if ($number === '') {
             return;
         }

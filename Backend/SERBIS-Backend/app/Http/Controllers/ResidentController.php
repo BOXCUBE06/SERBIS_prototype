@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Resident;
 use App\Models\User;
-use App\Services\PhilSms;
+use App\Support\PhoneNumber;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +40,7 @@ class ResidentController extends Controller
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
-            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             'email_address' => 'required|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
             // The column carries exactly three values and 'required|string'
@@ -154,7 +154,7 @@ class ResidentController extends Controller
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
-            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             'email_address' => 'required|email|unique:tbl_residents,email_address,'.$id.',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
             'street_address' => 'nullable|string|max:255',
