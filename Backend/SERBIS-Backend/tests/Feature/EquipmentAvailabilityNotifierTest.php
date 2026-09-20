@@ -127,6 +127,32 @@ class EquipmentAvailabilityNotifierTest extends TestCase
         $this->assertFalse(SmsMessagePolicy::containsLink($sent));
     }
 
+    public function test_an_item_name_that_reads_as_a_domain_is_sanitised_not_skipped(): void
+    {
+        $resident = $this->resident();
+        $borrowing = $this->deniedForUnavailability($resident);
+        $this->equipment->update(['item_name' => 'Tent.com Set', 'available_quantity' => 2]);
+
+        $sent = null;
+        Http::fake([
+            'skysms.skyio.site/*' => function ($request) use (&$sent) {
+                $sent = $request['message'];
+
+                return Http::response(['success' => true], 200);
+            },
+            'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
+        ]);
+
+        app(EquipmentAvailabilityNotifier::class)->notifyIfAvailable($this->equipment->fresh());
+
+        // Sent, not silently dropped by the link check, and marked so it is not
+        // asked again.
+        $this->assertNotNull($sent, 'the notice must still go out');
+        $this->assertStringContainsString('Tent com Set is available again', $sent);
+        $this->assertFalse(SmsMessagePolicy::containsLink($sent));
+        $this->assertNotNull($borrowing->fresh()->availability_reconfirm_sent_at);
+    }
+
     public function test_does_nothing_while_still_out_of_stock(): void
     {
         $this->deniedForUnavailability($this->resident());

@@ -102,9 +102,10 @@ class EquipmentAvailabilityNotifier
     {
         // ASCII only: the em dash this text used to carry is outside GSM-7 and
         // would have moved it to 70 characters a segment. The item name is
-        // typed by staff and can hold curly quotes, so it goes through the same
-        // swap.
-        return 'SERBIS: '.SmsMessagePolicy::toGsmSafe($this->itemName($equipment)).' is available again. Still need it? '
+        // typed by staff: curly quotes are swapped for ASCII, and a name that
+        // reads as a domain has its dots turned to spaces, so it cannot get the
+        // whole notice refused.
+        return 'SERBIS: '.SmsMessagePolicy::sanitizeName($this->itemName($equipment)).' is available again. Still need it? '
             .'Request it from the app - your earlier request was not carried over.';
     }
 

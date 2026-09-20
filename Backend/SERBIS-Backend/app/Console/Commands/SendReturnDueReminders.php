@@ -315,7 +315,9 @@ class SendReturnDueReminders extends Command
         // outside GSM-7 turns the whole text into a 70-character-per-segment
         // message. The ellipsis below is three ASCII dots for the same reason,
         // and counted as three.
-        $itemName = SmsMessagePolicy::toGsmSafe($borrowing->equipment->item_name ?? $borrowing->other_equipment_text ?? 'item');
+        // A name that reads as a domain ("Tent.com Set") would get the whole
+        // reminder refused, so its dots become spaces instead.
+        $itemName = SmsMessagePolicy::sanitizeName($borrowing->equipment->item_name ?? $borrowing->other_equipment_text ?? 'item');
         $budget = self::SMS_SEGMENT_LIMIT - mb_strlen($prefix) - mb_strlen($suffix);
 
         if (mb_strlen($itemName) > $budget) {

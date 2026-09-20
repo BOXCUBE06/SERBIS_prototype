@@ -374,6 +374,26 @@ class SkySmsGatewayTest extends TestCase
         $this->assertSame(["\u{2014}", "\u{1F600}"], SmsMessagePolicy::nonGsmCharacters("a \u{2014} b \u{1F600}"));
     }
 
+    public function test_a_name_is_sanitised_but_written_message_text_keeps_the_hard_block(): void
+    {
+        $this->assertSame('Tent com Set', SmsMessagePolicy::sanitizeName('Tent.com Set'));
+        $this->assertSame('Radio 192 168 0 10', SmsMessagePolicy::sanitizeName('Radio 192.168.0.10'));
+        $this->assertSame('www echague gov unit', SmsMessagePolicy::sanitizeName('www.echague.gov unit'));
+        $this->assertSame('https boat', SmsMessagePolicy::sanitizeName('https://boat'));
+        $this->assertSame('Crutches (pair)', SmsMessagePolicy::sanitizeName('Crutches (pair)'));
+        $this->assertSame('Tent 3.5m', SmsMessagePolicy::sanitizeName('Tent 3.5m'));
+        $this->assertSame("Boat's ring", SmsMessagePolicy::sanitizeName("Boat\u{2019}s ring"));
+        $this->assertSame('item', SmsMessagePolicy::sanitizeName('...'));
+        $this->assertSame('item', SmsMessagePolicy::sanitizeName(''));
+
+        // The same text as a whole message is still refused, by the gateway
+        // and by the blast: the person typed that, so they are told.
+        Http::fake();
+        $result = $this->gateway()->sendOne('09171234567', 'Bring the Tent.com Set');
+        $this->assertSame(SmsResult::REASON_BLOCKED_CONTENT, $result->reason);
+        Http::assertNothingSent();
+    }
+
     // ---- timeouts, auth, server ------------------------------------------
 
     public function test_a_timeout_is_unknown_not_delivered(): void

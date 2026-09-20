@@ -70,4 +70,39 @@ class SmsMessagePolicy
     {
         return strtr($text, self::ASCII_MAP);
     }
+
+    /**
+     * A staff-typed name (an equipment item) made safe to put inside a text.
+     *
+     * The name is data, not the message: refusing the whole reminder because
+     * staff called an item "Tent.com Set" would leave a resident never told
+     * their loan is due. So when the name itself looks like a link its dots
+     * become spaces ("Tent com Set"), and a name that only trips because of a
+     * scheme ("https://…") loses its colons and slashes too. A name that does
+     * not look like a link is only tidied to plain ASCII. Anything still
+     * tripping after that is replaced by "item".
+     *
+     * Only for names substituted into a fixed template. Text a person writes
+     * as the message itself — the blast — keeps the hard block.
+     */
+    public static function sanitizeName(string $name): string
+    {
+        $name = self::toGsmSafe($name);
+
+        if (self::containsLink($name)) {
+            $name = str_replace('.', ' ', $name);
+        }
+
+        if (self::containsLink($name)) {
+            $name = preg_replace('~[:/]+~', ' ', $name) ?? $name;
+        }
+
+        $name = trim(preg_replace('/\s+/', ' ', $name) ?? $name);
+
+        // Nothing readable left (empty, or only punctuation) says nothing about
+        // what is due back, so it falls back to the generic word.
+        $readable = preg_match('/[\p{L}\p{N}]/u', $name) === 1;
+
+        return ! $readable || self::containsLink($name) ? 'item' : $name;
+    }
 }

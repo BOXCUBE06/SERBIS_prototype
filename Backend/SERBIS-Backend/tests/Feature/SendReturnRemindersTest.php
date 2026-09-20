@@ -308,6 +308,46 @@ class SendReturnRemindersTest extends TestCase
         $this->assertFalse(SmsMessagePolicy::containsLink($sent));
     }
 
+    public function test_an_item_name_that_reads_as_a_domain_is_sanitised_and_the_reminder_still_goes_out(): void
+    {
+        $sent = [];
+        Http::fake(function ($request) use (&$sent) {
+            $sent[] = $request['message'];
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $names = ['Tent.com Set', 'Radio 192.168.0.10', 'www.echague.gov unit', 'https://boat', 'Crutches (pair)', 'Tent 3.5m'];
+        $rows = [];
+
+        foreach ($names as $i => $name) {
+            $rows[] = $this->released(
+                $this->resident('0917'.str_pad((string) ($i + 1), 7, '0', STR_PAD_LEFT)),
+                now()->addDay()->format('Y-m-d'),
+                ['equipment_id' => null, 'other_equipment_text' => $name],
+            );
+        }
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        // Every one went out and was marked — none skipped for tripping the check.
+        $this->assertCount(count($names), $sent);
+        foreach ($rows as $row) {
+            $this->assertNotNull($row->fresh()->return_reminder_sent_at);
+        }
+
+        foreach ($sent as $message) {
+            $this->assertFalse(SmsMessagePolicy::containsLink($message), $message);
+        }
+
+        $joined = implode("\n", $sent);
+        $this->assertStringContainsString('your borrowed Tent com Set is due back', $joined);
+        $this->assertStringContainsString('your borrowed Radio 192 168 0 10 is due back', $joined);
+        // A name that was never a link is left exactly as typed.
+        $this->assertStringContainsString('your borrowed Tent 3.5m is due back', $joined);
+        $this->assertStringContainsString('your borrowed Crutches (pair) is due back', $joined);
+    }
+
     public function test_respects_manila_date_boundaries_not_utc(): void
     {
         Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
