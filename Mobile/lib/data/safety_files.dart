@@ -322,7 +322,7 @@ final libraryArticles = <String, LibraryArticle>{
       ),
     ],
   ),
-  // Source: NDRRMC public preparedness guidance. Wording not verified against the original.
+  // Source: NDRRMC public preparedness guidance (wording not verified against the original), plus PHIVOLCS earthquake preparedness lines (know your hazards, check the evacuation route, join earthquake drills).
   'before': const LibraryArticle(
     title: 'Before a Disaster',
     titleFil: 'Bago ang Sakuna',
@@ -335,11 +335,12 @@ final libraryArticles = <String, LibraryArticle>{
       ArticleSection(
         heading: 'Make a family emergency plan',
         bullets: [
+          'Know the hazards in your area, such as flood, landslide, and earthquake risk.',
           'Agree on a meeting point if family members get separated.',
-          'Identify the nearest evacuation center for your barangay.',
+          'Identify the nearest evacuation center for your barangay and check the route to it.',
           'Save MDRRMO, barangay, and emergency hotline numbers in every phone.',
           'Know the evacuation routes from your home and workplace.',
-          'Practice the plan with your family, including barangay drills.',
+          'Practice the plan with your family and take part in regular earthquake and barangay drills.',
         ],
       ),
       ArticleSection(
@@ -364,22 +365,23 @@ final libraryArticles = <String, LibraryArticle>{
       ),
       ArticleSection(
         heading: 'Stay informed',
-        body: 'Know the hazards in your area and follow official advisories '
-            'from PAGASA (weather), PHIVOLCS (earthquakes and volcanoes), '
-            'NDRRMC, the MDRRMO, and your barangay, especially during typhoon '
-            'season. Keep MDRRMO text alerts turned on in your profile so you '
-            'receive announcements even with limited internet access.',
+        body: 'Follow official advisories from PAGASA (weather), PHIVOLCS '
+            '(earthquakes and volcanoes), NDRRMC, the MDRRMO, and your '
+            'barangay, especially during typhoon season. Keep MDRRMO text '
+            'alerts turned on in your profile so you receive announcements '
+            'even with limited internet access.',
       ),
     ],
     sectionsFil: [
       ArticleSection(
         heading: 'Gumawa ng Family Emergency Plan',
         bullets: [
+          'Alamin ang mga panganib sa inyong lugar, gaya ng baha, landslide, at lindol.',
           'Magkasundo sa lugar na magkikitaan kung magkahiwalay ang pamilya.',
-          'Alamin ang pinakamalapit na evacuation center sa inyong barangay.',
+          'Alamin ang pinakamalapit na evacuation center sa inyong barangay at suriin ang daan papunta roon.',
           'I-save ang mga numero ng MDRRMO, barangay, at emergency hotlines sa lahat ng cellphone.',
           'Alamin ang ruta ng evacuation mula sa tahanan at lugar ng trabaho.',
-          'Isagawa ang plano kasama ang pamilya, pati ang mga drill ng barangay.',
+          'Isagawa ang plano kasama ang pamilya at makilahok sa regular na earthquake drill at drill ng barangay.',
         ],
       ),
       ArticleSection(
@@ -404,15 +406,15 @@ final libraryArticles = <String, LibraryArticle>{
       ),
       ArticleSection(
         heading: 'Manatiling May Alam',
-        body: 'Alamin ang mga panganib sa inyong lugar at sundan ang mga '
-            'opisyal na advisory ng PAGASA (panahon), PHIVOLCS (lindol at '
-            'bulkan), NDRRMC, MDRRMO, at inyong barangay, lalo na sa tag-bagyo. '
-            'Panatilihing naka-on ang text alerts ng MDRRMO sa inyong profile '
-            'para makatanggap ng abiso kahit limitado ang internet.',
+        body: 'Sundan ang mga opisyal na advisory ng PAGASA (panahon), '
+            'PHIVOLCS (lindol at bulkan), NDRRMC, MDRRMO, at inyong barangay, '
+            'lalo na sa tag-bagyo. Panatilihing naka-on ang text alerts ng '
+            'MDRRMO sa inyong profile para makatanggap ng abiso kahit '
+            'limitado ang internet.',
       ),
     ],
   ),
-  // Source: NDRRMC public preparedness guidance; the earthquake section follows DOST-PHIVOLCS "Duck, Cover, and Hold". Wording not verified against the originals.
+  // Source: NDRRMC public preparedness guidance (wording not verified against the original). The earthquake sections are PHIVOLCS; see the comment above them.
   'during': const LibraryArticle(
     title: 'During a Disaster',
     titleFil: 'Habang Nagaganap ang Sakuna',
@@ -448,17 +450,25 @@ final libraryArticles = <String, LibraryArticle>{
           'Avoid using candles if there is a gas leak risk — use flashlights instead.',
         ],
       ),
-      // Earthquake: DOST-PHIVOLCS guidance. "Duck, Cover, and Hold" is their
-      // exact phrase — do not reword it to "Drop, cover, and hold on".
+      // Source: PHIVOLCS official Before-During-After earthquake measures (verified against direct quotes, cross-checked across multiple citing sources)
+      // "Duck, Cover, and Hold" is their exact phrase — do not reword it to
+      // "Drop, cover, and hold on".
       ArticleSection(
-        heading: 'During an earthquake — Duck, Cover, and Hold',
-        bullets: [
-          'Duck, Cover, and Hold: get down, take cover under a sturdy table or desk (or protect your head and neck with your arms), and hold on until the shaking stops.',
-          'If you are indoors and the structure is sound, stay inside. Do not leave the building while it is still shaking.',
-          'Stay away from glass windows, shelves, cabinets, and heavy objects that could fall.',
-          'If you are in bed, stay there and protect your head with a pillow.',
-          'If you are outdoors, move to an open area away from buildings, trees, and power lines.',
-        ],
+        heading: 'During an earthquake — Duck, Cover, and Hold (indoors)',
+        body: 'When you are inside a structurally sound building or home, '
+            'stay there and remain calm. If possible, quickly open the door '
+            'for easy exit. Duck under a sturdy desk or table and hold on to '
+            'it, or protect your head with your arms. Stay away from glass '
+            'windows, shelves, cabinets and other heavy objects.',
+      ),
+      ArticleSection(
+        heading: 'During an earthquake — outdoors',
+        body: 'Move to an open area. Stay away from trees, power lines, '
+            'posts and concrete structures. Move away from steep slopes which '
+            'may be affected by landslides. If you are near the shore, move '
+            'quickly to higher ground — a tsunami might occur. If you are in '
+            'a moving vehicle, stop and move out. Do not attempt to cross '
+            'bridges, overpasses, or flyovers which may have been damaged.',
       ),
     ],
     sectionsFil: [
@@ -489,18 +499,27 @@ final libraryArticles = <String, LibraryArticle>{
         ],
       ),
       ArticleSection(
-        heading: 'Habang Lumilindol — Duck, Cover, and Hold',
-        bullets: [
-          'Duck, Cover, and Hold: yumuko, sumilong sa ilalim ng matibay na mesa o desk (o protektahan ang ulo at leeg gamit ang mga braso), at kumapit hanggang tumigil ang pagyanig.',
-          'Kung nasa loob ka at matibay ang gusali, manatili sa loob. Huwag lumabas ng gusali habang yumayanig pa.',
-          'Lumayo sa mga salamin na bintana, estante, kabinet, at mabibigat na bagay na maaaring mahulog.',
-          'Kung nasa kama ka, manatili roon at protektahan ang ulo gamit ang unan.',
-          'Kung nasa labas, pumunta sa bukas na lugar, malayo sa mga gusali, puno, at poste ng kuryente.',
-        ],
+        heading: 'Habang Lumilindol — Duck, Cover, and Hold (sa loob)',
+        body: 'Kapag nasa loob ka ng matibay na gusali o bahay, manatili roon '
+            'at manatiling kalmado. Kung maaari, mabilis na buksan ang pinto '
+            'para madaling makalabas. Yumuko sa ilalim ng matibay na mesa o '
+            'desk at kumapit dito, o protektahan ang ulo gamit ang mga braso. '
+            'Lumayo sa mga salamin na bintana, estante, kabinet, at iba pang '
+            'mabibigat na bagay.',
+      ),
+      ArticleSection(
+        heading: 'Habang Lumilindol — sa labas',
+        body: 'Pumunta sa bukas na lugar. Lumayo sa mga puno, linya ng '
+            'kuryente, poste, at estrukturang kongkreto. Lumayo sa matatarik '
+            'na dalisdis na maaaring maapektuhan ng landslide. Kung malapit ka '
+            'sa dalampasigan, agad na pumunta sa mataas na lugar — maaaring '
+            'magkaroon ng tsunami. Kung nasa gumagalaw na sasakyan ka, huminto '
+            'at bumaba. Huwag tumawid sa mga tulay, overpass, o flyover na '
+            'maaaring nasira.',
       ),
     ],
   ),
-  // Source: NDRRMC public preparedness guidance. Wording not verified against the original.
+  // Source: NDRRMC public preparedness guidance (wording not verified against the original), plus PHIVOLCS after-earthquake lines (exit fast and safely, no elevators, stay out of damaged buildings, expect aftershocks).
   'after': const LibraryArticle(
     title: 'After a Disaster',
     titleFil: 'Pagkatapos ng Sakuna',
@@ -513,10 +532,12 @@ final libraryArticles = <String, LibraryArticle>{
       ArticleSection(
         heading: 'Check for safety first',
         bullets: [
+          'If you are in a building, take the fastest and safest way out. Do not use elevators.',
           'Check yourself and family members for injuries before checking property.',
           'Watch for hazards: downed power lines, broken glass, gas leaks, and structural damage.',
           'Avoid floodwater — it may be contaminated or carry electrical hazards.',
-          'After an earthquake, expect aftershocks and stay out of damaged buildings.',
+          'Do not enter damaged buildings.',
+          'Be prepared for aftershocks.',
           'Do not return home until local officials say it is safe to do so.',
         ],
       ),
@@ -550,10 +571,12 @@ final libraryArticles = <String, LibraryArticle>{
       ArticleSection(
         heading: 'Suriin Muna ang Kaligtasan',
         bullets: [
+          'Kung nasa loob ng gusali, lumabas sa pinakamabilis at pinakaligtas na daan. Huwag gumamit ng elevator.',
           'Tingnan kung may sugat ang sarili at pamilya bago tingnan ang ari-arian.',
           'Mag-ingat sa mga panganib: putol na linya ng kuryente, basag na salamin, gas leak, at sirang istruktura.',
           'Iwasan ang tubig-baha — maaaring kontaminado o may electrical hazard.',
-          'Pagkatapos ng lindol, asahan ang aftershocks at lumayo sa mga nasirang gusali.',
+          'Huwag pumasok sa mga nasirang gusali.',
+          'Maghanda para sa aftershocks.',
           'Huwag bumalik sa bahay hangga\'t hindi pinapayagan ng mga opisyal.',
         ],
       ),
