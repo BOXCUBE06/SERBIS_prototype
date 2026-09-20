@@ -1,12 +1,10 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
         <PageHeader
           title="Staff Accounts"
-          subtitle="Who can sign in to this panel. Every admin can manage every other."
-          class="mb-6"
         >
           <template v-slot:actions>
             <v-btn
@@ -29,15 +27,16 @@
           </template>
         </v-alert>
 
-        <!-- There is no password reset by email: MAIL_MAILER=log means a reset
-             link would be sent to a log file. Saying so here is cheaper than an
-             admin discovering it while locked out. -->
+        <!-- No mail is sent to a staff username, so a reset cannot be emailed.
+             Saying so here is cheaper than an admin discovering it while a
+             colleague is locked out. -->
         <v-alert
           type="info" variant="tonal" density="comfortable" rounded="lg" class="mb-6"
           icon="mdi-information-outline"
         >
-          Forgotten passwords are reset here, not by email. Open the account, set a new
-          password, and pass it on in person — there is no mail transport configured.
+          Forgotten passwords are reset here, not by email. Choose “Reset password” on the
+          account, then pass the temporary password on in person. They will be asked to set
+          their own before they can use the panel.
         </v-alert>
 
         <v-skeleton-loader v-if="initialLoad" type="table" rounded="xl"></v-skeleton-loader>
@@ -90,6 +89,16 @@
                   @click="openEdit(item)"
                 >
                   Edit
+                </v-btn>
+                <!-- Never on your own row, and never on a closed account: the
+                     server refuses both, this only spares the round trip. -->
+                <v-btn
+                  v-if="!isClosed(item) && !isSelf(item)"
+                  variant="text" size="small" class="text-none font-weight-bold"
+                  :aria-label="`Reset the password of ${fullName(item)}`"
+                  @click="askReset(item)"
+                >
+                  Reset password
                 </v-btn>
                 <v-btn
                   v-if="isClosed(item)"
@@ -156,9 +165,21 @@
               </v-col>
             </v-row>
 
+            <!-- Staff sign in with a made-up username on the office domain; no mail
+                 is ever sent to it. Only the name part is typed. An account made
+                 before this rule keeps its full address and shows it as-is. -->
             <v-text-field
-              v-model="form.email_address" label="Email address *" placeholder="juan.delacruz@echague.gov.ph" type="email" variant="outlined"
-              density="comfortable" rounded="lg" autocomplete="email" class="mb-1"
+              v-if="!legacyEmail"
+              :model-value="form.email_address" label="Username *" placeholder="juan.delacruz" variant="outlined"
+              density="comfortable" rounded="lg" autocomplete="off" class="mb-1"
+              suffix="@serbis.com" hint="Lowercase letters, digits and dots." persistent-hint
+              :rules="[requiredRule('Username'), usernameRule]" :error-messages="fieldErrors.email_address"
+              @update:model-value="onUsernameInput"
+            ></v-text-field>
+            <v-text-field
+              v-else
+              v-model="form.email_address" label="Email address *" type="email" variant="outlined"
+              density="comfortable" rounded="lg" autocomplete="off" class="mb-1"
               :rules="[requiredRule('Email address')]" :error-messages="fieldErrors.email_address"
             ></v-text-field>
 
@@ -250,6 +271,56 @@
       </v-card>
     </v-dialog>
 
+    <!-- Reset password: confirm first, because it signs the person out everywhere. -->
+    <v-dialog v-model="resetDialog.show" max-width="460">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Reset this password?</v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
+          <strong class="text-high-emphasis">{{ fullName(resetDialog.item) }}</strong>
+          will be signed out everywhere and given a temporary password. They must set
+          their own the next time they sign in.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="resetDialog.loading" @click="resetDialog.show = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            :loading="resetDialog.loading" @click="confirmReset"
+          >
+            Reset password
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- The temporary password, shown once. Persistent: it is not stored
+         anywhere the panel can show it again, so an accidental click outside
+         must not lose it. -->
+    <v-dialog v-model="tempDialog.show" max-width="460" persistent>
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Temporary password</v-card-title>
+        <v-card-text class="px-6 py-4">
+          <div class="text-body-2 text-medium-emphasis mb-3">
+            Give this to <strong class="text-high-emphasis">{{ tempDialog.name }}</strong> in person.
+            It is shown only once — closing this window discards it.
+          </div>
+          <div class="temp-password" data-testid="temporary-password">{{ tempDialog.password }}</div>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" @click="copyTemporary">
+            {{ tempDialog.copied ? 'Copied' : 'Copy' }}
+          </v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            @click="closeTemporary"
+          >
+            Done
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Announced, not just shown. The snackbar is mounted on show and is not
          reliably read out; this region is permanent and is blanked before each
          message so an unchanged string is still announced. -->
@@ -279,9 +350,11 @@ const myId = ref(null)
 const showPassword = ref(false)
 const liveMessage = ref('')
 
-const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null })
+const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null, legacyEmail: false })
 const form = ref({ first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' })
 const closeDialog = ref({ show: false, item: null, loading: false })
+const resetDialog = ref({ show: false, item: null, loading: false })
+const tempDialog = ref({ show: false, name: '', password: '', copied: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 // Template ref for the Add/Edit <v-form> -- named formRef, not form, because
@@ -296,6 +369,22 @@ const requiredRule = (label) => (v) =>
 const passwordRequiredRule = (v) =>
   modal.value.editing || (v && String(v).trim() !== '') || 'A password is required for a new account.'
 
+const EMAIL_SUFFIX = '@serbis.com'
+
+// Editing an account made before the @serbis.com rule: its address is kept and
+// shown in full. Everything else types just the name part.
+const legacyEmail = computed(() => modal.value.editing && !!modal.value.legacyEmail)
+
+// Same shape the server enforces: letters, digits and single dots between them.
+const usernameRule = (v) =>
+  /^[a-z0-9]+(\.[a-z0-9]+)*$/.test(String(v || '')) || 'Use lowercase letters, digits and single dots only.'
+
+// Lowercases and drops anything the address cannot hold as it is typed. A pasted
+// full address loses everything from the @ on, so the suffix is never doubled.
+const onUsernameInput = (v) => {
+  form.value.email_address = String(v || '').toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9.]/g, '')
+}
+
 const passwordConfirmRule = (v) =>
   String(v || '') === String(form.value.password || '') || 'The two passwords do not match.'
 
@@ -308,7 +397,7 @@ const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Name', key: 'name', sortable: false, width: '55%' },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '220px' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '340px' },
 ]
 
 const getHeaders = () => ({
@@ -392,21 +481,22 @@ const fetchMe = async () => {
 const openAdd = () => {
   form.value = { first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' }
   showPassword.value = false
-  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
+  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null, legacyEmail: false }
   clearFieldErrors()
   formRef.value?.resetValidation()
 }
 
 const openEdit = (item) => {
+  const legacy = !String(item.email_address).endsWith(EMAIL_SUFFIX)
   form.value = {
     first_name: item.first_name,
     last_name: item.last_name,
-    email_address: item.email_address,
+    email_address: legacy ? item.email_address : item.email_address.slice(0, -EMAIL_SUFFIX.length),
     password: '',
     password_confirmation: '',
   }
   showPassword.value = false
-  modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item) }
+  modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item), legacyEmail: legacy }
   clearFieldErrors()
   formRef.value?.resetValidation()
 }
@@ -427,7 +517,9 @@ const save = async () => {
   const payload = {
     first_name: form.value.first_name.trim(),
     last_name: form.value.last_name.trim(),
-    email_address: form.value.email_address.trim(),
+    email_address: legacyEmail.value
+      ? form.value.email_address.trim()
+      : `${form.value.email_address.trim()}${EMAIL_SUFFIX}`,
   }
   if (form.value.password) {
     payload.password = form.value.password
@@ -475,6 +567,42 @@ const confirmClose = async () => {
   } finally {
     closeDialog.value.loading = false
   }
+}
+
+const askReset = (item) => { resetDialog.value = { show: true, item, loading: false } }
+
+const confirmReset = async () => {
+  const item = resetDialog.value.item
+  resetDialog.value.loading = true
+  try {
+    const res = await fetch(`${API}/${idOf(item)}/reset-password`, { method: 'POST', headers: getHeaders() })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(messageFrom(data, 'Could not reset the password'))
+
+    resetDialog.value.show = false
+    // Held only in this dialog's state. Nothing else keeps it.
+    tempDialog.value = { show: true, name: fullName(item), password: data.temporary_password, copied: false }
+  } catch (error) {
+    resetDialog.value.show = false
+    announce(error.message, 'error')
+  } finally {
+    resetDialog.value.loading = false
+  }
+}
+
+const copyTemporary = async () => {
+  try {
+    await navigator.clipboard.writeText(tempDialog.value.password)
+    tempDialog.value.copied = true
+  } catch {
+    // Clipboard blocked (insecure origin, permissions). The password is on
+    // screen to read out or type, which is the fallback that always works.
+    announce('Could not copy. Read the password from the window instead.', 'warning')
+  }
+}
+
+const closeTemporary = () => {
+  tempDialog.value = { show: false, name: '', password: '', copied: false }
 }
 
 const reactivate = async (item) => {
@@ -536,6 +664,19 @@ onMounted(() => {
 }
 
 .subtle-surface { background: rgba(var(--v-theme-on-surface), 0.04); }
+
+/* Monospace and spaced so a password read aloud is not misheard. */
+.temp-password {
+  padding: 14px 16px;
+  border-radius: 10px;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  user-select: all;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
 
 /* Read by a screen reader, invisible to everything else. clip-path rather than
    display:none, which removes it from the accessibility tree as well. */

@@ -23,7 +23,7 @@ use Tests\TestCase;
  *
  * preventStrayRequests() is on regardless — most tests here never configure
  * Fcm, so notifyResidentDevices() no-ops before any HTTP call, same as it
- * did for PhilSMS before push replaced it.
+ * did for SkySMS before push replaced it.
  */
 class ServiceRequestRejectTest extends TestCase
 {

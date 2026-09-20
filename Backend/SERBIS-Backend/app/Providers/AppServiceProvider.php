@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Services\Sms\SkySmsGateway;
+use App\Services\Sms\SmsGateway;
+use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,7 +19,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The one SMS vendor. Callers ask for the interface, so a provider
+        // change is this line and one class.
+        $this->app->singleton(SmsGateway::class, SkySmsGateway::class);
     }
 
     /**
@@ -25,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         self::assertDebugIsOffInProduction();
-        self::assertOtpBypassIsUnsetInProduction();
+        self::assertOtpBypassIsLocalOnly();
         self::assertSmsFakeIsUnsetInProduction();
 
         // Replaces the old flat throttleApi('60,1') (bootstrap/app.php used to
@@ -78,10 +83,16 @@ class AppServiceProvider extends ServiceProvider
         // IP can front an entire subscriber pool, and an IP-only limit would lock those
         // residents out of a disaster-response system.
         RateLimiter::for('login', function (Request $request) {
-            $email = Str::lower((string) $request->input('email_address'));
+            // The account being attacked: a resident's phone number (in canonical
+            // form, so "0917…" and "+63917…" share one bucket), or a staff
+            // member's email address on the admin login.
+            $phone = PhoneNumber::normalize((string) $request->input('phone_number'));
+            $account = $phone !== ''
+                ? 'phone:'.$phone
+                : 'email:'.Str::lower((string) $request->input('email_address'));
 
             return [
-                Limit::perMinute(5)->by('email:'.$email.'|'.$request->ip()),
+                Limit::perMinute(5)->by($account.'|'.$request->ip()),
                 Limit::perMinute(20)->by('ip:'.$request->ip()),
             ];
         });
@@ -94,7 +105,7 @@ class AppServiceProvider extends ServiceProvider
         // being per-minute it resets forever, so a script sitting at 20/min
         // could create an unbounded number of accounts over a day. Each
         // registration also creates a `tbl_residents` row immediately and, if
-        // the phone number is a real one, bills a real PhilSMS send before
+        // the phone number is a real one, bills a real SkySMS send before
         // anyone confirms the address — so both the row-spam and the billing
         // exposure scale with how long a script is left running, not with any
         // single burst. The per-hour tier is the actual fix; per-minute stays
@@ -128,6 +139,41 @@ class AppServiceProvider extends ServiceProvider
         // hour became closer to one. Keyed on the account for the reason
         // SmsController::assertCurrentPassword is: an office on one CGNAT address
         // must not be able to spend a colleague's allowance.
+        // POST /admin/change-password checks the current password, so it is a
+        // guessing target for anyone holding a token. Keyed on the account.
+        // Forgotten password (three public steps). Keyed on the canonical phone
+        // number, NOT on whether an account holds it: a limit that only bit real
+        // accounts would be a way to find them. The per-hour tier is per number
+        // whatever the caller's address, since a text to one number is a text to
+        // one person however many addresses ask; the IP tier bounds one caller
+        // across many numbers (SMS is billed).
+        RateLimiter::for('password-reset', function (Request $request) {
+            $phone = PhoneNumber::normalize((string) $request->input('phone_number'));
+            $number = $phone !== '' ? hash('sha256', $phone) : 'malformed';
+
+            return [
+                Limit::perMinute(5)->by('pwreset-minute:'.$number.'|'.$request->ip()),
+                Limit::perHour(10)->by('pwreset-hour:'.$number),
+                Limit::perHour(30)->by('pwreset-ip:'.$request->ip()),
+            ];
+        });
+
+        // The three steps of moving a resident's phone number. Keyed on the
+        // account: an office or a CGNAT address must not share a budget, and the
+        // per-code attempt cap is the real brake on guessing.
+        RateLimiter::for('phone-change', function (Request $request) {
+            $who = 'phone-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            return [
+                Limit::perMinute(5)->by($who.'|minute'),
+                Limit::perHour(15)->by($who.'|hour'),
+            ];
+        });
+
+        RateLimiter::for('password-change', function (Request $request) {
+            return Limit::perMinute(5)->by('password-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
+        });
+
         RateLimiter::for('sms-blast', function (Request $request) {
             return Limit::perHour(3)->by('admin:'.$request->user()->admin_id);
         });
@@ -180,21 +226,18 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Refuse to run a production deployment with the test-only OTP bypass
+     * Refuse to run anywhere but `local` with the test-only OTP bypass
      * configured (config/serbis.php, AuthController::otpBypassMatches()).
      *
-     * That method already refuses the bypass on its own by checking
-     * app()->environment() at request time — this guard exists so a
-     * misconfigured production server fails loudly at boot instead of
-     * depending on that request-time check never being changed or bypassed
-     * by a future edit. Same shape as assertDebugIsOffInProduction() above,
-     * for the same reason: quietly clearing the config would leave the
-     * variable still set in the .env on the server, so the next person to
-     * read it learns the wrong thing about what is running.
+     * That method already refuses the bypass outside `local` at request time;
+     * this guard makes a misconfigured server fail loudly at boot instead of
+     * depending on that check never being edited. Same shape as
+     * assertDebugIsOffInProduction() above: quietly clearing the config would
+     * leave the variable set in the server's .env, misleading the next reader.
      */
-    public static function assertOtpBypassIsUnsetInProduction(): void
+    public static function assertOtpBypassIsLocalOnly(): void
     {
-        if (! app()->environment('production')) {
+        if (app()->environment('local')) {
             return;
         }
 
@@ -204,9 +247,9 @@ class AppServiceProvider extends ServiceProvider
 
         throw new RuntimeException(
             'REFUSING TO START: SERBIS_OTP_BYPASS_CODE is set while APP_ENV is '
-            .'production. This bypass exists only so local development and CI '
-            .'test automation (Playwright) can skip real OTP delivery, and must '
-            .'never be reachable in production. '
+            .app()->environment().'. This bypass exists only so local development '
+            .'can skip real OTP delivery, and must never be reachable on a server '
+            .'residents can use. '
             .'Unset SERBIS_OTP_BYPASS_CODE in the .env on this server, then run '
             .'`php artisan config:clear` (or `config:cache`) and start again.'
         );
@@ -214,11 +257,11 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Refuse to run a production deployment with the test-only SMS
-     * suppression flag configured (config/serbis.php, PhilSms::send()).
+     * suppression flag configured (config/serbis.php, SkySmsGateway).
      *
-     * Same shape as assertOtpBypassIsUnsetInProduction() above, for the same
+     * Same shape as assertOtpBypassIsLocalOnly() above, for the same
      * reason: that flag already refuses itself at request time
-     * (PhilSms::fakingEnabled() checks app()->environment() too), and this
+     * (SkySmsGateway::fakingEnabled() checks app()->environment() too), and this
      * guard exists so a misconfigured production server fails loudly at boot
      * instead of depending on that request-time check never being changed.
      */
@@ -235,7 +278,7 @@ class AppServiceProvider extends ServiceProvider
         throw new RuntimeException(
             'REFUSING TO START: SERBIS_SMS_FAKE is set while APP_ENV is '
             .'production. This flag exists only so local development and CI '
-            .'test automation (Playwright) can skip real, billed PhilSMS '
+            .'test automation (Playwright) can skip real, billed SkySMS '
             .'sends, and must never be reachable in production. '
             .'Unset SERBIS_SMS_FAKE in the .env on this server, then run '
             .'`php artisan config:clear` (or `config:cache`) and start again.'

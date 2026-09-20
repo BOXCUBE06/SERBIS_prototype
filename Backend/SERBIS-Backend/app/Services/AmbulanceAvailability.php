@@ -38,6 +38,16 @@ class AmbulanceAvailability
      * such a row can never satisfy the overlap. A unit out on that kind of
      * trip is still caught by the 'Dispatched' rule above.
      *
+     * `scheduled_end` itself is null on every Booked request until approve()
+     * sets a real one — store()/adminStore() only ever write `scheduled_at`.
+     * The same `NULL > $start` fact above meant an unapproved booking held no
+     * window at all: two residents could both be told a unit was free for a
+     * slot one of them had already (unapproved) claimed. Derived here with
+     * `COALESCE(...DATE_ADD(scheduled_at, INTERVAL DEFAULT_BOOKING_HOURS
+     * HOUR))` rather than backfilling the column, so an unapproved booking
+     * reserves the same default window approve() itself falls back to, and
+     * the two can never disagree.
+     *
      * `$excludeServiceRequestId` is for rescheduling a booking that already
      * holds a unit: without it, the booking's own not-yet-updated row would
      * count as a conflict against itself the moment the new window is checked
@@ -62,7 +72,10 @@ class AmbulanceAvailability
                     ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
                     ->whereNotIn('tbl_service_request.status', ServiceRequestController::TERMINAL_STATUSES)
                     ->where('tbl_ambulance_bookings.scheduled_at', '<', $end)
-                    ->where('tbl_ambulance_bookings.scheduled_end', '>', $start)
+                    ->whereRaw(
+                        'COALESCE(tbl_ambulance_bookings.scheduled_end, DATE_ADD(tbl_ambulance_bookings.scheduled_at, INTERVAL ? HOUR)) > ?',
+                        [ServiceRequestController::DEFAULT_BOOKING_HOURS, $start->toDateTimeString()]
+                    )
                     ->when($excludeServiceRequestId, fn (Builder $q) => $q->where('tbl_service_request.request_id', '!=', $excludeServiceRequestId));
             })
             ->get();

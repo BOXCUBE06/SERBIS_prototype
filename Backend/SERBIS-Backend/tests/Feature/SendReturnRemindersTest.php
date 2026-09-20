@@ -6,28 +6,41 @@ use App\Models\Barangay;
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Models\SystemLog;
+use App\Models\User;
+use App\Support\ReminderFollowUp;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Tests\Concerns\FakesFcm;
 use Tests\TestCase;
 
 /**
- * serbis:send-return-reminders — PhilSMS has no sandbox, so every test here
- * fakes the host rather than letting a real send happen, same as the
- * ServiceRequest approve/reject/reschedule tests.
+ * serbis:send-return-reminders, the equipment half: push only, no text. A
+ * reminder is marked sent only once FCM accepts it for a device; a resident with
+ * none is left unmarked and put in front of staff (ReminderFollowUp).
+ *
+ * preventStrayRequests() is what proves no SMS is attempted: a request to
+ * SkySMS that this file did not fake would throw.
  */
 class SendReturnRemindersTest extends TestCase
 {
+    use FakesFcm;
     use RefreshDatabase;
+
+    private const FCM = 'fcm.googleapis.com/*';
 
     private Equipment $equipment;
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        Http::preventStrayRequests();
+        $this->configureFcm();
 
         // Pinned so every bare now()/today()/addDay() call in this file — and
         // the command's own single Carbon::now() read — lands on the same
@@ -52,11 +65,11 @@ class SendReturnRemindersTest extends TestCase
         parent::tearDown();
     }
 
-    private function resident(string $phone = '09171111111'): Resident
+    private function resident(string $phone = '09171111111', bool $withDevice = true): Resident
     {
-        $barangay = Barangay::create(['barangay_name' => 'San Antonio Ugad']);
+        $barangay = Barangay::firstOrCreate(['barangay_name' => 'San Antonio Ugad']);
 
-        return Resident::create([
+        $resident = Resident::create([
             'barangay_id' => $barangay->barangay_id,
             'first_name' => 'Maria',
             'last_name' => 'Santos',
@@ -65,6 +78,12 @@ class SendReturnRemindersTest extends TestCase
             'password' => Hash::make('password123'),
             'status' => 'Active',
         ]);
+
+        if ($withDevice) {
+            $this->deviceFor($resident, 'device-'.$resident->getKey());
+        }
+
+        return $resident;
     }
 
     private function released(Resident $resident, string $dueDate, array $overrides = []): EquipmentBorrowing
@@ -79,37 +98,48 @@ class SendReturnRemindersTest extends TestCase
         ], $overrides));
     }
 
-    public function test_sends_a_reminder_for_a_borrowing_due_tomorrow_and_marks_it_sent(): void
+    private function tomorrow(): string
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        return now()->addDay()->format('Y-m-d');
+    }
 
-        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+    private function pushBodies(): array
+    {
+        return Http::recorded()->map(fn ($pair) => $pair[0]['message']['notification']['body'] ?? null)->filter()->values()->all();
+    }
+
+    public function test_pushes_a_reminder_for_a_borrowing_due_tomorrow_and_marks_it_sent(): void
+    {
+        Http::fake([self::FCM => $this->fcmAccepts()]);
+
+        $borrowing = $this->released($this->resident(), $this->tomorrow());
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
         Http::assertSentCount(1);
-        Http::assertSent(fn ($request) => str_contains($request['message'], 'Rubber Boat')
-            && str_contains($request['message'], 'due back tomorrow'));
+        $body = $this->pushBodies()[0];
+        $this->assertStringContainsString('Rubber Boat', $body);
+        $this->assertStringContainsString('due back tomorrow', $body);
 
         $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
     }
 
-    public function test_sends_a_reminder_for_a_borrowing_due_today(): void
+    public function test_pushes_a_reminder_for_a_borrowing_due_today(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake([self::FCM => $this->fcmAccepts()]);
 
         $this->released($this->resident(), now()->format('Y-m-d'));
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
-        Http::assertSent(fn ($request) => str_contains($request['message'], 'due back today'));
+        $this->assertStringContainsString('due back today', $this->pushBodies()[0]);
     }
 
-    public function test_a_borrowing_already_reminded_is_never_texted_twice(): void
+    public function test_a_borrowing_already_reminded_is_never_pushed_twice(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake([self::FCM => $this->fcmAccepts()]);
 
-        $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+        $this->released($this->resident(), $this->tomorrow());
 
         $this->artisan('serbis:send-return-reminders');
         $this->artisan('serbis:send-return-reminders');
@@ -119,9 +149,9 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_skips_a_borrowing_that_has_already_been_returned(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake();
 
-        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'), [
+        $borrowing = $this->released($this->resident(), $this->tomorrow(), [
             'status' => 'Returned',
             'returned_at' => now(),
         ]);
@@ -132,92 +162,158 @@ class SendReturnRemindersTest extends TestCase
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
     }
 
-    public function test_a_rejected_response_leaves_the_row_unmarked_for_retry(): void
+    public function test_a_resident_with_no_device_is_left_unmarked_and_staff_are_told(): void
     {
-        // A 200 carrying status "error" — PhilSms::accepted() treats this as
-        // a rejection, not a success, same as ServiceRequestController's own
-        // sends.
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200)]);
+        Http::fake();
 
-        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+        $borrowing = $this->released($this->resident('09171111111', withDevice: false), $this->tomorrow());
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
-        Http::assertSentCount(1);
-        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a rejected send must not be marked as delivered');
+        // No device, so nothing left the machine — and no text was tried in its place.
+        Http::assertNothingSent();
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a reminder nobody received must not be marked sent');
+
+        $log = SystemLog::where('action_type', ReminderFollowUp::ACTION)->sole();
+        $this->assertSame($borrowing->resident_id, $log->resident_id);
+        $this->assertSame($borrowing->getKey(), (int) $log->auditable_id);
+        $this->assertSame(EquipmentBorrowing::class, $log->auditable_type);
+        $this->assertSame(ReminderFollowUp::DUE_REMINDER, $log->new_values['kind']);
     }
 
-    public function test_a_thrown_exception_leaves_the_row_unmarked_for_retry(): void
+    public function test_a_push_fcm_refuses_is_also_a_follow_up_and_stays_unmarked(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out')]);
+        Http::fake([self::FCM => $this->fcmRefuses()]);
 
-        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+        $borrowing = $this->released($this->resident(), $this->tomorrow());
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
-        $this->assertNull($borrowing->fresh()->return_reminder_sent_at, 'a failed send must not be marked as delivered');
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
+        $this->assertSame(1, SystemLog::where('action_type', ReminderFollowUp::ACTION)->count());
     }
 
-    public function test_skips_a_borrowing_with_no_reachable_phone_number(): void
+    public function test_it_is_marked_sent_when_only_one_of_two_devices_takes_it(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        $resident = $this->resident();
+        $this->deviceFor($resident, 'second-device');
 
-        // Bypasses the registration-time PHONE_REGEX rule on purpose — see
-        // PhilSms::PHONE_REGEX's own note that rows written before the rule
-        // can still hold an undialable number.
-        $borrowing = $this->released($this->resident('not-a-phone'), now()->addDay()->format('Y-m-d'));
+        Http::fake([self::FCM => Http::sequence()
+            ->push(['error' => ['status' => 'UNAVAILABLE']], 503)
+            ->push(['name' => 'projects/x/messages/0:2'], 200)]);
+
+        $borrowing = $this->released($resident, $this->tomorrow());
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+        $this->assertSame(0, SystemLog::where('action_type', ReminderFollowUp::ACTION)->count());
+    }
+
+    public function test_a_resident_with_no_device_is_retried_on_the_next_run_and_reminded_once_they_have_one(): void
+    {
+        Http::fake([self::FCM => $this->fcmAccepts()]);
+
+        $resident = $this->resident('09171111111', withDevice: false);
+        $borrowing = $this->released($resident, $this->tomorrow());
+
+        $this->artisan('serbis:send-return-reminders');
+        $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
+
+        $this->deviceFor($resident);
+
+        $this->artisan('serbis:send-return-reminders');
+        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+    }
+
+    public function test_the_follow_up_is_not_repeated_by_a_second_run_the_same_day(): void
+    {
+        Http::fake();
+
+        $this->released($this->resident('09171111111', withDevice: false), $this->tomorrow());
+
+        $this->artisan('serbis:send-return-reminders');
+        $this->artisan('serbis:send-return-reminders');
+
+        $this->assertSame(1, SystemLog::where('action_type', ReminderFollowUp::ACTION)->count());
+    }
+
+    public function test_the_follow_up_reaches_the_dashboard_with_a_name_and_a_number_to_ring(): void
+    {
+        Http::fake();
+
+        $admin = User::create([
+            'first_name' => 'Ana',
+            'last_name' => 'Reyes',
+            'role' => 'Admin',
+            'email_address' => 'ana@test.local',
+            'password' => Hash::make('password123'),
+            'status' => 'Active',
+        ]);
+
+        $borrowing = $this->released($this->resident('09171111111', withDevice: false), $this->tomorrow());
 
         $this->artisan('serbis:send-return-reminders');
 
-        Http::assertNothingSent();
+        $this->actingAs($admin)->getJson('/api/admin/dashboard')
+            ->assertOk()
+            ->assertJsonPath('followUps.0.name', 'Maria Santos')
+            ->assertJsonPath('followUps.0.phone', '09171111111')
+            ->assertJsonPath('followUps.0.what', 'Equipment due-back reminder');
 
-        // Left unmarked: a resident who fixes their number before the due
-        // date still gets reminded on a later run.
-        $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
+        $this->actingAs($admin)->getJson('/api/logs/system')
+            ->assertOk()
+            ->assertJsonPath('data.0.action', ReminderFollowUp::ACTION)
+            ->assertJsonPath('data.0.description', 'Equipment due-back reminder not delivered: Maria Santos has no registered device. Follow up by phone (EquipmentBorrowing ID: '.$borrowing->getKey().')');
     }
 
-    public function test_missing_philsms_config_logs_one_warning_and_exits_non_zero(): void
+    public function test_an_item_name_that_reads_as_a_domain_goes_into_the_push_as_typed(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-        Config::set('services.philsms.token', null);
+        Http::fake([self::FCM => $this->fcmAccepts()]);
 
-        $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
-        $this->released($this->resident('09172222222'), now()->format('Y-m-d'));
+        $row = $this->released($this->resident(), $this->tomorrow(), [
+            'equipment_id' => null,
+            'other_equipment_text' => 'Tent.com Set',
+        ]);
 
-        Log::shouldReceive('warning')
-            ->once()
-            ->with('PhilSMS not configured, 2 reminder(s) skipped');
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
-
-        Http::assertNothingSent();
+        // No text is sent any more, so nothing has to be scrubbed to get past a link check.
+        $this->assertStringContainsString('Your borrowed Tent.com Set is due back', $this->pushBodies()[0]);
+        $this->assertNotNull($row->fresh()->return_reminder_sent_at);
     }
 
-    public function test_the_summary_line_reports_all_four_buckets(): void
+    public function test_the_summary_line_counts_sent_and_not_delivered(): void
     {
-        // Keyed on the recipient in the request body, not call order, since
-        // EquipmentBorrowing::get() makes no ordering guarantee here.
-        Http::fake(function ($request) {
-            $rejected = str_contains((string) $request['recipient'], '639172222222');
+        Http::fake([self::FCM => $this->fcmAccepts()]);
 
-            return Http::response(['status' => $rejected ? 'error' : 'success'], 200);
-        });
-
-        // Sent.
-        $this->released($this->resident('09171111111'), now()->addDay()->format('Y-m-d'));
-        // Failed — rejected by PhilSMS, left unmarked.
-        $this->released($this->resident('09172222222'), now()->addDay()->format('Y-m-d'));
-        // Skipped — no usable number.
-        $this->released($this->resident('not-a-phone'), now()->addDay()->format('Y-m-d'));
+        $this->released($this->resident('09171111111'), $this->tomorrow());
+        $this->released($this->resident('09172222222', withDevice: false), $this->tomorrow());
 
         $this->artisan('serbis:send-return-reminders')
-            ->expectsOutputToContain('1 sent, 1 failed (will retry), 1 skipped (no usable number), 0 skipped (not configured).')
+            ->expectsOutputToContain('1 sent, 0 failed (will retry), 0 skipped (no usable number), 1 not delivered (no registered device), 0 skipped (not configured).')
             ->assertExitCode(0);
+    }
+
+    public function test_equipment_is_still_reminded_and_the_run_succeeds_when_skysms_is_not_configured_and_no_booking_is_due(): void
+    {
+        Http::fake([self::FCM => $this->fcmAccepts()]);
+        Config::set('services.skysms.api_key', null);
+        Log::spy();
+
+        $borrowing = $this->released($this->resident(), $this->tomorrow());
+
+        // Exits 0: SkySMS is unset, but there is no ambulance booking to text
+        // today, so nothing was missed, and equipment does not need it.
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+        Log::shouldNotHaveReceived('warning', fn ($message) => str_contains((string) $message, 'SkySMS not configured'));
     }
 
     public function test_respects_manila_date_boundaries_not_utc(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake([self::FCM => $this->fcmAccepts()]);
 
         // 23:30 UTC on the 11th is already 07:30 on the 12th in Manila
         // (UTC+8, no DST) — "today" in the office's own day is the 12th, not

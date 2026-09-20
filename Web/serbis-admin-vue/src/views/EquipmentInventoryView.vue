@@ -1,12 +1,10 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row class="ma-0 w-100">
       <v-col cols="12" class="pa-0 w-100">
 
         <PageHeader
           title="Resource Management"
-          subtitle="How much of each item is on hand, and how much is out on loan"
-          class="mb-6"
         >
           <template v-slot:actions>
             <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">

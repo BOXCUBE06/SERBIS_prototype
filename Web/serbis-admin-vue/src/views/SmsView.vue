@@ -1,42 +1,54 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
-    <v-row justify="center" class="ma-0 w-100 mt-4">
-      <v-col cols="12" md="10" lg="8" xl="6" class="pa-0">
-        
-        <v-card elevation="4" rounded="lg" class="bg-surface fade-in w-100">
-          <div class="pa-8 border-b bg-surface d-flex align-center gap-4">
-            <v-avatar color="red-lighten-5" size="72" class="rounded-lg">
+  <v-container fluid class="fill-height align-start bg-background">
+    <div class="w-100">
+    <PageHeader title="Text Blast (SMS)" />
+
+    <!-- Form left, history right from 1360px; one column below that. The
+         other admin pages fill the width, but a short form stretched across
+         1500px gives a message box far wider than an SMS, so the form column is
+         capped and the history, which is the data worth reading, takes the rest. -->
+    <div class="blast-layout">
+
+        <v-card elevation="0" rounded="xl" class="blast-card fade-in">
+          <div class="blast-pad border-b bg-surface d-flex flex-wrap align-center gap-4">
+            <v-avatar color="red-lighten-5" size="72" class="rounded-lg blast-avatar">
               <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
             </v-avatar>
-            <!-- "active, opted-in" is exact: SmsController::sendBlast filters
-                 status = Active AND sms_opt_in AND a non-null phone number, so
-                 "every resident" would overstate who actually receives this. -->
-            <PageHeader title="Text Blast (SMS)" subtitle="One message to the active, opted-in residents of the barangays you pick" />
+            <!-- Reachable from the header rather than buried in a settings page —
+                 the two people who know the code are the ones who need this. -->
+            <v-btn
+              variant="text" size="small" class="text-none flex-shrink-0"
+              prepend-icon="mdi-key-outline"
+              @click="openManageCode"
+            >Text blast code</v-btn>
 
             <!-- Pushed right, and deliberately quiet. The balance is context for
-                 a decision, not a call to action — and it must never read as a
-                 blocker, because a failed lookup does not stop a send.
+                 a decision, not a call to action — except when the account is
+                 out of credits, which is the one case that stops every send.
 
-                 Both fields are printed exactly as PhilSMS sent them. The peso
-                 figure arrives carrying its own currency symbol and the expiry
-                 in a format no Date constructor reads twice the same way, so
-                 neither is parsed or reformatted here. -->
+                 SkySMS has no balance lookup. The figure is the credits left
+                 after the last message that went out, so it says "as of". -->
             <div class="ml-auto text-right flex-shrink-0">
-              <!-- Each line is nowrap and the block refuses to shrink: at this
-                   card width the expiry is long enough to wrap mid-phrase into
-                   "expires 21st / Aug 27", which reads as two separate facts. -->
               <template v-if="balance.available">
                 <div class="text-h6 font-weight-bold text-high-emphasis" style="white-space: nowrap;">{{ balance.remaining }}</div>
-                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">SMS credit</div>
-                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">expires {{ balance.expiresOn }}</div>
+                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">SMS credits left</div>
+                <div v-if="balance.asOf" class="text-caption text-medium-emphasis" style="white-space: nowrap;">as of {{ balance.asOf }}</div>
               </template>
+              <div
+                v-else-if="balance.outOfCredits"
+                class="text-caption font-weight-bold text-error"
+                style="max-width: 200px;"
+                role="alert"
+              >
+                {{ balance.message }}
+              </div>
               <div v-else-if="balance.checked" class="text-caption text-medium-emphasis" style="max-width: 180px;">
                 {{ balance.message }}
               </div>
             </div>
           </div>
 
-          <v-card-text class="pa-8">
+          <v-card-text class="blast-pad">
             <v-alert 
               v-if="alert.show" 
               :type="alert.type" 
@@ -52,6 +64,10 @@
 
             <v-form ref="form" @submit.prevent="sendSmsBlast">
               
+              <!-- The audience is exactly the active, opted-in residents:
+                   SmsController::sendBlast filters status = Active AND
+                   sms_opt_in AND a non-null phone number, so "every
+                   resident" would overstate who actually receives this. -->
               <div class="mb-6">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Target Audience</div>
                 <v-select
@@ -131,7 +147,8 @@
                   class="font-weight-medium text-body-1"
                   :rules="[
                     v => !!v || 'A message is required.',
-                    v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.'
+                    v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.',
+                    v => !findLink(v) || linkMessage
                   ]"
                   :error-messages="fieldErrors.message"
                 ></v-textarea>
@@ -142,7 +159,7 @@
                    different kinds: the recipient count is exact for the moment
                    it was fetched, but the roll can change before Send; the
                    segment count is derived from the GSM 03.38 tables because
-                   PhilSMS has no sandbox to confirm it against. -->
+                   SkySMS has no sandbox to confirm it against. -->
               <div class="mt-6 pa-4 rounded-lg bg-grey-lighten-5 border">
                 <div class="d-flex align-center justify-space-between flex-wrap gap-3">
                   <div class="d-flex align-center gap-2">
@@ -196,6 +213,31 @@
                     Caused by {{ offendingSummary }}.
                     Swapping {{ sms.offendingCharacters.length === 1 ? 'it for its' : 'them for their' }} plain-ASCII equivalent brings the cost back down.
                   </span>
+                  <!-- Only offered when the swap would actually change something:
+                       an emoji has no plain twin, and a button that does nothing
+                       reads as broken. -->
+                  <template v-if="canSimplifyCharacters" #append>
+                    <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="simplifyCharacters">
+                      Use plain characters
+                    </v-btn>
+                  </template>
+                </v-alert>
+
+                <!-- Blocking, unlike the warning above: the provider charges
+                     10 to 50 credits a recipient for a link and does not deliver
+                     the message. The server refuses it as well. -->
+                <v-alert
+                  v-if="messageLink"
+                  type="error"
+                  variant="tonal"
+                  density="compact"
+                  rounded="lg"
+                  class="mt-3"
+                  role="alert"
+                >
+                  <span class="text-body-2">
+                    “{{ messageLink }}” looks like a link or web address. {{ linkMessage }}
+                  </span>
                 </v-alert>
               </div>
               <div class="pt-6 mt-4 border-t">
@@ -208,6 +250,7 @@
                   height="64"
                   type="submit"
                   :loading="loading"
+                  :disabled="!!messageLink"
                   elevation="2"
                 >
                   <v-icon start size="24" class="mr-2">mdi-send</v-icon>
@@ -221,12 +264,94 @@
             </v-form>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
+
+        <!-- What became of the blasts after SkySMS took them. Below the form
+             rather than in a tab or a collapsed panel: this is the thing to
+             watch after pressing Send, so it should not be hidden or take a
+             click to reach. No auto-refresh — SkySMS's rate limit is shared with
+             every send, and a stuck message will not resolve faster for being
+             polled. -->
+        <v-card elevation="0" rounded="xl" class="blast-card fade-in">
+          <div class="blast-row border-b d-flex align-center gap-3">
+            <v-icon color="primary" size="28">mdi-message-check-outline</v-icon>
+            <div>
+              <div class="text-h6 font-weight-bold">Recent blasts</div>
+              <div class="text-caption text-medium-emphasis">
+                Queued means SkySMS accepted it and billed the credits. A message is delivered only when it shows Sent.
+              </div>
+            </div>
+            <v-btn
+              variant="text" size="small" class="text-none ml-auto flex-shrink-0"
+              prepend-icon="mdi-refresh"
+              :loading="deliveries.loading"
+              @click="fetchDeliveries"
+            >Refresh list</v-btn>
+          </div>
+
+          <v-card-text class="pa-0">
+            <div v-if="deliveries.error" class="blast-pad text-error" role="alert">{{ deliveries.error }}</div>
+            <div v-else-if="!deliveries.rows.length && !deliveries.loading" class="blast-pad text-medium-emphasis">
+              No blasts have been sent yet.
+            </div>
+
+            <div
+              v-for="row in deliveries.rows" :key="row.sms_log_id"
+              class="blast-row delivery-row"
+            >
+              <div class="d-flex flex-wrap align-start gap-3">
+                <div style="flex: 1 1 240px; min-width: 0;">
+                  <div class="text-body-2 font-weight-bold">
+                    {{ row.barangay }}
+                    <span class="font-weight-regular text-medium-emphasis"> · {{ formatWhen(row.created_at) }} · {{ row.sender }}</span>
+                  </div>
+                  <div class="text-body-2 text-medium-emphasis text-truncate" :title="row.message">{{ row.message }}</div>
+                </div>
+
+                <v-tooltip :disabled="row.checkable" location="top" text="No SkySMS message ids were stored for this blast, so its delivery can't be checked.">
+                  <template #activator="{ props: tip }">
+                    <span v-bind="tip" class="blast-check flex-shrink-0">
+                      <v-btn
+                        variant="tonal" size="small" class="text-none"
+                        prepend-icon="mdi-cloud-sync-outline"
+                        :disabled="!row.checkable"
+                        :loading="!!checking[row.sms_log_id]"
+                        @click="checkDelivery(row)"
+                      >Check status</v-btn>
+                    </span>
+                  </template>
+                </v-tooltip>
+              </div>
+
+              <!-- The four states SkySMS documents are always drawn, zero
+                   included and muted, so a missing chip never reads as "not
+                   tracked". Unconfirmed and Other appear only when there is
+                   one: they are not delivery states, they are things to look at. -->
+              <div class="d-flex flex-wrap gap-2 mt-3">
+                <v-chip
+                  v-for="state in visibleStates(row)" :key="state.key"
+                  size="small" class="font-weight-bold"
+                  :color="row.counts[state.key] > 0 ? state.color : undefined"
+                  :variant="row.counts[state.key] > 0 ? 'tonal' : 'outlined'"
+                  :class="{ 'text-medium-emphasis': row.counts[state.key] === 0 }"
+                >{{ row.counts[state.key] }} {{ state.label }}</v-chip>
+              </div>
+
+              <div class="text-caption text-medium-emphasis mt-2">
+                <template v-if="row.delivery_checked_at">Checked {{ formatWhen(row.delivery_checked_at) }}.</template>
+                <template v-else>Not checked yet. The numbers above are what was recorded when it was sent.</template>
+                <span v-if="notes[row.sms_log_id]" role="status"> {{ notes[row.sms_log_id] }}</span>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+    </div>
+    </div>
 
     <!-- Replaces a native confirm(). The scale and the cost still read the
-         same; what is new is the password, which the server re-checks against
-         the signed-in account before it spends anything. -->
+         same; what is new is the shared blast code, which the server checks
+         before it spends anything. There is no role system, so this proves
+         the sender was told the code, not that they are any particular
+         admin. -->
     <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
@@ -240,15 +365,17 @@
           <p class="text-body-1 mb-3">{{ confirmDialog.summary }}</p>
           <p v-if="confirmDialog.cost" class="text-body-2 text-medium-emphasis mb-4">{{ confirmDialog.cost }}</p>
           <v-text-field
-            v-model="confirmDialog.password"
-            label="Your password"
-            placeholder="Re-enter your account password"
-            type="password"
+            v-model="confirmDialog.code"
+            label="Text blast code"
+            placeholder="Enter the 6-digit code"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
             variant="outlined"
             density="comfortable"
             rounded="lg"
-            autocomplete="current-password"
-            :error-messages="fieldErrors.password"
+            autocomplete="off"
+            :error-messages="fieldErrors.code"
             :disabled="loading"
             @keyup.enter="confirmSend"
           ></v-text-field>
@@ -273,13 +400,81 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Rotation requires the current code, so no admin can reset it without
+         already knowing it (MDRRMO feedback, 2026-09-19). -->
+    <v-dialog v-model="manageCodeDialog.open" max-width="480" persistent>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
+          <span>Text blast code</span>
+          <v-btn
+            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            :disabled="manageCodeDialog.loading" @click="closeManageCode"
+          ></v-btn>
+        </v-card-title>
+        <v-card-text class="px-6">
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            <template v-if="codeStatus.configured">Last set by {{ codeStatus.updatedBy }} on {{ codeStatus.updatedAtLabel }}.</template>
+            <template v-else>No code has been set yet — no admin can send a blast until one is.</template>
+          </p>
+          <v-text-field
+            v-model="manageCodeDialog.currentCode"
+            label="Current code"
+            placeholder="Leave the code with someone who knows it"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            autocomplete="off"
+            class="mb-2"
+            :error-messages="manageCodeDialog.errors.currentCode"
+            :disabled="manageCodeDialog.loading"
+          ></v-text-field>
+          <v-text-field
+            v-model="manageCodeDialog.newCode"
+            label="New code"
+            placeholder="6 digits"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            autocomplete="off"
+            :error-messages="manageCodeDialog.errors.newCode"
+            :disabled="manageCodeDialog.loading"
+            @keyup.enter="rotateBlastCode"
+          ></v-text-field>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
+          <v-btn
+            variant="text"
+            class="text-none font-weight-bold"
+            height="44"
+            :disabled="manageCodeDialog.loading"
+            @click="closeManageCode"
+          >Cancel</v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-6"
+            height="44"
+            :loading="manageCodeDialog.loading"
+            @click="rotateBlastCode"
+          >Set code</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { describeSms, nameCharacter } from '@/composables/smsSegments'
+import { describeSms, findLink, nameCharacter, toGsmSafe } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -296,9 +491,9 @@ const alert = ref({
   message: ''
 })
 
-// The send confirmation. `password` lives only as long as the dialog is open —
+// The send confirmation. `code` lives only as long as the dialog is open —
 // cleared on cancel, on a successful send, and on any failure that closes it.
-const confirmDialog = ref({ open: false, summary: '', cost: '', password: '' })
+const confirmDialog = ref({ open: false, summary: '', cost: '', code: '' })
 
 // Starting text, not a fill-in form. There are deliberately no [AREA]-style
 // tokens: a token that survives editing goes out to a real handset with the
@@ -355,6 +550,15 @@ const sms = computed(() => describeSms(message.value))
 const offendingSummary = computed(() =>
   sms.value.offendingCharacters.map(nameCharacter).join(', '))
 
+// SkySMS charges 10 to 50 credits a recipient for a link or domain and does not
+// deliver the message, so one blocks the send here and on the server.
+const linkMessage = 'Links, web addresses and domains cannot be sent in a text blast — the SMS provider penalises them and does not deliver the message. Remove it.'
+const messageLink = computed(() => findLink(message.value))
+
+// The swap only helps when it changes the text — an emoji has no plain twin.
+const canSimplifyCharacters = computed(() => toGsmSafe(message.value) !== message.value)
+const simplifyCharacters = () => { message.value = toGsmSafe(message.value) }
+
 const recipientCount = ref(null)
 const recipientCountLoading = ref(false)
 const recipientCountError = ref('')
@@ -374,19 +578,19 @@ const getHeaders = () => ({
 // Server-side errors, keyed by field, so a 422 lands on the input it belongs
 // to instead of being concatenated into the banner above the form. Mirrors
 // VehiclesView's/StaffView's applyServerErrors.
-const fieldErrors = ref({ message: '', barangays: '', password: '' })
-const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '', password: '' } }
+const fieldErrors = ref({ message: '', barangays: '', code: '' })
+const clearFieldErrors = () => { fieldErrors.value = { message: '', barangays: '', code: '' } }
 
 const applyServerErrors = (data) => {
   if (data?.errors && typeof data.errors === 'object') {
-    const mapped = { message: '', barangays: '', password: '' }
+    const mapped = { message: '', barangays: '', code: '' }
     const leftovers = []
     for (const [key, messages] of Object.entries(data.errors)) {
       const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
       // barangays.* validation failures report as "barangays.0", not "barangays".
       if (key === 'message') mapped.message = text
       else if (key === 'barangays' || key.startsWith('barangays.')) mapped.barangays = text
-      else if (key === 'password') mapped.password = text
+      else if (key === 'code') mapped.code = text
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
@@ -410,7 +614,7 @@ const toggleAllBarangays = () => {
 
 // Deliberately asks the server rather than counting client-side. The set is
 // not derivable from anything this page holds: it turns on status, on the
-// resident's own sms_opt_in, and on whether PhilSms::normalize() accepts the
+// resident's own sms_opt_in, and on whether PhoneNumber::normalize() accepts the
 // stored number — the last of which is PHP, not SQL. SmsController resolves
 // the preview through the identical code path the send uses, so the number
 // shown here is the number that will be billed.
@@ -540,11 +744,18 @@ const fetchBarangays = async () => {
 // Account-level rather than per-message, so it is read once on mount and never
 // again while the page is open.
 //
-// PhilSMS returns a peso balance, not a unit count — there is no "messages
-// remaining" figure to display, and the page must not imply one. Converting
-// pesos to segments would need a per-segment rate hardcoded here, which is a
-// confident wrong number next to Send the first time the vendor reprices.
-const balance = ref({ available: false, checked: false, remaining: '', expiresOn: '', message: '' })
+// SkySMS bills credits (one per 160-character message) and has no balance
+// lookup: the server reports the credits left after the last accepted send, or
+// that the account is out. So this is "as of the last message", not live, and
+// it is read again after every send. The call touches no vendor.
+const balance = ref({ available: false, checked: false, outOfCredits: false, remaining: '', asOf: '', message: '' })
+
+const formatAsOf = (iso) => {
+  const date = iso ? new Date(iso) : null
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : ''
+}
 
 const fetchBalance = async () => {
   try {
@@ -554,21 +765,86 @@ const fetchBalance = async () => {
     balance.value = {
       available: !!data.available,
       checked: true,
-      remaining: data.data?.remaining_balance ?? '',
-      expiresOn: data.data?.expired_on ?? '',
+      outOfCredits: !!data.out_of_credits,
+      remaining: data.data?.remaining_credits ?? '',
+      asOf: formatAsOf(data.data?.as_of),
       message: data.message ?? 'SMS credit unavailable',
     }
   } catch {
     // Swallowed on purpose. GET /sms/balance already answers 200 on every
     // failure path it knows about, so this catches only a dead network — and a
     // missing balance is not a reason to redden a form that still sends.
-    balance.value = { available: false, checked: true, remaining: '', expiresOn: '', message: 'SMS credit unavailable' }
+    balance.value = { available: false, checked: true, outOfCredits: false, remaining: '', asOf: '', message: 'SMS credit unavailable' }
+  }
+}
+
+// Recent blasts and what SkySMS says became of them. Pending and Queued are
+// not delivery: the API keeps them apart from Sent, and so does this list.
+const deliveries = ref({ rows: [], loading: false, error: '' })
+const checking = ref({})
+const notes = ref({})
+
+const DELIVERY_STATES = [
+  { key: 'queued', label: 'Queued', color: 'info', always: true },
+  { key: 'pending', label: 'Pending', color: 'warning', always: true },
+  { key: 'sent', label: 'Sent', color: 'success', always: true },
+  { key: 'failed', label: 'Failed', color: 'error', always: true },
+  { key: 'unconfirmed', label: 'Unconfirmed', color: 'warning', always: false },
+  { key: 'other', label: 'Other status', color: 'warning', always: false },
+]
+
+const visibleStates = (row) =>
+  DELIVERY_STATES.filter(state => state.always || row.counts[state.key] > 0)
+
+const formatWhen = (value) => (value ? new Date(value).toLocaleString() : '')
+
+const fetchDeliveries = async () => {
+  deliveries.value.loading = true
+  deliveries.value.error = ''
+
+  try {
+    const res = await fetch(`${API_BASE}/sms/deliveries`, { headers: getHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Failed to load recent blasts')
+    deliveries.value.rows = data.data
+  } catch (error) {
+    deliveries.value.error = error.message
+  } finally {
+    deliveries.value.loading = false
+  }
+}
+
+const checkDelivery = async (row) => {
+  checking.value = { ...checking.value, [row.sms_log_id]: true }
+  notes.value = { ...notes.value, [row.sms_log_id]: '' }
+
+  try {
+    const res = await fetch(`${API_BASE}/sms/deliveries/${row.sms_log_id}/check`, {
+      method: 'POST',
+      headers: getHeaders(),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Failed to check the status')
+
+    const index = deliveries.value.rows.findIndex(r => r.sms_log_id === row.sms_log_id)
+    if (index !== -1) deliveries.value.rows[index] = data.data
+
+    let note = data.message || ''
+    if (data.checked && data.not_found > 0) {
+      note = `${data.not_found} recipient(s) are not in SkySMS's list yet, so they still show what was recorded at send.`
+    }
+    notes.value = { ...notes.value, [row.sms_log_id]: note }
+  } catch (error) {
+    notes.value = { ...notes.value, [row.sms_log_id]: error.message }
+  } finally {
+    checking.value = { ...checking.value, [row.sms_log_id]: false }
   }
 }
 
 onMounted(() => {
   fetchBarangays()
   fetchBalance()
+  fetchDeliveries()
 })
 
 const sendSmsBlast = async () => {
@@ -597,20 +873,20 @@ const sendSmsBlast = async () => {
     ? ''
     : `${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
 
-  confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, password: '' }
+  confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, code: '' }
 }
 
 const cancelSend = () => {
   confirmDialog.value.open = false
-  confirmDialog.value.password = ''
-  fieldErrors.value.password = ''
+  confirmDialog.value.code = ''
+  fieldErrors.value.code = ''
 }
 
-// The dialog stays open on a rejected password so the wrong one can be
-// corrected in place, and the send is retried against the same message and
-// barangay selection rather than composed again.
+// The dialog stays open on a rejected code so the wrong one can be corrected
+// in place, and the send is retried against the same message and barangay
+// selection rather than composed again.
 const confirmSend = async () => {
-  fieldErrors.value.password = ''
+  fieldErrors.value.code = ''
   loading.value = true
   alert.value.show = false
 
@@ -621,7 +897,7 @@ const confirmSend = async () => {
       body: JSON.stringify({
         message: message.value,
         barangays: selectedBarangays.value,
-        password: confirmDialog.value.password
+        code: confirmDialog.value.code
       })
     })
 
@@ -629,21 +905,28 @@ const confirmSend = async () => {
 
     if (!res.ok) throw new Error(applyServerErrors(data))
 
-    // Sent. The password is dropped here rather than held for a second blast.
-    confirmDialog.value = { open: false, summary: '', cost: '', password: '' }
+    // Sent. The code is dropped here rather than held for a second blast.
+    confirmDialog.value = { open: false, summary: '', cost: '', code: '' }
 
     // A 202 with `unconfirmed` means the vendor never answered, so res.ok is
     // true but the send is not confirmed. Branching on it matters more than it
     // looks: without this the server's "do NOT send it again" is discarded and
     // the box reads "Success: 0 messages dispatched", which is worse than the
     // error it replaced.
-    alert.value = data.unconfirmed
+    // A blast that went out in several requests can end part way: some
+    // recipients were sent it and some were not. The server's own sentence
+    // says so, and says not to resend the whole message.
+    // A 201 from SkySMS is "queued and billed", not "delivered", so this is
+    // an info box, not a success one. Delivery shows under Recent blasts.
+    alert.value = data.unconfirmed || data.failed > 0
       ? { show: true, type: 'warning', message: data.message }
       : {
           show: true,
-          type: 'success',
-          message: `Success: ${data.sent} messages dispatched. ${data.failed} failed.`
+          type: 'info',
+          message: `${data.queued} messages queued at SkySMS and billed. Delivery is not confirmed yet — use Check status under Recent blasts.`
         }
+
+    fetchDeliveries()
 
     message.value = ''
     selectedTemplate.value = null
@@ -658,20 +941,149 @@ const confirmSend = async () => {
       message: error.message
     }
 
-    // A rejected password keeps the dialog open to be retyped. Any other
-    // failure closes it, because the alert explaining that failure renders on
-    // the page behind this overlay and would otherwise not be readable.
-    if (!fieldErrors.value.password) {
+    // A rejected code keeps the dialog open to be retyped. Any other failure
+    // closes it, because the alert explaining that failure renders on the
+    // page behind this overlay and would otherwise not be readable.
+    if (!fieldErrors.value.code) {
       confirmDialog.value.open = false
-      confirmDialog.value.password = ''
+      confirmDialog.value.code = ''
     }
   } finally {
     loading.value = false
+    // The credits left changed, or ran out. Local read, no vendor call.
+    fetchBalance()
+  }
+}
+
+// Who set the current code and when — never the code itself, which the
+// status endpoint never returns.
+const codeStatus = ref({ configured: false, updatedBy: '', updatedAtLabel: '' })
+
+const fetchCodeStatus = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/sms/blast-code`, { headers: getHeaders() })
+    const data = await res.json()
+
+    codeStatus.value = {
+      configured: !!data.configured,
+      updatedBy: data.updated_by || '',
+      updatedAtLabel: data.updated_at ? new Date(data.updated_at).toLocaleString() : '',
+    }
+  } catch {
+    // Swallowed like the balance lookup above — a failed status read must not
+    // block sending, and the dialog re-fetches on every open anyway.
+  }
+}
+
+const manageCodeDialog = ref({
+  open: false,
+  currentCode: '',
+  newCode: '',
+  loading: false,
+  errors: { currentCode: '', newCode: '' },
+})
+
+const openManageCode = () => {
+  manageCodeDialog.value = {
+    open: true,
+    currentCode: '',
+    newCode: '',
+    loading: false,
+    errors: { currentCode: '', newCode: '' },
+  }
+  fetchCodeStatus()
+}
+
+const closeManageCode = () => {
+  manageCodeDialog.value.open = false
+}
+
+const rotateBlastCode = async () => {
+  manageCodeDialog.value.errors = { currentCode: '', newCode: '' }
+  manageCodeDialog.value.loading = true
+
+  try {
+    const res = await fetch(`${API_BASE}/sms/blast-code`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        current_code: manageCodeDialog.value.currentCode,
+        new_code: manageCodeDialog.value.newCode,
+      })
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      if (data?.errors && typeof data.errors === 'object') {
+        const mapped = { currentCode: '', newCode: '' }
+        for (const [key, messages] of Object.entries(data.errors)) {
+          const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
+          if (key === 'current_code') mapped.currentCode = text
+          else if (key === 'new_code') mapped.newCode = text
+        }
+        manageCodeDialog.value.errors = mapped
+      }
+      throw new Error(data?.message || 'Failed to update the code')
+    }
+
+    manageCodeDialog.value.open = false
+    alert.value = { show: true, type: 'success', message: 'Text blast code updated.' }
+    fetchCodeStatus()
+  } catch (error) {
+    if (!manageCodeDialog.value.errors.currentCode && !manageCodeDialog.value.errors.newCode) {
+      alert.value = { show: true, type: 'error', message: error.message }
+    }
+  } finally {
+    manageCodeDialog.value.loading = false
   }
 }
 </script>
 
 <style scoped>
+/* Both cards share one border and the panel's newer card shape (see
+   ServicesConfigView's .table-card). Padding is one pair of variables so the
+   header, the form body and the history rows always agree, and it steps down
+   with the shell: 32px, 24px once the drawer becomes an overlay, 16px on a
+   phone. */
+.blast-card {
+  --blast-x: 32px;
+  --blast-y: 20px;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+  overflow: hidden;
+  min-width: 0;
+}
+.blast-pad { padding: var(--blast-x); }
+.blast-row { padding: var(--blast-y) var(--blast-x); }
+
+.blast-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+}
+
+/* 1360px is where the history gets 540px or more once the form takes its 440.
+   The form column stops growing at 600px: past that it only makes the message
+   box wider than any SMS needs. */
+@media (min-width: 1360px) {
+  .blast-layout { grid-template-columns: clamp(440px, 40%, 600px) minmax(0, 1fr); }
+}
+
+@media (max-width: 959px) {
+  .blast-card { --blast-x: 24px; }
+}
+
+@media (max-width: 599px) {
+  .blast-card { --blast-x: 16px; --blast-y: 16px; }
+  .blast-avatar { display: none !important; }
+  .blast-check, .blast-check :deep(.v-btn) { width: 100%; }
+}
+
+.delivery-row + .delivery-row { border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }

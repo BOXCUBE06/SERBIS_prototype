@@ -5,13 +5,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'models/request_models.dart';
+import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/auth/verify_email_screen.dart';
+import 'screens/auth/verify_phone_screen.dart';
 import 'screens/auth/verify_login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/awaiting_approval_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'state/api_service.dart';
@@ -112,7 +114,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-enum _AuthView { login, register, verifyEmail, verifyLogin }
+enum _AuthView { login, register, verifyPhone, verifyLogin, forgotPassword }
 
 class _AuthGateState extends State<AuthGate> {
   late final ApiService _api = widget.api ?? ApiService();
@@ -123,9 +125,11 @@ class _AuthGateState extends State<AuthGate> {
   _AuthView _view = _AuthView.login;
   String? _loginInfoMessage;
 
-  /// The address whose registration is waiting on a code. Set by registering,
-  /// and by a login the server refused as unverified.
-  String? _pendingVerificationEmail;
+  /// The number whose sign-in or registration is waiting on a code. Set by
+  /// registering, by a login the server refused as unverified, and by a login
+  /// that reached its code prompt. Also seeds the forgot-password screen with
+  /// whatever the resident had typed.
+  String? _pendingPhone;
 
   /// Where the code the resident is about to type was sent, and how much of
   /// the resend cooldown is left. Null only if the server did not say.
@@ -235,13 +239,13 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   /// Registration now ends at the code screen rather than at the login form:
-  /// the account is not usable until the emailed code comes back, and verifying
+  /// the account is not usable until the texted code comes back, and verifying
   /// issues a token, so a resident who finishes never sees a login screen at
   /// all on their first run.
-  void _afterRegister(String email, VerificationDelivery? delivery) {
+  void _afterRegister(String phone, VerificationDelivery? delivery) {
     setState(() {
-      _view = _AuthView.verifyEmail;
-      _pendingVerificationEmail = email;
+      _view = _AuthView.verifyPhone;
+      _pendingPhone = phone;
       _pendingDelivery = delivery;
       _loginInfoMessage = null;
     });
@@ -290,20 +294,27 @@ class _AuthGateState extends State<AuthGate> {
             _loginInfoMessage = null;
           });
         },
-        onEmailUnverified: (email, delivery) {
+        onPhoneUnverified: (phone, delivery) {
           setState(() {
-            _view = _AuthView.verifyEmail;
-            _pendingVerificationEmail = email;
+            _view = _AuthView.verifyPhone;
+            _pendingPhone = phone;
             _pendingDelivery = delivery;
             _loginInfoMessage = null;
           });
         },
-        onMfaRequired: (email, challengeId, delivery) {
+        onMfaRequired: (phone, challengeId, delivery) {
           setState(() {
             _view = _AuthView.verifyLogin;
-            _pendingVerificationEmail = email;
+            _pendingPhone = phone;
             _pendingLoginChallengeId = challengeId;
             _pendingDelivery = delivery;
+            _loginInfoMessage = null;
+          });
+        },
+        onForgotPassword: (phone) {
+          setState(() {
+            _view = _AuthView.forgotPassword;
+            _pendingPhone = phone;
             _loginInfoMessage = null;
           });
         },
@@ -311,10 +322,30 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    if (_view == _AuthView.verifyEmail && _pendingVerificationEmail != null) {
-      return VerifyEmailScreen(
+    if (_view == _AuthView.forgotPassword) {
+      return ForgotPasswordScreen(
         userStore: _userStore,
-        email: _pendingVerificationEmail!,
+        initialPhone: _pendingPhone,
+        onGoToLogin: () {
+          setState(() {
+            _view = _AuthView.login;
+          });
+        },
+        // Not signed in: a reset ends every session, so the resident goes back
+        // to the login form, told what happened, and signs in as usual.
+        onReset: (message) {
+          setState(() {
+            _view = _AuthView.login;
+            _loginInfoMessage = message;
+          });
+        },
+      );
+    }
+
+    if (_view == _AuthView.verifyPhone && _pendingPhone != null) {
+      return VerifyPhoneScreen(
+        userStore: _userStore,
+        phone: _pendingPhone!,
         delivery: _pendingDelivery,
         // Verifying issues a token, so this is a real sign-in, not a hand-off
         // back to the login form.
@@ -322,25 +353,25 @@ class _AuthGateState extends State<AuthGate> {
         onGoToLogin: () {
           setState(() {
             _view = _AuthView.login;
-            _pendingVerificationEmail = null;
+            _pendingPhone = null;
           });
         },
       );
     }
 
     if (_view == _AuthView.verifyLogin &&
-        _pendingVerificationEmail != null &&
+        _pendingPhone != null &&
         _pendingLoginChallengeId != null) {
       return VerifyLoginScreen(
         userStore: _userStore,
-        email: _pendingVerificationEmail!,
+        phone: _pendingPhone!,
         challengeId: _pendingLoginChallengeId!,
         delivery: _pendingDelivery,
         onVerified: _login,
         onGoToLogin: () {
           setState(() {
             _view = _AuthView.login;
-            _pendingVerificationEmail = null;
+            _pendingPhone = null;
             _pendingLoginChallengeId = null;
           });
         },
@@ -400,6 +431,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
 
   Timer? _poll;
   bool _foreground = true;
+  bool _showingOffline = false;
 
   @override
   void initState() {
@@ -469,8 +501,12 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Screens rebuild through their own [_TabSlot]; the shell itself only has
+  /// the offline banner to redraw, so it rebuilds only when that flips.
   void _onAppStateChanged() {
-    setState(() {});
+    if (_appState.isOffline != _showingOffline) {
+      setState(() => _showingOffline = _appState.isOffline);
+    }
 
     // Single drain point for store failures, so every screen reports them the
     // same way instead of each one swallowing its own.
@@ -520,50 +556,74 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         );
     final onOpenProfile = () => _goTo(4);
 
+    Widget slot(int index, WidgetBuilder builder, {Object? deps}) => _TabSlot(
+          active: _index == index,
+          listenable: _appState,
+          deps: deps,
+          builder: builder,
+        );
+
     final screens = [
-      HomeScreen(
-        appState: _appState,
-        onOpenTrack: () => _goTo(2),
-        onOpenLibrary: () => _goTo(3),
-        onOpenProfile: onOpenProfile,
-        onOpenNotifications: onOpenNotifications,
-        onOpenServices: () => _goTo(1),
-        onOpenService: _openService,
-      ),
-      ServicesScreen(
-        key: ValueKey(_serviceType),
-        appState: _appState,
-        user: widget.user,
-        initialType: _serviceType,
-        onSubmitted: () => _goTo(2),
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-      ),
-      TrackScreen(
-        appState: _appState,
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-      ),
-      LibraryScreen(
-        appState: _appState,
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-      ),
-      ProfileScreen(
-        appState: _appState,
-        // The cached rows name this resident's own requests. The next person to
-        // use the phone must not open the app onto them.
-        onLogout: () {
-          _appState.clearRequestCache();
-          _appState.clearBorrowCache();
-          widget.onLogout();
-        },
-        onOpenNotifications: onOpenNotifications,
-        onOpenProfile: onOpenProfile,
-        userStore: widget.userStore,
-        user: widget.user,
-        onUserChanged: widget.onUserChanged,
-      ),
+      slot(0, (_) => HomeScreen(
+            appState: _appState,
+            user: widget.user,
+            onOpenTrack: () => _goTo(2),
+            onOpenLibrary: () => _goTo(3),
+            onOpenProfile: onOpenProfile,
+            onOpenNotifications: onOpenNotifications,
+            onOpenServices: () => _goTo(1),
+            onOpenService: _openService,
+          )),
+      slot(1, (_) => widget.user.isAwaitingApproval
+          // An organization MDRRMO has not activated yet cannot file anything,
+          // so it gets the reason instead of a service list it could not use.
+          ? AwaitingApprovalScreen(
+              user: widget.user,
+              filipino: _appState.language == AppLanguage.filipino,
+              onOpenNotifications: onOpenNotifications,
+              onOpenProfile: onOpenProfile,
+              // Reloads the profile; the shell rebuilds with the service list
+              // the moment the account is Active.
+              onCheckAgain: () async {
+                final fresh = await widget.userStore.currentUser();
+                widget.onUserChanged(fresh);
+                return fresh.isAwaitingApproval;
+              },
+            )
+          : ServicesScreen(
+              key: ValueKey(_serviceType),
+              appState: _appState,
+              user: widget.user,
+              initialType: _serviceType,
+              onSubmitted: () => _goTo(2),
+              onOpenNotifications: onOpenNotifications,
+              onOpenProfile: onOpenProfile,
+            ), deps: (_serviceType, widget.user)),
+      slot(2, (_) => TrackScreen(
+            appState: _appState,
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+          )),
+      slot(3, (_) => LibraryScreen(
+            appState: _appState,
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+          )),
+      slot(4, (_) => ProfileScreen(
+            appState: _appState,
+            // The cached rows name this resident's own requests. The next
+            // person to use the phone must not open the app onto them.
+            onLogout: () {
+              _appState.clearRequestCache();
+              _appState.clearBorrowCache();
+              widget.onLogout();
+            },
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+            userStore: widget.userStore,
+            user: widget.user,
+            onUserChanged: widget.onUserChanged,
+          ), deps: widget.user),
     ];
 
     return Scaffold(
@@ -587,6 +647,78 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: _BottomNav(index: _index, onTap: _goTo),
     );
+  }
+}
+
+/// One tab of the shell's IndexedStack, rebuilt only when its inputs change
+/// and only while it is showing.
+///
+/// The shell used to setState on every AppState notification and every tab
+/// switch, rebuilding all five screens — and on web, re-shaping every line of
+/// their text. An unchanged tab now returns its last widget (an identical
+/// instance, so Flutter skips the subtree); a tab whose data changed while it
+/// was off screen rebuilds when it is next shown. [deps] names the shell
+/// values a screen reads besides AppState; the callbacks it is handed are
+/// stable in meaning, so they are not inputs.
+class _TabSlot extends StatefulWidget {
+  final bool active;
+  final Listenable listenable;
+  final Object? deps;
+  final WidgetBuilder builder;
+
+  const _TabSlot({
+    required this.active,
+    required this.listenable,
+    required this.builder,
+    this.deps,
+  });
+
+  @override
+  State<_TabSlot> createState() => _TabSlotState();
+}
+
+class _TabSlotState extends State<_TabSlot> {
+  Widget? _built;
+  bool _stale = true;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TabSlot old) {
+    super.didUpdateWidget(old);
+    if (old.listenable != widget.listenable) {
+      old.listenable.removeListener(_onChanged);
+      widget.listenable.addListener(_onChanged);
+    }
+    if (old.deps != widget.deps) {
+      _stale = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    _stale = true;
+    if (widget.active && mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_built == null || (_stale && widget.active)) {
+      _built = widget.builder(context);
+      _stale = false;
+    }
+    return _built!;
   }
 }
 

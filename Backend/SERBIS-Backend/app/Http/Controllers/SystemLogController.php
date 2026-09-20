@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SystemLog;
+use App\Support\ReminderFollowUp;
 use App\Traits\PaginatesLists;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ class SystemLogController extends Controller
     {
         $query = SystemLog::with(['admin' => function ($query) {
             $query->select('admin_id', 'first_name', 'last_name');
-        }])
+        }, 'resident:resident_id,first_name,last_name'])
             ->orderBy('created_at', 'desc')
         // Tiebreaker, and it is load-bearing now that this pages. Several log rows
         // routinely share a second, and MySQL does not promise a stable order
@@ -92,6 +93,13 @@ class SystemLogController extends Controller
     {
         $module = class_basename($log->auditable_type);
         $action = strtolower($log->action_type);
+
+        if ($action === ReminderFollowUp::ACTION) {
+            $what = ReminderFollowUp::LABELS[$log->new_values['kind'] ?? ''] ?? 'Reminder';
+            $who = $log->resident ? trim($log->resident->first_name.' '.$log->resident->last_name) : 'the resident';
+
+            return "{$what} not delivered: {$who} has no registered device. Follow up by phone ({$module} ID: {$log->auditable_id})";
+        }
 
         if ($action === 'created') {
             return "Created new {$module} (ID: {$log->auditable_id})";

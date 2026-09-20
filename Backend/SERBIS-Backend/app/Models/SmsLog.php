@@ -15,10 +15,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * "what was sent to my barangay".
  */
 #[Table('tbl_sms_logs', key: 'sms_log_id')]
-#[Fillable(['sender_id', 'target_area_id', 'api_job_id', 'message_body', 'status'])]
+#[Fillable(['sender_id', 'target_area_id', 'api_job_id', 'message_body', 'status', 'delivery_checked_at'])]
 class SmsLog extends Model
 {
     use HasFactory;
+
+    protected function casts(): array
+    {
+        return ['delivery_checked_at' => 'datetime'];
+    }
 
     public function barangay(): BelongsTo
     {
@@ -28,6 +33,11 @@ class SmsLog extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id', 'admin_id');
+    }
+
+    public function queueIds(): HasMany
+    {
+        return $this->hasMany(SmsQueueId::class, 'sms_log_id', 'sms_log_id');
     }
 
     public function recipients(): HasMany

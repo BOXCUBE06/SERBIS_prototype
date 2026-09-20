@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Support\PhoneNumber;
 use App\Traits\InvalidatesAnalyticsCache;
 use App\Traits\TracksHistory; // 1. Import the trait
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -21,17 +23,17 @@ use Laravel\Sanctum\HasApiTokens;
 // client can ask for — so clients get `has_photo` and the image itself comes
 // from GET /api/residents/{id}/photo.
 #[Table('tbl_residents', key: 'resident_id')]
-#[Fillable(['barangay_id', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'sms_opt_in', 'email_address'])]
+#[Fillable(['barangay_id', 'street_address', 'first_name', 'middle_name', 'last_name', 'phone_number', 'password', 'status', 'sms_opt_in', 'email_address'])]
 // There is no verification code on this model. A code is a short-lived
 // credential that grants an account, and tbl_residents is what the admin
 // panel's Users view serialises — a code in that payload is a code any
 // signed-in admin can read off the wire and use. It lives in the cache instead,
 // alongside the rest of the pending sign-up; see AuthController::register().
-// `email_verified_at` stays visible: the panel shows it as a badge, and it
-// discloses nothing. A row only exists once it is set, so it is never null on
-// anything registered through the app.
+// `phone_verified_at` stays visible: the panel shows it as a badge, and it
+// discloses nothing. A row that finished sign-up has it set, and so does an
+// account an admin created (the admin vouches for the number).
 #[Hidden(['password', 'remember_token', 'photo'])]
-#[Appends(['has_photo', 'is_email_verified'])]
+#[Appends(['has_photo', 'is_phone_verified'])]
 class Resident extends Authenticatable
 {
     // 2. Add TracksHistory to the used traits list
@@ -47,8 +49,8 @@ class Resident extends Authenticatable
         // updated_at does not, and logging it copies a path we keep off every
         // response into a second table.
         'photo',
-        // `email_verified_at` is deliberately NOT ignored — an address
-        // becoming verified is exactly the change worth recording.
+        // `phone_verified_at` is deliberately NOT ignored — a number becoming
+        // verified is exactly the change worth recording.
     ];
 
     /**
@@ -59,6 +61,55 @@ class Resident extends Authenticatable
     protected $casts = [
         'sms_opt_in' => 'boolean',
         'email_verified_at' => 'datetime',
+        'phone_verified_at' => 'datetime',
+    ];
+
+    /**
+     * The phone number is the login, so it is stored in one form only —
+     * +639XXXXXXXXX — whichever way it was typed (09…, 639…, +639…). Every
+     * write path gets this for free, which is what keeps the unique index
+     * meaningful.
+     *
+     * A value that is not a dialable number is stored as given rather than
+     * blanked: the validation rules refuse such a value at the API, and
+     * quietly replacing it here would hide a bug instead of surfacing it.
+     */
+    protected function phoneNumber(): Attribute
+    {
+        return Attribute::set(function ($value) {
+            $canonical = is_string($value) ? PhoneNumber::normalize($value) : '';
+
+            return $canonical !== '' ? $canonical : $value;
+        });
+    }
+
+    public function hasVerifiedPhone(): bool
+    {
+        return $this->phone_verified_at !== null;
+    }
+
+    public function markPhoneAsVerified(): void
+    {
+        $this->forceFill(['phone_verified_at' => now()])->save();
+    }
+
+    /**
+     * `account_type` is absent from #[Fillable] on purpose: it decides which
+     * services an account may request and whether it is texted, so a
+     * mass-assigned array must never be able to set it. Only the admin CRUD in
+     * ResidentController assigns it, one attribute at a time; sign-up gets the
+     * column default.
+     */
+    public const TYPE_HEAD_OF_FAMILY = 'head_of_family';
+
+    public const TYPE_BARANGAY = 'barangay';
+
+    public const TYPE_ORGANIZATION = 'organization';
+
+    public const ACCOUNT_TYPES = [
+        self::TYPE_HEAD_OF_FAMILY,
+        self::TYPE_BARANGAY,
+        self::TYPE_ORGANIZATION,
     ];
 
     /**
@@ -70,6 +121,32 @@ class Resident extends Authenticatable
     public const CODE_TTL_MINUTES = 15;
 
     public const RESEND_COOLDOWN_SECONDS = 60;
+
+    /** A code texted to confirm a new phone number, and the password-reset code, lives ten minutes. */
+    public const PHONE_CHANGE_TTL_MINUTES = 10;
+
+    protected $attributes = [
+        'account_type' => self::TYPE_HEAD_OF_FAMILY,
+    ];
+
+    public function isHeadOfFamily(): bool
+    {
+        return $this->account_type === self::TYPE_HEAD_OF_FAMILY;
+    }
+
+    /**
+     * An organization that signed itself up and has not been activated yet.
+     * `Inactive` is the "pending" status here (see isDeactivated()), and an
+     * individual in that state may still file, so this is specific to
+     * organizations: MDRRMO checks who they are before they can request
+     * anything. A Deactivated organization is refused at login and filing
+     * already, so it is not this.
+     */
+    public function isAwaitingApproval(): bool
+    {
+        return $this->account_type === self::TYPE_ORGANIZATION
+            && strtolower((string) $this->status) === 'inactive';
+    }
 
     /**
      * Mirrors User::isDeactivated() in shape and deliberately not in value.
@@ -96,25 +173,9 @@ class Resident extends Authenticatable
         return strtolower((string) $this->status) === 'deactivated';
     }
 
-    public function hasVerifiedEmail(): bool
+    public function getIsPhoneVerifiedAttribute(): bool
     {
-        return $this->email_verified_at !== null;
-    }
-
-    /**
-     * Only reached for a row that already exists and has not been claimed: one
-     * written before the sign-up flow moved into the cache, or one the admin
-     * panel created. A self-registration is inserted with the timestamp already
-     * set, because its row is not created until the code comes back.
-     */
-    public function markEmailAsVerified(): void
-    {
-        $this->forceFill(['email_verified_at' => now()])->save();
-    }
-
-    public function getIsEmailVerifiedAttribute(): bool
-    {
-        return $this->hasVerifiedEmail();
+        return $this->hasVerifiedPhone();
     }
 
     /**

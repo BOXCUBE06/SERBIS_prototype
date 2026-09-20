@@ -38,7 +38,7 @@ class CrossPathDoubleBookingTest extends TestCase
         parent::setUp();
 
         Http::preventStrayRequests();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->admin = User::create([
             'first_name' => 'Ana',
@@ -93,6 +93,7 @@ class CrossPathDoubleBookingTest extends TestCase
             'walk_in_contact_number' => '09171234567',
             'service_id' => $this->ambulance->getKey(),
             'patient_name' => 'Pedro Ramos',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'patient_address' => 'Purok 1, San Fabian',
             'pickup_location' => 'Purok 1, San Fabian',
             'destination' => 'Echague District Hospital',
@@ -119,6 +120,7 @@ class CrossPathDoubleBookingTest extends TestCase
         $secondResponse = $this->actingAs($this->resident)->postJson('/api/service-requests', [
             'service_id' => $this->ambulance->getKey(),
             'patient_name' => 'Ana Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => \Illuminate\Http\UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
             'scheduled_at' => $this->manilaString($laterStart),

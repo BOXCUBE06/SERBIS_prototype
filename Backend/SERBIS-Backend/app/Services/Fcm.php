@@ -17,9 +17,8 @@ use Illuminate\Support\Facades\Log;
  * credentials file is exchanged for a short-lived bearer token, which is
  * cached so a burst of sends does not mint (and sign) a fresh one per call.
  *
- * Unlike PhilSms, there is no caller yet to do this — nothing triggers a push
- * in this branch — so sendToDevice() is the best-effort boundary itself: it
- * never throws, and it is the thing that decides a dead token gets deleted.
+ * sendToDevice() is the best-effort boundary itself: it never throws, and it
+ * is the thing that decides a dead token gets deleted.
  */
 class Fcm
 {
@@ -45,6 +44,61 @@ class Fcm
     }
 
     /**
+     * Pushes a title/body to every device a resident has registered.
+     * Walk-in requests carry no resident_id and are silently skipped —
+     * there is no account to push to.
+     *
+     * Extracted from ServiceRequestController::notifyResidentDevices() so a
+     * second controller (equipment borrowing) can reuse it instead of
+     * duplicating the device-token lookup.
+     *
+     * $data is the FCM data payload — string values only, FCM's own
+     * requirement. Lets a caller identify what the push was about
+     * (request_id, service_type) without putting either in the visible
+     * title/body. No client reads this yet; nothing in the app deep-links
+     * on it.
+     *
+     * Returns how many devices FCM accepted the push for. Zero means nobody was
+     * reached — no registered device, FCM not configured, or every send refused
+     * — which is what a caller with no other channel has to act on. Accepted is
+     * still not shown: a person who turned notifications off in the phone's own
+     * settings is accepted by FCM all the same.
+     */
+    public function notifyResident(?int $residentId, string $title, string $body, array $data = []): int
+    {
+        if ($residentId === null) {
+            return 0;
+        }
+
+        $accepted = 0;
+
+        foreach (DeviceToken::where('resident_id', $residentId)->get() as $deviceToken) {
+            if ($this->sendToDevice($deviceToken, $title, $body, $data)) {
+                $accepted++;
+            }
+        }
+
+        return $accepted;
+    }
+
+    /**
+     * Pushes a title/body to every device any resident has registered —
+     * unscoped, unlike notifyResident(). Built for the info-materials
+     * publish notice (MDRRMO feedback, 2026-09-19): a new safety material is
+     * for every resident, not one. Each device is sent to independently, so
+     * one dead or rejected token never stops the rest of the broadcast —
+     * same isolation sendToDevice() already gives a per-resident push.
+     */
+    public function notifyAllResidents(string $title, string $body, array $data = []): void
+    {
+        // A foreach, not ->each(): sendToDevice() now returns false for a device
+        // it could not reach, and a collection's each() stops at the first false.
+        foreach (DeviceToken::all() as $deviceToken) {
+            $this->sendToDevice($deviceToken, $title, $body, $data);
+        }
+    }
+
+    /**
      * One push to one device. Best-effort, like every other notification
      * channel in this app: a missing config, a network error, or FCM
      * rejecting the request is logged and swallowed, never thrown — the
@@ -55,24 +109,54 @@ class Fcm
      * outcome that changes anything on our side: the row is deleted so
      * nothing keeps sending to a device that will never answer again. Every
      * other failure leaves it alone, since it might still be good next time.
+     *
+     * True only when FCM accepted the message for this device.
      */
-    public function sendToDevice(DeviceToken $deviceToken, string $title, string $body): void
+    public function sendToDevice(DeviceToken $deviceToken, string $title, string $body, array $data = []): bool
     {
         if (! self::configured()) {
-            return;
+            // The one branch that used to leave zero trace: every other
+            // failure path below logs, so a missing credential was
+            // indistinguishable from "nothing tried to send" — see
+            // docs/mdrrmo-feedback.md item 1's debug notes, 2026-09-18.
+            $path = config('services.firebase.credentials');
+            Log::warning('FCM push skipped: not configured', [
+                'device_token_id' => $deviceToken->getKey(),
+                'reason' => filled($path)
+                    ? "FIREBASE_CREDENTIALS is set to \"{$path}\" but that file does not exist"
+                    : 'FIREBASE_CREDENTIALS is not set',
+            ]);
+
+            return false;
         }
 
         try {
-            $response = $this->post($deviceToken->token, $title, $body);
+            $response = $this->post($deviceToken->token, $title, $body, $data);
 
             if ($response->successful()) {
-                return;
+                // The one success path that used to leave zero trace, same
+                // gap as the "not configured" branch above: nothing here
+                // distinguished "FCM accepted this" from "never attempted".
+                Log::info('FCM send accepted', [
+                    'device_token_id' => $deviceToken->getKey(),
+                    'message_name' => $response->json('name'),
+                ]);
+
+                return true;
             }
 
             if ($this->tokenIsDead($response)) {
+                // Logged before the delete, not after — there's nothing
+                // left to log about a row that no longer exists.
+                Log::info('FCM device token deleted', [
+                    'device_token_id' => $deviceToken->getKey(),
+                    'resident_id' => $deviceToken->resident_id,
+                    'reason' => $response->json('error.status'),
+                ]);
+
                 $deviceToken->delete();
 
-                return;
+                return false;
             }
 
             Log::warning('FCM send not accepted', [
@@ -86,9 +170,11 @@ class Fcm
                 'error' => $e->getMessage(),
             ]);
         }
+
+        return false;
     }
 
-    private function post(string $token, string $title, string $body): Response
+    private function post(string $token, string $title, string $body, array $data = []): Response
     {
         $projectId = $this->credentials()->getProjectId();
 
@@ -102,6 +188,10 @@ class Fcm
                         'title' => $title,
                         'body' => $body,
                     ],
+                    // Omitted entirely when empty rather than sent as {} — an
+                    // absent key and an empty map should not be two different
+                    // wire shapes for the same "nothing extra" case.
+                    ...($data === [] ? [] : ['data' => $data]),
                 ],
             ]);
     }

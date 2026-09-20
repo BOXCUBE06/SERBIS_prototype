@@ -1,632 +1,341 @@
 <template>
-  <!-- height:100% + overflow-hidden apply either way now: the embedded case
-       (standalone=false, the Ambulance Dispatch Requests tab) used to fall
-       back to a guessed fixed height here because its route scrolled the
-       page underneath it — that route is fixedHeight now too
-       (router/index.ts), so this component's real ancestor chain gives it
-       an actual height to fill, the same way the standalone case already
-       worked. Only the outer padding still differs: pa-5 owns its own
-       margin as a whole route, pa-0 sits flush inside the tab it's
-       embedded in. -->
+  <!-- Scrolls with the page like every other list: the split pane that
+       needed a fixed-height canvas is gone (detail is a modal now). As a whole
+       route the shell sets the padding (App.vue); pa-0 sits flush inside the
+       Ambulance Dispatch tab it's embedded in. -->
   <v-container
     fluid
-    class="dashboard-bg overflow-hidden"
-    :class="[standalone ? 'pa-5' : 'pa-0']"
-    style="height: 100%; min-height: 480px;"
+    class="dashboard-bg"
+    :class="{ 'pa-0': !standalone }"
   >
-    <div class="d-flex flex-column w-100 h-100">
+    <div class="d-flex flex-column w-100">
 
-      <!-- Toolbar. Standalone only (Resident Requests, which owns its whole
-           route and has no page-level header of its own to put this in).
-           Embedded (the Ambulance Dispatch Requests tab), ConductionRequestView.vue
-           renders this same button group in its own page-header instead, via
-           the exposed actions below -- this row would otherwise duplicate
-           that page's title and waste a whole row's height on redundant
-           "Ambulance Bookings" text the page-header's own title already
-           covers (layout redesign follow-up). -->
       <PageHeader
         v-if="standalone"
         :title="scope === 'ambulance' ? 'Ambulance Bookings' : 'Resident Requests'"
-        :subtitle="`${requestCounts.All} ${scope === 'ambulance' ? 'ambulance bookings' : 'requests across all barangays'}`"
-        class="mb-6"
-      >
-        <template v-slot:actions>
-        <!-- The adviser's ask: someone who shows up at the office in person
-             rather than through the app, with or without an account. A
-             separate button rather than folding this into the export/filter
-             row, since filing a request is a different kind of action from
-             everything else up here. -->
-        <v-btn
-          color="secondary"
-          variant="flat"
-          class="text-none font-weight-bold px-6 text-white"
-          height="48"
-          @click="openCreateDialog"
-        >
-          <v-icon start size="small">mdi-account-plus-outline</v-icon>
-          Log Service Request
-        </v-btn>
-        <!-- text, not outlined: outlined still reads as a near-peer of Log
-             Service Request's filled button sitting right beside it — two
-             bordered, bold-labelled buttons plus a filled one is still three
-             things competing, just with one slightly heavier. Only Log
-             Service Request is the page's actual decision; this and Export
-             below are both supporting views, so both drop to the lightest
-             tier (item 8 of the layout redesign). Ambulance-only: the fleet
-             schedule this shows has nothing to say about a road-clearing
-             crew's queue. -->
-        <v-btn
-          v-if="scope === 'ambulance'"
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="48"
-          @click="openDayView"
-        >
-          <v-icon start size="small">mdi-calendar-clock</v-icon>
-          Ambulance Day View
-        </v-btn>
-        <!-- This used to be a button with no handler and no export function
-             behind it, styled larger than either real action on the page. It
-             now writes what the operator is actually looking at: the current
-             filter and search, in the order shown, not all 30 rows. -->
-        <!-- text, not outlined — see the comment on Ambulance Day View
-             above; the same reasoning demoted this from its earlier
-             outlined treatment. Count dropped from the label itself (item
-             8): "Export 29" read as a fourth number competing with the
-             page's own counts (bookings total, per-status chips) for
-             attention it didn't need — the sr-only text and the disabled
-             "Nothing to export" state already say what it does without it. -->
-        <v-btn
-          color="primary"
-          variant="text"
-          class="text-none font-weight-bold px-6"
-          height="48"
-          :disabled="filteredAndSortedRequests.length === 0"
-          @click="exportCsv"
-        >
-          <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-          {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
-          <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
-        </v-btn>
-        </template>
-      </PageHeader>
+      />
 
-      <!-- Split view: list + detail panel.
-           Side by side on a desk, which is where this screen is used. Below the
-           md breakpoint the two stop competing for one narrow column and become
-           one surface at a time: the list until a request is picked, the detail
-           with a way back after. -->
-      <div
-        class="d-flex flex-grow-1 gap-4 overflow-hidden"
-        :class="twoUp ? 'flex-row' : 'flex-column'"
-        style="min-height: 0;"
-      >
+          <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-        <!-- LEFT: request list -->
-        <v-card
-          v-if="twoUp || !selectedRequest"
-          elevation="0"
-          rounded="xl"
-          class="soft-card d-flex flex-column overflow-hidden request-list"
-          :class="twoUp ? 'request-list--rail' : 'flex-grow-1'"
-        >
-          <div class="pa-4 pb-2" style="flex-shrink: 0;">
-            <v-text-field
-              v-model="search"
-              prepend-inner-icon="mdi-magnify"
-              placeholder="Search by name, service, barangay..."
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-              class="mb-3"
-            ></v-text-field>
+          <!-- Every status tab always renders, including a Disapproved or
+               Cancelled reading zero — hiding an empty status read as "this
+               queue has nothing named Disapproved" rather than "nothing is
+               disapproved right now" (MDRRMO feedback, 2026-09-18). -->
+          <DataTablePage
+            v-else
+            v-model:search="search"
+            search-placeholder="Search by name, service, barangay..."
+            :tabs="statusTabItems"
+            :status="filters.status"
+            @update:status="filters.status = $event"
+            :headers="tableHeaders"
+            :items="filteredAndSortedRequests"
+            item-value="request_id"
+            :no-data-text="emptyListMessage"
+            :page="page"
+            @update:page="page = $event"
+            :items-per-page="itemsPerPage"
+            @update:items-per-page="itemsPerPage = $event"
+            result-noun="requests"
+            :row-props="(ctx) => ({
+              class: [`row-${(ctx.item.status || 'Pending').toLowerCase()}`, isSelected(ctx.item) ? 'row-selected' : ''],
+              role: 'button',
+              tabindex: 0,
+              'aria-current': isSelected(ctx.item) ? 'true' : undefined,
+              'aria-label': `${ctx.item._requesterName}, ${ctx.item._secondary}, ${ctx.item.status || 'Pending'}`,
+            })"
+            :active-filters="activeFilters"
+            @clear-filter="clearFilter"
+            @clear-all="clearAllFilters"
+            @click:row="(_event, { item }) => selectRequest(item)"
+          >
+            <template v-slot:filters>
+              <!-- Cross-cutting narrows a dispatcher reaches for less often
+                   than the status tabs above (MDRRMO feedback, 2026-09-18). -->
+              <v-select
+                v-model="filters.barangay"
+                :items="barangayOptions"
+                label="Barangay"
+                variant="outlined"
+                density="compact"
+                hide-details
+                rounded="lg"
+                class="filter-field"
+              ></v-select>
+              <v-select
+                v-model="filters.unit"
+                :items="unitOptions"
+                label="Unit"
+                variant="outlined"
+                density="compact"
+                hide-details
+                rounded="lg"
+                class="filter-field"
+              ></v-select>
+            </template>
 
-            <!-- Typing narrows the list but leaves the status counts alone, so
-                 without this the operator cannot tell an empty result from a
-                 filter that is hiding it. -->
-            <div v-if="search" class="text-caption text-medium-emphasis mb-2" aria-live="polite">
-              {{ filteredAndSortedRequests.length }}
-              {{ filteredAndSortedRequests.length === 1 ? 'request matches' : 'requests match' }} "{{ search }}"
-            </div>
-
-            <!-- Every status, always — including a Disapproved or Cancelled
-                 reading zero. Hiding an empty status read as "this queue has
-                 nothing named Disapproved" rather than "nothing is disapproved
-                 right now"; the chip staying put and the list explaining the
-                 zero is the honest version. -->
-            <!-- The group owns the selection, via v-model + :value on each chip.
-                 It used to have neither: the chips drove `filters.status` from
-                 their own @click while VChipGroup ran a second, independent
-                 useGroup selection that nothing ever set. VChip only applies its
-                 `color` when the GROUP considers it selected, so the active chip
-                 got `variant="flat"` from the ternary and then no `bg-primary`
-                 to go with it — it rendered plain grey, telling active from
-                 inactive by lightness alone. `mandatory` keeps one always on, so
-                 clicking the selected chip cannot clear the filter to nothing. -->
-            <!-- `column` (dropped) wraps chips to as many rows as it takes —
-                 seven statuses, half of them reading zero most of the time,
-                 wrapped to two rows every time. Without it VChipGroup falls
-                 back to its VSlideGroup base: one row, and if it still
-                 doesn't fit at the rail's narrowest it scrolls horizontally
-                 with its own prev/next arrows rather than wrapping.
-                 status-filter-chip--muted (zero-count, not the active
-                 filter) drops to a plain outline so an all-zero status
-                 reads as available-but-empty rather than competing on the
-                 same visual weight as a populated one — the chip itself
-                 still always renders (see the comment above this), only its
-                 weight changes. -->
-            <v-chip-group v-if="!initialLoad" v-model="filters.status" mandatory>
-              <v-chip
-                v-for="status in statusTabs" :key="status"
-                :value="status"
-                size="small" class="font-weight-bold"
-                :class="{ 'status-filter-chip--muted': status !== filters.status && !requestCounts[status] }"
-                color="primary"
-                :variant="status === filters.status ? 'flat' : (requestCounts[status] ? 'tonal' : 'outlined')"
-              >
-                {{ status }} <span class="ml-1 font-weight-black">{{ requestCounts[status] }}</span>
-              </v-chip>
-            </v-chip-group>
-            <v-skeleton-loader v-else type="chip" width="100%" height="32"></v-skeleton-loader>
-          </div>
-
-          <!-- Bulk action bar. This was already wired to bulkDisapprove(), but
-               both controls were text buttons at the same weight, so the one
-               action the checkboxes exist for read as a caption sitting beside
-               "3 selected" rather than as the thing to press. The count moves
-               into the label — the button now names what it does and to how
-               many — and the destructive action takes the rightmost slot, the
-               same order the confirm dialog below uses. -->
-          <div v-if="selectedIds.size > 0" class="d-flex align-center justify-space-between px-4 py-2 subtle-surface" style="flex-shrink: 0;">
-            <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
-            <div class="d-flex align-center gap-2">
-              <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+            <!-- Both scopes render their own actions now; the Ambulance
+                 Dispatch page used to host Bookings' copy in its page header,
+                 outside this panel. Log Service Request is the one decision
+                 here, so it alone is filled; Day View and Export are
+                 supporting views at text weight. Day View is ambulance-only:
+                 the fleet schedule says nothing about a road-clearing queue. -->
+            <template v-slot:actions>
               <v-btn
-                color="error"
-                variant="flat"
-                size="small"
-                height="36"
+                v-if="scope === 'ambulance'"
+                color="primary"
+                variant="text"
                 class="text-none font-weight-bold"
-                :loading="bulkLoading"
-                @click="openReason('bulk')"
+                height="40"
+                @click="openDayView"
               >
-                Disapprove {{ selectedIds.size }}
-                <span class="d-sr-only">selected requests</span>
+                <v-icon start size="small">mdi-calendar-clock</v-icon>
+                Day View
               </v-btn>
+              <!-- Writes what the operator is looking at: current filter and
+                   search, in the order shown. -->
+              <v-btn
+                color="primary"
+                variant="text"
+                class="text-none font-weight-bold"
+                height="40"
+                :disabled="filteredAndSortedRequests.length === 0"
+                @click="exportCsv"
+              >
+                <v-icon start size="small">mdi-tray-arrow-down</v-icon>
+                {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
+                <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
+              </v-btn>
+              <!-- Someone who shows up at the office in person rather than
+                   through the app, with or without an account. -->
+              <v-btn
+                color="secondary"
+                variant="flat"
+                class="text-none font-weight-bold text-white"
+                height="40"
+                @click="openCreateDialog"
+              >
+                <v-icon start size="small">mdi-account-plus-outline</v-icon>
+                Log Service Request
+              </v-btn>
+            </template>
+
+            <!-- Bulk action bar. Count in the label — the button names what
+                 it does and to how many — destructive action rightmost, the
+                 same order the confirm dialog below uses. -->
+            <template v-if="selectedIds.size > 0" v-slot:before-table>
+              <div class="d-flex align-center justify-space-between px-4 py-2 subtle-surface rounded-lg mb-3">
+                <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
+                <div class="d-flex align-center gap-2">
+                  <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+                  <v-btn
+                    color="error"
+                    variant="flat"
+                    size="small"
+                    height="36"
+                    class="text-none font-weight-bold"
+                    :loading="bulkLoading"
+                    @click="openReason('bulk')"
+                  >
+                    Disapprove {{ selectedIds.size }}
+                    <span class="d-sr-only">selected requests</span>
+                  </v-btn>
+                </div>
+              </div>
+            </template>
+
+            <template v-slot:item.select="{ item }">
+              <v-checkbox-btn
+                :model-value="selectedIds.has(itemId(item))"
+                density="compact"
+                :aria-label="`Select ${item._requesterName}'s request`"
+                @click.stop="toggleSelect(item)"
+              ></v-checkbox-btn>
+            </template>
+
+            <template v-slot:item.status="{ item }">
+              <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
+            </template>
+
+            <!-- A Booked row's own scheduled time is the date an operator
+                 actually needs here, not when it was filed — created_at
+                 stays as the fallback for every other status. -->
+            <template v-slot:item.scheduled_at="{ item }">
+              <template v-if="item.scheduled_at">
+                <div class="d-flex align-center">
+                  <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
+                  <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
+                </div>
+                <!-- One label, one pill — "Awaiting unit" / "Unit assigned" /
+                     "…late — not dispatched" (MDRRMO feedback, 2026-09-18).
+                     Overdue only changes which pill color this reuses, not a
+                     separate branch. -->
+                <StatusPill
+                  v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                  small
+                  class="mt-1"
+                  :status="isBookingOverdue(item.status, item.scheduled_at) ? 'Disapproved' : 'Booked'"
+                  :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                />
+              </template>
+              <div v-else>
+                <!-- A program (training, drill) is asked for a day, and that day
+                     is what the office plans around, so it replaces the filed
+                     date here. Certification has none and shows the filed date
+                     like every other request. -->
+                <template v-if="item.preferred_date">
+                  <v-icon size="12" class="mr-1 flex-shrink-0">mdi-calendar-clock</v-icon>
+                  <span class="row-date">{{ formatPreferredDate(item.preferred_date, 'short') }}</span>
+                </template>
+                <span v-else class="row-date">{{ formatDate(item.created_at) }}</span>
+                <!-- The one status with no scheduled_at at all — an
+                     untriaged call's own age is the signal here (MDRRMO
+                     feedback, 2026-09-18). Still the filing age when the
+                     date shown is a program's preferred day. -->
+                <StatusPill
+                  v-if="pendingWaitLabel(item.status, item.created_at)"
+                  small
+                  status="Pending"
+                  :label="pendingWaitLabel(item.status, item.created_at)"
+                  class="ml-2"
+                />
+              </div>
+            </template>
+
+            <template v-slot:item._requesterName="{ item }">
+              <PersonCell
+                :name="item._requesterName"
+                :initials="requesterInitials(item)"
+                :secondary="displayPhone(item.resident?.phone_number) || item.walk_in_contact_number || requesterBarangay(item)"
+              />
+            </template>
+
+            <template v-slot:item._secondary="{ item }">
+              <span class="text-medium-emphasis text-truncate d-block">{{ item._secondary }}</span>
+            </template>
+
+            <template v-slot:item.patient_name="{ item }">
+              <span class="text-truncate d-block" :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
+            </template>
+
+            <template v-slot:item._unit="{ item }">
+              <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+            </template>
+          </DataTablePage>
+
+      <!-- Detail modal, centred rather than a right-hand drawer (MDRRMO
+           feedback, 2026-09-18) — the drawer was `temporary`, meaning it
+           already blocked the list behind its own scrim while open, so
+           centring it costs nothing the flush-right position was actually
+           protecting. Closing it (X, ESC, backdrop) clears selectedRequest
+           through the setter below; picking a different row just swaps this
+           same modal's content via the same selectRequest() assignment as
+           always, so the dispatcher's place in the list is never lost. -->
+      <v-dialog
+        :model-value="!!selectedRequest"
+        @update:model-value="(v) => { if (!v) selectedRequest = null }"
+        max-width="720"
+        class="detail-modal"
+      >
+        <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
+          <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
+            <div class="d-flex align-center gap-3 min-width-0">
+              <v-avatar color="primary" variant="tonal" size="52" class="flex-shrink-0">
+                <span class="text-h6 font-weight-black">
+                  {{ requesterInitials(selectedRequest) }}
+                </span>
+              </v-avatar>
+              <div class="min-width-0">
+                <div class="text-h6 font-weight-bold text-truncate" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ requesterBarangay(selectedRequest) }}</div>
+              </div>
+            </div>
+            <div class="d-flex align-center gap-2 flex-shrink-0">
+              <StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)" />
+              <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="selectedRequest = null"></v-btn>
             </div>
           </div>
 
           <v-divider></v-divider>
 
-          <div class="flex-grow-1 overflow-y-auto">
-            <v-skeleton-loader v-if="initialLoad" type="list-item-avatar-two-line@6"></v-skeleton-loader>
+          <div class="pa-6 overflow-y-auto flex-grow-1">
+            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
-            <div v-else-if="pagedRequests.length === 0" class="text-center text-caption text-medium-emphasis py-10">
-              {{ emptyListMessage }}
-            </div>
-
-            <div v-else>
-              <!-- Selecting a request is the entry point to every other action
-                   on this page, and it was a bare div with a click handler: not
-                   in the tab order, not announced as interactive, unreachable
-                   without a mouse. Space is prevented explicitly or it scrolls
-                   the list instead of opening the row. -->
-              <div
-                v-for="item in pagedRequests" :key="item.request_id || item.id"
-                class="d-flex align-center px-4 py-3 request-row"
-                :class="[`row-${(item.status || 'Pending').toLowerCase()}`, { 'row-selected': isSelected(item) }]"
-                role="button"
-                tabindex="0"
-                :aria-current="isSelected(item) ? 'true' : undefined"
-                :aria-label="`${requesterName(item)}, ${item.service?.service_name || 'service'}, ${item.status || 'Pending'}`"
-                @click="selectRequest(item)"
-                @keydown.enter.prevent="selectRequest(item)"
-                @keydown.space.prevent="selectRequest(item)"
-              >
-                <!-- flex-shrink-0 alone let this GROW into whatever space the
-                     row had left, which is why the avatars beside it sat at a
-                     different x on every row. It is a fixed-size control. -->
-                <v-checkbox-btn
-                  :model-value="selectedIds.has(itemId(item))"
-                  class="mr-1"
-                  style="flex: 0 0 auto;"
-                  density="compact"
-                  :aria-label="`Select ${requesterName(item)}'s request`"
-                  @click.stop="toggleSelect(item)"
-                ></v-checkbox-btn>
-                <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
-                  <span class="font-weight-bold text-caption">
-                    {{ requesterInitials(item) }}
-                  </span>
-                </v-avatar>
-                <!-- The date is the half of this line that survives truncation
-                     worst, and it is the half that decides what is urgent, so
-                     it gets its own column instead of trailing the service
-                     name off the end of the row. -->
-                <div class="flex-grow-1 min-width-0">
-                  <div class="text-body-2 font-weight-bold text-truncate">{{ requesterName(item) }}</div>
-                  <!-- Ambulance-scope rows are all the same one service —
-                       "Ambulance/Medical Response", truncated, told nothing
-                       an operator didn't already know from being on this
-                       page at all. Barangay is what actually distinguishes
-                       one row from the next here. The other board (scope
-                       'other') genuinely varies by service, so it keeps
-                       showing that instead. -->
-                  <div class="d-flex align-center text-caption text-medium-emphasis">
-                    <span class="text-truncate">{{ scope === 'ambulance' ? requesterBarangay(item) : (item.service?.service_name || 'N/A') }}</span>
-                    <!-- A Booked row's own scheduled time is the date an operator
-                         actually needs here, not when it was filed — created_at
-                         stays as the fallback for every other status. -->
-                    <template v-if="item.scheduled_at">
-                      <v-icon size="12" class="ml-2 mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
-                      <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
-                      <span v-if="isBookingOverdue(item.status, item.scheduled_at)" class="status-pill status-pill--sm pill-disapproved ml-2">Overdue</span>
-                    </template>
-                    <span v-else class="row-date ms-2">{{ formatDate(item.created_at) }}</span>
-                  </div>
-                </div>
-                <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)">{{ outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason) }}</span>
-              </div>
-
-              <!-- itemsPerPage is sized off windowHeight so a full page fills
-                   the panel with no gap (see the computed above) — that
-                   leaves this blank whenever a filter/search genuinely has
-                   fewer results than a page holds, which reads as broken
-                   rather than as "this is everything" (impeccable ui-audit,
-                   2026-08-30). pagedRequests.length < itemsPerPage only ever
-                   true on the last page, so this can't appear mid-list. -->
-              <div
-                v-if="pagedRequests.length < itemsPerPage"
-                class="text-center text-caption text-medium-emphasis py-6"
-              >
-                Showing all {{ filteredAndSortedRequests.length }} {{ filteredAndSortedRequests.length === 1 ? 'result' : 'results' }}
-              </div>
-            </div>
-          </div>
-
-          <div class="d-flex justify-center pa-2" style="flex-shrink: 0;">
-            <!-- active-color was `secondary` (#0A2620), which is 1.07:1 on the
-                 dark surface — the current page number simply was not there. -->
-            <v-pagination v-model="page" :length="pageCount" :total-visible="4" density="compact" active-color="primary"></v-pagination>
-          </div>
-        </v-card>
-
-        <!-- RIGHT: detail panel -->
-        <v-card
-          v-if="twoUp || selectedRequest"
-          elevation="0"
-          rounded="xl"
-          class="soft-card d-flex flex-column flex-grow-1 overflow-hidden"
-        >
-          <div v-if="!selectedRequest" class="d-flex flex-column align-center justify-center h-100 text-medium-emphasis pa-6 text-center">
-            <v-icon size="48" class="mb-3">mdi-clipboard-text-outline</v-icon>
-            <div class="text-body-1">Select a request to view details</div>
-            <div class="text-caption mt-1">Its description, attachments and dispatch options open here.</div>
-          </div>
-
-          <template v-else>
-            <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
-              <div class="d-flex align-center gap-3">
-                <!-- Stacked, the list is gone from the screen; without this the
-                     only way back to it is the browser's own back button. -->
-                <v-btn
-                  v-if="!twoUp"
-                  icon="mdi-arrow-left"
-                  variant="text"
-                  density="comfortable"
-                  aria-label="Back to the request list"
-                  @click="selectedRequest = null"
-                ></v-btn>
-                <v-avatar color="primary" variant="tonal" size="52">
-                  <span class="text-h6 font-weight-black">
-                    {{ requesterInitials(selectedRequest) }}
-                  </span>
-                </v-avatar>
-                <div>
-                  <div class="text-h6 font-weight-bold" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
-                  <div class="text-caption text-medium-emphasis">{{ requesterBarangay(selectedRequest) }}</div>
-                </div>
-              </div>
-              <span class="status-pill" :class="outcomePillClass(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)">
-                {{ outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason) }}
-              </span>
-            </div>
-
-            <v-divider></v-divider>
-
-            <!-- flex-grow-1 forced this to fill all remaining panel height
-                 regardless of content, pinning the footer at the fixed
-                 bottom edge with dead space above it (impeccable ui-audit,
-                 2026-08-30). Dropped: short content now hugs its own size
-                 and the footer follows directly after it — verified via
-                 exact pixel offsets, not just visually. Verified separately
-                 with a synthetic several-thousand-character description:
-                 unusually long content grows the card (bounded by the
-                 outer container's own fixed max height and overflow:hidden,
-                 unchanged by this edit) rather than triggering an internal
-                 scrollbar here — that is pre-existing overflow-y-auto
-                 behavior this change did not alter, and real admin remarks
-                 are short operational notes, not thousands of characters. -->
-            <div
-              class="pa-6 overflow-y-auto"
+            <!-- One alert, title from the same sub-label the row shows —
+                 "Awaiting unit" / "Unit assigned" / "…late — not
+                 dispatched" (MDRRMO feedback, 2026-09-18). Only the body
+                 and the alert's own color differ between overdue and
+                 upcoming. -->
+            <v-alert
+              v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
+              :type="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at) ? 'warning' : 'info'"
+              variant="tonal"
+              class="mb-4"
+              density="compact"
+              :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
             >
-              <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
-              <v-alert
-                v-if="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)"
-                type="warning"
-                variant="tonal"
-                class="mb-4"
-                density="compact"
-              >
-                Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.
+              {{ isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)
+                ? 'Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.'
+                : `Scheduled for ${formatDateTime(selectedRequest.scheduled_at)}.` }}
+            </v-alert>
+
+            <!-- Pending's own age — no scheduled_at to build a countdown
+                 from, so created_at is what says how long this call has
+                 sat untouched (MDRRMO feedback, 2026-09-18). -->
+            <v-alert
+              v-if="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
+              type="info"
+              variant="tonal"
+              class="mb-4"
+              density="compact"
+              :title="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
+            >
+              Filed {{ formatDateTime(selectedRequest.created_at) }}, no action taken yet.
+            </v-alert>
+
+            <!-- Section 1: Action. Time, unit, the decision itself — lead
+                 with what the dispatcher acts on, in reading order, not
+                 just visual weight (MDRRMO feedback, 2026-09-18). These
+                 buttons used to be a pinned footer at the bottom of a
+                 much longer scroll. -->
+            <h3 class="section-title">Action</h3>
+
+            <div v-if="selectedRequest.scheduled_at" class="detail-group">
+              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Scheduled</div>
+              <div class="font-weight-medium text-body-2">
+                {{ formatDateTime(selectedRequest.scheduled_at) }}
+                <template v-if="selectedRequest.scheduled_end"> – {{ formatTime(selectedRequest.scheduled_end) }}</template>
+              </div>
+            </div>
+
+            <div v-if="selectedRequest.status === 'Responding' && isProgramRequest(selectedRequest)" class="detail-group">
+              <v-alert type="success" variant="tonal" border="start" rounded="lg">
+                <div class="text-subtitle-2 font-weight-bold">Approved</div>
+                <div class="text-body-2">Mark it resolved once the office has carried it out.</div>
               </v-alert>
-
-              <v-row class="detail-group">
-                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
-                  <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>
-                  <div class="font-weight-medium text-body-2">{{ formatDateTime(selectedRequest.created_at) }}</div>
-                </v-col>
-                <v-col v-if="selectedRequest.scheduled_at" cols="12" sm="4" md="3">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Scheduled</div>
-                  <div class="font-weight-medium text-body-2">
-                    {{ formatDateTime(selectedRequest.scheduled_at) }}
-                    <template v-if="selectedRequest.scheduled_end"> – {{ formatTime(selectedRequest.scheduled_end) }}</template>
-                  </div>
-                </v-col>
-                <v-col cols="12" sm="4" :md="selectedRequest.scheduled_at ? 3 : 4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
-                  <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
-                </v-col>
-              </v-row>
-
-              <!-- Structured ambulance intake (C3's columns: patient_name,
-                   patient_age, patient_sex, patient_address, pickup_location,
-                   destination, condition_notes) shown as its own labeled
-                   fields when present, instead of only the server-composed
-                   `description` text those exact columns generate. The Log
-                   Service Request form (below) already asks for these seven
-                   fields separately; the detail view showed them nowhere
-                   individually, only folded back into one paragraph. -->
-              <v-row v-if="selectedRequest.patient_name" class="detail-group">
-                <v-col cols="12" sm="6" md="4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Patient</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_name }}</div>
-                </v-col>
-                <v-col cols="6" sm="3" md="2">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Age</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_age ?? 'N/A' }}</div>
-                </v-col>
-                <v-col cols="6" sm="3" md="2">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Sex</div>
-                  <div class="font-weight-medium text-body-2 text-capitalize">{{ selectedRequest.patient_sex ?? 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="6" md="4">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Address</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_address || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Pickup</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.pickup_location || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Destination</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.destination || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition</div>
-                  <div class="font-weight-medium text-body-2">{{ selectedRequest.condition_notes || 'N/A' }}</div>
-                </v-col>
-              </v-row>
-
-              <!-- Fallback: a non-ambulance service (still just typed as one
-                   free-text description) or a pre-C3 ambulance record the
-                   backfill couldn't fully read. -->
-              <div v-else class="detail-group">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
-                <!-- One element per line. The description arrives newline-
-                     separated and was rendered as a single interpolation, so
-                     every break collapsed to a space and the whole thing read
-                     as one run-on sentence. -->
-                <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                  <template v-if="descriptionLines.length > 0">
-                    <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
-                  </template>
-                  <template v-else>No description provided by the Head of the Family.</template>
-                </v-card>
-              </div>
-
-              <!-- One group, two tiles, site photo first: it is what the
-                   resident is reporting and what decides whether a unit is
-                   sent, and the ID answers a different question after it.
-                   `attachments` keeps that order.
-
-                   These were full-width boxes holding a contained image. A
-                   square 240px source in a 1005px-wide frame painted at
-                   198x198 with roughly 400px of flat tint either side, which
-                   reads as a broken image rather than a small one. Fixed
-                   180x140 tiles, filled with `cover`, and the full picture is
-                   a click away. -->
-              <div class="detail-group" v-if="selectedRequest.landmark">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Landmark</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.landmark }}</div>
-              </div>
-
-              <div class="detail-group" v-if="attachments.length > 0">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
-
-                <!-- A flex row is a block box, so it stretches to the full
-                     detail-pane width by default regardless of how many
-                     180px tiles it actually holds -- one attachment left a
-                     measured 746px of empty space beside it (layout
-                     redesign follow-up, item 1). width: fit-content makes
-                     the row's own box only as wide as its tiles need, same
-                     as any other content-sized element here. -->
-                <div class="d-flex flex-wrap gap-3 attachments-row">
-                  <div v-for="a in attachments" :key="a.key">
-                    <v-skeleton-loader
-                      v-if="a.state.loading"
-                      type="image"
-                      height="140"
-                      width="180"
-                      class="rounded-lg"
-                    ></v-skeleton-loader>
-                    <v-alert
-                      v-else-if="a.state.error"
-                      type="error"
-                      variant="tonal"
-                      density="compact"
-                      class="attachment-error"
-                    >{{ a.state.error }}</v-alert>
-                    <button
-                      v-else-if="a.state.url"
-                      type="button"
-                      class="attachment-tile rounded-lg"
-                      :aria-label="`View the ${a.label.toLowerCase()} full size`"
-                      @click="openLightbox(a)"
-                    >
-                      <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
-                      <!-- Always drawn, not only on hover: a hover-only
-                           affordance tells a touch user nothing, and this is
-                           the only cue that the tile opens anything. -->
-                      <span class="attachment-badge" aria-hidden="true">
-                        <v-icon size="16">mdi-magnify-plus-outline</v-icon>
-                      </span>
-                      <span class="attachment-scrim" aria-hidden="true">
-                        <v-icon size="18">mdi-magnify-plus-outline</v-icon>
-                        View
-                      </span>
-                    </button>
-                    <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
-                  </div>
-                </div>
-              </div>
-
-              <v-divider class="detail-rule"></v-divider>
-
-              <!-- The Dispatch Assignment card used to live here, and its only
-                   control was the button that enables the action pinned to the
-                   footer. The two now share the footer row, so the card would
-                   be a heading over a sentence. Its unit display went with the
-                   button rather than being left behind. -->
-
-              <div v-if="selectedRequest.status === 'Responding'" class="detail-group">
-                <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
-                  <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
-                  <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
-                  <!-- Requests dispatched before the server owned the fleet
-                       carry no `vehicle_id` at all. Naming the absence beats
-                       "Vehicle Unknown", which read as a lookup that failed. -->
-                  <div v-if="selectedRequest.vehicle" class="text-body-2">
-                    {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
-                  </div>
-                  <div v-else class="text-body-2">No unit is recorded against this request.</div>
-                </v-alert>
-              </div>
-
-              <!-- The trip record C5 creates the moment this request went
-                   Responding (ServiceRequestController::createConductionStub)
-                   — surfaced here rather than rebuilt here: "Open Trip
-                   Record" jumps to the Trip Logs tab's own dialog, which
-                   already has every field (checkpoints, odometer, drivers,
-                   passengers, relatives) rather than a second, thinner copy
-                   of the same form living in this panel. Resolving is
-                   refused server-side without an arrival time, both
-                   odometer readings and a driver — the error surfaces
-                   through the alert above the fields, same as any other
-                   apiError, naming exactly what's missing. -->
-              <!-- Alert type is state-driven, not fixed warning: a completed
-                   trip (returned_office_at set — trip_status 'Completed') is
-                   the request working as intended, not something to flag.
-                   Warning is reserved for what actually needs attention: no
-                   trip record at all, or one still open ('Not dispatched' /
-                   'In transit'). -->
-              <!-- density="compact" only — same type/variant/border/copy,
-                   just Vuetify's own smaller padding scale, so this card
-                   stops overflowing the now-bounded canvas (layout redesign
-                   follow-up, item 3). -->
-              <div v-if="scope === 'ambulance'" class="detail-group">
-                <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
-                  <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
-                  <template v-if="respondingTrip">
-                    <div class="text-body-2">
-                      {{ tripDriverNames || 'No driver recorded yet' }}
-                      <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
-                    </div>
-                    <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
-                      <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
-                    </div>
-                    <div class="text-caption text-medium-emphasis mb-2">
-                      Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
-                    </div>
-                    <v-btn
-                      variant="outlined" size="small" class="text-none font-weight-bold"
-                      @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
-                    >Open Trip Record</v-btn>
-                  </template>
-                  <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
-                    No trip record found for this request.
-                  </div>
-                  <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
-                    This request resolved with no trip record on file — likely older data.
-                  </div>
-                  <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
-                    Closed before a trip was ever started.
-                  </div>
-                  <div v-else class="text-body-2">
-                    No trip record yet — one is created automatically once this request is dispatched.
-                  </div>
-                </v-alert>
-              </div>
-
-              <!-- Staff-only scratch pad. Deliberately never pre-fills the
-                   approve/decline dialog below (reasonDialog) — that field
-                   goes to the requester, this one never does, and the two
-                   sharing a column used to mean an internal shorthand could
-                   reach a resident's phone unedited. Visible regardless of
-                   status: a note about what happened is still useful to read
-                   on a Resolved request, not just a Pending one. -->
-              <v-textarea
-                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
-                placeholder="e.g. Called twice, no answer — retrying after lunch"
-                hint="Never shown to the requester — for staff reading this request later."
-                persistent-hint
-              ></v-textarea>
-              <!-- Its own save path, not the reasonDialog's: a terminal
-                   request (Resolved, Disapproved, Cancelled) shows no
-                   approve/decline action at all, so this is the only way a
-                   note typed here ever reaches the server. update() already
-                   accepts a partial body — no status, no vehicle_id — so this
-                   PATCH touches nothing else on the request. -->
-              <div class="d-flex align-center gap-3 mb-2">
-                <v-btn
-                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
-                  :loading="noteSaving"
-                  @click="saveInternalNote"
-                >Save note</v-btn>
-                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
-              </div>
             </div>
 
-            <v-divider v-if="showActions"></v-divider>
-            <div
-              v-if="showActions"
-              class="d-flex justify-end align-center pa-4 gap-3 flex-wrap"
-              style="flex-shrink: 0;"
-            >
+            <div v-else-if="selectedRequest.status === 'Responding'" class="detail-group">
+              <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
+                <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
+                <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
+                <!-- Requests dispatched before the server owned the fleet
+                     carry no `vehicle_id` at all. Naming the absence beats
+                     "Vehicle Unknown", which read as a lookup that failed. -->
+                <div v-if="selectedRequest.vehicle" class="text-body-2">
+                  {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
+                </div>
+                <div v-else class="text-body-2">No unit is recorded against this request.</div>
+              </v-alert>
+            </div>
+
+            <div v-if="showActions" class="detail-group d-flex align-center flex-wrap gap-3">
               <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <!-- The unit and the button it unlocks now sit in one row. They
-                     used to be a scroll apart — the picker was a card up in the
-                     body, the action it gated was pinned down here — so an
-                     operator reading a greyed-out "Approve & Dispatch" had to go
-                     hunting for the reason. The gate itself has always been
-                     real; only the distance was the problem. -->
-                <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
+                <!-- The unit and the button it unlocks sit in one row,
+                     right next to the decision itself now — they used to
+                     be a scroll apart, the picker up in the body and the
+                     action it gated pinned in a separate footer. -->
+                <div v-if="!isProgramRequest(selectedRequest)" class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
                   <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
                     <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
                       {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
@@ -650,6 +359,7 @@
                      green that works as a fill under a white label and vanishes
                      as an outline on the dark theme's own dark surface. -->
                 <v-btn
+                  v-if="!isProgramRequest(selectedRequest)"
                   color="primary"
                   variant="outlined"
                   class="text-none font-weight-bold"
@@ -658,7 +368,7 @@
                 >
                   {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
                 </v-btn>
-                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+                <v-btn color="error" variant="text" class="text-none font-weight-bold" :class="{ 'ml-auto': isProgramRequest(selectedRequest) }" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
                 <v-btn
@@ -671,7 +381,7 @@
                   :aria-describedby="scope === 'ambulance' && !formData.vehicle_id ? 'dispatch-gate' : undefined"
                   @click="openReason('approve')"
                 >
-                  Approve &amp; Dispatch
+                  {{ isProgramRequest(selectedRequest) ? 'Approve' : 'Approve & Dispatch' }}
                 </v-btn>
                 <span v-if="scope === 'ambulance' && !formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
                   Disabled until a vehicle is chosen with the Select Vehicle button beside it.
@@ -679,46 +389,26 @@
               </template>
               <template v-else-if="selectedRequest.status === 'Responding'">
                 <!-- Confirmed, not immediate: resolving stamps a terminal
-                     status the panel offers no way back from, and this used
-                     to be one click with nothing between it and the request. -->
+                     status the panel offers no way back from. -->
                 <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="openResolveConfirm">
                   Mark as Resolved
                 </v-btn>
               </template>
               <template v-else-if="selectedRequest.status === 'Booked'">
-                <!-- Not yet approved: same unit-and-button row as the Pending
-                     branch above, same gating, same picker dialog — only the
-                     data source differs (see openAssignUnitModal), and Reject
-                     reuses the existing Disapprove flow untouched. -->
+                <!-- Assigning a unit and approving used to be two separate
+                     controls; both steps now live inside the one dialog
+                     this button opens. Reject reuses the existing
+                     Disapprove flow untouched. -->
                 <template v-if="!selectedRequest.vehicle_id">
-                  <div class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
-                    <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
-                      <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
-                        {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
-                      </v-icon>
-                    </v-avatar>
-                    <div class="min-width-0">
-                      <div class="text-body-2 font-weight-bold text-truncate">
-                        {{ formData.vehicle_id ? getSelectedVehicleName() : 'No unit selected' }}
-                      </div>
-                      <div class="text-caption text-medium-emphasis text-truncate">
-                        <template v-if="formData.vehicle_id">
-                          Free for this window<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
-                        </template>
-                        <template v-else>Select a unit free for the scheduled window.</template>
-                      </div>
-                    </div>
-                  </div>
-
                   <v-btn
-                    color="primary"
-                    variant="outlined"
-                    class="text-none font-weight-bold"
+                    color="secondary"
+                    variant="flat"
+                    class="text-none font-weight-bold text-white mr-auto"
                     height="40"
                     :loading="scheduledAvailabilityLoading"
                     @click="openAssignUnitModal"
                   >
-                    {{ formData.vehicle_id ? 'Change Unit' : 'Assign Unit' }}
+                    Approve &amp; Assign Unit
                   </v-btn>
                   <v-btn variant="text" class="text-none font-weight-bold" height="40" @click="openReschedule">
                     Reschedule
@@ -726,21 +416,6 @@
                   <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                     Reject
                   </v-btn>
-                  <v-btn
-                    color="secondary"
-                    variant="flat"
-                    class="text-none font-weight-bold text-white"
-                    height="40"
-                    :loading="loading"
-                    :disabled="!formData.vehicle_id"
-                    :aria-describedby="!formData.vehicle_id ? 'approve-gate' : undefined"
-                    @click="approveBooking"
-                  >
-                    Approve
-                  </v-btn>
-                  <span v-if="!formData.vehicle_id" id="approve-gate" class="d-sr-only">
-                    Disabled until a unit is chosen with the Assign Unit button beside it.
-                  </span>
                 </template>
 
                 <!-- Already approved: the fleet decision is made, so what is
@@ -755,9 +430,228 @@
                 </template>
               </template>
             </div>
-          </template>
+
+            <div v-if="!showActions && selectedRequest.status !== 'Responding' && !selectedRequest.scheduled_at" class="text-caption text-medium-emphasis detail-group">
+              This request is closed — no action needed.
+            </div>
+
+            <!-- Section 2: Route. Only for a request that actually has one
+                 of these fields — a non-ambulance service has none of them
+                 at all. -->
+            <template v-if="selectedRequest.pickup_location || selectedRequest.landmark || selectedRequest.destination">
+              <h3 class="section-title">Route</h3>
+              <div class="detail-group">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Pickup</div>
+                <div class="font-weight-medium text-body-1">{{ selectedRequest.pickup_location || selectedRequest.landmark || 'N/A' }}</div>
+                <!-- Real de-dupe, not a relabel: ADDRESS, LANDMARK and
+                     PICKUP used to show the same text three times under
+                     three different labels (MDRRMO feedback, 2026-09-18).
+                     A landmark only earns its own line when it says
+                     something Pickup does not already say. -->
+                <div
+                  v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)"
+                  class="text-caption text-medium-emphasis mt-1"
+                >Landmark: {{ selectedRequest.landmark }}</div>
+                <div class="mt-3">
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Destination</div>
+                  <div class="font-weight-medium text-body-2">{{ selectedRequest.destination || 'N/A' }}</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Section 3: Patient & Requester. -->
+            <h3 class="section-title">Patient &amp; Requester</h3>
+
+            <!-- Structured ambulance intake (C3's columns) shown as its own
+                 labeled fields when present, instead of only the
+                 server-composed `description` text those exact columns
+                 generate. -->
+            <v-row v-if="selectedRequest.patient_name" class="detail-group">
+              <v-col cols="12" sm="6" md="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Patient</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_name }}</div>
+              </v-col>
+              <v-col cols="6" sm="3" md="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Age</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_age ?? 'N/A' }}</div>
+              </v-col>
+              <v-col cols="12" sm="6" md="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Address</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.patient_address || 'N/A' }}</div>
+              </v-col>
+              <v-col cols="12">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.condition_notes || 'N/A' }}</div>
+              </v-col>
+            </v-row>
+
+            <!-- Fallback: a non-ambulance service (still just typed as one
+                 free-text description) or a pre-C3 ambulance record the
+                 backfill couldn't fully read. -->
+            <div v-else class="detail-group">
+              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
+              <!-- One element per line. The description arrives newline-
+                   separated and was rendered as a single interpolation, so
+                   every break collapsed to a space and the whole thing read
+                   as one run-on sentence. -->
+              <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
+                <template v-if="descriptionLines.length > 0">
+                  <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
+                </template>
+                <template v-else>No description provided by the Head of the Family.</template>
+              </v-card>
+            </div>
+
+            <v-row class="detail-group">
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
+                <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'Other' }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>
+                <div class="font-weight-medium text-body-2">{{ formatDateTime(selectedRequest.created_at) }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
+                <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
+              </v-col>
+              <v-col v-if="selectedRequest.preferred_date" cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Preferred date</div>
+                <div class="font-weight-medium text-body-2">{{ formatPreferredDate(selectedRequest.preferred_date) }}</div>
+              </v-col>
+            </v-row>
+
+            <!-- Section 4: Notes & Attachments. Lowest priority, reference
+                 material rather than something the dispatcher acts on
+                 first. -->
+            <h3 class="section-title">Notes &amp; Attachments</h3>
+
+            <!-- The trip record C5 creates the moment this request went
+                 Responding (ServiceRequestController::createConductionStub)
+                 — surfaced here rather than rebuilt here: "Open Trip
+                 Record" jumps to the Trip Logs tab's own dialog, which
+                 already has every field. Alert type is state-driven: a
+                 completed trip is the request working as intended, not
+                 something to flag. -->
+            <div v-if="scope === 'ambulance'" class="detail-group">
+              <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
+                <div class="text-subtitle-2 font-weight-bold mb-1">Trip record</div>
+                <template v-if="respondingTrip">
+                  <div class="text-body-2">
+                    {{ tripDriverNames || 'No driver recorded yet' }}
+                    <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
+                  </div>
+                  <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
+                    <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
+                  </div>
+                  <div class="text-caption text-medium-emphasis mb-2">
+                    Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
+                  </div>
+                  <v-btn
+                    variant="outlined" size="small" class="text-none font-weight-bold"
+                    @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
+                  >Open Trip Record</v-btn>
+                </template>
+                <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
+                  No trip record found for this request.
+                </div>
+                <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
+                  This request resolved with no trip record on file — likely older data.
+                </div>
+                <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
+                  Closed before a trip was ever started.
+                </div>
+                <div v-else class="text-body-2">
+                  No trip record yet — one is created automatically once this request is dispatched.
+                </div>
+              </v-alert>
+            </div>
+
+            <!-- Staff-only scratch pad. Deliberately never pre-fills the
+                 approve/decline dialog below (reasonDialog) — that field
+                 goes to the requester, this one never does. Visible
+                 regardless of status: a note about what happened is still
+                 useful to read on a Resolved request, not just a Pending
+                 one. -->
+            <div class="detail-group">
+              <v-textarea
+                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
+                placeholder="e.g. Called twice, no answer — retrying after lunch"
+                hint="Never shown to the requester — for staff reading this request later."
+                persistent-hint
+              ></v-textarea>
+              <!-- Its own save path, not the reasonDialog's: a terminal
+                   request (Resolved, Disapproved, Cancelled) shows no
+                   approve/decline action at all, so this is the only way a
+                   note typed here ever reaches the server. -->
+              <div class="d-flex align-center gap-3 mt-2">
+                <v-btn
+                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
+                  :loading="noteSaving"
+                  @click="saveInternalNote"
+                >Save note</v-btn>
+                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
+              </div>
+            </div>
+
+            <!-- One group, two tiles, site photo first: it is what the
+                 resident is reporting and what decides whether a unit is
+                 sent, and the ID answers a different question after it. -->
+            <div class="detail-group" v-if="attachments.length > 0">
+              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
+              <div class="d-flex flex-wrap gap-3 attachments-row">
+                <div v-for="a in attachments" :key="a.key">
+                  <v-skeleton-loader
+                    v-if="a.state.loading"
+                    type="image"
+                    height="140"
+                    width="180"
+                    class="rounded-lg"
+                  ></v-skeleton-loader>
+                  <v-alert
+                    v-else-if="a.state.error"
+                    type="error"
+                    variant="tonal"
+                    density="compact"
+                    class="attachment-error"
+                  >{{ a.state.error }}</v-alert>
+                  <a
+                    v-else-if="a.state.url && a.state.type === 'application/pdf'"
+                    :href="a.state.url"
+                    target="_blank"
+                    rel="noopener"
+                    class="attachment-tile attachment-tile--file rounded-lg"
+                    :aria-label="`Open the ${a.label.toLowerCase()} (PDF) in a new tab`"
+                  >
+                    <v-icon size="40" color="primary">mdi-file-pdf-box</v-icon>
+                    <span class="text-body-2 font-weight-bold mt-1">Open PDF</span>
+                  </a>
+                  <button
+                    v-else-if="a.state.url"
+                    type="button"
+                    class="attachment-tile rounded-lg"
+                    :aria-label="`View the ${a.label.toLowerCase()} full size`"
+                    @click="openLightbox(a)"
+                  >
+                    <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
+                    <!-- Always drawn, not only on hover: a hover-only
+                         affordance tells a touch user nothing, and this is
+                         the only cue that the tile opens anything. -->
+                    <span class="attachment-badge" aria-hidden="true">
+                      <v-icon size="16">mdi-magnify-plus-outline</v-icon>
+                    </span>
+                    <span class="attachment-scrim" aria-hidden="true">
+                      <v-icon size="18">mdi-magnify-plus-outline</v-icon>
+                      View
+                    </span>
+                  </button>
+                  <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </v-card>
-      </div>
+      </v-dialog>
     </div>
 
     <!-- Attachment lightbox. Same shape as the vehicle picker below: v-dialog,
@@ -785,14 +679,20 @@
     </v-dialog>
 
     <!-- Vehicle picker -->
-    <v-dialog v-model="vehicleModal.isOpen" max-width="600">
+    <v-dialog v-model="vehicleModal.isOpen" max-width="600" :persistent="selectedRequest?.status === 'Booked'">
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
           <span class="text-h6 font-weight-bold">
-            {{ selectedRequest?.status === 'Booked' ? 'Units Free for This Window' : 'Available Vehicles' }}
+            {{ selectedRequest?.status === 'Booked' ? 'Approve & Assign Unit' : 'Available Vehicles' }}
           </span>
           <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
+
+        <!-- Rendered here, not left to the detail panel's own alert (:361) —
+             that one sits behind this dialog's scrim, so a failed approve
+             would report an error nobody could see without closing the
+             dialog first. -->
+        <v-alert v-if="selectedRequest?.status === 'Booked' && apiError" type="error" variant="tonal" density="compact" class="ma-4 mb-0">{{ apiError }}</v-alert>
 
         <!-- A two-across grid of cards for a list of identical units. Each tile
              carried three words and the eye had to travel in two directions to
@@ -802,6 +702,54 @@
           <div v-if="scheduledAvailabilityLoading" class="pa-4">
             <v-skeleton-loader type="list-item-avatar-two-line" v-for="n in 3" :key="n" class="mb-1"></v-skeleton-loader>
           </div>
+
+          <!-- Booked/approve: every Ambulance unit is listed, not just the
+               free ones — an unavailable unit shows why instead of vanishing,
+               so a dispatcher who expects to see AMB-02 can tell "already
+               booked" from "the list failed to load" (MDRRMO feedback,
+               2026-09-18). Picking one here does not close the dialog —
+               Approve below does, once a free unit is actually chosen. -->
+          <v-list v-else-if="selectedRequest?.status === 'Booked'" bg-color="transparent" class="py-0">
+            <template v-if="bookingUnitOptions.length > 0">
+              <v-list-item
+                v-for="opt in bookingUnitOptions"
+                :key="opt.vehicle.vehicle_id"
+                class="vehicle-option px-4 py-3"
+                :active="formData.vehicle_id === opt.vehicle.vehicle_id"
+                :disabled="!opt.available"
+                @click="selectVehicle(opt.vehicle.vehicle_id)"
+              >
+                <template v-slot:prepend>
+                  <v-avatar
+                    :color="formData.vehicle_id === opt.vehicle.vehicle_id ? 'success' : undefined"
+                    :variant="formData.vehicle_id === opt.vehicle.vehicle_id ? 'flat' : 'tonal'"
+                    size="42"
+                    class="mr-3"
+                  >
+                    <v-icon :color="formData.vehicle_id === opt.vehicle.vehicle_id ? 'white' : undefined">{{ vehicleIcon(opt.vehicle.type) }}</v-icon>
+                  </v-avatar>
+                </template>
+
+                <v-list-item-title class="font-weight-bold text-body-1">{{ vehicleName(opt.vehicle) }}</v-list-item-title>
+                <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
+                  <template v-if="opt.available">
+                    {{ opt.vehicle.type }}<template v-if="opt.vehicle.specification"> &bull; {{ opt.vehicle.specification }}</template>
+                  </template>
+                  <template v-else>{{ opt.reason }}</template>
+                </v-list-item-subtitle>
+
+                <template v-slot:append>
+                  <v-icon v-if="formData.vehicle_id === opt.vehicle.vehicle_id" color="success">mdi-check-circle</v-icon>
+                </template>
+              </v-list-item>
+            </template>
+            <div v-else class="pa-6 text-center text-medium-emphasis">
+              <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
+              <div class="text-h6 font-weight-bold">No Ambulance Units</div>
+              <div class="text-body-2">The fleet has no Ambulance unit at all yet.</div>
+            </div>
+          </v-list>
+
           <v-list v-else-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
             <v-list-item
               v-for="v in availableVehicles"
@@ -835,12 +783,28 @@
             <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
             <div class="text-h6 font-weight-bold">No Vehicles Available</div>
             <div class="text-body-2">
-              {{ selectedRequest?.status === 'Booked'
-                ? 'No Ambulance unit is free for the scheduled window. Try Reschedule instead.'
-                : 'All fleet vehicles are currently dispatched or under maintenance.' }}
+              No free unit of a type this service uses. Units are either dispatched, under maintenance, or of a type set aside for other services.
             </div>
           </div>
         </v-card-text>
+
+        <!-- The dialog this collapses: picking a unit and approving used to be
+             a picker modal plus a separate always-visible footer button
+             elsewhere on the page (MDRRMO feedback, 2026-09-18) — both steps
+             now live here, next to each other. -->
+        <v-card-actions v-if="selectedRequest?.status === 'Booked'" class="pa-4 border-t d-flex justify-end gap-3">
+          <v-btn variant="text" class="text-none font-weight-bold" :disabled="loading" @click="vehicleModal.isOpen = false">Cancel</v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            class="text-none font-weight-bold text-white"
+            :disabled="!formData.vehicle_id"
+            :loading="loading"
+            @click="approveBooking"
+          >
+            Approve
+          </v-btn>
+        </v-card-actions>
       </v-card>
     </v-dialog>
 
@@ -864,21 +828,41 @@
         </v-card-title>
         <v-card-text class="px-5 pt-2">
           <div class="text-body-2 text-medium-emphasis mb-4">{{ reasonCopy.body }}</div>
-          <v-textarea
-            v-if="reasonCopy.showField"
-            v-model="reasonDialog.reason"
-            :label="reasonCopy.label"
-            :placeholder="reasonCopy.placeholder"
-            :hint="reasonCopy.hint"
-            persistent-hint
-            variant="outlined"
-            rows="3"
-            counter="255"
-            maxlength="255"
-            autofocus
-            :error-messages="reasonDialog.error"
-            @update:model-value="reasonDialog.error = ''"
-          ></v-textarea>
+
+          <template v-if="reasonCopy.showField">
+            <!-- Approve's note is optional and used to be a permanent 3-row
+                 textarea dominating what is otherwise one line plus a
+                 confirm button — collapsed behind a toggle so the default
+                 view is just the decision (MDRRMO feedback, 2026-09-18). A
+                 decline's reason is required, so it stays always visible;
+                 kind !== 'approve' covers both 'disapprove' and 'bulk'. -->
+            <v-textarea
+              v-if="reasonDialog.kind !== 'approve' || noteExpanded"
+              v-model="reasonDialog.reason"
+              :label="reasonCopy.label"
+              :placeholder="reasonCopy.placeholder"
+              :hint="reasonCopy.hint"
+              persistent-hint
+              variant="outlined"
+              rows="3"
+              counter="255"
+              maxlength="255"
+              autofocus
+              :error-messages="reasonDialog.error"
+              @update:model-value="reasonDialog.error = ''"
+            ></v-textarea>
+            <v-btn
+              v-else
+              variant="text"
+              size="small"
+              density="compact"
+              class="text-none px-0"
+              prepend-icon="mdi-plus"
+              @click="noteExpanded = true"
+            >
+              Add a note
+            </v-btn>
+          </template>
           <!-- Approve on a walk-in with no account: the note is optional and
                there is no app to show it in, so there is nothing to type. -->
           <div v-else class="text-caption text-medium-emphasis">
@@ -1053,7 +1037,7 @@
               <div class="day-view-unit">
                 <div class="font-weight-bold text-body-2 text-truncate">{{ unit.unit_identifier }}</div>
                 <div class="text-caption text-medium-emphasis text-truncate">{{ unit.specification || '&nbsp;' }}</div>
-                <span v-if="unit.is_maintenance" class="status-pill status-pill--sm pill-disapproved mt-1">Maintenance</span>
+                <StatusPill v-if="unit.is_maintenance" small status="Disapproved" label="Maintenance" class="mt-1" />
               </div>
               <div class="day-view-track" :class="{ 'day-view-track--maintenance': unit.is_maintenance }">
                 <div v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-hourline" :style="{ left: mark.left }"></div>
@@ -1177,18 +1161,11 @@
                   :rules="[required]"
                 ></v-text-field>
               </v-col>
-              <v-col cols="6" sm="2">
+              <v-col cols="6" sm="4">
                 <v-text-field
                   v-model="createDialog.form.patient_age"
                   label="Age" placeholder="e.g. 54" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
                 ></v-text-field>
-              </v-col>
-              <v-col cols="6" sm="2">
-                <v-select
-                  v-model="createDialog.form.patient_sex"
-                  :items="sexOptions"
-                  label="Sex" variant="outlined" density="comfortable" clearable class="mb-2"
-                ></v-select>
               </v-col>
             </v-row>
             <v-text-field
@@ -1222,7 +1199,9 @@
                  dispatch. The trip record these used to live on does not
                  exist until the request reaches Responding, so anyone named
                  at the counter had nowhere to be written down until now.
-                 Optional throughout: nobody has to bring anyone. -->
+                 At least one is required (MDRRMO, 2026-09-20: the hospital
+                 asks for a companion), and the server refuses more than
+                 two. -->
             <div class="mb-2">
               <div class="d-flex align-center justify-space-between mb-1">
                 <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Patient / Relatives</span>
@@ -1237,7 +1216,7 @@
               >
                 <v-text-field
                   v-model="createDialog.form.patient_relatives[idx]"
-                  :label="`Relative ${idx + 1}`"
+                  :label="idx === 0 ? 'Relative 1 *' : `Relative ${idx + 1}`"
                   placeholder="e.g. Ana Santos"
                   variant="outlined"
                   density="compact"
@@ -1315,13 +1294,16 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, outcomePillClass, isBookingOverdue } from '@/composables/adminUi'
+import { displayPhone } from '@/composables/phoneNumber'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import PersonCell from '@/components/PersonCell.vue'
 
 // 'ambulance': only Ambulance/Medical Response requests, rendered as the
 // Bookings tab on the Ambulance Dispatch Requests page. 'other': every
@@ -1345,20 +1327,6 @@ const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-c
 
 const route = useRoute()
 
-// The split view needs a real breakpoint, not a media query in CSS: below it
-// the two panes are rendered one at a time rather than merely restyled, so the
-// list is not sitting offscreen holding focusable rows.
-//
-// `lg`, not `md`. Vuetify 4 moved the breakpoints (display.js: sm 600, md 840,
-// lg 1145 — v3 was 960/1280), so mdAndUp turned the split on at an 840px
-// viewport. The drawer is `permanent` at 260px and the shell adds 24px of
-// padding, so that left ~556px for two columns: the list rail's clamp(360px…)
-// floor lost to `flex-shrink` and the rail rendered 175px wide against a
-// scrollWidth of 218. lgAndUp leaves ~861px, which fits the 360px rail and a
-// detail pane that can still show a full field row.
-const { lgAndUp, height: windowHeight } = useDisplay()
-const twoUp = lgAndUp
-
 const requests = ref([])
 const vehicles = ref([])
 const residents = ref([])
@@ -1369,37 +1337,22 @@ const loading = ref(false)
 const bulkLoading = ref(false)
 const apiError = ref('')
 const page = ref(1)
-// Ten was a fixed number against a variable amount of room, so a 1080px screen
-// showed ten rows and a band of empty card below them, with pagination under
-// that. Fill the space that exists.
-//
-// Both constants are measured off the rendered panel, not guessed: a row is
-// 73px (two lines of text plus 12px of vertical padding and a hairline), and
-// the search field, the wrapped status chips and the pager take 348px between
-// them. The old 58/360 pair overshot by two rows, which put a scrollbar inside
-// a list that also paginates -- the one arrangement this computed exists to
-// prevent. At 1080 this now yields exactly the 10 rows that fit.
-// The floor is 5, not 8. Eight rows need 584px and a 860px-tall window leaves
-// 512px, so the old floor put the scrollbar straight back on any laptop screen
-// -- it was defending against a uselessly short list and instead guaranteed the
-// thing the whole computed exists to avoid. Five still reads as a list, and
-// below roughly a 713px window the list scrolls, which is the honest trade.
-const ROW_HEIGHT = 73
-const LIST_CHROME = 348
-
-const itemsPerPage = computed(() => {
-  const rowsFit = Math.floor((windowHeight.value - LIST_CHROME) / ROW_HEIGHT)
-  return Math.min(20, Math.max(5, rowsFit))
-})
+const itemsPerPage = ref(10)
 
 // Same exact-code match as the mobile app's formKindForServiceCode: only this
 // one service carries a scheduling concept server-side today, and it's the
 // one thing that decides which of the two boards a request belongs on.
 const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
 const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
+
+// The MDRRMO programs (trainings, drills, certification): services whose
+// category is Programs. No unit ever goes out for one, so the queue shows a
+// plain Approve/Disapprove instead of the dispatch panel. Read off the service's
+// category column, so the office can move a service in or out in Manage Services.
+const isProgramRequest = (r) => r?.service?.category === 'programs'
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
-const filters = reactive({ status: 'All' })
+const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
 const vehicleModal = ref({ isOpen: false })
 const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
@@ -1410,12 +1363,6 @@ const noteSaved = ref(false)
 let noteSavedTimer = null
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
-// Same two values ConductionRequestView.vue's own create form offers, for
-// the same patient.
-const sexOptions = [
-  { title: 'Male', value: 'male' },
-  { title: 'Female', value: 'female' },
-]
 
 const emptyCreateForm = () => ({
   resident_id: null,
@@ -1426,7 +1373,6 @@ const emptyCreateForm = () => ({
   // Ambulance only — see the v-else block in the template above.
   patient_name: '',
   patient_age: null,
-  patient_sex: null,
   patient_address: '',
   pickup_location: '',
   destination: '',
@@ -1526,6 +1472,14 @@ const checkWalkInAvailability = async () => {
 const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
 const reasonDialog = ref(emptyReason())
 
+// Approve's note is optional (a dispatched unit is its own explanation —
+// see reasonCopy) and used to sit as a permanent 3-row textarea dominating
+// a dialog that is otherwise one line of context and a confirm button
+// (MDRRMO feedback, 2026-09-18). Collapsed behind this toggle so the
+// default view is just the decision; a decline's reason stays always
+// visible below, since that one is required, not decoration.
+const noteExpanded = ref(false)
+
 // Resolve is terminal and the panel offers no way back, so it gets a
 // confirmation rather than firing on the click. `label` is captured at open
 // time purely so the dialog can name the request in its own copy; the resolve
@@ -1575,6 +1529,16 @@ const reasonCopy = computed(() => {
       // unit "will be sent" there promised something nobody was sending.
       const unit = getSelectedVehicleName()
       const note = { label: 'Note for the Head of the Family (optional)', hint: appHint, showField: hasAccount }
+      // A program has no unit to send, so it gets no "without a vehicle" wording.
+      if (req && isProgramRequest(req)) {
+        return {
+          ...note,
+          title: 'Approve this request',
+          body: `This approves the request for ${what}. Nothing is dispatched.`,
+          placeholder: 'e.g. We will confirm the schedule with your office',
+          confirm: 'Approve',
+        }
+      }
       return unit
         ? {
             ...note,
@@ -1615,6 +1579,7 @@ const reasonCopy = computed(() => {
 })
 
 const openReason = (kind) => {
+  noteExpanded.value = false
   reasonDialog.value = {
     ...emptyReason(),
     open: true,
@@ -1628,7 +1593,7 @@ const openReason = (kind) => {
   }
 }
 
-const clearReason = () => { reasonDialog.value = emptyReason() }
+const clearReason = () => { reasonDialog.value = emptyReason(); noteExpanded.value = false }
 
 const confirmReason = () => {
   const { kind, reason } = reasonDialog.value
@@ -1675,11 +1640,12 @@ const tripRecordAlertType = computed(() => {
 // factory rather than a second hand-written copy — the copy is where the rule
 // that every early return must release the previous blob gets forgotten.
 const createAttachment = (segment, failureMessage) => {
-  const state = reactive({ url: '', loading: false, error: '', for: null })
+  const state = reactive({ url: '', type: '', loading: false, error: '', for: null })
 
   const release = () => {
     if (state.url) URL.revokeObjectURL(state.url)
     state.url = ''
+    state.type = ''
   }
 
   const load = async (item, present) => {
@@ -1699,6 +1665,7 @@ const createAttachment = (segment, failureMessage) => {
       // The selection moved on while this was in flight; the blob belongs to a
       // request that is no longer on screen.
       if (state.for !== id) return
+      state.type = blob.type
       state.url = URL.createObjectURL(blob)
     } catch (error) {
       if (state.for === id) state.error = error.message
@@ -1712,16 +1679,71 @@ const createAttachment = (segment, failureMessage) => {
 
 const lightbox = ref({ open: false, key: null })
 
+// preferred_date is a bare YYYY-MM-DD, so it is read as a local date rather than
+// through Date's UTC parsing, which would show the day before in Manila.
+const formatPreferredDate = (value, month = 'long') => {
+  const [y, m, d] = String(value).split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { year: 'numeric', month, day: 'numeric' })
+}
+
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
 // The route segment and the `site_photo` column keep their names -- this is a
 // label change, not an API one.
 const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
+// The request letter of a training or drill. A scan (image) or a PDF; a PDF
+// opens in a new tab instead of the lightbox.
+const letter = createAttachment('letter', 'Could not load the request letter.')
 
 // Booked is a status only an ambulance booking can ever reach — showing the
 // chip on the 'other' board would be a filter that always reads zero.
 const statusTabs = computed(() => props.scope === 'ambulance'
   ? ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
   : ['All', 'Pending', 'Responding', 'Resolved', 'Disapproved', 'Cancelled'])
+
+// SegmentedTabs' own {value, label, count} shape, built off statusTabs and
+// requestCounts (declared further down — safe to reference here since this
+// only runs when the computed is first read, after the whole script has run).
+const statusTabItems = computed(() =>
+  statusTabs.value.map((status) => ({ value: status, label: status, count: requestCounts.value[status] })),
+)
+
+// Read off the requests actually on screen, not a barangay master list —
+// this filter should only ever offer a value that narrows the result to
+// something, never a barangay with zero requests sitting in the dropdown.
+const barangayOptions = computed(() => {
+  const names = new Set(requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean))
+  return ['All', ...Array.from(names).sort()]
+})
+
+// Same fleet split requesterBarangay/availableVehicles already use: an
+// ambulance board only ever assigns an Ambulance, the other board only ever
+// assigns something else. 'Unassigned' is its own option, not folded into
+// 'All' — "show me the ones nobody has dispatched yet" is a real question a
+// dispatcher asks.
+const unitOptions = computed(() => {
+  const pool = props.scope === 'ambulance'
+    ? vehicles.value.filter(v => v.type === 'Ambulance')
+    : vehicles.value.filter(v => v.type !== 'Ambulance')
+  return ['All', 'Unassigned', ...pool.map(v => v.unit_identifier)]
+})
+
+// Column keys point at plain string fields (added below in
+// filteredAndSortedRequests's own map step) rather than accessor functions,
+// so v-data-table's native sort-by can compare them directly without a
+// Vuetify-version-specific function-value API.
+// Every column carries a declared width, paired with DataTablePage's
+// `table-layout: fixed` — without both, columns size off the visible text and
+// jump on every filter or search (MDRRMO feedback, 2026-09-18). Percentages,
+// not px: the px set summed to 1028px and overflowed the panel below ~1450px.
+const tableHeaders = computed(() => [
+  { title: '', key: 'select', sortable: false, width: '48px' },
+  { title: 'Status', key: 'status', width: '13%' },
+  { title: 'Scheduled', key: 'scheduled_at', width: '18%' },
+  { title: 'Requester', key: '_requesterName', width: '22%' },
+  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary', width: '16%' },
+  { title: 'Patient', key: 'patient_name', width: '15%' },
+  { title: 'Unit', key: '_unit', width: '12%' },
+])
 
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
 // arrival so the operator lands on the filtered view, not "All".
@@ -1747,10 +1769,23 @@ const requesterInitials = (item) => {
   const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
   return parts.length > 0 ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
 }
-const requesterPhone = (item) => item?.resident?.phone_number || item?.walk_in_contact_number || 'N/A'
+const requesterPhone = (item) => displayPhone(item?.resident?.phone_number) || item?.walk_in_contact_number || 'N/A'
 const requesterBarangay = (item) => {
   if (item?.resident) return item.resident.barangay?.barangay_name || 'Unknown Barangay'
   return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
+}
+
+// A real comparison, not a relabel: ADDRESS/LANDMARK/PICKUP used to show
+// the same text three times under three different labels (MDRRMO feedback,
+// 2026-09-18). Whitespace-normalized equality or containment either way —
+// "beside the barangay hall" typed as the whole pickup value and again as
+// just the landmark note should still count as the same fact, not two.
+const isLandmarkRedundant = (landmark, pickup) => {
+  if (!landmark || !pickup) return false
+  const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ')
+  const a = normalize(landmark)
+  const b = normalize(pickup)
+  return a === b || a.includes(b) || b.includes(a)
 }
 
 const requestCounts = computed(() => {
@@ -1790,6 +1825,7 @@ const fetchScheduledAvailability = async (req) => {
 }
 
 const openAssignUnitModal = async () => {
+  apiError.value = ''
   await fetchScheduledAvailability(selectedRequest.value)
   vehicleModal.value.isOpen = true
 }
@@ -1811,9 +1847,59 @@ const availableVehicles = computed(() => {
   // board is the mirror image: it dispatches everything BUT an ambulance,
   // since ambulance requests never reach this board at all (scope='ambulance'
   // handles those on their own).
-  return props.scope === 'ambulance'
-    ? vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
-    : vehicles.value.filter(v => v.status === 'Available' && v.type !== 'Ambulance')
+  //
+  // The other board also narrows to the unit types the office mapped to this
+  // service (Service Vehicles page). No mapping, or a mapping that failed to
+  // load, means every non-ambulance unit — the server enforces the same list, so
+  // this only saves the dispatcher a refusal.
+  if (props.scope === 'ambulance') {
+    return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
+  }
+
+  const allowed = vehicleTypesByService.value[selectedRequest.value?.service?.code] ?? []
+  return vehicles.value.filter(v =>
+    v.status === 'Available' && v.type !== 'Ambulance' && (allowed.length === 0 || allowed.includes(v.type)),
+  )
+})
+
+// service code -> the unit types the office allows on it. Best effort: it only
+// narrows the picker, and the server refuses a wrong unit either way.
+const vehicleTypesByService = ref({})
+const fetchVehicleTypes = async () => {
+  if (props.scope === 'ambulance') return
+  try {
+    const res = await fetch(`${API_BASE}/service-vehicle-types`, { headers: getHeaders(), signal: listAbortController.signal })
+    if (!res.ok) return
+    const body = await res.json()
+    vehicleTypesByService.value = Object.fromEntries((body.data || []).map(row => [row.code, row.vehicle_types]))
+  } catch (error) {
+    if (error.name !== 'AbortError') console.error('Failed to fetch vehicle types:', error)
+  }
+}
+
+/**
+ * The Booked/approve picker's own list — every Ambulance unit, not just the
+ * free ones, each tagged with why it can or cannot take this window (MDRRMO
+ * feedback, 2026-09-18). Naming why a known unit is missing beats silently
+ * omitting it; a dispatcher who expects to see AMB-02 and does not has no
+ * way to tell "already booked" from "the list failed to load" otherwise.
+ * Free units sort first so the common case is never scrolled past.
+ */
+const bookingUnitOptions = computed(() => {
+  const freeIds = new Set(scheduledAvailability.value.map(u => u.vehicle_id))
+
+  return vehicles.value
+    .filter(v => v.type === 'Ambulance')
+    .map(v => ({
+      vehicle: v,
+      available: freeIds.has(v.vehicle_id),
+      reason: freeIds.has(v.vehicle_id)
+        ? null
+        : v.status === 'Maintenance'
+          ? 'Under maintenance'
+          : 'Already booked for this window',
+    }))
+    .sort((a, b) => Number(b.available) - Number(a.available))
 })
 
 const residentOptions = computed(() => residents.value
@@ -1848,6 +1934,13 @@ const attachments = computed(() => {
       present: !!req.has_site_photo,
       state: sitePhoto.state,
       alt: 'Landmark photo attached by the Head of the Family',
+    },
+    {
+      key: 'letter',
+      label: 'Request letter',
+      present: !!req.has_letter,
+      state: letter.state,
+      alt: 'Request letter attached by the requesting barangay or organization',
     },
     {
       key: 'valid-id',
@@ -1909,23 +2002,30 @@ const filteredAndSortedRequests = computed(() => {
   return requests.value.filter(r => {
     if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) return false
 
+    if (filters.barangay !== 'All' && (r.resident?.barangay?.barangay_name || '') !== filters.barangay) return false
+
+    if (filters.unit !== 'All') {
+      const unit = r.vehicle?.unit_identifier || ''
+      if (filters.unit === 'Unassigned' ? unit : unit !== filters.unit) return false
+    }
+
     if (!searchLower) return true
     return requesterName(r).toLowerCase().includes(searchLower) ||
            (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
            (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
-  }).sort((a, b) => {
+  }).map(r => ({
+    ...r,
+    // Plain fields so the table's native column sort can compare them
+    // directly — see tableHeaders.
+    _requesterName: requesterName(r),
+    _secondary: props.scope === 'ambulance' ? requesterBarangay(r) : (r.service?.service_name || 'Other'),
+    _unit: r.vehicle?.unit_identifier || '',
+  })).sort((a, b) => {
     const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
     if (statusA === 'Pending' && statusB !== 'Pending') return -1
     if (statusB === 'Pending' && statusA !== 'Pending') return 1
     return new Date(b.created_at) - new Date(a.created_at)
   })
-})
-
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredAndSortedRequests.value.length / itemsPerPage.value)))
-
-const pagedRequests = computed(() => {
-  const start = (page.value - 1) * itemsPerPage.value
-  return filteredAndSortedRequests.value.slice(start, start + itemsPerPage.value)
 })
 
 // Names which of the two reasons the list is empty. A status chip reading
@@ -1936,6 +2036,30 @@ const emptyListMessage = computed(() => {
   if (filters.status !== 'All') return `No ${filters.status.toLowerCase()} requests`
   return 'No requests yet'
 })
+
+// Search's own chip is DataTablePage's job. Status is included even though
+// the active SegmentedTabs item already shows it — Clear all needs a single
+// place that knows every filter this page has, and a status left off this
+// list would silently survive a Clear all click.
+const activeFilters = computed(() => {
+  const out = []
+  if (filters.status !== 'All') out.push({ key: 'status', label: `Status: ${filters.status}` })
+  if (filters.barangay !== 'All') out.push({ key: 'barangay', label: `Barangay: ${filters.barangay}` })
+  if (filters.unit !== 'All') out.push({ key: 'unit', label: `Unit: ${filters.unit}` })
+  return out
+})
+
+const clearFilter = (key) => {
+  if (key === 'status') filters.status = 'All'
+  else if (key === 'barangay') filters.barangay = 'All'
+  else if (key === 'unit') filters.unit = 'All'
+}
+
+const clearAllFilters = () => {
+  filters.status = 'All'
+  filters.barangay = 'All'
+  filters.unit = 'All'
+}
 
 const showActions = computed(() =>
   selectedRequest.value && (
@@ -2025,11 +2149,13 @@ const getHeaders = () => ({
 const loadAttachments = (item) => {
   validId.load(item, !!item?.has_valid_id)
   sitePhoto.load(item, !!item?.has_site_photo)
+  letter.load(item, !!item?.has_letter)
 }
 
 const releaseAttachments = () => {
   validId.release()
   sitePhoto.release()
+  letter.release()
 }
 
 // Aborted on unmount (below) so a component torn down mid-request — a quick
@@ -2090,14 +2216,14 @@ const fetchRequests = async () => {
   }
 }
 
+// Only ever refreshes an already-open selection — never picks a row on its
+// own. This used to auto-select filteredAndSortedRequests[0] whenever
+// nothing was selected, which opened the detail drawer on every page load
+// before anything was clicked (MDRRMO feedback, 2026-09-18).
 const selectDefaultOrRefreshSelection = () => {
-  if (!selectedRequest.value && requests.value.length > 0) {
-    selectRequest(pagedRequests.value[0] || filteredAndSortedRequests.value[0])
-  } else if (selectedRequest.value) {
-    // Keep the panel in sync with the freshly-fetched copy of the selected request
-    const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
-    if (fresh) selectRequest(fresh, false)
-  }
+  if (!selectedRequest.value) return
+  const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
+  if (fresh) selectRequest(fresh, false)
 }
 
 const selectRequest = (item, resetRemarks = true) => {
@@ -2132,7 +2258,14 @@ const selectRequestById = (id) => {
 
 const selectVehicle = (id) => {
   formData.value.vehicle_id = id
-  vehicleModal.value.isOpen = false
+  // A Booked (ambulance) pick stays open — Approve now lives in this same
+  // dialog's footer, so picking a unit is a selection, not a submit. Every
+  // other caller (the Pending board's plain "Select Vehicle") keeps the old
+  // one-click-and-close behavior; its own Approve & Dispatch is a separate
+  // button outside this dialog entirely.
+  if (selectedRequest.value?.status !== 'Booked') {
+    vehicleModal.value.isOpen = false
+  }
 }
 
 // `tbl_vehicles` has no `plate_number` column and never has -- the unit is
@@ -2265,6 +2398,10 @@ const approveBooking = async () => {
     }
 
     await fetchRequests()
+    // Left open on failure — the error alert renders inside this same
+    // dialog (below), and closing would hide it behind the scrim right as
+    // it appears. Only a successful approve dismisses the dialog.
+    vehicleModal.value.isOpen = false
   } catch (error) {
     apiError.value = error.message
   } finally {
@@ -2484,6 +2621,10 @@ const submitWalkIn = async () => {
       createDialog.value.error = 'Patient name, address, pickup, destination and condition are required'
       return
     }
+    if (!form.patient_relatives.some(name => name.trim())) {
+      createDialog.value.error = 'Name at least one relative or companion going with the patient'
+      return
+    }
   } else if (!form.description.trim()) {
     createDialog.value.error = 'Description is required'
     return
@@ -2512,7 +2653,6 @@ const submitWalkIn = async () => {
       // detail panel's own "Description" display, not a parser anymore.
       body.append('patient_name', form.patient_name.trim())
       if (form.patient_age) body.append('patient_age', form.patient_age)
-      if (form.patient_sex) body.append('patient_sex', form.patient_sex)
       body.append('patient_address', form.patient_address.trim())
       body.append('pickup_location', form.pickup_location.trim())
       body.append('destination', form.destination.trim())
@@ -2588,19 +2728,17 @@ watch(selectedRequest, () => { lightbox.value = { open: false, key: null } })
 
 watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
+watch(() => filters.barangay, () => { page.value = 1 })
+watch(() => filters.unit, () => { page.value = 1 })
 
 onMounted(fetchData)
+onMounted(fetchVehicleTypes)
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
 
-// Everything ConductionRequestView.vue's page-header needs to render this
-// component's own toolbar buttons externally when embedded (standalone=
-// false, toolbar hidden above) -- actions plus the one piece of reactive
-// state the Export button's label/disabled state depends on. Grouped at
-// the bottom, after every referenced const's own declaration, since
-// defineExpose runs inline during setup (not deferred like a template) and
-// openDayView in particular is declared well after where this used to sit.
-defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filteredAndSortedRequests })
+// Trip Logs' "Open Booking" reaches in through this. Last in setup because
+// defineExpose runs inline, after every referenced const is declared.
+defineExpose({ selectRequestById })
 </script>
 
 <style scoped>
@@ -2611,6 +2749,12 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .gap-4 { gap: 16px; }
 .min-width-0 { min-width: 0; }
 
+/* Centred modal, capped so it never exceeds the viewport — the body below
+   (pa-6 overflow-y-auto flex-grow-1) is what actually scrolls. */
+.detail-modal-card {
+  max-height: 90vh;
+}
+
 .soft-card {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
@@ -2618,14 +2762,6 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
-}
-
-/* Outlined variant alone already reads quieter than tonal's colored fill;
-   this drops the label itself a step further so a zero-count status is
-   unambiguously the lightest thing in the row, not just a different border
-   style at the same boldness as a populated chip beside it. */
-.status-filter-chip--muted {
-  opacity: 0.6;
 }
 
 /* One unit per row in the picker, separated rather than floated. */
@@ -2645,13 +2781,19 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
 .detail-group { margin-bottom: 28px; }
 .detail-group:last-child { margin-bottom: 0; }
 
-/* 40, and it has to exceed 28 rather than merely differ from it: adjacent
-   margins collapse to the larger of the two, so anything under the group
-   spacing above it renders as that group spacing and the break disappears. */
-.detail-rule {
-  margin-top: 40px;
-  margin-bottom: 40px;
+/* Section headers (Action / Route / Patient & Requester / Notes &
+   Attachments) — same treatment ConductionRequestView.vue's create/trip-log
+   dialogs already use, reused rather than inventing a second convention
+   (MDRRMO feedback, 2026-09-18). */
+.section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary-strong));
+  margin: 28px 0 12px;
 }
+.section-title:first-child { margin-top: 0; }
 
 /* The unit summary holds the left end of the action row. It needs a floor so
    a long unit name truncates instead of squeezing the buttons, and a width it
@@ -2741,10 +2883,24 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   max-width: 320px;
 }
 
+.attachment-tile--file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 140px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  text-decoration: none;
+  color: inherit;
+}
 .attachments-row {
   width: fit-content;
   max-width: 100%;
 }
+
+/* Fixed column widths (tableHeaders' own width values) — DataTablePage's own
+   .dtp-table :deep(table) rule now supplies table-layout: fixed. */
 
 .request-row {
   cursor: pointer;
@@ -2782,13 +2938,6 @@ defineExpose({ selectRequestById, openCreateDialog, openDayView, exportCsv, filt
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
-}
-
-/* A rail, not a fixed 400px. The old width truncated service names mid-word on
-   every screen while the pane beside it ran mostly empty. */
-.request-list--rail {
-  flex: 0 1 clamp(360px, 26vw, 560px);
-  min-width: 0;
 }
 
 /* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ConductionRequestView.vue). */

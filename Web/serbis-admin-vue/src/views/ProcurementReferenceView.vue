@@ -1,12 +1,10 @@
 <template>
-  <v-container fluid class="fill-height align-start px-6 px-md-10 pt-4 pb-10 page-background">
+  <v-container fluid class="fill-height align-start page-background">
     <v-row>
       <v-col cols="12">
 
         <PageHeader
           title="Procurement Reference"
-          subtitle="Equipment residents asked for that MDRRMO does not stock — the standing list for MDRRMC"
-          class="mb-6"
         >
           <template v-slot:actions>
             <v-btn

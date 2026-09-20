@@ -58,7 +58,7 @@ class AdminAccountTest extends TestCase
         return array_merge([
             'first_name' => 'Grace',
             'last_name' => 'Reyes',
-            'email_address' => 'grace@test.local',
+            'email_address' => 'grace@serbis.com',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ], $overrides);
@@ -69,11 +69,11 @@ class AdminAccountTest extends TestCase
         $response = $this->postJson('/api/admins', $this->payload());
 
         $response->assertStatus(201)
-            ->assertJsonPath('email_address', 'grace@test.local')
+            ->assertJsonPath('email_address', 'grace@serbis.com')
             // The whole point of the feature: the account can sign in.
             ->assertJsonPath('role', 'Admin');
 
-        $created = User::where('email_address', 'grace@test.local')->first();
+        $created = User::where('email_address', 'grace@serbis.com')->first();
         $this->assertNotNull($created);
         $this->assertTrue(Hash::check('Password123', $created->password));
 
@@ -87,7 +87,7 @@ class AdminAccountTest extends TestCase
 
         // Creating a row that cannot authenticate would pass every assertion
         // above and still leave the office locked out of the account it made.
-        $this->loginAdmin('grace@test.local', 'Password123')
+        $this->loginAdmin('grace@serbis.com', 'Password123')
             ->assertStatus(200)->assertJsonStructure(['token']);
     }
 
@@ -99,7 +99,7 @@ class AdminAccountTest extends TestCase
             ->assertStatus(201)
             ->assertJsonPath('role', 'Admin');
 
-        $this->assertSame('Admin', User::where('email_address', 'grace@test.local')->first()->role);
+        $this->assertSame('Admin', User::where('email_address', 'grace@serbis.com')->first()->role);
     }
 
     public function test_a_weak_or_unconfirmed_password_is_refused(): void
@@ -120,6 +120,46 @@ class AdminAccountTest extends TestCase
         $this->postJson('/api/admins', $this->payload(['email_address' => 'admin@test.local']))
             ->assertStatus(422)
             ->assertJsonValidationErrors('email_address');
+    }
+
+    public function test_a_new_staff_address_must_be_a_serbis_com_username(): void
+    {
+        foreach (['grace@test.local', 'grace@gmail.com', 'Grace@serbis.com', 'gr ace@serbis.com', 'grace_r@serbis.com', '.grace@serbis.com', 'grace..r@serbis.com', 'grace@serbis.com.evil.com', 'grace@sub.serbis.com'] as $bad) {
+            $this->postJson('/api/admins', $this->payload(['email_address' => $bad]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('email_address');
+        }
+
+        $this->assertSame(1, User::count());
+
+        $this->postJson('/api/admins', $this->payload(['email_address' => 'grace.r2@serbis.com']))
+            ->assertStatus(201);
+    }
+
+    public function test_an_existing_staff_address_outside_the_domain_can_still_be_saved(): void
+    {
+        // Accounts made before the rule keep their address. Editing the name
+        // resubmits it unchanged and must not be refused for it.
+        $legacy = $this->makeAdmin('someone@echague.gov.ph');
+
+        $this->putJson("/api/admins/{$legacy->admin_id}", [
+            'first_name' => 'Renamed',
+            'last_name' => 'Person',
+            'email_address' => 'someone@echague.gov.ph',
+        ])->assertStatus(200);
+
+        // Moving it is a change, and lands on the new rule.
+        $this->putJson("/api/admins/{$legacy->admin_id}", [
+            'first_name' => 'Renamed',
+            'last_name' => 'Person',
+            'email_address' => 'someone@gmail.com',
+        ])->assertStatus(422)->assertJsonValidationErrors('email_address');
+
+        $this->putJson("/api/admins/{$legacy->admin_id}", [
+            'first_name' => 'Renamed',
+            'last_name' => 'Person',
+            'email_address' => 'someone@serbis.com',
+        ])->assertStatus(200);
     }
 
     public function test_an_admin_can_be_renamed_without_touching_the_password(): void
@@ -225,7 +265,7 @@ class AdminAccountTest extends TestCase
         // What a typo looks like: created minutes ago, nothing recorded against
         // it, no reason to keep the row.
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
-        $typo = User::where('email_address', 'grace@test.local')->first();
+        $typo = User::where('email_address', 'grace@serbis.com')->first();
 
         $this->deleteJson("/api/admins/{$typo->admin_id}")
             ->assertStatus(200)
@@ -364,7 +404,7 @@ class AdminAccountTest extends TestCase
     {
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
 
-        $created = User::where('email_address', 'grace@test.local')->first();
+        $created = User::where('email_address', 'grace@serbis.com')->first();
 
         $log = DB::table('tbl_system_logs')
             ->where('auditable_type', User::class)

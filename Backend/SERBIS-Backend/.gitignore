@@ -6,6 +6,7 @@
 # .env sat untracked and unignored, one `git add -A` away from being committed.
 .env.*
 !.env.example
+!.env.testing
 .phpactor.json
 .phpunit.result.cache
 /.codex

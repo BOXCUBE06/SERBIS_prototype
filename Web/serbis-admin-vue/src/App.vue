@@ -29,7 +29,7 @@ import { useAppTheme } from '@/composables/useAppTheme'
 
 const route = useRoute()
 
-const isAuthPage = computed(() => route?.path === '/login')
+const isAuthPage = computed(() => route?.path === '/login' || route?.path === '/change-password')
 
 // Set by the route, not sniffed from the path — see the note in router/index.ts.
 const isFixedHeight = computed(() => route?.meta?.fixedHeight === true)
@@ -146,9 +146,13 @@ useAppTheme().init()
   overflow: hidden;
 }
 
-.v-main .v-container {
-  padding-left: 40px !important;
-  padding-right: 24px !important;
+/* The one place page padding lives: routes must not set pa-*, pt-* or px-* on
+   their root container, or the title stops sitting where it does everywhere
+   else. Each route's own root container only. `.v-main .v-container` also caught
+   ServiceRequestQueue's container nested inside Ambulance Dispatch → Bookings,
+   overriding its pa-0 and insetting that panel 40px/24px past its siblings. */
+.inner-wrapper > .v-container {
+  padding: 24px 24px 24px 40px !important;
 }
 
 .modern-drawer {

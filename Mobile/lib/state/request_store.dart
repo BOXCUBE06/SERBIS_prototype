@@ -54,6 +54,11 @@ class AppState extends ChangeNotifier {
   final List<ServiceRequest> requests = [];
   final List<ServiceCatalogItem> services = [];
 
+  /// The ambulance form's destination dropdown (MDRRMO feedback,
+  /// 2026-09-19). Loaded once per screen visit, same as [services] — see
+  /// [loadAmbulanceDestinations].
+  final List<String> ambulanceDestinations = [];
+
   static const String _borrowLogArea = 'borrowing';
 
   /// `GET /equipments` — the borrowing catalogue.
@@ -159,6 +164,7 @@ class AppState extends ChangeNotifier {
           serviceName: service.displayName(language == AppLanguage.filipino),
           // The code too: the icon, colour and type are keyed on it.
           serviceCode: service.code,
+          serviceCategory: service.category,
         );
       }
     }
@@ -179,6 +185,12 @@ class AppState extends ChangeNotifier {
         : 'Something went wrong. Please try again.';
     notifyListeners();
   }
+
+  /// Whether this account type may borrow equipment / file an "Others"
+  /// request (Service Audience page). The server enforces both; these only
+  /// decide what the app offers.
+  bool get borrowingAllowed => _api.serviceAudience.equipmentBorrowing;
+  bool get othersAllowed => _api.serviceAudience.others;
 
   Future<void> loadServices() async {
     try {
@@ -204,6 +216,23 @@ class AppState extends ChangeNotifier {
           reason: 'catalogue emptied');
       services.clear();
       notifyListeners();
+    }
+  }
+
+  /// Best-effort, unlike [loadServices]: a failed fetch just means the
+  /// destination field falls back to "Others" only — free text, exactly
+  /// what the field already was before this list existed. Nothing here
+  /// blocks filing a request.
+  Future<void> loadAmbulanceDestinations() async {
+    try {
+      final list = await _api.getAmbulanceDestinations();
+      ambulanceDestinations
+        ..clear()
+        ..addAll(list);
+      notifyListeners();
+    } catch (error) {
+      AppLog.error(_logArea, 'load ambulance destinations', error: error,
+          reason: 'destination dropdown falls back to Others only');
     }
   }
 
@@ -371,8 +400,6 @@ class AppState extends ChangeNotifier {
     required String purpose,
     String fulfillmentMethod = 'Pickup',
     String? deliveryAddress,
-    String borrowerType = 'Resident',
-    String? organizationName,
   }) async {
     final optimistic = _resolveBorrow(BorrowRequest(
       equipmentId: item?.id,
@@ -395,8 +422,6 @@ class AppState extends ChangeNotifier {
         purpose: purpose,
         fulfillmentMethod: fulfillmentMethod,
         deliveryAddress: deliveryAddress,
-        borrowerType: borrowerType,
-        organizationName: organizationName,
       );
 
       final confirmed = _resolveBorrow(BorrowRequest.fromJson(result));
@@ -783,10 +808,16 @@ class AppState extends ChangeNotifier {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     /// Present only for an ambulance request. When it is, the server composes
     /// `description` from it and `request.description` is not sent at all —
     /// the optimistic row still carries its own copy for the Track screen.
     AmbulanceIntake? intake,
+    // The MDRRMO programs (trainings, drills, certification).
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     // request.scheduledAt, if any, rides along on `request` itself — the
     // optimistic row already carries it, and it is read off there below
@@ -794,11 +825,14 @@ class AppState extends ChangeNotifier {
     requests.insert(0, request);
     notifyListeners();
 
-    if (request.serviceId == null || request.description == null) {
+    // serviceId null is not incomplete — it is the "Others" tile, which has
+    // no tbl_services row to point at. description is still required either
+    // way, same as the server's own required_unless rule.
+    if (request.description == null) {
       requests.remove(request);
       lastError = 'This request is incomplete. Please choose a service and try again.';
-      // Never reachable from the form, which validates both. If this line ever
-      // shows up in a report, the form and the model have drifted apart.
+      // Never reachable from the form, which validates this. If this line
+      // ever shows up in a report, the form and the model have drifted apart.
       AppLog.error(_logArea, 'submit request',
           reason: 'blocked before sending: incomplete');
       notifyListeners();
@@ -807,7 +841,7 @@ class AppState extends ChangeNotifier {
 
     try {
       final result = await _api.submitRequest(
-        serviceId: request.serviceId!,
+        serviceId: request.serviceId,
         description: request.description!,
         validIdFileBytes: validIdFileBytes,
         validIdFileName: validIdFileName,
@@ -815,8 +849,13 @@ class AppState extends ChangeNotifier {
         sitePhotoBytes: sitePhotoBytes,
         sitePhotoFileName: sitePhotoFileName,
         landmark: landmark,
+        fulfillmentMethod: fulfillmentMethod,
+        deliveryAddress: deliveryAddress,
         scheduledAt: request.scheduledAt,
         intake: intake,
+        preferredDate: preferredDate,
+        letterBytes: letterBytes,
+        letterFileName: letterFileName,
       );
 
       final confirmed = _resolveService(ServiceRequest.fromJson(result));

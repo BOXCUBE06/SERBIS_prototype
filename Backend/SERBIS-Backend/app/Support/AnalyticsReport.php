@@ -118,10 +118,9 @@ class AnalyticsReport
             'aging' => $this->aging(),
             'equipmentUtilization' => $this->equipmentUtilization(),
             'loans' => $this->loanTurnaround(),
-            'fleet' => $this->fleetUsage(),
+            'vehicleTrips' => $this->mostUsedVehicles(),
             'barangayCoverage' => $this->barangayResidentsVsRequests(),
             'adoption' => $this->appAdoptionByMonth(),
-            'activation' => $this->activationBacklog(),
         ];
     }
 
@@ -159,12 +158,17 @@ class AnalyticsReport
                 ->where('tbl_residents.barangay_id', $this->barangayId));
     }
 
+    /** Monday-first day labels, paired with the four-block day split below. */
+    private const TIME_BLOCKS = ['Morning', 'Afternoon', 'Evening', 'Late night'];
+
     /**
-     * Section 1 — when demand actually arrives, as a 7 x 24 grid.
+     * Section 1 — when demand actually arrives: which day, and which quarter
+     * of the day, in Manila.
      *
      * Aggregated by UTC date and UTC hour in the database, then each bucket is
-     * shifted into Manila here. The bucket count is bounded by days x 24, so
-     * this returns counts rather than rows however large the table gets.
+     * shifted into Manila and folded into a weekday total and a time-of-day
+     * total here. The bucket count is bounded by days x 24, so this returns
+     * counts rather than rows however large the table gets.
      */
     private function demandByWeekdayHour(): array
     {
@@ -173,34 +177,56 @@ class AnalyticsReport
             ->selectRaw('CAST(tbl_service_request.created_at AS DATE) as bucket_date, EXTRACT(HOUR FROM tbl_service_request.created_at) as bucket_hour, COUNT(*) as total')
             ->get();
 
-        $grid = array_fill(0, 7, array_fill(0, 24, 0));
+        $dayTotals = array_fill_keys(self::WEEKDAYS, 0);
+        $blockTotals = array_fill_keys(self::TIME_BLOCKS, 0);
+        $crossTab = [];
         $total = 0;
 
         foreach ($rows as $row) {
             $utc = CarbonImmutable::parse($row->bucket_date, 'UTC')->setTime((int) $row->bucket_hour, 0);
             $local = $utc->timezone(self::OFFICE_TIMEZONE);
+            $count = (int) $row->total;
 
-            // dayOfWeekIso is 1 (Mon) to 7 (Sun).
-            $grid[$local->dayOfWeekIso - 1][$local->hour] += (int) $row->total;
-            $total += (int) $row->total;
+            $weekday = self::WEEKDAYS[$local->dayOfWeekIso - 1];
+            $block = self::timeBlockFor($local->hour);
+
+            $dayTotals[$weekday] += $count;
+            $blockTotals[$block] += $count;
+            $crossTab[$weekday][$block] = ($crossTab[$weekday][$block] ?? 0) + $count;
+            $total += $count;
         }
 
-        $peak = ['weekday' => null, 'hour' => null, 'count' => 0];
+        $peak = ['weekday' => null, 'block' => null, 'count' => 0];
 
-        foreach ($grid as $weekday => $hours) {
-            foreach ($hours as $hour => $count) {
+        foreach ($crossTab as $weekday => $blocks) {
+            foreach ($blocks as $block => $count) {
                 if ($count > $peak['count']) {
-                    $peak = ['weekday' => self::WEEKDAYS[$weekday], 'hour' => $hour, 'count' => $count];
+                    $peak = ['weekday' => $weekday, 'block' => $block, 'count' => $count];
                 }
             }
         }
 
         return [
-            'weekdays' => self::WEEKDAYS,
-            'grid' => $grid,
+            'days' => ['labels' => self::WEEKDAYS, 'data' => array_values($dayTotals)],
+            'timeOfDay' => ['labels' => self::TIME_BLOCKS, 'data' => array_values($blockTotals)],
             'total' => $total,
             'peak' => $peak,
         ];
+    }
+
+    /**
+     * Morning 6 AM-12 PM, Afternoon 12-6 PM, Evening 6 PM-12 AM, Late night
+     * 12-6 AM — the four-block split the Analytics page shows instead of a
+     * raw hour. $hour is the Manila-local hour, 0-23.
+     */
+    private static function timeBlockFor(int $hour): string
+    {
+        return match (true) {
+            $hour >= 6 && $hour < 12 => 'Morning',
+            $hour >= 12 && $hour < 18 => 'Afternoon',
+            $hour >= 18 => 'Evening',
+            default => 'Late night',
+        };
     }
 
     /**
@@ -566,90 +592,62 @@ class AnalyticsReport
     }
 
     /**
-     * Section 8 — fleet usage: trips and time per vehicle/type, from the
+     * Section 8 — most used vehicles: trips per vehicle, ranked, from the
      * conduction (ambulance dispatch) trip log.
      *
-     * Windowed by created_at, matching every other section. No barangay or
-     * service filter: tbl_conduction_requests carries no resident_id at all
-     * (filed by MDRRMO staff, not a resident — see the table's own
-     * migration comment) and its parent service_request_id is always the
-     * one ambulance-dispatch service, so a service filter would either show
-     * everything or nothing.
+     * Its own Today / This week / This month, independent of the page's
+     * shared date filter — all three computed in one pass so the toggle on
+     * screen never requeries. Manila calendar boundaries: 'today' is
+     * midnight-to-now, 'week' is Monday-to-now, 'month' is the 1st-to-now,
+     * matching this class's other calendar-boxed windows (resolveRange())
+     * rather than a rolling N-day lookback.
      *
-     * Duration is computed only for a trip with both departed_office_at and
-     * returned_office_at — a dispatch still out has no duration yet.
-     * Distance is computed only where both odometer readings exist, which
-     * the migration that added them notes is a minority of trips, so it
-     * carries its own sample size rather than being folded into trip count.
+     * Built from the full vehicle catalogue outward, the same shape as
+     * equipmentUtilization() — a vehicle with no trips in the period still
+     * shows at zero rather than dropping off the chart.
+     *
+     * No barangay or service filter: tbl_conduction_requests carries no
+     * resident_id at all (filed by MDRRMO staff, not a resident — see the
+     * table's own migration comment) and its parent service_request_id is
+     * always the one ambulance-dispatch service, so a service filter would
+     * either show everything or nothing.
      */
-    private function fleetUsage(): array
+    private function mostUsedVehicles(): array
     {
-        $rows = DB::table('tbl_conduction_requests')
-            ->leftJoin('tbl_vehicles', 'tbl_conduction_requests.vehicle_id', '=', 'tbl_vehicles.vehicle_id')
-            ->where('tbl_conduction_requests.created_at', '>=', $this->from)
-            ->where('tbl_conduction_requests.created_at', '<', $this->to)
-            ->select([
-                'tbl_conduction_requests.vehicle_id',
-                'tbl_vehicles.unit_identifier',
-                'tbl_vehicles.type',
-                'tbl_conduction_requests.departed_office_at',
-                'tbl_conduction_requests.returned_office_at',
-                'tbl_conduction_requests.odometer_start',
-                'tbl_conduction_requests.odometer_end',
-            ])
+        $now = CarbonImmutable::now(self::OFFICE_TIMEZONE);
+
+        $boundaries = [
+            'today' => $now->startOfDay(),
+            'week' => $now->startOfWeek(CarbonImmutable::MONDAY),
+            'month' => $now->startOfMonth(),
+        ];
+
+        $vehicles = DB::table('tbl_vehicles')
+            ->orderBy('unit_identifier')
+            ->select('vehicle_id', 'unit_identifier', 'type')
             ->get();
 
-        $byVehicle = [];
-        $allDurations = [];
-        $distances = [];
+        $result = [];
 
-        foreach ($rows as $row) {
-            $key = $row->vehicle_id ?? 0;
+        foreach ($boundaries as $key => $start) {
+            $tripsByVehicle = DB::table('tbl_conduction_requests')
+                ->where('created_at', '>=', $start->utc())
+                ->whereNotNull('vehicle_id')
+                ->groupBy('vehicle_id')
+                ->selectRaw('vehicle_id, COUNT(*) as total')
+                ->pluck('total', 'vehicle_id');
 
-            $byVehicle[$key] ??= [
-                'label' => $row->unit_identifier ?? 'No unit recorded',
-                'type' => $row->type,
-                'trips' => 0,
-                'durations' => [],
-            ];
-            $byVehicle[$key]['trips']++;
-
-            if ($row->departed_office_at !== null && $row->returned_office_at !== null) {
-                $hours = CarbonImmutable::parse($row->departed_office_at, 'UTC')
-                    ->diffInMinutes(CarbonImmutable::parse($row->returned_office_at, 'UTC')) / 60;
-
-                $byVehicle[$key]['durations'][] = $hours;
-                $allDurations[] = $hours;
-            }
-
-            if ($row->odometer_start !== null && $row->odometer_end !== null) {
-                $distances[] = max(0, (int) $row->odometer_end - (int) $row->odometer_start);
-            }
+            $result[$key] = $vehicles
+                ->map(fn ($v) => [
+                    'label' => $v->unit_identifier,
+                    'type' => $v->type,
+                    'trips' => (int) ($tripsByVehicle[$v->vehicle_id] ?? 0),
+                ])
+                ->sortByDesc('trips')
+                ->values();
         }
 
-        $units = collect($byVehicle)
-            ->map(fn ($v) => [
-                'label' => $v['label'],
-                'type' => $v['type'],
-                'trips' => $v['trips'],
-                'medianTripHours' => $this->median($v['durations']),
-                'n' => count($v['durations']),
-            ])
-            ->sortByDesc('trips')
-            ->values();
-
-        return [
-            'units' => $units,
-            'totalTrips' => $rows->count(),
-            'duration' => [
-                'medianHours' => $this->median($allDurations),
-                'n' => count($allDurations),
-            ],
-            'distance' => [
-                'medianKm' => $this->median($distances),
-                'n' => count($distances),
-            ],
-        ];
+        return $result;
     }
 
     /**
@@ -680,6 +678,7 @@ class AnalyticsReport
         $placedByName = collect($counts['barangays'])->keyBy('name');
 
         $residentCounts = DB::table('tbl_residents')
+            ->where('account_type', 'head_of_family')
             ->whereNotNull('barangay_id')
             ->groupBy('barangay_id')
             ->selectRaw('barangay_id, COUNT(*) as total')
@@ -721,48 +720,6 @@ class AnalyticsReport
             ->get();
 
         return $this->stackByMonth($rows);
-    }
-
-    /**
-     * Section 11 — account activation backlog.
-     *
-     * 'Inactive' on tbl_residents means self-registered and waiting for an
-     * admin to switch the account on — NOT the closed state 'Deactivated'
-     * an admin turns off deliberately. The two are a plain varchar column
-     * apart (Resident::isDeactivated() documents the same split in detail),
-     * so counting 'Inactive' exactly, and never 'Deactivated', is what makes
-     * this the waiting-for-activation backlog and not a mix of two
-     * different problems.
-     *
-     * The backlog count itself DELIBERATELY ignores the date window, the
-     * same choice aging() and loanTurnaround()'s currentlyOverdue make: it
-     * is a present-moment count of accounts waiting right now, and scoping
-     * it to "this month" would hide a sign-up from three months ago nobody
-     * has activated yet. signupsByMonth is windowed, because a trend over
-     * time is exactly what the aggregate backlog number cannot show.
-     *
-     * Barangay filter applies to both; no service filter — a resident row
-     * has no service dimension.
-     */
-    private function activationBacklog(): array
-    {
-        $backlog = DB::table('tbl_residents')
-            ->where('status', 'Inactive')
-            ->when($this->barangayId, fn ($q) => $q->where('barangay_id', $this->barangayId))
-            ->count();
-
-        $signupRows = DB::table('tbl_residents')
-            ->where('created_at', '>=', $this->from)
-            ->where('created_at', '<', $this->to)
-            ->when($this->barangayId, fn ($q) => $q->where('barangay_id', $this->barangayId))
-            ->groupByRaw('CAST(created_at AS DATE), status')
-            ->selectRaw('CAST(created_at AS DATE) as bucket_date, status as label, COUNT(*) as total')
-            ->get();
-
-        return [
-            'backlog' => (int) $backlog,
-            'signupsByMonth' => $this->stackByMonth($signupRows),
-        ];
     }
 
     /**

@@ -105,7 +105,10 @@ class EquipmentBorrowingDeleteRouteTest extends TestCase
     {
         Sanctum::actingAs($this->admin);
 
-        $this->putJson("/api/borrowings/{$this->borrowing->getKey()}", ['status' => 'Returned'])
+        $this->putJson("/api/borrowings/{$this->borrowing->getKey()}", [
+            'status' => 'Returned',
+            'return_condition_note' => 'Came back in working order.',
+        ])
             ->assertOk();
 
         $this->assertSame('Returned', $this->borrowing->fresh()->status);

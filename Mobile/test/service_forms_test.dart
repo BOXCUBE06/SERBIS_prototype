@@ -64,8 +64,7 @@ void main() {
       final typed = await _fillEveryField(tester);
       // Eight, up from four: the structured rebuild added age, patient
       // address, patient contact number and one relative slot alongside the
-      // original patient / from / to / diagnosis. Sex is not counted — it is
-      // an AppDropdown, not a TextField, and is asserted separately below.
+      // original patient / from / to / diagnosis.
       //
       // This count is the guard that catches a field rendered but never read,
       // so it moves deliberately and never to make a run go green.
@@ -79,28 +78,6 @@ void main() {
         expect(description, contains(value),
             reason: 'a field the resident filled in was dropped: $value');
       }
-    });
-
-    testWidgets('ambulance — the sex dropdown reaches the description too',
-        (tester) async {
-      // The one input on this form that is not a TextField, so
-      // _fillEveryField above cannot cover it.
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      await _pump(tester, form);
-
-      await tester.tap(find.byType(DropdownButton<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Female').last);
-      await tester.pumpAndSettle();
-
-      expect(form.sex, 'Female');
-      // Lowercased on the way to the API, which takes `in:male,female`.
-      expect(form.sexValue, 'female');
-      expect(
-        form.metaLines(serviceName: 'Ambulance', submittedLabel: 'x'),
-        contains('Sex: female'),
-      );
     });
 
     testWidgets('road obstruction', (tester) async {
@@ -140,6 +117,34 @@ void main() {
       expect(description, contains(kAssistanceTypes.first));
     });
 
+    testWidgets('relief offers pickup/delivery; road and generic do not', (tester) async {
+      final relief = StructuredFormData.relief();
+      final road = StructuredFormData.road();
+      final generic = StructuredFormData.generic();
+      addTearDown(() {
+        relief.dispose();
+        road.dispose();
+        generic.dispose();
+      });
+
+      expect(relief.offersFulfillment, isTrue);
+      expect(road.offersFulfillment, isFalse);
+      expect(generic.offersFulfillment, isFalse);
+
+      await _pump(tester, relief);
+      expect(find.text('How should this reach you?'), findsOneWidget);
+      // Defaults to Pickup, so the address field starts hidden.
+      expect(find.text('Delivery address'), findsNothing);
+
+      await tester.tap(find.text('How should this reach you?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delivery').last);
+      await tester.pumpAndSettle();
+
+      expect(relief.fulfillmentMethod, 'Delivery');
+      expect(find.text('Delivery address'), findsOneWidget);
+    });
+
     testWidgets('generic', (tester) async {
       final form = StructuredFormData.generic();
       addTearDown(form.dispose);
@@ -155,6 +160,48 @@ void main() {
       for (final value in typed) {
         expect(description, contains(value), reason: 'dropped: $value');
       }
+    });
+  });
+
+  group('relief\'s "same as my address" checkbox', () {
+    test('off by default, fills only the address field when checked', () {
+      final relief = StructuredFormData.relief(accountFullAddress: 'Purok 3, San Fabian');
+      addTearDown(relief.dispose);
+
+      expect(relief.hasAddressField, isTrue);
+      expect(relief.addressIsMyAddress, isFalse);
+      expect(relief.field('address').text, isEmpty);
+
+      relief.setAddressIsMyAddress(true);
+
+      expect(relief.field('address').text, 'Purok 3, San Fabian');
+      // Untouched — the checkbox only ever writes to 'address'.
+      expect(relief.field('household_size').text, isEmpty);
+    });
+
+    test('road and generic have no address field to offer it for', () {
+      final road = StructuredFormData.road();
+      final generic = StructuredFormData.generic();
+      addTearDown(() {
+        road.dispose();
+        generic.dispose();
+      });
+
+      expect(road.hasAddressField, isFalse);
+      expect(generic.hasAddressField, isFalse);
+    });
+
+    testWidgets('checking it on screen fills the address field', (tester) async {
+      final relief = StructuredFormData.relief(accountFullAddress: 'Purok 3, San Fabian');
+      addTearDown(relief.dispose);
+      await _pump(tester, relief);
+
+      expect(find.text('Same as my address'), findsOneWidget);
+
+      await tester.tap(find.text('Same as my address'));
+      await tester.pump();
+
+      expect(find.widgetWithText(TextField, 'Purok 3, San Fabian'), findsOneWidget);
     });
   });
 
@@ -202,15 +249,19 @@ void main() {
   });
 
   group('what the account fills in for the resident', () {
-    test('the address and the contact number are prefilled, the name is not', () {
+    test('the contact number is prefilled; the name and both addresses are not', () {
       final form = AmbulanceFormData(
         contactNumber: '09171234567',
-        accountAddress: 'San Fabian',
+        accountFullAddress: 'Purok 3, San Fabian',
       );
       addTearDown(form.dispose);
 
-      expect(form.patientAddress.text, 'San Fabian');
       expect(form.patientContact.text, '09171234567');
+      // The account's own address is offered through the "Same as my
+      // address" checkboxes (see below), never applied automatically — the
+      // patient's address and the pickup point are often somewhere else.
+      expect(form.patientAddress.text, isEmpty);
+      expect(form.pickup.text, isEmpty);
       // The one field that must never arrive pre-answered: the requester is
       // often not the patient, and a name already in the box gets submitted
       // unchecked.
@@ -220,16 +271,13 @@ void main() {
     test('every other field starts blank', () {
       final form = AmbulanceFormData(
         contactNumber: '09171234567',
-        accountAddress: 'San Fabian',
+        accountFullAddress: 'Purok 3, San Fabian',
       );
       addTearDown(form.dispose);
 
       expect(form.age.text, isEmpty);
-      expect(form.pickup.text, isEmpty);
       expect(form.destination.text, isEmpty);
       expect(form.diagnosis.text, isEmpty);
-      expect(form.sex, AmbulanceFormData.sexUnspecified);
-      expect(form.sexValue, isNull);
       expect(form.relativeNames, isEmpty);
       expect(form.scheduledAt, isNull);
     });
@@ -237,7 +285,7 @@ void main() {
     test('an edited prefill is what reaches the dispatcher, not the account', () {
       final form = AmbulanceFormData(
         contactNumber: '09171234567',
-        accountAddress: 'San Fabian',
+        accountFullAddress: 'San Fabian',
       );
       addTearDown(form.dispose);
 
@@ -248,8 +296,86 @@ void main() {
 
       expect(lines, contains('Address: Purok 7, San Miguel'));
       expect(lines, contains('Contact: 09189999999'));
-      expect(lines.join('\n'), isNot(contains('San Fabian')));
       expect(lines.join('\n'), isNot(contains('09171234567')));
+    });
+  });
+
+  group('the "same as my address" checkboxes', () {
+    test('patient address: off by default, fills only when checked', () {
+      final form = AmbulanceFormData(accountFullAddress: 'Purok 3, San Fabian');
+      addTearDown(form.dispose);
+
+      expect(form.patientAddressIsMyAddress, isFalse);
+      expect(form.patientAddress.text, isEmpty);
+
+      form.setPatientAddressIsMyAddress(true);
+
+      expect(form.patientAddressIsMyAddress, isTrue);
+      expect(form.patientAddress.text, 'Purok 3, San Fabian');
+    });
+
+    test('patient address: unchecking does not clear the field', () {
+      final form = AmbulanceFormData(accountFullAddress: 'Purok 3, San Fabian');
+      addTearDown(form.dispose);
+
+      form.setPatientAddressIsMyAddress(true);
+      form.setPatientAddressIsMyAddress(false);
+
+      expect(form.patientAddress.text, 'Purok 3, San Fabian');
+    });
+
+    test('pickup: off by default, fills only when checked, independent of patient address', () {
+      final form = AmbulanceFormData(accountFullAddress: 'Purok 3, San Fabian');
+      addTearDown(form.dispose);
+
+      form.setPickupIsMyAddress(true);
+
+      expect(form.pickupIsMyAddress, isTrue);
+      expect(form.pickup.text, 'Purok 3, San Fabian');
+      // The other checkbox and field are untouched.
+      expect(form.patientAddressIsMyAddress, isFalse);
+      expect(form.patientAddress.text, isEmpty);
+    });
+  });
+
+  group('the "patient is myself" checkbox', () {
+    test('is off by default and the name stays blank', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      expect(form.patientIsAccountHolder, isFalse);
+      expect(form.patient.text, isEmpty);
+    });
+
+    test('checking it fills the patient name from the account', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      form.setPatientIsAccountHolder(true);
+
+      expect(form.patientIsAccountHolder, isTrue);
+      expect(form.patient.text, 'Maria Santos');
+    });
+
+    test('the filled name is still editable afterward', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      form.setPatientIsAccountHolder(true);
+      form.patient.text = 'Juan Dela Cruz';
+
+      expect(form.patient.text, 'Juan Dela Cruz');
+    });
+
+    test('unchecking does not clear whatever is currently in the field', () {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+
+      form.setPatientIsAccountHolder(true);
+      form.setPatientIsAccountHolder(false);
+
+      expect(form.patientIsAccountHolder, isFalse);
+      expect(form.patient.text, 'Maria Santos');
     });
   });
 
@@ -275,6 +401,16 @@ void main() {
         form.metaLines(serviceName: 'Ambulance', submittedLabel: 'x'),
         contains('Relatives: Lalaine Ferrer, Rosa Dela Cruz'),
       );
+    });
+
+    test('caps at two and refuses to add a third slot', () {
+      final form = AmbulanceFormData();
+      addTearDown(form.dispose);
+
+      form.addRelative();
+      form.addRelative();
+
+      expect(form.relatives, hasLength(2));
     });
 
     test('blank and whitespace-only slots are dropped, not sent', () {
@@ -444,7 +580,7 @@ void main() {
         (tester) async {
       final form = AmbulanceFormData(
         contactNumber: '09171234567',
-        accountAddress: 'San Fabian',
+        accountFullAddress: 'San Fabian',
       );
       addTearDown(form.dispose);
       await _pump(tester, form);
@@ -453,6 +589,66 @@ void main() {
       // correct rather than a question to answer.
       expect(find.widgetWithText(TextField, '09XXXXXXXXX'), findsOneWidget);
       expect(find.widgetWithText(TextField, '09171234567'), findsOneWidget);
+    });
+
+    testWidgets(
+        'checking "Patient is myself" fills the name field on screen',
+        (tester) async {
+      final form = AmbulanceFormData(accountName: 'Maria Santos');
+      addTearDown(form.dispose);
+      var changes = 0;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ServiceFormFields(
+              data: form,
+              onChanged: () => changes++,
+              appState: _appState,
+              filipino: false,
+            ),
+          ),
+        ),
+      ));
+
+      expect(find.widgetWithText(TextField, 'Maria Santos'), findsNothing);
+
+      await tester.tap(find.text('Patient is myself'));
+      await tester.pump();
+
+      expect(changes, 1);
+      expect(find.widgetWithText(TextField, 'Maria Santos'), findsOneWidget);
+    });
+
+    testWidgets(
+        'checking "Same as my address" fills patient address and pickup independently',
+        (tester) async {
+      final form = AmbulanceFormData(accountFullAddress: 'Purok 3, San Fabian');
+      addTearDown(form.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ServiceFormFields(
+              data: form,
+              onChanged: () {},
+              appState: _appState,
+              filipino: false,
+            ),
+          ),
+        ),
+      ));
+
+      // Two checkboxes share the same label — one above Patient address, one
+      // above the trip's "From" field.
+      final sameAsMyAddress = find.text('Same as my address');
+      expect(sameAsMyAddress, findsNWidgets(2));
+
+      await tester.tap(sameAsMyAddress.first);
+      await tester.pump();
+
+      expect(find.widgetWithText(TextField, 'Purok 3, San Fabian'), findsOneWidget);
+      expect(form.pickup.text, isEmpty);
     });
 
     testWidgets('the ambulance form lays out at real phone widths',
@@ -472,7 +668,7 @@ void main() {
 
         final form = AmbulanceFormData(
           contactNumber: '09171234567',
-          accountAddress: 'Purok 3, San Fabian',
+          accountFullAddress: 'Purok 3, San Fabian',
         );
         form.addRelative();
 
@@ -500,13 +696,12 @@ void main() {
       for (final label in const [
         'Patient name',
         'Age',
-        'Sex',
         'Patient address',
         'Contact number',
         'From',
         'To',
         'Medical diagnosis',
-        'Relative 1',
+        'Relative 1 (required)',
       ]) {
         expect(find.text(label), findsOneWidget,
             reason: '$label is missing from the ambulance form');
@@ -544,13 +739,16 @@ void main() {
         ),
       ));
 
-      expect(find.text('Relative 1'), findsOneWidget);
+      expect(find.text('Relative 1 (required)'), findsOneWidget);
       expect(find.text('Relative 2'), findsNothing);
 
       await tester.ensureVisible(find.text('Add relative'));
       await tester.tap(find.text('Add relative'));
       await tester.pumpAndSettle();
       expect(find.text('Relative 2'), findsOneWidget);
+
+      // Cap of two reached: the button that would add a third row is gone.
+      expect(find.text('Add relative'), findsNothing);
 
       await tester.enterText(
         find.descendant(

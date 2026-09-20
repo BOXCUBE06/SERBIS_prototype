@@ -119,10 +119,9 @@
               </template>
             </v-text-field>
 
-            <!-- No "Recover password" link: there is no reset route and no
-                 mail transport behind it. Admins are provisioned by hand, so
-                 a forgotten password is a DB operation, not a self-serve flow.
-                 See audit #29. -->
+            <!-- No "Forgot password?" link: staff usernames are not mailboxes, so
+                 nothing can be emailed. Another admin resets it from Staff
+                 Accounts; the note under the button says so. -->
             <div class="d-flex align-center mb-5">
               <!-- Was "for 30 days", which stopped being true when admin tokens
                    gained an 8-hour server-side TTL (audit #30): the server ends
@@ -156,6 +155,10 @@
             >
               {{ lockoutSeconds > 0 ? `LOCKED — ${lockoutSeconds}s` : 'SIGN IN' }}
             </v-btn>
+
+            <p class="reset-note text-body-2 text-center mt-4 mb-0">
+              Ask another admin to reset your password.
+            </p>
 
           </v-form>
 
@@ -314,7 +317,8 @@ const handleLogin = async () => {
 
     if (response.ok) {
       setToken(data.token, rememberMe.value)
-      router.push('/')
+      // A temporary password gets no further than the page that replaces it.
+      router.push(data.user?.must_change_password ? '/change-password' : '/')
     } else if (response.status === 401) {
       errorMessage.value = 'Invalid email or password. Please try again.'
     } else if (response.status === 403 && data.code === 'mfa_required') {
@@ -576,6 +580,12 @@ const handleMfaSubmit = async () => {
 
 .custom-checkbox :deep(.v-selection-control__input > .v-icon) {
   color: white !important;
+}
+
+/* On the dark half of the card, so it needs light text. 0.85 white on #113F36
+   is well above the AA floor. */
+.reset-note {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .hover-underline:hover {

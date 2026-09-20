@@ -253,7 +253,7 @@ void main() {
         () => messageFrom(() => api.me()),
       );
 
-      expect(message, 'You are not allowed to do that.');
+      expect(message, 'This action isn\'t available to your account.');
     });
   });
 
@@ -266,7 +266,7 @@ void main() {
         () => messageFrom(() => api.getAdvisories()),
       );
 
-      expect(message, 'You are not allowed to do that.');
+      expect(message, 'This action isn\'t available to your account.');
     });
 
     test('404 without a body', () async {
@@ -362,7 +362,6 @@ void main() {
           lastName: 'Santos',
           barangayId: 1,
           phoneNumber: '09171234567',
-          email: 'maria@example.test',
           password: 'Secret123',
         ),
       );

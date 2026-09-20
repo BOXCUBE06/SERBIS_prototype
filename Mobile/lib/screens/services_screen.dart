@@ -52,6 +52,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
   bool _loadingServices = true;
   ServiceCatalogItem? _selected;
 
+  /// The ambulance form's destination dropdown (MDRRMO feedback,
+  /// 2026-09-19). A local copy, same as [_services] and for the same
+  /// reason — `setState` is what makes the fetch visible on screen.
+  List<String> _ambulanceDestinations = [];
+
   /// One form per kind, kept for the life of the screen: switching services and
   /// switching back must not silently empty what the resident already typed.
   final Map<ServiceFormKind, ServiceFormData> _forms = {};
@@ -63,6 +68,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// dispatch as much as to a clearing crew, and a rule about which forms may
   /// carry a photo is one the resident would have to discover by its absence.
   fp.PlatformFile? _sitePhotoFile;
+
+  /// The request letter of a training or drill (jpg, png or pdf), the upload
+  /// that stands in for the valid ID on those services.
+  fp.PlatformFile? _letterFile;
 
   /// Optional free-text companion to the site photo — faster to type than to
   /// stop and photograph.
@@ -81,6 +90,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
   void initState() {
     super.initState();
     _loadServices();
+    _loadAmbulanceDestinations();
+  }
+
+  Future<void> _loadAmbulanceDestinations() async {
+    await widget.appState.loadAmbulanceDestinations();
+    if (!mounted) return;
+    setState(() => _ambulanceDestinations = List.of(widget.appState.ambulanceDestinations));
   }
 
   Future<void> _loadServices() async {
@@ -91,7 +107,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
       // in place (`..clear()..addAll()`), so aliasing it let a later reload —
       // or a failed one, which clears it — rewrite the grid with no `setState`
       // while `_selected` still pointed at a row that had been removed.
-      _services = List.of(widget.appState.services);
+      // Appended, not part of the catalogue: "Others" has no tbl_services
+      // row, so it never comes back from loadServices() and has to be added
+      // here every time the grid is (re)built from a fresh fetch.
+      _services = [
+        ...widget.appState.services,
+        if (widget.appState.othersAllowed) const ServiceCatalogItem.others(),
+      ];
       _loadingServices = false;
       _selected = _defaultSelection(_services, widget.initialType);
     });
@@ -135,9 +157,20 @@ class _ServicesScreenState extends State<ServicesScreen> {
       case ServiceFormKind.relief:
         return ServiceType.relief;
       case ServiceFormKind.generic:
+      case ServiceFormKind.training:
+      case ServiceFormKind.drill:
+      case ServiceFormKind.certification:
         return ServiceType.inquiry;
     }
   }
+
+  /// Which uploads a kind of service asks for. The response services take a
+  /// photo of a valid ID; the programs take a request letter instead.
+  ServiceAttachments _attachmentsFor(ServiceFormKind kind) => switch (kind) {
+        ServiceFormKind.training || ServiceFormKind.drill => ServiceAttachments.letterRequired,
+        ServiceFormKind.certification => ServiceAttachments.letterOptional,
+        _ => ServiceAttachments.standard,
+      };
 
   /// `putIfAbsent`, so the prefill happens once per kind. A resident who
   /// overwrites the name and switches services must not find their own name
@@ -146,18 +179,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
       _forms.putIfAbsent(kind, () => switch (kind) {
             ServiceFormKind.ambulance => AmbulanceFormData(
                 contactNumber: widget.user.phone,
-                // `AppUser.address` is the barangay relation, not a street —
-                // tbl_residents carries no address column. A starting point
-                // the resident is expected to narrow, not a doorstep.
-                accountAddress: widget.user.address,
+                accountName: widget.user.fullName,
+                accountFullAddress: widget.user.fullAddress,
               ),
             ServiceFormKind.road => StructuredFormData.road(),
             ServiceFormKind.relief => StructuredFormData.relief(
                 headName: widget.user.fullName,
                 contactNumber: widget.user.phone,
+                accountFullAddress: widget.user.fullAddress,
               ),
             ServiceFormKind.generic =>
               StructuredFormData.generic(contactNumber: widget.user.phone),
+            ServiceFormKind.training =>
+              StructuredFormData.training(contactNumber: widget.user.phone),
+            ServiceFormKind.drill =>
+              StructuredFormData.drill(contactNumber: widget.user.phone),
+            ServiceFormKind.certification =>
+              StructuredFormData.certification(contactNumber: widget.user.phone),
           });
 
   @override
@@ -212,6 +250,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
   }
 
+  Future<void> _pickLetter() async {
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    setState(() => _letterFile = result.files.first);
+  }
+
   Future<fp.PlatformFile?> _pickImage() async {
     final result = await fp.FilePicker.platform.pickFiles(
       type: fp.FileType.custom,
@@ -232,7 +282,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return;
     }
 
-    if (_validIdFile == null || _validIdFile!.bytes == null) {
+    final attachments = _selected == null
+        ? ServiceAttachments.standard
+        : _attachmentsFor(_selected!.formKind);
+
+    if (attachments == ServiceAttachments.standard &&
+        (_validIdFile == null || _validIdFile!.bytes == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
       );
@@ -254,7 +309,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     // the account, where `phone_number` is required at registration and NOT
     // NULL, so there is nothing left to be blank.
 
-    // The same two the server requires for an ambulance request, and only
+    // The same three the server requires for an ambulance request, and only
     // those — refused here so the resident is told which field is missing
     // instead of reading a 422 the app would surface as a generic failure.
     // Everything else on this form is optional on purpose: a resident filing
@@ -264,11 +319,44 @@ class _ServicesScreenState extends State<ServicesScreen> {
       final missing = <String>[
         if (form.patient.text.trim().isEmpty) 'the patient name',
         if (form.destination.text.trim().isEmpty) 'where the ambulance should go',
+        if (form.relativeNames.isEmpty) 'at least one relative going with the patient',
       ];
 
       if (missing.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please fill in ${missing.join(' and ')}.')),
+          SnackBar(
+            content: Text(
+              'Please fill in ${missing.length > 1 ? '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}' : missing.single}.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    // The programs are booked for a day and need the office's lead time, so the
+    // date and the letter are checked here; the server checks them again.
+    if (form is StructuredFormData) {
+      final dateField = form.spec.fields.where((field) => field.isDate).firstOrNull;
+      if (dateField != null) {
+        final picked = form.date(dateField.key);
+        final today = DateTime.now();
+        final earliest = DateTime(today.year, today.month, today.day)
+            .add(Duration(days: dateField.minDaysAhead));
+        if (picked == null || picked.isBefore(earliest)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(picked == null
+                ? 'Please choose a preferred date.'
+                : 'Choose a date at least ${dateField.minDaysAhead} days from today.')),
+          );
+          return;
+        }
+      }
+
+      if (form.spec.attachments == ServiceAttachments.letterRequired &&
+          (_letterFile == null || _letterFile!.bytes == null)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please attach your request letter before submitting.')),
         );
         return;
       }
@@ -284,7 +372,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final scheduledAt = form is AmbulanceFormData ? form.scheduledAt : null;
 
     final request = ServiceRequest(
-      serviceId: service.id,
+      serviceId: service.isOthers ? null : service.id,
       description: metaLines.join('\n'),
       type: _typeForKind(service.formKind),
       // Empty until the server answers: the reference number is the server's
@@ -306,8 +394,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       confirmed = await widget.appState.addRequest(
         request,
-        validIdFileBytes: _validIdFile!.bytes!,
-        validIdFileName: _validIdFile!.name,
+        // Empty for the programs, which ask for a letter instead of an ID.
+        validIdFileBytes: _validIdFile?.bytes ?? const <int>[],
+        validIdFileName: _validIdFile?.name ?? '',
+        preferredDate: form is StructuredFormData ? form.preferredDate : null,
+        letterBytes: _letterFile?.bytes,
+        letterFileName: _letterFile?.bytes == null ? null : _letterFile?.name,
         // `bytes` is null when the picker returns a path-only file, which is
         // what happens if `withData` ever stops holding. Sending the name
         // without the bytes would be a 422 on an upload the resident is not
@@ -321,6 +413,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
         // entirely and re-checks availability under a lock at approval
         // instead — sending it here is harmless either way.
         requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
+        // Relief goods only (StructuredFormData.offersFulfillment) — pickup/
+        // delivery beyond equipment borrowing, MDRRMO feedback, 2026-09-18.
+        fulfillmentMethod: form is StructuredFormData && form.offersFulfillment
+            ? form.fulfillmentMethod
+            : null,
+        deliveryAddress: form is StructuredFormData && form.offersFulfillment
+            ? form.deliveryAddress.text.trim()
+            : null,
         // Ambulance only. Its presence is what tells the request builder to
         // send the structured columns and omit `description` entirely — the
         // server composes that from these same values, and a client-composed
@@ -353,6 +453,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     setState(() {
       _submitFailed = false;
       _sitePhotoFile = null;
+      _letterFile = null;
       _landmarkController.clear();
     });
 
@@ -395,13 +496,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: SafetyNotice(filipino: f),
         ),
+        if (widget.appState.borrowingAllowed)
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
           child: _BorrowEquipmentEntry(
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => BorrowEquipmentScreen(appState: widget.appState),
+                builder: (_) => BorrowEquipmentScreen(
+                  appState: widget.appState,
+                  user: widget.user,
+                ),
               ),
             ),
           ),
@@ -421,11 +526,25 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   data: _formFor(selection.formKind),
                   onChanged: () => setState(() {}),
                   appState: widget.appState,
+                  ambulanceDestinations: _ambulanceDestinations,
                   filipino: f,
                 ),
                 FormSection(
                   label: tr(f, 'form_section.attachments'),
                   children: [
+                    if (_attachmentsFor(selection.formKind) != ServiceAttachments.standard)
+                      AttachmentUploadField(
+                        label: _attachmentsFor(selection.formKind) == ServiceAttachments.letterRequired
+                            ? 'Request letter (required)'
+                            : 'Supporting document (optional)',
+                        hint: 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)',
+                        fileName: _letterFile?.name,
+                        onTap: _pickLetter,
+                        onClear: _attachmentsFor(selection.formKind) == ServiceAttachments.letterOptional
+                            ? () => setState(() => _letterFile = null)
+                            : null,
+                      )
+                    else ...[
                     AttachmentUploadField(
                       label: 'Valid ID (required)',
                       hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
@@ -439,6 +558,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       onTap: _pickSitePhoto,
                       onClear: () => setState(() => _sitePhotoFile = null),
                     ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 12),

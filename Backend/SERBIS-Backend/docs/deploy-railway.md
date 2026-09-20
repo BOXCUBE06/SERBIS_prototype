@@ -121,6 +121,7 @@ every start regardless of which service triggered it.
 | `DB_PASSWORD` | **required** | **yes** | `${{MySQL.MYSQLPASSWORD}}` |
 | `MYSQL_ATTR_SSL_CA` | leave unset | — | private network, no TLS — see §1 |
 | `ADMIN_SEED_PASSWORD` | **required** | **yes** | chosen at deploy time, typed directly into the Railway variable |
+| `SMS_BLAST_CODE_SEED` | **required** | **yes** | the shared 6-digit text-blast code, chosen at deploy time, typed directly into the Railway variable |
 | `SESSION_DRIVER` | optional | no | fixed: `database` |
 | `CACHE_STORE` | optional | no | `file` — `throttleApi()` in `bootstrap/app.php` applies to every route, so a database-backed limiter is two extra round trips per request on a single-instance deploy; move to Redis only if this is ever scaled past one instance |
 | `QUEUE_CONNECTION` | optional | no | fixed: `database` — inert, nothing queues a job |
@@ -138,8 +139,8 @@ every start regardless of which service triggered it.
 | `MAIL_MAILER` | optional | no | fixed: `log` — fallback only; **never `ses`**, `config/services.php` reads the same `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` R2 now uses |
 | `MAIL_FROM_ADDRESS` | optional | no | placeholder — mail never actually sends with `MAIL_MAILER=log` |
 | `MAIL_FROM_NAME` | optional | no | fixed: `SERBIS` |
-| `PHILSMS_TOKEN` | **required** | **yes** | PhilSMS dashboard — a hard deploy blocker, registration OTP has no other channel |
-| `PHILSMS_SENDER_ID` | optional | no | fixed: `PhilSMS`, the shared default |
+| `SKYSMS_API_KEY` | **required** | **yes** | SkySMS dashboard — a hard deploy blocker, registration OTP has no other channel. Credits, not a subscription: an empty balance answers 402 and stops every send |
+| `SKYSMS_BASE_URL` | optional | no | fixed: `https://skysms.skyio.site/api/v1` |
 | `FIREBASE_CREDENTIALS_BASE64` | **required for push** | **yes** | base64 of the downloaded service-account JSON — see the callout below |
 | `FIREBASE_CREDENTIALS` | set by the boot sequence, not by hand | no (the path, not the file) | written from the variable above — see below |
 | `SANCTUM_ADMIN_EXPIRATION` | optional | no | fixed: `480` |
@@ -213,6 +214,8 @@ start, cron run included.
   ```
   php artisan serbis:send-return-reminders && php artisan sanctum:prune-expired --hours=24
   ```
+
+What the reminders command needs: equipment due-back reminders are push only, so they need `FIREBASE_CREDENTIALS_BASE64` and nothing else. Ambulance booking reminders also text, so they need `SKYSMS_API_KEY`; without it, a day with a booking to text makes the command skip those bookings, warn `SkySMS not configured, N booking reminder(s) skipped`, and exit 1 (equipment has already been pushed by then). A day with no booking to text exits 0 whatever the SkySMS config. A resident with no registered device is not retried by text: the run summary counts them ("not delivered (no registered device)") and each is written to the system log and listed in the dashboard bell for staff to phone.
 
 **This runs the two commands directly rather than `php artisan schedule:run`,
 and that is deliberate, not a shortcut.** `routes/console.php` schedules
@@ -306,11 +309,13 @@ assumed.
    on-demand run separate from its schedule) and confirm both commands exit
    0 in its logs before trusting the `0 0 * * *` schedule to run it
    unattended.
-10. **Analytics backfill.** Manual, once, after the deploy is otherwise
-    green — see §6a. Skipping it is not a failure: the analytics page works
-    without it and simply reports a smaller sample.
+10. **Analytics backfill (optional).** Manual, once, after the deploy is
+    otherwise green — see §6a. The Analytics page no longer surfaces a
+    turnaround section, so nothing on that page depends on this running;
+    skip it unless the columns are needed for another purpose (a report, a
+    future turnaround feature).
 
-### 6a. Analytics backfill — manual, run once
+### 6a. Analytics backfill — manual, run once, optional
 
 `first_responded_at` and `resolved_at` on `tbl_service_request` are filled
 going forward by the model, and the **schema** arrives on its own:
@@ -340,9 +345,10 @@ data repair whose coverage a person should read.
   expected result, not a fault.** The audit log begins after the oldest
   requests, a deleted request takes its log rows with it, and a request
   created already `Booked` never had a first response to record.
-- Gate: the command exits 0 and prints the table. Then load the Analytics
-  page and confirm the turnaround section shows a sample size (`n`) rather
-  than presenting partial history as a complete record.
+- Gate: the command exits 0 and prints the table. The Analytics page has no
+  turnaround section to check this against; verify coverage from the
+  command's own output, or with
+  `php artisan tinker --execute="echo DB::table('tbl_service_request')->whereNotNull('first_responded_at')->count();"`.
 
 ## 7. What stays local
 

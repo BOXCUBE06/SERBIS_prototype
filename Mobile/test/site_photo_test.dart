@@ -28,7 +28,7 @@ class _RecordingApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -36,8 +36,13 @@ class _RecordingApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     this.validIdFileBytes = validIdFileBytes;
     this.sitePhotoBytes = sitePhotoBytes;

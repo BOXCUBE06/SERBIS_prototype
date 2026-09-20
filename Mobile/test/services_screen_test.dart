@@ -157,7 +157,7 @@ class FakeApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -165,8 +165,13 @@ class FakeApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     submitCount++;
     lastSitePhotoBytes = sitePhotoBytes;
@@ -220,13 +225,16 @@ Future<void> _pump(
   // that the submit button never builds, which would make it unfindable for a
   // reason that has nothing to do with the code under test.
   //
-  // 8000, not 5600: the ambulance form grew from four inputs to nine plus a
-  // relatives repeater, and 5600 was already tuned tightly enough that the
-  // earlier schedule picker had pushed Submit below the fold. ensureVisible()
-  // ought to scroll to it regardless of height, but this screen was
-  // deliberately sized to avoid depending on that in the first place — keep it
-  // that way rather than debug why only some tests need the scroll to work.
-  tester.view.physicalSize = const Size(1080, 8000);
+  // 8600, not 8000: the "Same as my address" checkboxes on patient address
+  // and pickup (MDRRMO feedback, 2026-09-19) pushed Submit below the fold
+  // again at 8000. ensureVisible() ought to scroll to it regardless of
+  // height, but this screen was deliberately sized to avoid depending on
+  // that in the first place — keep it that way rather than debug why only
+  // some tests need the scroll to work. Previously 8000, not 5600: the
+  // ambulance form grew from four inputs to nine plus a relatives repeater,
+  // and 5600 was already tuned tightly enough that the schedule picker
+  // before that had pushed Submit below the fold too.
+  tester.view.physicalSize = const Size(1080, 8600);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 
@@ -279,7 +287,11 @@ Finder _patientNameField() {
 /// Mirrors the server's own required set for this service
 /// (ServiceRequestController::store): patient_name and destination.
 Future<void> _fillRequiredAmbulanceFields(WidgetTester tester) async {
-  for (final entry in const {'Patient name': 'Maria Santos', 'To': 'Echague District Hospital'}.entries) {
+  for (final entry in const {
+    'Patient name': 'Maria Santos',
+    'Destination': 'Echague District Hospital',
+    'Relative 1 (required)': 'Lalaine Ferrer',
+  }.entries) {
     final field = find.descendant(
       of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
       matching: find.byType(TextField),
@@ -553,6 +565,32 @@ void main() {
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 
+    testWidgets('an ambulance request naming no relative is refused with a reason',
+        (tester) async {
+      // MDRRMO, 2026-09-20: the hospital asks for a companion, so at least one
+      // relative is required. The server refuses it too; this is the half that
+      // tells the resident which field.
+      final api = FakeApi();
+      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+
+      for (final entry in const {
+        'Patient name': 'Maria Santos',
+        'Destination': 'Echague District Hospital',
+      }.entries) {
+        final field = find.descendant(
+          of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
+          matching: find.byType(TextField),
+        );
+        await tester.ensureVisible(field);
+        await tester.enterText(field, entry.value);
+      }
+      await _attachValidId(tester);
+      await _submit(tester);
+
+      expect(find.textContaining('at least one relative'), findsOneWidget);
+      expect(api.submitCount, 0, reason: 'nothing may reach the server');
+    });
+
     testWidgets("the account's number reaches the dispatcher as a real field",
         (tester) async {
       // Was an assertion on `lastDescription`. The client no longer composes a
@@ -574,18 +612,22 @@ void main() {
       expect(api.lastIntake?.toFields()['patient_contact_number'], '09171234567');
     });
 
-    testWidgets("the account's address prefills the patient address",
+    testWidgets(
+        'checking "Same as my address" sends the account address as the patient address',
         (tester) async {
-      // Same shape as the number above: never typed here, carried by
-      // `_testUser`, and editable once it is on screen.
+      // Unlike the callback number, the address is never prefilled
+      // automatically (MDRRMO feedback, 2026-09-19) — the checkbox is what
+      // carries `_testUser`'s address onto the field.
       final api = FakeApi();
       await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
 
       await _fillRequiredAmbulanceFields(tester);
+      await tester.tap(find.text('Same as my address').first);
+      await tester.pump();
       await _attachValidId(tester);
       await _submit(tester);
 
-      expect(api.lastIntake?.patientAddress, _testUser.address);
+      expect(api.lastIntake?.patientAddress, _testUser.fullAddress);
     });
 
     testWidgets('an ambulance request sends the structured fields, not a description',

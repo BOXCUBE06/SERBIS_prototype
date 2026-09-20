@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/info_material.dart';
 import 'package:serbis/models/request_models.dart';
 import 'package:serbis/screens/dashboard_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/material_cache.dart';
 import 'package:serbis/state/request_store.dart';
@@ -31,6 +32,14 @@ class _FakeApi extends ApiService {
   Future<List<Map<String, dynamic>>> getInfoMaterials() async =>
       <Map<String, dynamic>>[];
 }
+
+const _resident = AppUser(
+  id: '1',
+  firstName: 'Maria',
+  lastName: 'Santos',
+  email: 'maria@example.com',
+  address: 'San Fabian',
+);
 
 InfoMaterial _material(int id, String title, {DateTime? publishedAt}) =>
     InfoMaterial(
@@ -60,6 +69,7 @@ Future<AppState> _pumpHome(
     home: Scaffold(
       body: HomeScreen(
         appState: state,
+        user: _resident,
         onOpenTrack: () {},
         onOpenLibrary: () {},
         onOpenProfile: () {},

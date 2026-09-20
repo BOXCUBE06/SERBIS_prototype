@@ -1,6 +1,7 @@
 
 library serbis.state.user_store;
 
+import '../models/phone_number.dart';
 import 'api_service.dart';
 import 'user_cache.dart';
 
@@ -12,13 +13,24 @@ class AppUser {
   /// resident has none on file, which is different from not having loaded it.
   final String middleName;
   final String lastName;
+  /// Kept because the server still returns it for accounts that gave one. New
+  /// accounts have none (a phone number is the login), so this is usually empty
+  /// and nothing in the app asks for it.
   final String email;
 
-  /// The number the MDRRMO calls back on. Editable by the resident through
-  /// `PATCH /me`; it is not the number SMS blasts are keyed on being correct,
-  /// so a typo here costs the resident a callback, not an alert.
+  /// The number the resident signs in with, as the server stores it
+  /// (`+639171234567`). It moves only through the two-step code flow
+  /// ([UserStore.requestPhoneChange]); read it through [phoneDisplay] for
+  /// anything a person sees.
   final String phone;
   final String address;
+
+  /// Purok/street — `tbl_residents.street_address`, added because the
+  /// barangay relation alone is not enough for a dispatcher to find a
+  /// household (MDRRMO feedback, 2026-09-19). Optional, and editable through
+  /// `PATCH /me` the same as every other contact field. An empty string means
+  /// the resident has none on file.
+  final String streetAddress;
 
   /// Whether a profile photo has been uploaded. The path is never sent to a
   /// client — the server answers this flag and serves the image from
@@ -30,19 +42,74 @@ class AppUser {
   /// false here means no blast reaches this number at all.
   final bool smsOptIn;
 
+  /// `head_of_family` (an individual, the default), `organization` or
+  /// `barangay`. A server that predates the column sends none, which reads as
+  /// an individual.
+  final String accountType;
+
+  /// The organization's name; empty for every other type.
+  final String organizationName;
+
+  /// `tbl_residents.status`: Active, Inactive (pending) or Deactivated. Only
+  /// consulted for [isAwaitingApproval]. Empty when the payload has none.
+  final String status;
+
   const AppUser({
     required this.id,
     required this.firstName,
     this.middleName = '',
     required this.lastName,
-    required this.email,
+    this.email = '',
     this.phone = '',
     required this.address,
+    this.streetAddress = '',
     this.hasPhoto = false,
     this.smsOptIn = true,
+    this.accountType = 'head_of_family',
+    this.organizationName = '',
+    this.status = '',
   });
 
+  /// The number the way a person writes it, `09171234567`.
+  String get phoneDisplay => PhoneNumber.display(phone);
+
+  bool get isOrganization => accountType == 'organization';
+  bool get isBarangay => accountType == 'barangay';
+
+  /// An organization that registered itself and has not been activated. It
+  /// cannot file anything (the server answers 403 account_pending), so the app
+  /// shows an approval screen instead of the service list. An individual in the
+  /// same status can file, so this is specific to organizations.
+  bool get isAwaitingApproval => isOrganization && status.toLowerCase() == 'inactive';
+
+  /// Who this account is, for the top of the home screen: the organization's
+  /// name, "Barangay <name>" for a barangay hall, or the person's own name.
+  String get accountName {
+    if (isOrganization && organizationName.isNotEmpty) return organizationName;
+    if (isBarangay) return 'Barangay $address'.trim();
+    return fullName;
+  }
+
+  /// A `translations.dart` key for the account type's label.
+  String get accountTypeKey => isOrganization
+      ? 'account.organization'
+      : isBarangay
+          ? 'account.barangay'
+          : 'account.individual';
+
   String get fullName => '$firstName $lastName'.trim();
+
+  /// The purok/street and barangay together, for the "Same as my address"
+  /// checkboxes on the request forms (MDRRMO feedback, 2026-09-19) — the
+  /// fuller answer [address] alone cannot give, now that [streetAddress]
+  /// exists to ask for it. Falls back to just the barangay when the resident
+  /// has not set a street address yet, and to empty when there is no
+  /// barangay either (profile not yet loaded).
+  String get fullAddress {
+    if (streetAddress.isEmpty) return address;
+    if (address.isEmpty) return streetAddress;
+    return '$streetAddress, $address';
+  }
 
   /// Two letters for the avatar when there is no photo. Empty when the profile
   /// carries no name at all, so nothing invented appears in the circle.
@@ -59,6 +126,7 @@ class AppUser {
     String? lastName,
     String? email,
     String? phone,
+    String? streetAddress,
     bool? hasPhoto,
     bool? smsOptIn,
   }) {
@@ -70,13 +138,18 @@ class AppUser {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       address: address,
+      streetAddress: streetAddress ?? this.streetAddress,
       hasPhoto: hasPhoto ?? this.hasPhoto,
       smsOptIn: smsOptIn ?? this.smsOptIn,
+      accountType: accountType,
+      organizationName: organizationName,
+      status: status,
     );
   }
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
-    // tbl_residents has no address column; location is the barangay relation.
+    // The barangay relation, not a street — tbl_residents' own street_address
+    // column is read separately below.
     final barangay = json['barangay'];
     final barangayName =
         barangay is Map<String, dynamic> ? barangay['barangay_name'] as String? : null;
@@ -89,11 +162,15 @@ class AppUser {
       email: json['email_address'] as String? ?? '',
       phone: json['phone_number'] as String? ?? '',
       address: barangayName ?? '',
+      streetAddress: json['street_address'] as String? ?? '',
       hasPhoto: json['has_photo'] == true,
       // Absent falls back to true, matching the column's own default. Reading a
       // missing key as false would show a resident an "off" switch and tell
       // them they are receiving nothing while the server still sends to them.
       smsOptIn: json['sms_opt_in'] as bool? ?? true,
+      accountType: json['account_type'] as String? ?? 'head_of_family',
+      organizationName: json['organization_name'] as String? ?? '',
+      status: json['status'] as String? ?? '',
     );
   }
 }
@@ -145,36 +222,40 @@ class UserStore {
     String? middleName,
     required String lastName,
     required int barangayId,
+    String? streetAddress,
     required String phoneNumber,
-    required String email,
     required String password,
+    String accountType = 'head_of_family',
+    String? organizationName,
   }) {
     return _api.register(
       firstName: firstName,
       middleName: middleName,
       lastName: lastName,
       barangayId: barangayId,
+      streetAddress: streetAddress,
       phoneNumber: phoneNumber,
-      email: email,
       password: password,
+      accountType: accountType,
+      organizationName: organizationName,
     );
   }
 
-  /// Finishes registration with the emailed code. Returns the signed-in
-  /// resident: the server issues a token here, so there is no second trip
-  /// through the login screen.
-  Future<AppUser> verifyEmail({
-    required String email,
+  /// Finishes registration with the code texted to the number. Returns the
+  /// signed-in resident: the server issues a token here, so there is no second
+  /// trip through the login screen.
+  Future<AppUser> verifyPhone({
+    required String phoneNumber,
     required String code,
   }) async {
-    final json = await _api.verifyEmail(email: email, code: code);
+    final json = await _api.verifyPhone(phoneNumber: phoneNumber, code: code);
     return _remember(json);
   }
 
   Future<VerificationDelivery?> resendVerificationCode({
-    required String email,
+    required String phoneNumber,
   }) {
-    return _api.resendVerificationCode(email: email);
+    return _api.resendVerificationCode(phoneNumber: phoneNumber);
   }
 
   Future<List<BarangayOption>> barangays() async {
@@ -188,10 +269,11 @@ class UserStore {
   }
 
   Future<AppUser> login({
-    required String email,
+    required String phoneNumber,
     required String password,
   }) async {
-    final json = await _api.residentLogin(email: email, password: password);
+    final json =
+        await _api.residentLogin(phoneNumber: phoneNumber, password: password);
     return _remember(json);
   }
 
@@ -212,27 +294,74 @@ class UserStore {
     return _api.resendLoginCode(challengeId: challengeId);
   }
 
-  /// Saves the resident's own contact details and returns the refreshed
-  /// profile, so the caller does not have to re-fetch `/me` to see the result.
+  /// Saves the resident's own details and returns the refreshed profile, so
+  /// the caller does not have to re-fetch `/me` to see the result. The phone
+  /// number is not among them: it moves through [requestPhoneChange] and
+  /// [verifyPhoneChange].
   Future<AppUser> updateProfile({
     String? firstName,
     String? middleName,
     String? lastName,
-    String? phoneNumber,
-    String? email,
+    String? streetAddress,
     bool? smsOptIn,
-    String? currentPassword,
   }) async {
     final json = await _api.updateProfile(
       firstName: firstName,
       middleName: middleName,
       lastName: lastName,
-      phoneNumber: phoneNumber,
-      email: email,
+      streetAddress: streetAddress,
       smsOptIn: smsOptIn,
-      currentPassword: currentPassword,
     );
     return _remember(json);
+  }
+
+  // --- Moving the phone number --------------------------------------------
+
+  /// The new number and the current password; a code is texted to the NEW
+  /// number. Nothing on the account changes until [verifyPhoneChange].
+  Future<VerificationDelivery?> requestPhoneChange({
+    required String phoneNumber,
+    required String currentPassword,
+  }) {
+    return _api.requestPhoneChange(
+      phoneNumber: phoneNumber,
+      currentPassword: currentPassword,
+    );
+  }
+
+  Future<VerificationDelivery?> resendPhoneChangeCode() {
+    return _api.resendPhoneChangeCode();
+  }
+
+  /// The code that came back. Returns the refreshed profile with the new
+  /// number, which also becomes tomorrow's offline launch.
+  Future<AppUser> verifyPhoneChange({required String code}) async {
+    return _remember(await _api.verifyPhoneChange(code: code));
+  }
+
+  // --- Forgotten password -------------------------------------------------
+
+  Future<int> forgotPassword({required String phoneNumber}) {
+    return _api.forgotPassword(phoneNumber: phoneNumber);
+  }
+
+  Future<String> verifyPasswordReset({
+    required String phoneNumber,
+    required String code,
+  }) {
+    return _api.verifyPasswordReset(phoneNumber: phoneNumber, code: code);
+  }
+
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String password,
+  }) {
+    return _api.resetPassword(
+      phoneNumber: phoneNumber,
+      resetToken: resetToken,
+      password: password,
+    );
   }
 
   /// Uploads a new profile photo and returns the refreshed profile.

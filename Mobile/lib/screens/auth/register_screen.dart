@@ -8,6 +8,7 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/purok_field.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -15,7 +16,7 @@ class RegisterScreen extends StatefulWidget {
   final UserStore userStore;
   /// Carries the address the account was created with, and where the first
   /// code was sent — registration is not finished until that code comes back.
-  final void Function(String email, VerificationDelivery? delivery)
+  final void Function(String phone, VerificationDelivery? delivery)
       onRegisterSuccess;
   final VoidCallback onGoToLogin;
 
@@ -34,10 +35,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey       = GlobalKey<FormState>();
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl  = TextEditingController();
+  final _streetCtrl    = TextEditingController();
   final _phoneCtrl     = TextEditingController();
-  final _emailCtrl     = TextEditingController();
   final _passwordCtrl  = TextEditingController();
   final _confirmCtrl   = TextEditingController();
+  final _orgNameCtrl   = TextEditingController();
+
+  /// Individual (a household's head, the default) or Organization. There is no
+  /// third choice: a barangay hall's account is made by MDRRMO staff.
+  bool    _organization = false;
   bool    _agreed     = false;
   bool    _loading    = false;
   String? _formError;
@@ -97,10 +103,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
+    _streetCtrl.dispose();
     _phoneCtrl.dispose();
-    _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
+    _orgNameCtrl.dispose();
     super.dispose();
   }
 
@@ -137,12 +144,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final outcome = await widget.userStore.register(
-        firstName:   _firstNameCtrl.text.trim(),
-        lastName:    _lastNameCtrl.text.trim(),
-        barangayId:  barangayId,
-        phoneNumber: _phoneCtrl.text.trim(),
-        email:       _emailCtrl.text.trim(),
-        password:    _passwordCtrl.text,
+        firstName:     _firstNameCtrl.text.trim(),
+        lastName:      _lastNameCtrl.text.trim(),
+        barangayId:    barangayId,
+        streetAddress: _streetCtrl.text.trim(),
+        phoneNumber:   _phoneCtrl.text.trim(),
+        password:      _passwordCtrl.text,
+        accountType:   _organization ? 'organization' : 'head_of_family',
+        organizationName: _organization ? _orgNameCtrl.text.trim() : null,
       );
 
       if (!mounted) return;
@@ -151,15 +160,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _formError = outcome.error);
         return;
       }
-      // The account exists but is not usable yet — the code finishes it. The
-      // address goes with the callback so the verify screen never asks the
-      // resident to retype what they just entered.
-      widget.onRegisterSuccess(_emailCtrl.text.trim(), outcome.delivery);
+      // The account is not usable yet — the code finishes it. The number goes
+      // with the callback so the verify screen never asks the resident to
+      // retype what they just entered.
+      widget.onRegisterSuccess(_phoneCtrl.text.trim(), outcome.delivery);
     } catch (error) {
       // `UserStore.register` converts an ApiException into a returned message
       // rather than throwing, so anything arriving here escaped the HTTP layer
       // and has not been logged. No field values: this method holds the
-      // password, the phone number and the email.
+      // password and the phone number.
       AppLog.error('auth', 'register', error: error);
       if (mounted) {
         setState(() =>
@@ -196,8 +205,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // resident to expect one leaves them waiting for a screen
                     // that never comes.
                     Text(
-                      'One account per household, registered by the head of the family. '
-                      'You can log in as soon as you have registered.',
+                      _organization
+                          ? 'For a school, office or other group. MDRRMO checks an '
+                              'organization account before it can request services.'
+                          : 'One account per household, registered by the head of the family. '
+                              'You can log in as soon as you have registered.',
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
                     ),
@@ -205,23 +217,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const ServicePurposeNote(),
                     const SizedBox(height: 22),
 
+                    Text('Registering as', style: AppText.display(size: 12, weight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('Individual')),
+                        ButtonSegment(value: true, label: Text('Organization')),
+                      ],
+                      selected: {_organization},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (choice) => setState(() => _organization = choice.first),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (_organization)
+                      AuthTextField(
+                        label: 'Organization name',
+                        hint: 'e.g. Isabela State University',
+                        controller: _orgNameCtrl,
+                        prefixIcon: Icons.apartment_rounded,
+                        maxLength: 150,
+                        validator: (v) => (v ?? '').trim().isEmpty
+                            ? 'Enter the organization name'
+                            : null,
+                      ),
+
                     AuthTextField(
-                      label: 'First name',
+                      label: _organization ? 'Contact first name' : 'First name',
                       hint: 'e.g. Juan',
                       controller: _firstNameCtrl,
                       prefixIcon: Icons.person_outline_rounded,
                       validator: (v) => (v ?? '').trim().isEmpty
-                          ? 'Enter your first name'
+                          ? (_organization ? 'Enter the contact person\'s first name' : 'Enter your first name')
                           : null,
                     ),
 
                     AuthTextField(
-                      label: 'Last name',
+                      label: _organization ? 'Contact last name' : 'Last name',
                       hint: 'e.g. Delacruz',
                       controller: _lastNameCtrl,
                       prefixIcon: Icons.person_outline_rounded,
                       validator: (v) => (v ?? '').trim().isEmpty
-                          ? 'Enter your last name'
+                          ? (_organization ? 'Enter the contact person\'s last name' : 'Enter your last name')
                           : null,
                     ),
 
@@ -255,21 +292,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onChanged: (id) => setState(() => _barangayId = id),
                     ),
 
-                    AuthTextField(
-                      label: 'Email address',
-                      hint: 'yourname@email.com',
-                      controller: _emailCtrl,
-                      keyboard: TextInputType.emailAddress,
-                      prefixIcon: Icons.email_outlined,
-                      validator: (v) {
-                        final val = (v ?? '').trim();
-                        if (val.isEmpty) return 'Enter your email address';
-                        if (!val.contains('@') || !val.contains('.')) {
-                          return 'Enter a valid email address';
-                        }
-                        return null;
-                      },
-                    ),
+                    // Optional. The barangay picker above is required, but the
+                    // purok/street is exactly the detail a resident might not
+                    // have memorized while filling this in — editable later
+                    // from the profile either way (MDRRMO feedback, 2026-09-19).
+                    PurokField(controller: _streetCtrl),
 
                     AuthTextField(
                       label: 'Password',

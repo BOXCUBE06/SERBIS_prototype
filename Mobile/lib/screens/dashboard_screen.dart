@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/request_models.dart';
+import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -8,6 +9,10 @@ import 'borrow_equipment_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final AppState appState;
+
+  /// Threaded through to [BorrowEquipmentScreen] for its delivery-address
+  /// "Same as my address" checkbox — nothing else on this screen reads it.
+  final AppUser user;
   final VoidCallback onOpenTrack;
   final VoidCallback onOpenLibrary;
   final VoidCallback onOpenProfile;
@@ -18,6 +23,7 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     required this.appState,
+    required this.user,
     required this.onOpenTrack,
     required this.onOpenLibrary,
     required this.onOpenProfile,
@@ -38,7 +44,15 @@ class HomeScreen extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
         AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
-        const SizedBox(height: 22),
+        const SizedBox(height: 14),
+
+        // ── Who is signed in ── the account type and name, so an organization
+        // or a barangay hall sees at a glance which account this phone is on.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: _AccountLine(user: user, filipino: f),
+        ),
+        const SizedBox(height: 14),
 
         // ── Active Service Request ──
         Padding(
@@ -114,7 +128,7 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          StatusBadge(activeRequest.status, filipino: f),
+                          StatusBadge(activeRequest.status, filipino: f, label: activeRequest.statusLabelFor(f)),
                         ],
                       ),
                       const SizedBox(height: 14),
@@ -136,7 +150,7 @@ class HomeScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(11),
                         decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                         child: Text(
-                          activeRequest.note ?? _statusMessage(f, activeRequest.status),
+                          activeRequest.note ?? _statusMessage(f, activeRequest),
                           style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6),
                         ),
                       ),
@@ -170,7 +184,9 @@ class HomeScreen extends StatelessWidget {
 
         const SizedBox(height: 22),
 
-        // ── Need help now ──
+        // ── Need help now ── withheld from an organization still awaiting approval:
+        // both tiles lead to requests it cannot file yet.
+        if (!user.isAwaitingApproval)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Column(
@@ -189,6 +205,7 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => onOpenService(ServiceType.ambulance),
                     ),
                   ),
+                  if (appState.borrowingAllowed) ...[
                   const SizedBox(width: 10),
                   Expanded(
                     child: _QuickTypeCard(
@@ -200,11 +217,12 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) =>
-                                BorrowEquipmentScreen(appState: appState)),
+                            builder: (_) => BorrowEquipmentScreen(
+                                appState: appState, user: user)),
                       ),
                     ),
                   ),
+                  ],
                 ],
               ),
             ],
@@ -293,14 +311,57 @@ class HomeScreen extends StatelessWidget {
     ];
   }
 
-  String _statusMessage(bool f, ReqStatus status) => switch (status) {
+  String _statusMessage(bool f, ServiceRequest request) => switch (request.status) {
         ReqStatus.review => tr(f, 'home.status.review'),
         ReqStatus.booked => tr(f, 'home.status.booked'),
-        ReqStatus.scheduled => tr(f, 'home.status.scheduled'),
+        ReqStatus.scheduled => tr(f, request.isProgram ? 'home.status.approved' : 'home.status.scheduled'),
         ReqStatus.completed => tr(f, 'home.status.completed'),
         ReqStatus.cancelled => tr(f, 'home.status.cancelled'),
         ReqStatus.disapproved => tr(f, 'home.status.disapproved'),
       };
+}
+
+/// The account type and name at the top of the home screen. An organization
+/// waiting for MDRRMO also gets the reason it cannot request anything yet.
+class _AccountLine extends StatelessWidget {
+  final AppUser user;
+  final bool filipino;
+
+  const _AccountLine({required this.user, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tr(f, user.accountTypeKey).toUpperCase(),
+          style: AppText.display(size: 10.5, weight: FontWeight.w700, color: AppColors.inkFaint, letterSpacing: .5),
+        ),
+        const SizedBox(height: 2),
+        Text(user.accountName, style: AppText.display(size: 16)),
+        if (user.isOrganization && user.fullName.isNotEmpty)
+          Text(
+            user.fullName,
+            style: AppText.body(size: 12, color: AppColors.inkMuted),
+          ),
+        if (user.isAwaitingApproval) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(10)),
+            child: Text(
+              tr(f, 'awaiting.title'),
+              style: AppText.body(size: 12, color: AppColors.amber600, height: 1.5),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _QuickTypeCard extends StatelessWidget {

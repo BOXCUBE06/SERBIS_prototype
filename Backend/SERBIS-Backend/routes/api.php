@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AmbulanceAvailabilityController;
+use App\Http\Controllers\AmbulanceDestinationController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
@@ -10,10 +11,15 @@ use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\InfoMaterialController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PhoneChangeController;
 use App\Http\Controllers\ResidentController;
+use App\Http\Controllers\ServiceAudienceController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceRequestController;
+use App\Http\Controllers\ServiceVehicleTypeController;
 use App\Http\Controllers\SmsController;
+use App\Http\Controllers\SmsDeliveryController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\VehicleController;
 use Illuminate\Http\Request;
@@ -33,15 +39,27 @@ Route::middleware('throttle:api')->group(function () {
     Route::post('/admin/login/verify', [AuthController::class, 'adminLoginVerify'])->middleware('throttle:mfa');
     Route::post('/resident/login/verify', [AuthController::class, 'residentLoginVerify'])->middleware('throttle:mfa');
     Route::post('/resident/login/resend', [AuthController::class, 'resendLoginCode'])->middleware('throttle:mfa');
-    // Resident sign-up for the mobile app. Shares the 'login' limiter, which keys on
-    // the submitted email address as well as the IP.
+    // Resident sign-up for the mobile app. Its own 'register' limiter: every
+    // registration is a new number, so a limiter keyed on the number would
+    // never repeat.
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
-    // Second half of registration. Both share the 'login' limiter: verify is a
-    // guessing target (a million codes, six digits) and resend sends real mail.
-    // The per-account cooldown in resendVerificationCode is the other half of that
-    // — the limiter bounds one caller, the cooldown bounds one account.
-    Route::post('/resident/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:login');
-    Route::post('/resident/verify-email/resend', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:login');
+    // Second half of registration, by phone. Both share the 'login' limiter,
+    // which keys on the submitted number: verify is a guessing target (a million
+    // codes, six digits) and resend sends a billed text. The per-sign-up cooldown
+    // in resendVerificationCode is the other half of that — the limiter bounds
+    // one caller, the cooldown bounds one number.
+    Route::post('/resident/verify-phone', [AuthController::class, 'verifyPhone'])->middleware('throttle:login');
+    Route::post('/resident/verify-phone/resend', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:login');
+    // Forgotten password, by text. Public, and keyed on the phone number by the
+    // 'password-reset' limiter so a number with an account and one without are
+    // limited — and answered — the same way.
+    Route::post('/resident/password/forgot', [PasswordResetController::class, 'forgot'])->middleware('throttle:password-reset');
+    Route::post('/resident/password/verify', [PasswordResetController::class, 'verify'])->middleware('throttle:password-reset');
+    Route::post('/resident/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:password-reset');
+    // The email routes the app before phone login called. Answer 410 with an
+    // "update the app" message in both languages; remove in a later release.
+    Route::post('/resident/verify-email', [AuthController::class, 'emailVerificationRemoved']);
+    Route::post('/resident/verify-email/resend', [AuthController::class, 'emailVerificationRemoved']);
     // Public on purpose: the mobile register screen must show a barangay picker
     // before the resident has an account, and barangay_id is required to sign up.
     // The row is nothing but an id and a name, and the write routes stay admin-only.
@@ -50,9 +68,20 @@ Route::middleware('throttle:api')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        // Outside is.admin on purpose: a staff account holding a temporary
+        // password reaches nothing else until it has used this (IsAdmin). Named
+        // limiter, per the 'sms-blast' note in AppServiceProvider.
+        Route::post('/admin/change-password', [AuthController::class, 'adminChangePassword'])
+            ->middleware('throttle:password-change');
         // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
         // see the controller for why each one is excluded.
         Route::patch('/me', [AuthController::class, 'updateMe']);
+        // Moving the phone number, which is the login: the current password and
+        // a code texted to the NEW number, in two steps. Limited per resident —
+        // every step but the last sends a billed text or guesses a code.
+        Route::post('/me/phone', [PhoneChangeController::class, 'start'])->middleware('throttle:phone-change');
+        Route::post('/me/phone/resend', [PhoneChangeController::class, 'resend'])->middleware('throttle:phone-change');
+        Route::post('/me/phone/verify', [PhoneChangeController::class, 'verify'])->middleware('throttle:phone-change');
         // The resident's own profile photo. Kept off PATCH /me because it is a
         // multipart upload, not a column the resident types into.
         Route::post('/me/photo', [ResidentController::class, 'uploadMyPhoto']);
@@ -65,9 +94,13 @@ Route::middleware('throttle:api')->group(function () {
         // Endpoints requiring read/write access from the mobile application
         Route::get('equipments', [EquipmentController::class, 'index']);
         Route::get('services', [ServiceController::class, 'index']);
+        // The ambulance form's destination dropdown (MDRRMO feedback,
+        // 2026-09-19). Read-only — see AmbulanceDestinationSeeder.
+        Route::get('ambulance-destinations', [AmbulanceDestinationController::class, 'index']);
         Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
         Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
         Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto']);
+        Route::get('service-requests/{id}/letter', [ServiceRequestController::class, 'letter']);
         // What the MDRRMO has texted to this resident's barangay. Scoped to blasts
         // they were actually a recipient of, not to their barangay membership.
         Route::get('advisories', [SmsController::class, 'advisories']);
@@ -144,9 +177,16 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // was written; the route simply never existed.
     Route::get('/logs/sms', [SmsController::class, 'history']);
 
-    // The only endpoint that spends money: PhilSMS bills per message and has no
+    // The only endpoint that spends money: SkySMS bills per credit and has no
     // sandbox, so a repeated submit is real pesos, not a retry. 3/hour per admin.
     Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:sms-blast');
+    // The shared 6-digit code that gates a blast (MDRRMO feedback,
+    // 2026-09-19 — there is no role system, so this is the only thing that
+    // distinguishes "may send" from "any admin token"). Rotating requires
+    // the current code, so both share sendBlast's rate limit — see
+    // SmsController::assertCurrentCode().
+    Route::get('/sms/blast-code', [SmsController::class, 'blastCodeStatus']);
+    Route::post('/sms/blast-code', [SmsController::class, 'rotateBlastCode']);
     // Read-only and unbilled — but it is still an outbound vendor call on
     // every visit to the page, not free.
     Route::get('/sms/balance', [SmsController::class, 'balance'])->middleware('throttle:30,1');
@@ -154,7 +194,16 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // far more often than the send it previews. Touches only the local
     // database; no vendor call, nothing billed.
     Route::get('/sms/recipient-count', [SmsController::class, 'recipientCount'])->middleware('throttle:120,1');
+    // What became of a blast after SkySMS queued it. The list is local; the
+    // check reads SkySMS's GET /sms/messages, which is unbilled but is an
+    // outbound call on a rate limit the sends share, so it is capped per admin
+    // and the controller answers a repeat press from what it already stored.
+    Route::get('/sms/deliveries', [SmsDeliveryController::class, 'index'])->middleware('throttle:60,1');
+    Route::post('/sms/deliveries/{smsLog}/check', [SmsDeliveryController::class, 'check'])->middleware('throttle:20,1');
     Route::apiResource('vehicles', VehicleController::class);
+    // Read-only, for the resident detail panel. Registered before the
+    // apiResource so the literal segment is never read as another {id} action.
+    Route::get('residents/{id}/return-history', [ResidentController::class, 'returnHistory']);
     Route::apiResource('residents', ResidentController::class);
     // MDRRMO staff accounts (audit #29). Every admin may manage every other
     // — see the controller for why there is no super-admin tier, and for
@@ -162,11 +211,24 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     Route::apiResource('admins', AdminController::class);
     // Registered after the resource so `admins/{id}` never shadows it.
     Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
+    // Temporary password for a colleague who cannot sign in; refused for
+    // yourself. See AdminController::resetPassword().
+    Route::post('admins/{id}/reset-password', [AdminController::class, 'resetPassword']);
 
     // Admin-only write access for shared resources
     Route::apiResource('barangays', BarangayController::class)->except(['index', 'show']);
     Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);
     Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
+    // Which account types may request each service. Keyed on the service code,
+    // and includes the two entries that are not services (equipment-borrowing,
+    // others) — see the tbl_service_audience migration.
+    Route::get('service-audience', [ServiceAudienceController::class, 'index']);
+    Route::put('service-audience/{code}', [ServiceAudienceController::class, 'update']);
+    // Which kinds of unit may be sent on each service. The dispatch picker reads
+    // it and ServiceRequestController::update enforces it — see the
+    // tbl_service_vehicle_types migration.
+    Route::get('service-vehicle-types', [ServiceVehicleTypeController::class, 'index']);
+    Route::put('service-vehicle-types/{code}', [ServiceVehicleTypeController::class, 'update']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
     // Their own routes, not update(): both re-check ambulance availability
     // under a lock, which update()/syncFleet() were never built to do.

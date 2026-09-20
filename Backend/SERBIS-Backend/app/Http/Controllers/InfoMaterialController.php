@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InfoMaterial;
+use App\Services\Fcm;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -10,6 +11,11 @@ use Illuminate\Support\Facades\Storage;
 class InfoMaterialController extends Controller
 {
     use ResolvesUploadDisks;
+
+    /** Shown as the notification's title — same constant name and value as ServiceRequestController's. */
+    private const PUSH_TITLE = 'SERBIS';
+
+    public function __construct(private readonly Fcm $fcm) {}
 
     public function index()
     {
@@ -67,11 +73,16 @@ class InfoMaterialController extends Controller
     }
 
     /**
-     * Marks a material as checked by MDRRMO, or takes that mark back.
+     * Marks a material as checked by a named expert, or takes that mark back.
      *
      * One endpoint for both directions rather than separate verify/unverify
      * routes: the panel holds a toggle, and a toggle that can only be switched
      * on is a mark nobody can correct after a mistaken click.
+     *
+     * verified_by_name/role are required going on — a "verified" with nobody
+     * named behind it is what this replaces — and are cleared coming off,
+     * so an unverified row never displays a name for a check that no longer
+     * stands.
      */
     public function verify(Request $request, $id)
     {
@@ -83,12 +94,54 @@ class InfoMaterialController extends Controller
 
         $validated = $request->validate([
             'verified' => 'required|boolean',
+            'verified_by_name' => 'required_if:verified,true|nullable|string|max:255',
+            'verified_by_role' => 'required_if:verified,true|nullable|string|max:255',
         ]);
 
+        // Read before the assignment below overwrites it — the push only
+        // fires on the false-to-true edge, not on a verified row being saved
+        // again with verified still true.
+        $wasVerified = $material->verified;
+
         $material->verified = $validated['verified'];
+
+        if ($validated['verified']) {
+            $material->verified_by_name = $validated['verified_by_name'];
+            $material->verified_by_role = $validated['verified_by_role'];
+            $material->verified_at = now();
+        } else {
+            $material->verified_by_name = null;
+            $material->verified_by_role = null;
+            $material->verified_at = null;
+        }
+
         $material->save();
 
+        if ($validated['verified'] && ! $wasVerified) {
+            $this->notifyResidents($material);
+        }
+
         return response()->json($material);
+    }
+
+    /**
+     * MDRRMO feedback, 2026-09-19: every resident with a registered device is
+     * told when a safety material becomes available. Fired from verify(),
+     * not store() — an admin uploading a draft must not notify every phone
+     * in Echague before anyone has checked it. Fcm::notifyAllResidents()
+     * sends to each device independently, so one dead or rejected token
+     * never stops the rest of the broadcast.
+     */
+    private function notifyResidents(InfoMaterial $material): void
+    {
+        $this->fcm->notifyAllResidents(
+            self::PUSH_TITLE,
+            $material->title.' is now available in the safety library. — MDRRMO Echague',
+            [
+                'files_id' => (string) $material->files_id,
+                'material_type' => 'info_material',
+            ],
+        );
     }
 
     public function destroy($id)

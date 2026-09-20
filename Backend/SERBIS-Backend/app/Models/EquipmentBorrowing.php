@@ -40,7 +40,10 @@ class EquipmentBorrowing extends Model
         'return_reminder_sent_at',
         'status',
         'denial_reason',
+        'denial_reason_code',
+        'availability_reconfirm_sent_at',
         'return_condition_note',
+        'return_condition',
         'released_at',
         'returned_at',
     ];
@@ -53,6 +56,7 @@ class EquipmentBorrowing extends Model
     protected $casts = [
         'due_date' => 'date:Y-m-d',
         'return_reminder_sent_at' => 'datetime',
+        'availability_reconfirm_sent_at' => 'datetime',
         'released_at' => 'datetime',
         'returned_at' => 'datetime',
     ];

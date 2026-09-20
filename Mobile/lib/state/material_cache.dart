@@ -24,6 +24,11 @@ class CachedMaterial {
   /// Absent from indexes written before it existed, which reads as false.
   final bool verified;
 
+  /// Who verified it, kept for the same reason as [verified]. Absent from
+  /// indexes written before they were carried, which reads as unnamed.
+  final String? verifiedByName;
+  final String? verifiedByRole;
+
   const CachedMaterial({
     required this.id,
     required this.title,
@@ -33,6 +38,8 @@ class CachedMaterial {
     required this.savedAt,
     this.publishedAt,
     this.verified = false,
+    this.verifiedByName,
+    this.verifiedByRole,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -44,6 +51,8 @@ class CachedMaterial {
         'saved_at': savedAt.toIso8601String(),
         if (publishedAt != null) 'published_at': publishedAt!.toIso8601String(),
         'verified': verified,
+        if (verifiedByName != null) 'verified_by_name': verifiedByName,
+        if (verifiedByRole != null) 'verified_by_role': verifiedByRole,
       };
 
   static CachedMaterial? fromJson(Object? json) {
@@ -64,6 +73,8 @@ class CachedMaterial {
       // an upgrade must not drop those entries — it just has no date to show.
       publishedAt: DateTime.tryParse(json['published_at'] as String? ?? ''),
       verified: json['verified'] == true,
+      verifiedByName: json['verified_by_name'] as String?,
+      verifiedByRole: json['verified_by_role'] as String?,
     );
   }
 
@@ -77,6 +88,8 @@ class CachedMaterial {
         url: '',
         publishedAt: publishedAt,
         verified: verified,
+        verifiedByName: verifiedByName,
+        verifiedByRole: verifiedByRole,
       );
 }
 

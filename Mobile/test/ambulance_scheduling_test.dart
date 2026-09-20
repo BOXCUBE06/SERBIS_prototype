@@ -27,7 +27,7 @@ class _RecordingApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -35,8 +35,13 @@ class _RecordingApi extends ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     this.scheduledAt = scheduledAt;
     this.requiredVehicleType = requiredVehicleType;
@@ -125,7 +130,6 @@ void main() {
           patientName: 'Juan Dela Cruz',
           destination: 'Echague District Hospital',
           patientAge: '62',
-          patientSex: 'female',
           patientAddress: 'Purok 2, San Fabian',
           patientContactNumber: '09189999999',
           pickupLocation: 'Purok 2, San Fabian',
@@ -137,7 +141,6 @@ void main() {
       expect(request.fields['patient_name'], 'Juan Dela Cruz');
       expect(request.fields['destination'], 'Echague District Hospital');
       expect(request.fields['patient_age'], '62');
-      expect(request.fields['patient_sex'], 'female');
       expect(request.fields['patient_address'], 'Purok 2, San Fabian');
       expect(request.fields['patient_contact_number'], '09189999999');
       expect(request.fields['pickup_location'], 'Purok 2, San Fabian');
@@ -152,9 +155,9 @@ void main() {
     });
 
     test('an unset optional field is absent, never an empty string', () {
-      // `nullable|integer` rejects '', and `in:male,female` rejects ''. An
-      // untouched field has to be missing from the body, not present and
-      // blank, or an optional field becomes a 422.
+      // `nullable|integer` rejects ''. An untouched field has to be missing
+      // from the body, not present and blank, or an optional field becomes
+      // a 422.
       final request = ApiService().buildSubmitRequest(
         serviceId: 3,
         description: 'x',
@@ -168,7 +171,6 @@ void main() {
 
       for (final key in const [
         'patient_age',
-        'patient_sex',
         'patient_address',
         'patient_contact_number',
         'pickup_location',
@@ -191,6 +193,47 @@ void main() {
       expect(request.fields['description'], 'Fallen tree blocking the road');
       expect(request.fields.containsKey('patient_name'), isFalse);
       expect(request.fields.containsKey('destination'), isFalse);
+    });
+
+    test('a delivery request carries the address', () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 2,
+        description: 'Household head: Juan Dela Cruz',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        fulfillmentMethod: 'Delivery',
+        deliveryAddress: 'Purok 2, San Fabian',
+      );
+
+      expect(request.fields['fulfillment_method'], 'Delivery');
+      expect(request.fields['delivery_address'], 'Purok 2, San Fabian');
+    });
+
+    test('a pickup request omits the delivery address', () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: 2,
+        description: 'Household head: Juan Dela Cruz',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+        fulfillmentMethod: 'Pickup',
+        deliveryAddress: 'Purok 2, San Fabian',
+      );
+
+      expect(request.fields['fulfillment_method'], 'Pickup');
+      expect(request.fields.containsKey('delivery_address'), isFalse);
+    });
+
+    test('an "Others" request omits service_id rather than sending it empty',
+        () {
+      final request = ApiService().buildSubmitRequest(
+        serviceId: null,
+        description: 'A generator that will not start.',
+        validIdFileBytes: _idBytes,
+        validIdFileName: 'id.jpg',
+      );
+
+      expect(request.fields.containsKey('service_id'), isFalse);
+      expect(request.fields['description'], 'A generator that will not start.');
     });
 
     test('a scheduled ambulance request keeps both the schedule and the fields', () {
@@ -216,28 +259,6 @@ void main() {
   });
 
   group('AmbulanceIntake.from', () {
-    test('maps the dropdown\'s "Not specified" to null, not the label', () {
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      form.patient.text = 'Juan Dela Cruz';
-      form.destination.text = 'Echague District Hospital';
-
-      final intake = AmbulanceIntake.from(form);
-
-      expect(intake.patientSex, isNull);
-      expect(intake.toFields().containsKey('patient_sex'), isFalse);
-    });
-
-    test('maps a picked sex to the lowercase value the API takes', () {
-      final form = AmbulanceFormData();
-      addTearDown(form.dispose);
-      form.patient.text = 'Juan Dela Cruz';
-      form.destination.text = 'Echague District Hospital';
-      form.sex = 'Female';
-
-      expect(AmbulanceIntake.from(form).patientSex, 'female');
-    });
-
     test('an untouched age is null, not an empty string', () {
       final form = AmbulanceFormData();
       addTearDown(form.dispose);

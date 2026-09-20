@@ -407,10 +407,23 @@ class _MaterialRow extends StatelessWidget {
                           // is MDRRMO not having got to it yet.
                           if (material.verified) ...[
                             const SizedBox(width: 6),
-                            _VerifiedBadge(filipino: filipino),
+                            _VerifiedBadge(
+                              filipino: filipino,
+                              byName: material.verifiedByName,
+                              byRole: material.verifiedByRole,
+                            ),
                           ],
                         ],
                       ),
+                      // Named on the row, not only in the badge's tooltip, which
+                      // a touch screen shows on a long-press nobody knows to do.
+                      if (material.verifierLabel case final who?) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          filipino ? 'Sinuri ni $who' : 'Verified by $who',
+                          style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -445,11 +458,25 @@ class _MaterialRow extends StatelessWidget {
 class _VerifiedBadge extends StatelessWidget {
   final bool filipino;
 
-  const _VerifiedBadge({required this.filipino});
+  /// Who verified it, and in what capacity — MDRRMO feedback, 2026-09-18:
+  /// "verified" with nobody named behind it is what this replaces. Shown as
+  /// the badge's tooltip: the list row has no room for a name and a role
+  /// beside everything else on it, but the fact is still reachable from the
+  /// same badge, not buried behind a second screen.
+  final String? byName;
+  final String? byRole;
+
+  const _VerifiedBadge({required this.filipino, this.byName, this.byRole});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final who = [byName, byRole].where((s) => s != null && s.isNotEmpty).join(' — ');
+
+    return Tooltip(
+      message: who.isEmpty
+          ? (filipino ? 'Sinuri ng MDRRMO' : 'Checked by MDRRMO')
+          : (filipino ? 'Sinuri ni $who' : 'Verified by $who'),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(30)),
       child: Row(
@@ -462,6 +489,7 @@ class _VerifiedBadge extends StatelessWidget {
             style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
           ),
         ],
+      ),
       ),
     );
   }

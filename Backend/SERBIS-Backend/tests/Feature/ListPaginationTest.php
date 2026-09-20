@@ -36,7 +36,7 @@ use Tests\TestCase;
  * Checking for a `data` key would not.
  *
  * Http::preventStrayRequests() is inherited discipline from SmsHistoryTest —
- * PhilSMS has no sandbox, so an escaped request is a billed real send.
+ * SkySMS has no sandbox, so an escaped request is a billed real send.
  */
 class ListPaginationTest extends TestCase
 {
@@ -69,7 +69,7 @@ class ListPaginationTest extends TestCase
             'barangay_id' => $this->barangay->barangay_id,
             'first_name' => 'Test',
             'last_name' => 'Resident',
-            'phone_number' => '09171111111',
+            'phone_number' => '09'.random_int(100000000, 999999999),
             'email_address' => uniqid('r', true).'@test.local',
             'password' => Hash::make('password123'),
             'status' => $status,

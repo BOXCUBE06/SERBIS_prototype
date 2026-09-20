@@ -192,11 +192,78 @@ export function statusPillClass(status: string | null | undefined): string {
  * moving it off Booked. Nothing server-side watches for this (no worker, no
  * cron on this deploy) and no notification fires either side — this is a
  * client-side-only "someone should look at this" flag, not a guarantee the
- * booking was actually missed.
+ * booking was actually missed. Deliberately blind to approved_at — both an
+ * unapproved and an approved-but-never-dispatched booking are equally overdue.
  */
 export function isBookingOverdue(status: string | null | undefined, scheduledAt: string | Date | null | undefined): boolean {
   if (status !== 'Booked' || !scheduledAt) return false
 
   const d = new Date(scheduledAt)
   return !Number.isNaN(d.getTime()) && d.getTime() < Date.now()
+}
+
+/**
+ * Minutes/hours/days between now and `date`, always positive — the caller
+ * already knows the direction (in the future vs. elapsed) from context, this
+ * only picks the unit. Shared by every relative-time label in this file so
+ * "in 40m" and "25m late" round the same way (MDRRMO feedback, 2026-09-18:
+ * relative time alongside absolute, not day-granularity alone).
+ */
+function relativeMagnitude(diffMs: number): string {
+  const abs = Math.abs(diffMs)
+  const minutes = Math.round(abs / 60_000)
+  if (minutes < 60) return `${Math.max(minutes, 1)}m`
+  const hours = Math.round(abs / 3_600_000)
+  if (hours < 24) return `${hours}h`
+  const days = Math.round(abs / 86_400_000)
+  return `${days}d`
+}
+
+/**
+ * The Booked sub-label a dispatcher needs since the status pill alone cannot
+ * tell "scheduled with no unit yet" from "unit waiting" — both are the same
+ * DB status, differing only in approved_at (MDRRMO feedback, 2026-09-18).
+ * Three shapes:
+ *   - overdue (scheduled_at already passed, still Booked): "25m late — not
+ *     dispatched", regardless of approval — an approved booking that never
+ *     went out is exactly as overdue as one nobody approved.
+ *   - approved, still upcoming: "Unit assigned · in 2h"
+ *   - not yet approved, still upcoming: "Awaiting unit · in 2h"
+ * Null for anything not a live, scheduled Booked request.
+ */
+export function bookingCountdownLabel(
+  status: string | null | undefined,
+  scheduledAt: string | Date | null | undefined,
+  approvedAt?: string | Date | null | undefined,
+): string | null {
+  if (status !== 'Booked' || !scheduledAt) return null
+
+  const d = new Date(scheduledAt)
+  if (Number.isNaN(d.getTime())) return null
+
+  const diffMs = d.getTime() - Date.now()
+  if (diffMs < 0) return `${relativeMagnitude(diffMs)} late — not dispatched`
+
+  const prefix = approvedAt ? 'Unit assigned' : 'Awaiting unit'
+  return `${prefix} · in ${relativeMagnitude(diffMs)}`
+}
+
+/**
+ * How long an untouched Pending call has been waiting — the one status with
+ * no scheduled_at at all, so created_at is the only clock it has (MDRRMO
+ * feedback, 2026-09-18). An untriaged emergency call sitting for 25 minutes
+ * is arguably the single most urgent thing on the board, and until now it
+ * carried no time signal at all. Calm wording, existing .pill-pending token
+ * — no alarm color, per PRODUCT.md's "never argue from urgency".
+ */
+export function pendingWaitLabel(status: string | null | undefined, createdAt: string | Date | null | undefined): string | null {
+  if (status !== 'Pending' || !createdAt) return null
+
+  const d = new Date(createdAt)
+  if (Number.isNaN(d.getTime())) return null
+
+  const diffMs = Date.now() - d.getTime()
+  if (diffMs < 0) return null
+
+  return `Waiting ${relativeMagnitude(diffMs)}`
 }

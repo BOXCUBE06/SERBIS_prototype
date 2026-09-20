@@ -39,6 +39,7 @@ class _FakeApi extends ApiService {
     String? lastName,
     String? phoneNumber,
     String? email,
+    String? streetAddress,
     bool? smsOptIn,
     String? currentPassword,
   }) async {
@@ -48,6 +49,7 @@ class _FakeApi extends ApiService {
       'last_name': lastName,
       'phone_number': phoneNumber,
       'email_address': email,
+      'street_address': streetAddress,
       'sms_opt_in': smsOptIn,
       'current_password': currentPassword,
     });

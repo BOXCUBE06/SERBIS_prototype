@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Models\ServiceAudience;
 use App\Models\User;
+use App\Services\EquipmentAvailabilityNotifier;
+use App\Services\Fcm;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
@@ -21,11 +24,22 @@ class EquipmentBorrowingController extends Controller
     use ResolvesUploadDisks;
     use ScopesToOwner;
 
+    public function __construct(
+        private readonly Fcm $fcm,
+        private readonly EquipmentAvailabilityNotifier $availabilityNotifier,
+    ) {}
+
     /** The calendar a due date is read in — the office's, same as the panel's picker. */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
     /** Agency policy cap (MDRRMO feedback, 2026-09-14); DEFAULT_LOAN_DAYS in EquipmentBorrowingView.vue. */
     private const MAX_LOAN_DAYS = 7;
+
+    /** Agency policy floor (MDRRMO feedback, 2026-09-17): a same-day loan is not a real borrow term. */
+    private const MIN_LOAN_DAYS = 1;
+
+    /** Shown as the notification's title on every push this controller sends, matching ServiceRequestController. */
+    private const PUSH_TITLE = 'SERBIS';
 
     /**
      * Which column each handover stage writes, and which statuses it may be
@@ -126,6 +140,26 @@ class EquipmentBorrowingController extends Controller
 
     public function store(Request $request)
     {
+        // Equipment borrowing is one of the things the office can restrict by
+        // account type (Service Audience page). The app hides the tile; this is
+        // the check that holds for a hand-built request.
+        $account = $request->user();
+
+        if ($account instanceof Resident && $account->isAwaitingApproval()) {
+            return response()->json([
+                'message' => 'Your organization account is awaiting MDRRMO approval. You can borrow equipment once it is activated.',
+                'code' => 'account_pending',
+            ], 403);
+        }
+
+        if ($account instanceof Resident
+            && ! ServiceAudience::allows(ServiceAudience::EQUIPMENT_BORROWING, $account->account_type)) {
+            return response()->json([
+                'message' => 'This account type cannot borrow equipment.',
+                'code' => 'service_not_allowed',
+            ], 403);
+        }
+
         $validated = $request->validate([
             // Exactly one of these two names the item, which the CHECK
             // constraint on the table enforces underneath. `required_without`
@@ -155,14 +189,6 @@ class EquipmentBorrowingController extends Controller
             // no street address, so an unanswered delivery is a run nobody can
             // actually make.
             'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
-            // `sometimes` for the same reason as fulfillment_method above: an
-            // older client that says nothing meant a resident borrowing for
-            // themselves, which is what the column's default writes.
-            'borrower_type' => 'sometimes|in:Resident,Organization',
-            // Required for an organisation because there is nowhere else to get
-            // it from — the account behind the request is a person, and their
-            // name is not the group's. Capped at the column width.
-            'organization_name' => 'required_if:borrower_type,Organization|nullable|string|max:150',
         ]);
 
         // The rules above bound the shape and never the amount, so a resident
@@ -200,7 +226,12 @@ class EquipmentBorrowingController extends Controller
         }
 
         $method = $validated['fulfillment_method'] ?? 'Pickup';
-        $borrowerType = $validated['borrower_type'] ?? 'Resident';
+        // Who the loan is for comes from the account, never from the request: a
+        // barangay or organization account is an institution, a head of the
+        // family is a household. A client can no longer claim otherwise.
+        $isInstitution = $account instanceof Resident && ! $account->isHeadOfFamily();
+        $borrowerType = $isInstitution ? 'Organization' : 'Resident';
+        $organizationName = $isInstitution ? $this->institutionName($account) : null;
 
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
@@ -220,11 +251,7 @@ class EquipmentBorrowingController extends Controller
             // delivering.
             'delivery_address' => $method === 'Delivery' ? ($validated['delivery_address'] ?? null) : null,
             'borrower_type' => $borrowerType,
-            // Dropped on a Resident request for the same reason the address is
-            // dropped on a Pickup: an organisation name typed into the form and
-            // then switched away from must not survive as a claim that this
-            // loan was institutional.
-            'organization_name' => $borrowerType === 'Organization' ? ($validated['organization_name'] ?? null) : null,
+            'organization_name' => $organizationName,
             'status' => 'Pending',
         ]);
 
@@ -291,6 +318,49 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing);
     }
 
+    /** The catalogued item's name, or the free-text description for an uncatalogued ("Other") request. */
+    /**
+     * What the loan record calls the borrower: the organization's own name, or
+     * "Barangay <name>" for a barangay hall's shared account.
+     */
+    private function institutionName(Resident $account): string
+    {
+        if ($account->account_type === Resident::TYPE_ORGANIZATION && $account->organization_name) {
+            return $account->organization_name;
+        }
+
+        return 'Barangay '.($account->barangay?->barangay_name ?? '');
+    }
+
+    private function itemLabel(EquipmentBorrowing $borrowing): string
+    {
+        return $borrowing->equipment?->item_name ?? $borrowing->other_equipment_text;
+    }
+
+    private function approvedPushBody(EquipmentBorrowing $borrowing): string
+    {
+        return 'Your request to borrow '.$this->itemLabel($borrowing).' has been approved. — MDRRMO Echague';
+    }
+
+    /** denial_reason is optional (unlike a service request's rejection remarks), so the sentence only grows one when there is one. */
+    private function deniedPushBody(EquipmentBorrowing $borrowing): string
+    {
+        $reason = $borrowing->denial_reason;
+
+        return 'Your request to borrow '.$this->itemLabel($borrowing).' was not approved.'
+            .($reason ? ' Reason: '.$reason.'.' : '').' — MDRRMO Echague';
+    }
+
+    /** Pickup and Delivery are materially different instructions, not a wording preference. */
+    private function releasedPushBody(EquipmentBorrowing $borrowing): string
+    {
+        $item = $this->itemLabel($borrowing);
+
+        return $borrowing->fulfillment_method === 'Delivery'
+            ? 'Your '.$item.' is ready and will be delivered to you. — MDRRMO Echague'
+            : 'Your '.$item.' is ready for pickup. — MDRRMO Echague';
+    }
+
     public function update(Request $request, $id)
     {
         $borrowing = EquipmentBorrowing::find($id);
@@ -303,17 +373,50 @@ class EquipmentBorrowingController extends Controller
         // one day short of what the panel's picker offers and its own default
         // was refused with the raw rule text.
         $officeToday = Carbon::now(self::OFFICE_TIMEZONE)->startOfDay();
+        $earliestDue = $officeToday->copy()->addDays(self::MIN_LOAN_DAYS);
         $latestDue = $officeToday->copy()->addDays(self::MAX_LOAN_DAYS);
+
+        // Checked ahead of the full validate() below, and only when the
+        // status sent is one of the five real values — a garbage value still
+        // falls through to the enum rule's own message. Moved here (it used
+        // to run after validate()) because return_condition_note's
+        // required_if:status,Returned would otherwise fire on an illegal
+        // Returned attempt too (e.g. a Cancelled or Pending row), masking
+        // "cannot be moved to Returned" behind a note prompt for a move that
+        // was never going to happen.
+        $requestedStatus = $request->input('status');
+        $oldStatus = $borrowing->status;
+
+        // The five values the `in:` rule below accepts — deliberately not
+        // array_key_exists() against the full TRANSITIONS table, which also
+        // carries a 'Cancelled' key so an already-cancelled row still gets a
+        // transition message (see that class docblock). 'Cancelled' was never
+        // a legal *target* here — only cancel() may write it — so a request
+        // for it must keep falling through to validate()'s own field error
+        // below, not this early, differently-worded response.
+        $updatableStatuses = ['Pending', 'Approved', 'Released', 'Returned', 'Denied'];
+
+        if (
+            is_string($requestedStatus)
+            && in_array($requestedStatus, $updatableStatuses, true)
+            && $requestedStatus !== $oldStatus
+            && ! in_array($requestedStatus, self::TRANSITIONS[$oldStatus] ?? [], true)
+        ) {
+            return response()->json([
+                'message' => "A borrowing that is {$oldStatus} cannot be moved to {$requestedStatus}.",
+            ], 422);
+        }
 
         $validated = $request->validate([
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
             // Both optional: a status change on its own is still a valid call,
             // and only two of the five transitions carry either of these.
             //
-            // Bounded in both directions. A loan is due back after it is
-            // lent, so a date already past is a typo, not an instruction —
-            // and the upper bound is the agency's own policy cap. This used
-            // to allow +1 year, which was never a real loan term.
+            // Bounded in both directions per agency policy: a loan runs
+            // 1-7 days. A same-day due date is not a real loan term any more
+            // than one already past is, and the upper bound is the agency's
+            // own policy cap. This used to allow same-day and +1 year, which
+            // were never real loan terms.
             //
             // Safe against the overdue case specifically: the panel sends
             // `due_date` only when approving, or when releasing a row that
@@ -322,34 +425,35 @@ class EquipmentBorrowingController extends Controller
             // bound.
             'due_date' => [
                 'sometimes', 'nullable', 'date',
-                'after_or_equal:'.$officeToday->toDateString(),
+                'after_or_equal:'.$earliestDue->toDateString(),
                 'before_or_equal:'.$latestDue->toDateString(),
             ],
             'denial_reason' => 'sometimes|nullable|string|max:255',
-            // Optional, alongside the return photo — what staff noticed about
-            // the item's condition when it came back.
-            'return_condition_note' => 'sometimes|nullable|string|max:500',
+            // What actually keys the "still needed?" reconfirm notification
+            // (EquipmentAvailabilityNotifier) — denial_reason alone is free
+            // text an admin typed, with nothing machine-readable to check
+            // later. Optional: an admin denying for a reason that is not
+            // unavailability sends neither this nor anything to reconfirm.
+            'denial_reason_code' => 'sometimes|nullable|in:Unavailable,Other',
+            'return_condition' => 'sometimes|nullable|in:Good,Bad',
+            // MDRRMO feedback, 2026-09-19: required on every return, not just
+            // a Bad one — a Good return with no note is still one line staff
+            // typed nothing into for the next person deciding whether to lend
+            // again. Keyed on `status` rather than `return_condition`, so it
+            // fires whether or not the caller even sends a condition. No
+            // `sometimes` here: that rule skips everything else when the
+            // field is absent, which would let required_if never fire at all
+            // for exactly the case it exists to catch — a return with no note
+            // key in the payload, not just an empty one.
+            'return_condition_note' => 'nullable|string|max:500|required_if:status,Returned',
         ], [
             'due_date.date' => 'Pick a valid due date.',
-            'due_date.after_or_equal' => 'The due date cannot be earlier than today.',
+            'due_date.after_or_equal' => 'A loan runs at least '.self::MIN_LOAN_DAYS.' day — pick '.$earliestDue->format('M j, Y').' or later.',
             'due_date.before_or_equal' => 'A loan runs at most '.self::MAX_LOAN_DAYS.' days — pick '.$latestDue->format('M j, Y').' or earlier.',
+            'return_condition_note.required_if' => 'Say what condition it came back in — every return needs a note.',
         ]);
 
         $newStatus = $validated['status'];
-        $oldStatus = $borrowing->status;
-
-        // Checked before the transaction opens, so an illegal move costs no
-        // lock and touches no stock. Resending the current status is a no-op
-        // rather than a transition: `status` is required, so a call that only
-        // edits `due_date` has to carry it, and no branch below fires when the
-        // two are equal. A row whose status is not one of the five falls
-        // through to an empty list and is rejected, which is the safe way to
-        // fail on data drift.
-        if ($newStatus !== $oldStatus && ! in_array($newStatus, self::TRANSITIONS[$oldStatus] ?? [], true)) {
-            return response()->json([
-                'message' => "A borrowing that is {$oldStatus} cannot be moved to {$newStatus}.",
-            ], 422);
-        }
 
         // An uncatalogued request has no equipment row, so there is no stock to
         // deduct and nothing to hand over that the inventory knows about.
@@ -373,6 +477,11 @@ class EquipmentBorrowingController extends Controller
 
         DB::beginTransaction();
 
+        // Set inside the Returned branch below, read after DB::commit() —
+        // the availability check does push/SMS, which has no business
+        // holding the row lock this transaction takes.
+        $restockedEquipment = null;
+
         try {
             // Named for the only status Released can be reached from. The old
             // condition was `$oldStatus !== 'Released'`, which was true of a
@@ -382,7 +491,7 @@ class EquipmentBorrowingController extends Controller
                 if ($equipment->available_quantity < $borrowing->quantity) {
                     DB::rollBack();
 
-                    return response()->json(['message' => 'Not enough equipment available to release.'], 422);
+                    return response()->json(['message' => 'We wish to comply but as of the moment the equipment is not available.'], 422);
                 }
                 $equipment->decrement('available_quantity', $borrowing->quantity);
                 $borrowing->released_at = now();
@@ -439,6 +548,7 @@ class EquipmentBorrowingController extends Controller
                 $equipment->available_quantity = $clampedTo;
                 $equipment->save();
                 $borrowing->returned_at = now();
+                $restockedEquipment = $equipment;
             }
 
             // Assigned key by key rather than by splat: `status` is handled by
@@ -459,6 +569,10 @@ class EquipmentBorrowingController extends Controller
                 $borrowing->return_condition_note = $validated['return_condition_note'];
             }
 
+            if (array_key_exists('return_condition', $validated)) {
+                $borrowing->return_condition = $validated['return_condition'];
+            }
+
             // Only a denial carries a reason. Moving off Denied clears it, or a
             // request re-approved after a refusal keeps explaining a refusal
             // that no longer applies.
@@ -466,14 +580,39 @@ class EquipmentBorrowingController extends Controller
                 if (array_key_exists('denial_reason', $validated)) {
                     $borrowing->denial_reason = $validated['denial_reason'];
                 }
+                if (array_key_exists('denial_reason_code', $validated)) {
+                    $borrowing->denial_reason_code = $validated['denial_reason_code'];
+                }
             } else {
                 $borrowing->denial_reason = null;
+                $borrowing->denial_reason_code = null;
+                $borrowing->availability_reconfirm_sent_at = null;
             }
 
             $borrowing->status = $newStatus;
             $borrowing->save();
 
             DB::commit();
+
+            $pushBody = match ($newStatus) {
+                'Approved' => $this->approvedPushBody($borrowing),
+                'Denied' => $this->deniedPushBody($borrowing),
+                'Released' => $this->releasedPushBody($borrowing),
+                default => null,
+            };
+
+            if ($pushBody !== null) {
+                $this->fcm->notifyResident(
+                    $borrowing->resident_id,
+                    self::PUSH_TITLE,
+                    $pushBody,
+                    ['borrow_id' => (string) $borrowing->borrow_id],
+                );
+            }
+
+            if ($restockedEquipment !== null) {
+                $this->availabilityNotifier->notifyIfAvailable($restockedEquipment);
+            }
 
             return response()->json($borrowing);
 

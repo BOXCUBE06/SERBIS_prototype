@@ -51,10 +51,10 @@ class ResidentLoginStatusTest extends TestCase
         parent::setUp();
 
         // Login now ends in an SMS-challenge step (see AuthController::residentLogin);
-        // PhilSMS has no sandbox, so the vendor is faked the same way
+        // SkySMS has no sandbox, so the vendor is faked the same way
         // ResidentEmailVerificationTest fakes it for the signup code.
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => fn () => Http::response(['status' => 'success'], 200),
         ]);
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }
@@ -65,7 +65,7 @@ class ResidentLoginStatusTest extends TestCase
             'barangay_id' => $this->barangay->barangay_id,
             'first_name' => 'Test',
             'last_name' => 'Resident',
-            'phone_number' => '09171111111',
+            'phone_number' => '09'.random_int(100000000, 999999999),
             'email_address' => uniqid('r', true).'@test.local',
             'password' => Hash::make('password123'),
             'status' => $status,
@@ -75,7 +75,7 @@ class ResidentLoginStatusTest extends TestCase
         // reason login can refuse, and these tests are about `status` alone —
         // an unverified fixture would make them pass or fail for the wrong
         // reason. ResidentEmailVerificationTest owns the verification gate.
-        $resident->markEmailAsVerified();
+        $resident->markPhoneAsVerified();
 
         return $resident->fresh();
     }
@@ -90,7 +90,7 @@ class ResidentLoginStatusTest extends TestCase
     private function login(Resident $resident): TestResponse
     {
         $first = $this->postJson('/api/resident/login', [
-            'email_address' => $resident->email_address,
+            'phone_number' => $resident->phone_number,
             'password' => 'password123',
         ]);
 

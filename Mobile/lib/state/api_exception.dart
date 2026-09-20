@@ -46,10 +46,19 @@ class ApiException implements Exception {
     this.fieldErrors = const {},
   });
 
-  /// The account exists and the password was right, but the address was never
-  /// verified. The register flow left it half-finished; the resident resumes at
-  /// the code screen rather than being told their password is wrong.
-  bool get isEmailUnverified => code == 'email_unverified';
+  /// The account exists and the password was right, but the phone number was
+  /// never verified. The register flow left it half-finished; the resident
+  /// resumes at the code screen rather than being told their password is wrong.
+  bool get isPhoneUnverified => code == 'phone_unverified';
+
+  /// The server could not text the code (out of credits, the provider refused,
+  /// or it was rate limited). There is no other channel, so the screen says so
+  /// and offers to try again; nothing the resident typed is wrong.
+  bool get isSmsUnavailable => code == 'sms_unavailable';
+
+  /// This build predates phone login and the server has said so (410). The
+  /// message already carries the request to update in both languages.
+  bool get isAppUpdateRequired => code == 'app_update_required';
 
   /// Password proven; a TOTP (admin) or SMS/email (resident) code is what's
   /// left. The login screen routes to a verify screen instead of showing this

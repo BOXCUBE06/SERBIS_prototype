@@ -27,6 +27,11 @@ class InfoMaterial {
   /// claiming a review that did not happen is the one wrong answer here.
   final bool verified;
 
+  /// Who verified it, and in what capacity — null whenever [verified] is
+  /// false, same as the server clears both the moment a mark is taken back.
+  final String? verifiedByName;
+  final String? verifiedByRole;
+
   const InfoMaterial({
     required this.id,
     required this.title,
@@ -35,6 +40,8 @@ class InfoMaterial {
     required this.url,
     this.publishedAt,
     this.verified = false,
+    this.verifiedByName,
+    this.verifiedByRole,
   });
 
   factory InfoMaterial.fromJson(Map<String, dynamic> json) {
@@ -50,7 +57,22 @@ class InfoMaterial {
       // The column is cast to bool server-side, but an older build of the API
       // sends no key at all and 0/1 is still what a raw driver would give.
       verified: json['verified'] == true || json['verified'] == 1,
+      verifiedByName: (json['verified_by_name'] as String?)?.trim(),
+      verifiedByRole: (json['verified_by_role'] as String?)?.trim(),
     );
+  }
+
+  /// "Name — Role" for the verifier, or null when the material is not verified
+  /// or the server sent neither. Unverified reads as nothing at all, even if a
+  /// stale name were present.
+  String? get verifierLabel {
+    if (!verified) return null;
+
+    final label = [verifiedByName, verifiedByRole]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(' — ');
+
+    return label.isEmpty ? null : label;
   }
 
   static DateTime? _dateOf(Object? value) {

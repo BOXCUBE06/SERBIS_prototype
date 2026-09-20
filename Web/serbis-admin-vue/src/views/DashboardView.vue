@@ -1,16 +1,18 @@
 <template>
-  <v-container fluid class="pa-6 dashboard-bg">
+  <v-container fluid class="dashboard-bg">
 
     <PageHeader
       title="Dashboard"
-      subtitle="Request volume, barangay spread and fleet status. Each card sets its own period."
-      class="mb-6"
     >
       <template v-slot:actions>
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
-              <v-badge color="error" dot v-if="systemLogs.length > 0">
+              <!-- A count when staff have someone to ring, a plain dot for activity. -->
+              <v-badge v-if="followUps.length > 0" color="error" :content="followUps.length">
+                <v-icon>mdi-bell-outline</v-icon>
+              </v-badge>
+              <v-badge color="error" dot v-else-if="systemLogs.length > 0">
                 <v-icon>mdi-bell-outline</v-icon>
               </v-badge>
               <v-icon v-else>mdi-bell-outline</v-icon>
@@ -18,6 +20,25 @@
           </template>
           <v-card min-width="320" elevation="4" rounded="lg" class="border">
             <v-list density="compact" class="pa-0">
+              <!-- Push-only notices that reached nobody (equipment due-back
+                   reminders and available-again notices). There is no text behind
+                   them, so this is how staff learn whom to ring. -->
+              <template v-if="followUps.length > 0">
+                <v-list-subheader class="font-weight-bold text-uppercase py-2">Follow up by phone</v-list-subheader>
+                <v-divider></v-divider>
+                <v-list-item v-for="(item, i) in followUps" :key="'follow-'+i" class="py-3 border-b">
+                  <template v-slot:prepend>
+                    <v-avatar color="warning" variant="tonal" size="32" class="mr-3">
+                      <v-icon color="warning" size="small">mdi-phone-alert-outline</v-icon>
+                    </v-avatar>
+                  </template>
+                  <v-list-item-title class="text-body-2 font-weight-bold">{{ item.name }} &bull; {{ item.phone }}</v-list-item-title>
+                  <v-list-item-subtitle class="text-caption">{{ item.what }}: no registered device</v-list-item-subtitle>
+                  <template v-slot:append>
+                    <span class="text-caption text-medium-emphasis">{{ item.time }}</span>
+                  </template>
+                </v-list-item>
+              </template>
               <v-list-subheader class="font-weight-bold text-uppercase py-2">System Logs</v-list-subheader>
               <v-divider></v-divider>
               <template v-if="systemLogs.length > 0">
@@ -158,11 +179,11 @@
       <v-col cols="12">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 7 }">
           <v-card-item>
-            <!-- min-width-0 + wrapping subtitle: at 430px this row measured
+            <!-- min-width-0 + wrapping title: at 430px this row measured
                  315px inside a 295px card and clipped, because v-card-title
-                 and v-card-subtitle are both nowrap by default. -->
+                 is nowrap by default. -->
             <div class="d-flex justify-space-between align-center flex-wrap gap-2">
-              <div class="min-width-0">
+              <div class="min-width-0 d-flex align-center gap-1">
                 <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-text">Open Requests by Age</v-card-title>
                 <!-- Names the statuses outright. The KPI strip above reads
                      "Pending Service Requests: 8" while this card reads 32,
@@ -170,7 +191,23 @@
                      status that is not an ending. Unlabelled, the two numbers
                      look like a contradiction to whoever has to put one of
                      them in a monthly report. -->
-                <v-card-subtitle class="pa-0 wrap-text">Pending, booked or being responded to</v-card-subtitle>
+                <v-tooltip
+                  text="Pending, booked or being responded to. Ignores the period selectors on purpose, so an old request cannot hide."
+                  location="top"
+                  max-width="320"
+                >
+                  <template #activator="{ props: tip }">
+                    <v-icon
+                      v-bind="tip"
+                      size="16"
+                      class="text-medium-emphasis"
+                      tabindex="0"
+                      aria-label="Pending, booked or being responded to. Ignores the period selectors on purpose, so an old request cannot hide."
+                    >
+                      mdi-information-outline
+                    </v-icon>
+                  </template>
+                </v-tooltip>
               </div>
               <v-btn
                 variant="text"
@@ -426,6 +463,7 @@ const kpiStats = ref([])
 const serviceRequests = ref([])
 const borrowRequests = ref([])
 const systemLogs = ref([])
+const followUps = ref([])
 const loading = ref(true)
 
 const chartDataRaw = ref(null)
@@ -501,6 +539,7 @@ const fetchDashboardData = async () => {
     serviceRequests.value = data.serviceRequests || []
     borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
+    followUps.value = data.followUps || []
     mapDataByPeriod.value = data.mapDataByPeriod || {}
     walkInByPeriod.value = data.walkInByPeriod || {}
     totalsByPeriod.value = data.totalsByPeriod || {}

@@ -1,11 +1,7 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-6 bg-background">
-    <div class="residents-layout" :style="rowStyle">
-
-      <div class="residents-main">
-        <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
-
-          <PageHeader title="Residents" class="residents-toolbar px-6 py-3 border-b flex-shrink-0">
+  <v-container fluid class="fill-height align-start bg-background">
+    <div class="w-100">
+      <PageHeader title="Residents" class="residents-toolbar">
             <!-- Says "of" only when something is being hidden. The permanent
                  "N of N" read as a standing accusation that a filter was on.
                  ("residents" here is deliberate and ruled on; the heading
@@ -13,39 +9,15 @@
             <template v-slot:subtitle>
               <template v-if="filteredAndSortedResidents.length === residents.length">
                 <strong class="text-high-emphasis">{{ residents.length }}</strong>
-                {{ residents.length === 1 ? 'resident' : 'residents' }}
+                {{ residents.length === 1 ? 'account' : 'accounts' }}
               </template>
               <template v-else>
                 <strong class="text-high-emphasis">{{ filteredAndSortedResidents.length }}</strong>
-                of {{ residents.length }} residents
+                of {{ residents.length }} accounts
               </template>
             </template>
 
             <template v-slot:actions>
-              <v-text-field
-                v-model="search"
-                prepend-inner-icon="mdi-magnify"
-                label="Search residents"
-                placeholder="Name or email"
-                clearable
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                rounded="lg"
-                class="search-field"
-              ></v-text-field>
-
-              <v-select
-                v-model="filters.status"
-                :items="RESIDENT_STATUS_FILTER_ITEMS"
-                label="Status"
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                rounded="lg"
-                class="status-field"
-              ></v-select>
-
               <v-btn
                 color="primary"
                 elevation="0"
@@ -54,10 +26,52 @@
                 class="px-5 text-none font-weight-bold text-white transition-btn"
                 @click="openAddModal"
               >
-                <v-icon start>mdi-plus</v-icon> Add Head of the Family
+                <v-icon start>mdi-plus</v-icon> Add account
               </v-btn>
             </template>
-          </PageHeader>
+      </PageHeader>
+
+    <div class="residents-layout" :style="rowStyle">
+
+      <div class="residents-main">
+        <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
+
+          <div class="residents-toolbar px-6 py-3 border-b d-flex align-center flex-wrap gap-3 flex-shrink-0">
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              label="Search residents"
+              placeholder="Name or mobile number"
+              clearable
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              rounded="lg"
+              class="search-field"
+            ></v-text-field>
+
+            <v-select
+              v-model="filters.status"
+              :items="RESIDENT_STATUS_FILTER_ITEMS"
+              label="Status"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              rounded="lg"
+              class="status-field"
+            ></v-select>
+
+            <v-select
+              v-model="filters.type"
+              :items="ACCOUNT_TYPE_FILTER_ITEMS"
+              label="Account type"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              rounded="lg"
+              class="type-field"
+            ></v-select>
+          </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
                all without sight: the selected barangay was carried by colour
@@ -177,24 +191,21 @@
               </v-tooltip>
             </template>
 
+            <template v-slot:item.account_type="{ item }">
+              <span class="type-pill" :class="accountTypePillClass(item.account_type)">
+                {{ item.account_type === ACCOUNT_TYPE.organization && item.organization_name ? item.organization_name : accountTypeLabel(item.account_type) }}
+              </span>
+            </template>
+
             <template v-slot:item.barangay_name="{ item }">
               <span class="font-weight-medium text-body-1 text-high-emphasis cell-truncate">
                 {{ barangayOf(item) }}
               </span>
             </template>
 
+            <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
             <template v-slot:item.phone_number="{ item }">
-              <span class="text-body-1 text-medium-emphasis cell-truncate">{{ item.phone_number }}</span>
-            </template>
-
-            <template v-slot:item.email_address="{ item }">
-              <v-tooltip :text="item.email_address" location="top">
-                <template v-slot:activator="{ props }">
-                  <span v-bind="props" class="text-body-1 text-medium-emphasis cell-truncate">
-                    {{ item.email_address }}
-                  </span>
-                </template>
-              </v-tooltip>
+              <span class="text-body-1 text-medium-emphasis cell-truncate">{{ displayPhone(item.phone_number) }}</span>
             </template>
 
             <template v-slot:item.status="{ item }">
@@ -254,6 +265,7 @@
               @close="closeDetail"
               @edit="openExistingEditModal"
               @toggle-status="askToggleStatus"
+              @reject="askReject"
               @delete="askDelete"
               @clear-filters="clearFilters"
             />
@@ -262,13 +274,14 @@
       </aside>
 
     </div>
+    </div>
 
     <!-- Add / Edit -->
     <v-dialog v-model="modal.isOpen" max-width="680" persistent>
       <v-card rounded="lg" elevation="10">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <span class="text-h6 font-weight-bold text-high-emphasis">
-            {{ modal.isEditing ? 'Edit Head of the Family' : 'New Head of the Family' }}
+            {{ modal.isEditing ? 'Edit account' : 'New account' }}
           </span>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
@@ -293,28 +306,51 @@
                      initials from the name being typed, so it is a preview, not
                      a picture that was ever uploadable from this form. -->
                 <div>
-                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-1">Initials</div>
-                  <div class="text-caption text-medium-emphasis" style="max-width: 34ch;">
-                    Heads of the family add their own photo from the mobile app. It appears here once they do.
-                  </div>
+                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis">Initials</div>
                 </div>
               </v-col>
 
+              <v-col cols="12" :md="isOrganization ? 5 : 12">
+                <v-select
+                  v-model="formData.account_type"
+                  :items="ACCOUNT_TYPE_ITEMS"
+                  label="Account type *"
+                  :error-messages="fieldErrors.account_type"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-select>
+              </v-col>
+
+              <v-col v-if="isOrganization" cols="12" md="7">
+                <v-text-field
+                  v-model="formData.organization_name"
+                  label="Organization name *"
+                  placeholder="Isabela State University"
+                  :rules="[requiredRule('Organization name')]"
+                  :error-messages="fieldErrors.organization_name"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-text-field>
+              </v-col>
+
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.first_name" label="First Name *" placeholder="Juan" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
+                <v-text-field v-model="formData.first_name" :label="isHead ? 'First Name *' : 'Contact first name *'" placeholder="Juan" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
                 <v-text-field v-model="formData.middle_name" label="Middle Name" placeholder="Santos" :error-messages="fieldErrors.middle_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
               </v-col>
               <v-col cols="12" md="4">
-                <v-text-field v-model="formData.last_name" label="Last Name *" placeholder="Dela Cruz" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
+                <v-text-field v-model="formData.last_name" :label="isHead ? 'Last Name *' : 'Contact last name *'" placeholder="Dela Cruz" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6">
-                <v-text-field v-model="formData.phone_number" label="Phone Number *" placeholder="09171234567" :rules="[requiredRule('Phone number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field v-model="formData.email_address" label="Email Address *" placeholder="juan.delacruz@gmail.com" :rules="[requiredRule('Email address'), emailRule]" :error-messages="fieldErrors.email_address" type="email" variant="outlined" density="comfortable" rounded="lg" autocomplete="email"></v-text-field>
+                <!-- The resident logs in with this number, and no two accounts may
+                     share one. A barangay or organization officer who is also a
+                     head of the family needs a different number for this account;
+                     the server says so on the field when it is taken. -->
+                <v-text-field v-model="formData.phone_number" label="Mobile Number (login) *" placeholder="09171234567" hint="They sign in with this number. It must be unique." persistent-hint :rules="[requiredRule('Mobile number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
               </v-col>
 
               <v-col cols="12" md="6" v-if="!modal.isEditing">
@@ -341,6 +377,16 @@
 
               <v-col cols="12" :md="modal.isEditing ? 12 : 6">
                 <v-select v-model="formData.barangay_id" :items="barangays" item-title="barangay_name" item-value="barangay_id" label="Barangay *" :rules="[requiredRule('Barangay')]" :error-messages="fieldErrors.barangay_id" variant="outlined" density="comfortable" rounded="lg"></v-select>
+              </v-col>
+
+              <v-col cols="12">
+                <!-- Keyed on the dialog: the picker reads its value once, and this
+                     form is reused for every resident. -->
+                <PurokSelect
+                  :key="`${modal.isOpen}-${modal.targetId ?? 'new'}`"
+                  v-model="formData.street_address"
+                  :error-messages="fieldErrors.street_address"
+                />
               </v-col>
 
               <v-col cols="12">
@@ -434,11 +480,18 @@
     <!-- Deactivate confirm -->
     <v-dialog v-model="statusDialog.show" max-width="460">
       <v-card rounded="xl" class="pa-2">
-        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">Deactivate this account?</v-card-title>
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">
+          {{ statusDialog.reject ? 'Reject this organization?' : 'Deactivate this account?' }}
+        </v-card-title>
         <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis">
-          <strong class="text-high-emphasis">{{ statusDialog.item ? fullName(statusDialog.item) : '' }}</strong>
-          will lose access to sign in and file requests, and will stop receiving MDRRMO text blasts.
-          It can be reactivated later.
+          <strong class="text-high-emphasis">{{ statusDialog.item ? (statusDialog.item.organization_name || fullName(statusDialog.item)) : '' }}</strong>
+          <template v-if="statusDialog.reject">
+            will not be able to sign in or request services. You can approve it later from this page.
+          </template>
+          <template v-else>
+            will lose access to sign in and file requests, and will stop receiving MDRRMO text blasts.
+            It can be reactivated later.
+          </template>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
           <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
@@ -448,7 +501,7 @@
             color="warning" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
             :loading="statusDialog.loading" @click="confirmDeactivate"
           >
-            Deactivate account
+            {{ statusDialog.reject ? 'Reject organization' : 'Deactivate account' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -474,12 +527,20 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDisplay } from 'vuetify'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
+import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
 import { useRowNumbers } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
   releaseResidentPhotos,
   residentPhotoUrl,
 } from '@/composables/residentPhoto'
+import {
+  ACCOUNT_TYPE,
+  ACCOUNT_TYPE_FILTER_ITEMS,
+  ACCOUNT_TYPE_ITEMS,
+  accountTypeLabel,
+  accountTypePillClass,
+} from '@/composables/accountType'
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_FILTER_ITEMS,
@@ -494,6 +555,7 @@ import {
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import PurokSelect from '@/components/PurokSelect.vue'
 
 const { mdAndUp } = useDisplay()
 
@@ -516,11 +578,11 @@ const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
   { title: 'Full Name', key: 'fullName', width: '17%' },
+  { title: 'Type', key: 'account_type', width: '230px' },
   // The longest real barangay name in the data is "San Antonio Ugad", which
   // was still clipping when this column was 15% of a narrower table.
   { title: 'Barangay', key: 'barangay_name', width: '14%' },
-  { title: 'Phone Number', key: 'phone_number', width: '10%' },
-  { title: 'Email', key: 'email_address', width: '14%' },
+  { title: 'Mobile Number', key: 'phone_number', width: '14%' },
   { title: 'Status', key: 'status', align: 'center', width: '160px' },
   { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
 ]
@@ -542,17 +604,23 @@ const showPassword = ref(false)
 const form = ref(null)
 
 const selectedResident = ref(null)
-const filters = ref({ status: 'All', barangay: 'All' })
+const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
-const statusDialog = ref({ show: false, item: null, loading: false })
+// `reject` is set when the dialog is refusing a pending organization rather than
+// deactivating an active account; both end in Deactivated.
+const statusDialog = ref({ show: false, item: null, loading: false, reject: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 const statusToggleLoading = ref(false)
 
 const formData = ref({
   first_name: '', middle_name: '', last_name: '', phone_number: '',
-  email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
+  password: '', barangay_id: null, street_address: '',
+  status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
 })
+
+const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
+const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
 
 // The rail is open exactly when a resident is selected. There is no second
 // piece of state that can disagree with the first.
@@ -601,10 +669,12 @@ const onDocumentClick = (event) => {
 }
 
 // The table shares the row with the rail, so its height is the page less the
-// container's padding, and the table body is that less the card's header, the
-// barangay tabs and the table's own header.
-const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 96px);' : ''))
-const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 292px)' : '60vh'))
+// shell and container padding and the page header above the card (80px: a
+// 56px title-and-count block plus its 24px margin). The table body is that
+// less the card’s search toolbar (73px), the barangay tabs and the table’s
+// own header. Worked out by hand from those heights, not measured in a browser.
+const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 176px);' : ''))
+const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 364px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -627,6 +697,7 @@ const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type
 const filteredAndSortedResidents = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
+  if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
   if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
   // Trimmed: a leading space is trivially common when pasting from a list, and
   // it used to return zero rows with no explanation.
@@ -642,8 +713,10 @@ const filteredAndSortedResidents = computed(() => {
         `${last}, ${first}`.includes(q) ||
         `${last} ${first}`.includes(q) ||
         (r.middle_name || '').toLowerCase().includes(q) ||
-        (r.email_address || '').toLowerCase().includes(q) ||
-        (r.phone_number || '').toLowerCase().includes(q)
+        // Either spelling finds the number: staff type 0917… and the server
+        // holds +63917….
+        displayPhone(r.phone_number).includes(q) ||
+        (r.phone_number || '').includes(q)
     })
   }
   return [...result].sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
@@ -653,7 +726,7 @@ const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
 
 const clearFilters = () => {
   search.value = ''
-  filters.value = { status: 'All', barangay: 'All' }
+  filters.value = { status: 'All', barangay: 'All', type: 'All' }
 }
 
 // True when the open profile is not in the list behind it — filter to one
@@ -764,7 +837,8 @@ const openAddModal = () => {
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
-    email_address: '', password: '', barangay_id: null, status: RESIDENT_STATUS.active,
+    password: '', barangay_id: null, street_address: '',
+    status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
 }
@@ -777,11 +851,14 @@ const openExistingEditModal = (item) => {
     first_name: item.first_name,
     middle_name: item.middle_name,
     last_name: item.last_name,
-    phone_number: item.phone_number,
-    email_address: item.email_address,
+    // As staff read it (09…); the server accepts either spelling and stores +63….
+    phone_number: displayPhone(item.phone_number),
     password: '',
     barangay_id: item.barangay_id,
+    street_address: item.street_address ?? '',
     status: item.status,
+    account_type: item.account_type || ACCOUNT_TYPE.head,
+    organization_name: item.organization_name ?? '',
   }
   modal.value = { isOpen: true, isEditing: true, targetId: idOf(item) }
 }
@@ -795,13 +872,10 @@ const closeModal = () => { modal.value.isOpen = false }
 const requiredRule = (label) => (v) =>
   (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
 
-const emailRule = (v) =>
-  !v || /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(v) || 'Enter a valid email address, like juan@example.com.'
-
-// Deliberately loose: 09xx, +639xx and landlines all reach residents here, and
-// a strict pattern would refuse numbers the office actually holds.
+// The number is the login and the SMS destination, so it has to be a real
+// Philippine mobile number — the same rule the server applies, and no landline.
 const phoneRule = (v) =>
-  !v || v.replace(/\D/g, '').length >= 7 || 'Enter a full phone number.'
+  !v || isMobileNumber(v) || 'Enter a mobile number like 09171234567.'
 
 // Mirrors the hint already printed under the field, and the backend's own rule.
 const passwordRule = (v) =>
@@ -896,19 +970,25 @@ const askToggleStatus = (item) => {
   toggleStatus(item)
 }
 
-const confirmDeactivate = async () => {
-  const item = statusDialog.value.item
-  statusDialog.value.loading = true
-  await toggleStatus(item)
-  statusDialog.value = { show: false, item: null, loading: false }
+const askReject = (item) => {
+  statusDialog.value = { show: true, item, loading: false, reject: true }
 }
 
-const toggleStatus = async (item) => {
+const confirmDeactivate = async () => {
+  const { item, reject } = statusDialog.value
+  statusDialog.value.loading = true
+  await toggleStatus(item, reject ? RESIDENT_STATUS.deactivated : null)
+  statusDialog.value = { show: false, item: null, loading: false, reject: false }
+}
+
+const toggleStatus = async (item, forcedNext = null) => {
   // Pending and Deactivated both toggle to Active — activating a new signup and
-  // re-enabling a suspended account are the same write.
-  const next = item.status === RESIDENT_STATUS.active
+  // re-enabling a suspended account are the same write. `forcedNext` is for
+  // rejecting a pending organization, which goes straight to Deactivated.
+  const next = forcedNext ?? (item.status === RESIDENT_STATUS.active
     ? RESIDENT_STATUS.deactivated
-    : RESIDENT_STATUS.active
+    : RESIDENT_STATUS.active)
+  const isOrganization = item.account_type === ACCOUNT_TYPE.organization
   statusToggleLoading.value = true
   try {
     const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
@@ -919,14 +999,21 @@ const toggleStatus = async (item) => {
         middle_name: item.middle_name,
         last_name: item.last_name,
         phone_number: item.phone_number,
-        email_address: item.email_address,
         barangay_id: item.barangay_id,
+        // Omitted, ResidentController::update() would default this back to
+        // null — a status toggle must not silently wipe the resident's
+        // street address (MDRRMO feedback, 2026-09-19).
+        street_address: item.street_address ?? null,
         status: next,
       }),
     })
     if (!res.ok) throw new Error(await errorFrom(res))
     await fetchResidents()
-    notify(next === RESIDENT_STATUS.active ? 'Account activated' : 'Account deactivated')
+    if (next === RESIDENT_STATUS.active) {
+      notify(isOrganization ? 'Organization approved' : 'Account activated')
+    } else {
+      notify(forcedNext ? 'Organization rejected' : 'Account deactivated')
+    }
   } catch (error) {
     notify(error.message, 'error')
   } finally {
@@ -1144,6 +1231,24 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-on-surface), 0.25);
   border-radius: 4px;
 }
+
+/* Account-type pill. Barangay and organization accounts are the exceptions
+   worth spotting in a list of households, so they get the tint; a head of the
+   family stays plain text. */
+.type-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.type-pill--institution { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
+.type-pill--plain { color: rgba(var(--v-theme-on-surface), 0.82); padding-left: 0; }
+.type-field { width: 170px; max-width: 100%; }
 
 /* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
 .status-pill {

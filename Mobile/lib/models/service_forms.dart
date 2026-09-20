@@ -31,6 +31,16 @@ sealed class ServiceFormData {
   void dispose();
 }
 
+const _programMonths = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// "5 Oct 2026". English on purpose, like every other line of the description:
+/// it is read by an admin, not shown back to the resident.
+String formatProgramDate(DateTime date) =>
+    '${date.day} ${_programMonths[date.month - 1]} ${date.year}';
+
 String _text(TextEditingController controller) => controller.text.trim();
 
 String _or(TextEditingController controller, String fallback) {
@@ -64,7 +74,6 @@ class AmbulanceIntake {
     required this.patientName,
     required this.destination,
     this.patientAge,
-    this.patientSex,
     this.patientAddress,
     this.patientContactNumber,
     this.pickupLocation,
@@ -81,10 +90,6 @@ class AmbulanceIntake {
   /// `''`, so an untouched field has to be absent from the body rather than
   /// present and blank.
   final String? patientAge;
-
-  /// 'male', 'female', or null — never the dropdown's own "Not specified"
-  /// label, which is a display string the API has no rule for.
-  final String? patientSex;
 
   final String? patientAddress;
   final String? patientContactNumber;
@@ -109,7 +114,6 @@ class AmbulanceIntake {
       patientName: _text(form.patient),
       destination: _text(form.destination),
       patientAge: optional(form.age),
-      patientSex: form.sexValue,
       patientAddress: optional(form.patientAddress),
       patientContactNumber: optional(form.patientContact),
       pickupLocation: optional(form.pickup),
@@ -125,7 +129,6 @@ class AmbulanceIntake {
         'patient_name': patientName,
         'destination': destination,
         if (patientAge != null) 'patient_age': patientAge!,
-        if (patientSex != null) 'patient_sex': patientSex!,
         if (patientAddress != null) 'patient_address': patientAddress!,
         if (patientContactNumber != null)
           'patient_contact_number': patientContactNumber!,
@@ -135,16 +138,24 @@ class AmbulanceIntake {
 }
 
 class AmbulanceFormData extends ServiceFormData {
-  /// [accountAddress] and [contactNumber] seed the two fields the account can
-  /// answer for; both stay fully editable, because the account answers for the
-  /// requester and the request is often about someone else.
+  /// [contactNumber] seeds the one field the account can answer for
+  /// unconditionally; it stays fully editable, because the account answers
+  /// for the requester and the request is often about someone else.
   ///
-  /// The patient's name is deliberately NOT among them. The account holder is
-  /// the likeliest patient, not the certain one — a head of the family files
-  /// for the household — and a name already sitting in the field is a default
-  /// nobody chose, submitted unchecked.
-  AmbulanceFormData({this.contactNumber = '', String accountAddress = ''}) {
-    patientAddress.text = accountAddress;
+  /// The patient's name and the two address fields are deliberately NOT
+  /// prefilled the same way. The account holder is the likeliest patient and
+  /// the likeliest address, not the certain one — a head of the family files
+  /// for the household, and a request is often about someone or somewhere
+  /// else — so a value already sitting in the field is a default nobody
+  /// chose, submitted unchecked. [accountName] and [accountFullAddress] are
+  /// kept only for the three "same as mine" setters below, which fill on an
+  /// explicit, unchecked-by-default confirmation instead (MDRRMO feedback,
+  /// 2026-09-19).
+  AmbulanceFormData({
+    this.contactNumber = '',
+    this.accountName = '',
+    this.accountFullAddress = '',
+  }) {
     patientContact.text = contactNumber;
   }
 
@@ -153,20 +164,65 @@ class AmbulanceFormData extends ServiceFormData {
   /// not loaded.
   final String contactNumber;
 
-  /// The dropdown's own vocabulary. `AppDropdown` takes a non-null value, and
-  /// sex is optional server-side (`nullable|in:male,female`), so the unset
-  /// state is a real option here rather than a null the widget cannot hold.
-  /// [sexValue] maps it back to what the API accepts.
-  static const sexUnspecified = 'Not specified';
-  static const sexOptions = [sexUnspecified, 'Male', 'Female'];
+  /// The account holder's name, for [setPatientIsAccountHolder] to copy into
+  /// [patient] — never written to the field on its own.
+  final String accountName;
+
+  /// The account holder's purok/street and barangay together
+  /// (`AppUser.fullAddress`), for [setPatientAddressIsMyAddress] and
+  /// [setPickupIsMyAddress] to copy from — never written to either field on
+  /// its own.
+  final String accountFullAddress;
+
+  /// Whether the "Patient is myself" checkbox is ticked. Read by the screen
+  /// to draw the checkbox's own state; setting [patient] happens in
+  /// [setPatientIsAccountHolder], not here, so this stays a plain flag.
+  bool patientIsAccountHolder = false;
+
+  /// Fills [patient] from the account holder's name when [value] is true.
+  /// Unchecking afterward does not clear the field — the name stays fully
+  /// editable either way, the same as every other prefilled field on this
+  /// form.
+  void setPatientIsAccountHolder(bool value) {
+    patientIsAccountHolder = value;
+    if (value) {
+      patient.text = accountName;
+    }
+  }
+
+  /// Whether the "Same as my address" checkbox next to [patientAddress] is
+  /// ticked.
+  bool patientAddressIsMyAddress = false;
+
+  /// Fills [patientAddress] from the account's full address when [value] is
+  /// true. Same shape as [setPatientIsAccountHolder]: unchecking does not
+  /// clear whatever is now in the field.
+  void setPatientAddressIsMyAddress(bool value) {
+    patientAddressIsMyAddress = value;
+    if (value) {
+      patientAddress.text = accountFullAddress;
+    }
+  }
+
+  /// Whether the "Same as my address" checkbox next to [pickup] is ticked.
+  /// Separate from [patientAddressIsMyAddress] — the pickup point and the
+  /// patient's own address are often the same, but a request filed for
+  /// someone at a different location must be able to say so independently.
+  bool pickupIsMyAddress = false;
+
+  void setPickupIsMyAddress(bool value) {
+    pickupIsMyAddress = value;
+    if (value) {
+      pickup.text = accountFullAddress;
+    }
+  }
 
   final TextEditingController patient = TextEditingController();
   final TextEditingController age = TextEditingController();
 
-  /// Where the patient lives — `patient_address`. Prefilled from the account,
-  /// which on this schema is the barangay name and nothing finer
-  /// (`tbl_residents` has a `barangay_id` and no street column), so the
-  /// resident is expected to add the purok themselves.
+  /// Where the patient lives — `patient_address`. See
+  /// [setPatientAddressIsMyAddress] for how the account's own address reaches
+  /// this field.
   final TextEditingController patientAddress = TextEditingController();
 
   /// `patient_contact_number` — the number to ring about this patient, which
@@ -174,20 +230,50 @@ class AmbulanceFormData extends ServiceFormData {
   /// household. Prefilled with the account number as the common case.
   final TextEditingController patientContact = TextEditingController();
 
+  /// See [setPickupIsMyAddress] for how the account's own address reaches
+  /// this field.
   final TextEditingController pickup = TextEditingController();
+
+  /// The value actually sent as `destination` — free text either way. See
+  /// [destinationChoice]/[setDestinationChoice] for how the dropdown feeds
+  /// it (MDRRMO feedback, 2026-09-19).
   final TextEditingController destination = TextEditingController();
+
+  /// The sentinel [destinationChoice] holds when the resident is typing
+  /// their own destination rather than picking a seeded one. A value, not
+  /// null, so it can sit directly in the dropdown's own item list.
+  static const destinationOthers = 'Others';
+
+  /// The destination dropdown's own selection — a seeded name, or
+  /// [destinationOthers] for free text. Starts on [destinationOthers]: there
+  /// is no default destination to assume, the same reasoning behind every
+  /// other field on this form that isn't prefilled.
+  String destinationChoice = destinationOthers;
+
+  /// Picking a seeded destination copies it into [destination] — the field
+  /// the request actually sends — so the dropdown is a shortcut onto the
+  /// same free-text column, not a second source of truth. Picking
+  /// [destinationOthers] leaves whatever is already typed alone, the same
+  /// "unchecking doesn't clear" shape as the checkboxes above.
+  void setDestinationChoice(String value) {
+    destinationChoice = value;
+    if (value != destinationOthers) {
+      destination.text = value;
+    }
+  }
 
   /// Labelled "Medical diagnosis" on screen and stored in `condition_notes`.
   /// One field, not two: the column has always held exactly this, and adding a
   /// separate `medical_diagnosis` would give the same fact two homes.
   final TextEditingController diagnosis = TextEditingController();
 
-  String sex = sexUnspecified;
+  /// Companions travelling with the patient: at least one is required and two
+  /// is the cap, per MDRRMO policy (the hospital asks for a companion), and the
+  /// server enforces both. Starts with one empty slot, the same as the walk-in
+  /// dialog's repeater. Blank slots are dropped when read, not rejected — a
+  /// form whose only slot is blank simply names nobody.
+  static const maxRelatives = 2;
 
-  /// Who is travelling with the patient. Starts with one empty slot, the same
-  /// as the walk-in dialog's repeater — "Add relative" covers the case that
-  /// needs more, and starting at two pads the common trip with a field nobody
-  /// fills. Blank slots are dropped when read, not rejected.
   final List<TextEditingController> relatives = [TextEditingController()];
 
   /// Picked via the framework's showDatePicker + showTimePicker
@@ -198,16 +284,16 @@ class AmbulanceFormData extends ServiceFormData {
   /// [metaLines], never folded into prose.
   DateTime? scheduledAt;
 
-  /// What the API takes for `patient_sex`: lowercase, or null when unset.
-  String? get sexValue => sex == sexUnspecified ? null : sex.toLowerCase();
-
   /// The relative names actually typed in, in order, blanks removed.
   List<String> get relativeNames => relatives
       .map((controller) => controller.text.trim())
       .where((name) => name.isNotEmpty)
       .toList();
 
-  void addRelative() => relatives.add(TextEditingController());
+  void addRelative() {
+    if (relatives.length >= maxRelatives) return;
+    relatives.add(TextEditingController());
+  }
 
   /// Never leaves the group empty: a repeater with no rows reads as a broken
   /// section rather than an optional one, and "Add relative" becomes the only
@@ -233,7 +319,6 @@ class AmbulanceFormData extends ServiceFormData {
       serviceName,
       'Patient: ${_or(patient, 'Not specified')}',
       'Age: ${_or(age, 'Not specified')}',
-      'Sex: ${sexValue ?? 'Not specified'}',
       'Address: ${_or(patientAddress, 'Not specified')}',
       '${_or(pickup, 'Address not specified')} → '
           '${_or(destination, 'destination not specified')}',
@@ -282,7 +367,9 @@ class ServiceFormField {
     this.keyboard = TextInputType.text,
     this.metaPrefix,
     this.helpText,
-  }) : options = const [];
+  })  : options = const [],
+        isDate = false,
+        minDaysAhead = 0;
 
   /// A closed list, so it always has an answer — there is no fallback because
   /// there is no blank state to fall back from.
@@ -295,7 +382,25 @@ class ServiceFormField {
         lines = 1,
         keyboard = TextInputType.text,
         metaFallback = '',
-        helpText = null;
+        helpText = null,
+        isDate = false,
+        minDaysAhead = 0;
+
+  /// A day picked from a calendar, at least [minDaysAhead] days from today.
+  /// Held as a [DateTime], not typed, so it can be sent as a real field and
+  /// checked against the same lead time the server enforces.
+  const ServiceFormField.date({
+    required this.key,
+    required this.label,
+    required this.metaPrefix,
+    required this.metaFallback,
+    this.minDaysAhead = 0,
+  })  : hint = '',
+        lines = 1,
+        keyboard = TextInputType.text,
+        options = const [],
+        helpText = null,
+        isDate = true;
 
   /// Stable id, and the key the controller is stored under — so a renamed
   /// field breaks in one place rather than drifting apart between the widget
@@ -323,6 +428,12 @@ class ServiceFormField {
   /// gap in the block reads as a field that was never asked for.
   final String metaFallback;
 
+  /// True for a calendar day; see [ServiceFormField.date].
+  final bool isDate;
+
+  /// Only meaningful when [isDate].
+  final int minDaysAhead;
+
   bool get isChoice => options.isNotEmpty;
 }
 
@@ -337,9 +448,27 @@ class ServiceFormSection {
   final List<ServiceFormField> fields;
 }
 
+/// Which uploads a service asks for. Every response service asks for a photo
+/// of a valid ID and offers a site photo; the MDRRMO programs are requested by
+/// a barangay or an organization, which has no ID, and ask for a request
+/// letter instead.
+enum ServiceAttachments { standard, letterRequired, letterOptional }
+
+/// Days between filing and the earliest date a scheduled program can be asked
+/// for. Mirrors the server's own `PROGRAM_LEAD_DAYS`; duplicated rather than
+/// fetched because it is a fixed policy, and catching it here saves the round
+/// trip.
+const kProgramLeadDays = 14;
+
 /// What one service's form is made of.
 class ServiceFormSpec {
-  const ServiceFormSpec({required this.sections, required this.carriesContact});
+  const ServiceFormSpec({
+    required this.sections,
+    required this.carriesContact,
+    this.attachments = ServiceAttachments.standard,
+  });
+
+  final ServiceAttachments attachments;
 
   final List<ServiceFormSection> sections;
 
@@ -450,6 +579,130 @@ const _reliefSpec = ServiceFormSpec(
   ],
 );
 
+/// DRRM Trainings and Seminars (IEC). Everything except the date goes into the
+/// description like the other forms; the date is a real field so the server can
+/// enforce the lead time.
+const kDrillTypes = [
+  'Earthquake (NSED)',
+  'Fire',
+  'Flood',
+  'Other',
+];
+
+const _trainingSpec = ServiceFormSpec(
+  carriesContact: true,
+  attachments: ServiceAttachments.letterRequired,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.event',
+      fields: [
+        ServiceFormField.date(
+          key: 'preferred_date',
+          label: 'Preferred date',
+          metaPrefix: 'Preferred date: ',
+          metaFallback: 'Not specified',
+          minDaysAhead: kProgramLeadDays,
+        ),
+        ServiceFormField.text(
+          key: 'location',
+          label: 'Location',
+          hint: 'Venue, purok, barangay',
+          metaPrefix: 'Location: ',
+          metaFallback: 'Location not specified',
+        ),
+        ServiceFormField.text(
+          key: 'participants',
+          label: 'Expected number of participants',
+          hint: 'e.g. 40',
+          keyboard: TextInputType.number,
+          metaPrefix: 'Participants: ',
+          metaFallback: 'Not specified',
+        ),
+        ServiceFormField.text(
+          key: 'topic',
+          label: 'Training topic',
+          hint: 'e.g. Basic life support, fire safety',
+          metaPrefix: 'Topic: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+  ],
+);
+
+/// Simulation Drills / NSED. Same shape as the training form with a drill type
+/// where the topic was, and the same 14 day lead time and request letter.
+const _drillSpec = ServiceFormSpec(
+  carriesContact: true,
+  attachments: ServiceAttachments.letterRequired,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.event',
+      fields: [
+        ServiceFormField.date(
+          key: 'preferred_date',
+          label: 'Preferred date',
+          metaPrefix: 'Preferred date: ',
+          metaFallback: 'Not specified',
+          minDaysAhead: kProgramLeadDays,
+        ),
+        ServiceFormField.text(
+          key: 'location',
+          label: 'Location',
+          hint: 'Venue, purok, barangay',
+          metaPrefix: 'Location: ',
+          metaFallback: 'Location not specified',
+        ),
+        ServiceFormField.choice(
+          key: 'drill_type',
+          label: 'Drill type',
+          options: kDrillTypes,
+          metaPrefix: 'Drill type: ',
+        ),
+        ServiceFormField.text(
+          key: 'participants',
+          label: 'Expected number of participants',
+          hint: 'e.g. 40',
+          keyboard: TextInputType.number,
+          metaPrefix: 'Participants: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+  ],
+);
+
+/// MDRRMO Certification. No date and no scheduling: the resident says what the
+/// certificate is for and which one they need, and may attach a supporting
+/// document. The certification type is free text because the office has not
+/// given a fixed list.
+const _certificationSpec = ServiceFormSpec(
+  carriesContact: true,
+  attachments: ServiceAttachments.letterOptional,
+  sections: [
+    ServiceFormSection(
+      labelKey: 'form_section.certification',
+      fields: [
+        ServiceFormField.text(
+          key: 'certification_type',
+          label: 'Certification type',
+          hint: 'Which certificate do you need?',
+          metaPrefix: 'Certification type: ',
+          metaFallback: 'Not specified',
+        ),
+        ServiceFormField.text(
+          key: 'purpose',
+          label: 'Purpose',
+          hint: 'What is the certificate for?',
+          lines: 3,
+          metaPrefix: 'Purpose: ',
+          metaFallback: 'Not specified',
+        ),
+      ],
+    ),
+  ],
+);
+
 const _genericSpec = ServiceFormSpec(
   carriesContact: true,
   sections: [
@@ -487,10 +740,14 @@ final class StructuredFormData extends ServiceFormData {
   StructuredFormData._(
     this.spec, {
     this.contactNumber = '',
+    this.offersFulfillment = false,
+    this.accountFullAddress = '',
     Map<String, String> prefill = const {},
-  }) {
+  }) : hasAddressField = spec.fields.any((field) => field.key == 'address') {
     for (final field in spec.fields) {
-      if (field.isChoice) {
+      if (field.isDate) {
+        _dates[field.key] = null;
+      } else if (field.isChoice) {
         _choices[field.key] = field.options.first;
       } else {
         _controllers[field.key] =
@@ -503,25 +760,98 @@ final class StructuredFormData extends ServiceFormData {
 
   /// The household head is the account holder by definition — the app is
   /// distributed one account per household — so the name is prefilled for the
-  /// same reason the patient name is, with more confidence.
+  /// same reason the patient name is, with more confidence. The location
+  /// [address] itself is not prefilled the same way — see
+  /// [setAddressIsMyAddress] — because relief goods are often requested for
+  /// somewhere other than the account holder's own address.
   static StructuredFormData relief({
     String headName = '',
     String contactNumber = '',
+    String accountFullAddress = '',
   }) =>
       StructuredFormData._(
         _reliefSpec,
         contactNumber: contactNumber,
+        offersFulfillment: true,
+        accountFullAddress: accountFullAddress,
         prefill: {'household_head': headName},
       );
 
   static StructuredFormData generic({String contactNumber = ''}) =>
       StructuredFormData._(_genericSpec, contactNumber: contactNumber);
 
+  static StructuredFormData training({String contactNumber = ''}) =>
+      StructuredFormData._(_trainingSpec, contactNumber: contactNumber);
+
+  static StructuredFormData drill({String contactNumber = ''}) =>
+      StructuredFormData._(_drillSpec, contactNumber: contactNumber);
+
+  static StructuredFormData certification({String contactNumber = ''}) =>
+      StructuredFormData._(_certificationSpec, contactNumber: contactNumber);
+
   final ServiceFormSpec spec;
   final String contactNumber;
 
+  /// True only for [relief] — pickup/delivery beyond equipment borrowing
+  /// (MDRRMO feedback, 2026-09-18). Ambulance and conduction don't map onto
+  /// this at all, and road/generic weren't asked for it, so this stays a
+  /// per-instance flag rather than something every StructuredFormData shows.
+  final bool offersFulfillment;
+
+  /// The account holder's purok/street and barangay together
+  /// (`AppUser.fullAddress`), for [setAddressIsMyAddress] to copy from — only
+  /// ever non-empty when [hasAddressField] is true (relief).
+  final String accountFullAddress;
+
+  /// True when this form has a field keyed `'address'` — relief only, road
+  /// and generic don't collect a location the same way. Drives whether the
+  /// "Same as my address" checkbox is shown at all.
+  final bool hasAddressField;
+
+  /// Whether the "Same as my address" checkbox next to the address field is
+  /// ticked. Meaningless when [hasAddressField] is false.
+  bool addressIsMyAddress = false;
+
+  /// Fills the `'address'` field from the account's full address when
+  /// [value] is true. Same shape as AmbulanceFormData's "same as mine"
+  /// setters: unchecking does not clear whatever is now in the field.
+  void setAddressIsMyAddress(bool value) {
+    addressIsMyAddress = value;
+    if (value) {
+      field('address').text = accountFullAddress;
+    }
+  }
+
+  /// 'Pickup' or 'Delivery' — sent as its own field, not folded into
+  /// [metaLines]/description, the same way AmbulanceFormData.scheduledAt
+  /// isn't: this is a real column on tbl_service_request
+  /// (fulfillment_method), not prose for a dispatcher to re-parse.
+  String fulfillmentMethod = 'Pickup';
+
+  /// Meaningful only when [fulfillmentMethod] is 'Delivery' — dropped on the
+  /// way out otherwise, same as the server does, so an address typed in and
+  /// then switched back to Pickup cannot survive as a delivery instruction.
+  final TextEditingController deliveryAddress = TextEditingController();
+
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String> _choices = {};
+  final Map<String, DateTime?> _dates = {};
+
+  /// The day picked on a [ServiceFormField.date] field, or null before one is.
+  DateTime? date(String key) {
+    if (!_dates.containsKey(key)) {
+      throw ArgumentError.value(key, 'key', 'not a date field on this form');
+    }
+    return _dates[key];
+  }
+
+  void setDate(String key, DateTime? value) {
+    date(key);
+    _dates[key] = value == null ? null : DateTime(value.year, value.month, value.day);
+  }
+
+  /// What goes out as `preferred_date`. Null on every form without one.
+  DateTime? get preferredDate => _dates['preferred_date'];
 
   /// Throws rather than creating one on demand, which is the failure the old
   /// `_ctrl(key)` map had: a typo produced an empty controller that rendered
@@ -560,9 +890,15 @@ final class StructuredFormData extends ServiceFormData {
       ];
 
   String _lineFor(ServiceFormField field) {
-    final value = field.isChoice
-        ? _choices[field.key]!
-        : _or(_controllers[field.key]!, field.metaFallback);
+    final String value;
+    if (field.isDate) {
+      final picked = _dates[field.key];
+      value = picked == null ? field.metaFallback : formatProgramDate(picked);
+    } else if (field.isChoice) {
+      value = _choices[field.key]!;
+    } else {
+      value = _or(_controllers[field.key]!, field.metaFallback);
+    }
 
     return field.metaPrefix == null ? value : '${field.metaPrefix}$value';
   }
@@ -572,5 +908,6 @@ final class StructuredFormData extends ServiceFormData {
     for (final controller in _controllers.values) {
       controller.dispose();
     }
+    deliveryAddress.dispose();
   }
 }

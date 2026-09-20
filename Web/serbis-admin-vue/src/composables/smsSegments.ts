@@ -2,14 +2,14 @@
  * How many SMS segments a message will actually bill, and in which encoding.
  *
  * The Text Blast page used to show a plain `counter="160"` and validate
- * `length <= 160`. That is not what PhilSMS charges on. A GSM-7 message bills
+ * `length <= 160`. That is not what the SMS provider charges on. A GSM-7 message bills
  * one segment up to 160 characters, but a single character outside the GSM-7
  * alphabet — one `ñ`, one curly quote pasted out of Word, one emoji — moves the
  * whole message to UCS-2, where a segment holds 70 characters instead. A
  * 160-character message that has left GSM-7 bills three segments, at three
  * times the price, with nothing on screen saying so.
  *
- * There is no sandbox to check this against (see PhilSms.php), so this is an
+ * There is no sandbox to check this against (see SkySmsGateway.php), so this is an
  * estimate derived from the GSM 03.38 tables rather than something read back
  * from the vendor. It matches what every SMS gateway documents, but treat the
  * number as "what this should cost" rather than as a receipt.
@@ -156,4 +156,47 @@ export function nameCharacter(char: string): string {
   }
 
   return named[char] ?? `"${char}"`
+}
+
+/**
+ * What the SMS provider penalises: a URL, a web address, a domain or an IP
+ * address. SkySMS charges 10 to 50 credits per recipient for one and reports
+ * the message as sent while not delivering it, so the Text Blast page refuses
+ * to send one and the server refuses it too.
+ *
+ * The same rule as App\Services\Sms\SmsMessagePolicy on the server: schemes,
+ * "www.", well-known shorteners, bare IPv4 addresses, and a name followed by a
+ * common top-level domain. The list of endings is deliberately short — a
+ * general "word dot word" rule would refuse every sentence typed without a
+ * space after its full stop. Keep the two in step.
+ */
+const LINK_PATTERN = new RegExp(
+  'https?://' +
+    '|www\.' +
+    '|\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd)\b' +
+    '|\b\d{1,3}(?:\.\d{1,3}){3}\b' +
+    '|\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|ph|io|info|biz|edu|gov|co|me|ly|gl|tk|xyz|site|online|app|dev|link|click|shop|store|live|fun|top|vip|club)\b',
+  'i',
+)
+
+/** The first URL or domain in the message, as typed, or null when there is none. */
+export function findLink(message: string): string | null {
+  const match = (message ?? '').match(LINK_PATTERN)
+  return match ? match[0] : null
+}
+
+/**
+ * Curly quotes, dashes, the ellipsis character and odd spaces swapped for the
+ * plain ASCII a phone keypad has. Each of them is outside GSM-7 and, alone,
+ * moves the whole message to UCS-2 at 70 characters a segment. Anything else
+ * outside GSM-7 (an emoji, say) is left in place for the writer to decide on.
+ */
+export function toGsmSafe(message: string): string {
+  return (message ?? '')
+    .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
+    .replace(/[\u2013\u2014\u2212]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/\u00A0/g, ' ')
+    .replace(/\u200B/g, '')
 }

@@ -20,12 +20,16 @@ class InfoMaterial extends Model
         'file_type',
         'file_size',
         'verified',
+        'verified_by_name',
+        'verified_by_role',
+        'verified_at',
     ];
 
     // Without this the column comes back as 0/1 and every consumer has to
     // decide for itself what that means.
     protected $casts = [
         'verified' => 'boolean',
+        'verified_at' => 'datetime',
     ];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];

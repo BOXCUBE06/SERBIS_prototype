@@ -11,10 +11,17 @@ use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
 #[Table('tbl_services', key: 'service_id')]
-#[Fillable(['service_name', 'description', 'is_active'])]
+#[Fillable(['service_name', 'description', 'category', 'is_active'])]
 class Service extends Model
 {
     use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
+
+    /**
+     * What kind of service this is, set in Manage Services. It groups the list
+     * and decides which services the admin queue treats as programs (a plain
+     * approve, no dispatch). Never derived from the name.
+     */
+    public const CATEGORIES = ['rescue', 'medical', 'relief', 'infrastructure', 'programs'];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
 

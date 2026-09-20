@@ -1,16 +1,14 @@
 <template>
-  <v-container fluid class="fill-height align-start pa-8 bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <v-row>
       <v-col cols="12">
+        <PageHeader title="Documents" />
+
         <v-card elevation="2" rounded="xl" class="pa-6 border-0">
 
-          <!-- Header -->
-          <v-row class="mb-6" align="center" justify="space-between">
-            <v-col cols="12" md="5">
-              <PageHeader title="Documents" :subtitle="`${files.length} published · residents receive these on the mobile app`" />
-            </v-col>
-
-            <v-col cols="12" md="7" class="d-flex justify-end align-center gap-4 flex-wrap">
+          <!-- Filters -->
+          <v-row class="mb-6" align="center" justify="end">
+            <v-col cols="12" class="d-flex justify-end align-center gap-4 flex-wrap">
               <v-slide-group v-model="typeFilter" class="type-filter" show-arrows mandatory>
                 <v-slide-group-item
                   v-for="f in typeFilters"
@@ -217,8 +215,12 @@
                   density="compact"
                   hide-details
                   inset
-                  @update:model-value="value => setVerified(item, value)"
+                  @update:model-value="value => onToggleVerified(item, value)"
                 ></v-switch>
+                <!-- Who, not just that — MDRRMO feedback, 2026-09-18. -->
+                <div v-if="item.verified && item.verified_by_name" class="text-caption text-medium-emphasis" style="line-height: 1.3;">
+                  {{ item.verified_by_name }}<br>{{ item.verified_by_role }}
+                </div>
               </template>
 
               <template v-slot:item.actions="{ item }">
@@ -258,6 +260,41 @@
           <v-btn color="error" variant="flat" rounded="lg" class="text-none font-weight-bold" :loading="deleting" @click="confirmDelete">
             Delete
           </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Verify: who -->
+    <v-dialog v-model="verifyDialog" max-width="440">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="text-h6 font-weight-bold text-high-emphasis">Who verified this?</v-card-title>
+        <v-card-text class="text-body-2 text-medium-emphasis">
+          <div class="mb-4">
+            Marking <strong class="text-high-emphasis">{{ pendingVerify?.title }}</strong> verified names the
+            person who checked it — an unnamed "verified" is what this replaces.
+          </div>
+          <v-text-field
+            v-model="verifyName"
+            label="Name" placeholder="e.g. Dr. Ana Reyes"
+            variant="outlined" density="comfortable" class="mb-2"
+            :error-messages="verifyError"
+            @update:model-value="verifyError = ''"
+          ></v-text-field>
+          <v-text-field
+            v-model="verifyRole"
+            label="Role" placeholder="e.g. MDRRMO Medical Officer"
+            variant="outlined" density="comfortable"
+            @update:model-value="verifyError = ''"
+          ></v-text-field>
+        </v-card-text>
+        <v-card-actions class="px-4 pb-4">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" class="text-none" @click="cancelVerify" :disabled="verifying === pendingVerify?.files_id">Cancel</v-btn>
+          <v-btn
+            color="success" variant="flat" rounded="lg" class="text-none font-weight-bold"
+            :loading="verifying === pendingVerify?.files_id"
+            @click="confirmVerify"
+          >Mark verified</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -503,13 +540,61 @@ const publish = () => {
 // rather than the whole table going busy for a one-row change.
 const verifying = ref(null)
 
-const setVerified = async (item, value) => {
+// Verifying names who; unverifying does not need to ask anything, same as
+// before this existed.
+const verifyDialog = ref(false)
+const pendingVerify = ref(null)
+const verifyName = ref('')
+const verifyRole = ref('')
+const verifyError = ref('')
+
+const onToggleVerified = (item, value) => {
+  if (!value) {
+    setVerified(item, false)
+    return
+  }
+
+  pendingVerify.value = item
+  verifyName.value = ''
+  verifyRole.value = ''
+  verifyError.value = ''
+  verifyDialog.value = true
+}
+
+const cancelVerify = () => {
+  verifyDialog.value = false
+  pendingVerify.value = null
+}
+
+const confirmVerify = async () => {
+  if (!verifyName.value.trim() || !verifyRole.value.trim()) {
+    verifyError.value = 'Name and role are both required.'
+    return
+  }
+
+  const item = pendingVerify.value
+  verifyDialog.value = false
+  await setVerified(item, true, {
+    verified_by_name: verifyName.value.trim(),
+    verified_by_role: verifyRole.value.trim(),
+  })
+  pendingVerify.value = null
+}
+
+const setVerified = async (item, value, extra = {}) => {
   verifying.value = item.files_id
-  const previous = item.verified
+  const previous = { verified: item.verified, verified_by_name: item.verified_by_name, verified_by_role: item.verified_by_role }
 
   // Flipped up front so the switch does not sit on its old position while the
   // request is in flight; put back if the write fails.
   item.verified = value
+  if (value) {
+    item.verified_by_name = extra.verified_by_name
+    item.verified_by_role = extra.verified_by_role
+  } else {
+    item.verified_by_name = null
+    item.verified_by_role = null
+  }
 
   try {
     const res = await fetch(`${API}/${item.files_id}/verify`, {
@@ -517,12 +602,14 @@ const setVerified = async (item, value) => {
       // Content-Type spelled out here: getHeaders() leaves it off on purpose
       // for the FormData upload, and without it this JSON body never parses.
       headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ verified: value }),
+      body: JSON.stringify({ verified: value, ...extra }),
     })
     if (!res.ok) throw new Error('Could not update the verified mark')
     notify(value ? 'Material marked verified' : 'Verified mark removed')
   } catch (error) {
-    item.verified = previous
+    item.verified = previous.verified
+    item.verified_by_name = previous.verified_by_name
+    item.verified_by_role = previous.verified_by_role
     notify(error.message || 'Could not update the verified mark', 'error')
   } finally {
     verifying.value = null

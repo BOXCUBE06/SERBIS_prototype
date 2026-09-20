@@ -24,7 +24,7 @@ class VehicleController extends Controller
         // entirely, so an array reached the unique rule.
         $validated = $request->validate([
             'unit_identifier' => 'required|string|max:255|unique:tbl_vehicles,unit_identifier',
-            'type' => 'required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
+            'type' => ['required', Rule::in(Vehicle::TYPES)],
             'specification' => 'nullable|string|max:255',
             'status' => 'required|in:Available,Dispatched,Maintenance',
         ]);
@@ -60,7 +60,7 @@ class VehicleController extends Controller
                 'max:255',
                 Rule::unique('tbl_vehicles')->ignore($vehicle->vehicle_id, 'vehicle_id'),
             ],
-            'type' => 'sometimes|required|in:Ambulance,Rescue Vehicle,Fire Truck,Boat',
+            'type' => ['sometimes', 'required', Rule::in(Vehicle::TYPES)],
             'specification' => 'nullable|string|max:255',
             'status' => 'sometimes|required|in:Available,Dispatched,Maintenance',
         ]);

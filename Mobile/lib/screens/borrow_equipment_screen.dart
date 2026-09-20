@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../models/borrow_models.dart';
 import '../models/request_models.dart' show dueLabel, formatTimelineTime;
+import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -19,7 +20,16 @@ import '../widgets/shared_widgets.dart';
 class BorrowEquipmentScreen extends StatefulWidget {
   final AppState appState;
 
-  const BorrowEquipmentScreen({super.key, required this.appState});
+  /// The signed-in resident. Only used for the delivery-address "Same as my
+  /// address" checkbox (MDRRMO feedback, 2026-09-19) — everything else this
+  /// screen and its sheet do reads from [appState].
+  final AppUser user;
+
+  const BorrowEquipmentScreen({
+    super.key,
+    required this.appState,
+    required this.user,
+  });
 
   @override
   State<BorrowEquipmentScreen> createState() => _BorrowEquipmentScreenState();
@@ -74,7 +84,11 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _BorrowSheet(appState: widget.appState, item: item),
+      builder: (_) => _BorrowSheet(
+        appState: widget.appState,
+        user: widget.user,
+        item: item,
+      ),
     );
 
     if (filed == null || !mounted) return;
@@ -434,16 +448,32 @@ class _BorrowRequestCard extends StatelessWidget {
           ],
           if (request.dueDate != null && !request.status.isTerminal) ...[
             const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.event_outlined, size: 14, color: AppColors.inkFaint),
-                const SizedBox(width: 8),
-                Text(
-                  dueLabel(request.dueDate!),
-                  style: AppText.body(size: 12, color: AppColors.inkMuted),
+            Builder(builder: (context) {
+              // Prominent, not a small caption line — MDRRMO feedback,
+              // 2026-09-17. Same three-tier colouring the admin panel's own
+              // countdown chip uses: red once overdue, amber inside the
+              // 1-day reminder window, neutral otherwise.
+              final label = dueLabel(request.dueDate!);
+              final overdue = label.endsWith('overdue');
+              final urgent = label == 'Due today' || label == 'Due tomorrow';
+              final bg = overdue ? AppColors.red50 : (urgent ? AppColors.amber50 : AppColors.grey50);
+              final fg = overdue ? AppColors.red600 : (urgent ? AppColors.amber600 : AppColors.inkMuted);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_outlined, size: 16, color: fg),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: AppText.body(size: 13, weight: FontWeight.w700, color: fg),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            }),
           ],
           // Staff photograph the item at the counter; the resident only reads
           // it back. A row with neither photo draws nothing at all — most
@@ -730,12 +760,17 @@ class _FieldLabel extends StatelessWidget {
 /// in-flight spinner without rebuilding the whole screen behind it.
 class _BorrowSheet extends StatefulWidget {
   final AppState appState;
+  final AppUser user;
 
   /// Null for an item the catalogue does not list, which is when the sheet
   /// asks for its name instead of showing one.
   final Equipment? item;
 
-  const _BorrowSheet({required this.appState, required this.item});
+  const _BorrowSheet({
+    required this.appState,
+    required this.user,
+    required this.item,
+  });
 
   @override
   State<_BorrowSheet> createState() => _BorrowSheetState();
@@ -746,11 +781,10 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   /// finding that out only after a round trip loses what was typed past 255.
   static const _purposeMaxLength = 255;
 
-  /// `other_equipment_text` and `delivery_address` are both varchar(255);
-  /// `organization_name` is varchar(150). Same reasoning as above.
+  /// `other_equipment_text` and `delivery_address` are both varchar(255). Same
+  /// reasoning as above.
   static const _otherItemMaxLength = 255;
   static const _addressMaxLength = 255;
-  static const _organizationMaxLength = 150;
 
   /// Only bounds the uncatalogued path, where there is no stock figure to stop
   /// at. The stepper is one tap per unit, so it needs an end somewhere.
@@ -760,17 +794,19 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   final TextEditingController _purpose = TextEditingController();
   final TextEditingController _otherItem = TextEditingController();
   final TextEditingController _address = TextEditingController();
-  final TextEditingController _organization = TextEditingController();
 
   bool _delivery = false;
-  bool _organizationBorrower = false;
+
+  /// Off by default — checking it fills [_address] from the account's own
+  /// address once (MDRRMO feedback, 2026-09-19); the field stays editable
+  /// either way, since a delivery is often to somewhere else.
+  bool _deliveryAddressIsMyAddress = false;
 
   bool _submitting = false;
   String? _error;
   String? _purposeError;
   String? _otherItemError;
   String? _addressError;
-  String? _organizationError;
 
   bool get _uncatalogued => widget.item == null;
 
@@ -784,7 +820,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     _purpose.addListener(() => _clearIfFilled(_purpose, _purposeError, () => _purposeError = null));
     _otherItem.addListener(() => _clearIfFilled(_otherItem, _otherItemError, () => _otherItemError = null));
     _address.addListener(() => _clearIfFilled(_address, _addressError, () => _addressError = null));
-    _organization.addListener(() => _clearIfFilled(_organization, _organizationError, () => _organizationError = null));
   }
 
   void _clearIfFilled(TextEditingController field, String? error, VoidCallback clear) {
@@ -796,7 +831,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     _purpose.dispose();
     _otherItem.dispose();
     _address.dispose();
-    _organization.dispose();
     super.dispose();
   }
 
@@ -815,18 +849,15 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     final purpose = _purpose.text.trim();
     final otherItem = _otherItem.text.trim();
     final address = _address.text.trim();
-    final organization = _organization.text.trim();
 
     final missingItem = _uncatalogued && otherItem.isEmpty;
     final missingAddress = _delivery && address.isEmpty;
-    final missingOrganization = _organizationBorrower && organization.isEmpty;
 
-    if (purpose.isEmpty || missingItem || missingAddress || missingOrganization) {
+    if (purpose.isEmpty || missingItem || missingAddress) {
       setState(() {
         _purposeError = purpose.isEmpty ? 'Tell MDRRMO what you need this for.' : null;
         _otherItemError = missingItem ? 'Name the item you need.' : null;
         _addressError = missingAddress ? 'Where should MDRRMO deliver it?' : null;
-        _organizationError = missingOrganization ? 'Name the organization you are borrowing for.' : null;
       });
       return;
     }
@@ -845,8 +876,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
       // Sent only with the method it belongs to. A resident who types an
       // address and then switches back to Pickup must not still be delivered to.
       deliveryAddress: _delivery ? address : null,
-      borrowerType: _organizationBorrower ? 'Organization' : 'Resident',
-      organizationName: _organizationBorrower ? organization : null,
     );
 
     if (!mounted) return;
@@ -956,6 +985,24 @@ class _BorrowSheetState extends State<_BorrowSheet> {
               ),
               if (_delivery) ...[
                 const SizedBox(height: 12),
+                CheckboxListTile(
+                  value: _deliveryAddressIsMyAddress,
+                  onChanged: _submitting
+                      ? null
+                      : (checked) => setState(() {
+                            _deliveryAddressIsMyAddress = checked ?? false;
+                            if (_deliveryAddressIsMyAddress) {
+                              _address.text = widget.user.fullAddress;
+                            }
+                          }),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Same as my address',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'Delivery address',
                   hint: 'House number, street, barangay',
@@ -963,30 +1010,6 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                   lines: 2,
                   maxLength: _addressMaxLength,
                   errorText: _addressError,
-                  enabled: !_submitting,
-                ),
-              ],
-              const SizedBox(height: 20),
-              _FieldLabel('Who is borrowing?'),
-              const SizedBox(height: 8),
-              _SegmentedToggle(
-                leftLabel: 'Myself',
-                rightLabel: 'An organization',
-                rightSelected: _organizationBorrower,
-                enabled: !_submitting,
-                onChanged: (organization) => setState(() {
-                  _organizationBorrower = organization;
-                  if (!organization) _organizationError = null;
-                }),
-              ),
-              if (_organizationBorrower) ...[
-                const SizedBox(height: 12),
-                AppTextField(
-                  label: 'Organization name',
-                  hint: 'e.g. Barangay San Fabian BDRRMC',
-                  controller: _organization,
-                  maxLength: _organizationMaxLength,
-                  errorText: _organizationError,
                   enabled: !_submitting,
                 ),
               ],

@@ -41,12 +41,12 @@ class ResidentDeactivationTest extends TestCase
     {
         parent::setUp();
 
-        // PhilSMS has no sandbox. Faked here and asserted against below: one of
+        // SkySMS has no sandbox. Faked here and asserted against below: one of
         // these tests exists precisely to prove the deactivation refusal costs
         // no billed message.
         Http::preventStrayRequests();
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => fn () => Http::response(['status' => 'success'], 200),
         ]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
@@ -64,7 +64,7 @@ class ResidentDeactivationTest extends TestCase
             'status' => $status,
         ]);
 
-        $resident->markEmailAsVerified();
+        $resident->markPhoneAsVerified();
 
         return $resident->fresh();
     }
@@ -100,6 +100,7 @@ class ResidentDeactivationTest extends TestCase
         $this->postJson('/api/service-requests', [
             'service_id' => $service->service_id,
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
         ])
@@ -122,6 +123,7 @@ class ResidentDeactivationTest extends TestCase
         $this->postJson('/api/service-requests', [
             'service_id' => $service->service_id,
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             'valid_id' => UploadedFile::fake()->create('valid-id.jpg', 200, 'image/jpeg'),
         ])->assertSuccessful();
@@ -138,6 +140,7 @@ class ResidentDeactivationTest extends TestCase
             'resident_id' => $resident->resident_id,
             'service_id' => $service->service_id,
             'patient_name' => 'Juan Dela Cruz',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'patient_address' => 'Purok 1, San Fabian',
             'pickup_location' => 'Purok 1, San Fabian',
             'destination' => 'Echague District Hospital',
@@ -165,6 +168,7 @@ class ResidentDeactivationTest extends TestCase
             'walk_in_contact_number' => '09171111111',
             'service_id' => $service->service_id,
             'patient_name' => 'Maria Santos',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'patient_address' => 'Purok 1, San Fabian',
             'pickup_location' => 'Purok 1, San Fabian',
             'destination' => 'Echague District Hospital',
@@ -226,7 +230,7 @@ class ResidentDeactivationTest extends TestCase
 
     /**
      * The refusal is placed above the unverified-email branch in residentLogin,
-     * not below it, because that branch calls issueSignupCode(). PhilSMS bills
+     * not below it, because that branch calls issueSignupCode(). SkySMS bills
      * every send and has no sandbox, so gating afterwards would let repeated
      * logins against a closed account run up a real bill. Asserted rather than
      * described — the placement is invisible in a diff read later.
@@ -236,7 +240,7 @@ class ResidentDeactivationTest extends TestCase
         $resident = $this->resident('Deactivated');
 
         $this->postJson('/api/resident/login', [
-            'email_address' => $resident->email_address,
+            'phone_number' => $resident->phone_number,
             'password' => 'Password123',
         ])
             ->assertStatus(403)
@@ -245,7 +249,7 @@ class ResidentDeactivationTest extends TestCase
         $this->assertCount(
             0,
             Http::recorded(),
-            'A deactivated login must not reach PhilSMS — every send is billed.',
+            'A deactivated login must not reach SkySMS — every send is billed.',
         );
     }
 }

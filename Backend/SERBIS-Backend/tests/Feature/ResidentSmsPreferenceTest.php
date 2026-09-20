@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Barangay;
 use App\Models\Recipient;
 use App\Models\Resident;
+use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,7 +20,7 @@ use Tests\TestCase;
  * app.
  *
  * Http::preventStrayRequests() for the same reason as SmsBlastLoggingTest —
- * PhilSMS has no sandbox and every escaped request is a billed send.
+ * SkySMS has no sandbox and every escaped request is a billed send.
  */
 class ResidentSmsPreferenceTest extends TestCase
 {
@@ -41,6 +42,11 @@ class ResidentSmsPreferenceTest extends TestCase
             'email_address' => 'admin@test.local',
             'password' => Hash::make('password123'),
             'role' => 'Admin',
+        ]);
+
+        SmsBlastCode::create([
+            'code_hash' => Hash::make('123456'),
+            'updated_by' => $this->admin->admin_id,
         ]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
@@ -152,16 +158,16 @@ class ResidentSmsPreferenceTest extends TestCase
 
     public function test_the_blast_skips_residents_who_opted_out(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['job_id' => 'job-1'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['job_id' => 'job-1'], 200)]);
 
         $optedIn = $this->resident('09171111111');
         $optedOut = $this->resident('09172222222', ['sms_opt_in' => false]);
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
-        ])->assertOk()->assertJson(['sent' => 1, 'failed' => 0]);
+        ])->assertOk()->assertJson(['queued' => 1, 'failed' => 0]);
 
         // Both halves matter. The recipient row is the record of who the agency
         // says it warned, so an opted-out resident must be absent from it...
@@ -170,22 +176,22 @@ class ResidentSmsPreferenceTest extends TestCase
         // ...and their number must not have reached the vendor, which is the
         // half that actually costs money and delivers a text.
         Http::assertSent(function ($request) {
-            // PhilSMS takes one comma-separated string of E.164 numbers, so the
+            // SkySMS takes a list of E.164 numbers, so the
             // assertion is on the normalised form, not on what the resident typed.
-            return $request['recipient'] === '+639171111111';
+            return $request['recipients'] === [['phone_number' => '+639171111111']];
         });
     }
 
     public function test_an_opted_out_resident_sees_no_advisory_for_a_blast_they_missed(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response([], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response([], 200)]);
 
         $this->resident('09171111111');
         $optedOut = $this->resident('09172222222', ['sms_opt_in' => false]);
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertOk();
 
@@ -205,7 +211,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Nobody wants this one.',
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ])->assertStatus(422);
 

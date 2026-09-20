@@ -50,10 +50,10 @@ class InputBoundsTest extends TestCase
         parent::setUp();
 
         Storage::fake(config('filesystems.uploads.private'));
-        // store() texts nothing, but approve()/reschedule() notify over PhilSMS,
+        // store() texts nothing, but approve()/reschedule() notify over SkySMS,
         // which has no sandbox — an escaped request is a billed real send.
         Http::preventStrayRequests();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
 
@@ -97,6 +97,7 @@ class InputBoundsTest extends TestCase
         return array_merge([
             'service_id' => $this->ambulance->service_id,
             'patient_name' => 'Maria Santos',
+            'patient_relatives' => ['Lalaine Ferrer'],
             'destination' => 'Echague District Hospital',
             // create(), not image(): image() needs the GD extension, which is
             // not installed on either dev box. Same pattern as
@@ -180,13 +181,22 @@ class InputBoundsTest extends TestCase
         $this->assertSame(20, $trip->fresh()->people()->where('role', 'driver')->count());
     }
 
-    public function test_a_resident_cannot_file_more_than_twenty_relatives(): void
+    public function test_a_resident_cannot_file_more_than_two_relatives(): void
     {
         Sanctum::actingAs($this->resident);
 
         $this->postJson('/api/service-requests', $this->intake([
-            'patient_relatives' => array_fill(0, 21, 'Relative'),
+            'patient_relatives' => array_fill(0, 3, 'Relative'),
         ]))->assertStatus(422)->assertJsonValidationErrors('patient_relatives');
+    }
+
+    public function test_two_relatives_is_still_accepted(): void
+    {
+        Sanctum::actingAs($this->resident);
+
+        $this->postJson('/api/service-requests', $this->intake([
+            'patient_relatives' => ['Ana Cruz', 'Rosa Cruz'],
+        ]))->assertStatus(201);
     }
 
     // ---- patient age --------------------------------------------------------
@@ -388,7 +398,32 @@ class InputBoundsTest extends TestCase
             'status' => 'Approved',
             'due_date' => '2026-09-15',
         ])->assertStatus(422)
-            ->assertJsonPath('errors.due_date.0', 'The due date cannot be earlier than today.');
+            ->assertJsonPath('errors.due_date.0', 'A loan runs at least 1 day — pick Sep 17, 2026 or later.');
+    }
+
+    /** A same-day loan is not a real borrow term (MDRRMO feedback, 2026-09-17). */
+    public function test_a_same_day_due_date_is_rejected(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => now('Asia/Manila')->format('Y-m-d'),
+        ])->assertStatus(422)->assertJsonValidationErrors('due_date');
+    }
+
+    public function test_a_one_day_loan_is_still_accepted(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Approved',
+            'due_date' => now('Asia/Manila')->addDay()->format('Y-m-d'),
+        ])->assertOk();
     }
 
     /**
@@ -406,7 +441,10 @@ class InputBoundsTest extends TestCase
 
         Sanctum::actingAs($this->admin);
 
-        $this->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])
+        $this->putJson("/api/borrowings/{$borrowing->getKey()}", [
+            'status' => 'Returned',
+            'return_condition_note' => 'Came back in working order.',
+        ])
             ->assertOk();
 
         $this->assertSame('Returned', $borrowing->fresh()->status);

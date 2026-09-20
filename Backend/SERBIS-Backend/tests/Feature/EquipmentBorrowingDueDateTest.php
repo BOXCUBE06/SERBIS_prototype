@@ -76,14 +76,20 @@ class EquipmentBorrowingDueDateTest extends TestCase
     }
 
     /**
-     * Relative, not a hardcoded date. `due_date` is bounded to
-     * [today, +1 year] now, so a literal like '2026-08-10' passes until the
-     * day it silently starts failing for a reason that has nothing to do with
-     * what the test is checking.
+     * Relative, not a hardcoded date, and read against the office calendar
+     * specifically — the controller's own bound is computed in Asia/Manila
+     * (EquipmentBorrowingController::OFFICE_TIMEZONE), and `now()` here used
+     * to read the app's default timezone instead. For roughly eight hours a
+     * day (UTC evening, Manila past midnight) that skew put `dueDate(1)` on
+     * Manila's "today" rather than "tomorrow", so the 1-day minimum this
+     * suite added on 2026-09-17 rejected a payload the test asserts is
+     * accepted — a real intermittent failure, not flakiness in the tests'
+     * imagination (reproduced both in CI and locally, at the hours the skew
+     * is live).
      */
     private function dueDate(int $daysFromToday = 7): string
     {
-        return now()->addDays($daysFromToday)->format('Y-m-d');
+        return now('Asia/Manila')->addDays($daysFromToday)->format('Y-m-d');
     }
 
     public function test_approving_stores_the_due_date(): void
@@ -274,15 +280,86 @@ class EquipmentBorrowingDueDateTest extends TestCase
         );
     }
 
-    public function test_a_return_without_a_condition_note_is_still_accepted(): void
+    /** MDRRMO feedback, 2026-09-19: a return with no note at all is refused, condition unstated or not. */
+    public function test_a_return_without_a_condition_note_is_refused(): void
     {
         $borrowing = $this->pendingBorrowing();
         $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$borrowing->getKey()}", ['status' => 'Returned'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['return_condition_note']);
+
+        $this->assertSame('Released', $borrowing->fresh()->status);
+    }
+
+    public function test_a_bad_return_condition_requires_a_note(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Bad',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['return_condition_note']);
+
+        $this->assertNull($borrowing->fresh()->return_condition);
+    }
+
+    public function test_a_bad_return_condition_with_a_note_is_accepted_and_stored(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Bad',
+                'return_condition_note' => 'Motor housing cracked, unusable.',
+            ])
             ->assertOk();
 
-        $this->assertNull($borrowing->fresh()->return_condition_note);
+        $fresh = $borrowing->fresh();
+        $this->assertSame('Bad', $fresh->return_condition);
+        $this->assertSame('Motor housing cracked, unusable.', $fresh->return_condition_note);
+    }
+
+    /** MDRRMO feedback, 2026-09-19: a Good return now needs a note too, same as a Bad one. */
+    public function test_a_good_return_condition_still_requires_a_note(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Good',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['return_condition_note']);
+
+        $this->assertSame('Released', $borrowing->fresh()->status);
+    }
+
+    public function test_a_good_return_condition_with_a_note_is_accepted_and_stored(): void
+    {
+        $borrowing = $this->pendingBorrowing();
+        $borrowing->update(['status' => 'Released', 'due_date' => $this->dueDate(1)]);
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/borrowings/{$borrowing->getKey()}", [
+                'status' => 'Returned',
+                'return_condition' => 'Good',
+                'return_condition_note' => 'Came back clean, all straps intact.',
+            ])
+            ->assertOk();
+
+        $fresh = $borrowing->fresh();
+        $this->assertSame('Good', $fresh->return_condition);
+        $this->assertSame('Came back clean, all straps intact.', $fresh->return_condition_note);
     }
 }

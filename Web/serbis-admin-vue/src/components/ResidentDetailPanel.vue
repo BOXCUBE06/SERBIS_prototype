@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex flex-column h-100">
     <div class="pa-6 pb-0 d-flex justify-space-between align-start">
-      <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Head of the family profile</span>
+      <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">{{ accountTypeLabel(resident.account_type) }} profile</span>
       <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close profile panel" @click="$emit('close')"></v-btn>
     </div>
 
@@ -36,6 +36,13 @@
         <span class="status-dot" :class="residentStatusDotClass(resident.status)"></span>
         {{ residentStatusLabel(resident.status) }}
       </span>
+
+      <!-- A self-registered organization cannot request anything until it is
+           approved here. Approve activates it; Reject deactivates it. -->
+      <div v-if="isPendingOrganization" class="pending-note mt-4" role="status">
+        <v-icon size="16" class="mr-2" aria-hidden="true">mdi-clock-outline</v-icon>
+        <span>Awaiting your approval. This organization cannot request services until you approve it.</span>
+      </div>
     </div>
 
     <div class="px-6 py-4 flex-grow-1 detail-scroll">
@@ -43,12 +50,14 @@
 
       <div class="mb-4">
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Phone number</div>
-        <a :href="`tel:${resident.phone_number}`" class="detail-link text-body-1 font-weight-medium">
-          <v-icon size="18" class="mr-2">mdi-phone</v-icon>{{ resident.phone_number }}
+        <a :href="`tel:${displayPhone(resident.phone_number)}`" class="detail-link text-body-1 font-weight-medium">
+          <v-icon size="18" class="mr-2">mdi-phone</v-icon>{{ displayPhone(resident.phone_number) }}
         </a>
       </div>
 
-      <div class="mb-4">
+      <!-- Email is no longer collected (a phone number is the login), so newer
+           accounts have none. Shown only for the accounts that gave one. -->
+      <div v-if="resident.email_address" class="mb-4">
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Email address</div>
         <a :href="`mailto:${resident.email_address}`" class="detail-link text-body-1 font-weight-medium">
           <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>{{ resident.email_address }}
@@ -73,6 +82,13 @@
       <h4 class="text-subtitle-2 font-weight-bold text-medium-emphasis text-uppercase mb-4 mt-6">Registration</h4>
 
       <div class="mb-4">
+        <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Account type</div>
+        <div class="text-body-1 font-weight-medium text-high-emphasis">
+          {{ accountTypeLabel(resident.account_type) }}<template v-if="resident.organization_name"> · {{ resident.organization_name }}</template>
+        </div>
+      </div>
+
+      <div class="mb-4">
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Barangay</div>
         <div class="text-body-1 font-weight-medium text-high-emphasis">{{ barangayName }}</div>
       </div>
@@ -86,6 +102,11 @@
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Resident ID</div>
         <div class="text-body-1 font-weight-medium text-high-emphasis">#{{ residentId }}</div>
       </div>
+
+      <!-- For reading before approving a new borrow request. Information only:
+           nothing here blocks or flags a request. -->
+      <h4 class="text-subtitle-2 font-weight-bold text-medium-emphasis text-uppercase mb-4 mt-6">Equipment returns</h4>
+      <ResidentReturnHistory :resident-id="residentId" />
     </div>
 
     <div class="pa-6 pt-4 detail-actions">
@@ -101,7 +122,35 @@
         <v-icon start>mdi-pencil</v-icon> Edit profile
       </v-btn>
 
+      <template v-if="isPendingOrganization">
+        <v-btn
+          color="primary"
+          variant="flat"
+          height="48"
+          rounded="lg"
+          block
+          class="text-none font-weight-bold mb-3"
+          :loading="statusLoading"
+          @click="$emit('toggle-status', resident)"
+        >
+          <v-icon start>mdi-check-circle-outline</v-icon> Approve organization
+        </v-btn>
+        <v-btn
+          color="warning"
+          variant="tonal"
+          height="48"
+          rounded="lg"
+          block
+          class="text-none font-weight-bold mb-3"
+          :disabled="statusLoading"
+          @click="$emit('reject', resident)"
+        >
+          <v-icon start>mdi-close-circle-outline</v-icon> Reject organization
+        </v-btn>
+      </template>
+
       <v-btn
+        v-else
         :color="isActive ? 'warning' : 'primary'"
         variant="tonal"
         height="48"
@@ -132,7 +181,10 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import ResidentReturnHistory from '@/components/ResidentReturnHistory.vue'
+import { ACCOUNT_TYPE, accountTypeLabel } from '@/composables/accountType'
 import { initials as computeInitials } from '@/composables/adminUi'
+import { displayPhone } from '@/composables/phoneNumber'
 import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   RESIDENT_STATUS,
@@ -152,10 +204,17 @@ const props = defineProps({
   hiddenByFilter: { type: Boolean, default: false },
 })
 
-defineEmits(['close', 'edit', 'toggle-status', 'delete', 'clear-filters'])
+defineEmits(['close', 'edit', 'toggle-status', 'reject', 'delete', 'clear-filters'])
 
 // Pending and Deactivated share the action: both offer "Activate account".
 const isActive = computed(() => props.resident.status === RESIDENT_STATUS.active)
+
+// An organization that signed itself up and has not been activated. Individuals
+// in the same status keep the plain Activate button: they can already file.
+const isPendingOrganization = computed(() =>
+  props.resident.account_type === ACCOUNT_TYPE.organization &&
+  props.resident.status === RESIDENT_STATUS.pending
+)
 
 const residentId = computed(() => props.resident.resident_id ?? props.resident.id)
 
@@ -198,6 +257,18 @@ const registeredOn = computed(() => {
 </script>
 
 <style scoped>
+/* Pending organization: amber, like the Pending status pill, with the text in
+   the strong token so it stays readable on its own tint. */
+.pending-note {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  text-align: left;
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning-strong));
+}
 /* Avatar — the old blue-on-light-blue pairing measured 3.28:1. Tinting the
    primary token keeps the soft look and passes AA in both themes. */
 .avatar-tint { background: rgba(var(--v-theme-primary), 0.14) !important; }

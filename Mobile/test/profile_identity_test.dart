@@ -31,7 +31,7 @@ class _FakeApi extends ApiService {
 
 /// The screen takes the whole resident now, so the old `name` string is split
 /// back into the two columns it comes from.
-AppUser _userFrom(String? name, String? email, String? address) {
+AppUser _userFrom(String? name, String? phone, String? address) {
   final parts = (name ?? '').trim().split(RegExp(r'\s+'))
     ..removeWhere((part) => part.isEmpty);
 
@@ -39,7 +39,7 @@ AppUser _userFrom(String? name, String? email, String? address) {
     id: '1',
     firstName: parts.isEmpty ? '' : parts.first,
     lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
-    email: email ?? '',
+    phone: phone ?? '',
     address: address ?? '',
   );
 }
@@ -47,7 +47,7 @@ AppUser _userFrom(String? name, String? email, String? address) {
 Future<void> _pumpProfile(
   WidgetTester tester, {
   String? name,
-  String? email,
+  String? phone,
   String? address,
 }) async {
   // A phone-shaped viewport: the default 800x600 clips a screen this tall and
@@ -63,7 +63,7 @@ Future<void> _pumpProfile(
       body: ProfileScreen(
         appState: AppState(_FakeApi()),
         userStore: UserStore(_FakeApi()),
-        user: _userFrom(name, email, address),
+        user: _userFrom(name, phone, address),
         onUserChanged: (_) {},
         onLogout: () {},
         onOpenNotifications: () {},
@@ -81,7 +81,7 @@ void main() {
 
     expect(find.text('Juan Delacruz'), findsNothing);
     expect(find.text('Echague, Isabela'), findsNothing);
-    // Name, email and barangay all say so rather than guessing.
+    // Name, number and barangay all say so rather than guessing.
     expect(find.text('Not on file'), findsNWidgets(3));
   });
 
@@ -89,17 +89,18 @@ void main() {
     await _pumpProfile(
       tester,
       name: 'Maria Santos',
-      email: 'maria@example.com',
+      phone: '+639171234567',
       address: 'San Fabian',
     );
 
     expect(find.text('Maria Santos'), findsOneWidget);
-    expect(find.text('maria@example.com'), findsOneWidget);
+    // Stored as E.164, shown the way a person writes it.
+    expect(find.text('09171234567'), findsOneWidget);
     expect(find.text('San Fabian'), findsOneWidget);
     expect(find.text('Not on file'), findsNothing);
   });
 
-  testWidgets('the details sheet edits contact fields but never the barangay',
+  testWidgets('the details sheet edits the name and street but never the barangay',
       (tester) async {
     // This sheet was read-only while PATCH /me did not exist — offering an edit
     // the backend could not perform is what the original bug was. The endpoint
@@ -108,15 +109,17 @@ void main() {
     await _pumpProfile(
       tester,
       name: 'Maria Santos',
-      email: 'maria@example.com',
+      phone: '+639171234567',
       address: 'San Fabian',
     );
 
     await tester.tap(find.text('Account details'));
     await tester.pumpAndSettle();
 
-    // First, middle, last, phone, email — and nothing for the barangay.
-    expect(find.byType(TextField), findsNWidgets(5));
+    // First, middle, last, and the purok picker — and nothing for the barangay
+    // or the number, which moves through its own two-step flow.
+    expect(find.byType(TextField), findsNWidgets(3));
+    expect(find.byType(DropdownButton<String>), findsOneWidget);
     expect(find.text('Save changes'), findsOneWidget);
 
     // The barangay is still shown, still read-only, and now says why.
@@ -137,7 +140,7 @@ void main() {
     await _pumpProfile(
       tester,
       name: 'Maria Santos',
-      email: 'maria@example.com',
+      phone: '+639171234567',
     );
 
     await tester.tap(find.text('Account details'));

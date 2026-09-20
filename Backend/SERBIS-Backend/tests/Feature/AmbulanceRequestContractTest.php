@@ -31,7 +31,6 @@ class AmbulanceRequestContractTest extends TestCase
     private const AMBULANCE_EXPECTED = [
         'patient_name' => 'Juan Dela Cruz',
         'patient_age' => 62,
-        'patient_sex' => 'male',
         'patient_address' => 'Purok 2, San Fabian',
         'patient_contact_number' => '09189999999',
         'pickup_location' => 'Purok 2, San Fabian',
@@ -50,7 +49,6 @@ class AmbulanceRequestContractTest extends TestCase
     private const AMBULANCE_PATIENT_ONLY_EXPECTED = [
         'patient_name' => 'Juan Dela Cruz',
         'patient_age' => 62,
-        'patient_sex' => 'male',
         'patient_address' => 'Purok 2, San Fabian',
         'patient_contact_number' => '09189999999',
         'pickup_location' => 'Purok 2, San Fabian',
@@ -62,7 +60,6 @@ class AmbulanceRequestContractTest extends TestCase
     private const PLAIN_EXPECTED = [
         'patient_name' => null,
         'patient_age' => null,
-        'patient_sex' => null,
         'patient_address' => null,
         'patient_contact_number' => null,
         'pickup_location' => null,
@@ -126,7 +123,6 @@ class AmbulanceRequestContractTest extends TestCase
             'request_id' => $this->ambulanceRequest->getKey(),
             'patient_name' => 'Juan Dela Cruz',
             'patient_age' => 62,
-            'patient_sex' => 'male',
             'patient_address' => 'Purok 2, San Fabian',
             'patient_contact_number' => '09189999999',
             'pickup_location' => 'Purok 2, San Fabian',
@@ -235,8 +231,8 @@ class AmbulanceRequestContractTest extends TestCase
         Sanctum::actingAs($this->admin);
 
         $row = $this->patchJson("/api/service-requests/{$this->ambulanceRequest->getKey()}/reschedule", [
-            'scheduled_at' => '2026-09-20 08:00:00',
-            'scheduled_end' => '2026-09-20 10:00:00',
+            'scheduled_at' => now()->addDays(2)->setTime(8, 0)->toDateTimeString(),
+            'scheduled_end' => now()->addDays(2)->setTime(10, 0)->toDateTimeString(),
             'remarks' => 'Moved per resident request',
         ])->assertOk()->json();
 

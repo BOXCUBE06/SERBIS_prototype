@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import 'ambulance_schedule_field.dart';
 import 'form_inputs.dart';
 import 'form_section.dart';
+import 'program_date_field.dart';
 
 /// Renders whichever of the four guided forms the resident picked.
 ///
@@ -25,12 +26,18 @@ class ServiceFormFields extends StatelessWidget {
   final AppState appState;
   final bool filipino;
 
+  /// The seeded destination list for [AmbulanceFormData.destinationChoice]
+  /// (MDRRMO feedback, 2026-09-19). Empty is a valid state — the dropdown
+  /// then offers only "Others", same as before this list existed.
+  final List<String> ambulanceDestinations;
+
   const ServiceFormFields({
     super.key,
     required this.data,
     required this.onChanged,
     required this.appState,
     required this.filipino,
+    this.ambulanceDestinations = const [],
   });
 
   @override
@@ -43,7 +50,23 @@ class ServiceFormFields extends StatelessWidget {
             FormSection(
               label: tr(f, 'form_section.patient'),
               children: [
-                // Never prefilled — see AmbulanceFormData's constructor.
+                // Off by default — see AmbulanceFormData.setPatientIsAccountHolder.
+                // Checking it fills the name below once; the field stays fully
+                // editable either way.
+                CheckboxListTile(
+                  value: form.patientIsAccountHolder,
+                  onChanged: (checked) {
+                    form.setPatientIsAccountHolder(checked ?? false);
+                    onChanged();
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Patient is myself',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'Patient name',
                   hint: 'e.g. Maria Santos',
@@ -55,18 +78,23 @@ class ServiceFormFields extends StatelessWidget {
                   keyboard: TextInputType.number,
                   controller: form.age,
                 ),
-                AppDropdown<String>(
-                  label: 'Sex',
-                  items: AmbulanceFormData.sexOptions,
-                  value: form.sex,
-                  onChanged: (v) {
-                    form.sex = v;
+                // Off by default — see AmbulanceFormData.setPatientAddressIsMyAddress.
+                // The patient may live elsewhere, so this is a confirmation,
+                // not an assumption.
+                CheckboxListTile(
+                  value: form.patientAddressIsMyAddress,
+                  onChanged: (checked) {
+                    form.setPatientAddressIsMyAddress(checked ?? false);
                     onChanged();
                   },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Same as my address',
+                    style: TextStyle(fontSize: 14),
+                  ),
                 ),
-                // Prefilled from the account and fully editable: the account
-                // answers for the requester, and the patient may live
-                // elsewhere.
                 AppTextField(
                   label: 'Patient address',
                   hint: 'Purok / street, barangay',
@@ -81,16 +109,44 @@ class ServiceFormFields extends StatelessWidget {
             FormSection(
               label: tr(f, 'form_section.trip'),
               children: [
+                // Off by default — see AmbulanceFormData.setPickupIsMyAddress.
+                // Separate from the patient-address checkbox above: the
+                // pickup point and the patient's address are often the same,
+                // but not always.
+                CheckboxListTile(
+                  value: form.pickupIsMyAddress,
+                  onChanged: (checked) {
+                    form.setPickupIsMyAddress(checked ?? false);
+                    onChanged();
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Same as my address',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
                 AppTextField(
                   label: 'From',
                   hint: 'e.g. Purok 3, Brgy. Malasin',
                   controller: form.pickup,
                 ),
-                AppTextField(
+                AppDropdown<String>(
                   label: 'To',
-                  hint: 'e.g. Echague District Hospital',
-                  controller: form.destination,
+                  value: form.destinationChoice,
+                  items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
+                  onChanged: (choice) {
+                    form.setDestinationChoice(choice);
+                    onChanged();
+                  },
                 ),
+                if (form.destinationChoice == AmbulanceFormData.destinationOthers)
+                  AppTextField(
+                    label: 'Destination',
+                    hint: 'e.g. Echague District Hospital',
+                    controller: form.destination,
+                  ),
               ],
             ),
             FormSection(
@@ -116,7 +172,7 @@ class ServiceFormFields extends StatelessWidget {
                     children: [
                       Expanded(
                         child: AppTextField(
-                          label: 'Relative ${i + 1}',
+                          label: i == 0 ? 'Relative 1 (required)' : 'Relative ${i + 1}',
                           hint: 'e.g. Juan Dela Cruz',
                           controller: form.relatives[i],
                         ),
@@ -137,26 +193,27 @@ class ServiceFormFields extends StatelessWidget {
                       ),
                     ],
                   ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      form.addRelative();
-                      onChanged();
-                    },
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text(
-                      'Add relative',
-                      style: AppText.display(size: 12, weight: FontWeight.w600),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.green600,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 36),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                if (form.relatives.length < AmbulanceFormData.maxRelatives)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        form.addRelative();
+                        onChanged();
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(
+                        'Add relative',
+                        style: AppText.display(size: 12, weight: FontWeight.w600),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.green600,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             FormSection(
@@ -183,8 +240,36 @@ class ServiceFormFields extends StatelessWidget {
               FormSection(
                 label: tr(f, section.labelKey),
                 children: [
-                  for (final field in section.fields)
-                    if (field.isChoice)
+                  for (final field in section.fields) ...[
+                    // Off by default — see StructuredFormData.setAddressIsMyAddress.
+                    // Relief goods are often requested for somewhere other
+                    // than the account holder's own address, so this is a
+                    // confirmation, not an assumption.
+                    if (field.key == 'address' && form.hasAddressField)
+                      CheckboxListTile(
+                        value: form.addressIsMyAddress,
+                        onChanged: (checked) {
+                          form.setAddressIsMyAddress(checked ?? false);
+                          onChanged();
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text(
+                          'Same as my address',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    if (field.isDate)
+                      ProgramDateField(
+                        field: field,
+                        value: form.date(field.key),
+                        onPicked: (picked) {
+                          form.setDate(field.key, picked);
+                          onChanged();
+                        },
+                      )
+                    else if (field.isChoice)
                       AppDropdown(
                         label: field.label,
                         items: field.options,
@@ -203,6 +288,31 @@ class ServiceFormFields extends StatelessWidget {
                         controller: form.field(field.key),
                         helpText: field.helpText,
                       ),
+                  ],
+                ],
+              ),
+            // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
+            // 2026-09-18) — a real field on the request, not spec-driven
+            // prose, so it lives outside the section loop above.
+            if (form.offersFulfillment)
+              FormSection(
+                label: 'Pickup or delivery',
+                children: [
+                  AppDropdown(
+                    label: 'How should this reach you?',
+                    items: const ['Pickup', 'Delivery'],
+                    value: form.fulfillmentMethod,
+                    onChanged: (v) {
+                      form.fulfillmentMethod = v;
+                      onChanged();
+                    },
+                  ),
+                  if (form.fulfillmentMethod == 'Delivery')
+                    AppTextField(
+                      label: 'Delivery address',
+                      hint: 'Purok / street, barangay',
+                      controller: form.deliveryAddress,
+                    ),
                 ],
               ),
           ],

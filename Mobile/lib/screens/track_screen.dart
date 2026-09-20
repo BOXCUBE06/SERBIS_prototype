@@ -267,7 +267,7 @@ class _RequestCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                StatusBadge(request.status, filipino: filipino),
+                StatusBadge(request.status, filipino: filipino, label: request.statusLabelFor(filipino)),
               ],
             ),
             const SizedBox(height: 12),
@@ -289,6 +289,42 @@ class _RequestCard extends StatelessWidget {
                 decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                 child: Text(request.note!, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6)),
               ),
+            // A confirmed, still-upcoming booking — MDRRMO feedback,
+            // 2026-09-18, the same prominent-box treatment the equipment
+            // due countdown already has. Overdue takes the box below
+            // instead: once a scheduled time has passed there is nothing
+            // left to count down to.
+            if (request.status == ReqStatus.booked &&
+                request.scheduledAt != null &&
+                !request.isOverdue)
+              Builder(builder: (context) {
+                final countdown = scheduledCountdownLabel(request.scheduledAt!);
+                final urgent = countdown == 'Scheduled today';
+                final tint = urgent ? AppColors.amber600 : AppColors.blue600;
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: urgent ? AppColors.amber50 : AppColors.blue50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.event_outlined, size: 16, color: tint),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '$countdown · ${formatBookingConfirmationTime(request.scheduledAt!, filipino)}',
+                          style: AppText.body(size: 12, weight: FontWeight.w700, color: tint, height: 1.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             if (request.isOverdue)
               Container(
                 margin: const EdgeInsets.only(top: 6),

@@ -134,7 +134,6 @@
         }
 
         .w-narrow { flex: 0 0 22mm; }
-        .w-sex    { flex: 0 0 30mm; }
         .w-half   { flex: 1; }
 
         .group {
@@ -309,7 +308,6 @@
         $patientName    = $val($booking?->patient_name    ?: $trip->patient_name);
         $patientAge     = $val($booking?->patient_age     ?: $trip->patient_age);
         $patientAddress = $val($booking?->patient_address ?: $trip->patient_address);
-        $patientSex     = $val($booking?->patient_sex     ?: $trip->patient_sex);
         $patientContact = $val($booking?->patient_contact_number ?: $trip->patient_contact_number);
         $diagnosis      = $val($booking?->condition_notes ?: $trip->medical_diagnosis);
         $from           = $val($booking?->pickup_location ?: $trip->origin);
@@ -351,10 +349,6 @@
             <div class="field w-narrow">
                 <span class="label">Age</span>
                 <span class="rule">{{ $patientAge }}</span>
-            </div>
-            <div class="field w-sex">
-                <span class="label">Sex</span>
-                <span class="rule">{{ $patientSex ? ucfirst($patientSex) : '' }}</span>
             </div>
         </div>
 

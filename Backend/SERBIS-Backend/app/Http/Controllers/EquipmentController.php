@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\Resident;
+use App\Services\EquipmentAvailabilityNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class EquipmentController extends Controller
 {
+    public function __construct(private readonly EquipmentAvailabilityNotifier $availabilityNotifier) {}
+
     /**
      * total_quantity/available_quantity are a plain MySQL `integer` column —
      * signed INT, no `unsigned()`. The `integer` validation rule accepts
@@ -130,7 +133,17 @@ class EquipmentController extends Controller
             }
         }
 
+        // Read before the write — the notifier needs to know whether this
+        // update is what actually took the item from nothing to something,
+        // not merely that it now has stock (it could have had stock all
+        // along, unrelated to this particular edit).
+        $wasAvailable = $equipment->available_quantity > 0;
+
         $equipment->update($validated);
+
+        if (! $wasAvailable && $equipment->available_quantity > 0) {
+            $this->availabilityNotifier->notifyIfAvailable($equipment);
+        }
 
         return response()->json($equipment);
     }

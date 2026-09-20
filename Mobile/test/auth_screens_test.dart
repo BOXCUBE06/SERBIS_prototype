@@ -32,6 +32,7 @@ import 'package:serbis/screens/auth/register_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/theme/app_theme.dart';
+import 'package:serbis/widgets/form_inputs.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
 // ---------------------------------------------------------------------------
@@ -60,7 +61,7 @@ class _FakeAuthApi extends ApiService {
   bool barangaysThrow = false;
 
   int loginCalls = 0;
-  String? lastLoginEmail;
+  String? lastLoginPhone;
   String? lastLoginPassword;
 
   /// Thrown by `residentLogin` when set.
@@ -76,8 +77,8 @@ class _FakeAuthApi extends ApiService {
   String? registerMessage;
 
   /// What a real 201 reports about the code it just sent. Fixed here because
-  /// no test in this file cares which channel it was — the ones that do live
-  /// in verify_email_screen_test.dart.
+  /// no test in this file cares how the send went — the ones that do live in
+  /// verify_phone_screen_test.dart.
   static const registerDelivery = VerificationDelivery(
     channel: 'sms',
     sentTo: '4567',
@@ -98,11 +99,11 @@ class _FakeAuthApi extends ApiService {
 
   @override
   Future<Map<String, dynamic>> residentLogin({
-    required String email,
+    required String phoneNumber,
     required String password,
   }) async {
     loginCalls++;
-    lastLoginEmail = email;
+    lastLoginPhone = phoneNumber;
     lastLoginPassword = password;
 
     final gate = loginGate;
@@ -115,8 +116,7 @@ class _FakeAuthApi extends ApiService {
       'resident_id': 31,
       'first_name': 'Maria',
       'last_name': 'Santos',
-      'email_address': email,
-      'phone_number': '09171111111',
+      'phone_number': phoneNumber,
       'barangay': {'barangay_name': 'San Fabian'},
     };
   }
@@ -127,18 +127,23 @@ class _FakeAuthApi extends ApiService {
     String? middleName,
     required String lastName,
     required int barangayId,
+    String? streetAddress,
     required String phoneNumber,
-    required String email,
     required String password,
+    String accountType = 'head_of_family',
+    String? organizationName,
   }) async {
     registerCalls++;
     lastRegister = {
       'first_name': firstName,
       'last_name': lastName,
       'barangay_id': barangayId,
+      if (streetAddress != null && streetAddress.isNotEmpty)
+        'street_address': streetAddress,
       'phone_number': phoneNumber,
-      'email_address': email,
       'password': password,
+      'account_type': accountType,
+      if (organizationName != null) 'organization_name': organizationName,
     };
 
     final failure = registerError;
@@ -194,10 +199,11 @@ Future<_FakeAuthApi> _pumpLogin(
   String? infoMessage,
   void Function(AppUser)? onLoginSuccess,
   VoidCallback? onGoToRegister,
-  void Function(String email, VerificationDelivery? delivery)?
-      onEmailUnverified,
-  void Function(String email, String challengeId, VerificationDelivery? delivery)?
+  void Function(String phone, VerificationDelivery? delivery)?
+      onPhoneUnverified,
+  void Function(String phone, String challengeId, VerificationDelivery? delivery)?
       onMfaRequired,
+  void Function(String phone)? onForgotPassword,
 }) async {
   // A phone-shaped viewport, but WIDER than a real phone on purpose. The
   // default 800x600 clips these forms and the offscreen rows never build; 360
@@ -218,8 +224,9 @@ Future<_FakeAuthApi> _pumpLogin(
       userStore: UserStore(fake),
       onLoginSuccess: onLoginSuccess ?? (_) {},
       onGoToRegister: onGoToRegister ?? () {},
-      onEmailUnverified: onEmailUnverified ?? (_, __) {},
+      onPhoneUnverified: onPhoneUnverified ?? (_, __) {},
       onMfaRequired: onMfaRequired ?? (_, __, ___) {},
+      onForgotPassword: onForgotPassword ?? (_) {},
       infoMessage: infoMessage,
     ),
   ));
@@ -231,7 +238,7 @@ Future<_FakeAuthApi> _pumpLogin(
 Future<_FakeAuthApi> _pumpRegister(
   WidgetTester tester, {
   _FakeAuthApi? api,
-  void Function(String email, VerificationDelivery? delivery)?
+  void Function(String phone, VerificationDelivery? delivery)?
       onRegisterSuccess,
   VoidCallback? onGoToLogin,
 }) async {
@@ -268,7 +275,6 @@ Future<void> _fillValidRegistration(
   await tester.enterText(_field('First name'), 'Juan');
   await tester.enterText(_field('Last name'), 'Delacruz');
   await tester.enterText(_field('Mobile number'), phone);
-  await tester.enterText(_field('Email address'), 'juan@example.com');
   await tester.enterText(_field('Password'), password);
   await tester.enterText(_field('Confirm password'), confirm ?? password);
 
@@ -372,27 +378,43 @@ void main() {
       await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
 
-      _expectFieldError('Email address', 'Enter your email address');
+      _expectFieldError('Mobile number', 'Enter your mobile number');
       _expectFieldError('Password', 'Enter your password');
       // The whole point of client validation: no round trip.
       expect(api.loginCalls, 0);
     });
 
-    testWidgets('refuses an address with no @ or no dot', (tester) async {
+    testWidgets('refuses a number that is not a Philippine mobile number',
+        (tester) async {
       final api = await _pumpLogin(tester);
 
-      await tester.enterText(_field('Email address'), 'maria-at-example');
-      await tester.enterText(_field('Password'), 'whatever');
-      await tester.tap(find.text('Log in'));
-      await tester.pumpAndSettle();
+      // The field only lets digits and + through, so what reaches the validator
+      // is a number of the wrong shape, not text.
+      for (final bad in ['0917123', '0288888888', '12345678901']) {
+        await tester.enterText(_field('Mobile number'), bad);
+        await tester.enterText(_field('Password'), 'whatever');
+        await tester.tap(find.text('Log in'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Enter a valid email address'), findsOneWidget);
+        expect(find.text('Enter a valid mobile number'), findsOneWidget,
+            reason: bad);
+      }
       expect(api.loginCalls, 0);
+    });
+
+    testWidgets('keeps letters and punctuation out of the number field',
+        (tester) async {
+      await _pumpLogin(tester);
+
+      await tester.enterText(_field('Mobile number'), '09a17-123 4567');
+
+      final field = tester.widget<TextFormField>(_field('Mobile number'));
+      expect(field.controller!.text, '091712345' '67');
     });
   });
 
   group('login', () {
-    testWidgets('sends a trimmed email and hands back the mapped resident',
+    testWidgets('sends the number and hands back the mapped resident',
         (tester) async {
       AppUser? delivered;
       final api = await _pumpLogin(
@@ -400,13 +422,12 @@ void main() {
         onLoginSuccess: (user) => delivered = user,
       );
 
-      // The trailing space is what a phone keyboard adds after autocomplete.
-      await tester.enterText(_field('Email address'), '  maria@example.com  ');
+      await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'SitePhoto123');
       await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
 
-      expect(api.lastLoginEmail, 'maria@example.com');
+      expect(api.lastLoginPhone, '09171234567');
       expect(delivered, isNotNull);
       expect(delivered!.firstName, 'Maria');
       // `address` is the barangay relation — tbl_residents has no address
@@ -416,11 +437,11 @@ void main() {
 
     testWidgets('never trims the password', (tester) async {
       // A trimmed password is a login that fails against a server that did not
-      // trim it, with a "wrong credentials" message that is a lie. The email is
+      // trim it, with a "wrong credentials" message that is a lie. The number is
       // trimmed on purpose; the password deliberately is not.
       final api = await _pumpLogin(tester);
 
-      await tester.enterText(_field('Email address'), 'maria@example.com');
+      await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), ' spaced pass 1 ');
       await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
@@ -440,7 +461,7 @@ void main() {
         onLoginSuccess: (_) => succeeded = true,
       );
 
-      await tester.enterText(_field('Email address'), 'maria@example.com');
+      await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'wrong-password');
       await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
@@ -454,36 +475,35 @@ void main() {
 
     testWidgets('an unverified account is routed to the code screen, not an error',
         (tester) async {
-      // An abandoned registration: the password was right, the address was
+      // An abandoned registration: the password was right, the number was
       // never verified. Showing the message on this form would leave the
       // resident with nothing they can do about it, so the screen hands the
-      // address up instead and the caller opens the verify screen.
+      // number up instead and the caller opens the verify screen.
       String? routedTo;
       var succeeded = false;
       final api = _FakeAuthApi()
         ..loginError = const ApiException(
-          'Please verify your email address to finish creating your account.',
+          'Please enter the code we just sent to finish creating your account.',
           statusCode: 403,
-          code: 'email_unverified',
+          code: 'phone_unverified',
         );
 
       await _pumpLogin(
         tester,
         api: api,
         onLoginSuccess: (_) => succeeded = true,
-        onEmailUnverified: (email, _) => routedTo = email,
+        onPhoneUnverified: (phone, _) => routedTo = phone,
       );
 
-      await tester.enterText(_field('Email address'), '  maria@example.com  ');
+      await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'Password123');
       await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
 
-      // Trimmed, because it is about to be posted back as the account key.
-      expect(routedTo, 'maria@example.com');
+      expect(routedTo, '09171234567');
       expect(succeeded, isFalse);
       expect(
-        find.textContaining('verify your email address'),
+        find.textContaining('enter the code we just sent'),
         findsNothing,
         reason: 'the refusal is routing, not an error to read',
       );
@@ -497,7 +517,7 @@ void main() {
 
       await _pumpLogin(tester, api: api);
 
-      await tester.enterText(_field('Email address'), 'maria@example.com');
+      await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'SitePhoto123');
       await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
@@ -514,7 +534,7 @@ void main() {
 
       await _pumpLogin(tester, api: api);
 
-      await tester.enterText(_field('Email address'), 'maria@example.com');
+      await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'SitePhoto123');
       await tester.tap(find.text('Log in'));
       await tester.pump();
@@ -528,6 +548,98 @@ void main() {
 
       gate.complete();
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('"Forgot password?" opens the reset flow with the number typed so far',
+        (tester) async {
+      String? carried;
+      await _pumpLogin(tester, onForgotPassword: (phone) => carried = phone);
+
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.tap(find.text('Forgot password?'));
+      await tester.pumpAndSettle();
+
+      expect(carried, '09171234567');
+      // The old placeholder said to contact MDRRMO; the flow is real now.
+      expect(find.text('Contact MDRRMO to reset your password.'), findsNothing);
+    });
+
+    testWidgets('an old app is told to update and cannot retry', (tester) async {
+      final api = _FakeAuthApi()
+        ..loginError = const ApiException(
+          'Please update the SERBIS app to continue. / Paki-update ang SERBIS app para magpatuloy.',
+          statusCode: 410,
+          code: 'app_update_required',
+        );
+
+      await _pumpLogin(tester, api: api);
+
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Password'), 'Password123');
+      await tester.tap(find.text('Log in'));
+      await tester.pumpAndSettle();
+
+      // Shown as a block, not a retryable form error, and both languages arrive
+      // in the server's one string.
+      expect(find.textContaining('Paki-update ang SERBIS app'), findsOneWidget);
+      expect(find.textContaining('Please update the SERBIS app'), findsOneWidget);
+      final button = tester.widget<ElevatedButton>(
+        find.ancestor(of: find.text('Log in'), matching: find.byType(ElevatedButton)),
+      );
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('a login that could not be texted shows the server\'s sentence',
+        (tester) async {
+      final api = _FakeAuthApi()
+        ..loginError = const ApiException(
+          'We could not send the text message. Check the number and try again in a minute, or visit the MDRRMO office.',
+          statusCode: 503,
+          code: 'sms_unavailable',
+        );
+      var routed = false;
+
+      await _pumpLogin(tester, api: api, onMfaRequired: (_, __, ___) => routed = true);
+
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Password'), 'Password123');
+      await tester.tap(find.text('Log in'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('could not send the text message'), findsOneWidget);
+      expect(routed, isFalse);
+      // Retryable: nothing the resident typed was wrong.
+      expect(find.text('Log in'), findsOneWidget);
+    });
+
+    testWidgets('a login that reached its code prompt hands the number and challenge up',
+        (tester) async {
+      String? phone;
+      String? challenge;
+      final api = _FakeAuthApi()
+        ..loginError = const ApiException(
+          'Enter the code we just sent to finish signing in.',
+          statusCode: 403,
+          code: 'mfa_required',
+          challengeId: 'chal-1',
+        );
+
+      await _pumpLogin(
+        tester,
+        api: api,
+        onMfaRequired: (p, c, _) {
+          phone = p;
+          challenge = c;
+        },
+      );
+
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Password'), 'Password123');
+      await tester.tap(find.text('Log in'));
+      await tester.pumpAndSettle();
+
+      expect(phone, '09171234567');
+      expect(challenge, 'chal-1');
     });
 
     testWidgets('shows the hand-off message from a completed registration',
@@ -602,6 +714,92 @@ void main() {
     });
   });
 
+  group('registering as an organization', () {
+    testWidgets('an individual is the default and sends head_of_family', (tester) async {
+      final api = await _pumpRegister(tester);
+
+      expect(find.text('Organization name'), findsNothing);
+
+      await _fillValidRegistration(tester);
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastRegister!['account_type'], 'head_of_family');
+      expect(api.lastRegister!.containsKey('organization_name'), isFalse);
+    });
+
+    testWidgets('offers Individual and Organization and nothing else', (tester) async {
+      await _pumpRegister(tester);
+
+      final choice = find.byType(SegmentedButton<bool>);
+
+      expect(find.descendant(of: choice, matching: find.text('Individual')), findsOneWidget);
+      expect(find.descendant(of: choice, matching: find.text('Organization')), findsOneWidget);
+      expect(find.descendant(of: choice, matching: find.text('Barangay')), findsNothing);
+    });
+
+    testWidgets('an organization asks for its name and the names become the contact person',
+        (tester) async {
+      await _pumpRegister(tester);
+
+      await tester.tap(find.text('Organization'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Organization name'), findsOneWidget);
+      expect(find.text('Contact first name'), findsOneWidget);
+      expect(find.text('Contact last name'), findsOneWidget);
+      expect(find.text('First name'), findsNothing);
+    });
+
+    testWidgets('an organization with no name is refused before it is sent', (tester) async {
+      final api = await _pumpRegister(tester);
+
+      await tester.tap(find.text('Organization'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_field('Contact first name'), 'Ian');
+      await tester.enterText(_field('Contact last name'), 'Uy');
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Password'), 'Pasada123');
+      await tester.enterText(_field('Confirm password'), 'Pasada123');
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('San Fabian').last);
+      await tester.pumpAndSettle();
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter the organization name'), findsOneWidget);
+      expect(api.registerCalls, 0);
+    });
+
+    testWidgets('a filled organization form sends organization and its name', (tester) async {
+      final api = await _pumpRegister(tester);
+
+      await tester.tap(find.text('Organization'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_field('Organization name'), 'Isabela State University');
+      await tester.enterText(_field('Contact first name'), 'Ian');
+      await tester.enterText(_field('Contact last name'), 'Uy');
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Password'), 'Pasada123');
+      await tester.enterText(_field('Confirm password'), 'Pasada123');
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('San Fabian').last);
+      await tester.pumpAndSettle();
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(api.registerCalls, 1);
+      expect(api.lastRegister!['account_type'], 'organization');
+      expect(api.lastRegister!['organization_name'], 'Isabela State University');
+      expect(api.lastRegister!['first_name'], 'Ian');
+    });
+  });
+
   group('register validation', () {
     testWidgets('refuses an empty form field by field', (tester) async {
       final api = await _pumpRegister(tester);
@@ -612,7 +810,6 @@ void main() {
       _expectFieldError('First name', 'Enter your first name');
       _expectFieldError('Last name', 'Enter your last name');
       _expectFieldError('Mobile number', 'Enter your mobile number');
-      _expectFieldError('Email address', 'Enter your email address');
       _expectFieldError('Password', 'Enter a password');
       _expectFieldError('Confirm password', 'Confirm your password');
       // The picker is not an AuthTextField, so it is asserted on directly. Its
@@ -733,9 +930,35 @@ void main() {
         // The id, not the name: the resident row takes an FK.
         'barangay_id': 1,
         'phone_number': '09171234567',
-        'email_address': 'juan@example.com',
         'password': 'Pasada123',
+        // The default: an individual, the head of a household.
+        'account_type': 'head_of_family',
       });
+    });
+
+    testWidgets('sends the street address when filled in, optional otherwise',
+        (tester) async {
+      final api = await _pumpRegister(tester);
+
+      await _fillValidRegistration(tester);
+      // A dropdown, not an AuthTextField like the fields above, so it is found
+      // by label rather than through `_field()`.
+      final purokPicker = find.descendant(
+        of: find.byWidgetPredicate(
+            (w) => w is AppDropdown<String> && w.label == 'Street / Purok (optional)'),
+        matching: find.byType(DropdownButton<String>),
+      );
+      await tester.ensureVisible(purokPicker);
+      await tester.tap(purokPicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Purok 3').last);
+      await tester.pumpAndSettle();
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(api.registerCalls, 1);
+      expect(api.lastRegister!['street_address'], 'Purok 3');
     });
 
     testWidgets('ticking the consent box is visible, not just recorded',
@@ -756,7 +979,7 @@ void main() {
       // onRegisterSuccess for an account that was never created.
       var succeeded = false;
       final api = _FakeAuthApi()
-        ..registerMessage = 'The email address has already been taken.';
+        ..registerMessage = 'That number is already registered to an account.';
 
       await _pumpRegister(
         tester,
@@ -769,11 +992,11 @@ void main() {
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
 
-      expect(find.text('The email address has already been taken.'),
+      expect(find.text('That number is already registered to an account.'),
           findsOneWidget);
       expect(succeeded, isFalse);
-      // The form is still there with the values in it — a duplicate email is
-      // one field to change, not a form to retype.
+      // The form is still there with the values in it — a taken number is one
+      // field to change, not a form to retype.
       expect(find.text('Create account'), findsOneWidget);
     });
 

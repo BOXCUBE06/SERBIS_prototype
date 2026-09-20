@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\User;
-use App\Services\PhilSms;
+use App\Rules\PhoneAvailable;
+use App\Support\PhoneNumber;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class ResidentController extends Controller
 {
@@ -34,11 +38,15 @@ class ResidentController extends Controller
         // until a feature reads the column, then a hole that predates it.
         $validated = $request->validate([
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+            'street_address' => 'nullable|string|max:255',
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
-            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
-            'email_address' => 'required|email|unique:tbl_residents,email_address',
+            // Unique in canonical form: the number is the resident's login. An
+            // officer who is also a head of the family needs a second number for
+            // the institutional account, hence the plain message.
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable(null, 'This number is already used by another account. Give this account a different number.')],
+            'email_address' => 'nullable|email|unique:tbl_residents,email_address',
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
             // The column carries exactly three values and 'required|string'
             // accepted every other one, 'banana' included. That was not
@@ -47,28 +55,90 @@ class ResidentController extends Controller
             // status dropped the resident out of every blast with nothing
             // logged and nothing visibly wrong in the admin list.
             'status' => 'required|in:Active,Inactive,Deactivated',
+            ...$this->accountTypeRules(),
         ]);
+
+        $this->assertOneBarangayAccount($validated);
 
         // Columns assigned one at a time, never a splat of $validated. A splat
         // makes every future addition to the rules — or to $fillable — silently
         // client-settable, which is how the dead 'role' rule reached
         // /api/register. 'status' is deliberately here: this is the admin CRUD,
         // and activating a resident is the admin's job.
-        $resident = Resident::create([
+        $resident = new Resident([
             'barangay_id' => $validated['barangay_id'],
+            'street_address' => $validated['street_address'] ?? null,
             'first_name' => $validated['first_name'],
             'middle_name' => $validated['middle_name'] ?? null,
             'last_name' => $validated['last_name'],
             'phone_number' => $validated['phone_number'],
-            'email_address' => $validated['email_address'],
+            'email_address' => $validated['email_address'] ?? null,
             'password' => bcrypt($validated['password']),
             // No 'photo'. It is the resident's own face, uploaded from the
             // mobile app by POST /api/me/photo; an admin creating the account
             // has no file to attach and no business naming one.
             'status' => $validated['status'],
         ]);
+        $this->applyAccountType($resident, $validated);
+        // An account made here is vouched for by the admin who made it — a
+        // barangay hall, an organization, a walk-in — so its number counts as
+        // verified and it signs in like any other. forceFill: the column is
+        // deliberately not mass-assignable.
+        $resident->forceFill(['phone_verified_at' => now()]);
+        $resident->save();
 
         return response()->json($resident, 201);
+    }
+
+    /**
+     * Shared by store() and update(). Only an admin can choose the type; the
+     * column default (head_of_family) is what every self-registered account
+     * gets, because /register never reads this key.
+     */
+    private function accountTypeRules(): array
+    {
+        return [
+            'account_type' => ['sometimes', 'required', Rule::in(Resident::ACCOUNT_TYPES)],
+            'organization_name' => 'required_if:account_type,organization|nullable|string|max:150',
+        ];
+    }
+
+    /**
+     * One shared account per barangay. MySQL has no partial unique index, so
+     * this is checked here rather than in the schema.
+     */
+    private function assertOneBarangayAccount(array $validated, ?int $ignoreId = null): void
+    {
+        if (($validated['account_type'] ?? null) !== Resident::TYPE_BARANGAY) {
+            return;
+        }
+
+        $taken = Resident::where('account_type', Resident::TYPE_BARANGAY)
+            ->where('barangay_id', $validated['barangay_id'])
+            ->when($ignoreId, fn ($q) => $q->where('resident_id', '!=', $ignoreId))
+            ->exists();
+
+        if ($taken) {
+            throw ValidationException::withMessages([
+                'account_type' => 'This barangay already has its account.',
+            ]);
+        }
+    }
+
+    /**
+     * Assigned attribute by attribute: account_type is not fillable. An update
+     * that omits it leaves the stored type alone.
+     */
+    private function applyAccountType(Resident $resident, array $validated): void
+    {
+        if (isset($validated['account_type'])) {
+            $resident->account_type = $validated['account_type'];
+        }
+
+        // Only an organization has a name to keep; switching type clears it.
+        $resident->organization_name = $resident->account_type === Resident::TYPE_ORGANIZATION
+            ? ($validated['organization_name'] ?? $resident->organization_name)
+            : null;
     }
 
     public function show($id)
@@ -80,6 +150,49 @@ class ResidentController extends Controller
         }
 
         return response()->json($resident);
+    }
+
+    /**
+     * How this resident's past loans came back, newest first, so staff can see a
+     * pattern before approving the next request. Display only — nothing here
+     * blocks or flags a borrow. Only Returned loans: a loan still out has no
+     * condition yet. `return_condition` is null on returns recorded before that
+     * column existed, and those are counted as `unrecorded`, not as good.
+     * The photo itself is fetched from GET /borrowings/{id}/photo/return; this
+     * only says whether there is one.
+     */
+    public function returnHistory($id)
+    {
+        $resident = Resident::find($id);
+
+        if (! $resident) {
+            return response()->json(['message' => 'Resident not found'], 404);
+        }
+
+        $returns = EquipmentBorrowing::with('equipment')
+            ->where('resident_id', $resident->getKey())
+            ->where('status', 'Returned')
+            ->orderByDesc('returned_at')
+            ->orderByDesc('borrow_id')
+            ->get();
+
+        return response()->json([
+            'summary' => [
+                'total' => $returns->count(),
+                'good' => $returns->where('return_condition', 'Good')->count(),
+                'bad' => $returns->where('return_condition', 'Bad')->count(),
+                'unrecorded' => $returns->whereNull('return_condition')->count(),
+            ],
+            'data' => $returns->map(fn (EquipmentBorrowing $b) => [
+                'borrow_id' => $b->borrow_id,
+                'item' => $b->equipment?->item_name ?? $b->other_equipment_text,
+                'quantity' => $b->quantity,
+                'returned_at' => $b->returned_at,
+                'return_condition' => $b->return_condition,
+                'return_condition_note' => $b->return_condition_note,
+                'has_return_photo' => $b->has_return_photo,
+            ])->values(),
+        ]);
     }
 
     public function update(Request $request, $id)
@@ -94,16 +207,21 @@ class ResidentController extends Controller
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'required|string|max:255',
-            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhilSms::PHONE_REGEX],
-            'email_address' => 'required|email|unique:tbl_residents,email_address,'.$id.',resident_id',
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable((int) $id, 'This number is already used by another account. Give this account a different number.')],
+            'email_address' => 'nullable|email|unique:tbl_residents,email_address,'.$id.',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
+            'street_address' => 'nullable|string|max:255',
             // Same three values as store(). Both admin write paths reach this
             // method — the list's status toggle and the edit form's radio —
             // and the vocabulary is mirrored in the panel at
             // Web/serbis-admin-vue/src/composables/residentStatus.ts.
             'status' => 'required|in:Active,Inactive,Deactivated',
             'password' => ['nullable', 'string', Password::min(8)->mixedCase()->numbers()], // Must be nullable on update
+            ...$this->accountTypeRules(),
         ]);
+
+        $this->assertOneBarangayAccount($validated, $resident->getKey());
+        $this->applyAccountType($resident, $validated);
 
         // Explicit, for the same reason as store(). This method never accepted
         // the OTP columns, but it splatted whatever the rules happened to
@@ -114,10 +232,19 @@ class ResidentController extends Controller
             'middle_name' => $validated['middle_name'] ?? null,
             'last_name' => $validated['last_name'],
             'phone_number' => $validated['phone_number'],
-            'email_address' => $validated['email_address'],
             'barangay_id' => $validated['barangay_id'],
+            'street_address' => $validated['street_address'] ?? null,
             'status' => $validated['status'],
         ];
+
+        // Email is no longer collected — a phone number is the login — but the
+        // column keeps what residents gave before. The panel's form does not
+        // send it any more, so an omitted key must leave the stored address
+        // alone; only a key that is actually present moves it (an explicit null
+        // clears it).
+        if (array_key_exists('email_address', $validated)) {
+            $changes['email_address'] = $validated['email_address'];
+        }
 
         // An omitted or blank password leaves the stored hash alone; assigning
         // null would lock the resident out of their own account.

@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../models/phone_number.dart';
 import '../../state/api_service.dart';
 import '../../state/account_store.dart';
 import '../../state/app_log.dart';
@@ -20,11 +21,11 @@ import '../../widgets/form_inputs.dart';
 /// than one parameterised over which flow it's in.
 class VerifyLoginScreen extends StatefulWidget {
   final UserStore userStore;
-  final String email;
+  final String phone;
   final String challengeId;
 
-  /// Which channel carried the code and how long is left on the resend
-  /// cooldown, as reported by the login call that issued it.
+  /// How the send went and how long is left on the resend cooldown, as
+  /// reported by the login call that issued it.
   final VerificationDelivery? delivery;
 
   final void Function(AppUser user) onVerified;
@@ -33,7 +34,7 @@ class VerifyLoginScreen extends StatefulWidget {
   const VerifyLoginScreen({
     super.key,
     required this.userStore,
-    required this.email,
+    required this.phone,
     required this.challengeId,
     required this.delivery,
     required this.onVerified,
@@ -55,7 +56,7 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
   String? _notice;
 
   /// Starts as whatever the login call reported, and is replaced on every
-  /// resend: a number the vendor rejects falls back to mail mid-screen.
+  /// resend: a send that timed out once can go through the next time.
   VerificationDelivery? _delivery;
 
   /// Mirrors the server's per-challenge cooldown so the resident sees a
@@ -176,26 +177,30 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
     }
   }
 
+  /// Names where the code went. Always a text now — there is no email — so the
+  /// number's last four digits are all a resident needs to recognise it. Falls
+  /// back to the number they typed when the server did not say.
   String get _sentToLine {
     final delivery = _delivery;
+    final shown = PhoneNumber.display(widget.phone);
 
     if (delivery == null) {
-      return 'We sent a 6-digit code to ${widget.email}.';
+      return 'We sent a 6-digit code by text message to $shown.';
     }
-    if (delivery.bySms) {
-      return delivery.sentTo.isEmpty
-          ? 'We sent a 6-digit code by text message to your phone.'
-          : 'We sent a 6-digit code by text message to the number ending in '
-              '${delivery.sentTo}.';
-    }
-    return 'We sent a 6-digit code to '
-        '${delivery.sentTo.isEmpty ? widget.email : delivery.sentTo}.';
+    return delivery.sentTo.isEmpty
+        ? 'We sent a 6-digit code by text message to $shown.'
+        : 'We sent a 6-digit code by text message to the number ending in '
+            '${delivery.sentTo}.';
   }
+
+  /// Shown when the server timed out talking to the SMS provider, so the text
+  /// may or may not be on its way. The screen is open and Resend is counting
+  /// down; this says why a wait is reasonable and what to do after it.
+  bool get _deliveryUnknown => _delivery?.unknown ?? false;
 
   @override
   Widget build(BuildContext context) {
     final canResend = _resendIn <= 0 && !_resending && !_submitting;
-    final bySms = _delivery?.bySms ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -207,7 +212,7 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
             children: [
               const SizedBox(height: 24),
               Text(
-                bySms ? 'Check your messages' : 'Check your email',
+                'Check your messages',
                 style:
                     const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
@@ -232,6 +237,15 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
                 Text(
                   _notice!,
                   style: const TextStyle(color: AppColors.green700),
+                ),
+              ],
+              if (_deliveryUnknown) ...[
+                const SizedBox(height: 8),
+                Text(
+                  "Didn't get a text? It can take a minute. If it hasn't come "
+                  'when the timer ends, tap Send a new code.',
+                  key: const Key('delivery-unknown-hint'),
+                  style: const TextStyle(color: AppColors.inkMuted, height: 1.4),
                 ),
               ],
               const SizedBox(height: 24),

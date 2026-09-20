@@ -1,130 +1,34 @@
 <template>
-  <!-- height:100% + flex column, matching /manage-requests' own canvas now
-       that this route is fixedHeight too (router/index.ts) — the shell's
-       .inner-wrapper is the one bounded, non-scrolling ancestor everything
-       below sizes against, the same way ServiceRequestQueue.vue's own
-       standalone=true path already works. Header and tabs take their
-       natural height; v-window gets what's left. -->
-  <v-container fluid class="pa-6 bg-background d-flex flex-column" style="height: 100%;">
-    <!-- Right slot used to sit empty -- Bookings' own toolbar buttons lived
-         in a separate row inside ServiceRequestQueue.vue instead, and Trip
-         Logs' "+ Ambulance Trip Record" in one of its own below the filter
-         bar. Both moved here (layout redesign follow-up): one shared header
-         row instead of a header plus a second, mostly-empty button row per
-         tab, reclaiming that row's full height. Bookings' three buttons
-         call back into the child via bookingsQueueRef's exposed actions —
-         see ServiceRequestQueue.vue's own defineExpose — since it still
-         owns that state privately (the same reason "Open Booking" already
-         reaches in via a ref rather than duplicating state here). -->
-    <!-- 16px, not the mb-6/24px most other headers use: this row sits directly
-         above the tab bar, not a card with its own breathing room, and 24px
-         read as oversized once the action buttons moved inline with the
-         title (layout redesign follow-up, kept through the PageHeader
-         extraction). -->
+  <!-- Scrolls with the page like every other list route. Each tab's actions
+       live in its own DataTablePage panel, not this header. -->
+  <v-container fluid class="bg-background">
     <PageHeader
       title="Ambulance Dispatch Requests"
-      subtitle="MDRRMO Conduction Request Form — Echague Rescue EMS"
-      style="flex-shrink: 0; margin-bottom: 16px;"
-    >
-      <template v-slot:actions>
-        <template v-if="activeTab === 'bookings'">
-          <v-btn
-            color="secondary"
-            variant="flat"
-            class="text-none font-weight-bold px-6 text-white"
-            height="48"
-            @click="bookingsQueueRef?.openCreateDialog()"
-          >
-            <v-icon start size="small">mdi-account-plus-outline</v-icon>
-            Log Service Request
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="text"
-            class="text-none font-weight-bold px-6"
-            height="48"
-            @click="bookingsQueueRef?.openDayView()"
-          >
-            <v-icon start size="small">mdi-calendar-clock</v-icon>
-            Ambulance Day View
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="text"
-            class="text-none font-weight-bold px-6"
-            height="48"
-            :disabled="!bookingsQueueRef?.filteredAndSortedRequests?.length"
-            @click="bookingsQueueRef?.exportCsv()"
-          >
-            <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-            {{ bookingsQueueRef?.filteredAndSortedRequests?.length ? 'Export' : 'Nothing to export' }}
-            <span v-if="bookingsQueueRef?.filteredAndSortedRequests?.length" class="d-sr-only">{{ bookingsQueueRef.filteredAndSortedRequests.length }} requests as CSV</span>
-          </v-btn>
-        </template>
-        <v-btn
-          v-else-if="activeTab === 'trip-logs'"
-          color="primary"
-          variant="flat"
-          class="text-none font-weight-bold px-6"
-          height="48"
-          @click="openCreate()"
-        >
-          <v-icon start size="small">mdi-plus</v-icon>
-          Ambulance Trip Record
-        </v-btn>
-      </template>
-    </PageHeader>
+    />
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
          Ambulance/Medical Response — moved here from Resident Requests so
          staff have one place for everything ambulance. Trip Logs: the
          dispatch record itself, unchanged, for a unit that is actually
          rolling. -->
-    <v-tabs v-model="activeTab" color="primary" class="mb-5" style="flex-shrink: 0;">
+    <v-tabs v-model="activeTab" color="primary" class="mb-5">
       <v-tab value="bookings" class="text-none font-weight-bold">Bookings</v-tab>
       <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
     </v-tabs>
 
-    <v-window v-model="activeTab" class="flex-grow-1" style="min-height: 0;">
-      <v-window-item value="bookings" class="h-100">
+    <v-window v-model="activeTab">
+      <v-window-item value="bookings">
         <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
       </v-window-item>
 
-      <v-window-item value="trip-logs" class="h-100 d-flex flex-column">
-        <div v-if="!loadError" class="filter-bar">
-          <v-text-field
-            v-model="search"
-            label="Search"
-            placeholder="Patient, origin or destination"
-            prepend-inner-icon="mdi-magnify"
-            variant="outlined"
-            density="compact"
-            hide-details
-            clearable
-            rounded="lg"
-            class="filter-field"
-          ></v-text-field>
-          <v-select
-            v-model="statusFilter"
-            :items="statusOptions"
-            label="Trip status"
-            attach
-            prepend-inner-icon="mdi-map-marker-path"
-            variant="outlined"
-            density="compact"
-            hide-details
-            rounded="lg"
-            class="filter-field"
-          ></v-select>
-        </div>
-
-        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" style="flex-shrink: 0;" @click:close="apiError = ''">
+      <v-window-item value="trip-logs">
+        <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
           {{ apiError }}
         </v-alert>
 
-        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg flex-grow-1"></v-skeleton-loader>
+        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
 
-        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface flex-grow-1">
+        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
             <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
@@ -135,115 +39,73 @@
           </div>
         </v-card>
 
-        <!-- Table at lgAndUp, same breakpoint Bookings' two-pane layout uses
-             (ServiceRequestQueue.vue's `twoUp`) — so at any given width both
-             tabs are in the same layout mode, not two different products
-             switching at two different points (impeccable critique, P1,
-             2026-08-30). Below it, a card list in Bookings' own visual
-             language (soft-card, rounded-xl, avatar-initial rows) replaces a
-             table that forced a 704px min-width and horizontal scroll.
-
-             flex-grow-1 + height:100% on the card, height="100%" on the
-             table itself: short result sets used to leave whitespace below
-             the bordered table instead of inside it (Trip Logs fix,
-             layout redesign follow-up). Vuetify's v-data-table keeps its
-             header fixed and scrolls only the body when given a real
-             height, with the footer/pagination bar following directly
-             after — exactly the "table flexes, pagination stays pinned to
-             the container's bottom" the fix asked for, since the card
-             itself is now the thing bounded to the remaining flex height. -->
-        <!-- v-card is display:block by default -- v-data-table's own
-             height="100%" prop needs a parent whose *computed* height is
-             the resolution context for a percentage, and a percentage
-             cannot resolve against a block box the way it can a flex
-             item's main size. Forcing the card into an explicit flex
-             column and the table into flex:1 sidesteps that resolution
-             question entirely (found by comparing computed height of the
-             card, the table's own root, and its internal .v-table__wrapper
-             directly -- the table root sat at 242px against a 555px card
-             until this). -->
-        <v-card
-          v-else-if="isWide" elevation="0" border rounded="lg"
-          class="bg-surface overflow-hidden flex-grow-1 d-flex flex-column"
-          style="height: 100%; min-height: 0;"
+        <!-- One table at every width — it scrolls horizontally rather than
+             switching to a separate card-list renderer below lgAndUp
+             (dropped; see .conduction-table's min-width in this file's
+             <style> for the scroll threshold). -->
+        <DataTablePage
+          v-else
+          v-model:search="search"
+          search-placeholder="Patient, origin or destination"
+          :tabs="statusTabItems"
+          :status="statusFilter"
+          @update:status="statusFilter = $event"
+          :headers="headers"
+          :items="filteredItems"
+          item-value="conduction_request_id"
+          :row-props="rowProps"
+          no-data-text="No ambulance trip records yet"
+          :page="page"
+          @update:page="page = $event"
+          :items-per-page="itemsPerPage"
+          @update:items-per-page="itemsPerPage = $event"
+          result-noun="trip records"
+          class="conduction-table"
+          :active-filters="activeFilters"
+          @clear-filter="clearFilter"
+          @clear-all="clearAllFilters"
+          @click:row="(_e, { item }) => openDetail(item)"
         >
-          <v-data-table
-            :headers="headers"
-            :items="filteredItems"
-            :items-per-page="10"
-            height="100%"
-            density="comfortable"
-            hover
-            class="bg-transparent conduction-table flex-grow-1"
-            style="min-height: 0;"
-            item-value="conduction_request_id"
-            :row-props="rowProps"
-            @click:row="(_e, { item }) => openDetail(item)"
-          >
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-            </template>
-
-            <template v-slot:item.patient="{ item }">
-              <div class="font-weight-bold text-high-emphasis cell-truncate">{{ item.patient_name }}</div>
-              <div class="text-caption text-medium-emphasis cell-truncate">{{ item.patient_contact_number }}</div>
-            </template>
-
-            <template v-slot:item.trip="{ item }">
-              <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
-            </template>
-
-            <template v-slot:item.trip_status="{ item }">
-              <span class="status-pill status-pill--sm" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
-                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
-              </span>
-            </template>
-
-            <template v-slot:item.created_at="{ item }">
-              {{ fmtDateTime(item.created_at) }}
-            </template>
-
-            <template v-slot:no-data>
-              <div class="text-center py-12">
-                <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-                <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
-              </div>
-            </template>
-          </v-data-table>
-        </v-card>
-
-        <v-card v-else elevation="0" rounded="xl" class="soft-card overflow-hidden flex-grow-1 d-flex flex-column" style="min-height: 0;">
-          <div v-if="filteredItems.length === 0" class="text-center py-12 px-6">
-            <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
-          </div>
-          <div v-else class="overflow-y-auto">
-            <div
-              v-for="item in filteredItems" :key="item.conduction_request_id"
-              class="d-flex align-center px-4 py-3 trip-row"
-              role="button"
-              tabindex="0"
-              :aria-label="`Open details for ${item.patient_name}`"
-              @click="openDetail(item)"
-              @keydown.enter.prevent="openDetail(item)"
-              @keydown.space.prevent="openDetail(item)"
+          <template v-slot:actions>
+            <v-btn
+              color="primary"
+              variant="flat"
+              class="text-none font-weight-bold"
+              height="40"
+              @click="openCreate()"
             >
-              <v-avatar color="primary" variant="tonal" size="36" class="mr-3 flex-shrink-0">
-                <span class="font-weight-bold text-caption">{{ (item.patient_name || '?').slice(0, 2).toUpperCase() }}</span>
-              </v-avatar>
-              <div class="flex-grow-1 min-width-0">
-                <div class="text-body-2 font-weight-bold text-truncate">{{ item.patient_name }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">
-                  {{ item.origin }} <v-icon size="10" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}
-                </div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ fmtDateTime(item.created_at) }}</div>
-              </div>
-              <span class="status-pill status-pill--sm ml-2 flex-shrink-0" :class="outcomePillClass(sharedStatusLabel(item.trip_status), item.no_arrival_reason)">
-                {{ outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason) }}
-              </span>
+              <v-icon start size="small">mdi-plus</v-icon>
+              Ambulance Trip Record
+            </v-btn>
+          </template>
+
+          <template v-slot:item.patient="{ item }">
+            <PersonCell
+              :name="item.patient_name || 'Unnamed patient'"
+              :initials="nameInitials(item.patient_name)"
+              :secondary="item.patient_contact_number"
+            />
+          </template>
+
+          <template v-slot:item.trip="{ item }">
+            <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
+          </template>
+
+          <template v-slot:item.trip_status="{ item }">
+            <StatusPill small :status="pillStatus(item)" :label="outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason)" />
+          </template>
+
+          <template v-slot:item.created_at="{ item }">
+            {{ fmtDateTime(item.created_at) }}
+          </template>
+
+          <template v-slot:no-data>
+            <div class="text-center py-12">
+              <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
+              <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
             </div>
-          </div>
-        </v-card>
+          </template>
+        </DataTablePage>
       </v-window-item>
     </v-window>
 
@@ -294,11 +156,8 @@
               <v-col cols="12" sm="8">
                 <v-text-field v-model="createDialog.form.patient_name" label="Patient name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
-              <v-col cols="6" sm="2">
+              <v-col cols="6" sm="4">
                 <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
-              </v-col>
-              <v-col cols="6" sm="2">
-                <v-select v-model="createDialog.form.patient_sex" :items="sexOptions" label="Sex" variant="outlined" density="comfortable" clearable></v-select>
               </v-col>
               <v-col cols="12" sm="8">
                 <v-text-field v-model="createDialog.form.patient_address" label="Patient address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
@@ -403,12 +262,16 @@
                   hide-details
                 ></v-text-field>
                 <v-btn
+                  v-if="idx > 0 || group.min < 1"
                   icon="mdi-close"
                   variant="text"
                   size="small"
                   :aria-label="`Remove ${group.singular} ${idx + 1}`"
                   @click="removePerson(group.field, idx)"
                 ></v-btn>
+              </div>
+              <div v-if="createDialog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+                Up to {{ group.max }} {{ group.label.toLowerCase() }}.
               </div>
             </div>
           </v-form>
@@ -428,9 +291,7 @@
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <span class="status-pill" :class="outcomePillClass(sharedStatusLabel(selected.trip_status), selected.no_arrival_reason)">
-              {{ outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason) }}
-            </span>
+            <StatusPill :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
@@ -469,7 +330,6 @@
 
           <v-row class="mb-2">
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Sex</div><div class="field-value text-capitalize">{{ selected.patient_sex ?? 'N/A' }}</div></v-col>
             <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Contact number</div><div class="field-value">{{ selected.patient_contact_number }}</div></v-col>
             <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
@@ -517,106 +377,127 @@
     </v-dialog>
 
     <!-- Trip log -->
-    <v-dialog v-model="tripLog.open" max-width="600" persistent>
+    <v-dialog v-model="tripLog.open" max-width="960" scrollable persistent>
       <v-card rounded="lg">
         <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
           {{ tripLog.title }}
         </v-card-title>
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-6" style="max-height: 70vh;">
           <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
-          <v-row dense>
-            <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></DateTimePickerField>
+
+          <!-- Two columns at md+: checkpoints/odometer on the left, personnel
+               on the right — the same width this content needed to stop
+               scrolling on a 600px-wide dialog (MDRRMO feedback,
+               2026-09-18). Stacks to one column below md. -->
+          <v-row>
+            <v-col cols="12" md="6">
+              <h3 class="section-title">Departure &amp; arrival</h3>
+              <v-row dense>
+                <v-col cols="12">
+                  <DateTimePickerField v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></DateTimePickerField>
+                </v-col>
+                <v-col cols="12">
+                  <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
+                </v-col>
+                <v-col cols="12">
+                  <v-textarea
+                    v-model="tripLog.form.no_arrival_reason"
+                    label="No-arrival reason"
+                    placeholder="e.g. Patient had already been taken by a relative"
+                    hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
+                    persistent-hint
+                    variant="outlined"
+                    density="comfortable"
+                    rows="2"
+                  ></v-textarea>
+                </v-col>
+              </v-row>
+
+              <h3 class="section-title">Return &amp; odometer</h3>
+              <v-row dense>
+                <v-col cols="12" sm="6">
+                  <!-- Disabled rather than left typeable and refused afterwards. A
+                       trip that never arrived has no departure from a destination
+                       it never reached, and a 422 explaining that after the fact is
+                       worse than a field that cannot be filled in the first place.
+                       The hint says why, so the control does not just look broken. -->
+                  <DateTimePickerField
+                    v-model="tripLog.form.departed_destination_at"
+                    type="datetime-local"
+                    label="Departed destination"
+                    variant="outlined"
+                    density="comfortable"
+                    :disabled="hasNoArrivalReason"
+                    :hint="hasNoArrivalReason ? 'Not applicable — this trip never reached its destination.' : undefined"
+                    :persistent-hint="hasNoArrivalReason"
+                  ></DateTimePickerField>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
+                </v-col>
+                <v-col cols="12">
+                  <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+                </v-col>
+              </v-row>
             </v-col>
-            <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
-            </v-col>
-            <v-col cols="12">
-              <v-textarea
-                v-model="tripLog.form.no_arrival_reason"
-                label="No-arrival reason"
-                placeholder="e.g. Patient had already been taken by a relative"
-                hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
-                persistent-hint
-                variant="outlined"
-                density="comfortable"
-                rows="2"
-              ></v-textarea>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <!-- Disabled rather than left typeable and refused afterwards. A
-                   trip that never arrived has no departure from a destination
-                   it never reached, and a 422 explaining that after the fact is
-                   worse than a field that cannot be filled in the first place.
-                   The hint says why, so the control does not just look broken. -->
-              <DateTimePickerField
-                v-model="tripLog.form.departed_destination_at"
-                type="datetime-local"
-                label="Departed destination"
-                variant="outlined"
-                density="comfortable"
-                :disabled="hasNoArrivalReason"
-                :hint="hasNoArrivalReason ? 'Not applicable — this trip never reached its destination.' : undefined"
-                :persistent-hint="hasNoArrivalReason"
-              ></DateTimePickerField>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
-            </v-col>
-            <v-col cols="12">
-              <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+
+            <v-col cols="12" md="6">
+              <!-- All three PEOPLE_FIELDS roles, same pattern as the create
+                   dialog's own Personnel section (personnelGroups) — see
+                   ConductionRequestController::tripLog(). A stub created by
+                   Approve & Dispatch (C5's bridge) always starts with none of
+                   them, and a driver is required before this request can
+                   resolve. -->
+              <h3 class="section-title">Personnel</h3>
+              <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
+                <div class="d-flex align-center justify-space-between mb-1">
+                  <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
+                  <v-btn
+                    variant="text"
+                    size="small"
+                    density="compact"
+                    class="text-none"
+                    prepend-icon="mdi-plus"
+                    :disabled="tripLog.form[group.field].length >= group.max"
+                    @click="addTripPerson(group.field)"
+                  >
+                    Add {{ group.singular }}
+                  </v-btn>
+                </div>
+                <div
+                  v-for="(_n, idx) in tripLog.form[group.field]"
+                  :key="idx"
+                  class="d-flex align-center gap-2 mb-2"
+                >
+                  <v-text-field
+                    v-model="tripLog.form[group.field][idx]"
+                    :label="`${group.singular} ${idx + 1}`"
+                    placeholder="Full name"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                  ></v-text-field>
+                  <v-btn
+                    v-if="idx > 0 || group.min < 1"
+                    icon="mdi-close"
+                    variant="text"
+                    size="small"
+                    :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                    @click="removeTripPerson(group.field, idx)"
+                  ></v-btn>
+                </div>
+                <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+                  Up to {{ group.max }} {{ group.label.toLowerCase() }}.
+                </div>
+              </div>
             </v-col>
           </v-row>
-
-          <!-- All three PEOPLE_FIELDS roles, same pattern as the create
-               dialog's own Personnel section above (personnelGroups) — see
-               ConductionRequestController::tripLog(). A stub created by
-               Approve & Dispatch (C5's bridge) always starts with none of
-               them, and a driver is required before this request can
-               resolve. -->
-          <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
-            <div class="d-flex align-center justify-space-between mb-1">
-              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-              <v-btn
-                variant="text"
-                size="small"
-                density="compact"
-                class="text-none"
-                prepend-icon="mdi-plus"
-                :disabled="tripLog.form[group.field].length >= group.max"
-                @click="addTripPerson(group.field)"
-              >
-                Add {{ group.singular }}
-              </v-btn>
-            </div>
-            <div
-              v-for="(_n, idx) in tripLog.form[group.field]"
-              :key="idx"
-              class="d-flex align-center gap-2 mb-2"
-            >
-              <v-text-field
-                v-model="tripLog.form[group.field][idx]"
-                :label="`${group.singular} ${idx + 1}`"
-                placeholder="Full name"
-                variant="outlined"
-                density="compact"
-                hide-details
-              ></v-text-field>
-              <v-btn
-                icon="mdi-close"
-                variant="text"
-                size="small"
-                :aria-label="`Remove ${group.singular} ${idx + 1}`"
-                @click="removeTripPerson(group.field, idx)"
-              ></v-btn>
-            </div>
-          </div>
         </v-card-text>
         <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
           <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
@@ -632,51 +513,44 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useDisplay } from 'vuetify'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
-import { sharedStatusLabel, tripStatusLabel, outcomeLabel, outcomePillClass } from '@/composables/adminUi'
+import { displayPhone } from '@/composables/phoneNumber'
+import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import PersonCell from '@/components/PersonCell.vue'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
 const activeTab = ref('bookings')
 
-// Same breakpoint ServiceRequestQueue's `twoUp` uses for its own two-pane vs
-// single-column switch, so this tab changes layout mode in step with the
-// Bookings tab beside it rather than at a different width of its own.
-const { lgAndUp } = useDisplay()
-const isWide = lgAndUp
-
 const ALL_STATUS = 'All'
 // Filtering still compares the raw trip_status value (matchesStatus below is
-// unchanged) -- only the label shown in the dropdown and on every badge
-// moves to tripStatusLabel() (adminUi.ts), so the underlying value stays
-// exactly what the API sends. Pill color still comes from sharedStatusLabel()
-// separately -- the two only disagree on the 'Not dispatched' text.
+// unchanged) -- only the label shown on the tab/badge moves to
+// tripStatusLabel() (adminUi.ts), so the underlying value stays exactly what
+// the API sends. Pill color still comes from sharedStatusLabel() separately
+// -- the two only disagree on the 'Not dispatched' text.
 const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
-const statusOptions = [
-  { title: ALL_STATUS, value: ALL_STATUS },
-  ...RAW_TRIP_STATUSES.map((s) => ({ title: tripStatusLabel(s), value: s })),
-]
 
-// `max` mirrors ConductionRequestController's per-role limits — passengers cap
-// at 2, the other two at MAX_PEOPLE_PER_ROLE. This only stops the Add button;
-// the server-side rule is the actual gate, and a request that gets past this
-// still fails validation there.
+// `max` mirrors ConductionRequestController's per-role limits (MAX_PEOPLE_PER_ROLE
+// for drivers, MAX_AUTHORIZED_PASSENGERS, MAX_PATIENT_RELATIVES). This only stops
+// the Add button and shows the "up to N" cap message; the server-side rule is the
+// actual gate, and a request that gets past this still fails validation there.
+//
+// `min` is a driver-only rule (MDRRMO feedback, 2026-09-18): a trip cannot be
+// filed or updated without at least one real crew member, so index 0 never
+// shows a remove button for this group — see the remove-button v-if in both
+// the create dialog and the trip log dialog below. Passengers and relatives
+// have no minimum; either can go to zero.
 const personnelGroups = [
-  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', max: 20 },
-  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', max: 2 },
-  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', max: 20 },
-]
-
-const sexOptions = [
-  { title: 'Male', value: 'male' },
-  { title: 'Female', value: 'female' },
+  { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', min: 1, max: 20 },
+  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', min: 0, max: 2 },
+  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', min: 0, max: 2 },
 ]
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
@@ -684,6 +558,8 @@ const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '
 const items = ref([])
 const search = ref('')
 const statusFilter = ref(ALL_STATUS)
+const page = ref(1)
+const itemsPerPage = ref(10)
 const initialLoad = ref(true)
 const reloading = ref(false)
 const loading = ref(false)
@@ -691,12 +567,19 @@ const apiError = ref('')
 const loadError = ref('')
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
+// patient_name is one free-text field, not first/last like a resident.
+const nameInitials = (name) => {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  return parts.length ? `${parts[0][0]}${parts.length > 1 ? parts.at(-1)[0] : ''}`.toUpperCase() : '?'
+}
+
+// `value` gives the composite columns something to sort on; the key still
+// names the cell slot.
 const headers = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Patient', key: 'patient', width: '24%' },
-  { title: 'Status', key: 'trip_status', align: 'center', width: '17%' },
-  { title: 'From → To', key: 'trip', width: '28%' },
-  { title: 'Filed', key: 'created_at', width: '17%' },
+  { title: 'Patient', key: 'patient', value: 'patient_name', width: '28%' },
+  { title: 'Status', key: 'trip_status', width: '18%' },
+  { title: 'From → To', key: 'trip', value: (r) => `${r.origin || ''} ${r.destination || ''}`, width: '34%' },
+  { title: 'Filed', key: 'created_at', width: '20%' },
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
@@ -714,7 +597,44 @@ const matchesSearch = (r) => {
 }
 const matchesStatus = (r) => statusFilter.value === ALL_STATUS || r.trip_status === statusFilter.value
 const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r)))
-const rowNumber = useRowNumbers(filteredItems, 'conduction_request_id')
+
+// SegmentedTabs' {value, label, count} shape. Counts are off the search
+// match only, same as ServiceRequestQueue's own requestCounts — a status
+// tab's count should not move just because a different status tab is
+// selected.
+const statusTabItems = computed(() => {
+  const searched = items.value.filter(matchesSearch)
+  return [
+    { value: ALL_STATUS, label: ALL_STATUS, count: searched.length },
+    ...RAW_TRIP_STATUSES.map((s) => ({
+      value: s,
+      label: tripStatusLabel(s),
+      count: searched.filter((r) => r.trip_status === s).length,
+    })),
+  ]
+})
+
+// Search's own chip is DataTablePage's job. Status is the only other filter
+// this page has, but it still needs its own chip + Clear all target — the
+// active SegmentedTabs item shows the selection, not a way to jump back to
+// All in one click alongside a cleared search.
+const activeFilters = computed(() => (
+  statusFilter.value === ALL_STATUS ? [] : [{ key: 'status', label: `Status: ${tripStatusLabel(statusFilter.value)}` }]
+))
+const clearFilter = (key) => { if (key === 'status') statusFilter.value = ALL_STATUS }
+const clearAllFilters = () => { statusFilter.value = ALL_STATUS }
+
+// StatusPill's :status prop wants an accent-table key (Booked/Responding/
+// Resolved/'Resolved — no arrival') -- sharedStatusLabel() already maps a
+// raw trip_status onto that same vocabulary; only the no-arrival split needs
+// adding here, same condition outcomeLabel() uses for the label text.
+const pillStatus = (item) => {
+  const shared = sharedStatusLabel(item.trip_status)
+  return shared === 'Resolved' && item.no_arrival_reason ? 'Resolved — no arrival' : shared
+}
+
+watch(search, () => { page.value = 1 })
+watch(statusFilter, () => { page.value = 1 })
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -863,7 +783,7 @@ const emptyCreateForm = () => ({
   // (handleDispatchBooking below); a plain "Ambulance Trip Record"
   // leaves both null, exactly as before this feature existed.
   service_request_id: null, vehicle_id: null, override_reason: '',
-  patient_name: '', patient_age: null, patient_address: '', patient_sex: null,
+  patient_name: '', patient_age: null, patient_address: '',
   // No plate_no. The input was removed 2026-09-03: tbl_vehicles has had no
   // plate column since 2026_09_02_100000 dropped the one added the day before,
   // so nothing could prefill it, and tripLog() does not validate plate_no — a
@@ -916,7 +836,6 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   // `??`, not `||`: an age of 0 is a real value on this form. Neonate transport
   // is why the server's rule is min:0, and `||` would blank it.
   form.patient_age = booking.patient_age ?? null
-  form.patient_sex = booking.patient_sex ?? null
   form.patient_address = booking.patient_address || ''
   form.origin = booking.pickup_location || ''
   form.destination = booking.destination || ''
@@ -927,7 +846,7 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   // skipped booking.patient_contact_number entirely and opened at the filer's
   // number.
   form.patient_contact_number = booking.patient_contact_number
-    || booking.resident?.phone_number
+    || displayPhone(booking.resident?.phone_number)
     || booking.walk_in_contact_number
     || ''
   // patient_relatives is deliberately NOT prefilled, and must not be added.
@@ -1244,26 +1163,6 @@ onMounted(() => {
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 
-/* v-window's own internal wrapper (.v-window__container, the flex row that
-   holds every window-item side by side for the slide transition) sizes
-   itself to its content's natural height, not to v-window's own — v-window
-   is built for a horizontal carousel where that's the right default, not
-   for filling a fixed-height parent. Without this, v-window-item's h-100
-   resolves against an indeterminate parent (auto, not 100%), so the
-   Bookings detail pane's real content height leaks straight past
-   v-window's own overflow:hidden instead of being capped by it — found by
-   walking the ancestor chain and comparing rectHeight at each level, not by
-   reading the CSS and assuming it would work. */
-:deep(.v-window__container) {
-  height: 100%;
-}
-
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; flex-shrink: 0; }
-.filter-field { width: 240px; max-width: 100%; }
-@media (max-width: 599px) {
-  .filter-field { flex: 1 1 100%; width: 100%; }
-}
-
 .section-title {
   font-size: 0.78rem;
   font-weight: 800;
@@ -1288,61 +1187,16 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-/* Mirrors ServiceRequestQueue.vue's .soft-card/.request-row exactly (same
-   values, not shared — scoped styles don't cross files here, same pattern
-   already used for OFFICE_TIMEZONE elsewhere in this codebase, and for this
-   file's own .status-pill/.pill-* further down) so the two tabs read as one
-   container language below the breakpoint instead of two different
-   products sharing a tab bar. */
-.soft-card {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
-}
-.trip-row {
-  cursor: pointer;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
-  transition: background-color 150ms ease;
-}
-.trip-row:last-child { border-bottom: none; }
-.trip-row:hover {
-  background-color: rgba(var(--v-theme-on-surface), 0.04);
-}
-.trip-row:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
-  background-color: rgba(var(--v-theme-primary), 0.06);
-}
 
-/* Status pills: .status-pill/.pill-* -- one definition now, in src/styles/settings.scss (was duplicated here and in ServiceRequestQueue.vue), including the sharedStatusLabel() mapping in adminUi.ts that lets a trip's status speak the same badge language as a booking's. */
+/* Status pills: components/StatusPill.vue now, driven by pillStatus() above via composables/statusPill.ts's shared accent table -- was a locally duplicated .status-pill/.pill-* CSS block. */
 
-.conduction-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 704px; }
-/* VDataTableFooter has no prop to drop just the items-per-page selector —
-   an empty itemsPerPageOptions array (tried first) still renders the
-   select, just with nothing in it, which opens to a blank dropdown on
-   click. Real trip-log volume here is a handful of rows; offering a
-   page-size picker for a dataset smaller than any of its own options (10)
-   was the "large empty page" complaint (item 7). Plain prev/next plus the
-   "x-y of z" count is what's left. */
-.conduction-table :deep(.v-data-table-footer__items-per-page) {
-  display: none;
-}
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.conduction-table :deep(thead th) {
-  font-size: 0.72rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.conduction-table :deep(tbody tr) { cursor: pointer; }
-.conduction-table :deep(tbody tr:focus-visible) {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: -2px;
-}
+/* One table at every width now (the card-list branch below lgAndUp is
+   gone) — this min-width is what makes that honest: below it the table
+   scrolls horizontally (Vuetify's own .v-table__wrapper overflow-x) rather
+   than crushing a column unreadable. DataTablePage's own .dtp-table rule
+   already sets table-layout: fixed and the header/row styling; this only
+   adds the page-specific floor. */
+.conduction-table :deep(.dtp-table table) { min-width: 704px; }
 .cell-truncate {
   display: block;
   overflow: hidden;

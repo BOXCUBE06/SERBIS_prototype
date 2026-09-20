@@ -11,6 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -98,6 +99,39 @@ class FcmSendTest extends TestCase
         $this->assertNotNull(DeviceToken::find($this->deviceToken->getKey()));
     }
 
+    /**
+     * The one branch that used to leave zero trace — every other failure
+     * path logs, this one silently returned. A missing credential on a real
+     * deploy must not look identical to "everything is fine, nothing to
+     * send" in the logs.
+     */
+    public function test_logs_a_warning_when_no_credentials_path_is_set(): void
+    {
+        Log::spy();
+        config(['services.firebase.credentials' => null]);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM push skipped: not configured'
+                && $context['reason'] === 'FIREBASE_CREDENTIALS is not set');
+    }
+
+    public function test_logs_a_warning_naming_the_missing_file_when_the_path_is_set_but_wrong(): void
+    {
+        Log::spy();
+        config(['services.firebase.credentials' => '/nowhere/does-not-exist.json']);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM push skipped: not configured'
+                && str_contains($context['reason'], '/nowhere/does-not-exist.json')
+                && str_contains($context['reason'], 'does not exist'));
+    }
+
     public function test_sends_to_the_projects_endpoint_with_the_token_title_and_body(): void
     {
         Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
@@ -115,26 +149,86 @@ class FcmSendTest extends TestCase
         $this->assertNotNull(DeviceToken::find($this->deviceToken->getKey()));
     }
 
+    /**
+     * The one success path that used to leave zero trace — "FCM accepted
+     * this" and "never attempted" were both silence in the logs.
+     */
+    public function test_logs_the_message_name_on_a_successful_send(): void
+    {
+        Log::spy();
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM send accepted'
+                && $context['device_token_id'] === $this->deviceToken->getKey()
+                && $context['message_name'] === 'projects/x/messages/0:1');
+    }
+
+    public function test_sends_the_data_payload_when_given_one(): void
+    {
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        (new Fcm)->sendToDevice(
+            $this->deviceToken,
+            'Booking approved',
+            'Unit AMB-01 is on the way.',
+            ['request_id' => '42', 'service_type' => 'Ambulance/Medical Response'],
+        );
+
+        Http::assertSent(function ($request) {
+            return $request['message']['data']['request_id'] === '42'
+                && $request['message']['data']['service_type'] === 'Ambulance/Medical Response';
+        });
+    }
+
+    /** No data key at all, not an empty one — an absent key and {} are not the same wire shape for "nothing extra". */
+    public function test_omits_the_data_key_entirely_when_none_is_given(): void
+    {
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+
+        (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
+
+        Http::assertSent(fn ($request) => ! array_key_exists('data', $request['message']));
+    }
+
     public function test_deletes_the_token_when_fcm_reports_it_unregistered(): void
     {
+        Log::spy();
+        $tokenId = $this->deviceToken->getKey();
+        $residentId = $this->deviceToken->resident_id;
         Http::fake(['fcm.googleapis.com/*' => Http::response([
             'error' => ['status' => 'UNREGISTERED', 'message' => 'Requested entity was not found.'],
         ], 404)]);
 
         (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
 
-        $this->assertNull(DeviceToken::find($this->deviceToken->getKey()));
+        $this->assertNull(DeviceToken::find($tokenId));
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM device token deleted'
+                && $context['device_token_id'] === $tokenId
+                && $context['resident_id'] === $residentId
+                && $context['reason'] === 'UNREGISTERED');
     }
 
     public function test_deletes_the_token_when_fcm_reports_it_invalid(): void
     {
+        Log::spy();
+        $tokenId = $this->deviceToken->getKey();
         Http::fake(['fcm.googleapis.com/*' => Http::response([
             'error' => ['status' => 'INVALID_ARGUMENT', 'message' => 'The registration token is not a valid FCM registration token.'],
         ], 400)]);
 
         (new Fcm)->sendToDevice($this->deviceToken, 'Title', 'Body');
 
-        $this->assertNull(DeviceToken::find($this->deviceToken->getKey()));
+        $this->assertNull(DeviceToken::find($tokenId));
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(fn ($message, $context) => $message === 'FCM device token deleted'
+                && $context['reason'] === 'INVALID_ARGUMENT');
     }
 
     /** UNAVAILABLE is FCM saying "try again later", not "this token is dead". */

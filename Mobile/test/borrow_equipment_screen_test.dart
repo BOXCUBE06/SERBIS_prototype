@@ -27,6 +27,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/screens/borrow_equipment_screen.dart';
+import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,8 +92,6 @@ class _FakeApi extends ApiService {
     required String purpose,
     String fulfillmentMethod = 'Pickup',
     String? deliveryAddress,
-    String borrowerType = 'Resident',
-    String? organizationName,
   }) async {
     submitCalls++;
     lastQuantity = quantity;
@@ -108,8 +107,6 @@ class _FakeApi extends ApiService {
       'purpose': purpose,
       'fulfillment_method': fulfillmentMethod,
       if (fulfillmentMethod == 'Delivery') 'delivery_address': deliveryAddress,
-      'borrower_type': borrowerType,
-      if (borrowerType == 'Organization') 'organization_name': organizationName,
     };
     if (submitError != null) throw submitError!;
     return <String, dynamic>{
@@ -130,8 +127,16 @@ Map<String, dynamic> _equipmentRow(int id, String name, int qty) => <String, dyn
       'available_quantity': qty,
     };
 
+const _resident = AppUser(
+  id: '1',
+  firstName: 'Maria',
+  lastName: 'Santos',
+  email: 'maria@example.com',
+  address: 'San Fabian',
+);
+
 Widget _host(AppState state) => MaterialApp(
-      home: BorrowEquipmentScreen(appState: state),
+      home: BorrowEquipmentScreen(appState: state, user: _resident),
     );
 
 void main() {
@@ -493,10 +498,10 @@ void main() {
       expect(api.lastBody['equipment_id'], 1);
       expect(api.lastBody.containsKey('other_equipment_text'), isFalse);
       expect(api.lastBody['fulfillment_method'], 'Pickup');
-      expect(api.lastBody['borrower_type'], 'Resident');
+      // The borrower kind is the server's call now, from the account.
       // The two conditional fields are the point: defaults must send nothing.
       expect(api.lastBody.containsKey('delivery_address'), isFalse);
-      expect(api.lastBody.containsKey('organization_name'), isFalse);
+      expect(api.lastBody.containsKey('borrower_type'), isFalse);
     });
 
     testWidgets('the delivery address appears only for Delivery', (tester) async {
@@ -512,6 +517,23 @@ void main() {
 
       await tapVisible(tester, find.text('Pickup'));
       expect(find.text('Delivery address'), findsNothing);
+    });
+
+    testWidgets(
+        'checking "Same as my address" fills the delivery address from the account',
+        (tester) async {
+      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
+      await tester.pumpWidget(_host(AppState(api)));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await tapVisible(tester, find.text('Delivery'));
+
+      expect(find.widgetWithText(TextField, _resident.address), findsNothing);
+
+      await tapVisible(tester, find.text('Same as my address'));
+
+      expect(find.widgetWithText(TextField, _resident.address), findsOneWidget);
     });
 
     testWidgets('a Delivery with no address is refused before it is sent', (tester) async {
@@ -549,58 +571,6 @@ void main() {
 
       expect(api.lastBody['fulfillment_method'], 'Pickup');
       expect(api.lastBody.containsKey('delivery_address'), isFalse);
-    });
-
-    testWidgets('the organization name appears only for an organization', (tester) async {
-      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
-      await tester.pumpWidget(_host(AppState(api)));
-      await tester.pumpAndSettle();
-
-      await openSheet(tester);
-      expect(find.text('Organization name'), findsNothing);
-
-      await tapVisible(tester, find.text('An organization'));
-      expect(find.text('Organization name'), findsOneWidget);
-
-      await tapVisible(tester, find.text('Myself'));
-      expect(find.text('Organization name'), findsNothing);
-    });
-
-    testWidgets('an organization with no name is refused before it is sent', (tester) async {
-      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
-      await tester.pumpWidget(_host(AppState(api)));
-      await tester.pumpAndSettle();
-
-      await openSheet(tester);
-      await fill(tester, find.byType(TextField).first, 'Flood drill');
-      await tapVisible(tester, find.text('An organization'));
-      await submit(tester);
-
-      expect(find.text('Name the organization you are borrowing for.'), findsOneWidget);
-      expect(api.submitCalls, 0);
-
-      await fill(tester, find.byType(TextField).last, 'San Fabian BDRRMC');
-      await submit(tester);
-
-      expect(api.submitCalls, 1);
-      expect(api.lastBody['borrower_type'], 'Organization');
-      expect(api.lastBody['organization_name'], 'San Fabian BDRRMC');
-    });
-
-    testWidgets('an organization name typed and then switched away from is not sent', (tester) async {
-      final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
-      await tester.pumpWidget(_host(AppState(api)));
-      await tester.pumpAndSettle();
-
-      await openSheet(tester);
-      await fill(tester, find.byType(TextField).first, 'Flood drill');
-      await tapVisible(tester, find.text('An organization'));
-      await fill(tester, find.byType(TextField).last, 'San Fabian BDRRMC');
-      await tapVisible(tester, find.text('Myself'));
-      await submit(tester);
-
-      expect(api.lastBody['borrower_type'], 'Resident');
-      expect(api.lastBody.containsKey('organization_name'), isFalse);
     });
 
     testWidgets('an uncatalogued request names the item and sends no equipment_id', (tester) async {

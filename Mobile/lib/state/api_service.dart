@@ -337,27 +337,37 @@ class ApiService {
     }
 
     if (status == 401) return 'Your session expired. Please log in again.';
-    if (status == 403) return 'You are not allowed to do that.';
+    if (status == 403) return 'This action isn\'t available to your account.';
     if (status == 404) return 'Not found.';
     if (status >= 500) return 'The server had a problem. Please try again.';
     return 'Request failed ($status).';
   }
 
-  /// Creates the account and asks the server to send the first code. The
+  /// Creates the account and asks the server to text the first code. The
   /// returned outcome carries either the message to show on the form or the
   /// delivery details the code screen needs.
+  ///
+  /// There is no email: a phone number is the login. The server answers
+  /// `sms_unavailable` (503) when the text could not be sent, which arrives here
+  /// as a failed outcome carrying the server's own sentence.
   Future<RegisterOutcome> register({
     required String firstName,
     String? middleName,
     required String lastName,
     required int barangayId,
+    String? streetAddress,
     required String phoneNumber,
-    required String email,
     required String password,
+    // 'head_of_family' (an individual, the default) or 'organization'. There is
+    // no barangay option here: those accounts are made by MDRRMO staff.
+    String accountType = 'head_of_family',
+    String? organizationName,
   }) async {
     try {
       // No 'role': it is not a column on tbl_residents and the server assigns
       // status itself. barangay_id and phone_number are both required there.
+      // street_address is optional — a resident who does not have their
+      // purok on hand yet can still register and fill it in later.
       final data = await _post(
         '/register',
         {
@@ -366,10 +376,16 @@ class ApiService {
             'middle_name': middleName,
           'last_name': lastName,
           'barangay_id': barangayId,
+          if (streetAddress != null && streetAddress.isNotEmpty)
+            'street_address': streetAddress,
           'phone_number': phoneNumber,
-          'email_address': email,
           'password': password,
           'password_confirmation': password,
+          'account_type': accountType,
+          if (accountType == 'organization' &&
+              organizationName != null &&
+              organizationName.isNotEmpty)
+            'organization_name': organizationName,
         },
         isAuthEndpoint: true,
       );
@@ -381,12 +397,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> residentLogin({
-    required String email,
+    required String phoneNumber,
     required String password,
   }) async {
     final data = await _post(
       '/resident/login',
-      {'email_address': email, 'password': password},
+      {'phone_number': phoneNumber, 'password': password},
       isAuthEndpoint: true,
     );
 
@@ -401,13 +417,13 @@ class ApiService {
   /// Finishes registration. On success the server issues a token, so the
   /// resident lands signed in rather than being handed to a login form — this
   /// mirrors [residentLogin] deliberately, including saving the token.
-  Future<Map<String, dynamic>> verifyEmail({
-    required String email,
+  Future<Map<String, dynamic>> verifyPhone({
+    required String phoneNumber,
     required String code,
   }) async {
     final data = await _post(
-      '/resident/verify-email',
-      {'email_address': email, 'code': code},
+      '/resident/verify-phone',
+      {'phone_number': phoneNumber, 'code': code},
       isAuthEndpoint: true,
     );
 
@@ -423,23 +439,24 @@ class ApiService {
   /// 429 and a `retry_after`, which surfaces as an [ApiException] carrying
   /// `code == 'resend_too_soon'`.
   Future<VerificationDelivery?> resendVerificationCode({
-    required String email,
+    required String phoneNumber,
   }) async {
     final data = await _post(
-      '/resident/verify-email/resend',
-      {'email_address': email},
+      '/resident/verify-phone/resend',
+      {'phone_number': phoneNumber},
       isAuthEndpoint: true,
     );
 
-    // The channel can differ from the one the last code went out on, so the
-    // screen relabels itself from this rather than keeping its first answer.
+    // The send can be reported differently from the last one (it may now be
+    // "unknown" after a timeout), so the screen relabels itself from this
+    // rather than keeping its first answer.
     return VerificationDelivery.fromJson(data);
   }
 
-  /// Second half of resident login: the SMS (or mail-fallback) code that came
-  /// back on the `mfa_required` refusal. Mirrors [verifyEmail] — success
-  /// saves the token the same way — but this is a distinct server-side code
-  /// from the signup one and the two must not be confused.
+  /// Second half of resident login: the text-message code that came back on
+  /// the `mfa_required` refusal. Mirrors [verifyPhone] — success saves the
+  /// token the same way — but this is a distinct server-side code from the
+  /// signup one and the two must not be confused.
   Future<Map<String, dynamic>> verifyLoginCode({
     required String challengeId,
     required String code,
@@ -459,7 +476,7 @@ class ApiService {
   }
 
   /// Asks for a replacement login code against an existing challenge. Takes
-  /// the challenge id, not the email/password — the resident already proved
+  /// the challenge id, not the number/password — the resident already proved
   /// the password once to get this challenge.
   Future<VerificationDelivery?> resendLoginCode({
     required String challengeId,
@@ -473,14 +490,92 @@ class ApiService {
     return VerificationDelivery.fromJson(data);
   }
 
+  // --- Forgotten password -------------------------------------------------
+
+  /// Step one. The server answers the same thing whether or not the number has
+  /// an account, so there is nothing to branch on here: the screen always moves
+  /// on to "enter the code" and says "if this number has an account".
+  /// Returns the resend cooldown the server reported.
+  Future<int> forgotPassword({required String phoneNumber}) async {
+    final data = await _post(
+      '/resident/password/forgot',
+      {'phone_number': phoneNumber},
+      isAuthEndpoint: true,
+    );
+    final retry = data['retry_after'];
+    return retry is int ? retry : VerificationDelivery.fallbackCooldownSeconds;
+  }
+
+  /// Step two: the code. Answers the short-lived token step three needs. A
+  /// wrong, expired or unknown-number code is one and the same 422.
+  Future<String> verifyPasswordReset({
+    required String phoneNumber,
+    required String code,
+  }) async {
+    final data = await _post(
+      '/resident/password/verify',
+      {'phone_number': phoneNumber, 'code': code},
+      isAuthEndpoint: true,
+    );
+    final token = data['reset_token'];
+    if (token is String && token.isNotEmpty) return token;
+    throw const ApiException('That code was not accepted.');
+  }
+
+  /// Step three. Does not sign in: the server ends every session on a reset and
+  /// the resident logs in with the new password, code and all.
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String password,
+  }) async {
+    await _post(
+      '/resident/password/reset',
+      {
+        'phone_number': phoneNumber,
+        'reset_token': resetToken,
+        'password': password,
+        'password_confirmation': password,
+      },
+      isAuthEndpoint: true,
+    );
+  }
+
+  // --- Moving the phone number --------------------------------------------
+
+  /// Step one of changing the number: the new one and the CURRENT PASSWORD. A
+  /// code is texted to the new number. The password rides on the wire for this
+  /// one call only, because a token alone must not be enough to move the login.
+  Future<VerificationDelivery?> requestPhoneChange({
+    required String phoneNumber,
+    required String currentPassword,
+  }) async {
+    final data = await _post('/me/phone', {
+      'phone_number': phoneNumber,
+      'current_password': currentPassword,
+    });
+    return VerificationDelivery.fromJson(data);
+  }
+
+  Future<VerificationDelivery?> resendPhoneChangeCode() async {
+    final data = await _post('/me/phone/resend', const {});
+    return VerificationDelivery.fromJson(data);
+  }
+
+  /// Step two: the code. Returns the refreshed profile carrying the new number.
+  Future<Map<String, dynamic>> verifyPhoneChange({required String code}) async {
+    final data = await _post('/me/phone/verify', {'code': code});
+    return (data['user'] as Map<String, dynamic>?) ?? {};
+  }
+
   /// Rebuilds the signed-in resident from a stored token on relaunch.
   Future<Map<String, dynamic>> me() async {
     final data = await _get('/me');
     return (data['user'] as Map<String, dynamic>?) ?? {};
   }
 
-  /// Resident-scoped profile edit. Only the six fields the backend accepts are
-  /// sent — the five contact fields plus `sms_opt_in`; `barangay_id`, `status`,
+  /// Resident-scoped profile edit. Only the fields the backend accepts are
+  /// sent — the name, purok/street and `sms_opt_in`; the phone number moves through the two-step code flow below, and `barangay_id`, `status`,
   /// `photo` and `password` are refused there and have no business being
   /// offered here — the barangay in particular is what every service request is
   /// dispatched on.
@@ -493,10 +588,8 @@ class ApiService {
     String? firstName,
     String? middleName,
     String? lastName,
-    String? phoneNumber,
-    String? email,
+    String? streetAddress,
     bool? smsOptIn,
-    String? currentPassword,
   }) async {
     final data = await _patch(
       '/me',
@@ -504,10 +597,8 @@ class ApiService {
         firstName: firstName,
         middleName: middleName,
         lastName: lastName,
-        phoneNumber: phoneNumber,
-        email: email,
+        streetAddress: streetAddress,
         smsOptIn: smsOptIn,
-        currentPassword: currentPassword,
       ),
     );
     return (data['user'] as Map<String, dynamic>?) ?? {};
@@ -525,23 +616,19 @@ class ApiService {
     String? firstName,
     String? middleName,
     String? lastName,
-    String? phoneNumber,
-    String? email,
+    String? streetAddress,
     bool? smsOptIn,
-    String? currentPassword,
   }) {
     return <String, dynamic>{
       if (firstName != null) 'first_name': firstName,
       if (middleName != null) 'middle_name': middleName.isEmpty ? null : middleName,
       if (lastName != null) 'last_name': lastName,
-      if (phoneNumber != null) 'phone_number': phoneNumber,
-      if (email != null) 'email_address': email,
-      // Proof of knowledge, not a column. The endpoint requires it only when
-      // `email_address` or `phone_number` actually moves — those are where a
-      // login code is delivered, so a bearer token alone must not be enough to
-      // change them. Omitted entirely on every other save, which is what keeps
-      // a surname correction from asking for a password.
-      if (currentPassword != null) 'current_password': currentPassword,
+      // Same "empty string means none" shape as middleName above —
+      // street_address is nullable on the resident row, so clearing the
+      // field on screen has to be a real value the server can write, not an
+      // omitted key that leaves the old one in place.
+      if (streetAddress != null)
+        'street_address': streetAddress.isEmpty ? null : streetAddress,
       // Sent as a JSON boolean, not '1'/'0'. The backend's rule accepts both,
       // but the column is boolean and the response is cast to one, so anything
       // else here would make the value that goes out differ in type from the
@@ -600,9 +687,34 @@ class ApiService {
 
   /// [locale] is a BCP 47 subtag ('en', 'fil'). The server falls back to English
   /// for any locale it has no rows for, so an unsupported one is safe to send.
+  /// What the last catalogue response said about the two entries that are not
+  /// service rows. The server already leaves out any service this kind of
+  /// account may not request; Equipment Borrowing and "Others" have no row to
+  /// leave out, so it says so alongside the list. Both default to allowed, so a
+  /// response without the key (an older server) changes nothing.
+  ({bool equipmentBorrowing, bool others}) serviceAudience =
+      (equipmentBorrowing: true, others: true);
+
   Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async {
     final data = await _get('/services?locale=$locale');
+    final audience = data['audience'];
+    if (audience is Map) {
+      serviceAudience = (
+        equipmentBorrowing: audience['equipment_borrowing'] != false,
+        others: audience['others'] != false,
+      );
+    }
     return listFrom(data);
+  }
+
+  /// The ambulance form's destination dropdown (MDRRMO feedback,
+  /// 2026-09-19) — a short, hand-maintained list. See
+  /// AmbulanceDestinationSeeder for why it starts at one entry; the form's
+  /// "Others" option is the fallback for everywhere else.
+  Future<List<String>> getAmbulanceDestinations() async {
+    final data = await _get('/ambulance-destinations');
+    final rows = (data['data'] as List?) ?? const [];
+    return rows.map((row) => row.toString()).toList();
   }
 
   Future<List<Map<String, dynamic>>> getInfoMaterials() async {
@@ -704,7 +816,10 @@ class ApiService {
   /// end up attached.
   @visibleForTesting
   http.MultipartRequest buildSubmitRequest({
-    required int serviceId,
+    // Null for the "Others" tile, which has no tbl_services row — the field
+    // is omitted from the body entirely rather than sent empty, the same
+    // "absent means unset" contract every other optional field here follows.
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -712,8 +827,17 @@ class ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
+    // 2026-09-18) — offered on every service the same way landmark is, but
+    // only the relief goods form actually sends it.
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    // The MDRRMO programs: a day, and a request letter instead of an ID.
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) {
     final uri = Uri.parse('$baseUrl/service-requests');
     final request = http.MultipartRequest('POST', uri);
@@ -723,7 +847,9 @@ class ApiService {
       if (_token != null) 'Authorization': 'Bearer $_token',
     });
 
-    request.fields['service_id'] = serviceId.toString();
+    if (serviceId != null) {
+      request.fields['service_id'] = serviceId.toString();
+    }
 
     if (intake != null) {
       // No `description` for an ambulance request. The server composes it from
@@ -752,6 +878,16 @@ class ApiService {
     if (landmark != null && landmark.isNotEmpty) {
       request.fields['landmark'] = landmark;
     }
+    if (fulfillmentMethod != null && fulfillmentMethod.isNotEmpty) {
+      request.fields['fulfillment_method'] = fulfillmentMethod;
+    }
+    // Dropped rather than sent when there is no fulfillment method at all,
+    // same "absent means unset" contract every other optional field here
+    // follows — mirrors the server's own drop-on-Pickup behavior for the
+    // case a resident typed one in and switched back before submitting.
+    if (fulfillmentMethod == 'Delivery' && deliveryAddress != null && deliveryAddress.isNotEmpty) {
+      request.fields['delivery_address'] = deliveryAddress;
+    }
     // UTC with a 'Z' suffix, never a naive local string. The server honours an
     // offset-carrying string as the real instant it names; a bare
     // "2026-09-01 09:00:00" would instead be read as Manila wall clock,
@@ -761,13 +897,33 @@ class ApiService {
       request.fields['scheduled_at'] = scheduledAt.toUtc().toIso8601String();
     }
 
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'valid_id',
-        validIdFileBytes,
-        filename: validIdFileName,
-      ),
-    );
+    // The programs are requested by a barangay or an organization, which has
+    // no ID to photograph: empty bytes mean "none", and the part is left out
+    // (the server does not ask for it on those services).
+    if (validIdFileBytes.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'valid_id',
+          validIdFileBytes,
+          filename: validIdFileName,
+        ),
+      );
+    }
+
+    if (preferredDate != null) {
+      final month = preferredDate.month.toString().padLeft(2, '0');
+      final day = preferredDate.day.toString().padLeft(2, '0');
+      request.fields['preferred_date'] = '${preferredDate.year}-$month-$day';
+    }
+
+    if (letterBytes != null &&
+        letterBytes.isNotEmpty &&
+        letterFileName != null &&
+        letterFileName.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes('letter', letterBytes, filename: letterFileName),
+      );
+    }
 
     // Optional, and the part must be absent rather than empty when there is no
     // photo: `site_photo` is `nullable|file` server-side, so a zero-byte part
@@ -789,7 +945,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> submitRequest({
-    required int serviceId,
+    required int? serviceId,
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
@@ -797,8 +953,13 @@ class ApiService {
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
+    String? fulfillmentMethod,
+    String? deliveryAddress,
     DateTime? scheduledAt,
     AmbulanceIntake? intake,
+    DateTime? preferredDate,
+    List<int>? letterBytes,
+    String? letterFileName,
   }) async {
     final request = buildSubmitRequest(
       serviceId: serviceId,
@@ -809,8 +970,13 @@ class ApiService {
       sitePhotoBytes: sitePhotoBytes,
       sitePhotoFileName: sitePhotoFileName,
       landmark: landmark,
+      fulfillmentMethod: fulfillmentMethod,
+      deliveryAddress: deliveryAddress,
       scheduledAt: scheduledAt,
       intake: intake,
+      preferredDate: preferredDate,
+      letterBytes: letterBytes,
+      letterFileName: letterFileName,
     );
 
     http.Response response;
@@ -957,8 +1123,6 @@ class ApiService {
     required String purpose,
     String fulfillmentMethod = 'Pickup',
     String? deliveryAddress,
-    String borrowerType = 'Resident',
-    String? organizationName,
   }) async {
     assert(
       (equipmentId == null) != (otherEquipmentText == null),
@@ -978,8 +1142,6 @@ class ApiService {
       // Omitted rather than sent null on a pickup: the server drops the column
       // anyway, and `required_if` only reads it when the method is Delivery.
       if (fulfillmentMethod == 'Delivery') 'delivery_address': deliveryAddress,
-      'borrower_type': borrowerType,
-      if (borrowerType == 'Organization') 'organization_name': organizationName,
     });
   }
 

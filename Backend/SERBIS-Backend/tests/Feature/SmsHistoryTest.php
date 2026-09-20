@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Barangay;
 use App\Models\Resident;
+use App\Models\SmsBlastCode;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -19,7 +20,7 @@ use Tests\TestCase;
  * and look identical to having no history.
  *
  * Http::preventStrayRequests() is inherited discipline from SmsBlastLoggingTest
- * — PhilSMS has no sandbox, so an escaped request is a billed real send.
+ * — SkySMS has no sandbox, so an escaped request is a billed real send.
  */
 class SmsHistoryTest extends TestCase
 {
@@ -43,6 +44,11 @@ class SmsHistoryTest extends TestCase
             'role' => 'Admin',
         ]);
 
+        SmsBlastCode::create([
+            'code_hash' => Hash::make('123456'),
+            'updated_by' => $this->admin->admin_id,
+        ]);
+
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }
 
@@ -61,11 +67,11 @@ class SmsHistoryTest extends TestCase
 
     private function blast(string $message, int $status = 200): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['job_id' => 'job-1'], $status)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['job_id' => 'job-1'], $status)]);
 
         $this->actingAs($this->admin)->postJson('/api/sms/blast', [
             'message' => $message,
-            'password' => 'password123',
+            'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
         ]);
     }
@@ -83,7 +89,7 @@ class SmsHistoryTest extends TestCase
             ->assertJsonPath('data.0.user.name', 'MDRRMO Admin')
             ->assertJsonPath('data.0.barangay', 'San Fabian')
             ->assertJsonPath('data.0.recipient_count', 2)
-            ->assertJsonPath('data.0.status', 'Sent');
+            ->assertJsonPath('data.0.status', 'Queued');
     }
 
     public function test_a_failed_blast_appears_in_the_history(): void

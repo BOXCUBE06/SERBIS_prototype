@@ -125,7 +125,7 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
 
     public function test_an_approved_ambulance_booking_dispatches_normally(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $request = $this->bookedAmbulanceRequest();
 

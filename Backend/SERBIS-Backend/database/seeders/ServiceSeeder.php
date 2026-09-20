@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 class ServiceSeeder extends Seeder
 {
     /**
-     * The seven services the MDRRMO offers. Runs on production; this is their
-     * data, not test data.
+     * The services the MDRRMO offers: the seven response services, then the
+     * programs it runs. Runs on production; this is their data, not test data.
      *
      * Flood Evacuation, Fire Rescue and Search and Rescue were removed
      * deliberately. Each is a life-threatening event that belongs on a phone
@@ -45,19 +45,23 @@ class ServiceSeeder extends Seeder
         Schema::disableForeignKeyConstraints();
 
         $services = [
-            ['service_name' => 'Ambulance/Medical Response', 'description' => 'Emergency medical response and ambulance services.'],
-            ['service_name' => 'Relief Goods Distribution', 'description' => 'Distribution of essential relief goods during disasters.'],
-            ['service_name' => 'Road Clearing', 'description' => 'Clearing roads of debris and obstacles after natural calamities.'],
-            ['service_name' => 'Power Line Repair', 'description' => 'Emergency repair of downed power lines.'],
-            ['service_name' => 'Debris Removal', 'description' => 'Removal of hazardous debris from public areas.'],
-            ['service_name' => 'Animal Rescue', 'description' => 'Rescue operations for stranded or injured animals.'],
-            ['service_name' => 'Sandbagging', 'description' => 'Provision and placement of sandbags for flood prevention.'],
+            ['service_name' => 'Ambulance/Medical Response', 'category' => 'medical', 'description' => 'Emergency medical response and ambulance services.'],
+            ['service_name' => 'Relief Goods Distribution', 'category' => 'relief', 'description' => 'Distribution of essential relief goods during disasters.'],
+            ['service_name' => 'Road Clearing', 'category' => 'infrastructure', 'description' => 'Clearing roads of debris and obstacles after natural calamities.'],
+            ['service_name' => 'Power Line Repair', 'category' => 'infrastructure', 'description' => 'Emergency repair of downed power lines.'],
+            ['service_name' => 'Debris Removal', 'category' => 'infrastructure', 'description' => 'Removal of hazardous debris from public areas.'],
+            ['service_name' => 'Animal Rescue', 'category' => 'rescue', 'description' => 'Rescue operations for stranded or injured animals.'],
+            ['service_name' => 'Sandbagging', 'category' => 'rescue', 'description' => 'Provision and placement of sandbags for flood prevention.'],
+            ['service_name' => 'DRRM Trainings and Seminars', 'category' => 'programs', 'description' => 'Disaster risk reduction and management trainings and seminars (IEC) for barangays and organizations.'],
+            ['service_name' => 'Simulation Drills / NSED', 'category' => 'programs', 'description' => 'Simulation drills, including the Nationwide Simultaneous Earthquake Drill (NSED), for barangays and organizations.'],
+            ['service_name' => 'MDRRMO Certification', 'category' => 'programs', 'description' => 'Certification issued by the MDRRMO.'],
         ];
 
         foreach ($services as $service) {
             Service::create([
                 'service_name' => $service['service_name'],
                 'description' => $service['description'],
+                'category' => $service['category'],
             ]);
         }
 

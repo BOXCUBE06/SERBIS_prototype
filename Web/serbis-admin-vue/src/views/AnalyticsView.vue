@@ -1,10 +1,8 @@
 <template>
-  <v-container fluid class="pa-6 analytics-bg">
+  <v-container fluid class="analytics-bg">
 
     <PageHeader
       title="Analytics"
-      subtitle="Demand, turnaround and backlog over a period. The Dashboard answers today; this answers the quarter."
-      class="mb-6"
     />
 
     <!-- Filter bar. Governs every section below, so it sits above all of them
@@ -124,62 +122,49 @@
       </div>
     </v-alert>
 
-    <!-- 1. When demand arrives. Two cyclical dimensions at once, which no bar
-         chart can carry, and a plain CSS grid rather than a Chart.js matrix
-         plugin — this needs no new dependency. -->
+    <!-- 1. When demand arrives, split into two ordinary bar charts instead of
+         a day x hour heatmap: which weekday, and which quarter of the day
+         (see AnalyticsReport::demandByWeekdayHour / timeBlockFor). -->
     <v-row class="mb-2">
       <v-col cols="12">
         <AnalyticsSection
           title="When requests are filed"
-          subtitle="Day and hour a request was submitted, in Asia/Manila. This is when residents file, which is not the same as when the office is open."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && demand.total === 0"
-          :count="demand.total"
           empty-text="No requests in this range"
           empty-hint="Widen the range or clear the filters."
-          skeleton="image"
           @retry="fetchReport"
         >
-          <div class="heatmap-scroll">
-            <div class="heatmap">
-              <div class="heat-corner"></div>
-              <div
-                v-for="hour in 24"
-                :key="'h' + hour"
-                class="heat-hour text-caption text-medium-emphasis"
-              >{{ (hour - 1) % 3 === 0 ? (hour - 1) : '' }}</div>
-
-              <template v-for="(row, dayIndex) in demand.grid" :key="'d' + dayIndex">
-                <div class="heat-day text-caption text-medium-emphasis">{{ demand.weekdays[dayIndex] }}</div>
-                <div
-                  v-for="(count, hourIndex) in row"
-                  :key="'c' + dayIndex + '-' + hourIndex"
-                  class="heat-cell"
-                  :style="heatStyle(count)"
-                  :title="`${demand.weekdays[dayIndex]} ${String(hourIndex).padStart(2, '0')}:00 — ${count} ${count === 1 ? 'request' : 'requests'}`"
-                  :aria-label="`${demand.weekdays[dayIndex]} ${String(hourIndex).padStart(2, '0')}:00, ${count} ${count === 1 ? 'request' : 'requests'}`"
-                  role="img"
-                ></div>
-              </template>
-            </div>
+          <div v-if="demand.peak.count > 0" class="text-body-1 font-weight-bold text-high-emphasis mb-4">
+            Most requests: {{ demand.peak.weekday }} {{ demand.peak.block }}
           </div>
 
-          <div class="d-flex align-center justify-space-between flex-wrap gap-3 mt-3">
-            <div v-if="demand.peak.count > 0" class="text-caption text-medium-emphasis">
-              Busiest hour: <strong class="text-high-emphasis">{{ demand.peak.weekday }} {{ String(demand.peak.hour).padStart(2, '0') }}:00</strong>
-              ({{ demand.peak.count }} {{ demand.peak.count === 1 ? 'request' : 'requests' }})
+          <div class="d-flex flex-wrap gap-4">
+            <div class="demand-chart">
+              <div class="text-caption text-medium-emphasis mb-1">Busiest days</div>
+              <div style="height: 220px;">
+                <Bar :data="busiestDaysChartData" :options="baseOptions" />
+                <ChartDataTable
+                  caption="Busiest days — same data as the chart above"
+                  category-label="Day"
+                  :labels="demand.days.labels"
+                  :series="[{ label: 'Requests', data: demand.days.data }]"
+                />
+              </div>
             </div>
-            <!-- "None" is its own key rather than the first step of the ramp.
-                 Zero is a neutral, not the palest tint of the hue, and putting
-                 it under the word "Fewer" labelled absence as "a little" —
-                 undoing the distinction the cell colouring deliberately makes. -->
-            <div class="d-flex align-center gap-2">
-              <div class="heat-legend" :style="heatStyle(0)"></div>
-              <span class="text-caption text-medium-emphasis mr-2">None</span>
-              <span class="text-caption text-medium-emphasis">Fewer</span>
-              <div v-for="step in 4" :key="'l' + step" class="heat-legend" :style="heatStyle((step / 4) * demand.peak.count)"></div>
-              <span class="text-caption text-medium-emphasis">More</span>
+
+            <div class="demand-chart">
+              <div class="text-caption text-medium-emphasis mb-1">Busiest time of day</div>
+              <div style="height: 220px;">
+                <Bar :data="busiestTimeOfDayChartData" :options="baseOptions" />
+                <ChartDataTable
+                  caption="Busiest time of day — same data as the chart above"
+                  category-label="Time of day"
+                  :labels="demand.timeOfDay.labels"
+                  :series="[{ label: 'Requests', data: demand.timeOfDay.data }]"
+                />
+              </div>
             </div>
           </div>
         </AnalyticsSection>
@@ -192,25 +177,20 @@
       <v-col cols="12" lg="7">
         <AnalyticsSection
           title="Requests by month and service"
-          subtitle="What the office is asked for, and when."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && volume.total === 0"
-          :count="volume.total"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
-          <template #subtitle>
-            <div class="d-flex align-center justify-space-between flex-wrap gap-2">
-              <span>What the office is asked for, and when.</span>
-              <!-- Three of the light-mode series sit under 3:1 on white, so a
-                   table view is required rather than optional. It doubles as
-                   the non-visual reading of the same numbers. -->
-              <v-btn-toggle v-model="volumeView" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
-                <v-btn value="chart" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as chart">Chart</v-btn>
-                <v-btn value="table" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as table">Table</v-btn>
-              </v-btn-toggle>
-            </div>
+          <template #actions>
+            <!-- Three of the light-mode series sit under 3:1 on white, so a
+                 table view is required rather than optional. It doubles as
+                 the non-visual reading of the same numbers. -->
+            <v-btn-toggle v-model="volumeView" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
+              <v-btn value="chart" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as chart">Chart</v-btn>
+              <v-btn value="table" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text" aria-label="Show as table">Table</v-btn>
+            </v-btn-toggle>
           </template>
 
           <div v-if="volumeView === 'chart'" style="height: 300px;">
@@ -258,11 +238,9 @@
       <v-col cols="12" lg="5">
         <AnalyticsSection
           title="Outcomes by month"
-          subtitle="Share of each month's requests by where they ended up."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && outcomes.total === 0"
-          :count="outcomes.total"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
@@ -280,88 +258,15 @@
     </v-row>
 
     <v-row>
-      <!-- 4. How long the office takes. Every figure carries the sample it
-           came from: these columns are only partly backfilled. -->
-      <v-col cols="12" lg="7">
-        <AnalyticsSection
-          title="Turnaround"
-          subtitle="Median time to a first answer, and to closing the request."
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && turnaround.coverage.requests === 0"
-          empty-text="No requests in this range"
-          @retry="fetchReport"
-        >
-          <div class="d-flex flex-wrap gap-4 mb-4">
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median first response</div>
-              <div class="stat-value text-high-emphasis">
-                {{ turnaround.firstResponse.medianHours === null ? '—' : formatHours(turnaround.firstResponse.medianHours) }}
-              </div>
-              <div class="text-caption text-medium-emphasis">n = {{ turnaround.firstResponse.n }}</div>
-            </div>
-
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median time to close</div>
-              <div class="stat-value text-high-emphasis">
-                {{ turnaround.resolution.medianDays === null ? '—' : formatDays(turnaround.resolution.medianDays) }}
-              </div>
-              <div class="text-caption text-medium-emphasis">n = {{ turnaround.resolution.n }}</div>
-              <!-- Survivor bias, stated where the number is read rather than in
-                   the coverage note below. This median describes only requests
-                   that closed; the ones still open are excluded by definition,
-                   and some of them are older than everything counted here. -->
-              <div v-if="aging.total > 0" class="text-caption text-medium-emphasis mt-1">
-                Closed requests only — {{ aging.total }} still open are not counted.
-              </div>
-            </div>
-          </div>
-
-          <div v-if="turnaround.histogram.n > 0">
-            <div class="text-caption text-medium-emphasis mb-1">How long closing took</div>
-            <div style="height: 170px;">
-              <Bar :data="histogramChartData" :options="simpleBarOptions" />
-              <ChartDataTable
-                caption="How long closing took — same data as the chart above"
-                category-label="Duration bucket"
-                :labels="turnaround.histogram.labels"
-                :series="[{ label: 'Requests', data: turnaround.histogram.data }]"
-              />
-            </div>
-          </div>
-          <div v-else class="text-body-2 text-medium-emphasis py-4">
-            No request in this range has been closed yet, so there is nothing to time.
-          </div>
-
-          <!-- Not a footnote. These columns were backfilled from the audit
-               log, which starts later than the oldest requests, so a reader
-               must not take the medians above as the whole history. -->
-          <v-alert
-            v-if="turnaround.coverage.requests > turnaround.coverage.withResolution"
-            density="compact"
-            variant="tonal"
-            color="info"
-            rounded="lg"
-            class="mt-4 text-caption"
-          >
-            Timed from recorded history only:
-            {{ turnaround.coverage.withFirstResponse }} of {{ turnaround.coverage.requests }} requests have a recorded
-            first response and {{ turnaround.coverage.withResolution }} have a recorded closing time. Requests without
-            one are left out rather than counted as zero.
-          </v-alert>
-        </AnalyticsSection>
-      </v-col>
-
       <!-- 5. What is stuck right now. Reads created_at and the current status,
-           so unlike turnaround it is complete for every row from day one. -->
-      <v-col id="open-request-age" cols="12" lg="5">
+           so it is complete for every row from day one. -->
+      <v-col id="open-request-age" cols="12">
         <AnalyticsSection
           title="Open Requests by Age"
-          subtitle="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
+          info="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && aging.total === 0"
-          :count="aging.total"
           empty-text="Nothing is open"
           empty-hint="Every request has been closed."
           @retry="fetchReport"
@@ -390,11 +295,9 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment utilization"
-          subtitle="Times borrowed and quantity borrowed per item, in this range. Items never borrowed are listed at zero."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && equipmentUtilization.items.length === 0"
-          :count="equipmentUtilization.total"
           empty-text="No equipment in the catalogue"
           @retry="fetchReport"
         >
@@ -426,32 +329,23 @@
     </v-row>
 
     <v-row>
-      <!-- 7. Loan turnaround and overdue. Deliberately calm: this is a
+      <!-- 7. Equipment returns: on-time vs overdue. Deliberately calm: this is a
            standing operational fact, not an incident, so overdue reads in
            the same neutral tiles as everything else on the page rather than
            an alarm colour. currentlyOverdue ignores the date filter on
-           purpose (see AnalyticsReport::loanTurnaround) — a loan that went
-           out last quarter and never came back must not disappear because
-           the filter bar says "this month". -->
+           purpose (see AnalyticsReport::loanTurnaround) — a borrowed item
+           that went out last quarter and never came back must not disappear
+           because the filter bar says "this month". -->
       <v-col cols="12">
         <AnalyticsSection
-          title="Loan turnaround and overdue"
-          subtitle="Median days an item is out, and how often it comes back late."
+          title="Equipment returns"
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && loans.daysOut.n === 0 && loans.currentlyOverdue === 0"
-          empty-text="No returned loans in this range"
+          :empty="!loading && !error && loans.returnedLate.of === 0 && loans.currentlyOverdue === 0"
+          empty-text="No equipment returned in this range"
           @retry="fetchReport"
         >
           <div class="d-flex flex-wrap gap-4">
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median time out</div>
-              <div class="stat-value text-high-emphasis">
-                {{ loans.daysOut.medianDays === null ? '—' : formatDays(loans.daysOut.medianDays) }}
-              </div>
-              <div class="text-caption text-medium-emphasis">n = {{ loans.daysOut.n }}</div>
-            </div>
-
             <div class="stat-tile subtle-surface">
               <div class="text-caption text-medium-emphasis">Returned late</div>
               <div class="stat-value text-high-emphasis">
@@ -473,61 +367,40 @@
     </v-row>
 
     <v-row>
-      <!-- 8. Fleet usage. No barangay/service filter — the trip log carries
-           no resident_id at all (filed by MDRRMO staff, not a resident) and
-           every conduction request is the same one dispatch service, so
-           neither filter has anything to narrow. -->
+      <!-- 8. Most used vehicles. Its own Today/This week/This month toggle,
+           independent of the page's shared date filter (see
+           AnalyticsReport::mostUsedVehicles — all three periods come back in
+           one payload, so the toggle never requeries). No barangay/service
+           filter — the trip log carries no resident_id at all (filed by
+           MDRRMO staff, not a resident) and every conduction request is the
+           same one dispatch service, so neither filter has anything to
+           narrow. Only ambulances are actually dispatched through this flow;
+           boats, fire trucks and rescue vehicles carry no trips here. -->
       <v-col cols="12">
         <AnalyticsSection
-          title="Fleet usage"
-          subtitle="Trips and time per vehicle. Distance is shown only where both odometer readings exist."
+          title="Most used vehicles"
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && fleet.totalTrips === 0"
-          :count="fleet.totalTrips"
-          empty-text="No dispatch trips in this range"
+          :empty="!loading && !error && selectedVehicleTrips.every(v => v.trips === 0)"
+          empty-text="No dispatch trips in this period"
           @retry="fetchReport"
         >
-          <div class="d-flex flex-wrap gap-4 mb-4">
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median trip duration</div>
-              <div class="stat-value text-high-emphasis">
-                {{ fleet.duration.medianHours === null ? '—' : formatHours(fleet.duration.medianHours) }}
-              </div>
-              <div class="text-caption text-medium-emphasis">n = {{ fleet.duration.n }}</div>
-            </div>
+          <template #actions>
+            <v-btn-toggle v-model="vehiclePeriod" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
+              <v-btn value="today" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">Today</v-btn>
+              <v-btn value="week" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This week</v-btn>
+              <v-btn value="month" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This month</v-btn>
+            </v-btn-toggle>
+          </template>
 
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Median distance</div>
-              <div class="stat-value text-high-emphasis">
-                {{ fleet.distance.medianKm === null ? '—' : `${fleet.distance.medianKm} km` }}
-              </div>
-              <div class="text-caption text-medium-emphasis">n = {{ fleet.distance.n }}</div>
-            </div>
-          </div>
-
-          <div class="table-scroll">
-            <table class="data-table text-body-2">
-              <thead>
-                <tr>
-                  <th class="text-left" scope="col">Unit</th>
-                  <th class="text-left" scope="col">Type</th>
-                  <th class="text-right" scope="col">Trips</th>
-                  <th class="text-right" scope="col">Median duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="unit in fleet.units" :key="unit.label">
-                  <td>{{ unit.label }}</td>
-                  <td>{{ unit.type || '—' }}</td>
-                  <td class="text-right">{{ unit.trips }}</td>
-                  <td class="text-right">
-                    {{ unit.medianTripHours === null ? '—' : formatHours(unit.medianTripHours) }}
-                    <span class="text-medium-emphasis"> (n = {{ unit.n }})</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div :style="{ height: Math.max(120, selectedVehicleTrips.length * 40) + 'px' }">
+            <Bar :data="vehicleTripsChartData" :options="horizontalBarOptions" />
+            <ChartDataTable
+              caption="Most used vehicles — same data as the chart above"
+              category-label="Vehicle"
+              :labels="selectedVehicleTrips.map(v => v.label)"
+              :series="[{ label: 'Trips', data: selectedVehicleTrips.map(v => v.trips) }]"
+            />
           </div>
         </AnalyticsSection>
       </v-col>
@@ -542,7 +415,6 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Barangay: residents vs requests"
-          subtitle="Registered accounts (all time) against requests filed in this range. A barangay with accounts but no requests, or neither, still appears at zero."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && barangayCoverage.barangays.length === 0"
@@ -592,11 +464,9 @@
       <v-col cols="12">
         <AnalyticsSection
           title="App adoption"
-          subtitle="Walk-in vs app-filed share of requests, by month."
           :loading="loading"
           :error="error"
           :empty="!loading && !error && adoption.total === 0"
-          :count="adoption.total"
           empty-text="No requests in this range"
           @retry="fetchReport"
         >
@@ -607,56 +477,6 @@
               category-label="Month"
               :labels="adoption.labels"
               :series="adoption.series"
-            />
-          </div>
-        </AnalyticsSection>
-      </v-col>
-    </v-row>
-
-    <v-row>
-      <!-- 11. Account activation backlog. 'Inactive' here means self-
-           registered and waiting for an admin to switch the account on —
-           not 'Deactivated', which is an admin turning one off on purpose.
-           The backlog count ignores the date filter on purpose (see
-           AnalyticsReport::activationBacklog) — a sign-up from three months
-           ago nobody has activated yet must not vanish because the filter
-           bar says "this month". -->
-      <v-col cols="12" lg="5">
-        <AnalyticsSection
-          title="Account activation backlog"
-          subtitle="Residents who self-registered and are waiting for an admin to activate them, as of today."
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && activation.backlog === 0"
-          empty-text="No accounts are waiting on activation"
-          @retry="fetchReport"
-        >
-          <div class="stat-tile subtle-surface" style="width: fit-content;">
-            <div class="text-caption text-medium-emphasis">Waiting on activation</div>
-            <div class="stat-value text-high-emphasis">{{ activation.backlog }}</div>
-            <div class="text-caption text-medium-emphasis">As of today, not scoped to this range</div>
-          </div>
-        </AnalyticsSection>
-      </v-col>
-
-      <v-col cols="12" lg="7">
-        <AnalyticsSection
-          title="Sign-ups by month"
-          subtitle="New resident accounts in this range, by the status they hold today."
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && signupsByMonth.total === 0"
-          :count="signupsByMonth.total"
-          empty-text="No sign-ups in this range"
-          @retry="fetchReport"
-        >
-          <div style="height: 260px;">
-            <Bar :data="signupsChartData" :options="stackedOptions" />
-            <ChartDataTable
-              caption="Sign-ups by month — same data as the chart above"
-              category-label="Month"
-              :labels="signupsByMonth.labels"
-              :series="signupsByMonth.series"
             />
           </div>
         </AnalyticsSection>
@@ -705,15 +525,18 @@ const ALL = 'all'
  * modes, all checks pass on the adjacent pairlist that stacked bars use —
  * worst adjacent CVD ΔE 9.1 light / 8.4 dark against a target of 8.
  *
- * Light mode raises a contrast relief on three slots (aqua 2.82, yellow 2.17,
- * magenta 2.69 against white). That is not dismissable, which is why this
- * chart ships a Table view rather than treating one as optional.
+ * Light mode slots 2 (aqua), 3 (yellow) and 4 (magenta) originally measured
+ * 2.82/2.17/2.69 against white — under the 3:1 floor for a non-text fill.
+ * Darkened in place, same hue, to 3.22/3.32/3.28 (#1baf7a→#19a371,
+ * #eda100→#be8100, #e87ba4→#d16f94). The Table view stays regardless — it is
+ * the accessible path for anyone who can't read colour at all, not only a
+ * workaround for these three.
  *
  * Kept off the brand green deliberately: primary is the app's own accent and
  * reading it as "one particular service" would collide with every other use
  * of it on the page.
  */
-const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948']
+const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#19a371', '#be8100', '#d16f94', '#008300', '#4a3aa7', '#e34948']
 const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
 
 const preset = ref('quarter')
@@ -867,7 +690,12 @@ function hexToRgb (hex) {
 // without a guard on every access.
 const EMPTY_STACK = { labels: [], series: [], total: 0 }
 
-const demand = computed(() => report.value?.demand ?? { weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], grid: [], total: 0, peak: { weekday: null, hour: null, count: 0 } })
+const demand = computed(() => report.value?.demand ?? {
+  days: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [] },
+  timeOfDay: { labels: ['Morning', 'Afternoon', 'Evening', 'Late night'], data: [] },
+  total: 0,
+  peak: { weekday: null, block: null, count: 0 },
+})
 const volume = computed(() => report.value?.volume ?? EMPTY_STACK)
 const outcomes = computed(() => report.value?.outcomes ?? EMPTY_STACK)
 const aging = computed(() => report.value?.aging ?? { labels: [], data: [], total: 0, oldestDays: 0 })
@@ -877,48 +705,13 @@ const loans = computed(() => report.value?.loans ?? {
   returnedLate: { count: 0, of: 0, percent: null },
   currentlyOverdue: 0,
 })
-const fleet = computed(() => report.value?.fleet ?? {
-  units: [],
-  totalTrips: 0,
-  duration: { medianHours: null, n: 0 },
-  distance: { medianKm: null, n: 0 },
-})
+const vehicleTrips = computed(() => report.value?.vehicleTrips ?? { today: [], week: [], month: [] })
+const vehiclePeriod = ref('week')
+const selectedVehicleTrips = computed(() => vehicleTrips.value[vehiclePeriod.value] ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
 const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
-const activation = computed(() => report.value?.activation ?? { backlog: 0, signupsByMonth: EMPTY_STACK })
-const signupsByMonth = computed(() => activation.value.signupsByMonth)
-const turnaround = computed(() => report.value?.turnaround ?? {
-  firstResponse: { medianHours: null, n: 0 },
-  resolution: { medianDays: null, n: 0 },
-  histogram: { labels: [], data: [], n: 0 },
-  coverage: { requests: 0, withFirstResponse: 0, withResolution: 0 },
-})
-
-/**
- * Sequential fill for the heatmap: one hue, light to dark, as magnitude
- * demands. Zero gets a neutral rather than the palest tint of the hue, so
- * "none" reads as absence instead of "a little".
- */
-const heatStyle = (count) => {
-  const peak = demand.value.peak.count || 1
-
-  // 0.06 white on the dark surface measured ~1.25:1 — the empty cells all but
-  // vanished, taking the day/hour scaffolding with them and leaving the filled
-  // cells floating with nothing to read them against. Light mode never had the
-  // problem, so the two need different weights rather than one shared alpha.
-  if (!count) {
-    const alpha = isDark.value ? 0.14 : 0.06
-    return { backgroundColor: `rgba(${hexToRgb(themeColors.value['on-surface'])}, ${alpha})` }
-  }
-
-  // sqrt, not linear: a single busy cell would otherwise flatten every other
-  // cell on the grid to near-invisible.
-  const intensity = 0.18 + 0.82 * Math.sqrt(count / peak)
-
-  return { backgroundColor: `rgba(${hexToRgb(themeColors.value.primary)}, ${intensity.toFixed(3)})` }
-}
 
 const seriesPalette = computed(() => (isDark.value ? SERIES_DARK : SERIES_LIGHT))
 
@@ -966,17 +759,6 @@ const volumeChartData = computed(() => ({
   datasets: volume.value.series.map(s => stackedDataset(s, colorForSeries(s.label, volume.value.series))),
 }))
 
-const histogramChartData = computed(() => ({
-  labels: turnaround.value.histogram.labels,
-  datasets: [{
-    label: 'Requests',
-    data: turnaround.value.histogram.data,
-    backgroundColor: themeColors.value.primary,
-    borderRadius: 4,
-    maxBarThickness: 38,
-  }],
-}))
-
 const agingChartData = computed(() => ({
   labels: aging.value.labels,
   datasets: [{
@@ -985,6 +767,39 @@ const agingChartData = computed(() => ({
     backgroundColor: themeColors.value.primary,
     borderRadius: 4,
     maxBarThickness: 26,
+  }],
+}))
+
+const vehicleTripsChartData = computed(() => ({
+  labels: selectedVehicleTrips.value.map(v => v.label),
+  datasets: [{
+    label: 'Trips',
+    data: selectedVehicleTrips.value.map(v => v.trips),
+    backgroundColor: themeColors.value.primary,
+    borderRadius: 4,
+    maxBarThickness: 26,
+  }],
+}))
+
+const busiestDaysChartData = computed(() => ({
+  labels: demand.value.days.labels,
+  datasets: [{
+    label: 'Requests',
+    data: demand.value.days.data,
+    backgroundColor: themeColors.value.primary,
+    borderRadius: 4,
+    maxBarThickness: 38,
+  }],
+}))
+
+const busiestTimeOfDayChartData = computed(() => ({
+  labels: demand.value.timeOfDay.labels,
+  datasets: [{
+    label: 'Requests',
+    data: demand.value.timeOfDay.data,
+    backgroundColor: themeColors.value.primary,
+    borderRadius: 4,
+    maxBarThickness: 38,
   }],
 }))
 
@@ -1024,11 +839,13 @@ const percentStackedOptions = computed(() => ({
       boxPadding: 4,
       callbacks: {
         // The axis is a percentage but the useful number is the count, so the
-        // tooltip gives both rather than making the reader multiply.
+        // tooltip gives both rather than making the reader multiply. ctx.raw
+        // is the normalised percentage the bar is drawn from — the real count
+        // lives in dataset.rawData, set alongside it below.
         label: (ctx) => {
-          const total = ctx.chart.data.datasets.reduce((sum, d) => sum + (d.data[ctx.dataIndex] || 0), 0)
-          const share = total ? Math.round((ctx.raw / total) * 100) : 0
-          return `${ctx.dataset.label}: ${ctx.raw} (${share}%)`
+          const count = ctx.dataset.rawData?.[ctx.dataIndex] ?? ctx.raw
+          const share = Math.round(ctx.raw)
+          return `${ctx.dataset.label}: ${count} (${share}%)`
         },
       },
     },
@@ -1084,30 +901,6 @@ const adoptionChartDataNormalised = computed(() => {
   }
 })
 
-/**
- * A resident's own status vocabulary (Active/Inactive/Deactivated), not the
- * request status colours above — reused where the words happen to overlap
- * ('Deactivated' reads as an ended state, same intent as Disapproved) and
- * given its own entries otherwise, since a resident is not a request.
- */
-const residentStatusColor = (status) => {
-  const c = themeColors.value
-
-  switch (status) {
-    case 'Active': return c.success
-    case 'Inactive': return c.warning
-    case 'Deactivated': return c.error
-    default: return c.info
-  }
-}
-
-const signupsChartData = computed(() => ({
-  labels: signupsByMonth.value.labels,
-  datasets: signupsByMonth.value.series.map(s => stackedDataset(s, residentStatusColor(s.label))),
-}))
-
-const simpleBarOptions = computed(() => baseOptions.value)
-
 const horizontalBarOptions = computed(() => ({
   ...baseOptions.value,
   indexAxis: 'y',
@@ -1116,23 +909,6 @@ const horizontalBarOptions = computed(() => ({
     y: { grid: { display: false }, ticks: { color: tickColor.value } },
   },
 }))
-
-const formatHours = (hours) => {
-  if (hours < 1) return `${Math.round(hours * 60)} min`
-  if (hours < 48) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-  return `${(hours / 24).toFixed(1)} days`
-}
-
-const formatDays = (days) => {
-  const hours = Math.round(days * 24)
-
-  // "0 hours" reads as instantaneous, which is never what happened — it is a
-  // rounding artefact of a resolution that landed inside the same hour.
-  if (hours < 1) return 'Under an hour'
-  if (days < 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-
-  return `${days} ${days === 1 ? 'day' : 'days'}`
-}
 
 defineExpose({ fetchReport })
 </script>
@@ -1225,47 +1001,12 @@ defineExpose({ fetchReport })
   background-color: rgba(var(--v-theme-on-surface), 0.05);
 }
 
-/* 24 hour columns do not fit a phone, and squeezing them would make every
-   cell unreadable rather than merely offscreen. Scroll the grid, not the
-   page. */
-.heatmap-scroll {
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.heatmap {
-  display: grid;
-  grid-template-columns: 34px repeat(24, minmax(20px, 1fr));
-  gap: 3px;
-  min-width: 620px;
-}
-
-.heat-corner {
-  grid-column: 1;
-}
-
-.heat-hour {
-  text-align: center;
-  font-size: 10px;
-  line-height: 1;
-}
-
-.heat-day {
-  display: flex;
-  align-items: center;
-  font-size: 11px;
-}
-
-.heat-cell {
-  aspect-ratio: 1;
-  border-radius: 3px;
-  min-height: 18px;
-}
-
-.heat-legend {
-  width: 16px;
-  height: 10px;
-  border-radius: 2px;
+/* Two side by side above 600px (min 280px each, so a narrow half never
+   squeezes a bar chart's ticks); one per row below that, same as every
+   other flex-wrap pairing on this page. */
+.demand-chart {
+  flex: 1 1 280px;
+  min-width: 0;
 }
 
 .stat-tile {
