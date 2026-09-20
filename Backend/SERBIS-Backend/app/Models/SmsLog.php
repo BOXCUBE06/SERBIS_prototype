@@ -30,6 +30,11 @@ class SmsLog extends Model
         return $this->belongsTo(User::class, 'sender_id', 'admin_id');
     }
 
+    public function queueIds(): HasMany
+    {
+        return $this->hasMany(SmsQueueId::class, 'sms_log_id', 'sms_log_id');
+    }
+
     public function recipients(): HasMany
     {
         return $this->hasMany(Recipient::class, 'sms_log_id', 'sms_log_id');

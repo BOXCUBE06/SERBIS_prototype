@@ -6,6 +6,7 @@ use App\Models\Recipient;
 use App\Models\Resident;
 use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
+use App\Models\SmsQueueId;
 use App\Services\Sms\SkySmsGateway;
 use App\Services\Sms\SmsGateway;
 use App\Services\Sms\SmsMessagePolicy;
@@ -110,6 +111,7 @@ class SmsController extends Controller
                     default => 'Failed',
                 },
                 'job' => $result->queueId,
+                'queue_ids' => $result->queueIds,
             ];
         }
 
@@ -626,7 +628,12 @@ class SmsController extends Controller
      * differently, a barangay can appear twice: once for the chunk that went
      * out and once for the chunk that did not.
      *
-     * @param  array<int, array{residents: Collection, status: string, job: ?string}>  $groups
+     * A chunk's queue ids are kept on every log row the chunk produced. The
+     * vendor answers per request, not per barangay, and the order of `queue_ids`
+     * against the recipients is not documented, so an id is not pinned to one
+     * resident or one barangay.
+     *
+     * @param  array<int, array{residents: Collection, status: string, job: ?string, queue_ids: list<string>}>  $groups
      */
     private function recordBlast(int $senderId, array $groups, string $message): void
     {
@@ -640,6 +647,15 @@ class SmsController extends Controller
                         'message_body' => $message,
                         'status' => $group['status'],
                     ]);
+
+                    if ($group['queue_ids'] !== []) {
+                        SmsQueueId::insert(array_map(fn (string $queueId) => [
+                            'sms_log_id' => $log->sms_log_id,
+                            'queue_id' => $queueId,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ], $group['queue_ids']));
+                    }
 
                     Recipient::insert(
                         $residents->map(fn ($resident) => [

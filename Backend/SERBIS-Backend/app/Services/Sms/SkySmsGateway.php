@@ -248,7 +248,14 @@ class SkySmsGateway implements SmsGateway
 
         $queueId = $body['queue_id'] ?? $body['data']['queue_id'] ?? $body['batch_id'] ?? $body['data']['batch_id'] ?? null;
 
-        return SmsResult::accepted(is_scalar($queueId) ? (string) $queueId : null, $credits, $status, $body);
+        // The bulk reply (first seen 2026-09-20) carries no batch id, only one id
+        // per queued message: "queue_ids":[233895,233896].
+        $queueIds = $body['queue_ids'] ?? $body['data']['queue_ids'] ?? [];
+        $queueIds = is_array($queueIds)
+            ? array_values(array_map('strval', array_filter($queueIds, 'is_scalar')))
+            : [];
+
+        return SmsResult::accepted(is_scalar($queueId) ? (string) $queueId : null, $credits, $status, $body, $queueIds);
     }
 
     private function retryAfterSeconds(Response $response): ?int

@@ -401,4 +401,44 @@ class SmsBlastLoggingTest extends TestCase
         // vendor, so the log stays at the three that were allowed through.
         $this->assertSame(3, SmsLog::count());
     }
+
+    public function test_every_queue_id_of_the_real_bulk_reply_is_stored_against_the_blast(): void
+    {
+        Http::fake(['skysms.skyio.site/*' => Http::response([
+            'success' => true,
+            'total' => 2,
+            'queue_ids' => [233895, 233896],
+            'message' => 'SMS messages queued for delivery',
+            'credits_remaining' => 997,
+        ], 201)]);
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+        $this->resident($this->barangayA, 'Active', '09172222222');
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Evacuate low-lying areas immediately.',
+            'code' => self::CODE,
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk()->assertJson(['sent' => 2, 'failed' => 0]);
+
+        $log = SmsLog::firstOrFail();
+
+        $this->assertNull($log->api_job_id);
+        $this->assertEqualsCanonicalizing(['233895', '233896'], $log->queueIds->pluck('queue_id')->all());
+    }
+
+    public function test_a_reply_with_no_queue_ids_stores_none(): void
+    {
+        Http::fake(['skysms.skyio.site/*' => Http::response(['success' => true, 'batch_id' => 'job-123'], 200)]);
+
+        $this->resident($this->barangayA, 'Active', '09171111111');
+
+        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            'message' => 'Evacuate low-lying areas immediately.',
+            'code' => self::CODE,
+            'barangays' => [$this->barangayA->barangay_id],
+        ])->assertOk();
+
+        $this->assertSame(0, SmsLog::firstOrFail()->queueIds()->count());
+    }
 }

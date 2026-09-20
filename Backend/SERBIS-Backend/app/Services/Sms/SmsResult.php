@@ -44,6 +44,8 @@ final class SmsResult
 
     /**
      * @param  array<string, mixed>  $body  The vendor's decoded reply, when there was one.
+     * @param  list<string>  $queueIds  One id per message in a bulk reply (`queue_ids`), the handle the
+     *                                  vendor's message endpoints know a message by.
      */
     public function __construct(
         public readonly string $outcome,
@@ -54,11 +56,12 @@ final class SmsResult
         public readonly ?int $retryAfter = null,
         public readonly ?string $detail = null,
         public readonly array $body = [],
+        public readonly array $queueIds = [],
     ) {}
 
-    public static function accepted(?string $queueId = null, ?int $creditsRemaining = null, ?int $httpStatus = 200, array $body = []): self
+    public static function accepted(?string $queueId = null, ?int $creditsRemaining = null, ?int $httpStatus = 200, array $body = [], array $queueIds = []): self
     {
-        return new self(self::ACCEPTED, null, $httpStatus, $queueId, $creditsRemaining, null, null, $body);
+        return new self(self::ACCEPTED, null, $httpStatus, $queueId, $creditsRemaining, null, null, $body, $queueIds);
     }
 
     public static function rejected(string $reason, ?int $httpStatus = null, ?string $detail = null, ?int $retryAfter = null, array $body = []): self

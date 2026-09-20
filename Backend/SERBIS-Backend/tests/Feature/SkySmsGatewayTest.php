@@ -456,6 +456,37 @@ class SkySmsGatewayTest extends TestCase
 
     // ---- bulk ------------------------------------------------------------
 
+    public function test_bulk_reads_every_queue_id_and_the_credits_from_the_real_reply(): void
+    {
+        // Captured from a live send on 2026-09-20.
+        Http::fake([self::HOST => Http::response([
+            'success' => true,
+            'total' => 2,
+            'queue_ids' => [233895, 233896],
+            'message' => 'SMS messages queued for delivery',
+            'payment_method' => 'credits',
+            'credits_used' => 2,
+            'cost_per_sms' => 1,
+            'credits_remaining' => 997,
+        ], 201)]);
+
+        $result = $this->gateway()->sendBulk(['09171234567', '09171234568'], 'Advisory');
+
+        $this->assertTrue($result->isAccepted());
+        $this->assertSame(['233895', '233896'], $result->queueIds);
+        $this->assertNull($result->queueId);
+        $this->assertSame(997, $result->creditsRemaining);
+    }
+
+    public function test_a_reply_without_queue_ids_leaves_the_list_empty(): void
+    {
+        Http::fake([self::HOST => Http::response(['success' => true, 'batch_id' => 'b-9'], 200)]);
+
+        $result = $this->gateway()->sendBulk(['09171234567'], 'Advisory');
+
+        $this->assertSame([], $result->queueIds);
+    }
+
     public function test_bulk_posts_recipients_deduplicated_and_normalised(): void
     {
         Http::fake([self::HOST => Http::response(['success' => true, 'batch_id' => 'b-9'], 200)]);
