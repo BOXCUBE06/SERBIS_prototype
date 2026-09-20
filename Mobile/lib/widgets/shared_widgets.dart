@@ -345,7 +345,11 @@ class IconBadge extends StatelessWidget {
 class StatusBadge extends StatelessWidget {
   final ReqStatus status;
   final bool filipino;
-  const StatusBadge(this.status, {super.key, this.filipino = false});
+
+  /// Overrides the wording, not the colours: a request that words its own
+  /// status (an approved program says "Approved") passes it in.
+  final String? label;
+  const StatusBadge(this.status, {super.key, this.filipino = false, this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -353,7 +357,7 @@ class StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: status.bg, borderRadius: BorderRadius.circular(30)),
       child: Text(
-        status.labelFor(filipino).toUpperCase(),
+        (label ?? status.labelFor(filipino)).toUpperCase(),
         style: AppText.display(size: 10.5, weight: FontWeight.w700, color: status.fg, letterSpacing: .5),
       ),
     );
@@ -1113,8 +1117,8 @@ class _RequestUpdateTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   request.refNo.isEmpty
-                      ? request.status.labelFor(filipino)
-                      : '${request.status.labelFor(filipino)} · ${request.refNo}',
+                      ? request.statusLabelFor(filipino)
+                      : '${request.statusLabelFor(filipino)} · ${request.refNo}',
                   style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
                 ),
               ],

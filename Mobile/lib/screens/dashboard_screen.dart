@@ -120,7 +120,7 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          StatusBadge(activeRequest.status, filipino: f),
+                          StatusBadge(activeRequest.status, filipino: f, label: activeRequest.statusLabelFor(f)),
                         ],
                       ),
                       const SizedBox(height: 14),
@@ -142,7 +142,7 @@ class HomeScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(11),
                         decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                         child: Text(
-                          activeRequest.note ?? _statusMessage(f, activeRequest.status),
+                          activeRequest.note ?? _statusMessage(f, activeRequest),
                           style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6),
                         ),
                       ),
@@ -301,10 +301,10 @@ class HomeScreen extends StatelessWidget {
     ];
   }
 
-  String _statusMessage(bool f, ReqStatus status) => switch (status) {
+  String _statusMessage(bool f, ServiceRequest request) => switch (request.status) {
         ReqStatus.review => tr(f, 'home.status.review'),
         ReqStatus.booked => tr(f, 'home.status.booked'),
-        ReqStatus.scheduled => tr(f, 'home.status.scheduled'),
+        ReqStatus.scheduled => tr(f, request.isProgram ? 'home.status.approved' : 'home.status.scheduled'),
         ReqStatus.completed => tr(f, 'home.status.completed'),
         ReqStatus.cancelled => tr(f, 'home.status.cancelled'),
         ReqStatus.disapproved => tr(f, 'home.status.disapproved'),

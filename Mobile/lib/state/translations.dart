@@ -14,6 +14,7 @@ const Map<String, (String, String)> _strings = {
   'timeline.review': ('Under review by MDRRMO', 'Sinusuri ng MDRRMO'),
   'timeline.booked': ('Booked by MDRRMO', 'Nakabook sa MDRRMO'),
   'timeline.responding': ('MDRRMO is responding', 'Tumutugon ang MDRRMO'),
+  'timeline.approved': ('Approved by MDRRMO', 'Inaprubahan ng MDRRMO'),
   'timeline.completed': ('Completed', 'Natapos'),
   'timeline.cancelled': ('Cancelled', 'Kinansela'),
   'timeline.disapproved': ('Not approved by MDRRMO', 'Hindi inaprubahan ng MDRRMO'),
@@ -24,6 +25,7 @@ const Map<String, (String, String)> _strings = {
   'status.review': ('Under review', 'Sinusuri'),
   'status.booked': ('Booked', 'Nakabook'),
   'status.scheduled': ('Scheduled', 'Naka-iskedyul'),
+  'status.approved': ('Approved', 'Aprubado'),
   'status.completed': ('Completed', 'Natapos'),
   'status.cancelled': ('Cancelled', 'Kinansela'),
   'status.disapproved': ('Not approved', 'Hindi inaprubahan'),
@@ -120,6 +122,12 @@ const Map<String, (String, String)> _strings = {
     'Your request has been scheduled. '
         "You'll be notified of any updates.",
     'Naka-iskedyul na ang iyong kahilingan. '
+        'Aabisuhan ka kung may update.',
+  ),
+  'home.status.approved': (
+    'MDRRMO has approved your request. '
+        "You'll be notified of any updates.",
+    'Inaprubahan na ng MDRRMO ang iyong kahilingan. '
         'Aabisuhan ka kung may update.',
   ),
   'home.status.completed': ('This request has been completed.', 'Natapos na ang kahilingang ito.'),

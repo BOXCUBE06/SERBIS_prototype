@@ -164,6 +164,7 @@ class AppState extends ChangeNotifier {
           serviceName: service.displayName(language == AppLanguage.filipino),
           // The code too: the icon, colour and type are keyed on it.
           serviceCode: service.code,
+          serviceCategory: service.category,
         );
       }
     }

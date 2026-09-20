@@ -11,6 +11,11 @@ import '../state/translations.dart';
 /// hides that there are remarks explaining the refusal.
 enum ReqStatus { review, booked, scheduled, completed, cancelled, disapproved }
 
+/// The `tbl_services.category` of the MDRRMO programs (trainings, drills,
+/// certification). No crew goes out for one, so the app says "Approved" where it
+/// would say "Scheduled" or "MDRRMO is responding".
+const kProgramsCategory = 'programs';
+
 extension ReqStatusX on ReqStatus {
   String get label {
     if (this == ReqStatus.review) {
@@ -253,11 +258,17 @@ class ServiceCatalogItem {
   /// generic form and the generic badge.
   final String code;
 
+  /// The office's own grouping (`tbl_services.category`): rescue, medical,
+  /// relief, infrastructure or programs. Null from a server that predates the
+  /// column. The app only asks whether it is [kProgramsCategory].
+  final String? category;
+
   const ServiceCatalogItem({
     required this.id,
     required this.name,
     this.code = '',
     this.description,
+    this.category,
   });
 
   /// The client-only "Others" tile appended after the real catalogue loads —
@@ -273,7 +284,8 @@ class ServiceCatalogItem {
       : id = othersId,
         name = 'Others',
         code = 'others',
-        description = 'Something not covered by the services above.';
+        description = 'Something not covered by the services above.',
+        category = null;
 
   bool get isOthers => id == othersId;
 
@@ -304,6 +316,7 @@ class ServiceCatalogItem {
       name: name,
       code: (json['code'] as String?) ?? '',
       description: json['description'] as String?,
+      category: json['category'] as String?,
     );
   }
 
@@ -546,6 +559,11 @@ class ServiceRequest {
   /// instead. Such a row shows the neutral badge until the next fetch.
   final String? serviceCode;
 
+  /// The service's category, resolved the same way as [serviceCode]. Only
+  /// consulted to word the status of a program request; null until the row has
+  /// been matched to the catalogue (or from a server without the column).
+  final String? serviceCategory;
+
   /// The ambulance booking's own window start, distinct from [createdAt] (when
   /// it was filed). Null means "as soon as you can" — an ordinary, unscheduled
   /// request, which is every request this app has ever sent. Deliberately a
@@ -568,6 +586,7 @@ class ServiceRequest {
     this.updatedAt,
     this.serviceName,
     this.serviceCode,
+    this.serviceCategory,
     this.scheduledAt,
   });
 
@@ -579,6 +598,19 @@ class ServiceRequest {
       status == ReqStatus.booked &&
       scheduledAt != null &&
       scheduledAt!.isBefore(DateTime.now());
+
+  /// A program request (training, drill, certification). Display only: it
+  /// changes what the status is called, never what it is.
+  bool get isProgram => serviceCategory == kProgramsCategory;
+
+  /// Whether the office has agreed to this request and is carrying it out. The
+  /// server's Responding maps to [ReqStatus.scheduled] in this app.
+  bool get isApprovedProgram => isProgram && status == ReqStatus.scheduled;
+
+  /// The status as the resident reads it. A program the office has approved
+  /// says "Approved"; everything else keeps [ReqStatus.labelFor].
+  String statusLabelFor(bool filipino) =>
+      isApprovedProgram ? tr(filipino, 'status.approved') : status.labelFor(filipino);
 
   bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
 
@@ -673,7 +705,7 @@ class ServiceRequest {
         return [
           submitted,
           TimelineStep(
-            tr(filipino, 'timeline.responding'),
+            tr(filipino, isProgram ? 'timeline.approved' : 'timeline.responding'),
             movedLabel,
             RequestStepState.current,
           ),
@@ -722,6 +754,7 @@ class ServiceRequest {
     DateTime? updatedAt,
     String? serviceName,
     String? serviceCode,
+    String? serviceCategory,
   }) {
     return ServiceRequest(
       id: id ?? this.id,
@@ -733,6 +766,7 @@ class ServiceRequest {
           : type,
       serviceName: serviceName ?? this.serviceName,
       serviceCode: serviceCode ?? this.serviceCode,
+      serviceCategory: serviceCategory ?? this.serviceCategory,
       refNo: refNo,
       status: status ?? this.status,
       metaLines: metaLines ?? this.metaLines,
@@ -768,6 +802,9 @@ class ServiceRequest {
     final serviceCode = service is Map<String, dynamic>
         ? service['code'] as String?
         : null;
+    final serviceCategory = service is Map<String, dynamic>
+        ? service['category'] as String?
+        : null;
 
     final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
     final status = getStatusFromText(statusText);
@@ -789,6 +826,7 @@ class ServiceRequest {
           : serviceTypeForServiceCode(serviceCode),
       serviceName: serviceName,
       serviceCode: serviceCode,
+      serviceCategory: serviceCategory,
       refNo: id != null ? 'SR-$id' : '',
       status: status,
       metaLines: description == null ? [] : [description],
@@ -822,6 +860,7 @@ extension ServiceRequestCache on ServiceRequest {
         'updated_at': updatedAt?.toIso8601String(),
         'service_name': serviceName,
         'service_code': serviceCode,
+        'service_category': serviceCategory,
         'scheduled_at': scheduledAt?.toIso8601String(),
       };
 
@@ -860,6 +899,8 @@ extension ServiceRequestCache on ServiceRequest {
       // row reads back with a neutral badge and the next fetch relabels it,
       // which is preferable to reviving the name-keyed lookup for one release.
       serviceCode: json['service_code'] as String?,
+      // Absent in a cache written before this existed; the next fetch fills it.
+      serviceCategory: json['service_category'] as String?,
       // Same tolerance as service_code: a row cached by a build before this
       // feature existed has no 'scheduled_at' key at all. json['scheduled_at']
       // reads as null rather than throwing, so that row comes back as an

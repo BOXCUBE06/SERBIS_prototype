@@ -267,7 +267,7 @@ class _RequestCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                StatusBadge(request.status, filipino: filipino),
+                StatusBadge(request.status, filipino: filipino, label: request.statusLabelFor(filipino)),
               ],
             ),
             const SizedBox(height: 12),
