@@ -62,6 +62,19 @@ class InfoMaterial {
     );
   }
 
+  /// "Name — Role" for the verifier, or null when the material is not verified
+  /// or the server sent neither. Unverified reads as nothing at all, even if a
+  /// stale name were present.
+  String? get verifierLabel {
+    if (!verified) return null;
+
+    final label = [verifiedByName, verifiedByRole]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(' — ');
+
+    return label.isEmpty ? null : label;
+  }
+
   static DateTime? _dateOf(Object? value) {
     if (value is! String || value.isEmpty) return null;
     return DateTime.tryParse(value)?.toLocal();

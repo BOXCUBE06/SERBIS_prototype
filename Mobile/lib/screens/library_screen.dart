@@ -415,6 +415,15 @@ class _MaterialRow extends StatelessWidget {
                           ],
                         ],
                       ),
+                      // Named on the row, not only in the badge's tooltip, which
+                      // a touch screen shows on a long-press nobody knows to do.
+                      if (material.verifierLabel case final who?) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          filipino ? 'Sinuri ni $who' : 'Verified by $who',
+                          style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                        ),
+                      ],
                     ],
                   ),
                 ),
