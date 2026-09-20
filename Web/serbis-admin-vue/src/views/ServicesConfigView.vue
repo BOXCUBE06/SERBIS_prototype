@@ -220,6 +220,18 @@
             @blur="touched.name = true"
           ></v-text-field>
 
+          <v-select
+            v-model="form.category"
+            :items="categoryChoices"
+            label="Category *"
+            hint="Groups this service in the list. Programs are approved without dispatching a unit."
+            persistent-hint
+            variant="outlined"
+            density="comfortable"
+            rounded="lg"
+            class="mb-4"
+          ></v-select>
+
           <v-textarea
             v-model="form.description"
             label="Description"
@@ -268,9 +280,9 @@ import PageHeader from '@/components/PageHeader.vue'
 
 const API = `${API_BASE}/services`
 
-// Categories are derived from the service name — the API stores no category
-// column. They group a long list and drive the filter; every row also shows the
-// category as text, so nothing is conveyed by colour alone.
+// A service's category is a column the office sets in the edit form. It groups
+// a long list and drives the filter; every row also shows the category as
+// text, so nothing is conveyed by colour alone.
 const categories = {
   rescue: { key: 'rescue', label: 'Rescue', color: 'error', icon: 'mdi-lifebuoy' },
   medical: { key: 'medical', label: 'Medical', color: 'info', icon: 'mdi-medical-bag' },
@@ -311,7 +323,7 @@ const initialLoad = ref(true)
 const apiError = ref('')
 
 const modal = ref({ show: false, loading: false, error: '', targetId: null })
-const form = ref({ service_name: '', description: '' })
+const form = ref({ service_name: '', description: '', category: 'relief' })
 const touched = ref({ name: false })
 const togglingId = ref(null)
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -319,17 +331,14 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
-const categoryOf = (item) => {
-  const n = (item.service_name || '').toLowerCase()
-  if (/(training|seminar|drill|nsed|certif)/.test(n)) return categories.programs
-  if (/(medical|ambulance|health|first aid)/.test(n)) return categories.medical
-  if (/(rescue|evacuat|search|fire|sandbag)/.test(n)) return categories.rescue
-  if (/(road|power|line|debris|clearing|repair|water|infrastructure)/.test(n)) return categories.infrastructure
-  return categories.relief
-}
+// Read off the column, never the name. An unknown or missing value shows as Relief,
+// the same fallback the API's column default uses.
+const categoryOf = (item) => categories[item.category] ?? categories.relief
 const category = categoryOf
 
 const categoryOptions = ['All', 'Rescue', 'Medical', 'Relief', 'Infrastructure', 'Programs']
+// The edit form's dropdown: the same five, as value/label pairs.
+const categoryChoices = Object.values(categories).map((c) => ({ title: c.label, value: c.key }))
 
 const serviceIcon = (name) => {
   const n = (name || '').toLowerCase()
@@ -399,7 +408,7 @@ const fetchServices = async () => {
 }
 
 const openEdit = (item) => {
-  form.value = { service_name: item.service_name || '', description: item.description || '' }
+  form.value = { service_name: item.service_name || '', description: item.description || '', category: item.category || 'relief' }
   touched.value = { name: false }
   modal.value = { show: true, loading: false, error: '', targetId: item.service_id || item.id }
 }
@@ -417,6 +426,7 @@ const saveService = async () => {
   const payload = {
     service_name: form.value.service_name.trim(),
     description: form.value.description.trim() || null,
+    category: form.value.category,
   }
   try {
     const res = await fetch(`${API}/${modal.value.targetId}`, {

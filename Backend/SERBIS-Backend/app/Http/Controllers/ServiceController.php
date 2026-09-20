@@ -9,6 +9,7 @@ use App\Models\ServiceAudience;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ServiceController extends Controller
 {
@@ -48,6 +49,8 @@ class ServiceController extends Controller
         $validated = $request->validate([
             'service_name' => 'required|string|max:255',
             'description' => 'nullable|string|max:5000',
+            // Omitted means the column default (relief); the panel always sends it.
+            'category' => ['sometimes', 'required', Rule::in(Service::CATEGORIES)],
         ]);
 
         $service = Service::create($validated);
@@ -77,6 +80,7 @@ class ServiceController extends Controller
         $validated = $request->validate([
             'service_name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string|max:5000',
+            'category' => ['sometimes', 'required', Rule::in(Service::CATEGORIES)],
             'is_active' => 'sometimes|required|boolean',
         ]);
 

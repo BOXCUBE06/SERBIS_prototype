@@ -1344,12 +1344,11 @@ const itemsPerPage = ref(10)
 const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
 const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
 
-// The MDRRMO programs (trainings, drills, certification). No unit ever goes out
-// for one, so the queue shows a plain Approve/Disapprove instead of the
-// dispatch panel. Matched on the stable service code, like the line above, and
-// not on the Programs category label, which is only derived from the name.
-const PROGRAM_SERVICE_CODES = ['drrm-trainings-and-seminars', 'simulation-drills-nsed', 'mdrrmo-certification']
-const isProgramRequest = (r) => PROGRAM_SERVICE_CODES.includes(r?.service?.code)
+// The MDRRMO programs (trainings, drills, certification): services whose
+// category is Programs. No unit ever goes out for one, so the queue shows a
+// plain Approve/Disapprove instead of the dispatch panel. Read off the service's
+// category column, so the office can move a service in or out in Manage Services.
+const isProgramRequest = (r) => r?.service?.category === 'programs'
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
 const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })

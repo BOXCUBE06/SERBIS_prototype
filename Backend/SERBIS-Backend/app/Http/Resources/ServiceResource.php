@@ -29,6 +29,8 @@ class ServiceResource extends JsonResource
             'code' => $this->code,
             'service_name' => $this->service_name,
             'description' => $this->description,
+            // Set in Manage Services; groups the list and marks the programs.
+            'category' => $this->category,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
