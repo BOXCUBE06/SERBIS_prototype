@@ -40,12 +40,12 @@ class ResidentContactChangeTest extends TestCase
         Mail::fake();
         // test_the_next_login_has_to_verify_the_new_address reaches
         // issueSignupCode(), and phpunit.xml sets a PHILSMS_TOKEN precisely so
-        // the OTP takes its real SMS path. PhilSMS has no sandbox, so an
+        // the OTP takes its real SMS path. SkySMS has no sandbox, so an
         // escaped request is a real call to the vendor — preventStrayRequests()
         // turns that into a test failure instead.
         Http::preventStrayRequests();
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
         ]);
 
         $this->home = Barangay::create(['barangay_name' => 'San Fabian']);
@@ -163,8 +163,8 @@ class ResidentContactChangeTest extends TestCase
 
         // Proves the setUp() fake is load-bearing rather than decorative: this
         // path really does reach a vendor send, so an unfaked run of this test
-        // would be a live call to PhilSMS, which has no sandbox.
-        Http::assertSent(fn ($request) => str_contains($request->url(), 'philsms.com'));
+        // would be a live call to SkySMS, which has no sandbox.
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'skysms.skyio.site'));
     }
 
     /** Changing the phone number is not an email change, so verification survives it. */

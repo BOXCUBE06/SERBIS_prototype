@@ -15,7 +15,7 @@ use Tests\TestCase;
  * repeats and only the loose 20/min-per-IP fallback ever engaged — and being
  * per-minute, it resets forever, so a script sitting at 20/min could create
  * an unbounded number of `tbl_residents` rows (and, for a real-looking
- * number, bill real PhilSMS sends) over a day with nothing to stop it.
+ * number, bill real SkySMS sends) over a day with nothing to stop it.
  *
  * The 'register' limiter (AppServiceProvider::boot()) is IP-only with two
  * tiers: a fast per-minute burst cap and the actual fix, a per-hour
@@ -32,9 +32,9 @@ class RegisterThrottleTest extends TestCase
     {
         parent::setUp();
 
-        // register() texts an OTP through PhilSMS, which has no sandbox — an
+        // register() texts an OTP through SkySMS, which has no sandbox — an
         // escaped request here would be a billed real send.
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }

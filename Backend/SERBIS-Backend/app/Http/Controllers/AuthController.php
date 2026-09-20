@@ -6,7 +6,7 @@ use App\Mail\ResidentLoginCode;
 use App\Mail\ResidentVerificationCode;
 use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
-use App\Services\PhilSms;
+use App\Services\Sms\SmsGateway;
 use App\Services\Totp;
 use App\Support\PhoneNumber;
 use Illuminate\Http\Request;
@@ -417,33 +417,34 @@ class AuthController extends Controller
             return false;
         }
 
-        try {
-            $response = app(PhilSms::class)->send(
-                [$phone],
-                "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
-            );
+        $result = app(SmsGateway::class)->sendOne(
+            $phone,
+            "Your SERBIS verification code is {$code}. It expires in ".Resident::CODE_TTL_MINUTES.' minutes.',
+        );
 
-            if (PhilSms::accepted($response)) {
-                return true;
-            }
+        if ($result->isAccepted()) {
+            return true;
+        }
 
-            // No resident_id to log: there is no row yet, and the address is not
-            // going in a log line to make up for it.
-            Log::warning('OTP SMS failed, falling back to email', [
-                'status' => $response->status(),
-            ]);
-
-            return false;
-        } catch (\Throwable $e) {
-            // See sendLoginCode() for why this is treated as delivered rather
-            // than falling to the (production-dead, MAIL_MAILER=log) email path:
-            // the request timing out does not mean PhilSMS never sent it.
-            Log::warning('OTP SMS threw, treating as delivered', [
-                'error' => $e->getMessage(),
-            ]);
+        if ($result->isUnknown()) {
+            // See sendLoginCode() for why this still opens the code screen
+            // rather than falling to the (production-dead, MAIL_MAILER=log)
+            // email path. It is recorded as UNKNOWN, not delivered: the
+            // request timing out does not mean the vendor never sent it, and
+            // it does not mean it did.
+            Log::warning('OTP SMS send outcome unknown (timed out); showing the code screen, delivery unconfirmed');
 
             return true;
         }
+
+        // No resident_id to log: there is no row yet, and the address is not
+        // going in a log line to make up for it.
+        Log::warning('OTP SMS rejected, falling back to email', [
+            'reason' => $result->reason,
+            'status' => $result->httpStatus,
+        ]);
+
+        return false;
     }
 
     /**
@@ -554,7 +555,7 @@ class AuthController extends Controller
      */
     private function smsIsUsable(?string $phone): bool
     {
-        return PhilSms::configured()
+        return app(SmsGateway::class)->configured()
             && PhoneNumber::normalize((string) $phone) !== '';
     }
 
@@ -1256,37 +1257,38 @@ class AuthController extends Controller
         }
 
         if ($this->smsIsUsable($resident->phone_number)) {
-            try {
-                $response = app(PhilSms::class)->send(
-                    [$resident->phone_number],
-                    "Your SERBIS login code is {$code}. It expires in 5 minutes.",
-                );
+            $result = app(SmsGateway::class)->sendOne(
+                $resident->phone_number,
+                "Your SERBIS login code is {$code}. It expires in 5 minutes.",
+            );
 
-                if (PhilSms::accepted($response)) {
-                    return ['channel' => 'sms', 'challenge_id' => $challengeId];
-                }
+            if ($result->isAccepted()) {
+                return ['channel' => 'sms', 'challenge_id' => $challengeId];
+            }
 
-                Log::warning('Login OTP SMS failed, falling back to email', [
-                    'resident_id' => $resident->resident_id,
-                ]);
-            } catch (\Throwable $e) {
+            if ($result->isUnknown()) {
                 // Not a rejection — the request itself never completed (timeout,
-                // dropped connection), which on this vendor almost always means
-                // PhilSMS received and sent the text before the response leg
-                // failed. MAIL_MAILER=log in production (render.yaml) makes the
-                // email fallback below a dead end — it writes to a log file, not
-                // an inbox — so treating this as a real rejection would tell a
-                // resident who already has the code on their phone to go check
-                // an email that will never arrive. Report it delivered instead;
-                // the code sent is the same one this response's challenge checks
-                // against either way.
-                Log::warning('Login OTP SMS threw, treating as delivered', [
+                // dropped connection), which means the vendor may have taken and
+                // sent the text before the response leg failed.
+                // MAIL_MAILER=log in production makes the email fallback below a
+                // dead end — it writes to a log file, not an inbox — so treating
+                // this as a rejection would tell a resident who may already have
+                // the code on their phone to go check an email that will never
+                // arrive. The code screen opens, with Resend; the send is
+                // recorded as UNKNOWN, not delivered. The code sent is the same
+                // one this response's challenge checks against either way.
+                Log::warning('Login OTP SMS send outcome unknown (timed out); showing the code screen, delivery unconfirmed', [
                     'resident_id' => $resident->resident_id,
-                    'error' => $e->getMessage(),
                 ]);
 
                 return ['channel' => 'sms', 'challenge_id' => $challengeId];
             }
+
+            Log::warning('Login OTP SMS rejected, falling back to email', [
+                'resident_id' => $resident->resident_id,
+                'reason' => $result->reason,
+                'status' => $result->httpStatus,
+            ]);
         }
 
         Mail::to($resident->email_address)->send(

@@ -51,10 +51,10 @@ class ResidentLoginStatusTest extends TestCase
         parent::setUp();
 
         // Login now ends in an SMS-challenge step (see AuthController::residentLogin);
-        // PhilSMS has no sandbox, so the vendor is faked the same way
+        // SkySMS has no sandbox, so the vendor is faked the same way
         // ResidentEmailVerificationTest fakes it for the signup code.
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => fn () => Http::response(['status' => 'success'], 200),
         ]);
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }

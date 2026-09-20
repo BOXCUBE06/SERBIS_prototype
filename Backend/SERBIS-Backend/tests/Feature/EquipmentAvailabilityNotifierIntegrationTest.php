@@ -91,7 +91,7 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
         ]);
         $this->equipment->update(['available_quantity' => 0]);
 
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$active->getKey()}", [
@@ -107,7 +107,7 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
     {
         $waiting = $this->deniedForUnavailability($this->resident());
 
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->actingAs($this->admin)
             ->putJson("/api/equipments/{$this->equipment->getKey()}", ['available_quantity' => 3])

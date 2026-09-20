@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
+use App\Services\Sms\PacedSender;
+use App\Services\Sms\SmsGateway;
+use App\Services\Sms\SmsMessagePolicy;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Log;
 
@@ -32,7 +35,10 @@ class EquipmentAvailabilityNotifier
 
     public function __construct(
         private readonly Fcm $fcm,
-        private readonly PhilSms $philSms,
+        private readonly SmsGateway $gateway,
+        // One per notifier, so the two-second spacing between texts is
+        // measured across the whole loop over waiting borrowers.
+        private readonly PacedSender $sender,
     ) {}
 
     public function notifyIfAvailable(Equipment $equipment): void
@@ -62,7 +68,7 @@ class EquipmentAvailabilityNotifier
             ['borrow_id' => (string) $borrowing->borrow_id],
         );
 
-        if (! PhilSms::configured()) {
+        if (! $this->gateway->configured()) {
             return;
         }
 
@@ -71,21 +77,14 @@ class EquipmentAvailabilityNotifier
             return;
         }
 
-        try {
-            $response = $this->philSms->send([$number], $this->smsMessage($equipment));
+        $result = $this->sender->send($number, $this->smsMessage($equipment));
 
-            if (! PhilSms::accepted($response)) {
-                Log::warning('Availability reconfirm SMS not accepted, will retry next restock', [
-                    'borrow_id' => $borrowing->borrow_id,
-                    'status' => $response->status(),
-                ]);
-
-                return;
-            }
-        } catch (\Throwable $e) {
-            Log::error('Availability reconfirm SMS failed, will retry next restock', [
+        if (! $result->isAccepted()) {
+            Log::warning('Availability reconfirm SMS not accepted, will retry next restock', [
                 'borrow_id' => $borrowing->borrow_id,
-                'error' => $e->getMessage(),
+                'outcome' => $result->outcome,
+                'reason' => $result->reason,
+                'status' => $result->httpStatus,
             ]);
 
             return;
@@ -101,8 +100,12 @@ class EquipmentAvailabilityNotifier
 
     private function smsMessage(Equipment $equipment): string
     {
-        return 'SERBIS: '.$this->itemName($equipment).' is available again. Still need it? '
-            .'Request it from the app — your earlier request was not carried over.';
+        // ASCII only: the em dash this text used to carry is outside GSM-7 and
+        // would have moved it to 70 characters a segment. The item name is
+        // typed by staff and can hold curly quotes, so it goes through the same
+        // swap.
+        return 'SERBIS: '.SmsMessagePolicy::toGsmSafe($this->itemName($equipment)).' is available again. Still need it? '
+            .'Request it from the app - your earlier request was not carried over.';
     }
 
     private function pushBody(Equipment $equipment): string

@@ -6,10 +6,12 @@ use App\Mail\ResidentVerificationCode;
 use App\Models\Barangay;
 use App\Models\Resident;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -18,7 +20,7 @@ use Tests\TestCase;
  * Email verification on resident sign-up.
  *
  * Asked for by the adviser. It began as SMS, moved to email while no OTP-capable
- * SMS API was sourced, and is back on SMS now that PhilSMS is wired up: a
+ * SMS API was sourced, and is back on SMS now that SkySMS is wired up: a
  * resident registering on a phone reads the code without leaving the handset.
  * Mail is the fallback for a number the vendor cannot dial, so both paths are
  * covered below. The column is still email_verified_at whichever channel
@@ -52,14 +54,30 @@ class ResidentEmailVerificationTest extends TestCase
      */
     private string $smsStatus = 'success';
 
+    /** Makes the faked host never answer, as a timeout would. */
+    private bool $smsTimesOut = false;
+
+    /** Makes the faked host answer 402, as an empty credit balance does. */
+    private bool $smsOutOfCredits = false;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Mail::fake();
-        // PhilSMS has no sandbox. An escaped request is a billed real send.
+        // SkySMS has no sandbox. An escaped request is a billed real send.
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => Http::response(['status' => $this->smsStatus], 200),
+            'skysms.skyio.site/*' => function () {
+                if ($this->smsTimesOut) {
+                    throw new ConnectionException('cURL error 28: timed out');
+                }
+
+                if ($this->smsOutOfCredits) {
+                    return Http::response(['message' => 'Insufficient credits'], 402);
+                }
+
+                return Http::response(['success' => $this->smsStatus === 'success'], 200);
+            },
         ]);
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }
@@ -78,7 +96,7 @@ class ResidentEmailVerificationTest extends TestCase
     }
 
     /**
-     * Every six-digit code PhilSMS was asked to text, oldest first. Read off the
+     * Every six-digit code SkySMS was asked to text, oldest first. Read off the
      * outgoing request bodies rather than storage, because what is stored is a
      * hash — the plain code exists only in the message.
      */
@@ -320,10 +338,37 @@ class ResidentEmailVerificationTest extends TestCase
         Mail::assertSent(ResidentVerificationCode::class);
     }
 
+    public function test_a_timed_out_text_opens_the_code_screen_and_is_logged_as_unknown(): void
+    {
+        Log::spy();
+        $this->smsTimesOut = true;
+
+        // Still the SMS channel: the vendor may well have sent it, and the
+        // email fallback is a log file in production.
+        $this->postJson('/api/register', $this->payload())
+            ->assertStatus(201)
+            ->assertJsonPath('channel', 'sms');
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn ($message) => str_contains($message, 'outcome unknown'))
+            ->once();
+        // Never recorded as delivered.
+        Log::shouldNotHaveReceived('warning', fn ($message) => str_contains($message, 'treating as delivered'));
+    }
+
+    public function test_an_out_of_credits_text_falls_back_to_email(): void
+    {
+        $this->smsOutOfCredits = true;
+
+        $this->postJson('/api/register', $this->payload())
+            ->assertStatus(201)
+            ->assertJsonPath('channel', 'email');
+    }
+
     public function test_a_rejected_text_falls_back_to_email(): void
     {
-        // PhilSMS answers some rejections with a 200 carrying status "error",
-        // which is why the controller cannot treat a 200 as delivery.
+        // SkySMS can answer a 200 carrying success:false, which is why the
+        // gateway cannot treat a 200 as acceptance.
         $this->smsStatus = 'error';
 
         $this->postJson('/api/register', $this->payload())

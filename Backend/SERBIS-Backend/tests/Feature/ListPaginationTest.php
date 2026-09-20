@@ -36,7 +36,7 @@ use Tests\TestCase;
  * Checking for a `data` key would not.
  *
  * Http::preventStrayRequests() is inherited discipline from SmsHistoryTest —
- * PhilSMS has no sandbox, so an escaped request is a billed real send.
+ * SkySMS has no sandbox, so an escaped request is a billed real send.
  */
 class ListPaginationTest extends TestCase
 {

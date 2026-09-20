@@ -32,8 +32,8 @@ class RegisterAccountTypeTest extends TestCase
         parent::setUp();
 
         Mail::fake();
-        // PhilSMS has no sandbox: an escaped request is a billed real send.
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        // SkySMS has no sandbox: an escaped request is a billed real send.
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }

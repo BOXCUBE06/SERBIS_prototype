@@ -8,6 +8,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Services\EquipmentAvailabilityNotifier;
+use App\Services\Sms\SmsMessagePolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -89,7 +90,7 @@ class EquipmentAvailabilityNotifierTest extends TestCase
         $this->equipment->update(['available_quantity' => 2]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -98,6 +99,32 @@ class EquipmentAvailabilityNotifierTest extends TestCase
         Http::assertSent(fn ($sent) => isset($sent['message']['notification'])
             && str_contains($sent['message']['notification']['body'], 'Rubber Boat'));
         $this->assertNotNull($borrowing->fresh()->availability_reconfirm_sent_at);
+    }
+
+    public function test_the_text_is_plain_ascii_and_fits_one_segment_for_a_typical_item(): void
+    {
+        $resident = $this->resident();
+        $this->deniedForUnavailability($resident);
+        $this->equipment->update(['available_quantity' => 2]);
+
+        $sent = null;
+        Http::fake([
+            'skysms.skyio.site/*' => function ($request) use (&$sent) {
+                $sent = $request['message'];
+
+                return Http::response(['success' => true], 200);
+            },
+            'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
+        ]);
+
+        app(EquipmentAvailabilityNotifier::class)->notifyIfAvailable($this->equipment->fresh());
+
+        $this->assertNotNull($sent);
+        // The em dash this text used to carry is outside GSM-7, which would
+        // have halved the room in every segment.
+        $this->assertSame([], SmsMessagePolicy::nonGsmCharacters($sent));
+        $this->assertLessThanOrEqual(160, mb_strlen($sent));
+        $this->assertFalse(SmsMessagePolicy::containsLink($sent));
     }
 
     public function test_does_nothing_while_still_out_of_stock(): void
@@ -145,7 +172,7 @@ class EquipmentAvailabilityNotifierTest extends TestCase
         $this->equipment->update(['available_quantity' => 2]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response([
                 'error' => ['status' => 'UNAVAILABLE', 'message' => 'Server is overloaded.'],
             ], 503),
@@ -164,7 +191,7 @@ class EquipmentAvailabilityNotifierTest extends TestCase
         $this->equipment->update(['available_quantity' => 2]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200),
+            'skysms.skyio.site/*' => Http::response(['success' => false], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 

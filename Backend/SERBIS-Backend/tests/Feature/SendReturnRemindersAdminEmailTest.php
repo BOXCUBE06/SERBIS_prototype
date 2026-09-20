@@ -19,7 +19,7 @@ use Tests\TestCase;
  * serbis:send-return-reminders — the admin-side email added alongside the
  * existing resident push/SMS (MDRRMO feedback, 2026-09-18). Independent in
  * both directions: a mail failure must not block the resident's own channels
- * from marking a borrowing sent, and PhilSMS being unconfigured must not
+ * from marking a borrowing sent, and SkySMS being unconfigured must not
  * silence this email.
  */
 class SendReturnRemindersAdminEmailTest extends TestCase
@@ -91,7 +91,7 @@ class SendReturnRemindersAdminEmailTest extends TestCase
     public function test_active_admins_are_emailed_a_summary_of_what_is_due_tomorrow(): void
     {
         Mail::fake();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
@@ -105,7 +105,7 @@ class SendReturnRemindersAdminEmailTest extends TestCase
     public function test_nothing_due_tomorrow_sends_no_email(): void
     {
         Mail::fake();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         // Due today, not tomorrow — outside this email's scope.
         $this->released($this->resident(), now()->format('Y-m-d'));
@@ -118,7 +118,7 @@ class SendReturnRemindersAdminEmailTest extends TestCase
     public function test_a_deactivated_admin_is_not_emailed(): void
     {
         Mail::fake();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->admin->update(['status' => 'Deactivated']);
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
@@ -128,12 +128,12 @@ class SendReturnRemindersAdminEmailTest extends TestCase
         Mail::assertNothingSent();
     }
 
-    /** The independent-failure rule, admin-email direction: PhilSMS being down must not silence the office's own copy. */
-    public function test_the_admin_email_still_sends_when_philsms_is_not_configured(): void
+    /** The independent-failure rule, admin-email direction: SkySMS being down must not silence the office's own copy. */
+    public function test_the_admin_email_still_sends_when_skysms_is_not_configured(): void
     {
         Mail::fake();
-        // No Http::fake for PhilSMS and no token configured — PhilSms::configured() is false.
-        config(['services.philsms.token' => null]);
+        // No Http::fake for SkySMS and no token configured — PhilSms::configured() is false.
+        config(['services.skysms.api_key' => null]);
 
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
@@ -146,7 +146,7 @@ class SendReturnRemindersAdminEmailTest extends TestCase
     public function test_a_mail_failure_does_not_block_the_resident_reminder_from_being_marked_sent(): void
     {
         Mail::shouldReceive('to')->andThrow(new \RuntimeException('SMTP connection refused'));
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 

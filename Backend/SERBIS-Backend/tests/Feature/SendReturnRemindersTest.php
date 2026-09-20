@@ -6,8 +6,12 @@ use App\Models\Barangay;
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Services\Sms\PacedSender;
+use App\Services\Sms\SmsGateway;
+use App\Services\Sms\SmsMessagePolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -15,7 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
- * serbis:send-return-reminders — PhilSMS has no sandbox, so every test here
+ * serbis:send-return-reminders — SkySMS has no sandbox, so every test here
  * fakes the host rather than letting a real send happen, same as the
  * ServiceRequest approve/reject/reschedule tests.
  */
@@ -81,7 +85,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_sends_a_reminder_for_a_borrowing_due_tomorrow_and_marks_it_sent(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
@@ -96,7 +100,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_sends_a_reminder_for_a_borrowing_due_today(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->released($this->resident(), now()->format('Y-m-d'));
 
@@ -107,7 +111,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_a_borrowing_already_reminded_is_never_texted_twice(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
@@ -119,7 +123,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_skips_a_borrowing_that_has_already_been_returned(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'), [
             'status' => 'Returned',
@@ -137,7 +141,7 @@ class SendReturnRemindersTest extends TestCase
         // A 200 carrying status "error" — PhilSms::accepted() treats this as
         // a rejection, not a success, same as ServiceRequestController's own
         // sends.
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['success' => false], 200)]);
 
         $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
@@ -149,7 +153,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_a_thrown_exception_leaves_the_row_unmarked_for_retry(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out')]);
+        Http::fake(['skysms.skyio.site/*' => fn () => throw new ConnectionException('Connection timed out')]);
 
         $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
@@ -160,7 +164,7 @@ class SendReturnRemindersTest extends TestCase
 
     public function test_skips_a_borrowing_with_no_reachable_phone_number(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         // Bypasses the registration-time PHONE_REGEX rule on purpose — see
         // PhilSms::PHONE_REGEX's own note that rows written before the rule
@@ -176,17 +180,17 @@ class SendReturnRemindersTest extends TestCase
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
     }
 
-    public function test_missing_philsms_config_logs_one_warning_and_exits_non_zero(): void
+    public function test_missing_skysms_config_logs_one_warning_and_exits_non_zero(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
-        Config::set('services.philsms.token', null);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
+        Config::set('services.skysms.api_key', null);
 
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
         $this->released($this->resident('09172222222'), now()->format('Y-m-d'));
 
         Log::shouldReceive('warning')
             ->once()
-            ->with('PhilSMS not configured, 2 reminder(s) skipped');
+            ->with('SkySMS not configured, 2 reminder(s) skipped');
 
         // This class creates no admin User at all, so the office-email side
         // of the reminder has nobody to send to — same real behavior as a
@@ -206,14 +210,14 @@ class SendReturnRemindersTest extends TestCase
         // Keyed on the recipient in the request body, not call order, since
         // EquipmentBorrowing::get() makes no ordering guarantee here.
         Http::fake(function ($request) {
-            $rejected = str_contains((string) $request['recipient'], '639172222222');
+            $rejected = str_contains((string) $request['phone_number'], '639172222222');
 
-            return Http::response(['status' => $rejected ? 'error' : 'success'], 200);
+            return Http::response(['success' => ! $rejected], 200);
         });
 
         // Sent.
         $this->released($this->resident('09171111111'), now()->addDay()->format('Y-m-d'));
-        // Failed — rejected by PhilSMS, left unmarked.
+        // Failed — rejected by SkySMS, left unmarked.
         $this->released($this->resident('09172222222'), now()->addDay()->format('Y-m-d'));
         // Skipped — no usable number.
         $this->released($this->resident('not-a-phone'), now()->addDay()->format('Y-m-d'));
@@ -223,9 +227,90 @@ class SendReturnRemindersTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_reminders_are_spaced_two_seconds_apart(): void
+    {
+        // 30 texts a minute is the account's ceiling, shared with every other
+        // send, so a loop of reminders must not run flat out.
+        config(['services.skysms.pace_seconds' => 2]);
+        $slept = [];
+        // A named closure, not an arrow function: an arrow function captures
+        // $slept by value, so the sleeper inside would fill a copy.
+        $this->app->bind(PacedSender::class, function ($app) use (&$slept) {
+            return new PacedSender(
+                $app->make(SmsGateway::class),
+                function (float $seconds) use (&$slept) {
+                    $slept[] = $seconds;
+                },
+            );
+        });
+
+        Http::fake(['skysms.skyio.site/*' => Http::response(['success' => true], 200)]);
+
+        foreach (['09171111111', '09172222222', '09173333333'] as $phone) {
+            $this->released($this->resident($phone), now()->addDay()->format('Y-m-d'));
+        }
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        Http::assertSentCount(3);
+        $this->assertSame([2.0, 2.0], $slept);
+    }
+
+    public function test_a_429_is_retried_with_backoff_and_the_row_is_marked_once_it_goes_through(): void
+    {
+        config(['services.skysms.retry_base_seconds' => 2]);
+        $slept = [];
+        // A named closure, not an arrow function: an arrow function captures
+        // $slept by value, so the sleeper inside would fill a copy.
+        $this->app->bind(PacedSender::class, function ($app) use (&$slept) {
+            return new PacedSender(
+                $app->make(SmsGateway::class),
+                function (float $seconds) use (&$slept) {
+                    $slept[] = $seconds;
+                },
+            );
+        });
+
+        Http::fake(['skysms.skyio.site/*' => Http::sequence()
+            ->push(['message' => 'slow down'], 429)
+            ->push(['message' => 'slow down'], 429)
+            ->push(['success' => true], 200)]);
+
+        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        Http::assertSentCount(3);
+        $this->assertSame([2.0, 4.0], $slept);
+        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+    }
+
+    public function test_a_long_item_name_is_trimmed_with_plain_dots_and_stays_in_one_segment(): void
+    {
+        $this->released($this->resident(), now()->addDay()->format('Y-m-d'), [
+            'equipment_id' => null,
+            'other_equipment_text' => str_repeat("Inflatable rescue boat with a curly \u{2019}quote ", 5),
+        ]);
+
+        $sent = null;
+        Http::fake(function ($request) use (&$sent) {
+            $sent = $request['message'];
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        $this->assertNotNull($sent);
+        $this->assertLessThanOrEqual(160, mb_strlen($sent));
+        $this->assertStringContainsString('... is due back tomorrow (Sep 11).', $sent);
+        $this->assertSame([], SmsMessagePolicy::nonGsmCharacters($sent), 'The reminder must stay inside GSM-7.');
+        $this->assertFalse(SmsMessagePolicy::containsLink($sent));
+    }
+
     public function test_respects_manila_date_boundaries_not_utc(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         // 23:30 UTC on the 11th is already 07:30 on the 12th in Manila
         // (UTC+8, no DST) — "today" in the office's own day is the 12th, not

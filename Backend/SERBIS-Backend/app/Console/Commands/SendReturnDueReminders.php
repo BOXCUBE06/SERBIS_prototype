@@ -7,7 +7,9 @@ use App\Models\AmbulanceBooking;
 use App\Models\EquipmentBorrowing;
 use App\Models\User;
 use App\Services\Fcm;
-use App\Services\PhilSms;
+use App\Services\Sms\PacedSender;
+use App\Services\Sms\SmsGateway;
+use App\Services\Sms\SmsMessagePolicy;
 use App\Support\PhoneNumber;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -58,7 +60,7 @@ class SendReturnDueReminders extends Command
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
-    /** One billed PhilSMS segment. Matches ServiceRequestController's cap. */
+    /** One billed SMS segment: 160 GSM-7 characters is one credit. */
     private const SMS_SEGMENT_LIMIT = 160;
 
     /** Shown as the notification's title on every push this command sends, matching the two controllers. */
@@ -104,9 +106,9 @@ class SendReturnDueReminders extends Command
         // config value (the token), never a fact about one row, and a
         // missing token means every row in the window is equally unreachable
         // — one warning naming the count, not N identical per-row log lines.
-        if (! PhilSms::configured()) {
+        if (! app(SmsGateway::class)->configured()) {
             $total = $borrowings->count() + $bookings->count();
-            Log::warning("PhilSMS not configured, {$total} reminder(s) skipped");
+            Log::warning("SkySMS not configured, {$total} reminder(s) skipped");
             $this->summary(sent: 0, failed: 0, skippedNoNumber: 0, skippedNotConfigured: $total);
 
             return self::FAILURE;
@@ -115,6 +117,10 @@ class SendReturnDueReminders extends Command
         $sent = 0;
         $failed = 0;
         $skippedNoNumber = 0;
+
+        // One sender for the whole run, so its two-second spacing is measured
+        // across every reminder — the account allows 30 texts a minute.
+        $this->sender = app(PacedSender::class);
 
         foreach ($borrowings as $borrowing) {
             match ($this->remind($borrowing, $today, $now)) {
@@ -180,6 +186,8 @@ class SendReturnDueReminders extends Command
         }
     }
 
+    private PacedSender $sender;
+
     private const OUTCOME_SENT = 'sent';
 
     private const OUTCOME_FAILED = 'failed';
@@ -217,29 +225,26 @@ class SendReturnDueReminders extends Command
             ['borrow_id' => (string) $borrowing->borrow_id],
         );
 
-        // PhilSms::configured() is checked once in handle(), before this is
-        // ever called — a missing token is a fact about the run, not this row.
+        // The gateway's configured() check runs once in handle(), before this
+        // is ever called — a missing key is a fact about the run, not this row.
         $number = PhoneNumber::normalize((string) $borrowing->resident->phone_number);
 
         if ($number === '') {
             return self::OUTCOME_SKIPPED;
         }
 
-        try {
-            $response = app(PhilSms::class)->send([$number], $this->reminderMessage($borrowing, $today));
+        $result = $this->sender->send($number, $this->reminderMessage($borrowing, $today));
 
-            if (! PhilSms::accepted($response)) {
-                Log::warning('Return-due reminder SMS not accepted, will retry', [
-                    'borrow_id' => $borrowing->borrow_id,
-                    'status' => $response->status(),
-                ]);
-
-                return self::OUTCOME_FAILED;
-            }
-        } catch (\Throwable $e) {
-            Log::error('Return-due reminder SMS failed, will retry', [
+        if (! $result->isAccepted()) {
+            // Rejected and unknown both leave the row unmarked. An unknown send
+            // may have gone out, so the next run can text this person twice; a
+            // resident hearing a reminder twice is the cheaper mistake than
+            // one hearing nothing.
+            Log::warning('Return-due reminder SMS not accepted, will retry', [
                 'borrow_id' => $borrowing->borrow_id,
-                'error' => $e->getMessage(),
+                'outcome' => $result->outcome,
+                'reason' => $result->reason,
+                'status' => $result->httpStatus,
             ]);
 
             return self::OUTCOME_FAILED;
@@ -275,21 +280,14 @@ class SendReturnDueReminders extends Command
             return self::OUTCOME_SKIPPED;
         }
 
-        try {
-            $response = app(PhilSms::class)->send([$number], $this->bookingReminderMessage($booking, $today));
+        $result = $this->sender->send($number, $this->bookingReminderMessage($booking, $today));
 
-            if (! PhilSms::accepted($response)) {
-                Log::warning('Scheduled-booking reminder SMS not accepted, will retry', [
-                    'request_id' => $booking->request_id,
-                    'status' => $response->status(),
-                ]);
-
-                return self::OUTCOME_FAILED;
-            }
-        } catch (\Throwable $e) {
-            Log::error('Scheduled-booking reminder SMS failed, will retry', [
+        if (! $result->isAccepted()) {
+            Log::warning('Scheduled-booking reminder SMS not accepted, will retry', [
                 'request_id' => $booking->request_id,
-                'error' => $e->getMessage(),
+                'outcome' => $result->outcome,
+                'reason' => $result->reason,
+                'status' => $result->httpStatus,
             ]);
 
             return self::OUTCOME_FAILED;
@@ -313,11 +311,15 @@ class SendReturnDueReminders extends Command
         $prefix = 'SERBIS: your borrowed ';
         $suffix = " is due back {$when} ({$borrowing->due_date->format('M j')}).";
 
-        $itemName = $borrowing->equipment->item_name ?? $borrowing->other_equipment_text ?? 'item';
+        // Curly quotes and the like are swapped for plain ASCII: one character
+        // outside GSM-7 turns the whole text into a 70-character-per-segment
+        // message. The ellipsis below is three ASCII dots for the same reason,
+        // and counted as three.
+        $itemName = SmsMessagePolicy::toGsmSafe($borrowing->equipment->item_name ?? $borrowing->other_equipment_text ?? 'item');
         $budget = self::SMS_SEGMENT_LIMIT - mb_strlen($prefix) - mb_strlen($suffix);
 
         if (mb_strlen($itemName) > $budget) {
-            $itemName = mb_substr($itemName, 0, max($budget - 1, 0)).'…';
+            $itemName = mb_substr($itemName, 0, max($budget - 3, 0)).'...';
         }
 
         return $prefix.$itemName.$suffix;

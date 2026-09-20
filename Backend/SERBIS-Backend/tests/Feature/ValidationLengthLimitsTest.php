@@ -47,9 +47,9 @@ class ValidationLengthLimitsTest extends TestCase
 
         Storage::fake('local');
 
-        // register() texts an OTP through PhilSMS, which has no sandbox — an
+        // register() texts an OTP through SkySMS, which has no sandbox — an
         // escaped request here would be a billed real send.
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->admin = User::create([
             'first_name' => 'MDRRMO',

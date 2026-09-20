@@ -108,7 +108,7 @@ class SendScheduledBookingRemindersTest extends TestCase
         ]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -135,7 +135,7 @@ class SendScheduledBookingRemindersTest extends TestCase
         ]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response([
                 'error' => ['status' => 'UNAVAILABLE', 'message' => 'Server is overloaded.'],
             ], 503),
@@ -160,7 +160,7 @@ class SendScheduledBookingRemindersTest extends TestCase
         ]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200),
+            'skysms.skyio.site/*' => Http::response(['success' => false], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -176,7 +176,7 @@ class SendScheduledBookingRemindersTest extends TestCase
     public function test_a_walk_in_booking_with_no_resident_is_skipped_entirely(): void
     {
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -194,7 +194,7 @@ class SendScheduledBookingRemindersTest extends TestCase
         $resident = $this->resident();
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -212,7 +212,7 @@ class SendScheduledBookingRemindersTest extends TestCase
         $resident = $this->resident();
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -231,7 +231,7 @@ class SendScheduledBookingRemindersTest extends TestCase
         $resident = $this->resident();
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 

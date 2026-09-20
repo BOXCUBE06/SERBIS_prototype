@@ -27,7 +27,7 @@ class ResidentAccountPayloadTest extends TestCase
         parent::setUp();
 
         Mail::fake();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Miguel']);
     }

@@ -50,10 +50,10 @@ class InputBoundsTest extends TestCase
         parent::setUp();
 
         Storage::fake(config('filesystems.uploads.private'));
-        // store() texts nothing, but approve()/reschedule() notify over PhilSMS,
+        // store() texts nothing, but approve()/reschedule() notify over SkySMS,
         // which has no sandbox — an escaped request is a billed real send.
         Http::preventStrayRequests();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
 

@@ -97,7 +97,7 @@ class SendReturnRemindersPushTest extends TestCase
         ]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -144,7 +144,7 @@ class SendReturnRemindersPushTest extends TestCase
         ]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
             'fcm.googleapis.com/*' => Http::response([
                 'error' => ['status' => 'UNAVAILABLE', 'message' => 'Server is overloaded.'],
             ], 503),
@@ -169,7 +169,7 @@ class SendReturnRemindersPushTest extends TestCase
         ]);
 
         Http::fake([
-            'dashboard.philsms.com/*' => Http::response(['status' => 'error'], 200),
+            'skysms.skyio.site/*' => Http::response(['success' => false], 200),
             'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
         ]);
 
@@ -188,7 +188,7 @@ class SendReturnRemindersPushTest extends TestCase
     {
         $resident = $this->resident();
 
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $borrowing = $this->released($resident, now()->addDay()->format('Y-m-d'));
 

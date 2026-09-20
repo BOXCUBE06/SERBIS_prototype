@@ -205,7 +205,7 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     /** Probe 3: an ambulance booking's real lifecycle — Booked -> Responding -> Resolved with a complete trip. */
     public function test_ambulance_booked_to_responding_to_resolved_with_a_complete_trip_record(): void
     {
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $ambulanceVehicle = Vehicle::create([
             'unit_identifier' => 'AMB-01',

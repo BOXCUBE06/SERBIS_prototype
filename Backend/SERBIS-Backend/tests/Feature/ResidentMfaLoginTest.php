@@ -32,7 +32,7 @@ class ResidentMfaLoginTest extends TestCase
 
         Mail::fake();
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => Http::response(['status' => $this->smsStatus], 200),
+            'skysms.skyio.site/*' => fn () => Http::response(['status' => $this->smsStatus], 200),
         ]);
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
     }

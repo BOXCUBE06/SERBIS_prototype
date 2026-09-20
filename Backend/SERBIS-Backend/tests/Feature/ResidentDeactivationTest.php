@@ -41,12 +41,12 @@ class ResidentDeactivationTest extends TestCase
     {
         parent::setUp();
 
-        // PhilSMS has no sandbox. Faked here and asserted against below: one of
+        // SkySMS has no sandbox. Faked here and asserted against below: one of
         // these tests exists precisely to prove the deactivation refusal costs
         // no billed message.
         Http::preventStrayRequests();
         Http::fake([
-            'dashboard.philsms.com/*' => fn () => Http::response(['status' => 'success'], 200),
+            'skysms.skyio.site/*' => fn () => Http::response(['status' => 'success'], 200),
         ]);
 
         $this->barangay = Barangay::create(['barangay_name' => 'San Fabian']);
@@ -230,7 +230,7 @@ class ResidentDeactivationTest extends TestCase
 
     /**
      * The refusal is placed above the unverified-email branch in residentLogin,
-     * not below it, because that branch calls issueSignupCode(). PhilSMS bills
+     * not below it, because that branch calls issueSignupCode(). SkySMS bills
      * every send and has no sandbox, so gating afterwards would let repeated
      * logins against a closed account run up a real bill. Asserted rather than
      * described — the placement is invisible in a diff read later.
@@ -249,7 +249,7 @@ class ResidentDeactivationTest extends TestCase
         $this->assertCount(
             0,
             Http::recorded(),
-            'A deactivated login must not reach PhilSMS — every send is billed.',
+            'A deactivated login must not reach SkySMS — every send is billed.',
         );
     }
 }

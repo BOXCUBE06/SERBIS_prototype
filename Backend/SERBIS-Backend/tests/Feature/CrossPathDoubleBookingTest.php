@@ -38,7 +38,7 @@ class CrossPathDoubleBookingTest extends TestCase
         parent::setUp();
 
         Http::preventStrayRequests();
-        Http::fake(['dashboard.philsms.com/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $this->admin = User::create([
             'first_name' => 'Ana',
