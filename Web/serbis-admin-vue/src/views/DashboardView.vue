@@ -8,7 +8,11 @@
         <v-menu location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
-              <v-badge color="error" dot v-if="systemLogs.length > 0">
+              <!-- A count when staff have someone to ring, a plain dot for activity. -->
+              <v-badge v-if="followUps.length > 0" color="error" :content="followUps.length">
+                <v-icon>mdi-bell-outline</v-icon>
+              </v-badge>
+              <v-badge color="error" dot v-else-if="systemLogs.length > 0">
                 <v-icon>mdi-bell-outline</v-icon>
               </v-badge>
               <v-icon v-else>mdi-bell-outline</v-icon>
@@ -16,6 +20,25 @@
           </template>
           <v-card min-width="320" elevation="4" rounded="lg" class="border">
             <v-list density="compact" class="pa-0">
+              <!-- Push-only notices that reached nobody (equipment due-back
+                   reminders and available-again notices). There is no text behind
+                   them, so this is how staff learn whom to ring. -->
+              <template v-if="followUps.length > 0">
+                <v-list-subheader class="font-weight-bold text-uppercase py-2">Follow up by phone</v-list-subheader>
+                <v-divider></v-divider>
+                <v-list-item v-for="(item, i) in followUps" :key="'follow-'+i" class="py-3 border-b">
+                  <template v-slot:prepend>
+                    <v-avatar color="warning" variant="tonal" size="32" class="mr-3">
+                      <v-icon color="warning" size="small">mdi-phone-alert-outline</v-icon>
+                    </v-avatar>
+                  </template>
+                  <v-list-item-title class="text-body-2 font-weight-bold">{{ item.name }} &bull; {{ item.phone }}</v-list-item-title>
+                  <v-list-item-subtitle class="text-caption">{{ item.what }}: no registered device</v-list-item-subtitle>
+                  <template v-slot:append>
+                    <span class="text-caption text-medium-emphasis">{{ item.time }}</span>
+                  </template>
+                </v-list-item>
+              </template>
               <v-list-subheader class="font-weight-bold text-uppercase py-2">System Logs</v-list-subheader>
               <v-divider></v-divider>
               <template v-if="systemLogs.length > 0">
@@ -440,6 +463,7 @@ const kpiStats = ref([])
 const serviceRequests = ref([])
 const borrowRequests = ref([])
 const systemLogs = ref([])
+const followUps = ref([])
 const loading = ref(true)
 
 const chartDataRaw = ref(null)
@@ -515,6 +539,7 @@ const fetchDashboardData = async () => {
     serviceRequests.value = data.serviceRequests || []
     borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
+    followUps.value = data.followUps || []
     mapDataByPeriod.value = data.mapDataByPeriod || {}
     walkInByPeriod.value = data.walkInByPeriod || {}
     totalsByPeriod.value = data.totalsByPeriod || {}

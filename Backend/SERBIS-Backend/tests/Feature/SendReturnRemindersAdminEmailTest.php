@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Tests\Concerns\FakesFcm;
 use Tests\TestCase;
 
 /**
@@ -24,6 +25,7 @@ use Tests\TestCase;
  */
 class SendReturnRemindersAdminEmailTest extends TestCase
 {
+    use FakesFcm;
     use RefreshDatabase;
 
     private Equipment $equipment;
@@ -146,9 +148,12 @@ class SendReturnRemindersAdminEmailTest extends TestCase
     public function test_a_mail_failure_does_not_block_the_resident_reminder_from_being_marked_sent(): void
     {
         Mail::shouldReceive('to')->andThrow(new \RuntimeException('SMTP connection refused'));
-        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
+        $this->configureFcm();
+        Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
 
-        $borrowing = $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
+        $resident = $this->resident();
+        $this->deviceFor($resident);
+        $borrowing = $this->released($resident, now()->addDay()->format('Y-m-d'));
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 

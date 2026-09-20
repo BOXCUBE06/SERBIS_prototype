@@ -7,21 +7,23 @@ use App\Models\DeviceToken;
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Services\Fcm;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\FakesFcm;
 use Tests\TestCase;
 
 /**
- * serbis:send-return-reminders — the push channel added alongside the
- * existing SMS one. The two fail independently: neither's outcome is
- * allowed to affect the other, and only an accepted SMS send may set
- * return_reminder_sent_at — see the command's own class docblock.
+ * serbis:send-return-reminders — what the equipment push itself carries and how
+ * each device outcome is treated. Marking, windows and staff follow-ups are in
+ * SendReturnRemindersTest.
  */
 class SendReturnRemindersPushTest extends TestCase
 {
+    use FakesFcm;
     use RefreshDatabase;
 
     private Equipment $equipment;
@@ -31,6 +33,7 @@ class SendReturnRemindersPushTest extends TestCase
         parent::setUp();
 
         Http::preventStrayRequests();
+        $this->configureFcm();
 
         Carbon::setTestNow(Carbon::parse('2026-09-10 09:00:00', 'Asia/Manila'));
 
@@ -40,16 +43,6 @@ class SendReturnRemindersPushTest extends TestCase
             'available_quantity' => 3,
             'status' => 'Available',
         ]);
-
-        Cache::put('fcm_access_token', 'fake-access-token', 3000);
-
-        $path = tempnam(sys_get_temp_dir(), 'fcm_test_');
-        file_put_contents($path, json_encode([
-            'client_email' => 'fake@serbis-test.iam.gserviceaccount.com',
-            'private_key' => "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n",
-            'project_id' => 'serbis-test-project',
-        ]));
-        config(['services.firebase.credentials' => $path]);
     }
 
     protected function tearDown(): void
@@ -74,127 +67,105 @@ class SendReturnRemindersPushTest extends TestCase
         ]);
     }
 
-    private function released(Resident $resident, string $dueDate, array $overrides = []): EquipmentBorrowing
+    private function released(Resident $resident): EquipmentBorrowing
     {
-        return EquipmentBorrowing::create(array_merge([
+        return EquipmentBorrowing::create([
             'resident_id' => $resident->getKey(),
             'equipment_id' => $this->equipment->getKey(),
             'quantity' => 1,
             'status' => 'Released',
-            'due_date' => $dueDate,
+            'due_date' => now()->addDay()->format('Y-m-d'),
             'released_at' => now(),
-        ], $overrides));
+        ]);
     }
 
-    public function test_pushes_and_texts_a_borrowing_due_tomorrow(): void
+    public function test_the_push_carries_the_title_the_body_and_the_borrow_id(): void
     {
         $resident = $this->resident();
-        DeviceToken::create([
-            'resident_id' => $resident->getKey(),
-            'token' => 'device-1',
-            'platform' => 'android',
-            'last_seen_at' => now(),
-        ]);
+        $this->deviceFor($resident);
+        Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
 
-        Http::fake([
-            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
-            'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
-        ]);
-
-        $this->released($resident, now()->addDay()->format('Y-m-d'));
+        $borrowing = $this->released($resident);
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
-        Http::assertSent(fn ($sent) => isset($sent['message']['notification'])
-            && str_contains($sent['message']['notification']['body'], 'Rubber Boat')
-            && str_contains($sent['message']['notification']['body'], 'due back tomorrow'));
+        Http::assertSent(fn (Request $request) => $request['message']['token'] === 'device-1'
+            && $request['message']['notification']['title'] === 'SERBIS'
+            && $request['message']['notification']['body'] === 'Your borrowed Rubber Boat is due back tomorrow (Sep 11). — MDRRMO Echague'
+            && $request['message']['data'] === ['borrow_id' => (string) $borrowing->borrow_id]);
     }
 
-    /** The resident has no SMS-reachable number, but the push is attempted anyway — the two channels do not gate each other. */
-    public function test_push_still_fires_when_the_resident_has_no_reachable_phone_number(): void
+    public function test_every_registered_device_is_pushed_to(): void
     {
-        $resident = $this->resident('not-a-phone');
-        DeviceToken::create([
-            'resident_id' => $resident->getKey(),
-            'token' => 'device-1',
-            'platform' => 'android',
-            'last_seen_at' => now(),
-        ]);
+        $resident = $this->resident();
+        $this->deviceFor($resident, 'phone');
+        $this->deviceFor($resident, 'tablet');
+        Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
 
-        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+        $this->released($resident);
 
-        $borrowing = $this->released($resident, now()->addDay()->format('Y-m-d'));
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
-        $this->artisan('serbis:send-return-reminders');
+        Http::assertSentCount(2);
+    }
 
-        Http::assertSent(fn ($sent) => isset($sent['message']['notification']));
-        // SMS was never reachable, so the row stays unmarked regardless of the push.
+    public function test_no_text_is_attempted_for_a_reminder(): void
+    {
+        $resident = $this->resident();
+        $this->deviceFor($resident);
+        Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
+
+        $this->released($resident);
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'skysms'));
+    }
+
+    public function test_a_dead_token_is_deleted_and_counts_as_no_device(): void
+    {
+        $resident = $this->resident();
+        $this->deviceFor($resident);
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['error' => ['status' => 'UNREGISTERED']], 404)]);
+
+        $borrowing = $this->released($resident);
+
+        $this->artisan('serbis:send-return-reminders')
+            ->expectsOutputToContain('1 not delivered (no registered device)')
+            ->assertExitCode(0);
+
+        $this->assertSame(0, DeviceToken::count(), 'FCM said the token will never work again');
         $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
     }
 
-    /** A push failure must not stop the SMS from sending or from marking the row. */
-    public function test_a_push_failure_does_not_affect_the_sms_side(): void
+    public function test_notify_resident_reports_how_many_devices_accepted(): void
     {
         $resident = $this->resident();
-        DeviceToken::create([
-            'resident_id' => $resident->getKey(),
-            'token' => 'device-1',
-            'platform' => 'android',
-            'last_seen_at' => now(),
-        ]);
+        $this->deviceFor($resident, 'good');
+        $this->deviceFor($resident, 'bad');
 
-        Http::fake([
-            'skysms.skyio.site/*' => Http::response(['status' => 'success'], 200),
-            'fcm.googleapis.com/*' => Http::response([
-                'error' => ['status' => 'UNAVAILABLE', 'message' => 'Server is overloaded.'],
-            ], 503),
-        ]);
+        Http::fake(['fcm.googleapis.com/*' => function (Request $request) {
+            return $request['message']['token'] === 'good' ? $this->fcmAccepts() : $this->fcmRefuses();
+        }]);
 
-        $borrowing = $this->released($resident, now()->addDay()->format('Y-m-d'));
-
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
-
-        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at, 'a push failure must not block the SMS side from marking the row sent');
+        $this->assertSame(1, app(Fcm::class)->notifyResident($resident->getKey(), 'SERBIS', 'Hello'));
+        $this->assertSame(0, app(Fcm::class)->notifyResident(null, 'SERBIS', 'Hello'));
+        $this->assertSame(0, app(Fcm::class)->notifyResident($this->resident('09172222222')->getKey(), 'SERBIS', 'Hello'));
     }
 
-    /** A rejected SMS still leaves the row unmarked even though the push succeeded — a successful push cannot mark it sent on its own. */
-    public function test_a_successful_push_does_not_mark_the_reminder_sent_when_the_sms_is_rejected(): void
+    public function test_a_broadcast_reaches_the_devices_after_one_that_fails(): void
     {
         $resident = $this->resident();
-        DeviceToken::create([
-            'resident_id' => $resident->getKey(),
-            'token' => 'device-1',
-            'platform' => 'android',
-            'last_seen_at' => now(),
-        ]);
+        $this->deviceFor($resident, 'bad');
+        $this->deviceFor($resident, 'good');
 
-        Http::fake([
-            'skysms.skyio.site/*' => Http::response(['success' => false], 200),
-            'fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200),
-        ]);
+        Http::fake(['fcm.googleapis.com/*' => function (Request $request) {
+            return $request['message']['token'] === 'good' ? $this->fcmAccepts() : $this->fcmRefuses();
+        }]);
 
-        $borrowing = $this->released($resident, now()->addDay()->format('Y-m-d'));
+        app(Fcm::class)->notifyAllResidents('SERBIS', 'Hello');
 
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
-
-        // The push went out (FCM responded 200)...
-        Http::assertSent(fn ($sent) => isset($sent['message']['notification']));
-        // ...but the row is unmarked because the SMS side was rejected.
-        $this->assertNull($borrowing->fresh()->return_reminder_sent_at);
-    }
-
-    /** A resident with no registered device gets the SMS with no push attempted against anything — notifyResident() no-ops on an empty token set, harmlessly. */
-    public function test_a_resident_with_no_device_token_still_gets_the_sms(): void
-    {
-        $resident = $this->resident();
-
-        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
-
-        $borrowing = $this->released($resident, now()->addDay()->format('Y-m-d'));
-
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
-
-        Http::assertSentCount(1);
-        $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+        // Both were tried: a failure on the first must not end the broadcast.
+        Http::assertSentCount(2);
     }
 }

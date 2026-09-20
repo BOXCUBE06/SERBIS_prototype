@@ -4,11 +4,7 @@ namespace App\Services;
 
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
-use App\Services\Sms\PacedSender;
-use App\Services\Sms\SmsGateway;
-use App\Services\Sms\SmsMessagePolicy;
-use App\Support\PhoneNumber;
-use Illuminate\Support\Facades\Log;
+use App\Support\ReminderFollowUp;
 
 /**
  * MDRRMO feedback, 2026-09-18: a resident denied for "the equipment is not
@@ -23,23 +19,17 @@ use Illuminate\Support\Facades\Log;
  * filing one — so the message points back at the same borrow screen rather
  * than adding a second way to say yes.
  *
- * Push and SMS fail independently, same shape as SendReturnDueReminders:
- * the push is attempted regardless of whether SMS is reachable, and
- * availability_reconfirm_sent_at is set only once the SMS is actually
- * accepted, so a resident whose number is wrong is asked again the next
- * time stock ticks up rather than never again.
+ * Push only. It used to text as well; that moved off SMS so the notice costs
+ * no credits, and there is no SMS fallback. availability_reconfirm_sent_at is
+ * set only once FCM accepts the push for at least one of the resident's
+ * devices, so a resident with no device is asked again the next time stock
+ * ticks up, and is put in front of staff (ReminderFollowUp) to ring instead.
  */
 class EquipmentAvailabilityNotifier
 {
     private const PUSH_TITLE = 'SERBIS';
 
-    public function __construct(
-        private readonly Fcm $fcm,
-        private readonly SmsGateway $gateway,
-        // One per notifier, so the two-second spacing between texts is
-        // measured across the whole loop over waiting borrowers.
-        private readonly PacedSender $sender,
-    ) {}
+    public function __construct(private readonly Fcm $fcm) {}
 
     public function notifyIfAvailable(Equipment $equipment): void
     {
@@ -61,31 +51,15 @@ class EquipmentAvailabilityNotifier
 
     private function notifyOne(EquipmentBorrowing $borrowing, Equipment $equipment): void
     {
-        $this->fcm->notifyResident(
+        $accepted = $this->fcm->notifyResident(
             $borrowing->resident_id,
             self::PUSH_TITLE,
             $this->pushBody($equipment),
             ['borrow_id' => (string) $borrowing->borrow_id],
         );
 
-        if (! $this->gateway->configured()) {
-            return;
-        }
-
-        $number = PhoneNumber::normalize((string) $borrowing->resident?->phone_number);
-        if ($number === '') {
-            return;
-        }
-
-        $result = $this->sender->send($number, $this->smsMessage($equipment));
-
-        if (! $result->isAccepted()) {
-            Log::warning('Availability reconfirm SMS not accepted, will retry next restock', [
-                'borrow_id' => $borrowing->borrow_id,
-                'outcome' => $result->outcome,
-                'reason' => $result->reason,
-                'status' => $result->httpStatus,
-            ]);
+        if ($accepted === 0) {
+            ReminderFollowUp::record($borrowing, ReminderFollowUp::AVAILABILITY);
 
             return;
         }
@@ -93,24 +67,8 @@ class EquipmentAvailabilityNotifier
         $borrowing->update(['availability_reconfirm_sent_at' => now()]);
     }
 
-    private function itemName(Equipment $equipment): string
-    {
-        return $equipment->item_name;
-    }
-
-    private function smsMessage(Equipment $equipment): string
-    {
-        // ASCII only: the em dash this text used to carry is outside GSM-7 and
-        // would have moved it to 70 characters a segment. The item name is
-        // typed by staff: curly quotes are swapped for ASCII, and a name that
-        // reads as a domain has its dots turned to spaces, so it cannot get the
-        // whole notice refused.
-        return 'SERBIS: '.SmsMessagePolicy::sanitizeName($this->itemName($equipment)).' is available again. Still need it? '
-            .'Request it from the app - your earlier request was not carried over.';
-    }
-
     private function pushBody(Equipment $equipment): string
     {
-        return $this->itemName($equipment).' is available again. Still need it? Request it from the app. — MDRRMO Echague';
+        return $equipment->item_name.' is available again. Still need it? Request it from the app. — MDRRMO Echague';
     }
 }

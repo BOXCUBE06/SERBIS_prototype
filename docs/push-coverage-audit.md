@@ -26,9 +26,12 @@ Two backend tables carry a status a resident cares about: `tbl_service_request` 
 | Equipment borrowing | Pending → Approved | No | No | No |
 | Equipment borrowing | Pending → Denied | No | No | No |
 | Equipment borrowing | Approved → Released (**ready for pickup** / handed over) | No | No | No |
-| Equipment borrowing | Released, **due tomorrow or today** (reminder, not a status transition) | No | **Yes** — `SendReturnDueReminders` command, PhilSMS only | No |
+| Equipment borrowing | Released, **due tomorrow or today** (reminder, not a status transition) | **Yes** — `SendReturnDueReminders`, push only since 2026-09-21 | No — moved off SMS; no fallback | No (a miss is a system-log row, see the note below) |
+| Equipment borrowing | Denied for "unavailable", stock comes back (**available again**) | **Yes** — `EquipmentAvailabilityNotifier`, push only since 2026-09-21 | No — moved off SMS; no fallback | No (a miss is a system-log row, see the note below) |
 | Equipment borrowing | Released → Returned (**completed**) | No | No | No |
 | Equipment borrowing | any → Cancelled | No | No | No |
+
+**Update 2026-09-21 — push-only notices.** The equipment due-back reminder and the available-again notice no longer send a text. The row is marked reminded (`return_reminder_sent_at`, `availability_reconfirm_sent_at`) only when FCM accepts the push for at least one of the resident's devices; otherwise it stays unmarked and is retried (the next daily run, at most twice; the next restock), and an `action_type = 'reminder_not_delivered'` row is written to `tbl_system_logs` (`App\Support\ReminderFollowUp`). The admin dashboard's bell lists those as "Follow up by phone" with the resident's name and number. "Accepted" is FCM's word, not proof it was shown: a resident who switched notifications off in the phone's own settings is accepted all the same. Ambulance booking reminders still send SMS and push.
 
 **Six of seven services get zero notification of any kind on any transition.** Ambulance gets push on 3 of its 6 transitions (the three that specifically involve a *scheduled* booking going through `approve()`/`reschedule()`, or a scheduled booking being rejected). Equipment borrowing gets exactly one notification, and it's a time-based reminder, not a status-change push — every borrowing status transition itself (approved, denied, released, returned) is silent.
 

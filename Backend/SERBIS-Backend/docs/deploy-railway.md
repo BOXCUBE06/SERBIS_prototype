@@ -215,6 +215,8 @@ start, cron run included.
   php artisan serbis:send-return-reminders && php artisan sanctum:prune-expired --hours=24
   ```
 
+What the reminders command needs: equipment due-back reminders are push only, so they need `FIREBASE_CREDENTIALS_BASE64` and nothing else. Ambulance booking reminders also text, so they need `SKYSMS_API_KEY`; without it the command skips the bookings, warns `SkySMS not configured, N booking reminder(s) skipped`, and exits 1 (equipment has already been pushed by then). A resident with no registered device is not retried by text: the run summary counts them ("not delivered (no registered device)") and each is written to the system log and listed in the dashboard bell for staff to phone.
+
 **This runs the two commands directly rather than `php artisan schedule:run`,
 and that is deliberate, not a shortcut.** `routes/console.php` schedules
 `send-return-reminders` at `dailyAt('08:00')->timezone('Asia/Manila')` and

@@ -57,16 +57,28 @@ class Fcm
      * (request_id, service_type) without putting either in the visible
      * title/body. No client reads this yet; nothing in the app deep-links
      * on it.
+     *
+     * Returns how many devices FCM accepted the push for. Zero means nobody was
+     * reached — no registered device, FCM not configured, or every send refused
+     * — which is what a caller with no other channel has to act on. Accepted is
+     * still not shown: a person who turned notifications off in the phone's own
+     * settings is accepted by FCM all the same.
      */
-    public function notifyResident(?int $residentId, string $title, string $body, array $data = []): void
+    public function notifyResident(?int $residentId, string $title, string $body, array $data = []): int
     {
         if ($residentId === null) {
-            return;
+            return 0;
         }
 
-        DeviceToken::where('resident_id', $residentId)
-            ->get()
-            ->each(fn (DeviceToken $deviceToken) => $this->sendToDevice($deviceToken, $title, $body, $data));
+        $accepted = 0;
+
+        foreach (DeviceToken::where('resident_id', $residentId)->get() as $deviceToken) {
+            if ($this->sendToDevice($deviceToken, $title, $body, $data)) {
+                $accepted++;
+            }
+        }
+
+        return $accepted;
     }
 
     /**
@@ -79,8 +91,11 @@ class Fcm
      */
     public function notifyAllResidents(string $title, string $body, array $data = []): void
     {
-        DeviceToken::all()
-            ->each(fn (DeviceToken $deviceToken) => $this->sendToDevice($deviceToken, $title, $body, $data));
+        // A foreach, not ->each(): sendToDevice() now returns false for a device
+        // it could not reach, and a collection's each() stops at the first false.
+        foreach (DeviceToken::all() as $deviceToken) {
+            $this->sendToDevice($deviceToken, $title, $body, $data);
+        }
     }
 
     /**
@@ -94,8 +109,10 @@ class Fcm
      * outcome that changes anything on our side: the row is deleted so
      * nothing keeps sending to a device that will never answer again. Every
      * other failure leaves it alone, since it might still be good next time.
+     *
+     * True only when FCM accepted the message for this device.
      */
-    public function sendToDevice(DeviceToken $deviceToken, string $title, string $body, array $data = []): void
+    public function sendToDevice(DeviceToken $deviceToken, string $title, string $body, array $data = []): bool
     {
         if (! self::configured()) {
             // The one branch that used to leave zero trace: every other
@@ -110,7 +127,7 @@ class Fcm
                     : 'FIREBASE_CREDENTIALS is not set',
             ]);
 
-            return;
+            return false;
         }
 
         try {
@@ -125,7 +142,7 @@ class Fcm
                     'message_name' => $response->json('name'),
                 ]);
 
-                return;
+                return true;
             }
 
             if ($this->tokenIsDead($response)) {
@@ -139,7 +156,7 @@ class Fcm
 
                 $deviceToken->delete();
 
-                return;
+                return false;
             }
 
             Log::warning('FCM send not accepted', [
@@ -153,6 +170,8 @@ class Fcm
                 'error' => $e->getMessage(),
             ]);
         }
+
+        return false;
     }
 
     private function post(string $token, string $title, string $body, array $data = []): Response

@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\FakesFcm;
 use Tests\TestCase;
 
 /**
@@ -21,6 +22,7 @@ use Tests\TestCase;
  */
 class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
 {
+    use FakesFcm;
     use RefreshDatabase;
 
     private User $admin;
@@ -32,6 +34,7 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
         parent::setUp();
 
         Http::preventStrayRequests();
+        $this->configureFcm();
 
         $this->admin = User::create([
             'first_name' => 'Ana',
@@ -52,9 +55,9 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
 
     private function resident(string $phone = '09171111111'): Resident
     {
-        $barangay = Barangay::create(['barangay_name' => 'San Antonio Ugad']);
+        $barangay = Barangay::firstOrCreate(['barangay_name' => 'San Antonio Ugad']);
 
-        return Resident::create([
+        $resident = Resident::create([
             'barangay_id' => $barangay->barangay_id,
             'first_name' => 'Maria',
             'last_name' => 'Santos',
@@ -63,6 +66,10 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
             'password' => Hash::make('password123'),
             'status' => 'Active',
         ]);
+
+        $this->deviceFor($resident, 'device-'.$resident->getKey());
+
+        return $resident;
     }
 
     private function deniedForUnavailability(Resident $resident): EquipmentBorrowing
@@ -91,7 +98,7 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
         ]);
         $this->equipment->update(['available_quantity' => 0]);
 
-        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
 
         $this->actingAs($this->admin)
             ->putJson("/api/borrowings/{$active->getKey()}", [
@@ -107,7 +114,7 @@ class EquipmentAvailabilityNotifierIntegrationTest extends TestCase
     {
         $waiting = $this->deniedForUnavailability($this->resident());
 
-        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
+        Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
 
         $this->actingAs($this->admin)
             ->putJson("/api/equipments/{$this->equipment->getKey()}", ['available_quantity' => 3])

@@ -11,6 +11,8 @@ use App\Models\Vehicle;
 use App\Support\AnalyticsCache;
 use App\Support\AnalyticsReport;
 use App\Support\BarangayRequestCounts;
+use App\Support\PhoneNumber;
+use App\Support\ReminderFollowUp;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -195,6 +197,22 @@ class AnalyticsController extends Controller
                     ];
                 });
 
+            // Push-only notices that reached no device (ReminderFollowUp). With no
+            // SMS behind them, this list is how staff learn whom to ring. Three
+            // days, so a Friday miss is still here on Monday.
+            $followUps = SystemLog::with('resident:resident_id,first_name,last_name,phone_number')
+                ->where('action_type', ReminderFollowUp::ACTION)
+                ->where('created_at', '>=', now()->subDays(3))
+                ->latest()
+                ->take(10)
+                ->get()
+                ->map(fn ($log) => [
+                    'name' => $log->resident ? trim($log->resident->first_name.' '.$log->resident->last_name) : 'Unknown resident',
+                    'phone' => $log->resident ? PhoneNumber::display((string) $log->resident->phone_number) : '',
+                    'what' => ReminderFollowUp::LABELS[$log->new_values['kind'] ?? ''] ?? 'Reminder',
+                    'time' => $log->created_at->format('M j, h:i A'),
+                ]);
+
             // Sections 5-7 aggregate in the database and return counts, not rows.
             // Every construct below is standard SQL that MySQL and Postgres both
             // accept: JOIN, COUNT(*), GROUP BY on real columns, and
@@ -317,6 +335,7 @@ class AnalyticsController extends Controller
                 'serviceRequests' => $serviceRequests,
                 'borrowRequests' => $borrowRequests,
                 'systemLogs' => $systemLogs,
+                'followUps' => $followUps,
                 'mapDataByPeriod' => $mapDataByPeriod,
                 // Requests that carry no barangay at all, per period, and the
                 // reconciled section total. The panel prints both beside the

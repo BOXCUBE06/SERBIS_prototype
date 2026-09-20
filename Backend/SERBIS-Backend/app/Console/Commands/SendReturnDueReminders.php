@@ -9,8 +9,8 @@ use App\Models\User;
 use App\Services\Fcm;
 use App\Services\Sms\PacedSender;
 use App\Services\Sms\SmsGateway;
-use App\Services\Sms\SmsMessagePolicy;
 use App\Support\PhoneNumber;
+use App\Support\ReminderFollowUp;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -20,27 +20,24 @@ use Illuminate\Support\Facades\Mail;
 /**
  * Week 7 item 3, extended to every request type with a date to remind about
  * (MDRRMO feedback, 2026-09-17): equipment due back today or tomorrow, and a
- * confirmed ambulance booking scheduled today or tomorrow. One SMS and one
- * push per row, in either case.
+ * confirmed ambulance booking scheduled today or tomorrow.
+ *
+ * The two kinds no longer share a channel:
+ * - Equipment is push only. return_reminder_sent_at is set once FCM accepts the
+ *   push for at least one of the resident's devices. A resident with none is
+ *   left unmarked, so the next run tries again (at most today and tomorrow ever
+ *   match, so twice, not forever), and is put in front of staff to ring
+ *   (ReminderFollowUp). There is no SMS fallback.
+ * - An ambulance booking is still SMS and push. The two fail independently and
+ *   neither gates the other: the push is attempted for every row, and
+ *   scheduled_reminder_sent_at is set only once SkySMS accepts the text — a
+ *   successful push never sets it on its own, and a rejected response or a
+ *   thrown exception leaves the row unmarked so the next run retries it. The
+ *   push has no marker and repeats on a retry; accepted here rather than adding
+ *   a second tracking column for a two-run-wide window.
  *
  * The other five services carry no due or scheduled date at all, so there is
  * nothing here for them to remind about.
- *
- * The two channels fail independently and neither gates the other, for both
- * kinds of row:
- * - The push is attempted for every row in the window, regardless of
- *   whether this resident even has an SMS-reachable number — Fcm::notifyResident()
- *   is itself a best-effort boundary (never throws, logs and swallows any
- *   failure), so it cannot affect what happens to the SMS side below it.
- * - Marked reminded (return_reminder_sent_at / scheduled_reminder_sent_at
- *   set) only once SkySMS actually accepts the send — a successful push
- *   never sets it on its own, and a rejected SMS response or a thrown
- *   exception leaves the row unmarked so the next run retries it, bounded by
- *   the date window above (at most today and tomorrow ever match, so a
- *   permanently-failing number is retried at most twice, not forever). The
- *   push has no such marker and is attempted again on every retry — a
- *   resident whose SMS keeps failing could get the push twice; accepted here
- *   rather than adding a second tracking column for a two-run-wide window.
  *
  * Ambulance bookings filed by a walk-in (no resident_id) are skipped
  * entirely: there is no app account to push to, and reaching them by SMS
@@ -51,7 +48,7 @@ class SendReturnDueReminders extends Command
 {
     protected $signature = 'serbis:send-return-reminders';
 
-    protected $description = 'Text and push-notify residents whose released equipment, or confirmed ambulance booking, falls due today or tomorrow';
+    protected $description = 'Push-notify residents whose released equipment is due, and text and push-notify those with a confirmed ambulance booking, today or tomorrow';
 
     /**
      * Named here rather than trusted from app.timezone (UTC) — same reasoning
@@ -59,9 +56,6 @@ class SendReturnDueReminders extends Command
      * against the office's own day, not the server's.
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
-
-    /** One billed SMS segment: 160 GSM-7 characters is one credit. */
-    private const SMS_SEGMENT_LIMIT = 160;
 
     /** Shown as the notification's title on every push this command sends, matching the two controllers. */
     private const PUSH_TITLE = 'SERBIS';
@@ -102,33 +96,36 @@ class SendReturnDueReminders extends Command
             $borrowings->filter(fn (EquipmentBorrowing $b) => $b->due_date->toDateString() === $tomorrow)
         );
 
+        $sent = 0;
+        $noDevice = 0;
+
+        // Equipment first, and whether or not SMS is configured: it is push
+        // only, and a missing SkySMS key has nothing to do with it.
+        foreach ($borrowings as $borrowing) {
+            match ($this->remind($borrowing, $today, $now)) {
+                self::OUTCOME_SENT => $sent++,
+                self::OUTCOME_NO_DEVICE => $noDevice++,
+            };
+        }
+
         // Checked once per run, not once per row: this reflects a global
         // config value (the token), never a fact about one row, and a
-        // missing token means every row in the window is equally unreachable
-        // — one warning naming the count, not N identical per-row log lines.
+        // missing token means every booking in the window is equally
+        // unreachable by text — one warning naming the count, not N identical
+        // per-row log lines. Only bookings are behind it.
         if (! app(SmsGateway::class)->configured()) {
-            $total = $borrowings->count() + $bookings->count();
-            Log::warning("SkySMS not configured, {$total} reminder(s) skipped");
-            $this->summary(sent: 0, failed: 0, skippedNoNumber: 0, skippedNotConfigured: $total);
+            Log::warning("SkySMS not configured, {$bookings->count()} booking reminder(s) skipped");
+            $this->summary($sent, 0, 0, $noDevice, skippedNotConfigured: $bookings->count());
 
             return self::FAILURE;
         }
 
-        $sent = 0;
         $failed = 0;
         $skippedNoNumber = 0;
 
         // One sender for the whole run, so its two-second spacing is measured
-        // across every reminder — the account allows 30 texts a minute.
+        // across every booking reminder — the account allows 30 texts a minute.
         $this->sender = app(PacedSender::class);
-
-        foreach ($borrowings as $borrowing) {
-            match ($this->remind($borrowing, $today, $now)) {
-                self::OUTCOME_SENT => $sent++,
-                self::OUTCOME_FAILED => $failed++,
-                self::OUTCOME_SKIPPED => $skippedNoNumber++,
-            };
-        }
 
         foreach ($bookings as $booking) {
             match ($this->remindBooking($booking, $today, $now)) {
@@ -138,7 +135,7 @@ class SendReturnDueReminders extends Command
             };
         }
 
-        $this->summary($sent, $failed, $skippedNoNumber, skippedNotConfigured: 0);
+        $this->summary($sent, $failed, $skippedNoNumber, $noDevice, skippedNotConfigured: 0);
 
         return self::SUCCESS;
     }
@@ -194,60 +191,43 @@ class SendReturnDueReminders extends Command
 
     private const OUTCOME_SKIPPED = 'skipped';
 
-    private function summary(int $sent, int $failed, int $skippedNoNumber, int $skippedNotConfigured): void
+    /** A push-only reminder that FCM accepted for no device: staff are told, the row stays unmarked. */
+    private const OUTCOME_NO_DEVICE = 'no_device';
+
+    private function summary(int $sent, int $failed, int $skippedNoNumber, int $noDevice, int $skippedNotConfigured): void
     {
         $this->info(
             "{$sent} sent, {$failed} failed (will retry), ".
             "{$skippedNoNumber} skipped (no usable number), ".
+            "{$noDevice} not delivered (no registered device), ".
             "{$skippedNotConfigured} skipped (not configured)."
         );
     }
 
     /**
-     * 'sent' only on an accepted send (marks the row so it is not retried).
-     * 'failed' (a rejected response or a thrown exception) and 'skipped' (no
-     * reachable number) both leave the row unmarked, so a resident who fixes
-     * their number, or a send that goes through next time, still gets
-     * reminded on a later run — the distinction is for the summary line
-     * only, both are retried identically.
+     * Push only. 'sent' once FCM has accepted the push for at least one device,
+     * which marks the row so it is not reminded again. 'no_device' means FCM
+     * reached nobody — no registered device, FCM unconfigured, or every device
+     * refused — and leaves the row unmarked so the next run tries again, with a
+     * follow-up for staff recorded. Accepted is not shown: a resident who has
+     * turned notifications off in the phone's own settings is accepted too.
      *
      * resident_id is a required, non-nullable FK on this table — unlike
-     * ServiceRequest, every borrowing has a resident to read a number from.
+     * ServiceRequest, every borrowing has a resident to push to.
      */
     private function remind(EquipmentBorrowing $borrowing, string $today, Carbon $now): string
     {
-        // Fired before the SMS channel below and never touches $borrowing —
-        // see the class docblock for why the two channels stay independent.
-        app(Fcm::class)->notifyResident(
+        $accepted = app(Fcm::class)->notifyResident(
             $borrowing->resident_id,
             self::PUSH_TITLE,
             $this->reminderPushBody($borrowing, $today),
             ['borrow_id' => (string) $borrowing->borrow_id],
         );
 
-        // The gateway's configured() check runs once in handle(), before this
-        // is ever called — a missing key is a fact about the run, not this row.
-        $number = PhoneNumber::normalize((string) $borrowing->resident->phone_number);
+        if ($accepted === 0) {
+            ReminderFollowUp::record($borrowing, ReminderFollowUp::DUE_REMINDER);
 
-        if ($number === '') {
-            return self::OUTCOME_SKIPPED;
-        }
-
-        $result = $this->sender->send($number, $this->reminderMessage($borrowing, $today));
-
-        if (! $result->isAccepted()) {
-            // Rejected and unknown both leave the row unmarked. An unknown send
-            // may have gone out, so the next run can text this person twice; a
-            // resident hearing a reminder twice is the cheaper mistake than
-            // one hearing nothing.
-            Log::warning('Return-due reminder SMS not accepted, will retry', [
-                'borrow_id' => $borrowing->borrow_id,
-                'outcome' => $result->outcome,
-                'reason' => $result->reason,
-                'status' => $result->httpStatus,
-            ]);
-
-            return self::OUTCOME_FAILED;
+            return self::OUTCOME_NO_DEVICE;
         }
 
         $borrowing->update(['return_reminder_sent_at' => $now]);
@@ -264,6 +244,9 @@ class SendReturnDueReminders extends Command
     {
         $residentId = $booking->serviceRequest->resident_id;
 
+        // Fired before the SMS channel below and never touches $booking's
+        // marker — see the class docblock for why the two channels stay
+        // independent here.
         app(Fcm::class)->notifyResident(
             $residentId,
             self::PUSH_TITLE,
@@ -298,39 +281,7 @@ class SendReturnDueReminders extends Command
         return self::OUTCOME_SENT;
     }
 
-    /**
-     * Equipment name and due date only. The name is the one part of this
-     * message with no length cap of its own — other_equipment_text is
-     * varchar(255) — so it is trimmed to whatever keeps the whole body inside
-     * one segment, the same budget-then-trim shape as
-     * ServiceRequestController::rescheduleMessage().
-     */
-    private function reminderMessage(EquipmentBorrowing $borrowing, string $today): string
-    {
-        $when = $borrowing->due_date->toDateString() === $today ? 'today' : 'tomorrow';
-        $prefix = 'SERBIS: your borrowed ';
-        $suffix = " is due back {$when} ({$borrowing->due_date->format('M j')}).";
-
-        // Curly quotes and the like are swapped for plain ASCII: one character
-        // outside GSM-7 turns the whole text into a 70-character-per-segment
-        // message. The ellipsis below is three ASCII dots for the same reason,
-        // and counted as three.
-        // A name that reads as a domain ("Tent.com Set") would get the whole
-        // reminder refused, so its dots become spaces instead.
-        $itemName = SmsMessagePolicy::sanitizeName($borrowing->equipment->item_name ?? $borrowing->other_equipment_text ?? 'item');
-        $budget = self::SMS_SEGMENT_LIMIT - mb_strlen($prefix) - mb_strlen($suffix);
-
-        if (mb_strlen($itemName) > $budget) {
-            $itemName = mb_substr($itemName, 0, max($budget - 3, 0)).'...';
-        }
-
-        return $prefix.$itemName.$suffix;
-    }
-
-    /**
-     * Same fact as reminderMessage(), for the push channel — no 160-character
-     * segment budget to trim against here, so the item name goes in whole.
-     */
+    /** The push text for an equipment loan. No length budget: the item name goes in whole. */
     private function reminderPushBody(EquipmentBorrowing $borrowing, string $today): string
     {
         $when = $borrowing->due_date->toDateString() === $today ? 'today' : 'tomorrow';
@@ -340,8 +291,8 @@ class SendReturnDueReminders extends Command
     }
 
     /**
-     * "Today"/"tomorrow" read against the office calendar, same as
-     * reminderMessage() — a booking at 12:30 AM Manila time is still "today"
+     * "Today"/"tomorrow" read against the office calendar, the same day the
+     * push bodies use — a booking at 12:30 AM Manila time is still "today"
      * even though its UTC date rolled over hours earlier.
      */
     private function bookingWhen(AmbulanceBooking $booking, string $today): string
@@ -363,7 +314,7 @@ class SendReturnDueReminders extends Command
             .' at '.$this->bookingTime($booking).'. Please be ready.';
     }
 
-    /** No 160-character segment budget here, same as reminderPushBody(). */
+    /** No 160-character segment budget here. */
     private function bookingReminderPushBody(AmbulanceBooking $booking, string $today): string
     {
         return 'Your ambulance is scheduled '.$this->bookingWhen($booking, $today)
