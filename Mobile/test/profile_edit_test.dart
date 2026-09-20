@@ -164,8 +164,16 @@ Future<_FakeApi> _openSheet(
   return api;
 }
 
-/// Fields are positional in the sheet: first, middle, last, street.
+/// Text fields are positional in the sheet: first, middle, last. The purok is a
+/// dropdown, picked through [_pickPurok].
 Finder _field(int index) => find.byType(TextField).at(index);
+
+Future<void> _pickPurok(WidgetTester tester, String purok) async {
+  await tester.tap(find.byType(DropdownButton<String>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(purok).last);
+  await tester.pumpAndSettle();
+}
 
 /// The TextFields of the number-change sheet only. The account sheet stays
 /// under it in the tree, so a bare `find.byType(TextField)` would find both.
@@ -266,7 +274,7 @@ void main() {
       statusCode: 422,
     );
 
-    await tester.enterText(_field(3), 'Purok 3');
+    await _pickPurok(tester, 'Purok 3');
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
@@ -282,10 +290,12 @@ void main() {
   testWidgets('the barangay cannot be edited from here', (tester) async {
     await _openSheet(tester);
 
-    // Four fields: first, middle, last, street. A fifth would mean the barangay
-    // (or the number) became writable inline — the barangay is what every
-    // request is dispatched on, and the endpoint refuses it.
-    expect(find.byType(TextField), findsNWidgets(4));
+    // Three text fields (first, middle, last) and the purok picker. Anything
+    // more would mean the barangay (or the number) became writable inline —
+    // the barangay is what every request is dispatched on, and the endpoint
+    // refuses it.
+    expect(find.byType(TextField), findsNWidgets(3));
+    expect(find.byType(DropdownButton<String>), findsOneWidget);
   });
 
   // The number is the login and where every code goes, so moving it takes two

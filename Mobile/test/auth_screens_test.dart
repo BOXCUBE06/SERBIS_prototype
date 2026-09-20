@@ -941,15 +941,18 @@ void main() {
       final api = await _pumpRegister(tester);
 
       await _fillValidRegistration(tester);
-      // Not an AuthTextField like the fields above — PurokAutocompleteField
-      // wraps a plain AppTextField/TextField so RawAutocomplete can drive its
-      // focus, so this is found by label rather than through `_field()`.
-      final streetField = find.descendant(
+      // A dropdown, not an AuthTextField like the fields above, so it is found
+      // by label rather than through `_field()`.
+      final purokPicker = find.descendant(
         of: find.byWidgetPredicate(
-            (w) => w is AppTextField && w.label == 'Street / Purok (optional)'),
-        matching: find.byType(TextField),
+            (w) => w is AppDropdown<String> && w.label == 'Street / Purok (optional)'),
+        matching: find.byType(DropdownButton<String>),
       );
-      await tester.enterText(streetField, '  Purok 3  ');
+      await tester.ensureVisible(purokPicker);
+      await tester.tap(purokPicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Purok 3').last);
+      await tester.pumpAndSettle();
       await _agree(tester);
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();

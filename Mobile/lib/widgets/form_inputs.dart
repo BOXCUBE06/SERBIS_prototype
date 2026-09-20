@@ -39,12 +39,6 @@ class AppTextField extends StatelessWidget {
   /// beyond their [hint].
   final String? helpText;
 
-  /// Only set by a caller that needs to observe or control focus itself —
-  /// `PurokAutocompleteField` is the one so far, which must hand this field's
-  /// focus node to `RawAutocomplete` for the suggestions overlay to open and
-  /// close with it. Null lets `TextField` manage its own, as before.
-  final FocusNode? focusNode;
-
   const AppTextField({
     super.key,
     required this.label,
@@ -59,7 +53,6 @@ class AppTextField extends StatelessWidget {
     this.obscure = false,
     this.suffixIcon,
     this.helpText,
-    this.focusNode,
   });
 
   /// The phone field, spelled once instead of at each of the call sites that
@@ -119,7 +112,6 @@ class AppTextField extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           TextField(
             controller: controller,
-            focusNode: focusNode,
             // A masked field cannot be multi-line: Flutter asserts on
             // obscureText with maxLines > 1, and no caller wants both.
             maxLines: obscure ? 1 : lines,

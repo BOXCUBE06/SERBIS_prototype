@@ -1,120 +1,101 @@
-// PurokAutocompleteField — the type-ahead source for purok/street fields
-// (MDRRMO feedback, 2026-09-19). No seed data: suggestions come from
-// UserStore.puroks(barangayId), which reads real entries other residents of
-// that barangay already typed.
+// PurokField — a dropdown of the listed puroks plus a free-text "Other", the
+// picker behind the purok/street field on register and profile (MDRRMO
+// feedback, 2026-09-19). The value is plain text in the controller.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serbis/state/account_store.dart';
-import 'package:serbis/state/api_service.dart';
 import 'package:serbis/widgets/purok_field.dart';
 
-class _FakeApi extends ApiService {
-  Map<int, List<String>> puroksByBarangay = {};
-  int getPuroksCalls = 0;
-  int? lastRequestedBarangayId;
-
-  @override
-  Future<List<String>> getPuroks(int barangayId) async {
-    getPuroksCalls++;
-    lastRequestedBarangayId = barangayId;
-    return puroksByBarangay[barangayId] ?? const [];
-  }
-}
-
-Future<void> _pump(
-  WidgetTester tester, {
-  required TextEditingController controller,
-  required UserStore userStore,
-  int? barangayId,
-}) async {
+Future<void> _pump(WidgetTester tester, TextEditingController controller) async {
   await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: PurokAutocompleteField(
-        controller: controller,
-        userStore: userStore,
-        barangayId: barangayId,
-      ),
-    ),
+    home: Scaffold(body: SingleChildScrollView(child: PurokField(controller: controller))),
   ));
   await tester.pumpAndSettle();
 }
 
+Future<void> _choose(WidgetTester tester, String label) async {
+  await tester.tap(find.byType(DropdownButton<String>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('asks for no suggestions when no barangay is chosen yet',
-      (tester) async {
-    final api = _FakeApi();
+  testWidgets('offers Purok 1 to 6, Not specified and Other', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
+    await _pump(tester, controller);
 
-    await _pump(tester, controller: controller, userStore: UserStore(api));
-
-    expect(api.getPuroksCalls, 0);
-  });
-
-  testWidgets('fetches suggestions for the given barangay once it is known',
-      (tester) async {
-    final api = _FakeApi()
-      ..puroksByBarangay = {1: ['Purok 3', 'Purok 7']};
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
-
-    await _pump(tester, controller: controller, userStore: UserStore(api), barangayId: 1);
-
-    expect(api.getPuroksCalls, 1);
-    expect(api.lastRequestedBarangayId, 1);
-  });
-
-  group('matchingPuroks', () {
-    test('matches a substring, case-insensitively', () {
-      final result = matchingPuroks(['Purok 3', 'Purok 7', 'Purok 3 Extension'], 'purok 3');
-      expect(result, unorderedEquals(['Purok 3', 'Purok 3 Extension']));
-    });
-
-    test('a blank query offers nothing — typed suggestions, not a dropdown', () {
-      expect(matchingPuroks(['Purok 3', 'Purok 7'], ''), isEmpty);
-      expect(matchingPuroks(['Purok 3', 'Purok 7'], '   '), isEmpty);
-    });
-
-    test('no suggestions to search means no matches regardless of query', () {
-      expect(matchingPuroks([], 'Purok'), isEmpty);
-    });
-
-    test('no match is an empty result, not every suggestion', () {
-      expect(matchingPuroks(['Purok 3', 'Purok 7'], 'Zaragoza'), isEmpty);
-    });
-  });
-
-  testWidgets('typing into the field updates the controller normally',
-      (tester) async {
-    final api = _FakeApi()
-      ..puroksByBarangay = {1: ['Purok 3', 'Purok 7']};
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
-
-    await _pump(tester, controller: controller, userStore: UserStore(api), barangayId: 1);
-
-    await tester.tap(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'Purok 9, near the chapel');
+    await tester.tap(find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
 
-    expect(controller.text, 'Purok 9, near the chapel');
+    for (var n = 1; n <= 6; n++) {
+      expect(find.text('Purok $n'), findsOneWidget);
+    }
+    expect(find.text('Not specified'), findsWidgets);
+    expect(find.text('Other (type it in)'), findsOneWidget);
+    expect(find.text('Purok 7'), findsNothing);
   });
 
-  testWidgets('changing the barangay drops the old suggestions and asks for new ones',
-      (tester) async {
-    final api = _FakeApi()
-      ..puroksByBarangay = {
-        1: ['Purok 3'],
-        2: ['Purok 9'],
-      };
+  testWidgets('choosing a purok stores that text and shows no text box', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
+    await _pump(tester, controller);
 
-    await _pump(tester, controller: controller, userStore: UserStore(api), barangayId: 1);
-    await _pump(tester, controller: controller, userStore: UserStore(api), barangayId: 2);
+    await _choose(tester, 'Purok 3');
 
-    expect(api.getPuroksCalls, 2);
-    expect(api.lastRequestedBarangayId, 2);
+    expect(controller.text, 'Purok 3');
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('Other reveals a text box whose text is the stored value', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    await _pump(tester, controller);
+
+    await _choose(tester, 'Other (type it in)');
+    await tester.enterText(find.byType(TextField), 'Sitio Malaki');
+
+    expect(controller.text, 'Sitio Malaki');
+  });
+
+  testWidgets('switching from a purok to Other starts with an empty box', (tester) async {
+    final controller = TextEditingController(text: 'Purok 2');
+    addTearDown(controller.dispose);
+    await _pump(tester, controller);
+
+    await _choose(tester, 'Other (type it in)');
+
+    expect(controller.text, isEmpty);
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('a saved value that is not listed opens as Other with the text kept', (tester) async {
+    final controller = TextEditingController(text: 'Zone 2, near the chapel');
+    addTearDown(controller.dispose);
+    await _pump(tester, controller);
+
+    expect(find.text('Other (type it in)'), findsOneWidget);
+    expect(find.text('Zone 2, near the chapel'), findsOneWidget);
+    expect(controller.text, 'Zone 2, near the chapel');
+  });
+
+  testWidgets('a saved listed purok opens selected', (tester) async {
+    final controller = TextEditingController(text: 'Purok 5');
+    addTearDown(controller.dispose);
+    await _pump(tester, controller);
+
+    expect(find.text('Purok 5'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('Not specified clears the value', (tester) async {
+    final controller = TextEditingController(text: 'Purok 5');
+    addTearDown(controller.dispose);
+    await _pump(tester, controller);
+
+    await _choose(tester, 'Not specified');
+
+    expect(controller.text, isEmpty);
   });
 }

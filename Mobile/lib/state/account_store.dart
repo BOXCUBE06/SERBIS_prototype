@@ -25,12 +25,6 @@ class AppUser {
   final String phone;
   final String address;
 
-  /// `barangay_id` itself, alongside [address] (the barangay's name) — for
-  /// `PurokAutocompleteField` on the profile screen, which needs the id to
-  /// ask the server for suggestions and the resident's barangay is fixed
-  /// once registered. Null before the profile has loaded.
-  final int? barangayId;
-
   /// Purok/street — `tbl_residents.street_address`, added because the
   /// barangay relation alone is not enough for a dispatcher to find a
   /// household (MDRRMO feedback, 2026-09-19). Optional, and editable through
@@ -68,7 +62,6 @@ class AppUser {
     this.email = '',
     this.phone = '',
     required this.address,
-    this.barangayId,
     this.streetAddress = '',
     this.hasPhoto = false,
     this.smsOptIn = true,
@@ -145,7 +138,6 @@ class AppUser {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       address: address,
-      barangayId: barangayId,
       streetAddress: streetAddress ?? this.streetAddress,
       hasPhoto: hasPhoto ?? this.hasPhoto,
       smsOptIn: smsOptIn ?? this.smsOptIn,
@@ -170,9 +162,6 @@ class AppUser {
       email: json['email_address'] as String? ?? '',
       phone: json['phone_number'] as String? ?? '',
       address: barangayName ?? '',
-      barangayId: json['barangay_id'] is int
-          ? json['barangay_id'] as int
-          : int.tryParse(json['barangay_id']?.toString() ?? ''),
       streetAddress: json['street_address'] as String? ?? '',
       hasPhoto: json['has_photo'] == true,
       // Absent falls back to true, matching the column's own default. Reading a
@@ -273,8 +262,6 @@ class UserStore {
     final rows = await _api.getBarangays();
     return rows.map(BarangayOption.fromJson).toList();
   }
-
-  Future<List<String>> puroks(int barangayId) => _api.getPuroks(barangayId);
 
   /// Rebuilds the profile from a stored token on relaunch.
   Future<AppUser> currentUser() async {

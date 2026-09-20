@@ -296,13 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // purok/street is exactly the detail a resident might not
                     // have memorized while filling this in — editable later
                     // from the profile either way (MDRRMO feedback, 2026-09-19).
-                    // Suggestions come from what other residents of the picked
-                    // barangay have already typed — see PurokAutocompleteField.
-                    PurokAutocompleteField(
-                      controller: _streetCtrl,
-                      userStore: widget.userStore,
-                      barangayId: _barangayId,
-                    ),
+                    PurokField(controller: _streetCtrl),
 
                     AuthTextField(
                       label: 'Password',

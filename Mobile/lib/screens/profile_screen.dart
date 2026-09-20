@@ -1141,12 +1141,8 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               errorText: _errors['last'],
               enabled: !_saving,
             ),
-            // Suggestions come from what other residents of this account's
-            // barangay have already typed — see PurokAutocompleteField.
-            PurokAutocompleteField(
+            PurokField(
               controller: _street,
-              userStore: widget.userStore,
-              barangayId: widget.user.barangayId,
               label: _tr('profile.street_address'),
               enabled: !_saving,
             ),
