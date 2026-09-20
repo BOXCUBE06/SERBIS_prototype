@@ -355,6 +355,10 @@ class ApiService {
     required String phoneNumber,
     required String email,
     required String password,
+    // 'head_of_family' (an individual, the default) or 'organization'. There is
+    // no barangay option here: those accounts are made by MDRRMO staff.
+    String accountType = 'head_of_family',
+    String? organizationName,
   }) async {
     try {
       // No 'role': it is not a column on tbl_residents and the server assigns
@@ -375,6 +379,11 @@ class ApiService {
           'email_address': email,
           'password': password,
           'password_confirmation': password,
+          'account_type': accountType,
+          if (accountType == 'organization' &&
+              organizationName != null &&
+              organizationName.isNotEmpty)
+            'organization_name': organizationName,
         },
         isAuthEndpoint: true,
       );

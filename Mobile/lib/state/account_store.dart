@@ -184,6 +184,8 @@ class UserStore {
     required String phoneNumber,
     required String email,
     required String password,
+    String accountType = 'head_of_family',
+    String? organizationName,
   }) {
     return _api.register(
       firstName: firstName,
@@ -194,6 +196,8 @@ class UserStore {
       phoneNumber: phoneNumber,
       email: email,
       password: password,
+      accountType: accountType,
+      organizationName: organizationName,
     );
   }
 

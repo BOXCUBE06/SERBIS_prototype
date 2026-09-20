@@ -132,6 +132,8 @@ class _FakeAuthApi extends ApiService {
     required String phoneNumber,
     required String email,
     required String password,
+    String accountType = 'head_of_family',
+    String? organizationName,
   }) async {
     registerCalls++;
     lastRegister = {
@@ -143,6 +145,8 @@ class _FakeAuthApi extends ApiService {
       'phone_number': phoneNumber,
       'email_address': email,
       'password': password,
+      'account_type': accountType,
+      if (organizationName != null) 'organization_name': organizationName,
     };
 
     final failure = registerError;
@@ -606,6 +610,94 @@ void main() {
     });
   });
 
+  group('registering as an organization', () {
+    testWidgets('an individual is the default and sends head_of_family', (tester) async {
+      final api = await _pumpRegister(tester);
+
+      expect(find.text('Organization name'), findsNothing);
+
+      await _fillValidRegistration(tester);
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastRegister!['account_type'], 'head_of_family');
+      expect(api.lastRegister!.containsKey('organization_name'), isFalse);
+    });
+
+    testWidgets('offers Individual and Organization and nothing else', (tester) async {
+      await _pumpRegister(tester);
+
+      final choice = find.byType(SegmentedButton<bool>);
+
+      expect(find.descendant(of: choice, matching: find.text('Individual')), findsOneWidget);
+      expect(find.descendant(of: choice, matching: find.text('Organization')), findsOneWidget);
+      expect(find.descendant(of: choice, matching: find.text('Barangay')), findsNothing);
+    });
+
+    testWidgets('an organization asks for its name and the names become the contact person',
+        (tester) async {
+      await _pumpRegister(tester);
+
+      await tester.tap(find.text('Organization'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Organization name'), findsOneWidget);
+      expect(find.text('Contact first name'), findsOneWidget);
+      expect(find.text('Contact last name'), findsOneWidget);
+      expect(find.text('First name'), findsNothing);
+    });
+
+    testWidgets('an organization with no name is refused before it is sent', (tester) async {
+      final api = await _pumpRegister(tester);
+
+      await tester.tap(find.text('Organization'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_field('Contact first name'), 'Ian');
+      await tester.enterText(_field('Contact last name'), 'Uy');
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Email address'), 'isu@example.com');
+      await tester.enterText(_field('Password'), 'Pasada123');
+      await tester.enterText(_field('Confirm password'), 'Pasada123');
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('San Fabian').last);
+      await tester.pumpAndSettle();
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter the organization name'), findsOneWidget);
+      expect(api.registerCalls, 0);
+    });
+
+    testWidgets('a filled organization form sends organization and its name', (tester) async {
+      final api = await _pumpRegister(tester);
+
+      await tester.tap(find.text('Organization'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_field('Organization name'), 'Isabela State University');
+      await tester.enterText(_field('Contact first name'), 'Ian');
+      await tester.enterText(_field('Contact last name'), 'Uy');
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Email address'), 'isu@example.com');
+      await tester.enterText(_field('Password'), 'Pasada123');
+      await tester.enterText(_field('Confirm password'), 'Pasada123');
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('San Fabian').last);
+      await tester.pumpAndSettle();
+      await _agree(tester);
+      await tester.tap(find.text('Create account'));
+      await tester.pumpAndSettle();
+
+      expect(api.registerCalls, 1);
+      expect(api.lastRegister!['account_type'], 'organization');
+      expect(api.lastRegister!['organization_name'], 'Isabela State University');
+      expect(api.lastRegister!['first_name'], 'Ian');
+    });
+  });
+
   group('register validation', () {
     testWidgets('refuses an empty form field by field', (tester) async {
       final api = await _pumpRegister(tester);
@@ -739,6 +831,8 @@ void main() {
         'phone_number': '09171234567',
         'email_address': 'juan@example.com',
         'password': 'Pasada123',
+        // The default: an individual, the head of a household.
+        'account_type': 'head_of_family',
       });
     });
 

@@ -40,6 +40,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailCtrl     = TextEditingController();
   final _passwordCtrl  = TextEditingController();
   final _confirmCtrl   = TextEditingController();
+  final _orgNameCtrl   = TextEditingController();
+
+  /// Individual (a household's head, the default) or Organization. There is no
+  /// third choice: a barangay hall's account is made by MDRRMO staff.
+  bool    _organization = false;
   bool    _agreed     = false;
   bool    _loading    = false;
   String? _formError;
@@ -104,6 +109,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
+    _orgNameCtrl.dispose();
     super.dispose();
   }
 
@@ -147,6 +153,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phoneNumber:   _phoneCtrl.text.trim(),
         email:         _emailCtrl.text.trim(),
         password:      _passwordCtrl.text,
+        accountType:   _organization ? 'organization' : 'head_of_family',
+        organizationName: _organization ? _orgNameCtrl.text.trim() : null,
       );
 
       if (!mounted) return;
@@ -200,8 +208,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // resident to expect one leaves them waiting for a screen
                     // that never comes.
                     Text(
-                      'One account per household, registered by the head of the family. '
-                      'You can log in as soon as you have registered.',
+                      _organization
+                          ? 'For a school, office or other group. MDRRMO checks an '
+                              'organization account before it can request services.'
+                          : 'One account per household, registered by the head of the family. '
+                              'You can log in as soon as you have registered.',
                       style: AppText.body(
                           size: 12.5, color: AppColors.inkMuted, height: 1.5),
                     ),
@@ -209,23 +220,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const ServicePurposeNote(),
                     const SizedBox(height: 22),
 
+                    Text('Registering as', style: AppText.display(size: 12, weight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('Individual')),
+                        ButtonSegment(value: true, label: Text('Organization')),
+                      ],
+                      selected: {_organization},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (choice) => setState(() => _organization = choice.first),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (_organization)
+                      AuthTextField(
+                        label: 'Organization name',
+                        hint: 'e.g. Isabela State University',
+                        controller: _orgNameCtrl,
+                        prefixIcon: Icons.apartment_rounded,
+                        maxLength: 150,
+                        validator: (v) => (v ?? '').trim().isEmpty
+                            ? 'Enter the organization name'
+                            : null,
+                      ),
+
                     AuthTextField(
-                      label: 'First name',
+                      label: _organization ? 'Contact first name' : 'First name',
                       hint: 'e.g. Juan',
                       controller: _firstNameCtrl,
                       prefixIcon: Icons.person_outline_rounded,
                       validator: (v) => (v ?? '').trim().isEmpty
-                          ? 'Enter your first name'
+                          ? (_organization ? 'Enter the contact person\'s first name' : 'Enter your first name')
                           : null,
                     ),
 
                     AuthTextField(
-                      label: 'Last name',
+                      label: _organization ? 'Contact last name' : 'Last name',
                       hint: 'e.g. Delacruz',
                       controller: _lastNameCtrl,
                       prefixIcon: Icons.person_outline_rounded,
                       validator: (v) => (v ?? '').trim().isEmpty
-                          ? 'Enter your last name'
+                          ? (_organization ? 'Enter the contact person\'s last name' : 'Enter your last name')
                           : null,
                     ),
 
