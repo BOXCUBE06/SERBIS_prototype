@@ -198,6 +198,9 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // database; no vendor call, nothing billed.
     Route::get('/sms/recipient-count', [SmsController::class, 'recipientCount'])->middleware('throttle:120,1');
     Route::apiResource('vehicles', VehicleController::class);
+    // Read-only, for the resident detail panel. Registered before the
+    // apiResource so the literal segment is never read as another {id} action.
+    Route::get('residents/{id}/return-history', [ResidentController::class, 'returnHistory']);
     Route::apiResource('residents', ResidentController::class);
     // MDRRMO staff accounts (audit #29). Every admin may manage every other
     // — see the controller for why there is no super-admin tier, and for

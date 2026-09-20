@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\User;
 use App\Rules\PhoneAvailable;
@@ -149,6 +150,49 @@ class ResidentController extends Controller
         }
 
         return response()->json($resident);
+    }
+
+    /**
+     * How this resident's past loans came back, newest first, so staff can see a
+     * pattern before approving the next request. Display only — nothing here
+     * blocks or flags a borrow. Only Returned loans: a loan still out has no
+     * condition yet. `return_condition` is null on returns recorded before that
+     * column existed, and those are counted as `unrecorded`, not as good.
+     * The photo itself is fetched from GET /borrowings/{id}/photo/return; this
+     * only says whether there is one.
+     */
+    public function returnHistory($id)
+    {
+        $resident = Resident::find($id);
+
+        if (! $resident) {
+            return response()->json(['message' => 'Resident not found'], 404);
+        }
+
+        $returns = EquipmentBorrowing::with('equipment')
+            ->where('resident_id', $resident->getKey())
+            ->where('status', 'Returned')
+            ->orderByDesc('returned_at')
+            ->orderByDesc('borrow_id')
+            ->get();
+
+        return response()->json([
+            'summary' => [
+                'total' => $returns->count(),
+                'good' => $returns->where('return_condition', 'Good')->count(),
+                'bad' => $returns->where('return_condition', 'Bad')->count(),
+                'unrecorded' => $returns->whereNull('return_condition')->count(),
+            ],
+            'data' => $returns->map(fn (EquipmentBorrowing $b) => [
+                'borrow_id' => $b->borrow_id,
+                'item' => $b->equipment?->item_name ?? $b->other_equipment_text,
+                'quantity' => $b->quantity,
+                'returned_at' => $b->returned_at,
+                'return_condition' => $b->return_condition,
+                'return_condition_note' => $b->return_condition_note,
+                'has_return_photo' => $b->has_return_photo,
+            ])->values(),
+        ]);
     }
 
     public function update(Request $request, $id)

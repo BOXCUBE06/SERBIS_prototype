@@ -102,6 +102,11 @@
         <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Resident ID</div>
         <div class="text-body-1 font-weight-medium text-high-emphasis">#{{ residentId }}</div>
       </div>
+
+      <!-- For reading before approving a new borrow request. Information only:
+           nothing here blocks or flags a request. -->
+      <h4 class="text-subtitle-2 font-weight-bold text-medium-emphasis text-uppercase mb-4 mt-6">Equipment returns</h4>
+      <ResidentReturnHistory :resident-id="residentId" />
     </div>
 
     <div class="pa-6 pt-4 detail-actions">
@@ -176,6 +181,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import ResidentReturnHistory from '@/components/ResidentReturnHistory.vue'
 import { ACCOUNT_TYPE, accountTypeLabel } from '@/composables/accountType'
 import { initials as computeInitials } from '@/composables/adminUi'
 import { displayPhone } from '@/composables/phoneNumber'
