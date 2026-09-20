@@ -2,18 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\SendsResidentCodes;
 use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
 use App\Rules\PhoneAvailable;
-use App\Services\Sms\SmsGateway;
-use App\Services\Sms\SmsResult;
 use App\Services\Totp;
 use App\Support\PhoneNumber;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -24,6 +22,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
+    use SendsResidentCodes;
+
     /**
      * How long an unfinished sign-up survives. Two clocks run on a pending
      * sign-up and they are not the same one: the code inside it expires after
@@ -54,8 +54,6 @@ class AuthController extends Controller
      */
     private const APP_UPDATE_MESSAGE = 'Please update the SERBIS app to continue. / Paki-update ang SERBIS app para magpatuloy.';
 
-    private const SMS_UNAVAILABLE_MESSAGE = 'We could not send the text message. Check the number and try again in a minute, or visit the MDRRMO office.';
-
     /**
      * 410 for a client that predates phone login. Sent by the routes that used
      * to take an email address, and removed in a later release once no such app
@@ -76,15 +74,6 @@ class AuthController extends Controller
     public function emailVerificationRemoved(): JsonResponse
     {
         return $this->appUpdateRequired();
-    }
-
-    /** 503 when the code could not be texted, with the pending sign-up or challenge left in place. */
-    private function smsUnavailable(): JsonResponse
-    {
-        return response()->json([
-            'message' => self::SMS_UNAVAILABLE_MESSAGE,
-            'code' => 'sms_unavailable',
-        ], 503);
     }
 
     // Resident self-registration for the mobile app. Admins live in tbl_user and
@@ -345,52 +334,6 @@ class AuthController extends Controller
     }
 
     /**
-     * Texts a one-time code and says how it went, without the caller having to
-     * know the vendor:
-     *
-     * - 'accepted': the vendor took it.
-     * - 'unknown': the request timed out. The code screen still opens, with
-     *   Resend, because the text may well be on its way; it is logged as
-     *   UNKNOWN, never as delivered.
-     * - 'failed': nothing went out (out of credits, rate limited past the short
-     *   wait, refused number). There is no email to fall back to, so the caller
-     *   answers 503 sms_unavailable and the screen says so.
-     *
-     * On a developer machine with no SMS key and the OTP bypass code set, the
-     * absence of a key is not a failure — the bypass code is how that setup
-     * finishes a sign-up. Local only, and only for that one reason.
-     */
-    private function sendOtpText(string $phone, string $message): string
-    {
-        $result = app(SmsGateway::class)->sendOtp($phone, $message);
-
-        if ($result->isAccepted()) {
-            return 'accepted';
-        }
-
-        if ($result->isUnknown()) {
-            Log::warning('OTP SMS send outcome unknown (timed out); showing the code screen, delivery unconfirmed');
-
-            return 'unknown';
-        }
-
-        if ($result->reason === SmsResult::REASON_NOT_CONFIGURED
-            && app()->environment('local')
-            && filled(config('serbis.otp_bypass_code'))) {
-            Log::info('OTP SMS skipped: no SMS key on a local machine with the OTP bypass code set');
-
-            return 'accepted';
-        }
-
-        Log::warning('OTP SMS rejected', [
-            'reason' => $result->reason,
-            'status' => $result->httpStatus,
-        ]);
-
-        return 'failed';
-    }
-
-    /**
      * The plain code exists only inside this method. Everything stored is
      * hashed, so this is the single point where it can be sent.
      *
@@ -551,17 +494,6 @@ class AuthController extends Controller
         );
     }
 
-    /** The one shape every code-sending response carries. */
-    private function deliveryFields(string $phone, string $delivery, int $retryAfter): array
-    {
-        return [
-            'channel' => 'sms',
-            'sent_to' => substr(preg_replace('/\D/', '', $phone), -4),
-            'retry_after' => $retryAfter,
-            'delivery' => $delivery === 'unknown' ? 'unknown' : 'accepted',
-        ];
-    }
-
     // Lets a client rebuild the signed-in user from a stored token. Without this,
     // restoring a session yields a valid token attached to an empty profile,
     // because login is the only place the user object is ever returned.
@@ -657,31 +589,6 @@ class AuthController extends Controller
             'role' => 'resident',
             'user' => $user->load('barangay'),
         ]);
-    }
-
-    /**
-     * Proves the caller knows the account's password, rather than merely
-     * holding a token issued for it.
-     *
-     * Checked with Hash::check against the row, not with Laravel's
-     * `current_password` rule: that rule resolves the user from the default
-     * auth guard, which is `web`, while this request authenticates through
-     * `auth:sanctum` — so it would compare against a null user and reject a
-     * correct password. Both logins in this controller check the same way.
-     */
-    private function assertCurrentPassword(Request $request, Resident $resident): void
-    {
-        $current = (string) $request->input('current_password', '');
-
-        // One message for a missing password and a wrong one. The caller
-        // already holds a token for this account, so there is nothing to
-        // disclose by separating them — but there is nothing to gain either,
-        // and the client renders whichever it gets as-is.
-        if ($current === '' || ! Hash::check($current, (string) $resident->password)) {
-            throw ValidationException::withMessages([
-                'current_password' => 'Enter your current password to change the email address or phone number on this account.',
-            ]);
-        }
     }
 
     // Both logins issue a token with an explicit expiry (audit #30). Before this,
@@ -803,7 +710,7 @@ class AuthController extends Controller
 
         // Hash::check against the row, not the `current_password` rule, which
         // resolves the user from the default guard rather than sanctum — see
-        // assertCurrentPassword().
+        // PhoneChangeController::start().
         if (! Hash::check($validated['current_password'], (string) $admin->password)) {
             throw ValidationException::withMessages([
                 'current_password' => 'That is not your current password.',
@@ -1058,56 +965,6 @@ class AuthController extends Controller
             'role' => 'resident',
             'user' => $resident->load('barangay'),
         ], 200);
-    }
-
-    /**
-     * Test-only shortcut for the resident OTP — both sign-up verification and
-     * login — so an automated client can finish either without reading the
-     * SMS or email a real code goes to.
-     *
-     * Two conditions both have to hold, checked here rather than trusted from
-     * the boot-time guard alone (AppServiceProvider::assertOtpBypassIsLocalOnly):
-     * the config value must be non-empty, AND the running environment must be
-     * `local`. An allow-list, not "not production": a staging or demo server
-     * is still reachable by real residents. Deliberately redundant with the
-     * boot guard, so a stale config cache or a refactor that drops that guard
-     * cannot silently reopen this anywhere else.
-     *
-     * hash_equals rather than === : the bypass code is short and fixed, so a
-     * timing side-channel on it is unlikely to matter in practice, but there
-     * is no reason to compare a secret any other way.
-     */
-    private function otpBypassMatches(string $code): bool
-    {
-        $bypass = (string) config('serbis.otp_bypass_code', '');
-
-        return $bypass !== ''
-            && app()->environment('local')
-            && hash_equals($bypass, $code);
-    }
-
-    /**
-     * Every bypass use is written to tbl_system_logs, same shape TracksHistory
-     * uses, so a real login that skipped OTP delivery is never invisible in
-     * the audit trail even though it went through the resident's own model
-     * events unchanged (issuing a token isn't a model write, so
-     * TracksHistory has nothing to hook here on its own).
-     */
-    private function logOtpBypassUse(Resident $resident): void
-    {
-        DB::table('tbl_system_logs')->insert([
-            'admin_id' => null,
-            'resident_id' => $resident->getKey(),
-            'action_type' => 'otp_bypass_used',
-            'auditable_type' => Resident::class,
-            'auditable_id' => $resident->getKey(),
-            'old_values' => null,
-            'new_values' => null,
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
     }
 
     /**

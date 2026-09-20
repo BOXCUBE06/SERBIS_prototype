@@ -11,6 +11,7 @@ use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\InfoMaterialController;
+use App\Http\Controllers\PhoneChangeController;
 use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ServiceAudienceController;
 use App\Http\Controllers\ServiceController;
@@ -71,6 +72,12 @@ Route::middleware('throttle:api')->group(function () {
         // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
         // see the controller for why each one is excluded.
         Route::patch('/me', [AuthController::class, 'updateMe']);
+        // Moving the phone number, which is the login: the current password and
+        // a code texted to the NEW number, in two steps. Limited per resident —
+        // every step but the last sends a billed text or guesses a code.
+        Route::post('/me/phone', [PhoneChangeController::class, 'start'])->middleware('throttle:phone-change');
+        Route::post('/me/phone/resend', [PhoneChangeController::class, 'resend'])->middleware('throttle:phone-change');
+        Route::post('/me/phone/verify', [PhoneChangeController::class, 'verify'])->middleware('throttle:phone-change');
         // The resident's own profile photo. Kept off PATCH /me because it is a
         // multipart upload, not a column the resident types into.
         Route::post('/me/photo', [ResidentController::class, 'uploadMyPhoto']);

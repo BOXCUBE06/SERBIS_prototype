@@ -141,6 +141,18 @@ class AppServiceProvider extends ServiceProvider
         // must not be able to spend a colleague's allowance.
         // POST /admin/change-password checks the current password, so it is a
         // guessing target for anyone holding a token. Keyed on the account.
+        // The three steps of moving a resident's phone number. Keyed on the
+        // account: an office or a CGNAT address must not share a budget, and the
+        // per-code attempt cap is the real brake on guessing.
+        RateLimiter::for('phone-change', function (Request $request) {
+            $who = 'phone-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            return [
+                Limit::perMinute(5)->by($who.'|minute'),
+                Limit::perHour(15)->by($who.'|hour'),
+            ];
+        });
+
         RateLimiter::for('password-change', function (Request $request) {
             return Limit::perMinute(5)->by('password-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
         });

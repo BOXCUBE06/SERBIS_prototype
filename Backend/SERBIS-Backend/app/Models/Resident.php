@@ -122,6 +122,9 @@ class Resident extends Authenticatable
 
     public const RESEND_COOLDOWN_SECONDS = 60;
 
+    /** A code texted to confirm a new phone number, and the password-reset code, lives ten minutes. */
+    public const PHONE_CHANGE_TTL_MINUTES = 10;
+
     protected $attributes = [
         'account_type' => self::TYPE_HEAD_OF_FAMILY,
     ];
