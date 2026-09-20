@@ -179,10 +179,19 @@
                 />
               </template>
               <div v-else>
-                <span class="row-date">{{ formatDate(item.created_at) }}</span>
+                <!-- A program (training, drill) is asked for a day, and that day
+                     is what the office plans around, so it replaces the filed
+                     date here. Certification has none and shows the filed date
+                     like every other request. -->
+                <template v-if="item.preferred_date">
+                  <v-icon size="12" class="mr-1 flex-shrink-0">mdi-calendar-clock</v-icon>
+                  <span class="row-date">{{ formatPreferredDate(item.preferred_date, 'short') }}</span>
+                </template>
+                <span v-else class="row-date">{{ formatDate(item.created_at) }}</span>
                 <!-- The one status with no scheduled_at at all — an
                      untriaged call's own age is the signal here (MDRRMO
-                     feedback, 2026-09-18). -->
+                     feedback, 2026-09-18). Still the filing age when the
+                     date shown is a program's preferred day. -->
                 <StatusPill
                   v-if="pendingWaitLabel(item.status, item.created_at)"
                   small
@@ -1670,9 +1679,9 @@ const lightbox = ref({ open: false, key: null })
 
 // preferred_date is a bare YYYY-MM-DD, so it is read as a local date rather than
 // through Date's UTC parsing, which would show the day before in Manila.
-const formatPreferredDate = (value) => {
+const formatPreferredDate = (value, month = 'long') => {
   const [y, m, d] = String(value).split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { year: 'numeric', month, day: 'numeric' })
 }
 
 const validId = createAttachment('valid-id', 'Could not load the attached ID.')
