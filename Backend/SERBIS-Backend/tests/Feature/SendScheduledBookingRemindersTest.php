@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -238,6 +239,36 @@ class SendScheduledBookingRemindersTest extends TestCase
         $this->confirmedBooking($resident, now()->addDay()->setTime(14, 0), [
             'scheduled_reminder_sent_at' => now(),
         ]);
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
+
+    /** A booking that needed a text and could not get one is the failure: SkySMS is unset, so it is skipped and the run exits 1. */
+    public function test_an_unset_skysms_key_with_a_booking_to_text_skips_it_and_exits_non_zero(): void
+    {
+        config(['services.skysms.api_key' => null]);
+        Log::spy();
+        Http::fake();
+
+        $booking = $this->confirmedBooking($this->resident(), now()->addDay()->setTime(14, 0));
+
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
+
+        Http::assertNothingSent();
+        $this->assertNull($booking->fresh()->scheduled_reminder_sent_at, 'unreminded, so the next run tries again');
+        Log::shouldHaveReceived('warning')->with('SkySMS not configured, 1 booking reminder(s) skipped');
+    }
+
+    /** Nothing to text (a walk-in, an already-reminded booking) is not a failure, whatever the SkySMS config. */
+    public function test_an_unset_skysms_key_is_not_a_failure_when_no_booking_needs_a_text(): void
+    {
+        config(['services.skysms.api_key' => null]);
+        Http::fake();
+
+        $this->confirmedBooking(null, now()->addDay()->setTime(14, 0));
+        $this->confirmedBooking($this->resident(), now()->addDay()->setTime(15, 0), ['scheduled_reminder_sent_at' => now()]);
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 

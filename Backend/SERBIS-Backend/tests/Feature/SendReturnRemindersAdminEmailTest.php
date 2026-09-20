@@ -139,7 +139,8 @@ class SendReturnRemindersAdminEmailTest extends TestCase
 
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
+        // No ambulance booking needed a text, so an unset key is not a failed run.
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
         Mail::assertSent(EquipmentDueTomorrow::class);
     }

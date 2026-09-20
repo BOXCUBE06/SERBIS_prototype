@@ -112,8 +112,10 @@ class SendReturnDueReminders extends Command
         // config value (the token), never a fact about one row, and a
         // missing token means every booking in the window is equally
         // unreachable by text — one warning naming the count, not N identical
-        // per-row log lines. Only bookings are behind it.
-        if (! app(SmsGateway::class)->configured()) {
+        // per-row log lines. Only bookings are behind it, and only a booking
+        // that actually needed a text makes this a failure: a day with none to
+        // send exits 0 whatever the SkySMS config, since nothing was missed.
+        if ($bookings->isNotEmpty() && ! app(SmsGateway::class)->configured()) {
             Log::warning("SkySMS not configured, {$bookings->count()} booking reminder(s) skipped");
             $this->summary($sent, 0, 0, $noDevice, skippedNotConfigured: $bookings->count());
 

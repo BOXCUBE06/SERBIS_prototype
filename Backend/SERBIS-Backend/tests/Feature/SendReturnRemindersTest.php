@@ -295,7 +295,7 @@ class SendReturnRemindersTest extends TestCase
             ->assertExitCode(0);
     }
 
-    public function test_equipment_is_still_reminded_when_skysms_is_not_configured(): void
+    public function test_equipment_is_still_reminded_and_the_run_succeeds_when_skysms_is_not_configured_and_no_booking_is_due(): void
     {
         Http::fake([self::FCM => $this->fcmAccepts()]);
         Config::set('services.skysms.api_key', null);
@@ -303,12 +303,12 @@ class SendReturnRemindersTest extends TestCase
 
         $borrowing = $this->released($this->resident(), $this->tomorrow());
 
-        // Still exits non-zero — SkySMS is unset, and the ambulance booking
-        // reminders behind it would all be skipped — but equipment does not need it.
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(1);
+        // Exits 0: SkySMS is unset, but there is no ambulance booking to text
+        // today, so nothing was missed, and equipment does not need it.
+        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
         $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
-        Log::shouldHaveReceived('warning')->with('SkySMS not configured, 0 booking reminder(s) skipped');
+        Log::shouldNotHaveReceived('warning', fn ($message) => str_contains((string) $message, 'SkySMS not configured'));
     }
 
     public function test_respects_manila_date_boundaries_not_utc(): void
