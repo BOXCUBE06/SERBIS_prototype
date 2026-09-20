@@ -195,6 +195,7 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => onOpenService(ServiceType.ambulance),
                     ),
                   ),
+                  if (appState.borrowingAllowed) ...[
                   const SizedBox(width: 10),
                   Expanded(
                     child: _QuickTypeCard(
@@ -211,6 +212,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  ],
                 ],
               ),
             ],

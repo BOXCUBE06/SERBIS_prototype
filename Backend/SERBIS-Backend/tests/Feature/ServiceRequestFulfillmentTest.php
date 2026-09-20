@@ -34,7 +34,7 @@ class ServiceRequestFulfillmentTest extends TestCase
 
         $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
 
-        $this->resident = Resident::create([
+        $this->resident = new Resident([
             'barangay_id' => $barangay->barangay_id,
             'first_name' => 'Maria',
             'last_name' => 'Santos',
@@ -43,6 +43,10 @@ class ServiceRequestFulfillmentTest extends TestCase
             'password' => Hash::make('Password123'),
             'status' => 'Active',
         ]);
+        // Relief goods are a barangay's to request (Service Audience mapping), so
+        // the account filing here is the barangay hall's.
+        $this->resident->account_type = Resident::TYPE_BARANGAY;
+        $this->resident->save();
 
         // store() unconditionally resolves the ambulance service's id to build
         // its required_if/required_unless rules — unrelated to this feature,

@@ -624,8 +624,23 @@ class ApiService {
 
   /// [locale] is a BCP 47 subtag ('en', 'fil'). The server falls back to English
   /// for any locale it has no rows for, so an unsupported one is safe to send.
+  /// What the last catalogue response said about the two entries that are not
+  /// service rows. The server already leaves out any service this kind of
+  /// account may not request; Equipment Borrowing and "Others" have no row to
+  /// leave out, so it says so alongside the list. Both default to allowed, so a
+  /// response without the key (an older server) changes nothing.
+  ({bool equipmentBorrowing, bool others}) serviceAudience =
+      (equipmentBorrowing: true, others: true);
+
   Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async {
     final data = await _get('/services?locale=$locale');
+    final audience = data['audience'];
+    if (audience is Map) {
+      serviceAudience = (
+        equipmentBorrowing: audience['equipment_borrowing'] != false,
+        others: audience['others'] != false,
+      );
+    }
     return listFrom(data);
   }
 

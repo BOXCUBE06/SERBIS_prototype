@@ -12,6 +12,7 @@ use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\ResidentController;
+use App\Http\Controllers\ServiceAudienceController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\SmsController;
@@ -184,6 +185,11 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     Route::apiResource('barangays', BarangayController::class)->except(['index', 'show']);
     Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);
     Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
+    // Which account types may request each service. Keyed on the service code,
+    // and includes the two entries that are not services (equipment-borrowing,
+    // others) — see the tbl_service_audience migration.
+    Route::get('service-audience', [ServiceAudienceController::class, 'index']);
+    Route::put('service-audience/{code}', [ServiceAudienceController::class, 'update']);
     Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
     // Their own routes, not update(): both re-check ambulance availability
     // under a lock, which update()/syncFleet() were never built to do.

@@ -110,7 +110,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       // Appended, not part of the catalogue: "Others" has no tbl_services
       // row, so it never comes back from loadServices() and has to be added
       // here every time the grid is (re)built from a fresh fetch.
-      _services = [...widget.appState.services, const ServiceCatalogItem.others()];
+      _services = [
+        ...widget.appState.services,
+        if (widget.appState.othersAllowed) const ServiceCatalogItem.others(),
+      ];
       _loadingServices = false;
       _selected = _defaultSelection(_services, widget.initialType);
     });
@@ -488,6 +491,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: SafetyNotice(filipino: f),
         ),
+        if (widget.appState.borrowingAllowed)
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
           child: _BorrowEquipmentEntry(

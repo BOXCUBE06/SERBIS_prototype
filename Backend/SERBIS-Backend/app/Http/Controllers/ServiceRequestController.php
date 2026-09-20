@@ -7,6 +7,7 @@ use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
 use App\Models\Service;
+use App\Models\ServiceAudience;
 use App\Models\ServiceRequest;
 use App\Models\ServiceRequestRelative;
 use App\Models\User;
@@ -359,6 +360,20 @@ class ServiceRequestController extends Controller
                 'message' => 'This account has been deactivated and cannot file new requests. Please visit the MDRRMO office.',
                 'code' => 'account_deactivated',
             ], 403);
+        }
+
+        // Whether this kind of account may ask for this service at all. The
+        // mobile list is already filtered, so this is the check that holds when
+        // a client is hand-built. Refused before anything is written to disk.
+        if ($resident instanceof Resident) {
+            $audienceCode = $service?->code ?? ServiceAudience::OTHERS;
+
+            if (! ServiceAudience::allows($audienceCode, $resident->account_type)) {
+                return response()->json([
+                    'message' => 'This account type cannot request this service.',
+                    'code' => 'service_not_allowed',
+                ], 403);
+            }
         }
 
         if ($isAmbulance) {

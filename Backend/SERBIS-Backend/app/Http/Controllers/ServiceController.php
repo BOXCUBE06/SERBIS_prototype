@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ServiceResource;
+use App\Models\Resident;
 use App\Models\Service;
+use App\Models\ServiceAudience;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +25,22 @@ class ServiceController extends Controller
             ? Service::all()
             : Service::where('is_active', true)->get();
 
-        return ServiceResource::collection($services);
+        if (! $user instanceof Resident) {
+            return ServiceResource::collection($services);
+        }
+
+        // Only what this kind of account may request. store() enforces the same
+        // rule, so this is a convenience for the app and not the gate.
+        $services = $services->filter(fn (Service $s) => ServiceAudience::allows($s->code, $user->account_type))->values();
+
+        // Equipment Borrowing and "Others" are not service rows, so the app is
+        // told about them alongside the list.
+        return ServiceResource::collection($services)->additional([
+            'audience' => [
+                'equipment_borrowing' => ServiceAudience::allows(ServiceAudience::EQUIPMENT_BORROWING, $user->account_type),
+                'others' => ServiceAudience::allows(ServiceAudience::OTHERS, $user->account_type),
+            ],
+        ]);
     }
 
     public function store(Request $request)

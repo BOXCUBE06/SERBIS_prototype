@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Models\ServiceAudience;
 use App\Models\User;
 use App\Services\EquipmentAvailabilityNotifier;
 use App\Services\Fcm;
@@ -139,6 +140,19 @@ class EquipmentBorrowingController extends Controller
 
     public function store(Request $request)
     {
+        // Equipment borrowing is one of the things the office can restrict by
+        // account type (Service Audience page). The app hides the tile; this is
+        // the check that holds for a hand-built request.
+        $account = $request->user();
+
+        if ($account instanceof Resident
+            && ! ServiceAudience::allows(ServiceAudience::EQUIPMENT_BORROWING, $account->account_type)) {
+            return response()->json([
+                'message' => 'This account type cannot borrow equipment.',
+                'code' => 'service_not_allowed',
+            ], 403);
+        }
+
         $validated = $request->validate([
             // Exactly one of these two names the item, which the CHECK
             // constraint on the table enforces underneath. `required_without`
@@ -208,7 +222,6 @@ class EquipmentBorrowingController extends Controller
         // Who the loan is for comes from the account, never from the request: a
         // barangay or organization account is an institution, a head of the
         // family is a household. A client can no longer claim otherwise.
-        $account = $request->user();
         $isInstitution = $account instanceof Resident && ! $account->isHeadOfFamily();
         $borrowerType = $isInstitution ? 'Organization' : 'Resident';
         $organizationName = $isInstitution ? $this->institutionName($account) : null;

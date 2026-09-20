@@ -185,6 +185,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Whether this account type may borrow equipment / file an "Others"
+  /// request (Service Audience page). The server enforces both; these only
+  /// decide what the app offers.
+  bool get borrowingAllowed => _api.serviceAudience.equipmentBorrowing;
+  bool get othersAllowed => _api.serviceAudience.others;
+
   Future<void> loadServices() async {
     try {
       final list = await _api.getServices(locale: locale);
