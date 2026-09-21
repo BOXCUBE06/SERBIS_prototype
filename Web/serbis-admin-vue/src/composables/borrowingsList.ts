@@ -13,9 +13,9 @@ import { API_BASE } from '../config/api'
  * is twice that for the same rows, which is why the state below is module-level
  * and not per-component.
  *
- * Callers: EquipmentBorrowingView (the board) and ProcurementReferenceView (the
- * uncatalogued requests). The second is read-only and derives everything it
- * shows from these same rows.
+ * Caller: EquipmentBorrowingView (the board). ProcurementReferenceView used to
+ * share it and now reads its own narrow endpoint, so holding Procurement does
+ * not require, or open, the borrowings list and the borrower details on it.
  */
 export type BorrowingRow = Record<string, any>
 

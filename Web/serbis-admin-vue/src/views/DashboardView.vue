@@ -5,7 +5,10 @@
       title="Dashboard"
     >
       <template v-slot:actions>
-        <v-menu location="bottom end">
+        <!-- The bell carries the activity log and the follow-up calls. An account
+             holding none of the sections those come from would open an empty
+             list, so it is not drawn. -->
+        <v-menu v-if="showBell" location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
               <!-- A count when staff have someone to ring, a plain dot for activity. -->
@@ -79,7 +82,9 @@
     <v-row v-if="loading" class="mb-2">
       <v-col cols="12"><v-skeleton-loader type="card" height="88"></v-skeleton-loader></v-col>
     </v-row>
-    <div v-else class="kpi-grid mb-2" :style="{ '--kpi-count': kpiStats.length }">
+    <!-- Only the cards for sections this account holds arrive; none at all is a
+         real answer, and a grid of zero columns is not a layout. -->
+    <div v-else-if="kpiStats.length > 0" class="kpi-grid mb-2" :style="{ '--kpi-count': kpiStats.length }">
       <v-card
         v-for="(stat, i) in kpiStats" :key="stat.title"
         elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
@@ -439,11 +444,18 @@ import 'leaflet/dist/leaflet.css'
 // the choropleth joins on it, so the two must stay in step.
 import barangayBoundaries from '@/assets/echague-barangays.json'
 import { API_BASE } from '@/config/api'
+import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
 
 const router = useRouter()
 const goTo = (route) => router.push(route)
+
+// The server already leaves out the lists an account may not see (activity feed,
+// follow-up calls); this only decides whether the bell that shows them is worth
+// drawing at all.
+const { can } = useCurrentAdmin()
+const showBell = computed(() => can('logs') || can('borrowings') || can('ambulance'))
 
 // Chart.js draws to canvas, not the DOM, so it can't read CSS custom
 // properties the way the rest of the app does -- these read the active

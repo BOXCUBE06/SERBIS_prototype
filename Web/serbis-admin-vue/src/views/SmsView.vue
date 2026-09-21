@@ -349,9 +349,9 @@
 
     <!-- Replaces a native confirm(). The scale and the cost still read the
          same; what is new is the shared blast code, which the server checks
-         before it spends anything. There is no role system, so this proves
-         the sender was told the code, not that they are any particular
-         admin. -->
+         before it spends anything. Holding this section only opened the page,
+         so the code proves the sender was told it, not that they are any
+         particular admin. -->
     <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">

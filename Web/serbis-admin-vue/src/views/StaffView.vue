@@ -37,6 +37,10 @@
           Forgotten passwords are reset here, not by email. Choose “Reset password” on the
           account, then pass the temporary password on in person. They will be asked to set
           their own before they can use the panel.
+          <div class="mt-2">
+            A new account starts with no access. Choose “Access” on it to pick which sections it
+            can open. Only a super admin sees this page or can change access.
+          </div>
         </v-alert>
 
         <v-skeleton-loader v-if="initialLoad" type="table" rounded="xl"></v-skeleton-loader>
@@ -68,6 +72,17 @@
               </div>
             </template>
 
+            <template #item.access="{ item }">
+              <!-- Icon and word both, never colour alone. -->
+              <v-chip
+                :color="accessSummary(item).color"
+                size="small" variant="outlined" class="font-weight-bold"
+              >
+                <v-icon start size="14" aria-hidden="true">{{ accessSummary(item).icon }}</v-icon>
+                {{ accessSummary(item).text }}
+              </v-chip>
+            </template>
+
             <template #item.status="{ item }">
               <!-- Icon and word both, never colour alone. -->
               <v-chip
@@ -89,6 +104,13 @@
                   @click="openEdit(item)"
                 >
                   Edit
+                </v-btn>
+                <v-btn
+                  variant="text" size="small" class="text-none font-weight-bold"
+                  :aria-label="`Choose which sections ${fullName(item)} can open`"
+                  @click="openAccess(item)"
+                >
+                  Access
                 </v-btn>
                 <!-- Never on your own row, and never on a closed account: the
                      server refuses both, this only spares the round trip. -->
@@ -244,6 +266,68 @@
       </v-card>
     </v-dialog>
 
+    <!-- Access: which sections this account may open. A super admin sees every
+         section whatever is ticked, so the list is disabled while the switch is
+         on rather than left looking like it still decides something. -->
+    <v-dialog v-model="accessDialog.show" max-width="560" scrollable persistent>
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
+          <span class="text-h6 font-weight-bold text-high-emphasis">
+            Access for {{ fullName(accessDialog.item) }}
+          </span>
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="accessDialog.show = false"></v-btn>
+        </v-card-title>
+        <v-card-text class="px-6 py-2">
+          <v-alert
+            v-if="accessDialog.error" type="error" variant="tonal" density="compact"
+            rounded="lg" class="mb-4" role="alert"
+          >{{ accessDialog.error }}</v-alert>
+
+          <v-switch
+            v-model="accessDialog.superAdmin" color="primary" inset hide-details
+            label="Super admin"
+          ></v-switch>
+          <div class="text-caption text-medium-emphasis mb-4">
+            Sees every section, is the only kind of account that can open this page, and decides
+            everyone's access. The list below is ignored while this is on.
+          </div>
+
+          <div class="d-flex justify-space-between align-center mb-1">
+            <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+              Sections this account can open
+            </span>
+            <v-btn
+              variant="text" size="small" class="text-none font-weight-bold"
+              :disabled="accessDialog.superAdmin" @click="toggleAllSections"
+            >
+              {{ allSectionsGranted ? 'Clear all' : 'Select all' }}
+            </v-btn>
+          </div>
+
+          <div v-for="group in accessGroups" :key="group.label" class="mb-3">
+            <div class="text-caption text-medium-emphasis mb-0 mt-2">{{ group.label }}</div>
+            <v-checkbox
+              v-for="section in group.items" :key="section.key"
+              v-model="accessDialog.granted" :value="section.key" :label="section.title"
+              color="primary" density="compact" hide-details
+              :disabled="accessDialog.superAdmin"
+            ></v-checkbox>
+          </div>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <v-btn variant="text" rounded="lg" class="text-none" :disabled="accessDialog.loading" @click="accessDialog.show = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+            :loading="accessDialog.loading" @click="saveAccess"
+          >
+            Save access
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Close account -->
     <v-dialog v-model="closeDialog.show" max-width="460">
       <v-card rounded="xl" class="pa-2">
@@ -334,8 +418,10 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { initials as computeInitials } from '@/composables/adminUi'
+import { ASSIGNABLE_SECTIONS } from '@/composables/adminSections'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
+import { loadCurrentAdmin } from '@/composables/useCurrentAdmin'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -395,10 +481,38 @@ const clearFieldErrors = () => { fieldErrors.value = {} }
 
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Name', key: 'name', sortable: false, width: '55%' },
+  { title: 'Name', key: 'name', sortable: false, width: '40%' },
+  { title: 'Access', key: 'access', sortable: false, width: '190px' },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '340px' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '420px' },
 ]
+
+// What the Access column says for an account. NULL is the value every account
+// that existed before permissions did keeps: unrestricted, which is not the same
+// as an empty list and must not read as one.
+const accessSummary = (item) => {
+  if (item?.is_super_admin) return { text: 'Super admin', color: 'primary', icon: 'mdi-shield-crown-outline' }
+  if (item?.permissions === null || item?.permissions === undefined) {
+    return { text: 'All sections', color: 'secondary', icon: 'mdi-lock-open-variant-outline' }
+  }
+  if (item.permissions.length === 0) return { text: 'No sections', color: 'warning', icon: 'mdi-lock-outline' }
+  return {
+    text: `${item.permissions.length} of ${ASSIGNABLE_SECTIONS.length} sections`,
+    color: 'secondary',
+    icon: 'mdi-lock-open-variant-outline',
+  }
+}
+
+// The checkboxes follow the sidebar, so choosing what an account can open reads
+// like the menu it will get.
+const accessGroups = [
+  { label: 'Main menu', items: ASSIGNABLE_SECTIONS.filter((s) => s.group === 'main') },
+  { label: 'System', items: ASSIGNABLE_SECTIONS.filter((s) => s.group === 'system') },
+]
+
+const accessDialog = ref({ show: false, item: null, loading: false, error: '', superAdmin: false, granted: [] })
+
+const allSectionsGranted = computed(() => accessDialog.value.granted.length === ASSIGNABLE_SECTIONS.length)
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -545,6 +659,59 @@ const save = async () => {
     modal.value.error = error.message
   } finally {
     modal.value.loading = false
+  }
+}
+
+const openAccess = (item) => {
+  // An unrestricted account (NULL) starts with everything ticked: that is what
+  // it can open today, and saving turns it into an explicit list.
+  const current = item.permissions === null || item.permissions === undefined
+    ? ASSIGNABLE_SECTIONS.map((s) => s.key)
+    : [...item.permissions]
+
+  accessDialog.value = {
+    show: true,
+    item,
+    loading: false,
+    error: '',
+    superAdmin: !!item.is_super_admin,
+    granted: current,
+  }
+}
+
+const toggleAllSections = () => {
+  accessDialog.value.granted = allSectionsGranted.value ? [] : ASSIGNABLE_SECTIONS.map((s) => s.key)
+}
+
+const saveAccess = async () => {
+  const item = accessDialog.value.item
+  accessDialog.value.error = ''
+  accessDialog.value.loading = true
+
+  try {
+    const res = await fetch(`${API}/${idOf(item)}/permissions`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        is_super_admin: accessDialog.value.superAdmin,
+        permissions: accessDialog.value.granted,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    // Left on the dialog, which stays open: "the only active super admin" is
+    // fixed by choosing someone else, not by dismissing the message.
+    if (!res.ok) throw new Error(messageFrom(data, 'Could not save access'))
+
+    await fetchAdmins()
+    // Changing your own access changes your own menu.
+    if (isSelf(item)) await loadCurrentAdmin(true)
+
+    accessDialog.value.show = false
+    announce(`Access saved for ${fullName(item)}`)
+  } catch (error) {
+    accessDialog.value.error = error.message
+  } finally {
+    accessDialog.value.loading = false
   }
 }
 

@@ -141,10 +141,10 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { fmtDate } from '@/composables/adminUi'
-import { useBorrowingsList } from '@/composables/borrowingsList'
+import { authHeaders, fmtDate } from '@/composables/adminUi'
 import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 import { useRowNumbers } from '@/composables/rowNumber'
+import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 
 /**
@@ -157,27 +157,53 @@ import PageHeader from '@/components/PageHeader.vue'
  * holds. What this view is, is the thing the audit found missing: somewhere the
  * office can point at and see what it has been asked for and could not lend.
  *
- * Reads `useBorrowingsList`, the same rows EquipmentBorrowingView already
- * fetched. `GET /borrowings` returns the entire table unpaginated, so a second
- * independent fetch would double the panel's heaviest read for identical data.
+ * Reads `GET /procurement/other-equipment`, which returns only the uncatalogued
+ * requests and only the columns drawn here. It used to filter the whole
+ * borrowings list in the browser, which meant an account given Procurement also
+ * needed Equipment Borrowing and was handed every borrower's contact details.
  */
 
 const CLOSED_STATUSES = ['Returned', 'Denied', 'Cancelled']
 const ALL_STATUS = 'All'
 
-const { rows: allBorrowings, loadError, initialLoad, reloading, load } = useBorrowingsList()
+// The server's definition of this page: a borrowing whose item is free text
+// rather than an inventory row. Nothing left to filter here.
+const rows = ref([])
+const loadError = ref('')
+const initialLoad = ref(true)
+const reloading = ref(false)
+
+const load = async () => {
+  reloading.value = true
+
+  try {
+    const res = await fetch(`${API_BASE}/procurement/other-equipment`, { headers: authHeaders() })
+
+    // A non-2xx used to fall straight through and render as an empty list.
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || `Request failed (${res.status})`)
+    }
+
+    const data = await res.json()
+    const list = data.data || data
+    if (!Array.isArray(list)) throw new Error('The server returned an unexpected response')
+
+    rows.value = list
+    loadError.value = ''
+  } catch (error) {
+    console.error('Failed to fetch procurement rows:', error)
+    loadError.value = error.message || 'Could not reach the server'
+  } finally {
+    initialLoad.value = false
+    reloading.value = false
+  }
+}
 
 const search = ref('')
 const statusFilter = ref(ALL_STATUS)
 
 const statusOptions = [ALL_STATUS, ...BORROWING_STATUSES.map((s) => s.status)]
-
-// The whole definition of this page: a borrowing whose item is free text rather
-// than an inventory row. The backend's CHECK constraint guarantees exactly one
-// of the two is set, so this needs no second condition on equipment_id.
-const rows = computed(() =>
-  allBorrowings.value.filter((b) => !!b.other_equipment_text && String(b.other_equipment_text).trim() !== '')
-)
 
 const distinctItems = computed(
   () => new Set(rows.value.map((b) => String(b.other_equipment_text).trim().toLowerCase())).size
@@ -220,10 +246,7 @@ const headers = [
 
 const refresh = () => load()
 
-// `ifEmpty` so arriving here from the borrowing board reuses the rows that
-// board just fetched instead of pulling the whole table again. The Refresh
-// button above is the way to force a fresh read.
-onMounted(() => load({ ifEmpty: true }))
+onMounted(load)
 </script>
 
 <style scoped>

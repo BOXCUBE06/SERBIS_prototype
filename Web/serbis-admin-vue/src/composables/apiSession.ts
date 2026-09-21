@@ -14,6 +14,7 @@
 
 import type { Router } from 'vue-router'
 import { clearToken } from './authToken'
+import { can, firstAllowedPath, loadCurrentAdmin } from './useCurrentAdmin'
 import { API_BASE } from '../config/api'
 
 // The login routes answer 401 for bad credentials. Bouncing on those would
@@ -21,6 +22,16 @@ import { API_BASE } from '../config/api'
 const CREDENTIAL_ROUTES = ['/admin/login', '/resident/login']
 
 let installed = false
+
+async function refreshAccess(router: Router): Promise<void> {
+  await loadCurrentAdmin(true)
+
+  const section = router.currentRoute.value.meta.section as string | undefined
+
+  if (section && !can(section)) {
+    router.replace(firstAllowedPath() ?? '/no-access')
+  }
+}
 
 export function installSessionExpiryHandler(router: Router): void {
   if (installed) return
@@ -41,6 +52,14 @@ export function installSessionExpiryHandler(router: Router): void {
       const body = await response.clone().json().catch(() => null)
       if (body?.code === 'password_change_required' && router.currentRoute.value.path !== '/change-password') {
         router.push('/change-password')
+      }
+      // A section the account no longer holds: a super admin changed its access
+      // while a page was open, or the menu was drawn from an older answer. The
+      // page shows the server's own explanation; here the account is re-read so
+      // the menu catches up, and the visitor is moved off a page that is no
+      // longer theirs instead of being left on one that refuses everything.
+      if (body?.code === 'section_forbidden') {
+        void refreshAccess(router)
       }
       return response
     }

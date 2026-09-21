@@ -24,8 +24,8 @@
       </div>
 
       <div ref="navScrollEl" class="nav-scroll px-4">
-        <div class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest">Main Menu</div>
-        <v-list bg-color="transparent" density="compact" nav class="px-0">
+        <div v-if="mainMenu.length > 0" class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest">Main Menu</div>
+        <v-list v-if="mainMenu.length > 0" bg-color="transparent" density="compact" nav class="px-0">
           <v-list-item
             v-for="item in mainMenu"
             :key="item.to"
@@ -47,8 +47,8 @@
           </v-list-item>
         </v-list>
 
-        <div class="text-caption font-weight-medium text-white-50 mt-3 mb-1 px-2 tracking-widest">System</div>
-        <v-list bg-color="transparent" density="compact" nav class="px-0">
+        <div v-if="systemMenu.length > 0" class="text-caption font-weight-medium text-white-50 mt-3 mb-1 px-2 tracking-widest">System</div>
+        <v-list v-if="systemMenu.length > 0" bg-color="transparent" density="compact" nav class="px-0">
           <v-list-item
             v-for="item in systemMenu"
             :key="item.to"
@@ -114,11 +114,13 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
+import { ADMIN_SECTIONS } from '@/composables/adminSections'
 import { useAppTheme } from '@/composables/useAppTheme'
+import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
 
 const { isLoggingOut, showLogoutDialog, handleLogout } = useAuth()
 const { theme, toggle } = useAppTheme()
@@ -149,31 +151,17 @@ watch(() => route.path, () => nextTick(scrollActiveIntoView))
 const { mobile } = useDisplay()
 const isOpen = defineModel<boolean>('open', { default: true })
 
-const mainMenu = [
-  { to: '/', icon: 'mdi-view-dashboard-outline', title: 'Dashboard' },
-  // Directly after Dashboard: the two are read together, one for today and
-  // one for the quarter.
-  { to: '/analytics', icon: 'mdi-chart-box-outline', title: 'Analytics' },
-  { to: '/manage-requests', icon: 'mdi-clipboard-text-outline', title: 'Resident Requests' },
-  { to: '/conduction-requests', icon: 'mdi-ambulance', title: 'Ambulance Dispatch Requests' },
-  { to: '/borrowings', icon: 'mdi-hand-extended-outline', title: 'Equipment Borrowing' },
-  { to: '/vehicles', icon: 'mdi-ambulance', title: 'Vehicles' },
-  { to: '/inventory', icon: 'mdi-toolbox-outline', title: 'Resource Management' },
-  // Below Resource Management on purpose: it is the list of what the catalogue
-  // above does not carry, and it is read next to it, not next to the board.
-  { to: '/procurement', icon: 'mdi-clipboard-list-outline', title: 'Procurement Reference' },
-  { to: '/sms', icon: 'mdi-message-text-fast-outline', title: 'Text Blast (SMS)' }
-]
+// The menu is the section catalogue (composables/adminSections.ts, which also
+// holds the ordering notes) narrowed to what this account may open. A group
+// with nothing left in it drops its header too. Until the account has been read
+// nothing is hidden, so a slow `/me` does not blank the menu; the server refuses
+// what the account does not hold either way.
+const { can, loadCurrentAdmin } = useCurrentAdmin()
 
-const systemMenu = [
-  { to: '/services-config', icon: 'mdi-wrench-outline', title: 'Manage Services' },
-  { to: '/service-audience', icon: 'mdi-account-check-outline', title: 'Service Audience' },
-  { to: '/service-vehicles', icon: 'mdi-truck-outline', title: 'Service Vehicles' },
-  { to: '/users', icon: 'mdi-account-group-outline', title: 'Residents' },
-  { to: '/staff', icon: 'mdi-shield-account-outline', title: 'Staff Accounts' },
-  { to: '/files', icon: 'mdi-folder-outline', title: 'Documents' },
-  { to: '/logs', icon: 'mdi-history', title: 'Activity Logs' }
-]
+const mainMenu = computed(() => ADMIN_SECTIONS.filter((s) => s.group === 'main' && can(s.key)))
+const systemMenu = computed(() => ADMIN_SECTIONS.filter((s) => s.group === 'system' && can(s.key)))
+
+onMounted(() => { loadCurrentAdmin() })
 </script>
 
 <style scoped>

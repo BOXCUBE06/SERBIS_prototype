@@ -2183,7 +2183,10 @@ const fetchData = async () => {
     const [reqRes, vehRes, resRes, svcRes] = await Promise.all([
       fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders(), signal: listAbortController.signal }),
       fetch(`${API_BASE}/vehicles`, { headers: getHeaders(), signal: listAbortController.signal }),
-      fetch(`${API_BASE}/residents`, { headers: getHeaders(), signal: listAbortController.signal }),
+      // Just id, name and barangay, for the walk-in picker. The full /residents
+      // list carries phone, email and address and belongs to the Residents page,
+      // which an account holding only a request board cannot open.
+      fetch(`${API_BASE}/residents/lookup`, { headers: getHeaders(), signal: listAbortController.signal }),
       fetch(`${API_BASE}/services`, { headers: getHeaders(), signal: listAbortController.signal })
     ])
     const reqData = await reqRes.json()
