@@ -140,6 +140,11 @@ ThemeData buildAppTheme() {
     // Fields built straight on Material's TextFormField (the ones with a
     // labelText) get the same large, bold label and readable hint as the app's
     // own field widgets.
+    // A disabled button that carries information ("Resend code in 56s") must
+    // stay legible; Material's 38% grey was about 2:1.
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(disabledForegroundColor: AppColors.inkMuted),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       labelStyle: AppText.body(size: 14.5, weight: FontWeight.w600, color: AppColors.ink),
       floatingLabelStyle: AppText.body(size: 14.5, weight: FontWeight.w700, color: AppColors.green900),

@@ -4,6 +4,7 @@ import '../data/hotlines.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'motion.dart';
 import 'shared_widgets.dart';
 
 /// An upload slot on the request form. The file itself is picked by the screen
@@ -65,7 +66,10 @@ class AttachmentUploadField extends StatelessWidget {
                   Expanded(
                     child: Text(
                       hasFile ? fileName! : hint,
-                      style: AppText.body(size: 12, color: hasFile ? AppColors.green900 : AppColors.inkMuted),
+                      style: AppText.body(size: 13, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
+                      // A file name is cut short; the instruction is not, or
+                      // the resident cannot read which file is being asked for.
+                      maxLines: hasFile ? 1 : 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -108,10 +112,24 @@ class AttachmentUploadField extends StatelessWidget {
 /// under that instruction is the one thing it must not do. Each number is its
 /// own tap target for the reason the Library rows are: a resident on Smart
 /// cannot use the Globe line, so "call this contact" is not one action.
-class SafetyNotice extends StatelessWidget {
+class SafetyNotice extends StatefulWidget {
   final bool filipino;
 
-  const SafetyNotice({super.key, required this.filipino});
+  /// Folds the hotline numbers behind a "Show hotline numbers" row. Used above
+  /// a form, where the numbers are a reference and the form is what the
+  /// resident came for; the Services grid prints them in full.
+  final bool collapsible;
+
+  const SafetyNotice({super.key, required this.filipino, this.collapsible = false});
+
+  @override
+  State<SafetyNotice> createState() => _SafetyNoticeState();
+}
+
+class _SafetyNoticeState extends State<SafetyNotice> {
+  late bool _open = !widget.collapsible;
+
+  bool get filipino => widget.filipino;
 
   @override
   Widget build(BuildContext context) {
@@ -134,15 +152,51 @@ class SafetyNotice extends StatelessWidget {
               children: [
                 Text(
                   tr(f, 'services.notice_title'),
-                  style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.red600),
+                  style: AppText.display(size: 14, weight: FontWeight.w700, color: AppColors.red600),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   tr(f, 'services.notice_body'),
-                  style: AppText.body(size: 12, color: const Color(0xFF7A3527), height: 1.6),
+                  style: AppText.body(size: 13, color: const Color(0xFF7A3527), height: 1.5),
                 ),
-                const SizedBox(height: 10),
-                for (final hotline in kHotlines) _hotlineBlock(hotline, f),
+                if (widget.collapsible)
+                  InkWell(
+                    onTap: () => setState(() => _open = !_open),
+                    borderRadius: BorderRadius.circular(8),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              tr(f, _open ? 'notice.hide_hotlines' : 'notice.show_hotlines'),
+                              style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.red600),
+                            ),
+                          ),
+                          Icon(
+                            _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                            color: AppColors.red600,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 10),
+                AnimatedSize(
+                  duration: reduceMotion(context) ? Duration.zero : kMotionExit,
+                  curve: kEaseOut,
+                  alignment: Alignment.topCenter,
+                  child: _open
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.collapsible) const SizedBox(height: 4),
+                            for (final hotline in kHotlines) _hotlineBlock(hotline, f),
+                          ],
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
               ],
             ),
           ),
@@ -161,7 +215,7 @@ class SafetyNotice extends StatelessWidget {
             Text(
               hotline.labelFor(filipino: f),
               style: AppText.display(
-                  size: 12, weight: FontWeight.w700, color: const Color(0xFF7A3527)),
+                  size: 13, weight: FontWeight.w700, color: const Color(0xFF7A3527)),
             ),
             for (final number in hotline.numbers) _hotlineNumberRow(number),
           ],
@@ -185,11 +239,11 @@ class SafetyNotice extends StatelessWidget {
                       ? number.number
                       : '${number.label} · ${number.number}',
                   style: AppText.display(
-                      size: 12.5, weight: FontWeight.w700, color: AppColors.red600),
+                      size: 13.5, weight: FontWeight.w700, color: AppColors.red600),
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.call_rounded, size: 13, color: AppColors.red600),
+              const Icon(Icons.call_rounded, size: 16, color: AppColors.red600),
             ],
           ),
         ),

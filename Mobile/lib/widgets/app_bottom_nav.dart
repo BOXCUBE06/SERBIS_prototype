@@ -57,6 +57,10 @@ class AppBottomNav extends StatelessWidget {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 56),
                         child: Column(
+                          // Min, not the default max: a bar slot is laid out with
+                          // the whole screen's height available, and a max Column
+                          // filled all of it.
+                          mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             // The indicator grows out of the icon rather than

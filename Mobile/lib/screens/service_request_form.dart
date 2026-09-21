@@ -9,6 +9,7 @@ import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/form_inputs.dart';
 import '../widgets/form_section.dart';
 import '../widgets/service_form_fields.dart';
 import '../widgets/service_widgets.dart';
@@ -360,7 +361,7 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         if (kind == ServiceFormKind.ambulance)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: SafetyNotice(filipino: f),
+            child: SafetyNotice(filipino: f, collapsible: true),
           ),
         ServiceFormFields(
           data: _drafts.formFor(kind),
@@ -402,13 +403,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
           ],
         ),
         const SizedBox(height: 12),
-        TextFormField(
+        AppTextField(
+          label: 'Landmark (optional)',
+          hint: 'e.g. beside the chapel',
           controller: _drafts.landmark,
-          decoration: const InputDecoration(
-            labelText: 'Landmark (optional)',
-            hintText: 'e.g. beside the chapel, near the covered court',
-            border: OutlineInputBorder(),
-          ),
         ),
         if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
         const SizedBox(height: 6),

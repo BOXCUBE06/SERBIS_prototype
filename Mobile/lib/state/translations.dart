@@ -188,6 +188,8 @@ const Map<String, (String, String)> _strings = {
     'If you are experiencing a life-threatening emergency, contact authorities directly:',
     'Kung ikaw ay nasa banta-sa-buhay na emerhensiya, direktang tawagan ang mga awtoridad:',
   ),
+  'notice.show_hotlines': ('Show hotline numbers', 'Ipakita ang mga numero ng hotline'),
+  'notice.hide_hotlines': ('Hide hotline numbers', 'Itago ang mga numero ng hotline'),
   'services.choose_type': ('Choose a request type', 'Pumili ng Uri ng Kahilingan'),
   'services.form.ambulance': ('Ambulance Request', 'Kahilingan ng Ambulansya'),
   'services.form.transfer': ('Hospital Transfer Request', 'Kahilingan ng Paglilipat sa Ospital'),

@@ -88,6 +88,21 @@ void main() {
       }
     });
 
+    testWidgets('the bar is a bar: it hugs the bottom edge and does not fill the screen', (tester) async {
+      await _pumpNav(tester);
+
+      final bar = tester.getRect(find.byType(AppBottomNav));
+      expect(bar.height, lessThan(100));
+      expect(bar.height, greaterThanOrEqualTo(56));
+      expect(bar.bottom, 800);
+    });
+
+    testWidgets('it stays a bar at large text sizes too', (tester) async {
+      await _pumpNav(tester, textScale: 2.0);
+
+      expect(tester.getRect(find.byType(AppBottomNav)).height, lessThan(110));
+    });
+
     testWidgets('a tab is at least 48dp tall and a fifth of the width wide', (tester) async {
       await _pumpNav(tester);
 
