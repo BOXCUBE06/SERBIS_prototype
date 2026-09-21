@@ -2,9 +2,9 @@
   PageHeader.vue
 
   One header row — title, trailing actions, vertically centred against each
-  other — for every route in the admin panel. The `subtitle` slot survives
-  only for the Residents count, which has no footer count of its own; the
-  grey description prop is gone.
+  other — for every route in the admin panel. The grey description prop is
+  gone. Two optional slots remain: `badge`, drawn on the title's own line (the
+  Residents count, as a chip), and `subtitle`, a line below it.
 
   Reference shape lifted from Resident Requests and Ambulance Dispatch
   Requests (ServiceRequestQueue.vue's standalone block and
@@ -45,7 +45,13 @@
 <template>
   <div class="page-header d-flex justify-space-between align-center flex-wrap gap-3">
     <div class="min-w-0">
-      <h2 class="page-title text-high-emphasis">{{ title }}</h2>
+      <!-- The wrapper only exists when there is a badge, so every other page's
+           header keeps exactly the markup it had. -->
+      <div v-if="$slots.badge" class="d-flex align-center flex-wrap ga-3">
+        <h2 class="page-title text-high-emphasis">{{ title }}</h2>
+        <slot name="badge" />
+      </div>
+      <h2 v-else class="page-title text-high-emphasis">{{ title }}</h2>
       <div v-if="$slots.subtitle" class="page-subtitle text-medium-emphasis">
         <slot name="subtitle" />
       </div>
