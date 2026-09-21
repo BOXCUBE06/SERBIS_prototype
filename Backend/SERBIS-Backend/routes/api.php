@@ -13,6 +13,7 @@ use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PhoneChangeController;
+use App\Http\Controllers\ProcurementReferenceController;
 use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ServiceAudienceController;
 use App\Http\Controllers\ServiceController;
@@ -251,6 +252,11 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // apiResource so the literal segment is never read as another {id} action.
     Route::get('residents/{id}/return-history', [ResidentController::class, 'returnHistory'])
         ->middleware('section:residents');
+    // Just id, name and barangay, for the request boards' walk-in picker. The
+    // literal segment goes before the apiResource so `lookup` is never read as
+    // a resident id. The full directory below stays with the Residents page.
+    Route::get('residents/lookup', [ResidentController::class, 'lookup'])
+        ->middleware('section:residents,requests,ambulance');
     Route::apiResource('residents', ResidentController::class)->middleware('section:residents');
 
     // MDRRMO staff accounts (audit #29). Super admins only: the page creates
@@ -264,6 +270,8 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         // Temporary password for a colleague who cannot sign in; refused for
         // yourself. See AdminController::resetPassword().
         Route::post('admins/{id}/reset-password', [AdminController::class, 'resetPassword']);
+        // Which sections an account may open, and whether it is a super admin.
+        Route::put('admins/{id}/permissions', [AdminController::class, 'updatePermissions']);
     });
 
     // Admin-only write access for shared resources. The reads stay open to every
@@ -308,6 +316,12 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         // Returned), so nothing in the panel or the app has ever called this.
         Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update']);
     });
+
+    // The uncatalogued borrow requests, and nothing else about borrowings. Its
+    // own route so Procurement does not need the borrowings list (and the
+    // borrower details on it) to draw a page of item names.
+    Route::get('procurement/other-equipment', [ProcurementReferenceController::class, 'index'])
+        ->middleware('section:procurement');
 
     // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and
     // tracked entirely by staff — there is no resident-facing route, the

@@ -238,9 +238,9 @@ class SmsBlastLoggingTest extends TestCase
     }
 
     /**
-     * The point of a shared code rather than each admin's own password: there
-     * is no role system, so any admin who was told the code may send — not
-     * just the admin who last set it.
+     * The point of a shared code rather than each admin's own password: any
+     * admin who holds the section and was told the code may send — not just
+     * the admin who last set it.
      */
     public function test_a_second_admin_who_knows_the_shared_code_may_also_send(): void
     {

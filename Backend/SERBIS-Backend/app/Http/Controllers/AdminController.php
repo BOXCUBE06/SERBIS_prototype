@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\AdminSections;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -16,10 +17,22 @@ use Illuminate\Validation\Rules\Password;
  * remove its own staff without someone holding database credentials — and a
  * departing employee's account could only be closed the same way.
  *
- * Every admin is trusted equally: any admin may create, edit and remove any
- * other. There is no super-admin tier, deliberately. A role column that only
- * ever holds one value is a tier nobody administers, and the alternative is a
- * permission model this office does not need.
+ * There are two kinds of account. A super admin (`is_super_admin`) sees every
+ * section of the panel, is the only kind that can open this page at all, and is
+ * the only one that can change anyone's access. Every other admin holds a list
+ * of sections (`permissions`, App\Support\AdminSections) and reaches only
+ * those. Staff Accounts is deliberately not a section that can be handed out:
+ * the page creates accounts, resets passwords and edits access, so an admin
+ * holding it could reset a super admin's password and sign in as one.
+ *
+ * That is why the checks in here on a super-admin target look redundant with
+ * the route's own gate. They are. The gate is the reason a non-super caller
+ * never gets this far; the checks are what keep that true if the gate is ever
+ * loosened.
+ *
+ * The first super admin is chosen on purpose, per environment, with
+ * `php artisan staff:make-super-admin <email>`. Nothing promotes anyone
+ * automatically. An account created here starts with no sections at all.
  *
  * There is no emailed reset: staff addresses are made-up @serbis.com usernames
  * and no mail is sent. Recovery is another admin choosing "Reset password" in
@@ -72,7 +85,7 @@ class AdminController extends Controller
         // here, never taken from the request: a client-settable role is how an
         // account ends up with a value the is.admin middleware does not
         // recognise, locking the account out of the panel it was made for.
-        $admin = User::create([
+        $admin = new User([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'email_address' => $validated['email_address'],
@@ -81,7 +94,17 @@ class AdminController extends Controller
             'status' => 'Active',
         ]);
 
-        return response()->json($admin, 201);
+        // No sections until a super admin grants some (updatePermissions). An
+        // empty list, not NULL: NULL is the unrestricted value every account
+        // that existed before permissions did keeps. Set before the first save
+        // so the account is never briefly open to everything, and so the
+        // creation is one row in the log rather than two.
+        $admin->permissions = [];
+        $admin->save();
+
+        // Re-read, so the response carries the columns the database defaulted
+        // (is_super_admin) that the in-memory instance never saw.
+        return response()->json($admin->fresh(), 201);
     }
 
     public function show($id)
@@ -101,6 +124,10 @@ class AdminController extends Controller
 
         if (! $admin) {
             return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+            return $refusal;
         }
 
         $emailRules = [
@@ -161,11 +188,16 @@ class AdminController extends Controller
             return response()->json(['message' => 'Admin not found'], 404);
         }
 
-        // Two refusals, and both exist because the panel has no other way back
+        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+            return $refusal;
+        }
+
+        // Three refusals, and all exist because the panel has no other way back
         // in. Closing your own account ends your session mid-click; closing the
         // last active one leaves an office with a running system and no way to
         // sign into it, recoverable only by the hand-written INSERT this whole
-        // feature replaced.
+        // feature replaced; and closing the last active super admin leaves
+        // nobody who can change anyone's access.
         if ((int) $admin->getKey() === (int) $request->user()->getKey()) {
             return response()->json([
                 'message' => 'You cannot close your own account. Ask another admin to do it.',
@@ -175,6 +207,12 @@ class AdminController extends Controller
         if ($this->activeCount() <= 1 && $this->isActive($admin)) {
             return response()->json([
                 'message' => 'This is the only active admin account. Create another one before closing it.',
+            ], 422);
+        }
+
+        if ($this->isLastActiveSuperAdmin($admin)) {
+            return response()->json([
+                'message' => 'This is the only active super admin. Make another account a super admin before closing it.',
             ], 422);
         }
 
@@ -215,10 +253,82 @@ class AdminController extends Controller
             return response()->json(['message' => 'Admin not found'], 404);
         }
 
+        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+            return $refusal;
+        }
+
         $admin->status = 'Active';
         $admin->save();
 
         return response()->json($admin);
+    }
+
+    /**
+     * Sets which sections an account may open, and whether it is a super admin.
+     * Either or both may be sent; what is not sent is left alone.
+     *
+     * Only a super admin gets here (the route's own gate), and the list is
+     * checked against the sections that can be handed out — Staff Accounts is
+     * not one of them, so it can be neither granted nor stored by a hand-built
+     * request. The account's own next request sees the change: access is read
+     * from the row on every call, not from anything in the token.
+     *
+     * The last active super admin cannot be demoted, whoever asks, themselves
+     * included. See isLastActiveSuperAdmin().
+     */
+    public function updatePermissions(Request $request, $id)
+    {
+        $caller = $request->user();
+
+        if (! $caller instanceof User || ! $caller->isSuperAdmin()) {
+            return response()->json([
+                'message' => 'Only a super admin can change who may open what.',
+                'code' => 'section_forbidden',
+            ], 403);
+        }
+
+        $admin = User::find($id);
+
+        if (! $admin) {
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'is_super_admin' => ['sometimes', 'boolean'],
+            'permissions' => ['sometimes', 'array'],
+            'permissions.*' => ['string', 'distinct', Rule::in(AdminSections::ASSIGNABLE)],
+        ], [
+            'permissions.*.in' => 'That is not a section that can be given to an account.',
+        ]);
+
+        if (! array_key_exists('is_super_admin', $validated) && ! array_key_exists('permissions', $validated)) {
+            return response()->json([
+                'message' => 'Send is_super_admin, permissions, or both.',
+                'errors' => ['permissions' => ['Send is_super_admin, permissions, or both.']],
+            ], 422);
+        }
+
+        if (array_key_exists('is_super_admin', $validated)
+            && ! $validated['is_super_admin']
+            && $this->isLastActiveSuperAdmin($admin)) {
+            return response()->json([
+                'message' => 'This is the only active super admin. Make another account a super admin before removing this one.',
+            ], 422);
+        }
+
+        if (array_key_exists('is_super_admin', $validated)) {
+            $admin->is_super_admin = (bool) $validated['is_super_admin'];
+        }
+
+        if (array_key_exists('permissions', $validated)) {
+            // Re-indexed and in sidebar order, so two saves of the same choice
+            // are the same row and the log only records real changes.
+            $admin->permissions = array_values(array_intersect(AdminSections::ASSIGNABLE, $validated['permissions']));
+        }
+
+        $admin->save();
+
+        return response()->json($admin->fresh());
     }
 
     /**
@@ -240,6 +350,10 @@ class AdminController extends Controller
 
         if (! $admin) {
             return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+            return $refusal;
         }
 
         if ((int) $admin->getKey() === (int) $request->user()->getKey()) {
@@ -283,6 +397,42 @@ class AdminController extends Controller
     private function isActive(User $admin): bool
     {
         return ! $admin->isDeactivated();
+    }
+
+    /**
+     * True when $admin is a super admin who can still sign in and is the only
+     * one. They are the one account that can change anyone's access, so closing
+     * or demoting them would leave the panel with no way to fix it short of
+     * `staff:make-super-admin` on the server. A deactivated super admin is not
+     * counted: they cannot sign in, so they are not a way back in.
+     */
+    private function isLastActiveSuperAdmin(User $admin): bool
+    {
+        return $admin->isSuperAdmin()
+            && $this->isActive($admin)
+            && User::activeSuperAdminCount() <= 1;
+    }
+
+    /**
+     * Refuses an action on a super admin's account from anyone who is not one.
+     *
+     * Editing a super admin's address or password, resetting it, or closing and
+     * reopening it are all ways to become one. The route's gate already keeps a
+     * non-super caller out of this controller; this is what holds if it is ever
+     * opened, so it is checked per target rather than assumed.
+     */
+    private function refuseSuperAdminTarget(Request $request, User $target)
+    {
+        $caller = $request->user();
+
+        if ($target->isSuperAdmin() && (! $caller instanceof User || ! $caller->isSuperAdmin())) {
+            return response()->json([
+                'message' => 'Only a super admin can change a super admin\'s account.',
+                'code' => 'section_forbidden',
+            ], 403);
+        }
+
+        return null;
     }
 
     /**

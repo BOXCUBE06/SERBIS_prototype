@@ -106,7 +106,19 @@ class SystemLogController extends Controller
         }
 
         if ($action === 'updated' && $log->old_values && $log->new_values) {
-            $changed = array_keys(array_diff_assoc($log->new_values, $log->old_values));
+            // Compared as text, the way array_diff_assoc did, except that an
+            // array-valued field (an admin's `permissions` list) is compared by
+            // its JSON. array_diff_assoc casts each value to a string, which
+            // throws "Array to string conversion" the moment one is an array —
+            // and that took the whole Activity Logs page down.
+            $text = fn ($value) => is_array($value) ? json_encode($value) : (string) $value;
+            $old = $log->old_values;
+
+            $changed = array_keys(array_filter(
+                $log->new_values,
+                fn ($value, $field) => ! array_key_exists($field, $old) || $text($value) !== $text($old[$field]),
+                ARRAY_FILTER_USE_BOTH
+            ));
             $fields = implode(', ', $changed);
 
             return "Updated {$module} (ID: {$log->auditable_id}) — fields: {$fields}";

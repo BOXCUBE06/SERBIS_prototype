@@ -27,6 +27,40 @@ class ResidentController extends Controller
         return response()->json($residents);
     }
 
+    /**
+     * Who a request can be filed for: an id, a name and a barangay, nothing else.
+     *
+     * The request boards need to pick a resident when staff file a walk-in, but
+     * index() hands back the whole directory — phone number, email, street
+     * address, account type — and that belongs to the Residents page alone. This
+     * is the part the boards actually use, so holding Resident Requests or
+     * Ambulance does not open the rest.
+     *
+     * The same shape index() returns for these fields (a `barangay` object), so
+     * the picker reads it the way it always did. Projected by hand rather than
+     * serialised from the model: the model appends derived fields (has_photo,
+     * is_phone_verified) that read columns this query does not select, so they
+     * would come back as confident-looking wrong answers.
+     */
+    public function lookup()
+    {
+        $residents = Resident::with('barangay:barangay_id,barangay_name')
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get(['resident_id', 'first_name', 'last_name', 'barangay_id'])
+            ->map(fn (Resident $resident) => [
+                'resident_id' => $resident->resident_id,
+                'first_name' => $resident->first_name,
+                'last_name' => $resident->last_name,
+                'barangay_id' => $resident->barangay_id,
+                'barangay' => $resident->barangay
+                    ? ['barangay_id' => $resident->barangay->barangay_id, 'barangay_name' => $resident->barangay->barangay_name]
+                    : null,
+            ]);
+
+        return response()->json(['data' => $residents]);
+    }
+
     public function store(Request $request)
     {
         // No 'otp' / 'otp_verified_at'. There is no OTP flow anywhere in this

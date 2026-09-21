@@ -60,12 +60,12 @@ class SmsController extends Controller
         // the application that spends money, and until now the sole thing
         // standing in front of it was a client-side dialog — see the route
         // definition, which notes that dialog does not survive a second tab, a
-        // reload mid-request, or a token replayed by hand. There is no role
-        // system (five admins, equal privileges — MDRRMO feedback,
-        // 2026-09-19), so this checks a code shared between the two staff who
-        // are supposed to know it, not the caller's own account password:
-        // any admin token can reach this route, but only someone who was
-        // told the code can make it actually send.
+        // reload mid-request, or a token replayed by hand. Holding the Text
+        // Blast section (EnsureSection) lets an admin open the page; it does
+        // not let them send. That takes a code shared between the two staff
+        // who are supposed to know it (MDRRMO feedback, 2026-09-19), not the
+        // caller's own account password, so an account given the section still
+        // cannot make it actually send without having been told the code.
         $this->assertCurrentCode($request);
 
         $residents = $this->resolveRecipients($validated['barangays']);
@@ -326,9 +326,10 @@ class SmsController extends Controller
 
     /**
      * Proves the caller knows the shared text-blast code, not their own
-     * account password — there is no role system in this application (five
-     * admin accounts, equal privileges), so "knows the code" is the only
-     * distinction between "may send a blast" and "may not" that exists.
+     * account password. Holding the Text Blast section only decides who may
+     * open the page; among those, "knows the code" is what separates "may send
+     * a blast" from "may not", so an account given the section by a super
+     * admin still cannot spend anything until it has been told the code.
      *
      * $inputKey lets rotateBlastCode() reuse this same check against its own
      * `current_code` field rather than duplicating the rate limit, the hash

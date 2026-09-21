@@ -512,6 +512,10 @@ class AuthController extends Controller
         return response()->json([
             'role' => 'admin',
             'user' => $user,
+            // What the panel may show this account, worked out here so the menu
+            // and the router never re-derive it. The server refuses the rest
+            // regardless (EnsureSection); this is only what to draw.
+            'sections' => $user instanceof User ? $user->allowedSections() : [],
         ]);
     }
 
@@ -635,6 +639,7 @@ class AuthController extends Controller
             'token' => $this->issueAdminToken($admin),
             'role' => 'admin',
             'user' => $admin,
+            'sections' => $admin->allowedSections(),
         ]);
     }
 
@@ -683,6 +688,7 @@ class AuthController extends Controller
             'token' => $this->issueAdminToken($admin),
             'role' => 'admin',
             'user' => $admin,
+            'sections' => $admin->allowedSections(),
         ], 200);
     }
 

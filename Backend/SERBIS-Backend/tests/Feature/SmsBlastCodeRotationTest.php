@@ -10,11 +10,11 @@ use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
- * MDRRMO feedback, 2026-09-19: there is no role system (five admin accounts,
- * equal privileges), so sending a text blast is gated on a code shared
+ * MDRRMO feedback, 2026-09-19: sending a text blast is gated on a code shared
  * between the two staff who know it, not on the caller's own account
- * password. This covers the rotation and status endpoints; SmsBlastLoggingTest
- * covers the send-time gate itself.
+ * password. That gate sits on top of the Text Blast section: the section lets
+ * an admin open the page, the code lets them send. This covers the rotation
+ * and status endpoints; SmsBlastLoggingTest covers the send-time gate itself.
  */
 class SmsBlastCodeRotationTest extends TestCase
 {

@@ -15,10 +15,12 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
 use App\Services\Fcm;
+use App\Support\AdminSections;
 use App\Support\PhoneNumber;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -177,6 +179,90 @@ class ServiceRequestController extends Controller
     }
 
     /**
+     * The admin making this request, or null for a resident. A resident's
+     * access is by ownership (ScopesToOwner), never by admin-panel section, so
+     * everything below leaves them alone.
+     */
+    private function staffOf(Request $request): ?User
+    {
+        $user = $request->user();
+
+        return $user instanceof User && $user->isAdmin() ? $user : null;
+    }
+
+    /**
+     * Narrows a service-request query to what an admin's sections cover.
+     *
+     * The two boards share one set of routes, so which rows a caller may see is
+     * decided here, from the service each request names: Ambulance holds the
+     * ambulance service's requests, Resident Requests holds every other,
+     * including the "Others" request that has no service row at all.
+     */
+    private function limitToSections($query, User $admin)
+    {
+        $requests = $admin->canAccess(AdminSections::REQUESTS);
+        $ambulance = $admin->canAccess(AdminSections::AMBULANCE);
+
+        if ($requests && $ambulance) {
+            return $query;
+        }
+
+        if (! $requests && ! $ambulance) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $isAmbulance = fn ($service) => $service->where('code', AdminSections::AMBULANCE_SERVICE_CODE);
+
+        return $ambulance
+            ? $query->whereHas('service', $isAmbulance)
+            : $query->where(fn ($rows) => $rows->whereNull('service_id')->orWhereDoesntHave('service', $isAmbulance));
+    }
+
+    /**
+     * 403 when a request belongs to a section the admin does not hold. Null for
+     * anyone it does not restrict, which includes every resident.
+     */
+    private function refuseOutsideSections(Request $request, ServiceRequest $serviceRequest): ?JsonResponse
+    {
+        $admin = $this->staffOf($request);
+
+        if ($admin === null) {
+            return null;
+        }
+
+        $serviceRequest->loadMissing('service');
+
+        return $this->refuseSection($admin, $serviceRequest->service?->code);
+    }
+
+    /** The same refusal for a request that does not exist yet: which service is it being filed under? */
+    private function refuseSectionForService(Request $request, mixed $serviceId): ?JsonResponse
+    {
+        $admin = $this->staffOf($request);
+
+        if ($admin === null) {
+            return null;
+        }
+
+        return $this->refuseSection($admin, $this->serviceCodeFor($serviceId));
+    }
+
+    private function refuseSection(User $admin, ?string $serviceCode): ?JsonResponse
+    {
+        $section = AdminSections::forServiceCode($serviceCode);
+
+        if ($admin->canAccess($section)) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => 'You do not have access to this kind of request. Ask a super admin to give it to you.',
+            'code' => 'section_forbidden',
+            'sections' => [$section],
+        ], 403);
+    }
+
+    /**
      * Full list, unpaginated — intentional, not an oversight. See the
      * PaginatesLists trait's own comment for the general reasoning; the P1
      * rate-limit/request-count audit (2026-09-15) walked this endpoint
@@ -194,17 +280,23 @@ class ServiceRequestController extends Controller
      * endpoint's payload size or query time becomes a real problem as the
      * table grows, not before.
      */
-    public function adminIndex()
+    public function adminIndex(Request $request)
     {
         // Added 'resident.barangay'
         // conductionRequests.people: C5's bridge — the Bookings queue's
         // Responding row needs its linked trip record (and who is driving
         // it) without a second round trip per row.
-        $requests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people'])
-            ->latest()
-            ->get();
+        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people'])
+            ->latest();
 
-        return response()->json(['data' => $requests]);
+        // Only the rows the admin's sections cover: Resident Requests and
+        // Ambulance are both served from here, and the panel splits them
+        // afterwards, so the server has to decide who may see which.
+        if ($admin = $this->staffOf($request)) {
+            $this->limitToSections($query, $admin);
+        }
+
+        return response()->json(['data' => $query->get()]);
     }
 
     public function index(Request $request)
@@ -213,7 +305,8 @@ class ServiceRequestController extends Controller
 
         if ($user instanceof User && $user->isAdmin()) {
             // Added 'resident.barangay'
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])->get();
+            $query = ServiceRequest::with(['resident.barangay', 'service', 'admin']);
+            $serviceRequests = $this->limitToSections($query, $user)->get();
         } else {
             $residentId = $user->getKey();
             // Added 'resident.barangay'
@@ -810,6 +903,12 @@ class ServiceRequestController extends Controller
      */
     public function adminStore(Request $request)
     {
+        // Which section the new request lands in follows its service, so an admin
+        // holding only one of the two boards cannot file into the other.
+        if ($refusal = $this->refuseSectionForService($request, $request->input('service_id'))) {
+            return $refusal;
+        }
+
         // Resolved before validate() so it can be interpolated into
         // required_if/required_unless below — Laravel's own rules take a
         // literal, not a query, and the ambulance service's id is not a
@@ -1049,6 +1148,10 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
         // Same reasoning as index()'s resident branch: internal_notes is for
         // staff only, and this route serves the same model to both audiences.
         if ($user instanceof Resident) {
@@ -1075,7 +1178,17 @@ class ServiceRequestController extends Controller
 
         // 404 rather than 403 for a non-owner, so the response does not disclose
         // that the request exists.
-        if (! $serviceRequest || ! $serviceRequest->{$column}) {
+        if (! $serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        // Before the file check, so an admin outside the section gets the same
+        // answer whether or not the request has a file to serve.
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
+        if (! $serviceRequest->{$column}) {
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
@@ -1156,6 +1269,10 @@ class ServiceRequestController extends Controller
         // response must not disclose that the request exists.
         if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
         }
 
         // Once a unit is Responding the cancellation is an operational decision,
@@ -1363,6 +1480,17 @@ class ServiceRequestController extends Controller
 
         if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
+        // Moving a request to another service moves it to another section, so
+        // the destination has to be one the admin holds too, or a Resident
+        // Requests admin could turn a request into an ambulance one and reach it.
+        if ($request->has('service_id') && ($refusal = $this->refuseSectionForService($request, $request->input('service_id')))) {
+            return $refusal;
         }
 
         $validated = $request->validate([
@@ -1711,6 +1839,10 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
         if ($serviceRequest->status !== 'Booked') {
             return response()->json([
                 'message' => 'Only a booked request can be approved.',
@@ -1819,6 +1951,10 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'Service request not found'], 404);
         }
 
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
         if ($serviceRequest->status !== 'Booked') {
             return response()->json([
                 'message' => 'Only a booked request can be rescheduled.',
@@ -1886,12 +2022,16 @@ class ServiceRequestController extends Controller
         return response()->json($fresh);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
 
         if (! $serviceRequest) {
             return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
         }
 
         $serviceRequest->delete();

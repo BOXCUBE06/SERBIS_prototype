@@ -104,9 +104,17 @@ class SectionMiddlewareTest extends TestCase
         ];
     }
 
+    /**
+     * The middleware's refusal specifically. ServiceRequestController also
+     * answers `section_forbidden` for a request in the other board's section,
+     * in its own words; that is covered in ServiceRequestSectionScopeTest and is
+     * not what these samples (which send no body) are asking about.
+     */
     private function refusedBySection($response): bool
     {
-        return $response->getStatusCode() === 403 && $response->json('code') === 'section_forbidden';
+        return $response->getStatusCode() === 403
+            && $response->json('code') === 'section_forbidden'
+            && str_starts_with((string) $response->json('message'), 'You do not have access to this section.');
     }
 
     /**
