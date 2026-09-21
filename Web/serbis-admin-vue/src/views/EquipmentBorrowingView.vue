@@ -1,5 +1,8 @@
 <template>
-  <v-container fluid class="align-start bg-background" style="min-height: 100vh;">
+  <!-- fill-height like every other page, not min-height: 100vh. The shell's
+       content box is 100vh minus its 12px padding top and bottom, so a
+       viewport-tall child always overshoots it and adds a scroll for nothing. -->
+  <v-container fluid class="fill-height align-start bg-background">
     <PageHeader
       title="Equipment Borrowing"
     />
