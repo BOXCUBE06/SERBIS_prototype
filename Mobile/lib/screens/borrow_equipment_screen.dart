@@ -155,10 +155,15 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
               onProfileTap: widget.onOpenProfile,
               filipino: f,
             ),
+          if (widget.embedded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+              child: SectionHeader(title: tr(f, 'borrow.title')),
+            ),
           if (widget.appState.borrowIsOffline)
             OfflineBanner(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+            padding: EdgeInsets.fromLTRB(22, widget.embedded ? 0 : 16, 22, 0),
             child: _SegmentedToggle(
               leftLabel: 'Available',
               rightLabel: 'My Requests (${_myRequests.length})',

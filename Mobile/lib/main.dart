@@ -565,6 +565,14 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       _appState.loadRequests(silent: true, maxAge: _tabRefreshMaxAge);
     }
 
+    // The Borrow tab keeps its screen alive between visits, so a loan MDRRMO
+    // approved while the resident was elsewhere shows up on arrival.
+    if (index == _borrowTab &&
+        !widget.user.isAwaitingApproval &&
+        _appState.borrowingAllowed) {
+      _appState.loadBorrowRequests(silent: true, maxAge: _tabRefreshMaxAge);
+    }
+
     _syncPolling();
   }
 
@@ -666,37 +674,46 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         );
 
     final screens = [
-      slot(_homeTab, (_) => HomeScreen(
-            appState: _appState,
-            user: widget.user,
-            onOpenTrack: () => _goTo(_trackTab),
-            onOpenLibrary: _openLibraryPage,
-            onOpenProfile: onOpenProfile,
-            onOpenNotifications: onOpenNotifications,
-            onOpenServices: () => _goTo(_servicesTab),
-            onOpenService: _openService,
-            onOpenBorrow: () => _goTo(_borrowTab),
-          ), deps: widget.user),
-      slot(_ambulanceTab, (_) => widget.user.isAwaitingApproval
-          ? awaitingApproval()
-          : AmbulanceScreen(
-              appState: _appState,
-              user: widget.user,
-              drafts: _drafts,
-              onSubmitted: () => _goTo(_trackTab),
-              onOpenNotifications: onOpenNotifications,
-              onOpenProfile: onOpenProfile,
-            ), deps: widget.user),
-      slot(_servicesTab, (_) => widget.user.isAwaitingApproval
-          ? awaitingApproval()
-          : ServicesScreen(
-              appState: _appState,
-              user: widget.user,
-              drafts: _drafts,
-              onSubmitted: () => _goTo(_trackTab),
-              onOpenNotifications: onOpenNotifications,
-              onOpenProfile: onOpenProfile,
-            ), deps: widget.user),
+      slot(
+          _homeTab,
+          (_) => HomeScreen(
+                appState: _appState,
+                user: widget.user,
+                onOpenTrack: () => _goTo(_trackTab),
+                onOpenLibrary: _openLibraryPage,
+                onOpenProfile: onOpenProfile,
+                onOpenNotifications: onOpenNotifications,
+                onOpenServices: () => _goTo(_servicesTab),
+                onOpenService: _openService,
+                onOpenBorrow: () => _goTo(_borrowTab),
+              ),
+          deps: widget.user),
+      slot(
+          _ambulanceTab,
+          (_) => widget.user.isAwaitingApproval
+              ? awaitingApproval()
+              : AmbulanceScreen(
+                  appState: _appState,
+                  user: widget.user,
+                  drafts: _drafts,
+                  onSubmitted: () => _goTo(_trackTab),
+                  onOpenNotifications: onOpenNotifications,
+                  onOpenProfile: onOpenProfile,
+                ),
+          deps: widget.user),
+      slot(
+          _servicesTab,
+          (_) => widget.user.isAwaitingApproval
+              ? awaitingApproval()
+              : ServicesScreen(
+                  appState: _appState,
+                  user: widget.user,
+                  drafts: _drafts,
+                  onSubmitted: () => _goTo(_trackTab),
+                  onOpenNotifications: onOpenNotifications,
+                  onOpenProfile: onOpenProfile,
+                ),
+          deps: widget.user),
       slot(_borrowTab, (_) {
         final f = _appState.language == AppLanguage.filipino;
         if (widget.user.isAwaitingApproval) return awaitingApproval();
@@ -718,40 +735,52 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           onOpenProfile: onOpenProfile,
         );
       }, deps: widget.user),
-      slot(_trackTab, (_) => TrackScreen(
-            appState: _appState,
-            onOpenNotifications: onOpenNotifications,
-            onOpenProfile: onOpenProfile,
-          )),
+      slot(
+          _trackTab,
+          (_) => TrackScreen(
+                appState: _appState,
+                onOpenNotifications: onOpenNotifications,
+                onOpenProfile: onOpenProfile,
+              )),
     ];
 
-    return Scaffold(
-      extendBody: true,
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            // Above every screen, not inside one: being unable to reach MDRRMO
-            // is true of the whole app, and the resident must see it wherever
-            // they happen to be standing.
-            if (_appState.isOffline)
-              OfflineBanner(
-                filipino: _appState.language == AppLanguage.filipino,
-                lastUpdated: _appState.requestsFetchedAt,
-              ),
-            Expanded(child: IndexedStack(index: _index, children: screens)),
-          ],
+    // Back from any other tab returns to Home before it leaves the app, as the
+    // Material navigation guidance asks. A page pushed above the tabs (Profile,
+    // a service form) takes the back press first, so this only sees it when the
+    // tabs are showing.
+    return PopScope(
+      canPop: _index == _homeTab,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goTo(_homeTab);
+      },
+      child: Scaffold(
+        extendBody: true,
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
+            children: [
+              // Above every screen, not inside one: being unable to reach MDRRMO
+              // is true of the whole app, and the resident must see it wherever
+              // they happen to be standing.
+              if (_appState.isOffline)
+                OfflineBanner(
+                  filipino: _appState.language == AppLanguage.filipino,
+                  lastUpdated: _appState.requestsFetchedAt,
+                ),
+              Expanded(child: IndexedStack(index: _index, children: screens)),
+            ],
+          ),
         ),
-      ),
-      // Its own listener: the shell does not rebuild on a language change, and
-      // the labels are words.
-      bottomNavigationBar: ListenableBuilder(
-        listenable: _appState,
-        builder: (_, __) => AppBottomNav(
-          index: _index,
-          onTap: _goTo,
-          filipino: _appState.language == AppLanguage.filipino,
+        // Its own listener: the shell does not rebuild on a language change, and
+        // the labels are words.
+        bottomNavigationBar: ListenableBuilder(
+          listenable: _appState,
+          builder: (_, __) => AppBottomNav(
+            index: _index,
+            onTap: _goTo,
+            filipino: _appState.language == AppLanguage.filipino,
+          ),
         ),
       ),
     );

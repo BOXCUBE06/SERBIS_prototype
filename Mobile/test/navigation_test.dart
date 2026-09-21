@@ -1,9 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:serbis/models/request_models.dart';
+import 'package:serbis/screens/borrow_equipment_screen.dart';
+import 'package:serbis/screens/dashboard_screen.dart';
+import 'package:serbis/screens/unavailable_tab_screen.dart';
+import 'package:serbis/state/account_store.dart';
+import 'package:serbis/state/api_service.dart';
+import 'package:serbis/state/request_store.dart';
 import 'package:serbis/state/translations.dart';
 import 'package:serbis/theme/app_theme.dart';
 import 'package:serbis/widgets/app_bottom_nav.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
+
+class _Api extends ApiService {
+  @override
+  Future<List<Map<String, dynamic>>> getRequests() async => [];
+
+  @override
+  Future<List<Map<String, dynamic>>> getServices({String locale = 'en'}) async => [];
+
+  @override
+  Future<List<Map<String, dynamic>>> getInfoMaterials() async => [];
+
+  @override
+  Future<List<Map<String, dynamic>>> getEquipments() async => [];
+
+  @override
+  Future<List<Map<String, dynamic>>> getBorrowings() async => [];
+}
+
+const _resident = AppUser(
+  id: '1',
+  firstName: 'Maria',
+  lastName: 'Santos',
+  email: 'maria@example.com',
+  address: 'San Fabian',
+);
 
 Future<void> _pumpNav(
   WidgetTester tester, {
@@ -142,6 +174,127 @@ void main() {
       ));
 
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('Home', () {
+    Future<void> pumpHome(
+      WidgetTester tester, {
+      VoidCallback? onOpenLibrary,
+      ValueChanged<ServiceType>? onOpenService,
+      VoidCallback? onOpenBorrow,
+    }) async {
+      tester.view.physicalSize = const Size(1080, 3600);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(
+          body: HomeScreen(
+            appState: AppState(_Api()),
+            user: _resident,
+            onOpenTrack: () {},
+            onOpenLibrary: onOpenLibrary ?? () {},
+            onOpenProfile: () {},
+            onOpenNotifications: () {},
+            onOpenServices: () {},
+            onOpenService: onOpenService ?? (_) {},
+            onOpenBorrow: onOpenBorrow,
+          ),
+        ),
+      ));
+    }
+
+    testWidgets('a large Safety guides card opens the Library', (tester) async {
+      var opened = 0;
+      await pumpHome(tester, onOpenLibrary: () => opened++);
+
+      expect(find.text('Safety guides'), findsOneWidget);
+      expect(find.textContaining('First aid'), findsOneWidget);
+
+      final card = find.ancestor(of: find.text('Safety guides'), matching: find.byType(InkWell)).first;
+      expect(tester.getSize(card).height, greaterThanOrEqualTo(88));
+
+      await tester.tap(find.text('Safety guides'));
+      expect(opened, 1);
+    });
+
+    testWidgets('the ambulance shortcut hands its type to the shell', (tester) async {
+      final seen = <ServiceType>[];
+      await pumpHome(tester, onOpenService: seen.add);
+
+      await tester.tap(find.text(ServiceType.ambulance.titleFor(false)));
+      expect(seen, [ServiceType.ambulance]);
+    });
+
+    testWidgets('the borrow shortcut opens the Borrow tab instead of pushing a page', (tester) async {
+      var opened = 0;
+      await pumpHome(tester, onOpenBorrow: () => opened++);
+
+      await tester.tap(find.text('Borrow Equipment'));
+      await tester.pump();
+
+      expect(opened, 1);
+      expect(find.byType(BorrowEquipmentScreen), findsNothing);
+    });
+  });
+
+  group('Borrow tab', () {
+    testWidgets('embedded, it carries the app header and a title, not a back-button bar', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: BorrowEquipmentScreen(
+          appState: AppState(_Api()),
+          user: _resident,
+          embedded: true,
+          onOpenNotifications: () {},
+          onOpenProfile: () {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppHeader), findsOneWidget);
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.text('Borrow equipment'), findsOneWidget);
+      expect(find.text('Available'), findsOneWidget);
+      expect(find.textContaining('My Requests'), findsOneWidget);
+    });
+
+    testWidgets('pushed from elsewhere it keeps its app bar', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: BorrowEquipmentScreen(appState: AppState(_Api()), user: _resident),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppBar), findsOneWidget);
+      expect(find.byType(AppHeader), findsNothing);
+    });
+
+    testWidgets('a tab the account is not offered says so, in both languages', (tester) async {
+      for (final filipino in [false, true]) {
+        await tester.pumpWidget(MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: UnavailableTabScreen(
+              icon: Icons.inventory_2_outlined,
+              title: tr(filipino, 'nav.borrow'),
+              message: tr(filipino, 'tab.borrow_unavailable'),
+              filipino: filipino,
+              onOpenNotifications: () {},
+              onOpenProfile: () {},
+            ),
+          ),
+        ));
+
+        expect(find.text(tr(filipino, 'tab.borrow_unavailable')), findsOneWidget);
+        expect(find.byType(AppButton), findsNothing);
+      }
     });
   });
 }

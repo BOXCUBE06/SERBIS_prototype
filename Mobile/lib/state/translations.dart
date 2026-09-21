@@ -89,6 +89,7 @@ const Map<String, (String, String)> _strings = {
     'The list could not be loaded. Check your connection and try again.',
     'Hindi ma-load ang listahan. Suriin ang koneksyon at subukang muli.',
   ),
+  'borrow.title': ('Borrow equipment', 'Manghiram ng kagamitan'),
   'tab.retry': ('Try again', 'Subukang muli'),
   'home.safety_guides': ('Safety guides', 'Mga Gabay sa Kaligtasan'),
   'home.safety_guides_desc': (
