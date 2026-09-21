@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AdminSections;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -59,6 +60,63 @@ class User extends Authenticatable
         return strtolower($this->role ?? '') === 'admin';
     }
 
+    /**
+     * A super admin is a flag on an admin, not a value of `role`: isAdmin()
+     * matches 'admin' exactly, and a client-settable role is how an account
+     * ends up locked out of the panel it was made for (AdminController::store).
+     */
+    public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_super_admin;
+    }
+
+    /**
+     * The sections this account may open, in sidebar order.
+     *
+     * A super admin has all of them, Staff Accounts included. Anyone else has
+     * the listed ones, or every assignable one when the list is NULL — the
+     * value every account that existed before permissions did keeps, so
+     * deploying them changes nothing for anyone. Staff Accounts is never
+     * assignable (AdminSections::ASSIGNABLE) and unknown keys are ignored, so a
+     * stale or hand-edited list cannot grant more than the panel offers.
+     *
+     * @return list<string>
+     */
+    public function allowedSections(): array
+    {
+        if ($this->isSuperAdmin()) {
+            return AdminSections::ALL;
+        }
+
+        $granted = $this->permissions;
+
+        if (! is_array($granted)) {
+            return AdminSections::ASSIGNABLE;
+        }
+
+        return array_values(array_intersect(AdminSections::ASSIGNABLE, $granted));
+    }
+
+    public function canAccess(string $section): bool
+    {
+        return in_array($section, $this->allowedSections(), true);
+    }
+
+    /**
+     * Super admins who can still sign in. The last one may not be demoted,
+     * closed or deleted: they are the only account that can change anyone's
+     * access, so losing them leaves the panel with no way to fix it short of
+     * `staff:make-super-admin` on the server.
+     */
+    public static function activeSuperAdminCount(): int
+    {
+        return static::where('is_super_admin', true)
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhereRaw('LOWER(status) != ?', ['inactive']);
+            })
+            ->count();
+    }
+
     protected $table = 'tbl_user';
 
     protected $primaryKey = 'admin_id';
@@ -75,6 +133,12 @@ class User extends Authenticatable
             // Not in #[Fillable]: only the reset paths set it, one attribute
             // at a time, so no request payload can clear or raise it.
             'must_change_password' => 'boolean',
+            // Also not in #[Fillable], for the same reason and a worse one: a
+            // mass-assignable flag is a request that promotes itself.
+            // AdminController::updatePermissions and staff:make-super-admin are
+            // the only writers.
+            'is_super_admin' => 'boolean',
+            'permissions' => 'array',
         ];
     }
 
