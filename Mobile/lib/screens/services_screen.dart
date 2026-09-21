@@ -7,6 +7,7 @@ import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/motion.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
@@ -51,7 +52,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
   bool _loading = true;
   ServiceDrafts? _ownDrafts;
 
-  ServiceDrafts get _drafts => widget.drafts ?? (_ownDrafts ??= ServiceDrafts(widget.user));
+  ServiceDrafts get _drafts =>
+      widget.drafts ?? (_ownDrafts ??= ServiceDrafts(widget.user));
 
   @override
   void initState() {
@@ -73,13 +75,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// Read live from the store on every build. "Others" has no tbl_services row,
   /// so it never comes back from the catalogue and is appended here.
   List<ServiceCatalogItem> _tiles() => [
-        ...widget.appState.services.where((s) => s.formKind != ServiceFormKind.ambulance),
+        ...widget.appState.services
+            .where((s) => s.formKind != ServiceFormKind.ambulance),
         if (widget.appState.othersAllowed) const ServiceCatalogItem.others(),
       ];
 
   void _open(ServiceCatalogItem service) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => ServiceFormPage(
+    Navigator.of(context).push(serbisRoute<void>(
+      (_) => ServiceFormPage(
         appState: widget.appState,
         user: widget.user,
         service: service,
@@ -118,7 +121,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
               child: Text(
                 tr(f, 'services.grid_intro'),
-                style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.5),
+                style: AppText.body(
+                    size: 14, color: AppColors.inkMuted, height: 1.5),
               ),
             ),
             if (_loading && widget.appState.services.isEmpty)
@@ -128,15 +132,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
               )
             else if (loadFailed)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 child: Row(
                   children: [
-                    const Icon(Icons.wifi_off_rounded, size: 20, color: AppColors.inkMuted),
+                    const Icon(Icons.wifi_off_rounded,
+                        size: 20, color: AppColors.inkMuted),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         "Couldn't load services. Check your connection and try again.",
-                        style: AppText.body(size: 13, color: AppColors.inkMuted),
+                        style:
+                            AppText.body(size: 13, color: AppColors.inkMuted),
                       ),
                     ),
                     TextButton(
@@ -188,8 +195,8 @@ class _TileGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final oneColumn =
-            constraints.maxWidth < 280 || MediaQuery.textScalerOf(context).scale(14) > 20;
+        final oneColumn = constraints.maxWidth < 280 ||
+            MediaQuery.textScalerOf(context).scale(14) > 20;
         final columns = oneColumn ? 1 : 2;
 
         final rows = <Widget>[];
@@ -197,13 +204,18 @@ class _TileGrid extends StatelessWidget {
           final cells = <Widget>[];
           for (var c = 0; c < columns; c++) {
             if (c > 0) cells.add(const SizedBox(width: _gap));
-            cells.add(Expanded(child: i + c < children.length ? children[i + c] : const SizedBox.shrink()));
+            cells.add(Expanded(
+                child: i + c < children.length
+                    ? children[i + c]
+                    : const SizedBox.shrink()));
           }
           if (rows.isNotEmpty) rows.add(const SizedBox(height: _gap));
           // Equal heights within a row, so a two-line name and a three-line name
           // sit as one row of tiles rather than a ragged pair.
           rows.add(IntrinsicHeight(
-            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: cells),
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: cells),
           ));
         }
         return Column(children: rows);
@@ -217,7 +229,11 @@ class _ServiceTile extends StatelessWidget {
   final bool filipino;
   final VoidCallback onTap;
 
-  const _ServiceTile({super.key, required this.service, required this.filipino, required this.onTap});
+  const _ServiceTile(
+      {super.key,
+      required this.service,
+      required this.filipino,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -229,31 +245,39 @@ class _ServiceTile extends StatelessWidget {
       label: name,
       onTap: onTap,
       excludeSemantics: true,
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: onTap,
+      child: PressableScale(
+        child: Material(
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(18),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 124),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.line, width: 1.5),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconBadge(icon: badge.icon, bg: badge.bg, fg: badge.fg, size: 46, iconSize: 24, radius: 14),
-                const SizedBox(height: 10),
-                Text(
-                  name,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.display(size: 14.5, height: 1.25),
-                ),
-              ],
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 124),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconBadge(
+                      icon: badge.icon,
+                      bg: badge.bg,
+                      fg: badge.fg,
+                      size: 46,
+                      iconSize: 24,
+                      radius: 14),
+                  const SizedBox(height: 10),
+                  Text(
+                    name,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.display(size: 14.5, height: 1.25),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

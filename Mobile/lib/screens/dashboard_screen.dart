@@ -4,6 +4,7 @@ import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/motion.dart';
 import '../widgets/shared_widgets.dart';
 import 'borrow_equipment_screen.dart';
 
@@ -394,7 +395,9 @@ class _SafetyGuidesCard extends StatelessWidget {
   const _SafetyGuidesCard({required this.title, required this.description, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => PressableScale(child: _card());
+
+  Widget _card() {
     return Semantics(
       button: true,
       label: title,
@@ -468,7 +471,9 @@ class _QuickTypeCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => PressableScale(child: _card());
+
+  Widget _card() {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),

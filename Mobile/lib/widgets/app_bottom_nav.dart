@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'motion.dart';
 
 /// The shell's bottom bar.
 class AppBottomNav extends StatelessWidget {
@@ -23,6 +24,8 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final duration = reduceMotion(context) ? Duration.zero : kMotionExit;
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -56,8 +59,12 @@ class AppBottomNav extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Container(
-                              width: 48,
+                            // The indicator grows out of the icon rather than
+                            // switching on, so the eye follows the selection.
+                            AnimatedContainer(
+                              duration: duration,
+                              curve: kEaseOut,
+                              width: active ? 52 : 28,
                               height: 28,
                               decoration: BoxDecoration(
                                 color: active ? AppColors.green50 : Colors.transparent,
@@ -75,14 +82,15 @@ class AppBottomNav extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 2),
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: Text(
-                                  label,
-                                  maxLines: 1,
+                                child: AnimatedDefaultTextStyle(
+                                  duration: duration,
+                                  curve: kEaseOut,
                                   style: AppText.display(
                                     size: 11.5,
                                     weight: active ? FontWeight.w700 : FontWeight.w500,
                                     color: active ? AppColors.green700 : AppColors.inkMuted,
                                   ),
+                                  child: Text(label, maxLines: 1),
                                 ),
                               ),
                             ),

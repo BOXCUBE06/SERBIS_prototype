@@ -28,6 +28,7 @@ import 'state/request_store.dart';
 import 'state/account_store.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_bottom_nav.dart';
+import 'widgets/motion.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
 
@@ -590,8 +591,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     _profileOpen = true;
 
     Navigator.of(context)
-        .push(MaterialPageRoute<void>(
-          builder: (routeContext) => Scaffold(
+        .push(serbisRoute<void>(
+          (routeContext) => Scaffold(
             body: ListenableBuilder(
               listenable: Listenable.merge([_appState, _user]),
               builder: (_, __) => ProfileScreen(
@@ -619,8 +620,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   }
 
   void _openLibraryPage() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (routeContext) => Scaffold(
+    Navigator.of(context).push(serbisRoute<void>(
+      (routeContext) => Scaffold(
         body: ListenableBuilder(
           listenable: _appState,
           builder: (_, __) => LibraryScreen(
@@ -768,7 +769,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                   filipino: _appState.language == AppLanguage.filipino,
                   lastUpdated: _appState.requestsFetchedAt,
                 ),
-              Expanded(child: IndexedStack(index: _index, children: screens)),
+              Expanded(child: TabFade(index: _index, children: screens)),
             ],
           ),
         ),
