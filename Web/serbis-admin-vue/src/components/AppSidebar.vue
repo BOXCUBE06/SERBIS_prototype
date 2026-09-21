@@ -33,10 +33,11 @@
             class="nav-item"
             rounded="pill"
             active-class="active-nav-item"
+            slim
             :ripple="false"
           >
             <template v-slot:prepend>
-              <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
+              <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
                 <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
               </v-avatar>
             </template>
@@ -55,10 +56,11 @@
             class="nav-item"
             rounded="pill"
             active-class="active-nav-item"
+            slim
             :ripple="false"
           >
             <template v-slot:prepend>
-              <v-avatar rounded="circle" size="32" class="nav-icon-avatar mr-3" color="transparent">
+              <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
                 <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
               </v-avatar>
             </template>
@@ -231,7 +233,6 @@ const systemMenu = [
 
 .nav-item:hover:not(.active-nav-item) {
   background-color: rgba(255, 255, 255, 0.04) !important;
-  transform: translateX(4px);
 }
 .nav-item:hover:not(.active-nav-item) .nav-icon-avatar { background-color: rgba(255, 255, 255, 0.05) !important; }
 .nav-item:hover:not(.active-nav-item) .nav-label,
@@ -240,8 +241,9 @@ const systemMenu = [
 .active-nav-item {
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%) !important;
 }
-.active-nav-item .nav-label, .active-nav-item .v-icon { color: #fff !important; font-weight: 700 !important; }
-.active-nav-item .nav-icon-avatar { border: 1px solid rgba(255, 255, 255, 0.15); }
+/* Colour only marks active: weight, transform and borders all change box
+   metrics and make the row shift on click. */
+.active-nav-item .nav-label, .active-nav-item .v-icon { color: #fff !important; }
 
 .profile-card { border-radius: 12px !important; border: 1px solid rgba(255, 255, 255, 0.02) !important; }
 .profile-card:hover { background-color: rgba(255, 255, 255, 0.06) !important; border-color: rgba(255, 255, 255, 0.1) !important; transform: translateY(-2px); }
