@@ -1735,15 +1735,25 @@ const unitOptions = computed(() => {
 // `table-layout: fixed` — without both, columns size off the visible text and
 // jump on every filter or search (MDRRMO feedback, 2026-09-18). Percentages,
 // not px: the px set summed to 1028px and overflowed the panel below ~1450px.
-const tableHeaders = computed(() => [
-  { title: '', key: 'select', sortable: false, width: '48px' },
-  { title: 'Status', key: 'status', width: '13%' },
-  { title: 'Scheduled', key: 'scheduled_at', width: '18%' },
-  { title: 'Requester', key: '_requesterName', width: '22%' },
-  { title: props.scope === 'ambulance' ? 'Barangay' : 'Service', key: '_secondary', width: '16%' },
-  { title: 'Patient', key: 'patient_name', width: '15%' },
-  { title: 'Unit', key: '_unit', width: '12%' },
-])
+// Scheduled and Patient are ambulance-only (booking fields), so they are dropped
+// on the other board and their width is spread over the columns that remain.
+const HEADER_WIDTH_TOTAL = 96
+const tableHeaders = computed(() => {
+  const ambulance = props.scope === 'ambulance'
+  const columns = [
+    { title: 'Status', key: 'status', width: 13 },
+    ...(ambulance ? [{ title: 'Scheduled', key: 'scheduled_at', width: 18 }] : []),
+    { title: 'Requester', key: '_requesterName', width: 22 },
+    { title: ambulance ? 'Barangay' : 'Service', key: '_secondary', width: 16 },
+    ...(ambulance ? [{ title: 'Patient', key: 'patient_name', width: 15 }] : []),
+    { title: 'Unit', key: '_unit', width: 12 },
+  ]
+  const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
+  return [
+    { title: '', key: 'select', sortable: false, width: '48px' },
+    ...columns.map(c => ({ ...c, width: `${Math.round(c.width * scale * 10) / 10}%` })),
+  ]
+})
 
 // Dashboard KPI cards deep-link here with ?status=Pending — honor it once on
 // arrival so the operator lands on the filtered view, not "All".
