@@ -10,9 +10,9 @@
     <div class="blast-layout">
 
         <v-card elevation="0" rounded="xl" class="blast-card fade-in">
-          <div class="blast-pad border-b bg-surface d-flex flex-wrap align-center gap-4">
-            <v-avatar color="red-lighten-5" size="72" class="rounded-lg blast-avatar">
-              <v-icon color="error" size="36">mdi-bullhorn-outline</v-icon>
+          <div class="blast-head border-b bg-surface d-flex flex-wrap align-center gap-4">
+            <v-avatar color="red-lighten-5" size="44" class="rounded-lg blast-avatar">
+              <v-icon color="error" size="24">mdi-bullhorn-outline</v-icon>
             </v-avatar>
             <!-- Reachable from the header rather than buried in a settings page —
                  the two people who know the code are the ones who need this. -->
@@ -48,12 +48,12 @@
             </div>
           </div>
 
-          <v-card-text class="blast-pad">
-            <v-alert 
-              v-if="alert.show" 
-              :type="alert.type" 
-              variant="tonal" 
-              class="mb-8" 
+          <v-card-text class="blast-body">
+            <v-alert
+              v-if="alert.show"
+              :type="alert.type"
+              variant="tonal"
+              class="mb-4"
               density="comfortable" 
               rounded="lg" 
               closable 
@@ -68,8 +68,8 @@
                    SmsController::sendBlast filters status = Active AND
                    sms_opt_in AND a non-null phone number, so "every
                    resident" would overstate who actually receives this. -->
-              <div class="mb-6">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Target Audience</div>
+              <div class="mb-2">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Target Audience</div>
                 <v-select
                   v-model="selectedBarangays"
                   :items="barangays"
@@ -81,7 +81,8 @@
                   closable-chips
                   placeholder="Select one or more barangays"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
+                  hide-details="auto"
                   rounded="lg"
                   color="error"
                   bg-color="grey-lighten-5"
@@ -113,8 +114,8 @@
                 </v-select>
               </div>
 
-              <div class="mb-6">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Message Template</div>
+              <div class="mb-2">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Message Template</div>
                 <v-select
                   v-model="selectedTemplate"
                   :items="templates"
@@ -122,7 +123,8 @@
                   item-value="label"
                   placeholder="Start from a template (optional)"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
+                  hide-details="auto"
                   rounded="lg"
                   color="error"
                   bg-color="grey-lighten-5"
@@ -132,17 +134,17 @@
                 ></v-select>
               </div>
 
-              <div class="mb-2">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Message Content</div>
+              <div>
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Message Content</div>
                 <v-textarea
                   v-model="message"
                   placeholder="e.g., MDRRMO Alert: Flood warning in your area. Evacuate to higher ground immediately."
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
                   color="error"
                   bg-color="grey-lighten-5"
-                  rows="5"
+                  rows="3"
                   counter="160"
                   class="font-weight-medium text-body-1"
                   :rules="[
@@ -160,7 +162,7 @@
                    it was fetched, but the roll can change before Send; the
                    segment count is derived from the GSM 03.38 tables because
                    SkySMS has no sandbox to confirm it against. -->
-              <div class="mt-6 pa-4 rounded-lg bg-grey-lighten-5 border">
+              <div class="mt-1 pa-3 rounded-lg bg-grey-lighten-5 border">
                 <div class="d-flex align-center justify-space-between flex-wrap gap-3">
                   <div class="d-flex align-center gap-2">
                     <v-icon size="20" class="text-medium-emphasis">mdi-account-group-outline</v-icon>
@@ -191,7 +193,7 @@
                   </div>
                 </div>
 
-                <div v-if="billedUnits !== null" class="text-caption text-medium-emphasis mt-3">
+                <div v-if="billedUnits !== null" class="text-caption text-medium-emphasis mt-2">
                   About {{ billedUnits.toLocaleString() }} SMS {{ billedUnits === 1 ? 'unit' : 'units' }} for this blast
                   ({{ recipientCount.toLocaleString() }} × {{ sms.segments }}).
                 </div>
@@ -206,7 +208,7 @@
                   variant="tonal"
                   density="compact"
                   rounded="lg"
-                  class="mt-3"
+                  class="mt-2"
                 >
                   <span class="text-body-2">
                     This message has left the GSM-7 alphabet, so one segment now holds 70 characters instead of 160.
@@ -232,7 +234,7 @@
                   variant="tonal"
                   density="compact"
                   rounded="lg"
-                  class="mt-3"
+                  class="mt-2"
                   role="alert"
                 >
                   <span class="text-body-2">
@@ -240,25 +242,25 @@
                   </span>
                 </v-alert>
               </div>
-              <div class="pt-6 mt-4 border-t">
+              <div class="pt-3 mt-3 border-t">
                 <v-btn
                   color="primary"
                   variant="flat"
                   rounded="lg"
                   class="text-none font-weight-bold w-100"
-                  size="x-large"
-                  height="64"
+                  size="large"
+                  height="48"
                   type="submit"
                   :loading="loading"
                   :disabled="!!messageLink"
                   elevation="2"
                 >
-                  <v-icon start size="24" class="mr-2">mdi-send</v-icon>
+                  <v-icon start size="20" class="mr-2">mdi-send</v-icon>
                   <!-- "Send", not "Dispatch". Dispatch means sending a vehicle
                        everywhere else in this panel (Ambulance Dispatch
                        Requests, Approve & Dispatch); reusing it for SMS blurs
                        the one word the desk uses for a physical response. -->
-                  <span class="text-h6 font-weight-bold">Send Blast</span>
+                  <span class="text-subtitle-1 font-weight-bold">Send Blast</span>
                 </v-btn>
               </div>
             </v-form>
@@ -1056,6 +1058,12 @@ const rotateBlastCode = async () => {
 }
 .blast-pad { padding: var(--blast-x); }
 .blast-row { padding: var(--blast-y) var(--blast-x); }
+/* The send form is the page's whole job and has to fit a desktop viewport
+   without scrolling, so its header and body use tighter vertical padding than
+   the shared blast-pad (the history card keeps that). The horizontal padding
+   stays on the shared variable so the two cards' text still lines up. */
+.blast-head { padding: 12px var(--blast-x); }
+.blast-body { padding: 16px var(--blast-x) 20px; }
 
 .blast-layout {
   display: grid;
