@@ -18,6 +18,12 @@
 //  * a second tap while the upload is in flight must not file a second live
 //    request in the dispatcher's queue.
 //
+// Since the redesign the screen is two: the Services tab is a grid of tiles and
+// each tile opens the service's form on its own page, and the Ambulance tab is
+// the ambulance form with nothing in front of it. The helpers below reach the
+// same form either way, so the assertions about what happens on Submit are
+// unchanged.
+//
 // The file picker is a plugin, so it is faked through `FilePicker.platform`.
 // An unmocked plugin channel HANGS rather than throwing, so a test that sits
 // until timeout here means the fake was not installed, not that the widget is
@@ -29,8 +35,9 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serbis/models/request_models.dart';
 import 'package:serbis/models/service_forms.dart';
+import 'package:serbis/screens/ambulance_screen.dart';
+import 'package:serbis/screens/service_drafts.dart';
 import 'package:serbis/screens/services_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
@@ -214,12 +221,15 @@ const _testUser = AppUser(
   address: 'Purok 3, San Fabian',
 );
 
+/// Pumps the Ambulance tab, or — with [open] — the Services grid with that
+/// tile already tapped, so the form under test is on screen either way.
 Future<void> _pump(
   WidgetTester tester,
   AppState state, {
-  ServiceType initialType = ServiceType.ambulance,
+  String? open,
   VoidCallback? onSubmitted,
   AppUser? user,
+  ServiceDrafts? drafts,
 }) async {
   // A tall phone. The default 800x600 surface clips this screen badly enough
   // that the submit button never builds, which would make it unfindable for a
@@ -238,14 +248,52 @@ Future<void> _pump(
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 
+  final resident = user ?? _testUser;
+  final kept = drafts ?? ServiceDrafts(resident);
+  if (drafts == null) addTearDown(kept.dispose);
+
+  await tester.pumpWidget(MaterialApp(
+    theme: buildAppTheme(),
+    home: Scaffold(
+      body: open == null
+          ? AmbulanceScreen(
+              appState: state,
+              user: resident,
+              drafts: kept,
+              onSubmitted: onSubmitted ?? () {},
+              onOpenNotifications: () {},
+              onOpenProfile: () {},
+            )
+          : ServicesScreen(
+              appState: state,
+              user: resident,
+              drafts: kept,
+              onSubmitted: onSubmitted ?? () {},
+              onOpenNotifications: () {},
+              onOpenProfile: () {},
+            ),
+    ),
+  ));
+  await tester.pumpAndSettle();
+
+  if (open != null) {
+    await _openTile(tester, open);
+  }
+}
+
+/// The Services grid alone, with no tile tapped.
+Future<void> _pumpGrid(WidgetTester tester, AppState state) async {
+  tester.view.physicalSize = const Size(1080, 8600);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+
   await tester.pumpWidget(MaterialApp(
     theme: buildAppTheme(),
     home: Scaffold(
       body: ServicesScreen(
         appState: state,
-        user: user ?? _testUser,
-        initialType: initialType,
-        onSubmitted: onSubmitted ?? () {},
+        user: _testUser,
+        onSubmitted: () {},
         onOpenNotifications: () {},
         onOpenProfile: () {},
       ),
@@ -314,25 +362,17 @@ Future<void> _attachSitePhoto(WidgetTester tester, {String name = 'scene.jpg'}) 
   await _tapUpload(tester, 'Site photo (optional)');
 }
 
-/// Opens the service dropdown and returns once the menu is on screen.
-///
-/// A closed `DropdownButton` builds only the selected item, so every other
-/// service is absent from the tree entirely — `find.text` on an unselected
-/// service finds nothing until the menu is open. That is the difference from
-/// the old grid, where all ten cards were always built.
-Future<void> _openServiceDropdown(WidgetTester tester) async {
-  final dropdown = find.byType(DropdownButton<ServiceCatalogItem>);
-  await tester.ensureVisible(dropdown);
-  await tester.tap(dropdown);
+/// Taps the grid tile named [name] and waits for its form page to open.
+Future<void> _openTile(WidgetTester tester, String name) async {
+  final tile = find.text(name);
+  await tester.ensureVisible(tile);
+  await tester.tap(tile);
   await tester.pumpAndSettle();
 }
 
-/// Picks [name] out of the open menu. The menu renders a second copy of the
-/// selected item, so tapping `.last` avoids the copy still sitting in the
-/// closed button underneath.
-Future<void> _chooseService(WidgetTester tester, String name) async {
-  await _openServiceDropdown(tester);
-  await tester.tap(find.text(name).last);
+/// The header's back arrow, which is how a resident leaves a form page.
+Future<void> _goBack(WidgetTester tester) async {
+  await tester.tap(find.byIcon(Icons.arrow_back_rounded));
   await tester.pumpAndSettle();
 }
 
@@ -384,18 +424,23 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
-    testWidgets('offers every service as an option in the dropdown', (tester) async {
-      await _pump(tester, AppState(FakeApi()));
+    testWidgets('offers every service as a tile, the ambulance excepted', (tester) async {
+      await _pumpGrid(tester, AppState(FakeApi()));
 
-      // Closed, the button holds only the selection. This is the assertion that
-      // would pass on a broken picker if it were made before opening the menu.
-      expect(find.text('Flood Evacuation'), findsNothing);
+      expect(find.text('Flood Evacuation'), findsOneWidget);
+      expect(find.text('Road Clearing'), findsOneWidget);
+      // "Others" is appended by the screen: it has no catalogue row.
+      expect(find.text('Others'), findsOneWidget);
+      // The ambulance has its own tab, so it is not offered a second time here.
+      expect(find.text('Ambulance/Medical Response'), findsNothing);
+    });
 
-      await _openServiceDropdown(tester);
+    testWidgets('withholds Others when the audience does not include it', (tester) async {
+      final api = FakeApi()..serviceAudience = (equipmentBorrowing: true, others: false);
+      await _pumpGrid(tester, AppState(api));
 
-      expect(find.text('Flood Evacuation'), findsWidgets);
-      expect(find.text('Ambulance/Medical Response'), findsWidgets);
-      expect(find.text('Road Clearing'), findsWidgets);
+      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Others'), findsNothing);
     });
 
     testWidgets('a failed load says so and offers Retry rather than showing an empty office',
@@ -404,7 +449,7 @@ void main() {
       // mean opposite things: "MDRRMO offers nothing" versus "your phone could
       // not reach MDRRMO".
       final api = FakeApi(servicesThrow: true);
-      await _pump(tester, AppState(api));
+      await _pumpGrid(tester, AppState(api));
 
       expect(find.textContaining("Couldn't load services"), findsOneWidget);
       expect(find.byIcon(Icons.wifi_off_rounded), findsWidgets);
@@ -414,7 +459,7 @@ void main() {
     testWidgets('Retry refetches and fills the grid once the network is back',
         (tester) async {
       final api = FakeApi(servicesThrow: true);
-      await _pump(tester, AppState(api));
+      await _pumpGrid(tester, AppState(api));
 
       expect(find.text('Retry'), findsOneWidget);
 
@@ -423,40 +468,38 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Couldn't load services"), findsNothing);
-      expect(find.text('Ambulance/Medical Response'), findsWidgets);
+      expect(find.text('Road Clearing'), findsOneWidget);
     });
   });
 
-  group('selecting a service', () {
-    testWidgets('initialType preselects a matching service', (tester) async {
-      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.road);
+  group('opening a service', () {
+    testWidgets('a tile opens that service on a page of its own', (tester) async {
+      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing');
 
-      // The form header names the selection, so a second copy of the title
-      // appears once a service is chosen.
-      expect(find.text('Road Clearing'), findsNWidgets(2));
+      // The form's own heading, with the grid no longer the visible route.
+      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Flood Evacuation'), findsNothing);
+      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
     });
 
-    testWidgets('an unmatched hint falls back to the first service',
-        (tester) async {
-      // `relief` has no row in this catalogue. Falling back beats rendering no
-      // form at all, which would look like a broken screen.
-      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.relief);
+    testWidgets('the back arrow returns to the grid', (tester) async {
+      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing');
 
-      expect(find.text('Flood Evacuation'), findsNWidgets(2));
+      await _goBack(tester);
+
+      expect(find.text('Flood Evacuation'), findsOneWidget);
+      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
     });
 
-    testWidgets('choosing another service from the dropdown changes the form header',
-        (tester) async {
-      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
+    testWidgets('the Ambulance tab opens straight onto the ambulance form', (tester) async {
+      await _pump(tester, AppState(FakeApi()));
 
-      expect(find.text('Ambulance/Medical Response'), findsNWidgets(2));
-
-      await _chooseService(tester, 'Road Clearing');
-
-      // Twice: once in the closed button, once as the form header. The old
-      // selection is gone from both.
-      expect(find.text('Road Clearing'), findsNWidgets(2));
-      expect(find.text('Ambulance/Medical Response'), findsNothing);
+      expect(find.text('Ambulance/Medical Response'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+      // No list to pick from first.
+      expect(find.text('Road Clearing'), findsNothing);
     });
 
     testWidgets('the patient name starts empty, not the signed-in resident',
@@ -464,27 +507,42 @@ void main() {
       // The account holder is the likeliest patient, not the certain one — a
       // head of the family files for the household — so a name already
       // sitting in the field would read as a default nobody actually chose.
-      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(FakeApi()));
 
       final controller = tester.widget<TextField>(_patientNameField()).controller!;
       expect(controller.text, isEmpty);
       expect(find.text('Maria Dela Cruz'), findsNothing);
     });
 
-    testWidgets('a typed name survives switching services and back',
+    testWidgets('a typed name survives leaving the form and coming back',
         (tester) async {
-      // The typed value runs through putIfAbsent, not on every build. If it
-      // ran on every rebuild, switching services and back would wipe out
-      // whatever the resident had already typed.
-      await _pump(tester, AppState(FakeApi()), initialType: ServiceType.ambulance);
+      // The answers live in the drafts the shell holds, not in the page, because
+      // a page is rebuilt on every visit.
+      final drafts = ServiceDrafts(_testUser);
+      addTearDown(drafts.dispose);
 
+      await _pump(tester, AppState(FakeApi()), drafts: drafts);
       await tester.enterText(_patientNameField(), 'Juan Dela Cruz');
       await tester.pumpAndSettle();
 
-      await _chooseService(tester, 'Road Clearing');
-      await _chooseService(tester, 'Ambulance/Medical Response');
+      // Away, and back to a fresh screen over the same drafts.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pump(tester, AppState(FakeApi()), drafts: drafts);
 
       expect(find.widgetWithText(TextField, 'Juan Dela Cruz'), findsOneWidget);
+    });
+
+    testWidgets('the ID attached on one form is still attached on the next', (tester) async {
+      final drafts = ServiceDrafts(_testUser);
+      addTearDown(drafts.dispose);
+
+      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing', drafts: drafts);
+      await _attachValidId(tester, name: 'id.jpg');
+      await _goBack(tester);
+
+      await _openTile(tester, 'Flood Evacuation');
+
+      expect(find.text('id.jpg'), findsOneWidget);
     });
 
     testWidgets('an empty catalogue renders no form section at all',
@@ -493,6 +551,19 @@ void main() {
       await _pump(tester, AppState(api));
 
       expect(find.byType(AttachmentUploadField), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
+      expect(find.text('Try again'), findsOneWidget);
+    });
+
+    testWidgets('an account not offered the ambulance says so, without a retry',
+        (tester) async {
+      final api = FakeApi(services: [
+        {'service_id': 5, 'code': 'road-clearing', 'service_name': 'Road Clearing'},
+      ]);
+      await _pump(tester, AppState(api));
+
+      expect(find.textContaining('not offered to this account type'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
       expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
     });
   });
@@ -540,7 +611,7 @@ void main() {
       // the patient name and destination are what the form asks for now, and
       // the number field it does render arrives already filled.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(api));
 
       await _fillRequiredAmbulanceFields(tester);
       await _attachValidId(tester);
@@ -556,7 +627,7 @@ void main() {
       // resident is told which field is missing instead of meeting a 422 the
       // app would surface as a generic failure.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(api));
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -571,7 +642,7 @@ void main() {
       // relative is required. The server refuses it too; this is the half that
       // tells the resident which field.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(api));
 
       for (final entry in const {
         'Patient name': 'Maria Santos',
@@ -602,7 +673,7 @@ void main() {
       // The resident never typed 09171234567 anywhere in this test: it is on
       // `_testUser` and reaches the wire by prefilling the contact field.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(api));
 
       await _fillRequiredAmbulanceFields(tester);
       await _attachValidId(tester);
@@ -619,7 +690,7 @@ void main() {
       // automatically (MDRRMO feedback, 2026-09-19) — the checkbox is what
       // carries `_testUser`'s address onto the field.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(api));
 
       await _fillRequiredAmbulanceFields(tester);
       await tester.tap(find.text('Same as my address').first);
@@ -633,7 +704,7 @@ void main() {
     testWidgets('an ambulance request sends the structured fields, not a description',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.ambulance);
+      await _pump(tester, AppState(api));
 
       await _fillRequiredAmbulanceFields(tester);
       await _attachValidId(tester);
@@ -649,7 +720,7 @@ void main() {
     testWidgets('a non-ambulance request still sends a description and no intake',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -662,7 +733,7 @@ void main() {
     testWidgets('a road request carries no contact line at all', (tester) async {
       // The road form asks about a place, not about the reporter.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -695,7 +766,7 @@ void main() {
       // sheet on this path, so a resident whose request never reached MDRRMO
       // was told help was coming.
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -707,7 +778,7 @@ void main() {
     testWidgets('keeps the attached ID and site photo so Retry costs one tap',
         (tester) async {
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester, name: 'id.jpg');
       await _attachSitePhoto(tester, name: 'scene.jpg');
@@ -720,7 +791,7 @@ void main() {
 
     testWidgets('the error card clears once a retry succeeds', (tester) async {
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -739,7 +810,7 @@ void main() {
     testWidgets('opens the confirmation sheet carrying the server reference',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -754,7 +825,7 @@ void main() {
       // and keeping it would file the last emergency's photo with the next
       // request.
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester, name: 'id.jpg');
       await _attachSitePhoto(tester, name: 'scene.jpg');
@@ -771,7 +842,7 @@ void main() {
     testWidgets('the site photo is sent when attached and omitted when not',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -784,7 +855,7 @@ void main() {
     testWidgets('clearing the site photo removes it before submitting',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _attachSitePhoto(tester, name: 'scene.jpg');
@@ -806,7 +877,7 @@ void main() {
       var submitted = false;
       final api = FakeApi();
       await _pump(tester, AppState(api),
-          initialType: ServiceType.road, onSubmitted: () => submitted = true);
+          open: 'Road Clearing', onSubmitted: () => submitted = true);
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -832,7 +903,7 @@ void main() {
       // path that stays live — the card is rendered whenever `_submitFailed`
       // is true, and a retry in flight does not clear that flag.
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), initialType: ServiceType.road);
+      await _pump(tester, AppState(api), open: 'Road Clearing');
 
       await _attachValidId(tester);
       await _submit(tester);

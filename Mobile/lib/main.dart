@@ -13,8 +13,10 @@ import 'screens/auth/verify_login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/ambulance_screen.dart';
 import 'screens/awaiting_approval_screen.dart';
 import 'screens/borrow_equipment_screen.dart';
+import 'screens/service_drafts.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'screens/unavailable_tab_screen.dart';
@@ -444,6 +446,10 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   late final ValueNotifier<AppUser> _user = ValueNotifier(widget.user);
   bool _profileOpen = false;
 
+  /// What the resident has typed into the service forms, kept for the session so
+  /// leaving a form page (or the Ambulance tab) and coming back loses nothing.
+  late final ServiceDrafts _drafts = ServiceDrafts(widget.user);
+
   Timer? _poll;
   bool _foreground = true;
   bool _showingOffline = false;
@@ -488,6 +494,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _appState.removeListener(_onAppStateChanged);
     _user.dispose();
+    _drafts.dispose();
     super.dispose();
   }
 
@@ -670,14 +677,12 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
             onOpenService: _openService,
             onOpenBorrow: () => _goTo(_borrowTab),
           ), deps: widget.user),
-      // Interim: the same screen as Services, opened on the ambulance service.
       slot(_ambulanceTab, (_) => widget.user.isAwaitingApproval
           ? awaitingApproval()
-          : ServicesScreen(
-              key: const ValueKey('ambulance'),
+          : AmbulanceScreen(
               appState: _appState,
               user: widget.user,
-              initialType: ServiceType.ambulance,
+              drafts: _drafts,
               onSubmitted: () => _goTo(_trackTab),
               onOpenNotifications: onOpenNotifications,
               onOpenProfile: onOpenProfile,
@@ -685,10 +690,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       slot(_servicesTab, (_) => widget.user.isAwaitingApproval
           ? awaitingApproval()
           : ServicesScreen(
-              key: const ValueKey('services'),
               appState: _appState,
               user: widget.user,
-              initialType: ServiceType.inquiry,
+              drafts: _drafts,
               onSubmitted: () => _goTo(_trackTab),
               onOpenNotifications: onOpenNotifications,
               onOpenProfile: onOpenProfile,

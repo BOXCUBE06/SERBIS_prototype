@@ -1,46 +1,46 @@
-
 library serbis.screens.services;
 
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart' as fp;
+
 import '../models/request_models.dart';
-import '../models/service_forms.dart';
 import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/service_form_fields.dart';
-import '../widgets/form_inputs.dart';
-import '../widgets/form_section.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
-import 'borrow_equipment_screen.dart';
+import 'service_drafts.dart';
+import 'service_form_page.dart';
 
-/// Picking a service and filing it. Everything this screen used to draw itself
-/// — the fields, the dropdowns, the tiles, the safety notice, the ID picker,
-/// the error card and the confirmation sheet — now lives in `widgets/`, and
-/// the four forms' data lives in `models/service_forms.dart`. What is left is
-/// the three jobs only this screen can do: fetch the catalogue, track the
-/// selection, and submit.
+/// The Services tab: one large, labelled tile per service the account may
+/// file. Tapping a tile opens that service's form on a page of its own.
+///
+/// The catalogue is already narrowed to this account's audience by the server
+/// (`appState.services`), and "Others" is added here when the audience allows
+/// it. The ambulance is left out: it has a tab of its own.
 class ServicesScreen extends StatefulWidget {
   final AppState appState;
 
   /// The signed-in resident. The forms used to ask for a name and a number the
   /// account already holds; both now come from here.
   final AppUser user;
-  final ServiceType initialType;
   final VoidCallback onSubmitted;
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenProfile;
+
+  /// The answers kept across forms. Shared with the Ambulance tab when the
+  /// shell passes one, so the resident's ID is attached once for both; a screen
+  /// built without one keeps its own.
+  final ServiceDrafts? drafts;
 
   const ServicesScreen({
     super.key,
     required this.appState,
     required this.user,
-    this.initialType = ServiceType.ambulance,
     required this.onSubmitted,
     required this.onOpenNotifications,
     required this.onOpenProfile,
+    this.drafts,
   });
 
   @override
@@ -48,648 +48,214 @@ class ServicesScreen extends StatefulWidget {
 }
 
 class _ServicesScreenState extends State<ServicesScreen> {
-  List<ServiceCatalogItem> _services = [];
-  bool _loadingServices = true;
-  ServiceCatalogItem? _selected;
+  bool _loading = true;
+  ServiceDrafts? _ownDrafts;
 
-  /// The ambulance form's destination dropdown (MDRRMO feedback,
-  /// 2026-09-19). A local copy, same as [_services] and for the same
-  /// reason — `setState` is what makes the fetch visible on screen.
-  List<String> _ambulanceDestinations = [];
-
-  /// One form per kind, kept for the life of the screen: switching services and
-  /// switching back must not silently empty what the resident already typed.
-  final Map<ServiceFormKind, ServiceFormData> _forms = {};
-
-  fp.PlatformFile? _validIdFile;
-
-  /// Optional. The backend note calls this the road-clearing form's upload, but
-  /// it is offered on every service: a blocked driveway matters to an ambulance
-  /// dispatch as much as to a clearing crew, and a rule about which forms may
-  /// carry a photo is one the resident would have to discover by its absence.
-  fp.PlatformFile? _sitePhotoFile;
-
-  /// The request letter of a training or drill (jpg, png or pdf), the upload
-  /// that stands in for the valid ID on those services.
-  fp.PlatformFile? _letterFile;
-
-  /// Optional free-text companion to the site photo — faster to type than to
-  /// stop and photograph.
-  final _landmarkController = TextEditingController();
-
-  /// True after a submit that never reached the server. Drives a persistent
-  /// error card with Retry — a snackbar alone auto-dismisses, and the previous
-  /// code showed a success sheet instead.
-  bool _submitFailed = false;
-
-  /// True while the multipart POST is in flight, so the button can show a
-  /// spinner and refuse repeat taps.
-  bool _submitting = false;
+  ServiceDrafts get _drafts => widget.drafts ?? (_ownDrafts ??= ServiceDrafts(widget.user));
 
   @override
   void initState() {
     super.initState();
-    _loadServices();
-    _loadAmbulanceDestinations();
-  }
-
-  Future<void> _loadAmbulanceDestinations() async {
-    await widget.appState.loadAmbulanceDestinations();
-    if (!mounted) return;
-    setState(() => _ambulanceDestinations = List.of(widget.appState.ambulanceDestinations));
-  }
-
-  Future<void> _loadServices() async {
-    await widget.appState.loadServices();
-    if (!mounted) return;
-    setState(() {
-      // A copy, not the store's list. `AppState.loadServices` mutates that list
-      // in place (`..clear()..addAll()`), so aliasing it let a later reload —
-      // or a failed one, which clears it — rewrite the grid with no `setState`
-      // while `_selected` still pointed at a row that had been removed.
-      // Appended, not part of the catalogue: "Others" has no tbl_services
-      // row, so it never comes back from loadServices() and has to be added
-      // here every time the grid is (re)built from a fresh fetch.
-      _services = [
-        ...widget.appState.services,
-        if (widget.appState.othersAllowed) const ServiceCatalogItem.others(),
-      ];
-      _loadingServices = false;
-      _selected = _defaultSelection(_services, widget.initialType);
-    });
-  }
-
-  ServiceCatalogItem? _defaultSelection(
-    List<ServiceCatalogItem> items,
-    ServiceType hint,
-  ) {
-    if (items.isEmpty) return null;
-    final hintKind = _kindForType(hint);
-    for (final s in items) {
-      if (s.formKind == hintKind) return s;
-    }
-    return items.first;
-  }
-
-  // Maps a dashboard shortcut's ServiceType hint onto a real catalogue service,
-  // so navigating in from "Ambulance" still preselects a medical service.
-  ServiceFormKind _kindForType(ServiceType t) {
-    switch (t) {
-      case ServiceType.ambulance:
-      case ServiceType.transfer:
-        return ServiceFormKind.ambulance;
-      case ServiceType.road:
-        return ServiceFormKind.road;
-      case ServiceType.relief:
-        return ServiceFormKind.relief;
-      case ServiceType.inquiry:
-      case ServiceType.items:
-        return ServiceFormKind.generic;
-    }
-  }
-
-  ServiceType _typeForKind(ServiceFormKind kind) {
-    switch (kind) {
-      case ServiceFormKind.ambulance:
-        return ServiceType.ambulance;
-      case ServiceFormKind.road:
-        return ServiceType.road;
-      case ServiceFormKind.relief:
-        return ServiceType.relief;
-      case ServiceFormKind.generic:
-      case ServiceFormKind.training:
-      case ServiceFormKind.drill:
-      case ServiceFormKind.certification:
-        return ServiceType.inquiry;
-    }
-  }
-
-  /// Which uploads a kind of service asks for. The response services take a
-  /// photo of a valid ID; the programs take a request letter instead.
-  ServiceAttachments _attachmentsFor(ServiceFormKind kind) => switch (kind) {
-        ServiceFormKind.training || ServiceFormKind.drill => ServiceAttachments.letterRequired,
-        ServiceFormKind.certification => ServiceAttachments.letterOptional,
-        _ => ServiceAttachments.standard,
-      };
-
-  /// `putIfAbsent`, so the prefill happens once per kind. A resident who
-  /// overwrites the name and switches services must not find their own name
-  /// back in the field on return.
-  ServiceFormData _formFor(ServiceFormKind kind) =>
-      _forms.putIfAbsent(kind, () => switch (kind) {
-            ServiceFormKind.ambulance => AmbulanceFormData(
-                contactNumber: widget.user.phone,
-                accountName: widget.user.fullName,
-                accountFullAddress: widget.user.fullAddress,
-              ),
-            ServiceFormKind.road => StructuredFormData.road(),
-            ServiceFormKind.relief => StructuredFormData.relief(
-                headName: widget.user.fullName,
-                contactNumber: widget.user.phone,
-                accountFullAddress: widget.user.fullAddress,
-              ),
-            ServiceFormKind.generic =>
-              StructuredFormData.generic(contactNumber: widget.user.phone),
-            ServiceFormKind.training =>
-              StructuredFormData.training(contactNumber: widget.user.phone),
-            ServiceFormKind.drill =>
-              StructuredFormData.drill(contactNumber: widget.user.phone),
-            ServiceFormKind.certification =>
-              StructuredFormData.certification(contactNumber: widget.user.phone),
-          });
-
-  @override
-  void didUpdateWidget(covariant ServicesScreen old) {
-    super.didUpdateWidget(old);
-    if (old.initialType != widget.initialType && _services.isNotEmpty) {
-      setState(() => _selected = _defaultSelection(_services, widget.initialType));
-    }
+    _load();
   }
 
   @override
   void dispose() {
-    for (final form in _forms.values) {
-      form.dispose();
-    }
-    _landmarkController.dispose();
+    _ownDrafts?.dispose();
     super.dispose();
   }
 
-  /// [_selected] is captured when the tile is tapped, so it goes stale the
-  /// moment the catalogue is refetched in another language. Re-resolving by id
-  /// keeps the form header in step with the tile above it.
-  ServiceCatalogItem? get _currentSelection {
-    final selected = _selected;
-    if (selected == null) {
-      return null;
-    }
-    for (final service in _services) {
-      if (service.id == selected.id) {
-        return service;
-      }
-    }
-    return selected;
+  Future<void> _load() async {
+    await widget.appState.loadServices();
+    if (mounted) setState(() => _loading = false);
   }
 
-  /// The submission time as it goes into the description. Always English and
-  /// always the device's local clock: this string is read by a dispatcher in
-  /// the admin panel, not by the resident.
-  String _nowLabel() => formatTimelineTime(DateTime.now(), false);
-
-  Future<void> _pickValidId() async {
-    final picked = await _pickImage();
-    if (picked != null) {
-      setState(() => _validIdFile = picked);
-    }
-  }
-
-  Future<void> _pickSitePhoto() async {
-    final picked = await _pickImage();
-    if (picked != null) {
-      setState(() => _sitePhotoFile = picked);
-    }
-  }
-
-  Future<void> _pickLetter() async {
-    final result = await fp.FilePicker.platform.pickFiles(
-      type: fp.FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-    setState(() => _letterFile = result.files.first);
-  }
-
-  Future<fp.PlatformFile?> _pickImage() async {
-    final result = await fp.FilePicker.platform.pickFiles(
-      type: fp.FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png'],
-      withData: true, // ensures .bytes is populated (needed on web)
-    );
-    if (result == null || result.files.isEmpty) {
-      return null;
-    }
-    return result.files.first;
-  }
-
-  Future<void> _submit() async {
-    // The multipart upload carries a photo and has a 30-second timeout. Without
-    // this guard every extra tap in that window filed another live request in
-    // the dispatcher's queue.
-    if (_submitting) {
-      return;
-    }
-
-    final attachments = _selected == null
-        ? ServiceAttachments.standard
-        : _attachmentsFor(_selected!.formKind);
-
-    if (attachments == ServiceAttachments.standard &&
-        (_validIdFile == null || _validIdFile!.bytes == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
-      );
-      return;
-    }
-
-    final service = _selected;
-    if (service == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please choose a service before submitting.')),
-      );
-      return;
-    }
-
-    final form = _formFor(service.formKind);
-
-    // The callback-number guard is gone with the field it guarded. It refused a
-    // submit when the resident left the number blank; the number now comes off
-    // the account, where `phone_number` is required at registration and NOT
-    // NULL, so there is nothing left to be blank.
-
-    // The same three the server requires for an ambulance request, and only
-    // those — refused here so the resident is told which field is missing
-    // instead of reading a 422 the app would surface as a generic failure.
-    // Everything else on this form is optional on purpose: a resident filing
-    // in an emergency may not have the address or the diagnosis, and admin
-    // verification confirms those by phone.
-    if (form is AmbulanceFormData) {
-      final missing = <String>[
-        if (form.patient.text.trim().isEmpty) 'the patient name',
-        if (form.destination.text.trim().isEmpty) 'where the ambulance should go',
-        if (form.relativeNames.isEmpty) 'at least one relative going with the patient',
+  /// Read live from the store on every build. "Others" has no tbl_services row,
+  /// so it never comes back from the catalogue and is appended here.
+  List<ServiceCatalogItem> _tiles() => [
+        ...widget.appState.services.where((s) => s.formKind != ServiceFormKind.ambulance),
+        if (widget.appState.othersAllowed) const ServiceCatalogItem.others(),
       ];
 
-      if (missing.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Please fill in ${missing.length > 1 ? '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}' : missing.single}.',
-            ),
-          ),
-        );
-        return;
-      }
-    }
-
-    // The programs are booked for a day and need the office's lead time, so the
-    // date and the letter are checked here; the server checks them again.
-    if (form is StructuredFormData) {
-      final dateField = form.spec.fields.where((field) => field.isDate).firstOrNull;
-      if (dateField != null) {
-        final picked = form.date(dateField.key);
-        final today = DateTime.now();
-        final earliest = DateTime(today.year, today.month, today.day)
-            .add(Duration(days: dateField.minDaysAhead));
-        if (picked == null || picked.isBefore(earliest)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(picked == null
-                ? 'Please choose a preferred date.'
-                : 'Choose a date at least ${dateField.minDaysAhead} days from today.')),
-          );
-          return;
-        }
-      }
-
-      if (form.spec.attachments == ServiceAttachments.letterRequired &&
-          (_letterFile == null || _letterFile!.bytes == null)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please attach your request letter before submitting.')),
-        );
-        return;
-      }
-    }
-
-    final metaLines = form.metaLines(
-      serviceName: service.name,
-      submittedLabel: _nowLabel(),
-    );
-
-    // Null on every form but the ambulance one, and null there too unless the
-    // resident picked a date and time — "as soon as possible" either way.
-    final scheduledAt = form is AmbulanceFormData ? form.scheduledAt : null;
-
-    final request = ServiceRequest(
-      serviceId: service.isOthers ? null : service.id,
-      description: metaLines.join('\n'),
-      type: _typeForKind(service.formKind),
-      // Empty until the server answers: the reference number is the server's
-      // request_id, and inventing one locally gave the resident a number that
-      // matched no record in tbl_service_request.
-      refNo: '',
-      status: ReqStatus.review,
-      cancellable: true,
-      metaLines: metaLines,
-      // The server's created_at replaces this the moment the row comes back;
-      // until then the timeline still has a real submission time to show.
-      createdAt: DateTime.now(),
-      scheduledAt: scheduledAt,
-    );
-
-    setState(() => _submitting = true);
-
-    ServiceRequest? confirmed;
-    try {
-      confirmed = await widget.appState.addRequest(
-        request,
-        // Empty for the programs, which ask for a letter instead of an ID.
-        validIdFileBytes: _validIdFile?.bytes ?? const <int>[],
-        validIdFileName: _validIdFile?.name ?? '',
-        preferredDate: form is StructuredFormData ? form.preferredDate : null,
-        letterBytes: _letterFile?.bytes,
-        letterFileName: _letterFile?.bytes == null ? null : _letterFile?.name,
-        // `bytes` is null when the picker returns a path-only file, which is
-        // what happens if `withData` ever stops holding. Sending the name
-        // without the bytes would be a 422 on an upload the resident is not
-        // required to make at all.
-        sitePhotoBytes: _sitePhotoFile?.bytes,
-        sitePhotoFileName: _sitePhotoFile?.bytes == null ? null : _sitePhotoFile?.name,
-        landmark: _landmarkController.text.trim().isEmpty ? null : _landmarkController.text.trim(),
-        // Plumbed through three layers and sent by nothing until now. For an
-        // unscheduled ambulance request the server still claims a unit
-        // immediately, same as before; a scheduled one ignores this
-        // entirely and re-checks availability under a lock at approval
-        // instead — sending it here is harmless either way.
-        requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
-        // Relief goods only (StructuredFormData.offersFulfillment) — pickup/
-        // delivery beyond equipment borrowing, MDRRMO feedback, 2026-09-18.
-        fulfillmentMethod: form is StructuredFormData && form.offersFulfillment
-            ? form.fulfillmentMethod
-            : null,
-        deliveryAddress: form is StructuredFormData && form.offersFulfillment
-            ? form.deliveryAddress.text.trim()
-            : null,
-        // Ambulance only. Its presence is what tells the request builder to
-        // send the structured columns and omit `description` entirely — the
-        // server composes that from these same values, and a client-composed
-        // one would be a second composer on the wire.
-        intake: form is AmbulanceFormData ? AmbulanceIntake.from(form) : null,
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      } else {
-        _submitting = false;
-      }
-    }
-
-    if (!mounted) return;
-
-    // The submit failed and the optimistic row has already been rolled back.
-    // Keep every entered value and the attached photo so Retry costs one tap,
-    // and show nothing that could be read as "help is on the way".
-    if (confirmed == null) {
-      setState(() => _submitFailed = true);
-      return;
-    }
-
-    // The ID is kept — it is the same ID next time, and re-picking it is pure
-    // friction. The site photo is not: it is a photo of one incident, and
-    // leaving it attached would silently file the last emergency's scene with
-    // the next request. On the failure path above it stays, because Retry has
-    // to cost one tap.
-    setState(() {
-      _submitFailed = false;
-      _sitePhotoFile = null;
-      _letterFile = null;
-      _landmarkController.clear();
-    });
-
-    // A mutable local is not promoted inside a closure, and the sheet's builder
-    // is one.
-    final filed = confirmed;
-
-    final f = widget.appState.language == AppLanguage.filipino;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => ConfirmationSheet(
-        refNo: filed.refNo,
-        filipino: f,
-        scheduledAt: filed.scheduledAt,
-        onViewTrack: () {
-          Navigator.pop(context);
-          widget.onSubmitted();
-        },
+  void _open(ServiceCatalogItem service) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => ServiceFormPage(
+        appState: widget.appState,
+        user: widget.user,
+        service: service,
+        drafts: _drafts,
+        onSubmitted: widget.onSubmitted,
+        onOpenNotifications: widget.onOpenNotifications,
       ),
-    );
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final f = widget.appState.language == AppLanguage.filipino;
-    final selection = _currentSelection;
+    return ListenableBuilder(
+      listenable: widget.appState,
+      builder: (context, _) {
+        final f = widget.appState.language == AppLanguage.filipino;
+        final tiles = _tiles();
+        // The ambulance alone in the catalogue still means a catalogue that
+        // loaded; only a truly empty one is a failed load.
+        final loadFailed = !_loading && widget.appState.services.isEmpty;
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        AppHeader(onNotificationsTap: widget.onOpenNotifications, onProfileTap: widget.onOpenProfile),
-        const SizedBox(height: 22),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: SectionHeader(title: tr(f, 'services.title')),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: SafetyNotice(filipino: f),
-        ),
-        if (widget.appState.borrowingAllowed)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
-          child: _BorrowEquipmentEntry(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BorrowEquipmentScreen(
-                  appState: widget.appState,
-                  user: widget.user,
-                ),
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            AppHeader(
+              onNotificationsTap: widget.onOpenNotifications,
+              onProfileTap: widget.onOpenProfile,
+              filipino: f,
+            ),
+            const SizedBox(height: 22),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: SectionHeader(title: tr(f, 'services.title')),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
+              child: Text(
+                tr(f, 'services.grid_intro'),
+                style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.5),
               ),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: _buildServicePicker(f),
-        ),
-        if (selection != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionHeader(title: selection.displayName(f)),
-                ServiceFormFields(
-                  data: _formFor(selection.formKind),
-                  onChanged: () => setState(() {}),
-                  appState: widget.appState,
-                  ambulanceDestinations: _ambulanceDestinations,
-                  filipino: f,
-                ),
-                FormSection(
-                  label: tr(f, 'form_section.attachments'),
+            if (_loading && widget.appState.services.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 30),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (loadFailed)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                child: Row(
                   children: [
-                    if (_attachmentsFor(selection.formKind) != ServiceAttachments.standard)
-                      AttachmentUploadField(
-                        label: _attachmentsFor(selection.formKind) == ServiceAttachments.letterRequired
-                            ? 'Request letter (required)'
-                            : 'Supporting document (optional)',
-                        hint: 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)',
-                        fileName: _letterFile?.name,
-                        onTap: _pickLetter,
-                        onClear: _attachmentsFor(selection.formKind) == ServiceAttachments.letterOptional
-                            ? () => setState(() => _letterFile = null)
-                            : null,
-                      )
-                    else ...[
-                    AttachmentUploadField(
-                      label: 'Valid ID (required)',
-                      hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
-                      fileName: _validIdFile?.name,
-                      onTap: _pickValidId,
+                    const Icon(Icons.wifi_off_rounded, size: 20, color: AppColors.inkMuted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Couldn't load services. Check your connection and try again.",
+                        style: AppText.body(size: 13, color: AppColors.inkMuted),
+                      ),
                     ),
-                    AttachmentUploadField(
-                      label: 'Site photo (optional)',
-                      hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
-                      fileName: _sitePhotoFile?.name,
-                      onTap: _pickSitePhoto,
-                      onClear: () => setState(() => _sitePhotoFile = null),
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _loading = true);
+                        _load();
+                      },
+                      child: const Text('Retry'),
                     ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _landmarkController,
-                  decoration: const InputDecoration(
-                    labelText: 'Landmark (optional)',
-                    hintText: 'e.g. beside the chapel, near the covered court',
-                    border: OutlineInputBorder(),
-                  ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: _TileGrid(
+                  children: [
+                    for (final service in tiles)
+                      _ServiceTile(
+                        key: ValueKey('service-tile-${service.id}'),
+                        service: service,
+                        filipino: f,
+                        onTap: () => _open(service),
+                      ),
+                  ],
                 ),
-                if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
-                const SizedBox(height: 6),
-                AppButton(
-                  label: tr(f, 'common.submit_request'),
-                  onPressed: _submit,
-                  loading: _submitting,
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 110),
-      ],
-    );
-  }
-
-  /// The catalogue used to be a grid of tappable cards, two across. Ten
-  /// services made it a wall the resident had to read before filing anything,
-  /// and the form for the selected one sat below the fold. One dropdown, with
-  /// the selected service's description under it.
-  Widget _buildServicePicker(bool f) {
-    if (_loadingServices) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 30),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_services.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Row(
-          children: [
-            const Icon(Icons.wifi_off_rounded, size: 18, color: AppColors.inkFaint),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                "Couldn't load services. Check your connection and try again.",
-                style: AppText.body(size: 12, color: AppColors.inkMuted),
               ),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() => _loadingServices = true);
-                _loadServices();
-              },
-              child: const Text('Retry'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 110),
+              child: SafetyNotice(filipino: f),
             ),
           ],
-        ),
-      );
-    }
-
-    // The dropdown's value must be an element of `items` or Flutter asserts.
-    // `_currentSelection` re-resolves by id but falls back to the stale object
-    // when the catalogue no longer holds it, which is exactly the case that
-    // would assert -- so resolve against `_services` and take the first row
-    // when nothing matches.
-    final selected = _services.firstWhere(
-      (s) => s.id == _selected?.id,
-      orElse: () => _services.first,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppDropdown<ServiceCatalogItem>(
-          label: tr(f, 'services.choose_type'),
-          items: _services,
-          value: selected,
-          itemLabel: (s) => s.displayName(f),
-          onChanged: (s) => setState(() => _selected = s),
-        ),
-        if (selected.displayDescription(f).isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              selected.displayDescription(f),
-              style: AppText.body(size: 12, color: AppColors.inkMuted),
-            ),
-          ),
-      ],
+        );
+      },
     );
   }
 }
 
-/// Entry point into the borrowing catalogue. Separate from the dropdown
-/// above on purpose: "Equipment / Item Request" in that list files a generic
-/// text description against `service_id` 6, with no picker and no stock
-/// check. This leads to the real catalogue instead — browse what MDRRMO
-/// actually has, see quantity on hand, and file against `POST /borrowings`.
-class _BorrowEquipmentEntry extends StatelessWidget {
-  final VoidCallback onTap;
+/// Two tiles to a row, one on a narrow screen or at a large system text size,
+/// where two columns would leave each name a few letters per line.
+class _TileGrid extends StatelessWidget {
+  final List<Widget> children;
 
-  const _BorrowEquipmentEntry({required this.onTap});
+  const _TileGrid({required this.children});
+
+  static const double _gap = 12;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final oneColumn =
+            constraints.maxWidth < 280 || MediaQuery.textScalerOf(context).scale(14) > 20;
+        final columns = oneColumn ? 1 : 2;
+
+        final rows = <Widget>[];
+        for (var i = 0; i < children.length; i += columns) {
+          final cells = <Widget>[];
+          for (var c = 0; c < columns; c++) {
+            if (c > 0) cells.add(const SizedBox(width: _gap));
+            cells.add(Expanded(child: i + c < children.length ? children[i + c] : const SizedBox.shrink()));
+          }
+          if (rows.isNotEmpty) rows.add(const SizedBox(height: _gap));
+          // Equal heights within a row, so a two-line name and a three-line name
+          // sit as one row of tiles rather than a ragged pair.
+          rows.add(IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: cells),
+          ));
+        }
+        return Column(children: rows);
+      },
+    );
+  }
+}
+
+class _ServiceTile extends StatelessWidget {
+  final ServiceCatalogItem service;
+  final bool filipino;
+  final VoidCallback onTap;
+
+  const _ServiceTile({super.key, required this.service, required this.filipino, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final badge = badgeForServiceCode(service.code);
+    final name = service.displayName(filipino);
+
+    return Semantics(
+      button: true,
+      label: name,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: AppCard(
-        child: Row(
-          children: [
-            const IconBadge(icon: Icons.inventory_2_outlined, bg: AppColors.green50, fg: AppColors.green700),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Borrow Equipment', style: AppText.display(size: 14.5)),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Wheelchairs, stretchers & more — see what\'s in stock',
-                    style: AppText.body(size: 12, color: AppColors.inkMuted),
-                  ),
-                ],
-              ),
+      excludeSemantics: true,
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 124),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.line, width: 1.5),
+              borderRadius: BorderRadius.circular(18),
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconBadge(icon: badge.icon, bg: badge.bg, fg: badge.fg, size: 46, iconSize: 24, radius: 14),
+                const SizedBox(height: 10),
+                Text(
+                  name,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.display(size: 14.5, height: 1.25),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

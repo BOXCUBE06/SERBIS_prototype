@@ -178,6 +178,10 @@ const Map<String, (String, String)> _strings = {
 
   // ---- Services ----
   'services.title': ('Service Request', 'Kahilingan sa Serbisyo'),
+  'services.grid_intro': (
+    'Choose the service you need. Each one opens its own form.',
+    'Piliin ang serbisyong kailangan mo. Bawat isa ay may sariling form.',
+  ),
   'services.notice_title': ('Non-life-threatening use only', 'Para sa hindi-banta-sa-buhay na sitwasyon lamang'),
   'services.notice_body': (
     'If you are experiencing a life-threatening emergency, contact authorities directly:',
