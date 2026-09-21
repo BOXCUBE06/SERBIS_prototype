@@ -24,7 +24,14 @@ use Illuminate\Support\Facades\Cache;
  */
 class AnalyticsCache
 {
-    public const DASHBOARD_KEY = 'analytics:dashboard';
+    /**
+     * `:v2` because the payload gained the `section` markers that
+     * AnalyticsController::index() reads to narrow it per admin. A payload
+     * cached before that lacks them, and would be served for up to five minutes
+     * after a deploy with every card and list dropped or, worse, leaking; a new
+     * key strands it and lets it expire on its own.
+     */
+    public const DASHBOARD_KEY = 'analytics:dashboard:v2';
 
     public const TTL_SECONDS = 300;
 

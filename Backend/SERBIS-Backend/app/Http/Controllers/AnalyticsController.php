@@ -7,7 +7,9 @@ use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
+use App\Models\User;
 use App\Models\Vehicle;
+use App\Support\AdminSections;
 use App\Support\AnalyticsCache;
 use App\Support\AnalyticsReport;
 use App\Support\BarangayRequestCounts;
@@ -16,6 +18,7 @@ use App\Support\ReminderFollowUp;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -73,18 +76,33 @@ class AnalyticsController extends Controller
         }));
     }
 
+    /**
+     * What each headline card counts, by the section that owns the page it links
+     * to. Carried on the card in the cached payload and removed before the
+     * response leaves, so an admin sees the cards for the sections they hold.
+     */
+    private const KPI_SECTIONS = [
+        'Total Residents' => AdminSections::RESIDENTS,
+        'Pending Service Requests' => AdminSections::REQUESTS,
+        'Pending Borrow Requests' => AdminSections::BORROWINGS,
+        'Available Vehicles' => AdminSections::VEHICLES,
+        'Pending Ambulance Requests' => AdminSections::AMBULANCE,
+    ];
+
     public function index(Request $request): JsonResponse
     {
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
-        // ~25 queries per admin dashboard load). No discriminator in the key:
-        // nothing below reads $request, so the payload is identical for every
-        // admin.
+        // ~25 queries per admin dashboard load). One entry for everyone: the
+        // payload is built without reading $request. What an admin may see of
+        // it is cut down after the cache read (limitToSections), never by
+        // keying the cache per admin, which would bring the ~25 queries back
+        // once per account.
         //
         // The TTL is now a backstop rather than the only invalidation:
         // InvalidatesAnalyticsCache forgets this key on every write to a model
         // these numbers count, so a status change reaches the panel on the next
         // load instead of up to five minutes later.
-        return response()->json(Cache::remember(AnalyticsCache::DASHBOARD_KEY, AnalyticsCache::TTL_SECONDS, function () {
+        $payload = Cache::remember(AnalyticsCache::DASHBOARD_KEY, AnalyticsCache::TTL_SECONDS, function () {
             // 1. Calculate KPI Stats
             // Heads of the family only: a barangay or organization account is an
             // institution, not a household, and would inflate the headline count.
@@ -164,6 +182,10 @@ class AnalyticsController extends Controller
                         'type' => $req->service ? $req->service->service_name : 'Other',
                         'date' => $req->created_at->format('M j, Y h:i A'),
                         'status' => $req->status,
+                        // Which board the request belongs to, so the list can be
+                        // cut down per admin after the cache read. Removed
+                        // before the response leaves (limitToSections).
+                        'section' => AdminSections::forServiceCode($req->service?->code),
                     ];
                 });
 
@@ -354,6 +376,49 @@ class AnalyticsController extends Controller
                     ],
                 ],
             ]), true);
-        }));
+        });
+
+        return response()->json($this->limitToSections($payload, $request->user()));
+    }
+
+    /**
+     * Cuts the shared dashboard payload down to the sections this admin holds.
+     *
+     * Applied after the cache read, so the cached entry stays whole and the same
+     * for everyone. Two kinds of thing go: the cards and lists that link to a
+     * page the admin cannot open, and every list that names a person (recent
+     * requests and borrowings, the activity feed, the follow-up calls). The
+     * counts and charts are aggregates with no one named in them, and stay for
+     * whoever holds the Dashboard.
+     *
+     * Fails closed: a card whose title is not in KPI_SECTIONS, or a request row
+     * with no marker, is dropped rather than shown.
+     */
+    private function limitToSections(array $payload, mixed $admin): array
+    {
+        $can = fn (string $section) => $admin instanceof User && $admin->canAccess($section);
+
+        $payload['kpiStats'] = collect($payload['kpiStats'] ?? [])
+            ->filter(fn (array $card) => $can(self::KPI_SECTIONS[$card['title'] ?? ''] ?? ''))
+            ->values()
+            ->all();
+
+        $payload['serviceRequests'] = collect($payload['serviceRequests'] ?? [])
+            ->filter(fn (array $row) => $can($row['section'] ?? ''))
+            ->map(fn (array $row) => Arr::except($row, 'section'))
+            ->values()
+            ->all();
+
+        $payload['borrowRequests'] = $can(AdminSections::BORROWINGS) ? ($payload['borrowRequests'] ?? []) : [];
+
+        $payload['systemLogs'] = $can(AdminSections::LOGS) ? ($payload['systemLogs'] ?? []) : [];
+
+        // Equipment due-back and available-again notices, and the ambulance
+        // booking reminders, are the two things staff ring residents about.
+        $payload['followUps'] = ($can(AdminSections::BORROWINGS) || $can(AdminSections::AMBULANCE))
+            ? ($payload['followUps'] ?? [])
+            : [];
+
+        return $payload;
     }
 }
