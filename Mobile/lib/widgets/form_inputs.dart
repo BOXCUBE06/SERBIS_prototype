@@ -98,7 +98,9 @@ class AppTextField extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+              // Flexible: at this size a long label wraps instead of pushing the
+              // help icon off the edge of a 320dp screen.
+              Flexible(child: Text(label, style: AppText.fieldLabel())),
               if (helpText != null) ...[
                 const SizedBox(width: 4),
                 Tooltip(
@@ -120,10 +122,10 @@ class AppTextField extends StatelessWidget {
             inputFormatters: inputFormatters,
             enabled: enabled,
             obscureText: obscure,
-            style: AppText.body(size: 13),
+            style: AppText.body(size: 14),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
+              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
               errorText: errorText,
               errorStyle: AppText.body(size: 11, color: AppColors.red600),
               suffixIcon: suffixIcon,
@@ -197,7 +199,7 @@ class AppDropdown<T> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          Text(label, style: AppText.fieldLabel()),
           const SizedBox(height: AppSpacing.xs),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13),
@@ -211,7 +213,7 @@ class AppDropdown<T> extends StatelessWidget {
                 value: value,
                 isExpanded: true,
                 icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
-                style: AppText.body(size: 13, color: AppColors.ink),
+                style: AppText.body(size: 14, color: AppColors.ink),
                 items: items
                     .map((i) => DropdownMenuItem<T>(value: i, child: Text(_label(i))))
                     .toList(),

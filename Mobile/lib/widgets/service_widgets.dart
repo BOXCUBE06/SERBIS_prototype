@@ -41,7 +41,7 @@ class AttachmentUploadField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          Text(label, style: AppText.fieldLabel()),
           const SizedBox(height: 6),
           InkWell(
             onTap: onTap,

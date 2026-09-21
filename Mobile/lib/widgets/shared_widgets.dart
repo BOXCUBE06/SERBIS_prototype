@@ -621,7 +621,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          Text(widget.label, style: AppText.fieldLabel()),
           const SizedBox(height: 6),
           TextFormField(
             controller: widget.controller,
@@ -630,10 +630,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
             validator: widget.validator,
             maxLength: widget.maxLength,
             inputFormatters: widget.inputFormatters,
-            style: AppText.body(size: 13),
+            style: AppText.body(size: 14),
             decoration: InputDecoration(
               hintText: widget.hint,
-              hintStyle: AppText.body(size: 13, color: AppColors.inkFaint),
+              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
               counterText: '',
               prefixIcon: widget.prefixIcon != null
                   ? Icon(widget.prefixIcon, size: 18, color: AppColors.inkFaint)

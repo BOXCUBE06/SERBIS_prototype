@@ -24,9 +24,9 @@ class FormSection extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: AppText.display(
-              size: 11,
-              weight: FontWeight.w600,
-              color: AppColors.inkFaint,
+              size: 12.5,
+              weight: FontWeight.w700,
+              color: AppColors.green900,
               letterSpacing: 0.6,
             ),
           ),

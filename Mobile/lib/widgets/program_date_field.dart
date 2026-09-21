@@ -43,7 +43,7 @@ class ProgramDateField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(field.label, style: AppText.display(size: 12, weight: FontWeight.w600)),
+          Text(field.label, style: AppText.fieldLabel()),
           const SizedBox(height: AppSpacing.xs),
           Semantics(
             button: true,

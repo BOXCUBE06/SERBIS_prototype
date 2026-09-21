@@ -217,7 +217,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const ServicePurposeNote(),
                     const SizedBox(height: 22),
 
-                    Text('Registering as', style: AppText.display(size: 12, weight: FontWeight.w600)),
+                    Text('Registering as', style: AppText.fieldLabel()),
                     const SizedBox(height: 8),
                     SegmentedButton<bool>(
                       segments: const [
@@ -452,7 +452,7 @@ class _BarangayField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Barangay',
-              style: AppText.display(size: 12, weight: FontWeight.w600)),
+              style: AppText.fieldLabel()),
           const SizedBox(height: 6),
           if (loading)
             _shell(
@@ -624,7 +624,7 @@ class _Header extends StatelessWidget {
                             style: AppText.display(
                                 size: 10,
                                 weight: FontWeight.w500,
-                                color: Colors.white.withOpacity(.65),
+                                color: Colors.white.withOpacity(.9),
                                 letterSpacing: 2)),
                       ],
                     ),

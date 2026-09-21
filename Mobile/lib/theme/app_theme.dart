@@ -8,10 +8,10 @@ class AppColors {
   static const green600 = Color(0xFF2C8C5E);
   static const green50 = Color(0xFFE8F3EC);
 
-  static const amber600 = Color(0xFFD9842B);
+  static const amber600 = Color(0xFF9A5A0F);
   static const amber50 = Color(0xFFFCEFDF);
 
-  static const red600 = Color(0xFFC0432D);
+  static const red600 = Color(0xFFB03B27);
   static const red50 = Color(0xFFFBEAE6);
 
   static const blue600 = Color(0xFF2D6CA8);
@@ -21,8 +21,8 @@ class AppColors {
   static const surface = Color(0xFFFFFFFF);
 
   static const ink = Color(0xFF1E2A24);
-  static const inkMuted = Color(0xFF6E7B73);
-  static const inkFaint = Color(0xFF9AA59E);
+  static const inkMuted = Color(0xFF4A554F);
+  static const inkFaint = Color(0xFF5F6A64);
 
   static const line = Color(0xFFE7E2D6);
   static const grey50 = Color(0xFFF1EFEA);
@@ -102,6 +102,12 @@ class AppText {
         height: height,
       );
 
+  /// The label above a form field. Large, bold and full-strength ink: a field
+  /// that cannot be read at a glance is one a resident fills in wrong, and these
+  /// screens are used outdoors, on small phones, by people of every age.
+  static TextStyle fieldLabel() =>
+      display(size: 14.5, weight: FontWeight.w700, height: 1.3);
+
   static TextStyle body({
     double size = 13,
     FontWeight weight = FontWeight.w400,
@@ -131,5 +137,13 @@ ThemeData buildAppTheme() {
     ),
     splashFactory: InkRipple.splashFactory,
     dividerColor: AppColors.line,
+    // Fields built straight on Material's TextFormField (the ones with a
+    // labelText) get the same large, bold label and readable hint as the app's
+    // own field widgets.
+    inputDecorationTheme: InputDecorationTheme(
+      labelStyle: AppText.body(size: 14.5, weight: FontWeight.w600, color: AppColors.ink),
+      floatingLabelStyle: AppText.body(size: 14.5, weight: FontWeight.w700, color: AppColors.green900),
+      hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+    ),
   );
 }

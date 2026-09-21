@@ -89,7 +89,7 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                             style: AppText.display(
                               size: 10.5,
                               weight: FontWeight.w600,
-                              color: Colors.white.withOpacity(.7),
+                              color: Colors.white.withOpacity(.9),
                               letterSpacing: 2,
                             ),
                           ),
