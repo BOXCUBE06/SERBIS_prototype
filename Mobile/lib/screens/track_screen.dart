@@ -77,7 +77,11 @@ class _TrackScreenState extends State<TrackScreen> {
       // refresh is most useful.
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        AppHeader(onNotificationsTap: widget.onOpenNotifications, onProfileTap: widget.onOpenProfile),
+        AppHeader(
+          onNotificationsTap: widget.onOpenNotifications,
+          onProfileTap: widget.onOpenProfile,
+          filipino: isFilipino,
+        ),
         const SizedBox(height: 22),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),

@@ -25,10 +25,20 @@ class BorrowEquipmentScreen extends StatefulWidget {
   /// screen and its sheet do reads from [appState].
   final AppUser user;
 
+  /// True when this is the Borrow tab: it draws the app header in place of a
+  /// back-button app bar, and follows the store so a loan MDRRMO approves shows
+  /// up without leaving the tab.
+  final bool embedded;
+  final VoidCallback? onOpenNotifications;
+  final VoidCallback? onOpenProfile;
+
   const BorrowEquipmentScreen({
     super.key,
     required this.appState,
     required this.user,
+    this.embedded = false,
+    this.onOpenNotifications,
+    this.onOpenProfile,
   });
 
   @override
@@ -50,6 +60,25 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     super.initState();
     _loadEquipment();
     _loadMine();
+    if (widget.embedded) {
+      widget.appState.addListener(_syncMine);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.embedded) {
+      widget.appState.removeListener(_syncMine);
+    }
+    super.dispose();
+  }
+
+  /// A tab outlives many visits, so the copy taken at mount goes stale. Only the
+  /// list of the resident's own loans is re-read: the catalogue's load and error
+  /// states are owned by [_loadEquipment].
+  void _syncMine() {
+    if (!mounted) return;
+    setState(() => _myRequests = List.of(widget.appState.borrowRequests));
   }
 
   Future<void> _loadEquipment() async {
@@ -110,14 +139,22 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      appBar: AppBar(
-        backgroundColor: AppColors.paper,
-        elevation: 0,
-        foregroundColor: AppColors.ink,
-        title: Text('Borrow Equipment', style: AppText.display(size: 17)),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              backgroundColor: AppColors.paper,
+              elevation: 0,
+              foregroundColor: AppColors.ink,
+              title: Text('Borrow Equipment', style: AppText.display(size: 17)),
+            ),
       body: Column(
         children: [
+          if (widget.embedded)
+            AppHeader(
+              onNotificationsTap: widget.onOpenNotifications,
+              onProfileTap: widget.onOpenProfile,
+              filipino: f,
+            ),
           if (widget.appState.borrowIsOffline)
             OfflineBanner(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
           Padding(

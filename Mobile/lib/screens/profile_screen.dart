@@ -30,6 +30,10 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenProfile;
 
+  /// Set when Profile is opened as a page over the tabs (from the header's
+  /// profile icon); draws the header's back button.
+  final VoidCallback? onBack;
+
   const ProfileScreen({
     super.key,
     required this.appState,
@@ -39,6 +43,7 @@ class ProfileScreen extends StatefulWidget {
     required this.onLogout,
     required this.onOpenNotifications,
     required this.onOpenProfile,
+    this.onBack,
   });
 
   @override
@@ -239,7 +244,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        AppHeader(onNotificationsTap: widget.onOpenNotifications, onProfileTap: widget.onOpenProfile),
+        AppHeader(
+          onNotificationsTap: widget.onOpenNotifications,
+          onProfileTap: widget.onBack == null ? widget.onOpenProfile : null,
+          onBack: widget.onBack,
+          filipino: filipino,
+        ),
         const SizedBox(height: 22),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),

@@ -20,6 +20,10 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onOpenServices;
   final ValueChanged<ServiceType> onOpenService;
 
+  /// Opens the Borrow tab. Left out, the tile pushes the borrowing screen
+  /// instead, which is what a host with no Borrow tab wants.
+  final VoidCallback? onOpenBorrow;
+
   const HomeScreen({
     super.key,
     required this.appState,
@@ -30,6 +34,7 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenNotifications,
     required this.onOpenServices,
     required this.onOpenService,
+    this.onOpenBorrow,
   });
 
   @override
@@ -43,7 +48,7 @@ class HomeScreen extends StatelessWidget {
       // controller and losing `primary`.
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
+        AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile, filipino: f),
         const SizedBox(height: 14),
 
         // ── Who is signed in ── the account type and name, so an organization
@@ -214,18 +219,32 @@ class HomeScreen extends StatelessWidget {
                       fg: AppColors.green700,
                       title: 'Borrow Equipment',
                       subtitle: 'Wheelchairs, stretchers & more',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => BorrowEquipmentScreen(
-                                appState: appState, user: user)),
-                      ),
+                      onTap: onOpenBorrow ??
+                          () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => BorrowEquipmentScreen(
+                                        appState: appState, user: user)),
+                              ),
                     ),
                   ),
                   ],
                 ],
               ),
             ],
+          ),
+        ),
+
+        const SizedBox(height: 22),
+
+        // ── Safety guides ── the Library used to be a tab of its own; it is a
+        // reference, opened when wanted, not somewhere a resident lives.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: _SafetyGuidesCard(
+            title: tr(f, 'home.safety_guides'),
+            description: tr(f, 'home.safety_guides_desc'),
+            onTap: onOpenLibrary,
           ),
         ),
 
@@ -360,6 +379,73 @@ class _AccountLine extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The way into the Library: first aid, disaster preparedness and hotlines.
+/// Large and labelled in words, so it reads as a place to go rather than as
+/// one more piece of information on the page.
+class _SafetyGuidesCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  const _SafetyGuidesCard({required this.title, required this.description, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: title,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Material(
+        color: AppColors.green50,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 88),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.green600.withOpacity(.35)),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.green700,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
+                      const SizedBox(height: 3),
+                      Text(
+                        description,
+                        style: AppText.body(size: 13, color: AppColors.ink, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.green700, size: 26),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

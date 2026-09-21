@@ -58,6 +58,12 @@ Future<AppState> _pumpHome(
   String? error,
   bool fromCache = false,
 }) async {
+  // Tall, so the announcements below the Safety guides card are built: the
+  // list only builds what is on screen.
+  tester.view.physicalSize = const Size(1080, 3600);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+
   final state = AppState(_FakeApi());
   state.materials.addAll(materials);
   state.materialsLoading = loading;

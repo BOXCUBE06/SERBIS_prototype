@@ -70,6 +70,7 @@ class _AwaitingApprovalScreenState extends State<AwaitingApprovalScreen> {
         AppHeader(
           onNotificationsTap: widget.onOpenNotifications,
           onProfileTap: widget.onOpenProfile,
+          filipino: f,
         ),
         const SizedBox(height: 22),
         Padding(

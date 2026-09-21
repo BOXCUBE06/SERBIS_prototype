@@ -12,11 +12,16 @@ class LibraryScreen extends StatelessWidget {
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenProfile;
 
+  /// Set when the Library is opened as a page over the tabs (from Home's Safety
+  /// guides card); draws the header's back button.
+  final VoidCallback? onBack;
+
   const LibraryScreen({
     super.key,
     required this.appState,
     required this.onOpenNotifications,
     required this.onOpenProfile,
+    this.onBack,
   });
 
   @override
@@ -32,7 +37,12 @@ class LibraryScreen extends StatelessWidget {
       child: ListView(
       padding: EdgeInsets.zero,
       children: [
-        AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile),
+        AppHeader(
+          onNotificationsTap: onOpenNotifications,
+          onProfileTap: onBack == null ? onOpenProfile : null,
+          onBack: onBack,
+          filipino: filipino,
+        ),
         const SizedBox(height: 22),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),

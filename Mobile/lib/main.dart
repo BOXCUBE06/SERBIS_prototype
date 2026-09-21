@@ -14,14 +14,18 @@ import 'screens/dashboard_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/awaiting_approval_screen.dart';
+import 'screens/borrow_equipment_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
+import 'screens/unavailable_tab_screen.dart';
+import 'state/translations.dart';
 import 'state/api_service.dart';
 import 'state/app_log.dart';
 import 'state/push_messaging.dart';
 import 'state/request_store.dart';
 import 'state/account_store.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_bottom_nav.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
 
@@ -411,10 +415,16 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
+  static const int _homeTab = 0;
+  static const int _ambulanceTab = 1;
+  static const int _servicesTab = 2;
+  static const int _borrowTab = 3;
+  static const int _trackTab = 4;
+
   /// Tabs whose content goes stale on its own, because the dispatcher moves a
   /// request through its statuses server-side. Home shows the active request
   /// card; Track shows the list.
-  static const Set<int> _statusTabs = {0, 2};
+  static const Set<int> _statusTabs = {_homeTab, _trackTab};
 
   /// Long enough not to hammer a rural connection, short enough that a resident
   /// watching for the ambulance sees the change without doing anything. An
@@ -425,9 +435,14 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   /// Otherwise tapping between Home and Track is a request each way.
   static const Duration _tabRefreshMaxAge = Duration(seconds: 15);
 
-  int _index = 0;
-  ServiceType _serviceType = ServiceType.ambulance;
+  int _index = _homeTab;
   late final AppState _appState = AppState(widget.api);
+
+  /// Profile and the Library open as pages above the tabs. A page is built once
+  /// when it is pushed, so it reads the signed-in resident from here to stay in
+  /// step with an edit made on that same page.
+  late final ValueNotifier<AppUser> _user = ValueNotifier(widget.user);
+  bool _profileOpen = false;
 
   Timer? _poll;
   bool _foreground = true;
@@ -458,10 +473,21 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(covariant RootShell old) {
+    super.didUpdateWidget(old);
+    // After the frame: a page pushed above the tabs listens to this, and it is
+    // not a descendant of the shell that is building right now.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _user.value = widget.user;
+    });
+  }
+
+  @override
   void dispose() {
     _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _appState.removeListener(_onAppStateChanged);
+    _user.dispose();
     super.dispose();
   }
 
@@ -535,26 +561,78 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     _syncPolling();
   }
 
+  /// Home's shortcut tiles. Ambulance and hospital transfer have a tab of their
+  /// own; every other service starts from the Services grid.
   void _openService(ServiceType type) {
-    setState(() {
-      _serviceType = type;
-      _index = 1;
+    _goTo(switch (type) {
+      ServiceType.ambulance || ServiceType.transfer => _ambulanceTab,
+      _ => _servicesTab,
     });
-    _syncPolling();
   }
+
+  void _openProfilePage() {
+    if (_profileOpen) return;
+    _profileOpen = true;
+
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(
+          builder: (routeContext) => Scaffold(
+            body: ListenableBuilder(
+              listenable: Listenable.merge([_appState, _user]),
+              builder: (_, __) => ProfileScreen(
+                appState: _appState,
+                // The cached rows name this resident's own requests. The next
+                // person to use the phone must not open the app onto them.
+                onLogout: () {
+                  Navigator.of(routeContext).pop();
+                  _appState.clearRequestCache();
+                  _appState.clearBorrowCache();
+                  widget.onLogout();
+                },
+                onOpenNotifications: _openNotifications,
+                // Already here.
+                onOpenProfile: () {},
+                onBack: () => Navigator.of(routeContext).pop(),
+                userStore: widget.userStore,
+                user: _user.value,
+                onUserChanged: widget.onUserChanged,
+              ),
+            ),
+          ),
+        ))
+        .whenComplete(() => _profileOpen = false);
+  }
+
+  void _openLibraryPage() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (routeContext) => Scaffold(
+        body: ListenableBuilder(
+          listenable: _appState,
+          builder: (_, __) => LibraryScreen(
+            appState: _appState,
+            onOpenNotifications: _openNotifications,
+            onOpenProfile: _openProfilePage,
+            onBack: () => Navigator.of(routeContext).pop(),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  void _openNotifications() => NotificationsSheet.show(
+        context,
+        filipino: _appState.language == AppLanguage.filipino,
+        // A copy: the sheet must not hold the store's mutable list, which a
+        // poll landing behind the sheet would mutate underneath it (M30).
+        requests: [..._appState.requests],
+        advisories: [..._appState.advisories],
+        advisoriesError: _appState.advisoriesError,
+      );
 
   @override
   Widget build(BuildContext context) {
-    final onOpenNotifications = () => NotificationsSheet.show(
-          context,
-          filipino: _appState.language == AppLanguage.filipino,
-          // A copy: the sheet must not hold the store's mutable list, which a
-          // poll landing behind the sheet would mutate underneath it (M30).
-          requests: [..._appState.requests],
-          advisories: [..._appState.advisories],
-          advisoriesError: _appState.advisoriesError,
-        );
-    final onOpenProfile = () => _goTo(4);
+    final onOpenNotifications = _openNotifications;
+    final onOpenProfile = _openProfilePage;
 
     Widget slot(int index, WidgetBuilder builder, {Object? deps}) => _TabSlot(
           active: _index == index,
@@ -563,67 +641,84 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           builder: builder,
         );
 
+    // An organization MDRRMO has not activated yet cannot file anything, so the
+    // three tabs that file things give it the reason instead of a form it could
+    // not use.
+    Widget awaitingApproval() => AwaitingApprovalScreen(
+          user: widget.user,
+          filipino: _appState.language == AppLanguage.filipino,
+          onOpenNotifications: onOpenNotifications,
+          onOpenProfile: onOpenProfile,
+          // Reloads the profile; the shell rebuilds with the real screens the
+          // moment the account is Active.
+          onCheckAgain: () async {
+            final fresh = await widget.userStore.currentUser();
+            widget.onUserChanged(fresh);
+            return fresh.isAwaitingApproval;
+          },
+        );
+
     final screens = [
-      slot(0, (_) => HomeScreen(
+      slot(_homeTab, (_) => HomeScreen(
             appState: _appState,
             user: widget.user,
-            onOpenTrack: () => _goTo(2),
-            onOpenLibrary: () => _goTo(3),
+            onOpenTrack: () => _goTo(_trackTab),
+            onOpenLibrary: _openLibraryPage,
             onOpenProfile: onOpenProfile,
             onOpenNotifications: onOpenNotifications,
-            onOpenServices: () => _goTo(1),
+            onOpenServices: () => _goTo(_servicesTab),
             onOpenService: _openService,
-          )),
-      slot(1, (_) => widget.user.isAwaitingApproval
-          // An organization MDRRMO has not activated yet cannot file anything,
-          // so it gets the reason instead of a service list it could not use.
-          ? AwaitingApprovalScreen(
-              user: widget.user,
-              filipino: _appState.language == AppLanguage.filipino,
-              onOpenNotifications: onOpenNotifications,
-              onOpenProfile: onOpenProfile,
-              // Reloads the profile; the shell rebuilds with the service list
-              // the moment the account is Active.
-              onCheckAgain: () async {
-                final fresh = await widget.userStore.currentUser();
-                widget.onUserChanged(fresh);
-                return fresh.isAwaitingApproval;
-              },
-            )
+            onOpenBorrow: () => _goTo(_borrowTab),
+          ), deps: widget.user),
+      // Interim: the same screen as Services, opened on the ambulance service.
+      slot(_ambulanceTab, (_) => widget.user.isAwaitingApproval
+          ? awaitingApproval()
           : ServicesScreen(
-              key: ValueKey(_serviceType),
+              key: const ValueKey('ambulance'),
               appState: _appState,
               user: widget.user,
-              initialType: _serviceType,
-              onSubmitted: () => _goTo(2),
+              initialType: ServiceType.ambulance,
+              onSubmitted: () => _goTo(_trackTab),
               onOpenNotifications: onOpenNotifications,
               onOpenProfile: onOpenProfile,
-            ), deps: (_serviceType, widget.user)),
-      slot(2, (_) => TrackScreen(
+            ), deps: widget.user),
+      slot(_servicesTab, (_) => widget.user.isAwaitingApproval
+          ? awaitingApproval()
+          : ServicesScreen(
+              key: const ValueKey('services'),
+              appState: _appState,
+              user: widget.user,
+              initialType: ServiceType.inquiry,
+              onSubmitted: () => _goTo(_trackTab),
+              onOpenNotifications: onOpenNotifications,
+              onOpenProfile: onOpenProfile,
+            ), deps: widget.user),
+      slot(_borrowTab, (_) {
+        final f = _appState.language == AppLanguage.filipino;
+        if (widget.user.isAwaitingApproval) return awaitingApproval();
+        if (!_appState.borrowingAllowed) {
+          return UnavailableTabScreen(
+            icon: Icons.inventory_2_outlined,
+            title: tr(f, 'nav.borrow'),
+            message: tr(f, 'tab.borrow_unavailable'),
+            filipino: f,
+            onOpenNotifications: onOpenNotifications,
+            onOpenProfile: onOpenProfile,
+          );
+        }
+        return BorrowEquipmentScreen(
+          appState: _appState,
+          user: widget.user,
+          embedded: true,
+          onOpenNotifications: onOpenNotifications,
+          onOpenProfile: onOpenProfile,
+        );
+      }, deps: widget.user),
+      slot(_trackTab, (_) => TrackScreen(
             appState: _appState,
             onOpenNotifications: onOpenNotifications,
             onOpenProfile: onOpenProfile,
           )),
-      slot(3, (_) => LibraryScreen(
-            appState: _appState,
-            onOpenNotifications: onOpenNotifications,
-            onOpenProfile: onOpenProfile,
-          )),
-      slot(4, (_) => ProfileScreen(
-            appState: _appState,
-            // The cached rows name this resident's own requests. The next
-            // person to use the phone must not open the app onto them.
-            onLogout: () {
-              _appState.clearRequestCache();
-              _appState.clearBorrowCache();
-              widget.onLogout();
-            },
-            onOpenNotifications: onOpenNotifications,
-            onOpenProfile: onOpenProfile,
-            userStore: widget.userStore,
-            user: widget.user,
-            onUserChanged: widget.onUserChanged,
-          ), deps: widget.user),
     ];
 
     return Scaffold(
@@ -645,7 +740,16 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           ],
         ),
       ),
-      bottomNavigationBar: _BottomNav(index: _index, onTap: _goTo),
+      // Its own listener: the shell does not rebuild on a language change, and
+      // the labels are words.
+      bottomNavigationBar: ListenableBuilder(
+        listenable: _appState,
+        builder: (_, __) => AppBottomNav(
+          index: _index,
+          onTap: _goTo,
+          filipino: _appState.language == AppLanguage.filipino,
+        ),
+      ),
     );
   }
 }
@@ -714,65 +818,14 @@ class _TabSlotState extends State<_TabSlot> {
 
   @override
   Widget build(BuildContext context) {
+    // Not built until first shown: a tab nobody opens costs no fetches.
+    if (_built == null && !widget.active) {
+      return const SizedBox.shrink();
+    }
     if (_built == null || (_stale && widget.active)) {
       _built = widget.builder(context);
       _stale = false;
     }
     return _built!;
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  final int index;
-  final ValueChanged<int> onTap;
-
-  const _BottomNav({required this.index, required this.onTap});
-
-  static const _items = [
-    (Icons.home_rounded, Icons.home_outlined, 'Home'),
-    (Icons.assignment_rounded, Icons.assignment_outlined, 'Services'),
-    (Icons.fact_check_rounded, Icons.fact_check_outlined, 'Track'),
-    (Icons.menu_book_rounded, Icons.menu_book_outlined, 'Library'),
-    (Icons.person_rounded, Icons.person_outline_rounded, 'Profile'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.line)),
-      ),
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 18),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: List.generate(_items.length, (i) {
-            final (filled, outline, label) = _items[i];
-            final active = i == index;
-            return Expanded(
-              child: InkWell(
-                onTap: () => onTap(i),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(active ? filled : outline, size: 22, color: active ? AppColors.green700 : AppColors.inkFaint),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      style: AppText.display(
-                        size: 11,
-                        weight: active ? FontWeight.w600 : FontWeight.w500,
-                        color: active ? AppColors.green700 : AppColors.inkFaint,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
   }
 }

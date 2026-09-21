@@ -69,6 +69,32 @@ const Map<String, (String, String)> _strings = {
   'home.need_help_now': ('Need help now?', 'Kailangan ng tulong ngayon?'),
   'home.announcements': ('Announcements', 'Mga Abiso'),
   'home.info_center': ('Info center', 'Sentro ng Impormasyon'),
+  'nav.home': ('Home', 'Home'),
+  'nav.ambulance': ('Ambulance', 'Ambulansya'),
+  'nav.services': ('Services', 'Serbisyo'),
+  'nav.borrow': ('Borrow', 'Hiram'),
+  'nav.track': ('Track', 'Subaybay'),
+  'nav.back': ('Back', 'Bumalik'),
+  'nav.notifications': ('Notifications', 'Mga Abiso'),
+  'nav.profile': ('My profile', 'Aking profile'),
+  'tab.borrow_unavailable': (
+    'Equipment borrowing is not offered to this account type.',
+    'Hindi iniaalok ang paghiram ng kagamitan sa uri ng account na ito.',
+  ),
+  'tab.ambulance_unavailable': (
+    'Ambulance booking is not offered to this account type.',
+    'Hindi iniaalok ang pag-book ng ambulansya sa uri ng account na ito.',
+  ),
+  'tab.load_failed': (
+    'The list could not be loaded. Check your connection and try again.',
+    'Hindi ma-load ang listahan. Suriin ang koneksyon at subukang muli.',
+  ),
+  'tab.retry': ('Try again', 'Subukang muli'),
+  'home.safety_guides': ('Safety guides', 'Mga Gabay sa Kaligtasan'),
+  'home.safety_guides_desc': (
+    'First aid, disaster preparedness and hotline numbers.',
+    'Pangunang lunas, paghahanda sa sakuna at mga numero ng hotline.',
+  ),
   'home.ann.empty': (
     'MDRRMO has not published anything yet.',
     'Wala pang nailalathalang materyal ang MDRRMO.',

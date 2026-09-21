@@ -9,13 +9,29 @@ class AppHeader extends StatelessWidget {
   final VoidCallback? onNotificationsTap;
   final VoidCallback? onProfileTap;
 
-  const AppHeader({super.key, this.onNotificationsTap, this.onProfileTap});
+  /// Set on a page opened from a tab (Profile, Safety guides, a service form):
+  /// draws a back button ahead of the logo. Such a page shows no profile icon —
+  /// there is not room for both on a 360dp phone, and the resident is already
+  /// one tap from where they came from.
+  final VoidCallback? onBack;
+
+  /// Only the button labels read this; the header has no other text that
+  /// changes with the language.
+  final bool filipino;
+
+  const AppHeader({
+    super.key,
+    this.onNotificationsTap,
+    this.onProfileTap,
+    this.onBack,
+    this.filipino = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 48, 22, 24),
+      padding: const EdgeInsets.fromLTRB(22, 40, 14, 20),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
@@ -45,54 +61,69 @@ class AppHeader extends StatelessWidget {
             ),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(.14)),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.shield_outlined, color: Colors.white, size: 19),
-                  ),
-                  const SizedBox(width: 11),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('SERBIS', style: AppText.display(size: 17, color: Colors.white, letterSpacing: .5)),
-                      const SizedBox(height: 2),
-                      Text(
-                        'ECHAGUE MDRRMO',
-                        style: AppText.display(
-                          size: 10,
-                          weight: FontWeight.w500,
-                          color: Colors.white.withOpacity(.65),
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              if (onNotificationsTap != null || onProfileTap != null)
-                Row(
+              if (onBack != null) ...[
+                _HeaderButton(
+                  icon: Icons.arrow_back_rounded,
+                  label: tr(filipino, 'nav.back'),
+                  onTap: onBack!,
+                ),
+                const SizedBox(width: 4),
+              ],
+              Expanded(
+                child: Row(
                   children: [
-                    if (onNotificationsTap != null)
-                      // No unread dot: it was hardcoded on, so it announced
-                      // unread news on a launch where nothing had happened and
-                      // stayed on after the sheet was read. There is no feed to
-                      // count against yet, and a permanent indicator teaches
-                      // residents to ignore the one that will matter.
-                      GestureDetector(onTap: onNotificationsTap, child: _circleIcon(Icons.notifications_outlined)),
-                    if (onNotificationsTap != null && onProfileTap != null) const SizedBox(width: 8),
-                    if (onProfileTap != null)
-                      GestureDetector(onTap: onProfileTap, child: _circleIcon(Icons.person_outline_rounded)),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(.14)),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.shield_outlined, color: Colors.white, size: 19),
+                    ),
+                    const SizedBox(width: 11),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('SERBIS', style: AppText.display(size: 17, color: Colors.white, letterSpacing: .5)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'ECHAGUE MDRRMO',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.display(
+                              size: 10,
+                              weight: FontWeight.w500,
+                              color: Colors.white.withOpacity(.85),
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
+                ),
+              ),
+              // No unread dot: it was hardcoded on, so it announced unread news
+              // on a launch where nothing had happened and stayed on after the
+              // sheet was read. There is no feed to count against yet, and a
+              // permanent indicator teaches residents to ignore the one that
+              // will matter.
+              if (onNotificationsTap != null)
+                _HeaderButton(
+                  icon: Icons.notifications_outlined,
+                  label: tr(filipino, 'nav.notifications'),
+                  onTap: onNotificationsTap!,
+                ),
+              if (onProfileTap != null)
+                _HeaderButton(
+                  icon: Icons.person_outline_rounded,
+                  label: tr(filipino, 'nav.profile'),
+                  onTap: onProfileTap!,
                 ),
             ],
           ),
@@ -100,18 +131,45 @@ class AppHeader extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _circleIcon(IconData icon) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(.06),
-        border: Border.all(color: Colors.white.withOpacity(.16)),
+/// A 36dp glass circle inside a 48dp touch target — the drawn size is what the
+/// header was designed around, the target is what a thumb needs.
+class _HeaderButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _HeaderButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(.10),
+                border: Border.all(color: Colors.white.withOpacity(.30)),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: Colors.white),
+            ),
+          ),
+        ),
       ),
-      alignment: Alignment.center,
-      child: Icon(icon, size: 17, color: Colors.white),
     );
   }
 }
