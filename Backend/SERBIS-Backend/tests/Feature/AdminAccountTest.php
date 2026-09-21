@@ -34,6 +34,8 @@ class AdminAccountTest extends TestCase
         parent::setUp();
 
         $this->admin = $this->makeAdmin('admin@test.local');
+        // Staff Accounts is super-admin-only; the accounts it manages are ordinary ones.
+        $this->admin->forceFill(['is_super_admin' => true])->save();
         Sanctum::actingAs($this->admin);
     }
 
@@ -248,6 +250,7 @@ class AdminAccountTest extends TestCase
         // someone adds a way to close an account other than by calling it
         // yourself, it is the guard that still holds.
         $solo = $this->makeAdmin('solo@test.local');
+        $solo->forceFill(['is_super_admin' => true])->save();
         Sanctum::actingAs($solo);
         User::where('admin_id', $this->admin->admin_id)->update(['status' => 'Inactive']);
 
@@ -277,6 +280,7 @@ class AdminAccountTest extends TestCase
     public function test_an_account_with_history_is_deactivated_rather_than_deleted(): void
     {
         $other = $this->makeAdmin('other@test.local');
+        $other->forceFill(['is_super_admin' => true])->save();
         Sanctum::actingAs($other);
         // Anything they did leaves a row in tbl_system_logs pointing at them.
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
@@ -326,6 +330,7 @@ class AdminAccountTest extends TestCase
     public function test_a_deactivated_admin_cannot_log_in_or_use_a_token(): void
     {
         $other = $this->makeAdmin('other@test.local');
+        $other->forceFill(['is_super_admin' => true])->save();
         Sanctum::actingAs($other);
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureSection;
 use App\Http\Middleware\IsAdmin;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -49,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         $middleware->alias([
             'is.admin' => IsAdmin::class,
+            'section' => EnsureSection::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

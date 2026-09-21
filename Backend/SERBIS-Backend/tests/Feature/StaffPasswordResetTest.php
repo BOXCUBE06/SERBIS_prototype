@@ -30,6 +30,8 @@ class StaffPasswordResetTest extends TestCase
         parent::setUp();
 
         $this->admin = $this->makeAdmin('admin@serbis.com');
+        // Staff Accounts is super-admin-only; the accounts it manages are ordinary ones.
+        $this->admin->forceFill(['is_super_admin' => true])->save();
         Sanctum::actingAs($this->admin);
     }
 
@@ -195,8 +197,10 @@ class StaffPasswordResetTest extends TestCase
         $this->assertFalse($other->must_change_password);
         $this->assertTrue(Hash::check('Brandnew123', $other->password));
 
-        // The session they made it on survives, and now reaches the panel.
-        $this->asBearer($other, $token)->getJson('/api/admins')->assertStatus(200);
+        // The session they made it on survives, and now reaches the panel. Any
+        // ordinary admin route will do; /api/admins would be refused on section
+        // grounds, since `other` is not a super admin.
+        $this->asBearer($other, $token)->getJson('/api/vehicles')->assertStatus(200);
 
         // The temporary password is dead.
         $this->postJson('/api/admin/login', [

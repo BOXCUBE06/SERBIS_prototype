@@ -89,7 +89,10 @@ Route::middleware('throttle:api')->group(function () {
         // Read is wider than write: staff render one photo per row in the resident
         // list, so this sits outside the is.admin group and does its own check.
         // Registered before the admin apiResource so it is never shadowed by it.
-        Route::get('residents/{id}/photo', [ResidentController::class, 'photo']);
+        // Staff need it on every page that shows a person, so it takes any of
+        // those sections; a resident is not staff and passes `section` untouched.
+        Route::get('residents/{id}/photo', [ResidentController::class, 'photo'])
+            ->middleware('section:residents,requests,ambulance,borrowings');
 
         // Endpoints requiring read/write access from the mobile application
         Route::get('equipments', [EquipmentController::class, 'index']);
@@ -97,10 +100,18 @@ Route::middleware('throttle:api')->group(function () {
         // The ambulance form's destination dropdown (MDRRMO feedback,
         // 2026-09-19). Read-only — see AmbulanceDestinationSeeder.
         Route::get('ambulance-destinations', [AmbulanceDestinationController::class, 'index']);
-        Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show']);
-        Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId']);
-        Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto']);
-        Route::get('service-requests/{id}/letter', [ServiceRequestController::class, 'letter']);
+        // The routes the mobile app and the panel both use. `section` only ever
+        // restricts staff here (see EnsureSection): a resident is scoped to their
+        // own rows by the controller, as before. Which of the two sections an
+        // admin holds also decides which rows they see — see ServiceRequestController.
+        Route::apiResource('service-requests', ServiceRequestController::class)->only(['index', 'store', 'show'])
+            ->middleware('section:requests,ambulance');
+        Route::get('service-requests/{id}/valid-id', [ServiceRequestController::class, 'validId'])
+            ->middleware('section:requests,ambulance');
+        Route::get('service-requests/{id}/site-photo', [ServiceRequestController::class, 'sitePhoto'])
+            ->middleware('section:requests,ambulance');
+        Route::get('service-requests/{id}/letter', [ServiceRequestController::class, 'letter'])
+            ->middleware('section:requests,ambulance');
         // What the MDRRMO has texted to this resident's barangay. Scoped to blasts
         // they were actually a recipient of, not to their barangay membership.
         Route::get('advisories', [SmsController::class, 'advisories']);
@@ -108,17 +119,21 @@ Route::middleware('throttle:api')->group(function () {
         // both need "which ambulances are free", neither gets patient details.
         Route::get('ambulance-availability', [AmbulanceAvailabilityController::class, 'index']);
         // Owner-scoped cancel. The general update() stays admin-only below.
-        Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel']);
+        Route::patch('service-requests/{id}/cancel', [ServiceRequestController::class, 'cancel'])
+            ->middleware('section:requests,ambulance');
         // Owner-scoped, same shape as the service-request cancel above. Registered
         // before the apiResource so the literal segment is never read as an {id}.
-        Route::patch('borrowings/{id}/cancel', [EquipmentBorrowingController::class, 'cancel']);
+        Route::patch('borrowings/{id}/cancel', [EquipmentBorrowingController::class, 'cancel'])
+            ->middleware('section:borrowings');
         // Read is wider than write: the upload sits in the admin group below,
         // because staff take the photo, but the borrower can read their own back —
         // evidence only one side of a dispute can see is not evidence.
         // scopeToOwner() inside does the narrowing. Registered before the
         // apiResource for the same reason cancel is.
-        Route::get('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'photo']);
-        Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show']);
+        Route::get('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'photo'])
+            ->middleware('section:borrowings');
+        Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['index', 'store', 'show'])
+            ->middleware('section:borrowings');
 
         // Mobile endpoint to fetch published materials
         Route::get('info-materials', [InfoMaterialController::class, 'index']);
@@ -154,107 +169,152 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // AnalyticsController::getAdvancedAnalytics, a method that does not
     // exist and never did — the route 500'd on any request. No client ever
     // called it; /admin/dashboard below is the panel's analytics source.
-    Route::get('/admin/service-requests', [ServiceRequestController::class, 'adminIndex']);
-    // Walk-in requests, filed by staff at the counter — separate from the
-    // resident-facing POST /service-requests above.
-    Route::post('/admin/service-requests', [ServiceRequestController::class, 'adminStore']);
-    Route::get('/admin/dashboard', [AnalyticsController::class, 'index']);
+    //
+    // Every route below sits under a `section:` middleware (EnsureSection): the
+    // admin panel's sections, one per sidebar item, each granted per account by
+    // a super admin. See App\Support\AdminSections for the keys. A route that
+    // two pages need lists both, and is open to whoever holds either.
+
+    // Both boards read and write service requests through the same routes, so a
+    // route can only ask for "either". Which rows a caller may see, and which
+    // records they may change, is decided per request by the controller from the
+    // section their service belongs to (ServiceRequestController).
+    Route::middleware('section:requests,ambulance')->group(function () {
+        Route::get('/admin/service-requests', [ServiceRequestController::class, 'adminIndex']);
+        // Walk-in requests, filed by staff at the counter — separate from the
+        // resident-facing POST /service-requests above.
+        Route::post('/admin/service-requests', [ServiceRequestController::class, 'adminStore']);
+        Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
+        // Their own routes, not update(): both re-check ambulance availability
+        // under a lock, which update()/syncFleet() were never built to do.
+        Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
+        Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
+    });
+
+    Route::get('/admin/dashboard', [AnalyticsController::class, 'index'])->middleware('section:dashboard');
     // The retrospective page. This path existed once against a method that
     // never did and 500'd on every call; it now points at real code. Same
     // admin-only group as the dashboard.
-    Route::get('/admin/analytics', [AnalyticsController::class, 'report']);
+    Route::get('/admin/analytics', [AnalyticsController::class, 'report'])->middleware('section:analytics');
 
     // Info Materials Administrative CRUD Routes
-    Route::get('/admin/info-materials', [InfoMaterialController::class, 'index']);
-    Route::post('/admin/info-materials', [InfoMaterialController::class, 'store']);
-    // Admin-only, unlike the read above: residents see the flag, only the
-    // office sets it.
-    Route::patch('/admin/info-materials/{id}/verify', [InfoMaterialController::class, 'verify']);
-    Route::delete('/admin/info-materials/{id}', [InfoMaterialController::class, 'destroy']);
+    Route::middleware('section:files')->group(function () {
+        Route::get('/admin/info-materials', [InfoMaterialController::class, 'index']);
+        Route::post('/admin/info-materials', [InfoMaterialController::class, 'store']);
+        // Admin-only, unlike the read above: residents see the flag, only the
+        // office sets it.
+        Route::patch('/admin/info-materials/{id}/verify', [InfoMaterialController::class, 'verify']);
+        Route::delete('/admin/info-materials/{id}', [InfoMaterialController::class, 'destroy']);
+    });
 
-    Route::get('/logs/system', [SystemLogController::class, 'index']);
-    // The Logs page's second tab. It had been fetching this since the page
-    // was written; the route simply never existed.
-    Route::get('/logs/sms', [SmsController::class, 'history']);
+    Route::middleware('section:logs')->group(function () {
+        Route::get('/logs/system', [SystemLogController::class, 'index']);
+        // The Logs page's second tab. It had been fetching this since the page
+        // was written; the route simply never existed. It lives in SmsController
+        // but belongs to Activity Logs, not to Text Blast.
+        Route::get('/logs/sms', [SmsController::class, 'history']);
+    });
 
-    // The only endpoint that spends money: SkySMS bills per credit and has no
-    // sandbox, so a repeated submit is real pesos, not a retry. 3/hour per admin.
-    Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:sms-blast');
-    // The shared 6-digit code that gates a blast (MDRRMO feedback,
-    // 2026-09-19 — there is no role system, so this is the only thing that
-    // distinguishes "may send" from "any admin token"). Rotating requires
-    // the current code, so both share sendBlast's rate limit — see
-    // SmsController::assertCurrentCode().
-    Route::get('/sms/blast-code', [SmsController::class, 'blastCodeStatus']);
-    Route::post('/sms/blast-code', [SmsController::class, 'rotateBlastCode']);
-    // Read-only and unbilled — but it is still an outbound vendor call on
-    // every visit to the page, not free.
-    Route::get('/sms/balance', [SmsController::class, 'balance'])->middleware('throttle:30,1');
-    // Fires on every change to the barangay picker, so it is allowed to run
-    // far more often than the send it previews. Touches only the local
-    // database; no vendor call, nothing billed.
-    Route::get('/sms/recipient-count', [SmsController::class, 'recipientCount'])->middleware('throttle:120,1');
-    // What became of a blast after SkySMS queued it. The list is local; the
-    // check reads SkySMS's GET /sms/messages, which is unbilled but is an
-    // outbound call on a rate limit the sends share, so it is capped per admin
-    // and the controller answers a repeat press from what it already stored.
-    Route::get('/sms/deliveries', [SmsDeliveryController::class, 'index'])->middleware('throttle:60,1');
-    Route::post('/sms/deliveries/{smsLog}/check', [SmsDeliveryController::class, 'check'])->middleware('throttle:20,1');
-    Route::apiResource('vehicles', VehicleController::class);
+    Route::middleware('section:sms')->group(function () {
+        // The only endpoint that spends money: SkySMS bills per credit and has no
+        // sandbox, so a repeated submit is real pesos, not a retry. 3/hour per admin.
+        Route::post('/sms/blast', [SmsController::class, 'sendBlast'])->middleware('throttle:sms-blast');
+        // The shared 6-digit code that gates a blast, on top of holding this
+        // section: knowing the code is what distinguishes "may send" from "may
+        // open the page". Rotating requires the current code, so both share
+        // sendBlast's rate limit — see SmsController::assertCurrentCode().
+        Route::get('/sms/blast-code', [SmsController::class, 'blastCodeStatus']);
+        Route::post('/sms/blast-code', [SmsController::class, 'rotateBlastCode']);
+        // Read-only and unbilled — but it is still an outbound vendor call on
+        // every visit to the page, not free.
+        Route::get('/sms/balance', [SmsController::class, 'balance'])->middleware('throttle:30,1');
+        // Fires on every change to the barangay picker, so it is allowed to run
+        // far more often than the send it previews. Touches only the local
+        // database; no vendor call, nothing billed.
+        Route::get('/sms/recipient-count', [SmsController::class, 'recipientCount'])->middleware('throttle:120,1');
+        // What became of a blast after SkySMS queued it. The list is local; the
+        // check reads SkySMS's GET /sms/messages, which is unbilled but is an
+        // outbound call on a rate limit the sends share, so it is capped per admin
+        // and the controller answers a repeat press from what it already stored.
+        Route::get('/sms/deliveries', [SmsDeliveryController::class, 'index'])->middleware('throttle:60,1');
+        Route::post('/sms/deliveries/{smsLog}/check', [SmsDeliveryController::class, 'check'])->middleware('throttle:20,1');
+    });
+
+    // The fleet list is read by the two boards that dispatch a unit as well as by
+    // the Vehicles page; only that page may change it.
+    Route::apiResource('vehicles', VehicleController::class)->only(['index', 'show'])
+        ->middleware('section:vehicles,requests,ambulance');
+    Route::apiResource('vehicles', VehicleController::class)->except(['index', 'show'])
+        ->middleware('section:vehicles');
+
     // Read-only, for the resident detail panel. Registered before the
     // apiResource so the literal segment is never read as another {id} action.
-    Route::get('residents/{id}/return-history', [ResidentController::class, 'returnHistory']);
-    Route::apiResource('residents', ResidentController::class);
-    // MDRRMO staff accounts (audit #29). Every admin may manage every other
-    // — see the controller for why there is no super-admin tier, and for
-    // the two deletions it refuses.
-    Route::apiResource('admins', AdminController::class);
-    // Registered after the resource so `admins/{id}` never shadows it.
-    Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
-    // Temporary password for a colleague who cannot sign in; refused for
-    // yourself. See AdminController::resetPassword().
-    Route::post('admins/{id}/reset-password', [AdminController::class, 'resetPassword']);
+    Route::get('residents/{id}/return-history', [ResidentController::class, 'returnHistory'])
+        ->middleware('section:residents');
+    Route::apiResource('residents', ResidentController::class)->middleware('section:residents');
 
-    // Admin-only write access for shared resources
-    Route::apiResource('barangays', BarangayController::class)->except(['index', 'show']);
-    Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show']);
-    Route::apiResource('services', ServiceController::class)->except(['index', 'show']);
+    // MDRRMO staff accounts (audit #29). Super admins only: the page creates
+    // accounts, resets passwords and edits who may open what, so `staff` is not
+    // a section that can be handed out (AdminSections::ASSIGNABLE). The refusals
+    // in the controller still apply to them.
+    Route::middleware('section:staff')->group(function () {
+        Route::apiResource('admins', AdminController::class);
+        // Registered after the resource so `admins/{id}` never shadows it.
+        Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
+        // Temporary password for a colleague who cannot sign in; refused for
+        // yourself. See AdminController::resetPassword().
+        Route::post('admins/{id}/reset-password', [AdminController::class, 'resetPassword']);
+    });
+
+    // Admin-only write access for shared resources. The reads stay open to every
+    // signed-in user above; only the writes are a section.
+    Route::apiResource('barangays', BarangayController::class)->except(['index', 'show'])
+        ->middleware('section:residents');
+    Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show'])
+        ->middleware('section:inventory');
+    Route::apiResource('services', ServiceController::class)->except(['index', 'show'])
+        ->middleware('section:services');
     // Which account types may request each service. Keyed on the service code,
     // and includes the two entries that are not services (equipment-borrowing,
     // others) — see the tbl_service_audience migration.
-    Route::get('service-audience', [ServiceAudienceController::class, 'index']);
-    Route::put('service-audience/{code}', [ServiceAudienceController::class, 'update']);
+    Route::middleware('section:service_audience')->group(function () {
+        Route::get('service-audience', [ServiceAudienceController::class, 'index']);
+        Route::put('service-audience/{code}', [ServiceAudienceController::class, 'update']);
+    });
     // Which kinds of unit may be sent on each service. The dispatch picker reads
     // it and ServiceRequestController::update enforces it — see the
-    // tbl_service_vehicle_types migration.
-    Route::get('service-vehicle-types', [ServiceVehicleTypeController::class, 'index']);
-    Route::put('service-vehicle-types/{code}', [ServiceVehicleTypeController::class, 'update']);
-    Route::apiResource('service-requests', ServiceRequestController::class)->only(['update', 'destroy']);
-    // Their own routes, not update(): both re-check ambulance availability
-    // under a lock, which update()/syncFleet() were never built to do.
-    Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
-    Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
-    // Its own route rather than a field on update(): update() takes JSON
-    // and a file needs multipart, so folding it in would make every status
-    // change carry a multipart encoder for a field it never sends.
-    Route::post('borrowings/{id}/photo', [EquipmentBorrowingController::class, 'uploadPhoto']);
-    // Removal is admin-only and stage-gated more tightly than the upload —
-    // see PHOTO_STAGES. The matching GET sits outside this group, because
-    // the borrower reads their own photos back.
-    Route::delete('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'destroyPhoto']);
-    // update() only. `destroy` was in this list with no destroy() on the
-    // controller behind it, so DELETE /borrowings/{id} was a live 500, and
-    // it is not implemented rather than fixed: a borrowing is a ledger row
-    // — it moved stock, it may carry handover photographs, and it is the
-    // only record of who held an item and when. The endings it needs
-    // already exist and all of them keep the row (Denied, Cancelled,
-    // Returned), so nothing in the panel or the app has ever called this.
-    Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update']);
+    // tbl_service_vehicle_types migration. Read by the boards too; written only
+    // from its own page.
+    Route::get('service-vehicle-types', [ServiceVehicleTypeController::class, 'index'])
+        ->middleware('section:service_vehicles,requests,ambulance');
+    Route::put('service-vehicle-types/{code}', [ServiceVehicleTypeController::class, 'update'])
+        ->middleware('section:service_vehicles');
+
+    Route::middleware('section:borrowings')->group(function () {
+        // Its own route rather than a field on update(): update() takes JSON
+        // and a file needs multipart, so folding it in would make every status
+        // change carry a multipart encoder for a field it never sends.
+        Route::post('borrowings/{id}/photo', [EquipmentBorrowingController::class, 'uploadPhoto']);
+        // Removal is admin-only and stage-gated more tightly than the upload —
+        // see PHOTO_STAGES. The matching GET sits outside this group, because
+        // the borrower reads their own photos back.
+        Route::delete('borrowings/{id}/photo/{stage}', [EquipmentBorrowingController::class, 'destroyPhoto']);
+        // update() only. `destroy` was in this list with no destroy() on the
+        // controller behind it, so DELETE /borrowings/{id} was a live 500, and
+        // it is not implemented rather than fixed: a borrowing is a ledger row
+        // — it moved stock, it may carry handover photographs, and it is the
+        // only record of who held an item and when. The endings it needs
+        // already exist and all of them keep the row (Denied, Cancelled,
+        // Returned), so nothing in the panel or the app has ever called this.
+        Route::apiResource('borrowings', EquipmentBorrowingController::class)->only(['update']);
+    });
 
     // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and
     // tracked entirely by staff — there is no resident-facing route, the
     // same way tbl_vehicles has none.
-    Route::apiResource('conduction-requests', ConductionRequestController::class)->only(['index', 'store', 'show']);
-    Route::patch('conduction-requests/{id}/trip-log', [ConductionRequestController::class, 'tripLog']);
-    Route::get('conduction-requests/{id}/print', [ConductionRequestController::class, 'print']);
+    Route::middleware('section:ambulance')->group(function () {
+        Route::apiResource('conduction-requests', ConductionRequestController::class)->only(['index', 'store', 'show']);
+        Route::patch('conduction-requests/{id}/trip-log', [ConductionRequestController::class, 'tripLog']);
+        Route::get('conduction-requests/{id}/print', [ConductionRequestController::class, 'print']);
+    });
 });

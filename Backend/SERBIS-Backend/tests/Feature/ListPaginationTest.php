@@ -509,6 +509,8 @@ class ListPaginationTest extends TestCase
      */
     public function test_admin_requests_and_admins_did_not_grow_a_meta_block(): void
     {
+        // /api/admins is Staff Accounts, which only a super admin can open.
+        $this->admin->forceFill(['is_super_admin' => true])->save();
         $this->resident();
 
         foreach (['/api/admin/service-requests', '/api/admins'] as $route) {
