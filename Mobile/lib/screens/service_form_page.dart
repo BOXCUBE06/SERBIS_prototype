@@ -8,8 +8,9 @@ import 'service_drafts.dart';
 import 'service_request_form.dart';
 
 /// One service's form on a page of its own, opened from the Services grid. The
-/// header's back arrow returns to the grid; the answers stay in [drafts], so
-/// going back and forth costs the resident nothing.
+/// header's back arrow returns to the grid and stays pinned while the form
+/// scrolls; the answers stay in [drafts], so going back and forth costs the
+/// resident nothing.
 class ServiceFormPage extends StatelessWidget {
   final AppState appState;
   final AppUser user;
@@ -41,25 +42,30 @@ class ServiceFormPage extends StatelessWidget {
           // and goes stale the moment the catalogue reloads in another language.
           final current = appState.services.where((s) => s.id == service.id).firstOrNull ?? service;
 
-          return ListView(
-            padding: EdgeInsets.zero,
+          // The header sits outside the list, so the back arrow stays under the
+          // thumb however far down a long form the resident has scrolled.
+          return Column(
             children: [
               AppHeader(
                 onNotificationsTap: onOpenNotifications,
                 onBack: () => Navigator.of(context).maybePop(),
                 filipino: f,
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 22, 22, 40),
-                child: ServiceRequestForm(
-                  appState: appState,
-                  user: user,
-                  service: current,
-                  drafts: drafts,
-                  onSubmitted: () {
-                    Navigator.of(context).maybePop();
-                    onSubmitted();
-                  },
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 40),
+                  children: [
+                    ServiceRequestForm(
+                      appState: appState,
+                      user: user,
+                      service: current,
+                      drafts: drafts,
+                      onSubmitted: () {
+                        Navigator.of(context).maybePop();
+                        onSubmitted();
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],

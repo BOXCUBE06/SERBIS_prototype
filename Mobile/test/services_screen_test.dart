@@ -493,6 +493,28 @@ void main() {
       expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
     });
 
+    testWidgets('the back arrow stays pinned while a long form scrolls', (tester) async {
+      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing');
+
+      // Down to a phone, so the form is longer than the screen and scrolls.
+      tester.view.physicalSize = const Size(1080, 1600);
+      await tester.pumpAndSettle();
+
+      final back = find.byIcon(Icons.arrow_back_rounded);
+      final before = tester.getTopLeft(back);
+
+      // The list, not the form: the form's centre is below the fold, where a
+      // drag lands on nothing and scrolls nothing.
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable).first);
+      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+      await tester.pumpAndSettle();
+
+      expect(scrollable.position.pixels, greaterThan(0), reason: 'the form did not scroll');
+      expect(tester.getTopLeft(back), before);
+      await _goBack(tester);
+      expect(find.text('Flood Evacuation'), findsOneWidget);
+    });
+
     testWidgets('the Ambulance tab opens straight onto the ambulance form', (tester) async {
       await _pump(tester, AppState(FakeApi()));
 
