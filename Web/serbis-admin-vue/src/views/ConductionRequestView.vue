@@ -18,7 +18,7 @@
 
     <v-window v-model="activeTab">
       <v-window-item value="bookings">
-        <ServiceRequestQueue ref="bookingsQueueRef" scope="ambulance" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
+        <AmbulanceRequestQueue ref="bookingsQueueRef" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
       </v-window-item>
 
       <v-window-item value="trip-logs">
@@ -518,7 +518,7 @@ import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
-import ServiceRequestQueue from '@/components/ServiceRequestQueue.vue'
+import AmbulanceRequestQueue from '@/components/AmbulanceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -599,7 +599,7 @@ const matchesStatus = (r) => statusFilter.value === ALL_STATUS || r.trip_status 
 const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r)))
 
 // SegmentedTabs' {value, label, count} shape. Counts are off the search
-// match only, same as ServiceRequestQueue's own requestCounts — a status
+// match only, same as AmbulanceRequestQueue's own requestCounts — a status
 // tab's count should not move just because a different status tab is
 // selected.
 const statusTabItems = computed(() => {
@@ -673,7 +673,7 @@ const rowProps = ({ item }) => ({
 })
 
 // C6: the create dialog's own "Link to approved service request" search —
-// same source ServiceRequestQueue.vue reads, fetched independently here
+// same source AmbulanceRequestQueue.vue reads, fetched independently here
 // since that component keeps its own list private. Same exact-code match
 // as its AMBULANCE_SERVICE_CODE (duplicated rather than shared — see the
 // OFFICE_TIMEZONE precedent in ServiceRequestController).
@@ -715,7 +715,7 @@ const bookingLabel = (r) => {
 }
 const bookingOptions = computed(() => linkableBookings.value.map(r => ({ title: bookingLabel(r), value: r.request_id })))
 
-// C7: the fleet picker. Own fetch rather than sharing ServiceRequestQueue's —
+// C7: the fleet picker. Own fetch rather than sharing AmbulanceRequestQueue's —
 // that component keeps its vehicle list private, same as bookings above.
 const vehicles = ref([])
 const vehiclesError = ref('')
@@ -892,7 +892,7 @@ const onLinkBooking = (id) => {
   if (booking) applyBooking(booking)
 }
 
-// Fired by the Bookings tab's "Dispatch" button (ServiceRequestQueue,
+// Fired by the Bookings tab's "Dispatch" button (AmbulanceRequestQueue,
 // scope="ambulance") on an approved booking. Both tabs live on this one page
 // now, so this is a tab switch plus the same prefill openCreate has always
 // done — no more round trip through a /conduction-requests?dispatch=<id>
@@ -906,7 +906,7 @@ const handleDispatchBooking = (booking) => {
 // Responding row's stub, created at Approve & Dispatch). Refetches first:
 // the stub may have been created moments ago by this same click chain, and
 // `items` is this view's own copy, last loaded independently of whatever
-// ServiceRequestQueue.vue just did.
+// AmbulanceRequestQueue.vue just did.
 const handleOpenTripRecord = async (conductionRequestId) => {
   if (!conductionRequestId) return
   await fetchData()
@@ -918,7 +918,7 @@ const handleOpenTripRecord = async (conductionRequestId) => {
 
 // The reverse of the above — a trip's own detail dialog linking back to the
 // booking that dispatched it (item 7 of the layout redesign: this link only
-// ever went one way before). ServiceRequestQueue.vue keeps its own request
+// ever went one way before). AmbulanceRequestQueue.vue keeps its own request
 // list and selection state private, so this reaches in via defineExpose
 // rather than duplicating that state here. v-window keeps both tabs
 // mounted (confirmed while building the sticky footer for item 1 — inactive
