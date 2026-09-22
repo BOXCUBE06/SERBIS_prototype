@@ -8,8 +8,9 @@
 
       <DataTablePage
         v-else
+        class="request-table"
         v-model:search="search"
-        search-placeholder="Search by name, service, barangay..."
+        search-placeholder="Search by transaction number, name, service, barangay..."
         :tabs="statusTabItems"
         :status="filters.status"
         @update:status="filters.status = $event"
@@ -98,24 +99,44 @@
           ></v-checkbox-btn>
         </template>
 
+        <template v-slot:item.request_id="{ item }">
+          <span class="text-truncate d-block row-date">{{ item.request_id }}</span>
+        </template>
+
+        <template v-slot:item._dateSubmitted="{ item }">
+          <span class="text-truncate d-block row-date">{{ item._dateSubmitted }}</span>
+        </template>
+
         <template v-slot:item.status="{ item }">
-          <StatusPill small :status="outcomeLabel(item.status || 'Pending')" />
+          <span class="status-col-pill"><StatusPill small :status="outcomeLabel(item.status || 'Pending')" /></span>
         </template>
 
         <template v-slot:item._requesterName="{ item }">
           <PersonCell
             :name="item._requesterName"
             :initials="requesterInitials(item)"
-            :secondary="displayPhone(item.resident?.phone_number) || item.walk_in_contact_number || requesterBarangay(item)"
+            :title="item._requesterName"
           />
         </template>
 
+        <template v-slot:item._phone="{ item }">
+          <span class="text-truncate d-block" :title="item._phone">{{ item._phone }}</span>
+        </template>
+
+        <template v-slot:item._barangay="{ item }">
+          <span class="text-truncate d-block" :title="item._barangay">{{ item._barangay }}</span>
+        </template>
+
         <template v-slot:item._secondary="{ item }">
-          <span class="text-medium-emphasis text-truncate d-block">{{ item._secondary }}</span>
+          <span class="text-medium-emphasis text-truncate d-block" :title="item._secondary">{{ item._secondary }}</span>
         </template>
 
         <template v-slot:item._unit="{ item }">
           <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+        </template>
+
+        <template v-slot:item._resolvedAt="{ item }">
+          <span class="text-truncate d-block row-date" :class="item._resolvedAt ? '' : 'text-medium-emphasis'">{{ item._resolvedAt || '—' }}</span>
         </template>
       </DataTablePage>
 
@@ -593,7 +614,6 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { displayPhone } from '@/composables/phoneNumber'
 import { outcomeLabel, pendingWaitLabel, authHeaders } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
@@ -763,10 +783,15 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Status', key: 'status', width: 13 },
-    { title: 'Requester', key: '_requesterName', width: 22 },
-    { title: 'Service', key: '_secondary', width: 16 },
-    { title: 'Unit', key: '_unit', width: 12 },
+    { title: 'Transaction No.', key: 'request_id', width: 12 },
+    { title: 'Submitted', key: '_dateSubmitted', width: 12 },
+    { title: 'Status', key: 'status', width: 9, sortable: false },
+    { title: 'Requester', key: '_requesterName', width: 16 },
+    { title: 'Phone', key: '_phone', width: 11 },
+    { title: 'Barangay', key: '_barangay', width: 12 },
+    { title: 'Service', key: '_secondary', width: 12 },
+    { title: 'Unit', key: '_unit', width: 8, sortable: false },
+    { title: 'Resolved / Disapproved', key: '_resolvedAt', width: 16 },
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
@@ -812,7 +837,16 @@ const selectedVehicle = computed(() =>
 )
 
 const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMessage, activeFilters, clearFilter, clearAllFilters } =
-  useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn: (r) => r.service?.service_name || 'Other' })
+  useFilteredRequestList(requests, filters, search, {
+    requesterName,
+    secondaryFn: (r) => r.service?.service_name || 'Other',
+    decorate: (r) => ({
+      _dateSubmitted: formatDate(r.created_at),
+      _phone: requesterPhone(r),
+      _barangay: requesterBarangay(r),
+      _resolvedAt: r.resolved_at ? formatDate(r.resolved_at) : '',
+    }),
+  })
 
 const showActions = computed(() =>
   selectedRequest.value && (
@@ -832,6 +866,7 @@ const exportCsv = () => {
   downloadCsv(csv, `serbis-requests-${scope}-${stamp}.csv`)
 }
 
+const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
 const selectVehicle = (id) => {
@@ -904,6 +939,8 @@ onMounted(fetchVehicleTypes)
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
 </script>
+
+<style scoped src="@/styles/request-table.css"></style>
 
 <style scoped>
 .dashboard-bg {

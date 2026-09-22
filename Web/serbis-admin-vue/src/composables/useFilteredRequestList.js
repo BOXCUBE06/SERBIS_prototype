@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 
-export function useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn }) {
+export function useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn, decorate }) {
   const barangayOptions = computed(() => {
     const names = new Set(requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean))
     return ['All', ...Array.from(names).toSorted()]
@@ -38,6 +38,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
       _requesterName: requesterName(r),
       _secondary: secondaryFn(r),
       _unit: r.vehicle?.unit_identifier || '',
+      ...decorate?.(r),
     })).toSorted((a, b) => {
       const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
       if (statusA === 'Pending' && statusB !== 'Pending') {return -1}

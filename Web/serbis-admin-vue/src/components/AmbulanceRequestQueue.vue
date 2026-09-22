@@ -8,8 +8,9 @@
 
       <DataTablePage
         v-else
+        class="request-table"
         v-model:search="search"
-        search-placeholder="Search by name, service, barangay..."
+        search-placeholder="Search by transaction number, name, barangay..."
         :tabs="statusTabItems"
         :status="filters.status"
         @update:status="filters.status = $event"
@@ -108,33 +109,43 @@
           ></v-checkbox-btn>
         </template>
 
+        <template v-slot:item.request_id="{ item }">
+          <span class="text-truncate d-block row-date">{{ item.request_id }}</span>
+        </template>
+
+        <template v-slot:item._dateSubmitted="{ item }">
+          <span class="text-truncate d-block row-date">{{ item._dateSubmitted }}</span>
+        </template>
+
         <template v-slot:item.status="{ item }">
-          <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
+          <span class="status-col-pill"><StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" /></span>
         </template>
 
         <template v-slot:item.scheduled_at="{ item }">
-          <template v-if="item.scheduled_at">
-            <div class="d-flex align-center">
-              <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
-              <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
-            </div>
-            <StatusPill
-              v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
-              small
-              class="mt-1"
-              :status="isBookingOverdue(item.status, item.scheduled_at) ? 'Disapproved' : 'Booked'"
-              :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
-            />
-          </template>
-          <div v-else>
-            <span class="row-date">{{ formatDate(item.created_at) }}</span>
-            <StatusPill
-              v-if="pendingWaitLabel(item.status, item.created_at)"
-              small
-              status="Pending"
-              :label="pendingWaitLabel(item.status, item.created_at)"
-              class="ml-2"
-            />
+          <div class="scheduled-cell">
+            <template v-if="item.scheduled_at">
+              <div class="d-flex align-center">
+                <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
+                <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
+              </div>
+              <StatusPill
+                v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+                small
+                class="mt-1"
+                :status="isBookingOverdue(item.status, item.scheduled_at) ? 'Disapproved' : 'Booked'"
+                :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
+              />
+            </template>
+            <template v-else>
+              <span class="row-date">{{ item._dateSubmitted }}</span>
+              <StatusPill
+                v-if="pendingWaitLabel(item.status, item.created_at)"
+                small
+                status="Pending"
+                :label="pendingWaitLabel(item.status, item.created_at)"
+                class="ml-2"
+              />
+            </template>
           </div>
         </template>
 
@@ -142,20 +153,32 @@
           <PersonCell
             :name="item._requesterName"
             :initials="requesterInitials(item)"
-            :secondary="displayPhone(item.resident?.phone_number) || item.walk_in_contact_number || requesterBarangay(item)"
+            :title="item._requesterName"
           />
         </template>
 
+        <template v-slot:item._phone="{ item }">
+          <span class="text-truncate d-block" :title="item._phone">{{ item._phone }}</span>
+        </template>
+
         <template v-slot:item._secondary="{ item }">
-          <span class="text-medium-emphasis text-truncate d-block">{{ item._secondary }}</span>
+          <span class="text-medium-emphasis text-truncate d-block" :title="item._secondary">{{ item._secondary }}</span>
         </template>
 
         <template v-slot:item.patient_name="{ item }">
-          <span class="text-truncate d-block" :class="item.patient_name ? '' : 'text-medium-emphasis'">{{ item.patient_name || '—' }}</span>
+          <span class="text-truncate d-block" :class="item.patient_name ? '' : 'text-medium-emphasis'" :title="item.patient_name">{{ item.patient_name || '—' }}</span>
         </template>
 
         <template v-slot:item._unit="{ item }">
           <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+        </template>
+
+        <template v-slot:item._dateApproved="{ item }">
+          <span class="text-truncate d-block row-date" :class="item._dateApproved ? '' : 'text-medium-emphasis'">{{ item._dateApproved || '—' }}</span>
+        </template>
+
+        <template v-slot:item._resolvedAt="{ item }">
+          <span class="text-truncate d-block row-date" :class="item._resolvedAt ? '' : 'text-medium-emphasis'">{{ item._resolvedAt || '—' }}</span>
         </template>
       </DataTablePage>
 
@@ -1023,7 +1046,6 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { displayPhone } from '@/composables/phoneNumber'
 import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, authHeaders } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
@@ -1253,12 +1275,17 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Status', key: 'status', width: 13 },
-    { title: 'Scheduled', key: 'scheduled_at', width: 18 },
-    { title: 'Requester', key: '_requesterName', width: 22 },
-    { title: 'Barangay', key: '_secondary', width: 16 },
-    { title: 'Patient', key: 'patient_name', width: 15 },
-    { title: 'Unit', key: '_unit', width: 12 },
+    { title: 'Transaction No.', key: 'request_id', width: 11 },
+    { title: 'Submitted', key: '_dateSubmitted', width: 11 },
+    { title: 'Status', key: 'status', width: 7, sortable: false },
+    { title: 'Scheduled', key: 'scheduled_at', width: 15 },
+    { title: 'Requester', key: '_requesterName', width: 12 },
+    { title: 'Phone', key: '_phone', width: 10 },
+    { title: 'Barangay', key: '_secondary', width: 10 },
+    { title: 'Patient', key: 'patient_name', width: 11 },
+    { title: 'Unit', key: '_unit', width: 7, sortable: false },
+    { title: 'Approved', key: '_dateApproved', width: 10 },
+    { title: 'Resolved / Disapproved', key: '_resolvedAt', width: 13 },
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
@@ -1342,7 +1369,16 @@ const selectedVehicle = computed(() =>
 )
 
 const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMessage, activeFilters, clearFilter, clearAllFilters } =
-  useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn: requesterBarangay })
+  useFilteredRequestList(requests, filters, search, {
+    requesterName,
+    secondaryFn: requesterBarangay,
+    decorate: (r) => ({
+      _dateSubmitted: formatDate(r.created_at),
+      _phone: requesterPhone(r),
+      _dateApproved: r.approved_at ? formatDate(r.approved_at) : '',
+      _resolvedAt: r.resolved_at ? formatDate(r.resolved_at) : '',
+    }),
+  })
 
 const showActions = computed(() =>
   selectedRequest.value && (
@@ -1363,7 +1399,7 @@ const exportCsv = () => {
   downloadCsv(csv, `serbis-requests-${scope}-${stamp}.csv`)
 }
 
-const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, { timeStyle: 'short' })
 
@@ -1658,6 +1694,8 @@ onUnmounted(() => listAbortController.abort())
 
 defineExpose({ selectRequestById })
 </script>
+
+<style scoped src="@/styles/request-table.css"></style>
 
 <style scoped>
 .dashboard-bg {
