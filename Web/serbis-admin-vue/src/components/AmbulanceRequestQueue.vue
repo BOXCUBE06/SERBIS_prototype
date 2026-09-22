@@ -1024,7 +1024,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
-import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel } from '@/composables/adminUi'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, authHeaders } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -1033,6 +1033,16 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import { buildRequestsCsv, downloadCsv } from '@/composables/requestCsvExport'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay } from '@/composables/requesterIdentity'
+import { vehicleName, vehicleIcon, getVehicleNameById } from '@/composables/vehicleDisplay'
+import { useRequestAttachments } from '@/composables/useRequestAttachments'
+import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
+import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
+import { useDescriptionLines, useSelection } from '@/composables/requestQueueHelpers'
+import { useInternalNote } from '@/composables/useInternalNote'
+import { useUpdateStatus } from '@/composables/useUpdateStatus'
+import { useResolveDialog } from '@/composables/useResolveDialog'
+import { emptyReasonDialog, useReasonActions } from '@/composables/useReasonActions'
 
 defineProps({
   standalone: { type: Boolean, default: true },
@@ -1041,11 +1051,8 @@ defineProps({
 const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-created'])
 
 const route = useRoute()
+const getHeaders = authHeaders
 
-const requests = ref([])
-const vehicles = ref([])
-const residents = ref([])
-const services = ref([])
 const search = ref('')
 const initialLoad = ref(true)
 const loading = ref(false)
@@ -1053,9 +1060,6 @@ const bulkLoading = ref(false)
 const apiError = ref('')
 const page = ref(1)
 const itemsPerPage = ref(10)
-
-const AMBULANCE_SERVICE_CODE = 'ambulance-medical-response'
-const isAmbulanceRequest = (r) => r.service?.code === AMBULANCE_SERVICE_CODE
 
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
@@ -1065,9 +1069,6 @@ const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
-const noteSaving = ref(false)
-const noteSaved = ref(false)
-let noteSavedTimer = null
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
 
@@ -1153,29 +1154,29 @@ const checkWalkInAvailability = async () => {
   }
 }
 
-const emptyReason = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
-const reasonDialog = ref(emptyReason())
+const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
+  useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const noteExpanded = ref(false)
+const { requests, vehicles, residents, services, listAbortController, fetchData, fetchRequests, selectRequest } =
+  useRequestFetch({ isAmbulance: true, getHeaders, initialLoad, apiError, formData, selectedRequest, loadAttachments })
 
-const resolveDialog = ref({ open: false, label: '' })
+const reasonDialog = ref(emptyReasonDialog())
 
-const openResolveConfirm = () => {
-  const req = selectedRequest.value
-  if (!req) return
-  const who = requesterName(req)
-  resolveDialog.value = {
-    open: true,
-    label: who && !who.startsWith('Unknown') ? `${who}'s request` : 'this request',
-  }
-}
+const { updateStatus } = useUpdateStatus({
+  selectedRequest, loading, apiError, formData, itemId, getHeaders, fetchRequests, reasonDialog,
+  onResponding: () => emit('trip-record-created'),
+})
 
-const confirmResolve = async () => {
-  await updateStatus('Resolved')
-  if (!apiError.value) {
-    resolveDialog.value.open = false
-  }
-}
+const { resolveDialog, openResolveConfirm, confirmResolve } = useResolveDialog(selectedRequest, { requesterName, updateStatus, apiError })
+
+const { noteExpanded, openReason, clearReason, confirmReason } =
+  useReasonActions(reasonDialog, { formData, apiError, bulkLoading, requests, selectedIds, itemId, getHeaders, updateStatus, fetchRequests })
+
+const { noteSaving, noteSaved, saveInternalNote } = useInternalNote(selectedRequest, { itemId, getHeaders, formData, apiError, fetchRequests })
+
+const { isSelected, toggleSelect } = useSelection(selectedRequest, selectedIds, itemId)
+
+const descriptionLines = useDescriptionLines(selectedRequest)
 
 const reasonCopy = computed(() => {
   const req = selectedRequest.value
@@ -1227,30 +1228,6 @@ const reasonCopy = computed(() => {
   }
 })
 
-const openReason = (kind) => {
-  noteExpanded.value = false
-  reasonDialog.value = {
-    ...emptyReason(),
-    open: true,
-    kind,
-    reason: '',
-  }
-}
-
-const clearReason = () => { reasonDialog.value = emptyReason(); noteExpanded.value = false }
-
-const confirmReason = () => {
-  const { kind, reason } = reasonDialog.value
-  const trimmed = reason.trim()
-  if (kind !== 'approve' && !trimmed) {
-    reasonDialog.value.error = 'Give a reason — the Head of the Family is shown this'
-    return
-  }
-  if (kind === 'bulk') return bulkDisapprove(trimmed)
-  formData.value.remarks = trimmed
-  return updateStatus(kind === 'approve' ? 'Responding' : 'Disapproved')
-}
-
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
@@ -1262,58 +1239,11 @@ const tripRecordAlertType = computed(() => {
   return ['Responding', 'Resolved'].includes(selectedRequest.value?.status) ? 'warning' : 'info'
 })
 
-const createAttachment = (segment, failureMessage) => {
-  const state = reactive({ url: '', type: '', loading: false, error: '', for: null })
-
-  const release = () => {
-    if (state.url) URL.revokeObjectURL(state.url)
-    state.url = ''
-    state.type = ''
-  }
-
-  const load = async (item, present) => {
-    const id = item ? itemId(item) : null
-    if (id === state.for) return
-
-    release()
-    state.for = id
-    state.error = ''
-    if (!present) return
-
-    state.loading = true
-    try {
-      const res = await fetch(`${API_BASE}/service-requests/${id}/${segment}`, { headers: getHeaders() })
-      if (!res.ok) throw new Error(failureMessage)
-      const blob = await res.blob()
-      if (state.for !== id) return
-      state.type = blob.type
-      state.url = URL.createObjectURL(blob)
-    } catch (error) {
-      if (state.for === id) state.error = error.message
-    } finally {
-      if (state.for === id) state.loading = false
-    }
-  }
-
-  return { state, load, release }
-}
-
-const lightbox = ref({ open: false, key: null })
-
-const validId = createAttachment('valid-id', 'Could not load the attached ID.')
-const sitePhoto = createAttachment('site-photo', 'Could not load the landmark photo.')
-const letter = createAttachment('letter', 'Could not load the request letter.')
-
 const statusTabs = ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
 const statusTabItems = computed(() =>
   statusTabs.map((status) => ({ value: status, label: status, count: requestCounts.value[status] })),
 )
-
-const barangayOptions = computed(() => {
-  const names = new Set(requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean))
-  return ['All', ...Array.from(names).sort()]
-})
 
 const unitOptions = computed(() => {
   const pool = vehicles.value.filter(v => v.type === 'Ambulance')
@@ -1339,25 +1269,6 @@ const tableHeaders = computed(() => {
 
 if (statusTabs.includes(route.query.status)) filters.status = route.query.status
 
-const itemId = (item) => item.request_id || item.id
-
-const residentName = (resident) =>
-  `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown Head of the Family'
-
-const isWalkIn = (item) => !item?.resident && !item?.resident_id
-const requesterName = (item) =>
-  item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
-const requesterInitials = (item) => {
-  if (item?.resident) return `${item.resident.first_name?.charAt(0) || ''}${item.resident.last_name?.charAt(0) || ''}`
-  const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)
-  return parts.length > 0 ? `${parts[0][0]}${parts[1]?.[0] || ''}`.toUpperCase() : 'W'
-}
-const requesterPhone = (item) => displayPhone(item?.resident?.phone_number) || item?.walk_in_contact_number || 'N/A'
-const requesterBarangay = (item) => {
-  if (item?.resident) return item.resident.barangay?.barangay_name || 'Unknown Barangay'
-  return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
-}
-
 const isLandmarkRedundant = (landmark, pickup) => {
   if (!landmark || !pickup) return false
   const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -1365,15 +1276,6 @@ const isLandmarkRedundant = (landmark, pickup) => {
   const b = normalize(pickup)
   return a === b || a.includes(b) || b.includes(a)
 }
-
-const requestCounts = computed(() => {
-  const counts = { All: requests.value.length, Pending: 0, Booked: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
-  requests.value.forEach(req => {
-    const status = req.status || 'Pending'
-    if (counts[status] !== undefined) counts[status]++
-  })
-  return counts
-})
 
 const scheduledAvailability = ref([])
 const scheduledAvailabilityLoading = ref(false)
@@ -1425,7 +1327,7 @@ const bookingUnitOptions = computed(() => {
           ? 'Under maintenance'
           : 'Already booked for this window',
     }))
-    .sort((a, b) => Number(b.available) - Number(a.available))
+    .toSorted((a, b) => Number(b.available) - Number(a.available))
 })
 
 const residentOptions = computed(() => residents.value
@@ -1433,119 +1335,14 @@ const residentOptions = computed(() => residents.value
     title: `${r.last_name}, ${r.first_name}${r.barangay?.barangay_name ? ' — ' + r.barangay.barangay_name : ''}`,
     value: r.resident_id,
   }))
-  .sort((a, b) => a.title.localeCompare(b.title)))
+  .toSorted((a, b) => a.title.localeCompare(b.title)))
 
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null
 )
 
-const attachments = computed(() => {
-  const req = selectedRequest.value
-  if (!req) return []
-  return [
-    {
-      key: 'site-photo',
-      label: 'Landmark',
-      present: !!req.has_site_photo,
-      state: sitePhoto.state,
-      alt: 'Landmark photo attached by the Head of the Family',
-    },
-    {
-      key: 'letter',
-      label: 'Request letter',
-      present: !!req.has_letter,
-      state: letter.state,
-      alt: 'Request letter attached by the requesting barangay or organization',
-    },
-    {
-      key: 'valid-id',
-      label: 'Valid ID',
-      present: !!req.has_valid_id,
-      state: validId.state,
-      alt: 'Valid ID attached by the Head of the Family',
-    },
-  ].filter(a => a.present)
-})
-
-const lightboxAttachment = computed(() =>
-  attachments.value.find(a => a.key === lightbox.value.key) || null
-)
-
-const openLightbox = (a) => { lightbox.value = { open: true, key: a.key } }
-
-const META_TAIL = /^(contact:|submitted\b)/i
-
-const descriptionLines = computed(() => {
-  const raw = selectedRequest.value?.description
-  if (!raw) return []
-
-  const lines = raw.split('\n').map(line => line.trim()).filter(Boolean)
-  const service = (selectedRequest.value?.service?.service_name || '').trim().toLowerCase()
-
-  const kept = [...lines]
-  if (service && kept[0]?.toLowerCase() === service) kept.shift()
-
-  while (kept.length > 0 && META_TAIL.test(kept.at(-1))) kept.pop()
-
-  return kept.length > 0 ? kept : lines
-})
-
-const filteredAndSortedRequests = computed(() => {
-  const searchLower = search.value.toLowerCase()
-  const currentStatus = filters.status
-
-  return requests.value.filter(r => {
-    if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) return false
-
-    if (filters.barangay !== 'All' && (r.resident?.barangay?.barangay_name || '') !== filters.barangay) return false
-
-    if (filters.unit !== 'All') {
-      const unit = r.vehicle?.unit_identifier || ''
-      if (filters.unit === 'Unassigned' ? unit : unit !== filters.unit) return false
-    }
-
-    if (!searchLower) return true
-    return requesterName(r).toLowerCase().includes(searchLower) ||
-           (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
-           (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
-  }).map(r => ({
-    ...r,
-    _requesterName: requesterName(r),
-    _secondary: requesterBarangay(r),
-    _unit: r.vehicle?.unit_identifier || '',
-  })).sort((a, b) => {
-    const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
-    if (statusA === 'Pending' && statusB !== 'Pending') return -1
-    if (statusB === 'Pending' && statusA !== 'Pending') return 1
-    return new Date(b.created_at) - new Date(a.created_at)
-  })
-})
-
-const emptyListMessage = computed(() => {
-  if (search.value) return `No requests match "${search.value}"`
-  if (filters.status !== 'All') return `No ${filters.status.toLowerCase()} requests`
-  return 'No requests yet'
-})
-
-const activeFilters = computed(() => {
-  const out = []
-  if (filters.status !== 'All') out.push({ key: 'status', label: `Status: ${filters.status}` })
-  if (filters.barangay !== 'All') out.push({ key: 'barangay', label: `Barangay: ${filters.barangay}` })
-  if (filters.unit !== 'All') out.push({ key: 'unit', label: `Unit: ${filters.unit}` })
-  return out
-})
-
-const clearFilter = (key) => {
-  if (key === 'status') filters.status = 'All'
-  else if (key === 'barangay') filters.barangay = 'All'
-  else if (key === 'unit') filters.unit = 'All'
-}
-
-const clearAllFilters = () => {
-  filters.status = 'All'
-  filters.barangay = 'All'
-  filters.unit = 'All'
-}
+const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMessage, activeFilters, clearFilter, clearAllFilters } =
+  useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn: requesterBarangay })
 
 const showActions = computed(() =>
   selectedRequest.value && (
@@ -1566,96 +1363,9 @@ const exportCsv = () => {
   downloadCsv(csv, `serbis-requests-${scope}-${stamp}.csv`)
 }
 
-const isSelected = (item) => selectedRequest.value && itemId(selectedRequest.value) === itemId(item)
-
-const toggleSelect = (item) => {
-  const id = itemId(item)
-  if (selectedIds.has(id)) selectedIds.delete(id)
-  else selectedIds.add(id)
-}
-
 const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, { timeStyle: 'short' })
-
-const getHeaders = () => ({
-  'Authorization': `Bearer ${getToken()}`,
-  'Content-Type': 'application/json',
-  'Accept': 'application/json'
-})
-
-const loadAttachments = (item) => {
-  validId.load(item, !!item?.has_valid_id)
-  sitePhoto.load(item, !!item?.has_site_photo)
-  letter.load(item, !!item?.has_letter)
-}
-
-const releaseAttachments = () => {
-  validId.release()
-  sitePhoto.release()
-  letter.release()
-}
-
-const listAbortController = new AbortController()
-
-const fetchData = async () => {
-  try {
-    const [reqRes, vehRes, resRes, svcRes] = await Promise.all([
-      fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders(), signal: listAbortController.signal }),
-      fetch(`${API_BASE}/vehicles`, { headers: getHeaders(), signal: listAbortController.signal }),
-      fetch(`${API_BASE}/residents/lookup`, { headers: getHeaders(), signal: listAbortController.signal }),
-      fetch(`${API_BASE}/services`, { headers: getHeaders(), signal: listAbortController.signal })
-    ])
-    const reqData = await reqRes.json()
-    const vehData = await vehRes.json()
-    const resData = await resRes.json()
-    const svcData = await svcRes.json()
-    const allRequests = reqData.data || reqData
-    requests.value = allRequests.filter(r => isAmbulanceRequest(r))
-    vehicles.value = vehData.data || vehData
-    residents.value = resData.data || resData
-    services.value = svcData.data || svcData
-
-    selectDefaultOrRefreshSelection()
-  } catch (error) {
-    if (error.name === 'AbortError') return
-    console.error('Failed to fetch data:', error)
-  } finally {
-    initialLoad.value = false
-  }
-}
-
-const fetchRequests = async () => {
-  try {
-    const reqRes = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders(), signal: listAbortController.signal })
-    const reqData = await reqRes.json()
-    const allRequests = reqData.data || reqData
-    requests.value = allRequests.filter(r => isAmbulanceRequest(r))
-
-    selectDefaultOrRefreshSelection()
-  } catch (error) {
-    if (error.name === 'AbortError') return
-    console.error('Failed to fetch service requests:', error)
-  }
-}
-
-const selectDefaultOrRefreshSelection = () => {
-  if (!selectedRequest.value) return
-  const fresh = requests.value.find(r => itemId(r) === itemId(selectedRequest.value))
-  if (fresh) selectRequest(fresh, false)
-}
-
-const selectRequest = (item, resetRemarks = true) => {
-  if (!item) return
-  apiError.value = ''
-  selectedRequest.value = item
-  formData.value = {
-    remarks: resetRemarks ? (item.remarks || '') : formData.value.remarks,
-    internal_notes: item.internal_notes || '',
-    vehicle_id: item.vehicle_id || null
-  }
-  loadAttachments(item)
-}
 
 const selectRequestById = (id) => {
   const item = requests.value.find((r) => itemId(r) === id)
@@ -1672,84 +1382,7 @@ const selectVehicle = (id) => {
   }
 }
 
-const vehicleName = (v) => v?.unit_identifier || 'Unassigned unit'
-
-const vehicleIcon = (type) => ({
-  ambulance: 'mdi-ambulance',
-  'fire truck': 'mdi-fire-truck',
-  'rescue vehicle': 'mdi-car-emergency',
-  boat: 'mdi-ferry',
-}[(type || '').toLowerCase()] || 'mdi-car')
-
-const getSelectedVehicleName = () => {
-  const v = vehicles.value.find(veh => veh.vehicle_id === formData.value.vehicle_id)
-  return v ? `${vehicleName(v)} (${v.type})` : ''
-}
-
-const updateStatus = async (newStatus, targetRequest = selectedRequest.value) => {
-  loading.value = true
-  apiError.value = ''
-  const id = itemId(targetRequest)
-
-  try {
-    const res = await fetch(`${API_BASE}/service-requests/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        status: newStatus,
-        remarks: formData.value.remarks,
-        internal_notes: formData.value.internal_notes,
-        vehicle_id: formData.value.vehicle_id || targetRequest.vehicle_id
-      })
-    })
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
-      throw new Error(firstError || errData.message || 'Failed to update request')
-    }
-
-    await fetchRequests()
-
-    if (newStatus === 'Responding') {
-      emit('trip-record-created')
-    }
-
-    reasonDialog.value.open = false
-  } catch (error) {
-    apiError.value = error.message
-    reasonDialog.value.error = error.message
-  } finally {
-    loading.value = false
-  }
-}
-
-const saveInternalNote = async () => {
-  if (!selectedRequest.value) return
-  noteSaving.value = true
-  apiError.value = ''
-  const id = itemId(selectedRequest.value)
-
-  try {
-    const res = await fetch(`${API_BASE}/service-requests/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({ internal_notes: formData.value.internal_notes }),
-    })
-    if (!res.ok) {
-      const errData = await res.json()
-      throw new Error(errData.message || 'Failed to save the note')
-    }
-    await fetchRequests()
-    noteSaved.value = true
-    clearTimeout(noteSavedTimer)
-    noteSavedTimer = setTimeout(() => { noteSaved.value = false }, 2000)
-  } catch (error) {
-    apiError.value = error.message
-  } finally {
-    noteSaving.value = false
-  }
-}
+const getSelectedVehicleName = () => getVehicleNameById(vehicles.value, formData.value.vehicle_id)
 
 const approveBooking = async () => {
   if (!formData.value.vehicle_id) return
@@ -2013,32 +1646,6 @@ const submitWalkIn = async () => {
     createDialog.value.loading = false
   }
 }
-
-const bulkDisapprove = async (reason) => {
-  bulkLoading.value = true
-  apiError.value = ''
-  const targets = requests.value.filter(r => selectedIds.has(itemId(r)))
-  try {
-    await Promise.all(targets.map(async (r) => {
-      const res = await fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ status: 'Disapproved', remarks: reason, vehicle_id: r.vehicle_id })
-      })
-      if (!res.ok) throw new Error('Failed to update one or more requests')
-    }))
-    selectedIds.clear()
-    await fetchRequests()
-    reasonDialog.value.open = false
-  } catch {
-    apiError.value = 'Failed to update one or more requests'
-    reasonDialog.value.error = 'Failed to update one or more requests'
-  } finally {
-    bulkLoading.value = false
-  }
-}
-
-watch(selectedRequest, () => { lightbox.value = { open: false, key: null } })
 
 watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
