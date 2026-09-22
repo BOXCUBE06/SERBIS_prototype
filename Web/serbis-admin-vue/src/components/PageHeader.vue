@@ -7,7 +7,7 @@
   Residents count, as a chip), and `subtitle`, a line below it.
 
   Reference shape lifted from Resident Requests and Ambulance Dispatch
-  Requests (ServiceRequestQueue.vue's standalone block and
+  Requests (ResidentRequestQueue.vue's standalone block and
   ConductionRequestView.vue), the two pages that already agreed on this
   structure before this component existed; every other view had assembled
   its own slightly different version by hand.

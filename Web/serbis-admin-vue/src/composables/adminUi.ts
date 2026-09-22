@@ -177,11 +177,9 @@ export function outcomePillClass(baseLabel: string, noArrivalReason?: string | n
 }
 
 /**
- * The CSS class for ServiceRequestQueue.vue's .status-pill system, given a
- * status already in the shared vocabulary above. Trivial on its own, but
- * shared here rather than left as ServiceRequestQueue's private one-liner
- * now that ConductionRequestView.vue needs the exact same mapping to render
- * the same badge language.
+ * The CSS class for the classic .status-pill system, given a status already
+ * in the shared vocabulary above. Trivial on its own, but centralized here
+ * rather than duplicated per caller.
  */
 export function statusPillClass(status: string | null | undefined): string {
   return `pill-${(status || 'Pending').toLowerCase()}`

@@ -176,10 +176,11 @@
     <!-- How long the open requests have been open. The KPI strip above counts
          them but cannot say whether one has been sitting there for weeks, and
          a stale request is a today problem rather than a quarterly one. Per
-         bucket there is no deep link: the requests list filters on status
-         only (ServiceRequestQueue's `filters` is {status}), so a clickable
-         bucket would have nowhere to land. The card as a whole opens the
-         fuller breakdown on Analytics. -->
+         bucket there is no deep link: the requests list filter state doesn't
+         map onto these buckets (ResidentRequestQueue's/AmbulanceRequestQueue's
+         `filters` is {status, barangay, unit}, no time-open axis), so a
+         clickable bucket would have nowhere to land. The card as a whole
+         opens the fuller breakdown on Analytics. -->
     <v-row class="mb-2">
       <v-col cols="12">
         <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 7 }">

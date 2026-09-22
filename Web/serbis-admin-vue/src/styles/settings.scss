@@ -28,11 +28,11 @@
 }
 
 /* ServiceRequest-family status pills — Pending/Booked/Responding/Resolved/
- * Disapproved/Cancelled, plus the Resolved-with-no-arrival split. Used by
- * ServiceRequestQueue.vue and ConductionRequestView.vue, which used to carry
- * this exact block twice, each file's own comment admitting it was a copy
- * ("mirrors ServiceRequestQueue.vue's .status-pill/.pill-* exactly"). One
- * definition here now; both files just use the classes.
+ * Disapproved/Cancelled, plus the Resolved-with-no-arrival split. Originally
+ * duplicated across the pre-split request queue and ConductionRequestView.vue,
+ * each file's own comment admitting it was a copy ("mirrors the other's
+ * .status-pill/.pill-* exactly"). Centralized here instead of duplicated per
+ * caller.
  *
  * v-chip's default variant is `tonal` (VChip.js:85), whose underlay is
  * `background: currentColor`. Measured plain tonal chips failed AA on every

@@ -2,8 +2,8 @@
   PersonCell.vue
 
   Avatar + name + secondary line, in one cell — the shape Equipment
-  Borrowing's avatar column and ServiceRequestQueue's requester column each
-  had half of (an avatar+name pairing with no secondary line under it,
+  Borrowing's avatar column and ResidentRequestQueue's/AmbulanceRequestQueue's
+  requester column each had half of (an avatar+name pairing with no secondary line under it,
   secondary info split into its own column instead). Trip Logs' patient
   cell (name + contact number stacked) is the closest existing match to
   this full shape.
