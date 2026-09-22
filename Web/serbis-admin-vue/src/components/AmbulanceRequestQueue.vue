@@ -406,6 +406,22 @@
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
                 <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
               </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.request_id }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Approved</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.approved_at ? formatDateTime(selectedRequest.approved_at) : '—' }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Unit</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.vehicle ? vehicleName(selectedRequest.vehicle) : 'Unassigned' }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Resolved / Disapproved</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.resolved_at ? formatDateTime(selectedRequest.resolved_at) : '—' }}</div>
+              </v-col>
             </v-row>
 
             <h3 class="section-title">Notes &amp; Attachments</h3>
@@ -442,23 +458,6 @@
                   No trip record yet — one is created automatically once this request is dispatched.
                 </div>
               </v-alert>
-            </div>
-
-            <div class="detail-group">
-              <v-textarea
-                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
-                placeholder="e.g. Called twice, no answer — retrying after lunch"
-                hint="Never shown to the requester — for staff reading this request later."
-                persistent-hint
-              ></v-textarea>
-              <div class="d-flex align-center gap-3 mt-2">
-                <v-btn
-                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
-                  :loading="noteSaving"
-                  @click="saveInternalNote"
-                >Save note</v-btn>
-                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
-              </div>
             </div>
 
             <div class="detail-group" v-if="attachments.length > 0">
@@ -1055,13 +1054,10 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import { buildRequestsCsv, downloadCsv } from '@/composables/requestCsvExport'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay } from '@/composables/requesterIdentity'
-import { vehicleName, vehicleIcon, getVehicleNameById } from '@/composables/vehicleDisplay'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
-import { useDescriptionLines, useSelection } from '@/composables/requestQueueHelpers'
-import { useInternalNote } from '@/composables/useInternalNote'
 import { useUpdateStatus } from '@/composables/useUpdateStatus'
 import { useResolveDialog } from '@/composables/useResolveDialog'
 import { emptyReasonDialog, useReasonActions } from '@/composables/useReasonActions'
@@ -1193,8 +1189,6 @@ const { resolveDialog, openResolveConfirm, confirmResolve } = useResolveDialog(s
 
 const { noteExpanded, openReason, clearReason, confirmReason } =
   useReasonActions(reasonDialog, { formData, apiError, bulkLoading, requests, selectedIds, itemId, getHeaders, updateStatus, fetchRequests })
-
-const { noteSaving, noteSaved, saveInternalNote } = useInternalNote(selectedRequest, { itemId, getHeaders, formData, apiError, fetchRequests })
 
 const { isSelected, toggleSelect } = useSelection(selectedRequest, selectedIds, itemId)
 

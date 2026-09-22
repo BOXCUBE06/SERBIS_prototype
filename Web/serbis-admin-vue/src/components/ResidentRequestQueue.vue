@@ -192,12 +192,11 @@
 
             <div v-else-if="selectedRequest.status === 'Responding'" class="detail-group">
               <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
-                <template v-slot:prepend><v-icon size="28">mdi-car-emergency</v-icon></template>
-                <div class="text-subtitle-2 font-weight-bold">Currently Dispatched</div>
+                <template v-slot:prepend><v-icon size="28">mdi-progress-clock</v-icon></template>
+                <div class="text-subtitle-2 font-weight-bold">In progress</div>
                 <div v-if="selectedRequest.vehicle" class="text-body-2">
                   {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
                 </div>
-                <div v-else class="text-body-2">No unit is recorded against this request.</div>
               </v-alert>
             </div>
 
@@ -257,7 +256,7 @@
               This request is closed — no action needed.
             </div>
 
-            <h3 class="section-title">Patient &amp; Requester</h3>
+            <h3 class="section-title">Details</h3>
 
             <div class="detail-group">
               <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
@@ -286,29 +285,28 @@
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Preferred date</div>
                 <div class="font-weight-medium text-body-2">{{ formatPreferredDate(selectedRequest.preferred_date) }}</div>
               </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.request_id }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
+                <div class="font-weight-medium text-body-2">{{ requesterBarangay(selectedRequest) }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Unit</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.vehicle ? vehicleName(selectedRequest.vehicle) : 'Unassigned' }}</div>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Resolved / Disapproved</div>
+                <div class="font-weight-medium text-body-2">{{ selectedRequest.resolved_at ? formatDateTime(selectedRequest.resolved_at) : '—' }}</div>
+              </v-col>
             </v-row>
 
-            <h3 class="section-title">Notes &amp; Attachments</h3>
+            <template v-if="attachments.length > 0">
+            <h3 class="section-title">Attachments</h3>
 
             <div class="detail-group">
-              <v-textarea
-                v-model="formData.internal_notes" label="Internal note (staff only)" variant="outlined" density="comfortable" rounded="lg" rows="2"
-                placeholder="e.g. Called twice, no answer — retrying after lunch"
-                hint="Never shown to the requester — for staff reading this request later."
-                persistent-hint
-              ></v-textarea>
-              <div class="d-flex align-center gap-3 mt-2">
-                <v-btn
-                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
-                  :loading="noteSaving"
-                  @click="saveInternalNote"
-                >Save note</v-btn>
-                <span v-if="noteSaved" class="text-caption text-success">Saved</span>
-              </div>
-            </div>
-
-            <div class="detail-group" v-if="attachments.length > 0">
-              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Attachments</div>
               <div class="d-flex flex-wrap gap-3 attachments-row">
                 <div v-for="a in attachments" :key="a.key">
                   <v-skeleton-loader
@@ -356,6 +354,7 @@
                 </div>
               </div>
             </div>
+            </template>
           </div>
         </v-card>
       </v-dialog>
@@ -622,13 +621,10 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import { buildRequestsCsv, downloadCsv } from '@/composables/requestCsvExport'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay } from '@/composables/requesterIdentity'
-import { vehicleName, vehicleIcon, getVehicleNameById } from '@/composables/vehicleDisplay'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
-import { useDescriptionLines, useSelection } from '@/composables/requestQueueHelpers'
-import { useInternalNote } from '@/composables/useInternalNote'
 import { useUpdateStatus } from '@/composables/useUpdateStatus'
 import { useResolveDialog } from '@/composables/useResolveDialog'
 import { emptyReasonDialog, useReasonActions } from '@/composables/useReasonActions'
@@ -698,8 +694,6 @@ const { resolveDialog, openResolveConfirm, confirmResolve } = useResolveDialog(s
 
 const { noteExpanded, openReason, clearReason, confirmReason } =
   useReasonActions(reasonDialog, { formData, apiError, bulkLoading, requests, selectedIds, itemId, getHeaders, updateStatus, fetchRequests })
-
-const { noteSaving, noteSaved, saveInternalNote } = useInternalNote(selectedRequest, { itemId, getHeaders, formData, apiError, fetchRequests })
 
 const { isSelected, toggleSelect } = useSelection(selectedRequest, selectedIds, itemId)
 
