@@ -32,7 +32,8 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
       if (!searchLower) {return true}
       return requesterName(r).toLowerCase().includes(searchLower) ||
              (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
-             (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower)
+             (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower) ||
+             String(r.request_id ?? '').toLowerCase().includes(searchLower)
     }).map(r => ({
       ...r,
       _requesterName: requesterName(r),
