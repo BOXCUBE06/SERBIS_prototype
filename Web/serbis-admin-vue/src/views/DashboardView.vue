@@ -190,7 +190,7 @@
                  is nowrap by default. -->
             <div class="d-flex justify-space-between align-center flex-wrap gap-2">
               <div class="min-width-0 d-flex align-center gap-1">
-                <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-text">Open Requests by Age</v-card-title>
+                <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-text">How Long Requests Have Been Waiting</v-card-title>
                 <!-- Names the statuses outright. The KPI strip above reads
                      "Pending Service Requests: 8" while this card reads 32,
                      and both are right — Pending is one status, open is every
