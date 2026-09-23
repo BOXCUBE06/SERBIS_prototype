@@ -87,6 +87,7 @@ class AnalyticsController extends Controller
         'Pending Borrow Requests' => AdminSections::BORROWINGS,
         'Available Vehicles' => AdminSections::VEHICLES,
         'Pending Ambulance Requests' => AdminSections::AMBULANCE,
+        'Equipment Overdue' => AdminSections::BORROWINGS,
     ];
 
     public function index(Request $request): JsonResponse
@@ -117,6 +118,16 @@ class AnalyticsController extends Controller
             // in docs/dashboard-kpis.md: nothing ever closes a request that was
             // filed and then handled off-system, so those keep counting.
             $pendingAmbulance = ConductionRequest::whereNull('departed_office_at')->count();
+
+            // Released but never returned, past its due date, as of right now.
+            // Same definition AnalyticsReport::currentlyOverdueLoans() uses on
+            // the Analytics page — surfaced here too since an overdue item is
+            // a today problem, not something to notice only when someone
+            // happens to open Analytics.
+            $overdueBorrowings = EquipmentBorrowing::where('status', 'Released')
+                ->whereNotNull('due_date')
+                ->where('due_date', '<', Carbon::now('Asia/Manila')->toDateString())
+                ->count();
 
             $kpiStats = [
                 [
@@ -163,6 +174,19 @@ class AnalyticsController extends Controller
                     'color' => 'error',
                     'subtitle' => 'Filed, not yet dispatched',
                     'route' => ['path' => '/conduction-requests'],
+                ];
+            }
+
+            // Same rule as the ambulance card above: only shown when there is
+            // something to chase, since a standing zero is not information.
+            if ($overdueBorrowings > 0) {
+                $kpiStats[] = [
+                    'title' => 'Equipment Overdue',
+                    'value' => number_format($overdueBorrowings),
+                    'icon' => 'mdi-alert-circle-outline',
+                    'color' => 'error',
+                    'subtitle' => 'Past due date, not yet returned',
+                    'route' => ['path' => '/borrowings'],
                 ];
             }
 

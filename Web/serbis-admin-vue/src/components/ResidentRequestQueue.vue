@@ -100,7 +100,7 @@
         </template>
 
         <template v-slot:item.request_id="{ item }">
-          <span class="text-truncate d-block row-date">{{ item.request_id }}</span>
+          <span class="text-truncate d-block row-date">{{ transactionNo(item.request_id) }}</span>
         </template>
 
         <template v-slot:item._dateSubmitted="{ item }">
@@ -287,7 +287,7 @@
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.request_id }}</div>
+                <div class="font-weight-medium text-body-2">{{ transactionNo(selectedRequest.request_id) }}</div>
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
@@ -636,7 +636,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import { buildRequestsCsv, downloadCsv } from '@/composables/requestCsvExport'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection } from '@/composables/requestDisplay'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
@@ -797,10 +797,10 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Transaction No.', key: 'request_id', width: 12 },
+    { title: 'Transaction No.', key: 'request_id', width: 8 },
     { title: 'Submitted', key: '_dateSubmitted', width: 12 },
     { title: 'Status', key: 'status', width: 9, sortable: false },
-    { title: 'Requester', key: '_requesterName', width: 16 },
+    { title: 'Requester', key: '_requesterName', width: 20 },
     { title: 'Phone', key: '_phone', width: 11 },
     { title: 'Barangay', key: '_barangay', width: 12 },
     { title: 'Service', key: '_secondary', width: 12 },
