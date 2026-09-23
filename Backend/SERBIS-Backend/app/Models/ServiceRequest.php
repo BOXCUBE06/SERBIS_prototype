@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -211,6 +212,12 @@ class ServiceRequest extends Model
     }
 
     /** The trip log(s) filed against this booking. Nothing enforces one-per-request at the schema level. */
+    public function responders(): BelongsToMany
+    {
+        return $this->belongsToMany(Responder::class, 'tbl_request_responders', 'request_id', 'responder_id')
+            ->withPivot('assigned_at');
+    }
+
     public function conductionRequests(): HasMany
     {
         return $this->hasMany(ConductionRequest::class, 'service_request_id', 'request_id');
