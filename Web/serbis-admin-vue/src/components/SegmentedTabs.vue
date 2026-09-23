@@ -21,8 +21,11 @@
       :key="item.value"
       type="button"
       role="tab"
-      class="segmented-tabs__seg"
-      :class="{ 'segmented-tabs__seg--active': item.value === modelValue }"
+      :class="[
+        'segmented-tabs__seg',
+        `segmented-tabs__seg--${String(item.value).toLowerCase()}`,
+        {'segmented-tabs__seg--active': item.value === modelValue}
+     ]"
       :aria-selected="item.value === modelValue"
       @click="$emit('update:modelValue', item.value)"
     >
@@ -74,6 +77,37 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
 .segmented-tabs__seg:last-child {
   border-right: none;
 }
+
+
+.segmented-tabs__seg:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
+}
+.segmented-tabs__seg--pending.segmented-tabs__seg--active {
+  background: rgb(var(--v-theme-warning));
+  color: #fff;
+}
+.segmented-tabs__seg--booked.segmented-tabs__seg--active {
+  background: #6D28D9;
+  color: #fff;
+}
+.segmented-tabs__seg--responding.segmented-tabs__seg--active {
+  background: rgb(var(--v-theme-info));
+  color: #fff;
+}
+.segmented-tabs__seg--resolved.segmented-tabs__seg--active {
+  background: rgb(var(--v-theme-success));
+  color: #fff;
+}
+.segmented-tabs__seg--disapproved.segmented-tabs__seg--active {
+  background: rgb(var(--v-theme-error));
+  color: #fff;
+}
+.segmented-tabs__seg--cancelled.segmented-tabs__seg--active {
+  background: rgb(var(--v-theme-secondary));
+  color: #fff;
+}
+
 .segmented-tabs__seg:hover:not(.segmented-tabs__seg--active) {
   background: rgba(var(--v-theme-on-surface), 0.05);
 }
@@ -85,10 +119,7 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
   font-weight: 800;
   opacity: 0.85;
 }
-.segmented-tabs__seg:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: -2px;
-}
+
 @media (prefers-reduced-motion: reduce) {
   .segmented-tabs__seg { transition: none; }
 }

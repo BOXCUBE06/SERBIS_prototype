@@ -566,7 +566,8 @@ const { mdAndUp } = useDisplay()
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Full Name', key: 'fullName', width: '17%' },
+  { title: 'Last Name', key: 'last_name', width: '9%' },
+  { title: 'First Name', key: 'first_name', width: '9%' },
   { title: 'Type', key: 'account_type', width: '230px' },
   // The longest real barangay name in the data is "San Antonio Ugad", which
   // was still clipping when this column was 15% of a narrower table.

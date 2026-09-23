@@ -344,16 +344,15 @@
             <v-col cols="12" md="7" class="pa-6 bg-surface">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
-              <v-alert
-                v-if="selectedRecord?.status === 'Denied'"
-                type="error" variant="tonal" class="mb-4" density="compact"
-                :title="'Request denied'"
-              >
-                {{ selectedRecord?.denial_reason || 'No reason was recorded.' }}
-                <div v-if="selectedRecord?.denial_reason_code === 'Unavailable'" class="text-caption mt-2">
-                  Marked as "not available" — the resident is texted and pushed automatically once this item is back in stock.
-                </div>
-              </v-alert>
+              <template v-if="selectedRecord?.status === 'Denied'">
+                <h3 class="text-subtitle-1 font-weight-bold mb-4 text-error text-uppercase">Reason for Denial</h3>
+                <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
+                  <div class="text-body-1 text-high-emphasis">{{ selectedRecord?.denial_reason || 'No reason was recorded.' }}</div>
+                  <div v-if="selectedRecord?.denial_reason_code === 'Unavailable'" class="text-caption text-medium-emphasis mt-2">
+                    Marked as "not available" — the resident is texted and pushed automatically once this item is back in stock.
+                  </div>
+                </v-card>
+              </template>
 
               <!-- Info, not error: the office refused nothing here. Saying
                    stock was untouched out loud because the obvious guess is
