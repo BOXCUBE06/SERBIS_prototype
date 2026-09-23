@@ -50,7 +50,7 @@ return [
         '#^https://serbis-prototype-[a-z0-9-]+-absolute3-js\.vercel\.app$#i',
     ],
 
-    'allowed_headers' => ['Content-Type', 'Authorization', 'X-Requested-With'],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
 
     // Retry-After is not a CORS-safelisted response header, so without this the
     // admin panel cannot read it and has to guess at the throttle window.
