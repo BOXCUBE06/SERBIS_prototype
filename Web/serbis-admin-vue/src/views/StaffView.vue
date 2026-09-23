@@ -178,7 +178,7 @@
                   :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name"
                 ></v-text-field>
               </v-col>
-              <v-col cols="12" md="6">
+               <v-col cols="12" md="6">
                 <v-text-field
                   v-model="form.last_name" label="Last name *" placeholder="Dela Cruz" variant="outlined"
                   density="comfortable" rounded="lg" autocomplete="family-name"

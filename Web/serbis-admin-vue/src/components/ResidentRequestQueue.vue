@@ -552,15 +552,30 @@
           ></v-autocomplete>
 
           <template v-else>
-            <v-text-field
-              v-model="createDialog.form.walk_in_name"
-              label="Full name"
-              placeholder="e.g. Juan Dela Cruz"
-              variant="outlined"
-              density="comfortable"
-              class="mb-2"
-              :rules="[required]"
-            ></v-text-field>
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.walk_in_first_name"
+                  label="First name"
+                  placeholder="e.g. Juan"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                  :rules="[required, nameFormat]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.walk_in_last_name"
+                  label="Last name"
+                  placeholder="e.g. Dela Cruz"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                  :rules="[required, nameFormat]"
+                ></v-text-field>
+              </v-col>
+            </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
               label="Contact number"
@@ -568,7 +583,7 @@
               variant="outlined"
               density="comfortable"
               class="mb-2"
-              :rules="[required]"
+              :rules="[required, phoneFormat]"
             ></v-text-field>
           </template>
 
@@ -654,10 +669,15 @@ const selectedIds = reactive(new Set())
 const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+// Letters (incl. accented/Ñ), spaces, hyphens, apostrophes, periods — no digits.
+const nameFormat = (v) => !v || /^[\p{L}.'-]+(?:\s[\p{L}.'-]+)*$/u.test(v.trim()) || 'Letters only'
+// Same shapes ServiceRequestController's PhoneNumber::REGEX accepts.
+const phoneFormat = (v) => !v || /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(v.trim()) || 'Use 09XXXXXXXXX'
 
 const emptyCreateForm = () => ({
   resident_id: null,
-  walk_in_name: '',
+  walk_in_first_name: '',
+  walk_in_last_name: '',
   walk_in_contact_number: '',
   service_id: null,
   description: '',
@@ -878,9 +898,19 @@ const submitWalkIn = async () => {
     createDialog.value.error = 'Pick a Head of the Family'
     return
   }
-  if (!isResident && (!form.walk_in_name.trim() || !form.walk_in_contact_number.trim())) {
-    createDialog.value.error = 'Name and contact number are required for someone with no account'
-    return
+  if (!isResident) {
+    if (!form.walk_in_first_name.trim() || !form.walk_in_last_name.trim() || !form.walk_in_contact_number.trim()) {
+      createDialog.value.error = 'Name and contact number are required for someone with no account'
+      return
+    }
+    if (phoneFormat(form.walk_in_contact_number) !== true) {
+      createDialog.value.error = 'Enter a valid contact number (e.g. 09171234567)'
+      return
+    }
+    if (nameFormat(form.walk_in_first_name) !== true || nameFormat(form.walk_in_last_name) !== true) {
+      createDialog.value.error = 'Names may only contain letters'
+      return
+    }
   }
   if (!form.service_id) {
     createDialog.value.error = 'Pick a service'
@@ -898,7 +928,7 @@ const submitWalkIn = async () => {
     if (isResident) {
       body.append('resident_id', form.resident_id)
     } else {
-      body.append('walk_in_name', form.walk_in_name.trim())
+      body.append('walk_in_name', `${form.walk_in_first_name.trim()} ${form.walk_in_last_name.trim()}`)
       body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
     }
     body.append('service_id', form.service_id)
