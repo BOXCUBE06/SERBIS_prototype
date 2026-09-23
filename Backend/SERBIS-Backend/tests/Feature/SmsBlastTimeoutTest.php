@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -89,11 +90,12 @@ class SmsBlastTimeoutTest extends TestCase
     {
         Sanctum::actingAs($this->admin);
 
-        return $this->postJson('/api/sms/blast', [
-            'message' => 'MDRRMO Echague weather advisory: heavy rain expected.',
-            'code' => '123456',
-            'barangays' => [$this->barangay->barangay_id],
-        ]);
+        return $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson('/api/sms/blast', [
+                'message' => 'MDRRMO Echague weather advisory: heavy rain expected.',
+                'code' => '123456',
+                'barangays' => [$this->barangay->barangay_id],
+            ]);
     }
 
     public function test_a_timeout_answers_202_and_tells_staff_not_to_resend(): void

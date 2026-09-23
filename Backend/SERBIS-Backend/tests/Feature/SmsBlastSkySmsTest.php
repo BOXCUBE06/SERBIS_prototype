@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -88,11 +89,14 @@ class SmsBlastSkySmsTest extends TestCase
 
     private function blast(string $message = 'MDRRMO Echague advisory: heavy rain expected today.')
     {
-        return $this->actingAs($this->admin)->postJson('/api/sms/blast', [
-            'message' => $message,
-            'code' => self::CODE,
-            'barangays' => [$this->barangay->barangay_id],
-        ]);
+        // Fresh key per call: each represents a separate send, not a retry.
+        return $this->actingAs($this->admin)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson('/api/sms/blast', [
+                'message' => $message,
+                'code' => self::CODE,
+                'barangays' => [$this->barangay->barangay_id],
+            ]);
     }
 
     // ---- content ---------------------------------------------------------

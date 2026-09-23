@@ -56,6 +56,33 @@ class SmsController extends Controller
             'code' => 'required|string',
         ]);
 
+        // One retry-safe attempt per key: a resubmitted request (a network
+        // hiccup, or a double click that slipped past the frontend's own
+        // guard) gets the stored result instead of a second billed send.
+        // Cache::add is atomic, so only the first caller with a given key
+        // claims it; a concurrent second request is told to wait.
+        $idempotencyKey = (string) $request->header('Idempotency-Key', '');
+
+        if ($idempotencyKey === '') {
+            throw ValidationException::withMessages([
+                'idempotency_key' => 'Missing Idempotency-Key header.',
+            ]);
+        }
+
+        $cacheKey = 'sms-blast:'.$request->user()->admin_id.':'.$idempotencyKey;
+
+        if (! Cache::add($cacheKey, ['status' => 'processing'], now()->addMinutes(10))) {
+            $stored = Cache::get($cacheKey);
+
+            if (is_array($stored) && ($stored['status'] ?? null) === 'done') {
+                return response()->json($stored['body'], $stored['http_status']);
+            }
+
+            return response()->json([
+                'message' => 'This blast is already being sent. Wait for it to finish before retrying.',
+            ], 409);
+        }
+
         // Before anything is resolved or sent. This endpoint is the only one in
         // the application that spends money, and until now the sole thing
         // standing in front of it was a client-side dialog — see the route
@@ -66,17 +93,24 @@ class SmsController extends Controller
         // who are supposed to know it (MDRRMO feedback, 2026-09-19), not the
         // caller's own account password, so an account given the section still
         // cannot make it actually send without having been told the code.
-        $this->assertCurrentCode($request);
+        try {
+            $this->assertCurrentCode($request);
+        } catch (\Throwable $e) {
+            // No billed action happened, so the key must not stay claimed — a
+            // wrong code is retried against the same dialog and the same key.
+            Cache::forget($cacheKey);
+            throw $e;
+        }
 
         $residents = $this->resolveRecipients($validated['barangays']);
 
         // Never call a billed endpoint with nothing to send.
         if ($residents->isEmpty()) {
-            return response()->json([
+            return $this->respond($cacheKey, response()->json([
                 'message' => 'No residents in the selected barangays are active, opted in to SMS and have a reachable phone number.',
                 'sent' => 0,
                 'failed' => 0,
-            ], 422);
+            ], 422));
         }
 
         // Several bulk requests, and each may wait on a rate limit: the default
@@ -132,22 +166,22 @@ class SmsController extends Controller
             // 202, not 200 and not 5xx. We cannot confirm delivery, so this is
             // not success; but a 5xx is what staff are currently retrying, and a
             // retry of a message that probably went out is a second bill.
-            return response()->json([
+            return $this->respond($cacheKey, response()->json([
                 'message' => 'SkySMS did not answer in time for '.$unconfirmed.' recipient(s), but the messages were most likely sent and billed. Do NOT send them again — check with a recipient before resending.',
                 'unconfirmed' => true,
                 'queued' => $queued,
                 'failed' => $failed,
                 'unconfirmed_count' => $unconfirmed,
                 'recipients' => $residents->count(),
-            ], 202);
+            ], 202));
         }
 
         if ($failed === 0) {
-            return response()->json([
+            return $this->respond($cacheKey, response()->json([
                 'message' => 'Text blast queued. SkySMS has accepted it and billed the credits; delivery is not confirmed yet. Check status under Recent blasts.',
                 'queued' => $queued,
                 'failed' => 0,
-            ]);
+            ]));
         }
 
         Log::error('SkySMS text blast had failures', [
@@ -160,14 +194,30 @@ class SmsController extends Controller
         // Some chunks were queued before one failed: report the split rather than
         // an error, so the desk knows part of the audience is already queued.
         if ($queued > 0) {
-            return response()->json([
+            return $this->respond($cacheKey, response()->json([
                 'message' => 'Part of the blast was queued: '.$queued.' queued, '.$failed.' failed. Do not resend the whole message — the recipients that were queued would get it twice.',
                 'queued' => $queued,
                 'failed' => $failed,
-            ]);
+            ]));
         }
 
-        return $this->blastFailureResponse($firstFailure, $failed);
+        return $this->respond($cacheKey, $this->blastFailureResponse($firstFailure, $failed));
+    }
+
+    /**
+     * Stores the finished blast's response under its idempotency key so a
+     * resubmit of the same key returns this instead of sending again, then
+     * returns the response unchanged.
+     */
+    private function respond(string $cacheKey, JsonResponse $response): JsonResponse
+    {
+        Cache::put($cacheKey, [
+            'status' => 'done',
+            'body' => $response->getData(true),
+            'http_status' => $response->getStatusCode(),
+        ], now()->addMinutes(10));
+
+        return $response;
     }
 
     /**

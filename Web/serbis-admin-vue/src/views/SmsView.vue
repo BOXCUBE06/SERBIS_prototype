@@ -498,6 +498,13 @@ const alert = ref({
 // cleared on cancel, on a successful send, and on any failure that closes it.
 const confirmDialog = ref({ open: false, summary: '', cost: '', code: '' })
 
+// One key per dialog-open, sent as Idempotency-Key so a resubmit (retry after
+// a dropped response, or a double click that slipped past the loading guard)
+// reaches the server as the same attempt instead of a second billed send. Set
+// when the dialog opens (sendSmsBlast) and left alone across a wrong-code
+// retry, so that retry still carries the original attempt's key.
+const blastKey = ref('')
+
 // Starting text, not a fill-in form. There are deliberately no [AREA]-style
 // tokens: a token that survives editing goes out to a real handset with the
 // blank still in it. Each draft stops mid-sentence instead, so an unfinished
@@ -877,6 +884,7 @@ const sendSmsBlast = async () => {
     : `${recipientCount.value.toLocaleString()} recipients × ${sms.value.segments} segment${sms.value.segments === 1 ? '' : 's'} ≈ ${billedUnits.value.toLocaleString()} SMS units.`
 
   confirmDialog.value = { open: true, summary: confirmMessage, cost: costLine, code: '' }
+  blastKey.value = crypto.randomUUID()
 }
 
 const cancelSend = () => {
@@ -900,7 +908,7 @@ const confirmSend = async () => {
   try {
     const res = await fetch(`${API_BASE}/sms/blast`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: { ...getHeaders(), 'Idempotency-Key': blastKey.value },
       body: JSON.stringify({
         message: message.value,
         barangays: selectedBarangays.value,

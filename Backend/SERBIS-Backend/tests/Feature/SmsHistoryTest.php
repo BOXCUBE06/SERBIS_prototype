@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -69,11 +70,14 @@ class SmsHistoryTest extends TestCase
     {
         Http::fake(['skysms.skyio.site/*' => Http::response(['job_id' => 'job-1'], $status)]);
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
-            'message' => $message,
-            'code' => '123456',
-            'barangays' => [$this->barangay->barangay_id],
-        ]);
+        // Fresh key per call: each represents a separate send, not a retry.
+        $this->actingAs($this->admin)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson('/api/sms/blast', [
+                'message' => $message,
+                'code' => '123456',
+                'barangays' => [$this->barangay->barangay_id],
+            ]);
     }
 
     public function test_history_returns_the_keys_the_panel_table_binds_to(): void

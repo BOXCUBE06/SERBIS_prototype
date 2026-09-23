@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -56,6 +57,15 @@ class SmsBlastLoggingTest extends TestCase
         $this->barangayB = Barangay::create(['barangay_name' => 'San Miguel']);
     }
 
+    /**
+     * A fresh Idempotency-Key per call: each of these represents a separate
+     * "confirm dialog opened and sent" in the real flow, not a resubmission.
+     */
+    private function actingAsAdmin(User $user)
+    {
+        return $this->actingAs($user)->withHeaders(['Idempotency-Key' => (string) Str::uuid()]);
+    }
+
     private function resident(Barangay $barangay, string $status, string $phone): Resident
     {
         return Resident::create([
@@ -77,7 +87,7 @@ class SmsBlastLoggingTest extends TestCase
         $a2 = $this->resident($this->barangayA, 'Active', '09172222222');
         $b1 = $this->resident($this->barangayB, 'Active', '09173333333');
 
-        $response = $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $response = $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id, $this->barangayB->barangay_id],
@@ -114,7 +124,7 @@ class SmsBlastLoggingTest extends TestCase
         // both null and ''.
         $this->resident($this->barangayA, 'Active', '');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Test advisory.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -129,7 +139,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $resident = $this->resident($this->barangayA, 'Active', '09171111111');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'This one never went out.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -149,7 +159,7 @@ class SmsBlastLoggingTest extends TestCase
         $inA = $this->resident($this->barangayA, 'Active', '09171111111');
         $inB = $this->resident($this->barangayB, 'Active', '09172222222');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -172,7 +182,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->resident($this->barangayA, 'Inactive', '09171111111');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Nobody to send this to.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -188,7 +198,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->resident($this->barangayA, 'Active', '09171111111');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Should never leave.',
             'barangays' => [$this->barangayA->barangay_id],
         ])->assertStatus(422)
@@ -205,7 +215,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->resident($this->barangayA, 'Active', '09171111111');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Should never leave.',
             'code' => 'not-the-code',
             'barangays' => [$this->barangayA->barangay_id],
@@ -226,7 +236,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->resident($this->barangayA, 'Active', '09171111111');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Should never leave.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -256,7 +266,7 @@ class SmsBlastLoggingTest extends TestCase
             'role' => 'Admin',
         ]);
 
-        $this->actingAs($other)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($other)->postJson('/api/sms/blast', [
             'message' => 'A colleague who knows the code.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -274,7 +284,7 @@ class SmsBlastLoggingTest extends TestCase
         $this->resident($this->barangayA, 'Active', '09171111111');
 
         for ($attempt = 1; $attempt <= 5; $attempt++) {
-            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
                 'message' => 'Guessing.',
                 'code' => "wrong-{$attempt}",
                 'barangays' => [$this->barangayA->barangay_id],
@@ -282,7 +292,7 @@ class SmsBlastLoggingTest extends TestCase
         }
 
         // Sixth wrong code is refused by the limiter, not the hash check.
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Guessing.',
             'code' => 'wrong-6',
             'barangays' => [$this->barangayA->barangay_id],
@@ -290,7 +300,7 @@ class SmsBlastLoggingTest extends TestCase
 
         // The point of checking the limit before the comparison: inside the
         // window even the real code does not get through.
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Correct code, still locked out.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -311,7 +321,7 @@ class SmsBlastLoggingTest extends TestCase
         $this->resident($this->barangayA, 'Active', '09171111111');
 
         for ($attempt = 1; $attempt <= 6; $attempt++) {
-            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
                 'message' => 'Guessing.',
                 'code' => "wrong-{$attempt}",
                 'barangays' => [$this->barangayA->barangay_id],
@@ -326,7 +336,7 @@ class SmsBlastLoggingTest extends TestCase
             'role' => 'Admin',
         ]);
 
-        $this->actingAs($other)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($other)->postJson('/api/sms/blast', [
             'message' => 'A colleague sending normally.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -345,7 +355,7 @@ class SmsBlastLoggingTest extends TestCase
 
         // Four typos — one short of the limit.
         for ($attempt = 1; $attempt <= 4; $attempt++) {
-            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
                 'message' => 'Typo.',
                 'code' => "wrong-{$attempt}",
                 'barangays' => [$this->barangayA->barangay_id],
@@ -353,7 +363,7 @@ class SmsBlastLoggingTest extends TestCase
         }
 
         // The right code, which sends and resets the tally to zero.
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Got it right.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -362,7 +372,7 @@ class SmsBlastLoggingTest extends TestCase
         // Four more typos. Without the reset these would be attempts five
         // through eight and the last of them would be refused as 429.
         for ($attempt = 5; $attempt <= 8; $attempt++) {
-            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
                 'message' => 'Typo again.',
                 'code' => "wrong-{$attempt}",
                 'barangays' => [$this->barangayA->barangay_id],
@@ -370,7 +380,7 @@ class SmsBlastLoggingTest extends TestCase
         }
 
         // And the tally being clear means the right code still works.
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Still able to send.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -384,14 +394,14 @@ class SmsBlastLoggingTest extends TestCase
         $this->resident($this->barangayA, 'Active', '09171111111');
 
         for ($sent = 1; $sent <= 3; $sent++) {
-            $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+            $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
                 'message' => "Advisory {$sent}.",
                 'code' => self::CODE,
                 'barangays' => [$this->barangayA->barangay_id],
             ])->assertOk();
         }
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'One too many.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -415,7 +425,7 @@ class SmsBlastLoggingTest extends TestCase
         $this->resident($this->barangayA, 'Active', '09171111111');
         $this->resident($this->barangayA, 'Active', '09172222222');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],
@@ -433,7 +443,7 @@ class SmsBlastLoggingTest extends TestCase
 
         $this->resident($this->barangayA, 'Active', '09171111111');
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAsAdmin($this->admin)->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
             'code' => self::CODE,
             'barangays' => [$this->barangayA->barangay_id],

@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -163,7 +164,7 @@ class ResidentSmsPreferenceTest extends TestCase
         $optedIn = $this->resident('09171111111');
         $optedOut = $this->resident('09172222222', ['sms_opt_in' => false]);
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAs($this->admin)->withHeaders(['Idempotency-Key' => (string) Str::uuid()])->postJson('/api/sms/blast', [
             'message' => 'Evacuate low-lying areas immediately.',
             'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
@@ -189,7 +190,7 @@ class ResidentSmsPreferenceTest extends TestCase
         $this->resident('09171111111');
         $optedOut = $this->resident('09172222222', ['sms_opt_in' => false]);
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAs($this->admin)->withHeaders(['Idempotency-Key' => (string) Str::uuid()])->postJson('/api/sms/blast', [
             'message' => 'Flooding on the national road.',
             'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
@@ -209,7 +210,7 @@ class ResidentSmsPreferenceTest extends TestCase
 
         $this->resident('09171111111', ['sms_opt_in' => false]);
 
-        $this->actingAs($this->admin)->postJson('/api/sms/blast', [
+        $this->actingAs($this->admin)->withHeaders(['Idempotency-Key' => (string) Str::uuid()])->postJson('/api/sms/blast', [
             'message' => 'Nobody wants this one.',
             'code' => '123456',
             'barangays' => [$this->barangay->barangay_id],
