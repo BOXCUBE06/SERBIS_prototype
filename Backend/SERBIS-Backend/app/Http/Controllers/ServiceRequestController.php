@@ -287,7 +287,7 @@ class ServiceRequestController extends Controller
         // conductionRequests.people: C5's bridge — the Bookings queue's
         // Responding row needs its linked trip record (and who is driving
         // it) without a second round trip per row.
-        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people'])
+        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people', 'responders'])
             ->latest();
 
         // Only the rows the admin's sections cover: Resident Requests and
