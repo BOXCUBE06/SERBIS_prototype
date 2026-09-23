@@ -1321,6 +1321,7 @@ class ServiceRequestController extends Controller
             // Pending, so cancelling has to hand the unit back or it leaks out of
             // the fleet with no request pointing at it.
             $this->releaseVehicle($serviceRequest->vehicle_id);
+            $serviceRequest->releaseResponders();
 
             $serviceRequest->update(['status' => 'Cancelled']);
         });
@@ -1611,6 +1612,35 @@ class ServiceRequestController extends Controller
             }
         }
 
+        // Dispatch needs a crew. A responder's status is only ever 'deployed'
+        // while attached to a Responding request (set below, released by
+        // releaseResponders() the moment that request ends) — since this
+        // request is not Responding yet (the same-status short-circuit above
+        // would have skipped this whole block otherwise), 'deployed' here can
+        // only mean "on a different request right now". Same check
+        // assignResponders() makes; kept here too since assignment and
+        // dispatch can happen minutes apart and a responder's status can
+        // change in between.
+        if (($validated['status'] ?? null) === 'Responding' && $serviceRequest->status !== 'Responding') {
+            $assigned = $serviceRequest->responders;
+
+            if ($assigned->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Cannot dispatch — no responders assigned.',
+                ]);
+            }
+
+            $blocked = $assigned->filter(fn (Responder $r) => $r->status !== 'available');
+
+            if ($blocked->isNotEmpty()) {
+                $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'status' => "Not available: {$names}.",
+                ]);
+            }
+        }
+
         // The picker's two rules, which until now lived only in the panel
         // (ServiceRequestQueue.vue's availableVehicles): a unit must be
         // Available, and its type must match the board — an ambulance request
@@ -1684,7 +1714,7 @@ class ServiceRequestController extends Controller
         // Captured before update() overwrites status — see the push block below.
         $oldStatus = $serviceRequest->status;
 
-        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
+        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest, $oldStatus) {
             $this->syncFleet($serviceRequest, $validated);
 
             $bookingFields = Arr::only($validated, self::BOOKING_FIELDS);
@@ -1697,6 +1727,16 @@ class ServiceRequestController extends Controller
             // it always was.
             if ($isAmbulanceRequest && $bookingFields) {
                 AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], $bookingFields);
+            }
+
+            $newStatus = $validated['status'] ?? $oldStatus;
+
+            if ($newStatus !== $oldStatus) {
+                if ($newStatus === 'Responding') {
+                    $serviceRequest->responders->each(fn (Responder $r) => $r->update(['status' => 'deployed']));
+                } elseif (in_array($newStatus, self::TERMINAL_STATUSES, true)) {
+                    $serviceRequest->releaseResponders();
+                }
             }
 
             // The bridge itself: this is the one place the instant path ever
