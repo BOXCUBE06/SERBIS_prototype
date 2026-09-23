@@ -533,9 +533,13 @@ class SmsController extends Controller
         // rather than inside the send keeps tbl_recipients honest: it records who
         // the message actually went to, and a resident whose number cannot be
         // dialled did not receive it.
-        return $residents->filter(
-            fn ($resident) => PhoneNumber::normalize($resident->phone_number) !== ''
-        )->values();
+        return $residents
+            ->filter(fn ($resident) => PhoneNumber::normalize($resident->phone_number) !== '')
+            // Two resident rows sharing one handset (a household number typed
+            // under both heads) must not both count as a recipient — one text
+            // per phone, not per resident row.
+            ->unique(fn ($resident) => PhoneNumber::normalize($resident->phone_number))
+            ->values();
     }
 
     /**
