@@ -526,6 +526,34 @@ String scheduledCountdownLabel(DateTime scheduledAt, [DateTime? now]) {
   return 'Scheduled in $delta days';
 }
 
+/// Who's handling the request — only ever present on a Booked/Responding row
+/// with someone assigned; see ServiceRequestController::decorateResponders on
+/// the server. photoUrl is a direct, public URL (not a token-gated stream),
+/// same as an info material's file, since a responder's photo isn't sensitive
+/// like a resident's government ID scan.
+class RequestResponder {
+  final String name;
+  final String position;
+  final String contactNo;
+  final String? photoUrl;
+
+  const RequestResponder({
+    required this.name,
+    required this.position,
+    required this.contactNo,
+    this.photoUrl,
+  });
+
+  factory RequestResponder.fromJson(Map<String, dynamic> json) {
+    return RequestResponder(
+      name: (json['name'] as String?) ?? '',
+      position: (json['position'] as String?) ?? '',
+      contactNo: (json['contact_no'] as String?) ?? '',
+      photoUrl: json['photo_url'] as String?,
+    );
+  }
+}
+
 class ServiceRequest {
   final int? id;
   final int? serviceId;
@@ -572,6 +600,11 @@ class ServiceRequest {
   /// booking confirmation would be reading it back out of free text.
   final DateTime? scheduledAt;
 
+  /// Empty unless the server sent a 'responders' key at all (see
+  /// ServiceRequestController::decorateResponders) — a request the office
+  /// hasn't staffed yet, or hasn't reached Booked/Responding, has none.
+  final List<RequestResponder> responders;
+
   const ServiceRequest({
     this.id,
     this.serviceId,
@@ -588,6 +621,7 @@ class ServiceRequest {
     this.serviceCode,
     this.serviceCategory,
     this.scheduledAt,
+    this.responders = const [],
   });
 
   /// True once a Booked slot's own window has passed with nobody moving the
@@ -775,6 +809,7 @@ class ServiceRequest {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       scheduledAt: scheduledAt,
+      responders: responders,
     );
   }
 
@@ -839,6 +874,13 @@ class ServiceRequest {
       // Absent on every request that is not a booking, and on an ordinary
       // request from a server build that predates this column.
       scheduledAt: _parseTimestamp(json['scheduled_at']),
+      // Absent entirely — not [] — until Booked/Responding with someone
+      // assigned; see the class doc on RequestResponder.
+      responders: (json['responders'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(RequestResponder.fromJson)
+              .toList() ??
+          const [],
     );
   }
 }
