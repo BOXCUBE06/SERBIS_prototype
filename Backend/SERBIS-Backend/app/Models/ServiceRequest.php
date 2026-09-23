@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -208,6 +209,38 @@ class ServiceRequest extends Model
     public function ambulanceBooking(): HasOne
     {
         return $this->hasOne(AmbulanceBooking::class, 'request_id', 'request_id');
+    }
+
+    public function responders(): BelongsToMany
+    {
+        return $this->belongsToMany(Responder::class, 'tbl_request_responders', 'request_id', 'responder_id')
+            ->withPivot('assigned_at');
+    }
+
+    /**
+     * Hands each of this request's deployed responders back to 'available',
+     * unless they are still deployed on a different Responding request (a
+     * responder assigned to more than one request at once, if that is ever
+     * allowed to happen). Safe to call on a request with no responders, or
+     * whose responders were never deployed (e.g. cancel(), which only runs
+     * on Pending/Booked — before dispatch ever sets 'deployed').
+     */
+    public function releaseResponders(): void
+    {
+        foreach ($this->responders as $responder) {
+            if ($responder->status !== 'deployed') {
+                continue;
+            }
+
+            $stillDeployed = $responder->serviceRequests()
+                ->where('status', 'Responding')
+                ->where('tbl_service_request.request_id', '!=', $this->request_id)
+                ->exists();
+
+            if (! $stillDeployed) {
+                $responder->update(['status' => 'available']);
+            }
+        }
     }
 
     /** The trip log(s) filed against this booking. Nothing enforces one-per-request at the schema level. */

@@ -30,6 +30,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'ambulance', to: '/conduction-requests', title: 'Ambulance Dispatch Requests', icon: 'mdi-ambulance', group: 'main' },
   { key: 'borrowings', to: '/borrowings', title: 'Equipment Borrowing', icon: 'mdi-hand-extended-outline', group: 'main' },
   { key: 'vehicles', to: '/vehicles', title: 'Vehicles', icon: 'mdi-ambulance', group: 'main' },
+  { key: 'responders', to: '/responders', title: 'Responders', icon: 'mdi-account-hard-hat-outline', group: 'main' },
   { key: 'inventory', to: '/inventory', title: 'Resource Management', icon: 'mdi-toolbox-outline', group: 'main' },
   // Below Resource Management on purpose: it is the list of what the catalogue
   // above does not carry, and it is read next to it, not next to the board.

@@ -15,6 +15,7 @@ use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PhoneChangeController;
 use App\Http\Controllers\ProcurementReferenceController;
 use App\Http\Controllers\ResidentController;
+use App\Http\Controllers\ResponderController;
 use App\Http\Controllers\ServiceAudienceController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceRequestController;
@@ -190,6 +191,7 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         // under a lock, which update()/syncFleet() were never built to do.
         Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
         Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
+        Route::patch('service-requests/{id}/responders', [ServiceRequestController::class, 'assignResponders']);
     });
 
     Route::get('/admin/dashboard', [AnalyticsController::class, 'index'])->middleware('section:dashboard');
@@ -322,6 +324,12 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // borrower details on it) to draw a page of item names.
     Route::get('procurement/other-equipment', [ProcurementReferenceController::class, 'index'])
         ->middleware('section:procurement');
+
+    Route::middleware('section:responders')->group(function () {
+        Route::apiResource('responders', ResponderController::class);
+        Route::post('responders/{id}/photo', [ResponderController::class, 'uploadPhoto']);
+        Route::delete('responders/{id}/photo', [ResponderController::class, 'deletePhoto']);
+    });
 
     // MDRRMO Conduction Request Form (Echague Rescue EMS). Filed and
     // tracked entirely by staff — there is no resident-facing route, the
