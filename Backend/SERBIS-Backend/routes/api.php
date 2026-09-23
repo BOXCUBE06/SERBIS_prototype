@@ -191,6 +191,7 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         // under a lock, which update()/syncFleet() were never built to do.
         Route::patch('service-requests/{id}/approve', [ServiceRequestController::class, 'approve']);
         Route::patch('service-requests/{id}/reschedule', [ServiceRequestController::class, 'reschedule']);
+        Route::patch('service-requests/{id}/responders', [ServiceRequestController::class, 'assignResponders']);
     });
 
     Route::get('/admin/dashboard', [AnalyticsController::class, 'index'])->middleware('section:dashboard');

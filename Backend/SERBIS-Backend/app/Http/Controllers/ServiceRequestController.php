@@ -6,6 +6,7 @@ use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
+use App\Models\Responder;
 use App\Models\Service;
 use App\Models\ServiceAudience;
 use App\Models\ServiceRequest;
@@ -2020,6 +2021,55 @@ class ServiceRequestController extends Controller
         $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']), $this->pushData($fresh));
 
         return response()->json($fresh);
+    }
+
+    /**
+     * Sets the full responder list on a request (sync, not append — resending
+     * the same set is a no-op, dropping one un-assigns it). Only before the
+     * request is dispatched: once it is Responding the crew is already out,
+     * and update()'s own transition guard is what actually deploys them
+     * (assigning here never changes a responder's status).
+     */
+    public function assignResponders(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::find($id);
+
+        if (! $serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
+        if (! in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
+            return response()->json([
+                'message' => 'Responders can only be assigned before the request is dispatched.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'responder_ids' => 'present|array',
+            'responder_ids.*' => 'integer|exists:tbl_responders,responder_id',
+        ]);
+
+        $responders = Responder::whereIn('responder_id', $validated['responder_ids'])->get();
+
+        $blocked = $responders->filter(fn (Responder $r) => $r->status !== 'available');
+
+        if ($blocked->isNotEmpty()) {
+            $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');
+
+            throw ValidationException::withMessages([
+                'responder_ids' => "Not available: {$names}.",
+            ]);
+        }
+
+        $serviceRequest->responders()->sync(
+            $responders->mapWithKeys(fn (Responder $r) => [$r->responder_id => ['assigned_at' => now()]])
+        );
+
+        return response()->json($serviceRequest->fresh(['responders']));
     }
 
     public function destroy(Request $request, $id)
