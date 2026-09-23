@@ -315,10 +315,12 @@ class ServiceRequestController extends Controller
             // internal_notes is the operator-only scratch pad (see its migration) —
             // hidden here rather than on the model, since adminIndex() and this
             // same method's admin branch above both need it visible.
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'responders'])
                 ->where('resident_id', $residentId)
                 ->get()
                 ->makeHidden('internal_notes');
+
+            $serviceRequests->each(fn (ServiceRequest $r) => $this->decorateResponders($r));
         }
 
         return response()->json($serviceRequests);
@@ -1157,9 +1159,36 @@ class ServiceRequestController extends Controller
         // staff only, and this route serves the same model to both audiences.
         if ($user instanceof Resident) {
             $serviceRequest->makeHidden('internal_notes');
+            $serviceRequest->load('responders');
+            $this->decorateResponders($serviceRequest);
         }
 
         return response()->json($serviceRequest);
+    }
+
+    /**
+     * Resident-facing only: names, positions, contact numbers and photo_url
+     * of who's handling the request — but only once there's someone to
+     * name (Booked/Responding) and someone assigned. Otherwise the
+     * 'responders' key is hidden entirely rather than sent as [], so the
+     * app's existing "field absent" checks keep working unchanged.
+     */
+    private function decorateResponders(ServiceRequest $r): void
+    {
+        $show = in_array($r->status, ['Booked', 'Responding'], true) && $r->responders->isNotEmpty();
+
+        if (! $show) {
+            $r->makeHidden('responders');
+
+            return;
+        }
+
+        $r->setRelation('responders', $r->responders->map(fn (Responder $resp) => [
+            'name' => $resp->name,
+            'position' => $resp->position,
+            'contact_no' => $resp->contact_no,
+            'photo_url' => $resp->photo_path ? Storage::disk(self::publicDisk())->url($resp->photo_path) : null,
+        ]));
     }
 
     // Shared by validId() and sitePhoto() below — same ownership guard, same
@@ -1467,7 +1496,10 @@ class ServiceRequestController extends Controller
      */
     private function respondingPushBody(ServiceRequest $serviceRequest): string
     {
-        return 'Your '.$serviceRequest->service->service_name.' request has been approved and is being responded to. — MDRRMO Echague';
+        $names = $serviceRequest->responders->pluck('name')->implode(', ');
+        $crew = $names !== '' ? ' Responder(s): '.$names.'.' : '';
+
+        return 'Your '.$serviceRequest->service->service_name.' request has been approved and is being responded to.'.$crew.' — MDRRMO Echague';
     }
 
     private function reschedulePushBody(ServiceRequest $serviceRequest, string $reason): string
