@@ -397,6 +397,7 @@
             class="text-none font-weight-bold px-6"
             height="44"
             :loading="loading"
+            :disabled="loading"
             @click="confirmSend"
           >Send Blast</v-btn>
         </v-card-actions>
@@ -888,6 +889,10 @@ const cancelSend = () => {
 // in place, and the send is retried against the same message and barangay
 // selection rather than composed again.
 const confirmSend = async () => {
+  // Button is :disabled="loading" too, but Enter on the code field bypasses
+  // that — guard the click and the Enter path here so a race can't fire twice.
+  if (loading.value) return
+
   fieldErrors.value.code = ''
   loading.value = true
   alert.value.show = false
