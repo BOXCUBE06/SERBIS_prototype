@@ -14,7 +14,7 @@ const csvCell = (value) => {
 
 export function buildCsv(head, body) {
   // BOM so Excel reads the UTF-8 (Filipino names, accents) instead of guessing.
-  return '\uFEFF' + [head, ...body].map((row) => row.map(csvCell).join(',')).join('\r\n')
+  return '\uFEFF' + [head, ...body].map((row) => row.map((cell) => csvCell(cell)).join(',')).join('\r\n')
 }
 
 export function downloadBlob(blob, filename) {

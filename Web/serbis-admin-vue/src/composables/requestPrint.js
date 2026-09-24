@@ -81,7 +81,7 @@ async function detailPages(type, cols, rows, withPhotos, urls) {
   const pages = []
 
   for (const row of rows) {
-    const photos = withPhotos ? await Promise.all(t.photos(row).filter(Boolean).map(fetchPhoto)) : []
+    const photos = withPhotos ? await Promise.all(t.photos(row).filter(Boolean).map((p) => fetchPhoto(p))) : []
     photos.forEach((p) => p.url && urls.push(p.url))
     const figures = photos.map((p) => (p.url
       ? `<figure><img src="${p.url}" alt="${esc(p.label)}"><figcaption>${esc(p.label)}</figcaption></figure>`
@@ -117,9 +117,9 @@ async function printHtml(html, urls) {
   frame.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden'
   document.body.append(frame)
 
-  await new Promise((resolve) => { frame.onload = resolve; frame.srcdoc = html })
+  await new Promise((resolve) => { frame.addEventListener('load', resolve, { once: true }); frame.srcdoc = html })
   // Blank pages are what an early print() produces: wait for the images.
-  await Promise.all([...frame.contentDocument.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r }))))
+  await Promise.all([...frame.contentDocument.images].map((img) => (img.complete ? null : new Promise((r) => { img.addEventListener('load', r, { once: true }); img.addEventListener('error', r, { once: true }) }))))
 
   const done = () => { frame.remove(); urls.forEach((u) => URL.revokeObjectURL(u)) }
   frame.contentWindow.addEventListener('afterprint', done, { once: true })

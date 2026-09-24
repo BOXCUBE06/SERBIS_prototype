@@ -45,18 +45,7 @@
         </template>
 
         <template v-slot:actions>
-          <v-btn
-            color="primary"
-            variant="text"
-            class="text-none font-weight-bold"
-            height="40"
-            :disabled="filteredAndSortedRequests.length === 0"
-            @click="exportCsv"
-          >
-            <v-icon start size="small">mdi-tray-arrow-down</v-icon>
-            {{ filteredAndSortedRequests.length > 0 ? 'Export' : 'Nothing to export' }}
-            <span v-if="filteredAndSortedRequests.length > 0" class="d-sr-only">{{ filteredAndSortedRequests.length }} requests as CSV</span>
-          </v-btn>
+          <ExportMenu type="request" :rows="filteredAndSortedRequests" :selected-ids="selectedIds" />
           <v-btn
             color="secondary"
             variant="flat"
@@ -161,6 +150,7 @@
             </div>
             <div class="d-flex align-center gap-2 flex-shrink-0">
               <StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending')" />
+              <ExportMenu type="request" :row="selectedRequest" />
               <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="selectedRequest = null"></v-btn>
             </div>
           </div>
@@ -620,7 +610,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
-import { buildRequestsCsv, downloadCsv } from '@/composables/requestCsvExport'
+import ExportMenu from '@/components/ExportMenu.vue'
 import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
@@ -849,16 +839,6 @@ const showActions = computed(() =>
     || selectedRequest.value.status === 'Responding'
   )
 )
-
-const exportCsv = () => {
-  const rows = filteredAndSortedRequests.value
-  if (rows.length === 0) return
-
-  const csv = buildRequestsCsv(rows, { itemId, requesterName, isWalkIn, requesterPhone, vehicleName, formatDateTime })
-  const stamp = new Date().toISOString().slice(0, 10)
-  const scope = filters.status === 'All' ? 'all' : filters.status.toLowerCase()
-  downloadCsv(csv, `serbis-requests-${scope}-${stamp}.csv`)
-}
 
 const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''

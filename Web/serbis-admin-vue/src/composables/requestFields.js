@@ -192,6 +192,7 @@ const SORTS = {
   newest: (t) => (a, b) => new Date(t.dateOf(b) || 0) - new Date(t.dateOf(a) || 0),
   oldest: (t) => (a, b) => new Date(t.dateOf(a) || 0) - new Date(t.dateOf(b) || 0),
   status: (t) => (a, b) => String(t.statusOf(a)).localeCompare(String(t.statusOf(b))) || new Date(t.dateOf(b) || 0) - new Date(t.dateOf(a) || 0),
+  none: () => () => 0, // keep the list's own order
   id: (t) => (a, b) => Number(t.idOf(a)) - Number(t.idOf(b)),
 }
 export const SORT_OPTIONS = [
@@ -205,12 +206,12 @@ export const SORT_OPTIONS = [
 export function prepareRows(type, rows, { sort = 'newest', from = '', to = '' } = {}) {
   const t = EXPORT_TYPES[type]
   const inRange = (r) => {
-    if (!from && !to) return true
+    if (!from && !to) { return true }
     const day = manilaDay(t.dateOf(r))
     return !!day && (!from || day >= from) && (!to || day <= to)
   }
 
-  return rows.filter(inRange).toSorted(SORTS[sort](t))
+  return rows.filter((r) => inRange(r)).toSorted(SORTS[sort](t))
 }
 
 /** `serbis-<type>-<range or today>.<ext>`, so a file says what it holds without opening it. */
