@@ -148,8 +148,8 @@
       >
         <template #item.filedAt="{ item }">
           <div class="text-body-2 font-weight-bold">{{ fmtFiled(item.filedAt) }}</div>
-          <div class="text-caption" :class="item.overdue ? 'text-error font-weight-bold' : 'text-medium-emphasis'">
-            {{ item.overdue ? item.overdueLabel : waitLabel(item.filedAt) }}
+          <div v-if="item.note" class="text-caption" :class="item.overdue ? 'text-error font-weight-bold' : 'text-medium-emphasis'">
+            {{ item.note }}
           </div>
         </template>
         <template #item.name="{ item }">
@@ -208,7 +208,7 @@ import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import { API_BASE } from '@/config/api'
-import { authHeaders, isBookingOverdue } from '@/composables/adminUi'
+import { authHeaders } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName, requesterPhone, requesterBarangay } from '@/composables/requestDisplay'
@@ -334,11 +334,10 @@ const fmtFiled = (ms) => new Date(ms).toLocaleString('en-PH', {
 })
 const fmtWhen = (value) => (value ? fmtFiled(new Date(value).getTime()) : '')
 
-const waitLabel = (ms) => {
-  const days = Math.floor((Date.now() - ms) / DAY_MS)
-  if (days >= 1) return `${days}d waiting`
-  const hours = Math.floor((Date.now() - ms) / 3_600_000)
-  return hours >= 1 ? `${hours}h waiting` : 'Just filed'
+// Only a Pending request is waiting on staff; later statuses have moved on.
+const waitNote = (status, ms) => {
+  if (status !== 'Pending') return ''
+  return `${Math.max(0, Math.floor((Date.now() - ms) / DAY_MS))}d waiting`
 }
 
 // due_date is a bare calendar date; new Date('2026-08-10') would parse as UTC
@@ -362,15 +361,16 @@ const serviceRow = (r) => {
     { label: 'Barangay', value: requesterBarangay(r) },
   ]
   if (ambulance && r.scheduled_at) details.push({ label: 'Scheduled for', value: fmtWhen(r.scheduled_at) })
+  const filedAt = new Date(r.created_at).getTime()
   return {
     key: `svc-${r.request_id}`,
     kind: ambulance ? 'ambulance' : 'service',
-    filedAt: new Date(r.created_at).getTime(),
+    filedAt,
     name: requesterName(r),
     type: r.service?.service_name || 'Other',
     status: r.status,
-    overdue: ambulance && isBookingOverdue(r.status, r.scheduled_at),
-    overdueLabel: 'Booking time has passed',
+    overdue: false,
+    note: waitNote(r.status, filedAt),
     details,
   }
 }
@@ -383,15 +383,17 @@ const borrowRow = (b) => {
     { label: 'Quantity', value: String(b.quantity ?? 1) },
   ]
   if (b.due_date) details.push({ label: 'Due back', value: b.due_date })
+  const filedAt = new Date(b.created_at).getTime()
+  const late = b.status === 'Released' && daysPastDue(b.due_date) > 0
   return {
     key: `bor-${b.borrow_id}`,
     kind: 'borrow',
-    filedAt: new Date(b.created_at).getTime(),
+    filedAt,
     name: requesterName(b),
     type: item,
     status: b.status,
-    overdue: daysPastDue(b.due_date) > 0,
-    overdueLabel: `${daysPastDue(b.due_date)}d overdue`,
+    overdue: late,
+    note: late ? `${daysPastDue(b.due_date)}d overdue` : waitNote(b.status, filedAt),
     details,
   }
 }
