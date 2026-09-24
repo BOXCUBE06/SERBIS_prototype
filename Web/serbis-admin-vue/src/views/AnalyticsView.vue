@@ -122,6 +122,11 @@
       </div>
     </v-alert>
 
+    <v-tabs v-model="tab" color="primary" class="mb-4">
+      <v-tab v-for="t in TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">{{ t.title }}</v-tab>
+    </v-tabs>
+
+    <template v-if="tab === 'demand'">
     <!-- 1. When demand arrives, split into two ordinary bar charts instead of
          a day x hour heatmap: which weekday, and which quarter of the day
          (see AnalyticsReport::demandByWeekdayHour / timeBlockFor). -->
@@ -172,9 +177,7 @@
     </v-row>
 
     <v-row class="mb-2">
-      <!-- 2. Seasonality and mix. Months are ordered discrete buckets whose
-           segments sum to a real total, which is what a stacked bar is for. -->
-      <v-col cols="12" lg="7">
+      <v-col cols="12">
         <AnalyticsSection
           title="Requests by month and service"
           :loading="loading"
@@ -232,10 +235,42 @@
         </AnalyticsSection>
       </v-col>
 
+    </v-row>
+    </template>
+
+    <template v-if="tab === 'barangays'">
+    <v-row>
+      <!-- 9. Barangays: the map and the residents-vs-requests ranking are one
+           set of numbers, so one section. Built from the full barangay
+           roster, so a barangay with accounts but no requests still shows at
+           zero. No barangay filter — narrowing the one cross-barangay
+           comparison to one barangay would defeat its purpose. -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="Barangays"
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && barangayCoverage.barangays.length === 0"
+          empty-text="No barangays configured"
+          @retry="fetchReport"
+        >
+          <BarangayDemand
+            :barangays="barangayCoverage.barangays"
+            :walk-in="barangayCoverage.walkIn"
+            :total-residents="barangayCoverage.totalResidents"
+            :total-requests="barangayCoverage.totalRequests"
+          />
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+    </template>
+
+    <template v-if="tab === 'operations'">
+    <v-row class="mb-2">
       <!-- 3. Are requests being closed, or accumulating? Proportion is the
            question, so the bars are normalised to 100%. Status colours are
            the app's own — reserved for state, never reused as series hues. -->
-      <v-col cols="12" lg="5">
+      <v-col cols="12">
         <AnalyticsSection
           title="Outcomes by month"
           :loading="loading"
@@ -288,6 +323,9 @@
       </v-col>
     </v-row>
 
+    </template>
+
+    <template v-if="tab === 'equipment'">
     <v-row>
       <!-- 6. Equipment utilization. Built from the full catalogue, so a
            never-borrowed item shows as a zero row rather than not showing at
@@ -380,30 +418,8 @@
       </v-col>
     </v-row>
 
-    <v-row>
-      <!-- 9. Barangays: the map and the residents-vs-requests ranking are one
-           set of numbers, so one section. Built from the full barangay
-           roster, so a barangay with accounts but no requests still shows at
-           zero. No barangay filter — narrowing the one cross-barangay
-           comparison to one barangay would defeat its purpose. -->
-      <v-col cols="12">
-        <AnalyticsSection
-          title="Barangays"
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && barangayCoverage.barangays.length === 0"
-          empty-text="No barangays configured"
-          @retry="fetchReport"
-        >
-          <BarangayDemand
-            :barangays="barangayCoverage.barangays"
-            :walk-in="barangayCoverage.walkIn"
-            :total-residents="barangayCoverage.totalResidents"
-            :total-requests="barangayCoverage.totalRequests"
-          />
-        </AnalyticsSection>
-      </v-col>
-    </v-row>
+    </template>
+
   </v-container>
 </template>
 
@@ -460,6 +476,14 @@ const ALL = 'all'
  */
 const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#19a371', '#be8100', '#d16f94', '#008300', '#4a3aa7', '#e34948']
 const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+
+const TABS = [
+  { value: 'demand', title: 'Demand' },
+  { value: 'barangays', title: 'Barangays' },
+  { value: 'operations', title: 'Operations' },
+  { value: 'equipment', title: 'Equipment & Vehicles' },
+]
+const tab = ref('demand')
 
 const preset = ref('quarter')
 const volumeView = ref('chart')
@@ -581,6 +605,7 @@ onMounted(async () => {
   // first payload has rendered, and the app scrolls an inner wrapper rather
   // than the document, so the native jump has nothing to move.
   if (window.location.hash === '#open-request-age') {
+    tab.value = 'operations'
     await nextTick()
     document.querySelector('#open-request-age')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
