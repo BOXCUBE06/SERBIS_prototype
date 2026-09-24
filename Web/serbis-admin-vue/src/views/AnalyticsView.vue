@@ -329,19 +329,14 @@
     </v-row>
 
     <v-row>
-      <!-- 7. Equipment returns: on-time vs overdue. Deliberately calm: this is a
-           standing operational fact, not an incident, so overdue reads in
-           the same neutral tiles as everything else on the page rather than
-           an alarm colour. currentlyOverdue ignores the date filter on
-           purpose (see AnalyticsReport::loanTurnaround) — a borrowed item
-           that went out last quarter and never came back must not disappear
-           because the filter bar says "this month". -->
+      <!-- 7. Equipment returns: on-time vs late, calm neutral tiles rather than
+           an alarm colour. Overdue loans still out are listed on the Dashboard. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment returns"
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && loans.returnedLate.of === 0 && loans.currentlyOverdue === 0"
+          :empty="!loading && !error && loans.returnedLate.of === 0"
           empty-text="No equipment returned in this range"
           @retry="fetchReport"
         >
@@ -355,18 +350,12 @@
                 {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned in this range
               </div>
             </div>
-
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Currently overdue</div>
-              <div class="stat-value text-high-emphasis">{{ loans.currentlyOverdue }}</div>
-              <div class="text-caption text-medium-emphasis">As of today, not scoped to this range</div>
-            </div>
           </div>
         </AnalyticsSection>
       </v-col>
     </v-row>
 
-    <v-row>
+    <v-row v-if="loading || error || selectedVehicleTrips.some(v => v.trips > 0)">
       <!-- 8. Most used vehicles, over the page's date range. No barangay/service
            filter: the trip log carries no resident_id and every conduction
            request is the same one dispatch service, so neither has anything
@@ -376,9 +365,7 @@
           title="Most used vehicles"
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && selectedVehicleTrips.every(v => v.trips === 0)"
-          empty-text="No dispatch trips in this range"
-          @retry="fetchReport"
+                    @retry="fetchReport"
         >
           <div :style="{ height: Math.max(120, selectedVehicleTrips.length * 40) + 'px' }">
             <Bar :data="vehicleTripsChartData" :options="horizontalBarOptions" />
@@ -417,35 +404,6 @@
         </AnalyticsSection>
       </v-col>
     </v-row>
-
-    <v-row>
-      <!-- 10. App adoption. Same base query and month rollup as sections 2
-           and 3, labelled by origin instead of service or status — respects
-           the barangay filter exactly as that shared query already does: a
-           walk-in carries no barangay, so filtering by one legitimately
-           zeroes the walk-in series rather than hiding the section. -->
-      <v-col cols="12">
-        <AnalyticsSection
-          title="App adoption"
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && adoption.total === 0"
-          empty-text="No requests in this range"
-          @retry="fetchReport"
-        >
-          <div style="height: 260px;">
-            <Bar :data="adoptionChartDataNormalised" :options="percentStackedOptions" />
-            <ChartDataTable
-              caption="App adoption — request counts by origin (the chart shows share, this table the real counts)"
-              category-label="Month"
-              :labels="adoption.labels"
-              :series="adoption.series"
-            />
-          </div>
-        </AnalyticsSection>
-      </v-col>
-    </v-row>
-
   </v-container>
 </template>
 
@@ -667,13 +625,11 @@ const equipmentUtilization = computed(() => report.value?.equipmentUtilization ?
 const loans = computed(() => report.value?.loans ?? {
   daysOut: { medianDays: null, n: 0 },
   returnedLate: { count: 0, of: 0, percent: null },
-  currentlyOverdue: 0,
 })
 const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
-const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
 
 const seriesPalette = computed(() => (isDark.value ? SERIES_DARK : SERIES_LIGHT))
 
@@ -835,28 +791,6 @@ const outcomeChartDataNormalised = computed(() => {
     labels: outcomes.value.labels,
     datasets: outcomes.value.series.map(s => ({
       ...stackedDataset(s, statusColor(s.label)),
-      data: s.data.map((v, i) => (totals[i] ? (v / totals[i]) * 100 : 0)),
-      rawData: s.data,
-    })),
-  }
-})
-
-/** App vs Walk-in is a binary origin, not a status and not a categorical series — its own two-colour mapping rather than reusing either palette. */
-const adoptionColor = (label) => {
-  const c = themeColors.value
-
-  return label === 'App' ? c.primary : (isDark.value ? '#94A3B8' : CANCELLED_COLOR)
-}
-
-const adoptionChartDataNormalised = computed(() => {
-  const totals = adoption.value.labels.map((_, i) =>
-    adoption.value.series.reduce((sum, s) => sum + (s.data[i] || 0), 0)
-  )
-
-  return {
-    labels: adoption.value.labels,
-    datasets: adoption.value.series.map(s => ({
-      ...stackedDataset(s, adoptionColor(s.label)),
       data: s.data.map((v, i) => (totals[i] ? (v / totals[i]) * 100 : 0)),
       rawData: s.data,
     })),
