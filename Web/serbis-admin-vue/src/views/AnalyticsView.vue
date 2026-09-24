@@ -367,32 +367,19 @@
     </v-row>
 
     <v-row>
-      <!-- 8. Most used vehicles. Its own Today/This week/This month toggle,
-           independent of the page's shared date filter (see
-           AnalyticsReport::mostUsedVehicles — all three periods come back in
-           one payload, so the toggle never requeries). No barangay/service
-           filter — the trip log carries no resident_id at all (filed by
-           MDRRMO staff, not a resident) and every conduction request is the
-           same one dispatch service, so neither filter has anything to
-           narrow. Only ambulances are actually dispatched through this flow;
-           boats, fire trucks and rescue vehicles carry no trips here. -->
+      <!-- 8. Most used vehicles, over the page's date range. No barangay/service
+           filter: the trip log carries no resident_id and every conduction
+           request is the same one dispatch service, so neither has anything
+           to narrow. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Most used vehicles"
           :loading="loading"
           :error="error"
           :empty="!loading && !error && selectedVehicleTrips.every(v => v.trips === 0)"
-          empty-text="No dispatch trips in this period"
+          empty-text="No dispatch trips in this range"
           @retry="fetchReport"
         >
-          <template #actions>
-            <v-btn-toggle v-model="vehiclePeriod" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
-              <v-btn value="today" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">Today</v-btn>
-              <v-btn value="week" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This week</v-btn>
-              <v-btn value="month" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This month</v-btn>
-            </v-btn-toggle>
-          </template>
-
           <div :style="{ height: Math.max(120, selectedVehicleTrips.length * 40) + 'px' }">
             <Bar :data="vehicleTripsChartData" :options="horizontalBarOptions" />
             <ChartDataTable
@@ -407,50 +394,26 @@
     </v-row>
 
     <v-row>
-      <!-- 9. Barangay: residents vs requests. Built from the full barangay
-           roster, so an account-but-no-request barangay and a neither
-           barangay both still show at zero rather than dropping out. No
-           barangay filter — filtering the one cross-barangay comparison
-           down to one barangay would defeat its purpose. -->
+      <!-- 9. Barangays: the map and the residents-vs-requests ranking are one
+           set of numbers, so one section. Built from the full barangay
+           roster, so a barangay with accounts but no requests still shows at
+           zero. No barangay filter — narrowing the one cross-barangay
+           comparison to one barangay would defeat its purpose. -->
       <v-col cols="12">
         <AnalyticsSection
-          title="Barangay: residents vs requests"
+          title="Barangays"
           :loading="loading"
           :error="error"
           :empty="!loading && !error && barangayCoverage.barangays.length === 0"
           empty-text="No barangays configured"
           @retry="fetchReport"
         >
-          <div class="table-scroll">
-            <table class="data-table text-body-2">
-              <thead>
-                <tr>
-                  <th class="text-left" scope="col">Barangay</th>
-                  <th class="text-right" scope="col">Residents</th>
-                  <th class="text-right" scope="col">Requests</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in barangayCoverage.barangays" :key="row.name">
-                  <td>{{ row.name }}</td>
-                  <td class="text-right" :class="{ 'text-medium-emphasis': row.residents === 0 }">{{ row.residents }}</td>
-                  <td class="text-right" :class="{ 'text-medium-emphasis': row.requests === 0 }">{{ row.requests }}</td>
-                </tr>
-                <tr v-if="barangayCoverage.walkIn > 0">
-                  <td class="text-medium-emphasis">Walk-in (no barangay)</td>
-                  <td class="text-right text-medium-emphasis">—</td>
-                  <td class="text-right">{{ barangayCoverage.walkIn }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="text-caption text-medium-emphasis mt-3">
-            {{ barangayCoverage.totalResidents.toLocaleString() }} registered
-            {{ barangayCoverage.totalResidents === 1 ? 'resident' : 'residents' }}
-            &bull; {{ barangayCoverage.totalRequests.toLocaleString() }}
-            {{ barangayCoverage.totalRequests === 1 ? 'request' : 'requests' }} in this range
-          </div>
+          <BarangayDemand
+            :barangays="barangayCoverage.barangays"
+            :walk-in="barangayCoverage.walkIn"
+            :total-residents="barangayCoverage.totalResidents"
+            :total-requests="barangayCoverage.totalRequests"
+          />
         </AnalyticsSection>
       </v-col>
     </v-row>
@@ -483,10 +446,6 @@
       </v-col>
     </v-row>
 
-    <!-- Live all-time picture (map, trend, volume) moved here from the Dashboard,
-         which is now the triage queue. Ignores the filter bar above: it reads
-         its own endpoint with its own period toggles. -->
-    <DashboardInsights class="mt-2" />
   </v-container>
 </template>
 
@@ -500,7 +459,7 @@ import { Bar } from 'vue-chartjs'
 import PageHeader from '@/components/PageHeader.vue'
 import AnalyticsSection from '@/components/AnalyticsSection.vue'
 import ChartDataTable from '@/components/ChartDataTable.vue'
-import DashboardInsights from '@/components/DashboardInsights.vue'
+import BarangayDemand from '@/components/BarangayDemand.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
@@ -710,9 +669,7 @@ const loans = computed(() => report.value?.loans ?? {
   returnedLate: { count: 0, of: 0, percent: null },
   currentlyOverdue: 0,
 })
-const vehicleTrips = computed(() => report.value?.vehicleTrips ?? { today: [], week: [], month: [] })
-const vehiclePeriod = ref('week')
-const selectedVehicleTrips = computed(() => vehicleTrips.value[vehiclePeriod.value] ?? [])
+const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })

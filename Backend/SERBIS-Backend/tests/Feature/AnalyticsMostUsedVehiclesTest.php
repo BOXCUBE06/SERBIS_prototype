@@ -110,6 +110,19 @@ class AnalyticsMostUsedVehiclesTest extends TestCase
         $this->assertSame(1, $today['trips']);
     }
 
+    public function test_range_follows_the_date_filter(): void
+    {
+        // 09:00 Manila, 2 Sep — inside the range. 25 Aug — outside it.
+        $this->trip([], '2026-09-02 01:00:00');
+        $this->trip([], '2026-08-25 01:00:00');
+
+        $range = $this->getJson('/api/admin/analytics?preset=custom&from=2026-09-01&to=2026-09-30')
+            ->assertOk()
+            ->json()['vehicleTrips']['range'];
+
+        $this->assertSame(1, collect($range)->firstWhere('label', 'Ambulance 1')['trips']);
+    }
+
     public function test_this_week_starts_monday_manila(): void
     {
         // 09:00 Manila, Monday 7 Sep — inside this week.
