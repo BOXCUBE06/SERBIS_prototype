@@ -101,6 +101,17 @@ class SystemLogController extends Controller
             return "{$what} not delivered: {$who} has no registered device. Follow up by phone ({$module} ID: {$log->auditable_id})";
         }
 
+        if (in_array($action, ['printed', 'exported'], true)) {
+            $what = $log->new_values ?? [];
+            $count = (int) ($what['count'] ?? 1);
+            $range = isset($what['from']) || isset($what['to'])
+                ? ' ('.($what['from'] ?? 'start').' to '.($what['to'] ?? 'today').')'
+                : '';
+
+            return ucfirst($action)." {$count} ".($what['type'] ?? strtolower($module)).' record'.($count === 1 ? '' : 's')
+                .' as '.strtoupper($what['format'] ?? '').$range;
+        }
+
         if ($action === 'created') {
             return "Created new {$module} (ID: {$log->auditable_id})";
         }

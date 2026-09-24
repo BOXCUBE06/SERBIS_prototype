@@ -10,6 +10,7 @@ use App\Http\Controllers\ConductionRequestController;
 use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\ExportLogController;
 use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PhoneChangeController;
@@ -197,6 +198,15 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // never did and 500'd on every call; it now points at real code. Same
     // admin-only group as the dashboard.
     Route::get('/admin/analytics', [AnalyticsController::class, 'report'])->middleware('section:analytics');
+
+    // The panel prints and exports in the browser; these only record that it
+    // happened. One route per record type so each is gated by the section that
+    // owns the list, and throttled per account (the 'export-log' limiter).
+    foreach (['request' => 'requests', 'booking' => 'ambulance', 'trip' => 'ambulance', 'borrowing' => 'borrowings', 'vehicle' => 'vehicles'] as $type => $section) {
+        Route::post("/admin/export-logs/{$type}", [ExportLogController::class, 'store'])
+            ->defaults('type', $type)
+            ->middleware(["section:{$section}", 'throttle:export-log']);
+    }
 
     // Info Materials Administrative CRUD Routes
     Route::middleware('section:files')->group(function () {

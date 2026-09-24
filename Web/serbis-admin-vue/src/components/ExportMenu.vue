@@ -60,6 +60,7 @@
 import { computed, reactive, ref } from 'vue'
 import ExportDialog from '@/components/ExportDialog.vue'
 import { EXPORT_TYPES, prepareRows } from '@/composables/requestFields'
+import { logExport } from '@/composables/exportLog'
 import { exportRows } from '@/composables/requestExport'
 import { printRows } from '@/composables/requestPrint'
 
@@ -89,13 +90,22 @@ const open = (mode, action) => {
 const tell = (text, color = 'error') => Object.assign(notice, { open: true, text, color })
 
 // The dialog's choices, applied to what it was opened for.
-async function run(options) {
+async function run(options, scope = dialog.mode) {
   const rows = prepareRows(props.type, targetRows.value, options)
   if (!rows.length) { return tell('Nothing to export in that date range.') }
 
   busy.value = true
   try {
     if (options.format === 'print') { await printRows(props.type, rows, options) } else { await exportRows(props.type, rows, options) }
+    logExport(props.type, {
+      action: options.format === 'print' ? 'print' : 'export',
+      format: options.format,
+      scope,
+      count: rows.length,
+      ids: rows.map((r) => EXPORT_TYPES[props.type].idOf(r)),
+      from: options.from,
+      to: options.to,
+    })
   } catch (error) {
     tell(error.message || 'Could not prepare the file.')
   } finally {
@@ -104,5 +114,5 @@ async function run(options) {
 }
 
 // No customize step: every column, current order.
-const quick = (format) => run({ columns: EXPORT_TYPES[props.type].fields.map((x) => x.key), format, sort: 'none' })
+const quick = (format) => run({ columns: EXPORT_TYPES[props.type].fields.map((x) => x.key), format, sort: 'none' }, 'all')
 </script>
