@@ -102,6 +102,8 @@
          waited, not by which form it came from; the tabs cut it back apart
          the way the sidebar does. Only open items are listed here: the full
          history lives on each page. -->
+    <v-row>
+      <v-col cols="12" lg="8">
     <v-card elevation="0" rounded="xl" class="soft-card queue-card">
       <v-card-item class="pb-0">
         <div class="d-flex justify-space-between align-center flex-wrap gap-2">
@@ -198,6 +200,11 @@
         </template>
       </v-data-table>
     </v-card>
+      </v-col>
+      <v-col cols="12" lg="4">
+        <DashboardRail :rows="rows" :vehicles="vehicles" />
+      </v-col>
+    </v-row>
 
   </v-container>
 </template>
@@ -207,6 +214,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import DashboardRail from '@/components/DashboardRail.vue'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
@@ -227,6 +235,7 @@ const kpiStats = ref([])
 const systemLogs = ref([])
 const followUps = ref([])
 const rows = ref([])
+const vehicles = ref(null)
 const loading = ref(true)
 const loadError = ref('')
 // Which lists arrived. A 403 or 500 on one must not read as "nothing open".
@@ -369,6 +378,8 @@ const serviceRow = (r) => {
     name: requesterName(r),
     type: r.service?.service_name || 'Other',
     status: r.status,
+    residentId: r.resident_id,
+    unit: r.vehicle?.unit_identifier,
     overdue: false,
     note: waitNote(r.status, filedAt),
     details,
@@ -392,6 +403,9 @@ const borrowRow = (b) => {
     name: requesterName(b),
     type: item,
     status: b.status,
+    residentId: b.resident_id,
+    phone: requesterPhone(b),
+    daysLate: daysPastDue(b.due_date),
     overdue: late,
     note: late ? `${daysPastDue(b.due_date)}d overdue` : waitNote(b.status, filedAt),
     details,
@@ -416,10 +430,11 @@ const fetchDashboardData = async () => {
   loading.value = true
   loadError.value = ''
   try {
-    const [dash, services, borrowings] = await Promise.all([
+    const [dash, services, borrowings, fleet] = await Promise.all([
       fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() }),
       fetchList('/admin/service-requests'),
       fetchList('/borrowings'),
+      fetchList('/vehicles'),
     ])
     if (!dash.ok) throw new Error('Network response error')
 
@@ -432,6 +447,7 @@ const fetchDashboardData = async () => {
       ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
       ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
     ]
+    vehicles.value = fleet
     loaded.services = services !== null
     loaded.borrowings = borrowings !== null
     const missing = [!loaded.services && 'resident requests and ambulance bookings', !loaded.borrowings && 'equipment loans'].filter(Boolean)
