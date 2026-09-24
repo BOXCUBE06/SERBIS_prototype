@@ -75,9 +75,9 @@
     <v-row v-if="loading" class="mb-2">
       <v-col cols="12"><v-skeleton-loader type="card" height="88"></v-skeleton-loader></v-col>
     </v-row>
-    <div v-else-if="kpiStats.length > 0" class="kpi-grid mb-4" :style="{ '--kpi-count': kpiStats.length }">
+    <div v-else-if="cards.length > 0" class="kpi-grid mb-4" :style="{ '--kpi-count': cards.length }">
       <v-card
-        v-for="(stat, i) in kpiStats" :key="stat.title"
+        v-for="(stat, i) in cards" :key="stat.title"
         elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
         :class="{ 'cursor-pointer': isActionable(stat), 'kpi-tile--active': isActiveKpi(stat) }"
         :style="{ '--stagger-i': i }"
@@ -92,7 +92,7 @@
         </v-avatar>
         <div class="min-width-0">
           <div class="text-h6 font-weight-black lh-1">{{ displayValues[stat.title] ?? stat.value }}</div>
-          <div class="text-caption font-weight-bold text-medium-emphasis kpi-label" :title="stat.title">{{ stat.title }}</div>
+          <div class="text-caption font-weight-bold text-medium-emphasis kpi-label" :title="stat.title">{{ stat.label || stat.title }}</div>
         </div>
       </v-card>
     </div>
@@ -229,15 +229,21 @@ const followUps = ref([])
 const rows = ref([])
 const loading = ref(true)
 const loadError = ref('')
+// Which lists arrived. A 403 or 500 on one must not read as "nothing open".
+const loaded = reactive({ services: false, borrowings: false })
 
 // Which queue each request-counting card narrows to. Cards not listed here
 // (residents, vehicles) count something that is not a request and keep
 // opening their own page through `route`.
+// `source` is the list the card is counted from, so a card and the tab it
+// opens always use the same rows. The server's own figure differs: it counts
+// ambulance bookings inside "Pending Service Requests" and counts ambulance
+// trips not yet departed, which is not what the queue lists.
 const KPI_FILTERS = {
-  'Pending Service Requests': { tab: 'service', status: 'Pending' },
-  'Pending Borrow Requests': { tab: 'borrow', status: 'Pending' },
-  'Pending Ambulance Requests': { tab: 'ambulance', status: null },
-  'Equipment Overdue': { tab: 'overdue', status: null },
+  'Pending Service Requests': { tab: 'service', status: 'Pending', source: 'services' },
+  'Pending Borrow Requests': { tab: 'borrow', status: 'Pending', source: 'borrowings' },
+  'Pending Ambulance Requests': { tab: 'ambulance', status: null, source: 'services', label: 'Open Ambulance Requests' },
+  'Equipment Overdue': { tab: 'overdue', status: null, source: 'borrowings' },
 }
 
 const QUEUE_TABS = [
@@ -316,10 +322,6 @@ const animateValue = (key, target) => {
   }
   requestAnimationFrame(step)
 }
-
-watch(kpiStats, (stats) => {
-  for (const stat of stats) animateValue(stat.title, stat.value)
-})
 
 // ---- The queue ----------------------------------------------------------
 
@@ -428,7 +430,10 @@ const fetchDashboardData = async () => {
       ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
       ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
     ]
-    if (services === null && borrowings === null) loadError.value = 'The request list could not be loaded.'
+    loaded.services = services !== null
+    loaded.borrowings = borrowings !== null
+    const missing = [!loaded.services && 'resident requests and ambulance bookings', !loaded.borrowings && 'equipment loans'].filter(Boolean)
+    if (missing.length > 0) loadError.value = `Could not load ${missing.join(' or ')}. The list below is incomplete.`
   } catch (error) {
     console.error('Failed to load dashboard:', error)
     loadError.value = 'The dashboard could not be loaded.'
@@ -448,6 +453,18 @@ const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.val
 const visibleRows = computed(() =>
   rowsForTab(queueTab.value).filter((r) => !statusFilter.value || r.status === statusFilter.value)
 )
+
+// The server's cards, with the request-counting ones recounted from the queue.
+const cards = computed(() => kpiStats.value.map((stat) => {
+  const f = KPI_FILTERS[stat.title]
+  if (!f || !loaded[f.source]) return stat
+  const count = rowsForTab(f.tab).filter((r) => !f.status || r.status === f.status).length
+  return { ...stat, value: String(count), label: f.label }
+}))
+
+watch(cards, (stats) => {
+  for (const stat of stats) animateValue(stat.title, stat.value)
+})
 
 onMounted(fetchDashboardData)
 </script>
