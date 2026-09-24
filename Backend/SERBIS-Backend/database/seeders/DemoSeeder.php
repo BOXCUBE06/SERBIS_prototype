@@ -199,6 +199,8 @@ class DemoSeeder extends Seeder
             $this->flushLogs();
         });
 
+        $this->call(DemoResponderSeeder::class);
+
         Storage::disk(config('filesystems.uploads.private'))->put(
             self::PLACEHOLDER,
             base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
