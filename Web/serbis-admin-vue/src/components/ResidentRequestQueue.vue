@@ -89,7 +89,7 @@
         </template>
 
         <template v-slot:item.request_id="{ item }">
-          <span class="text-truncate d-block row-date">{{ item.request_id }}</span>
+          <span class="text-truncate d-block row-date">{{ transactionNo(item.request_id) }}</span>
         </template>
 
         <template v-slot:item._dateSubmitted="{ item }">
@@ -221,6 +221,15 @@
                 >
                   {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
                 </v-btn>
+                <v-btn
+                  color="primary"
+                  variant="outlined"
+                  class="text-none font-weight-bold"
+                  height="40"
+                  @click="openResponderModal"
+                >
+                  {{ (selectedRequest.responders?.length || 0) > 0 ? `Responders (${selectedRequest.responders.length})` : 'Select Responders' }}
+                </v-btn>
                 <v-btn color="error" variant="text" class="text-none font-weight-bold" :class="{ 'ml-auto': isProgramRequest(selectedRequest) }" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
@@ -277,7 +286,7 @@
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.request_id }}</div>
+                <div class="font-weight-medium text-body-2">{{ transactionNo(selectedRequest.request_id) }}</div>
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
@@ -415,6 +424,43 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="responderModal.isOpen" max-width="600">
+      <v-card rounded="lg" elevation="6">
+        <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
+          <span class="text-h6 font-weight-bold">Select Responders</span>
+          <v-btn icon="mdi-close" variant="text" density="comfortable" @click="responderModal.isOpen = false"></v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
+          <v-alert v-if="responderModal.error" type="error" variant="tonal" density="compact" class="ma-4">{{ responderModal.error }}</v-alert>
+
+          <v-list v-if="responderPickerList.length > 0" bg-color="transparent" class="py-0">
+            <v-list-item
+              v-for="r in responderPickerList"
+              :key="r.responder_id"
+              class="vehicle-option px-4 py-3"
+              :disabled="responderModal.loading || (r.status !== 'available' && !responderModal.selectedIds.has(r.responder_id))"
+              @click="toggleResponder(r)"
+            >
+              <template v-slot:prepend>
+                <v-checkbox-btn :model-value="responderModal.selectedIds.has(r.responder_id)" density="compact"></v-checkbox-btn>
+              </template>
+
+              <v-list-item-title class="font-weight-bold text-body-1">{{ r.name }}</v-list-item-title>
+              <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
+                {{ r.position }}<template v-if="r.status !== 'available'"> &bull; {{ r.status }}</template>
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+          <div v-else class="pa-6 text-center text-medium-emphasis">
+            <v-icon size="48" class="mb-3">mdi-account-off-outline</v-icon>
+            <div class="text-h6 font-weight-bold">No Responders Available</div>
+            <div class="text-body-2">Every responder is deployed elsewhere or off duty.</div>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="reasonDialog.open" max-width="440" persistent @after-leave="clearReason">
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
@@ -542,15 +588,30 @@
           ></v-autocomplete>
 
           <template v-else>
-            <v-text-field
-              v-model="createDialog.form.walk_in_name"
-              label="Full name"
-              placeholder="e.g. Juan Dela Cruz"
-              variant="outlined"
-              density="comfortable"
-              class="mb-2"
-              :rules="[required]"
-            ></v-text-field>
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.walk_in_first_name"
+                  label="First name"
+                  placeholder="e.g. Juan"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                  :rules="[required, nameFormat]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.walk_in_last_name"
+                  label="Last name"
+                  placeholder="e.g. Dela Cruz"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                  :rules="[required, nameFormat]"
+                ></v-text-field>
+              </v-col>
+            </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
               label="Contact number"
@@ -558,7 +619,7 @@
               variant="outlined"
               density="comfortable"
               class="mb-2"
-              :rules="[required]"
+              :rules="[required, phoneFormat]"
             ></v-text-field>
           </template>
 
@@ -611,7 +672,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection } from '@/composables/requestDisplay'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
@@ -638,16 +699,22 @@ const isProgramRequest = (r) => r?.service?.category === 'programs'
 
 const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
 const vehicleModal = ref({ isOpen: false })
+const responderModal = ref({ isOpen: false, loading: false, error: '', selectedIds: new Set() })
 const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+// Letters (incl. accented/Ñ), spaces, hyphens, apostrophes, periods — no digits.
+const nameFormat = (v) => !v || /^[\p{L}.'-]+(?:\s[\p{L}.'-]+)*$/u.test(v.trim()) || 'Letters only'
+// Same shapes ServiceRequestController's PhoneNumber::REGEX accepts.
+const phoneFormat = (v) => !v || /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(v.trim()) || 'Use 09XXXXXXXXX'
 
 const emptyCreateForm = () => ({
   resident_id: null,
-  walk_in_name: '',
+  walk_in_first_name: '',
+  walk_in_last_name: '',
   walk_in_contact_number: '',
   service_id: null,
   description: '',
@@ -673,7 +740,7 @@ const openCreateDialog = () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, listAbortController, fetchData, fetchRequests, selectRequest } =
+const { requests, vehicles, residents, services, responders, listAbortController, fetchData, fetchRequests, selectRequest } =
   useRequestFetch({ isAmbulance: false, getHeaders, initialLoad, apiError, formData, selectedRequest, loadAttachments })
 
 const reasonDialog = ref(emptyReasonDialog())
@@ -767,10 +834,10 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Transaction No.', key: 'request_id', width: 12 },
+    { title: 'Transaction No.', key: 'request_id', width: 8 },
     { title: 'Submitted', key: '_dateSubmitted', width: 12 },
     { title: 'Status', key: 'status', width: 9, sortable: false },
-    { title: 'Requester', key: '_requesterName', width: 16 },
+    { title: 'Requester', key: '_requesterName', width: 20 },
     { title: 'Phone', key: '_phone', width: 11 },
     { title: 'Barangay', key: '_barangay', width: 12 },
     { title: 'Service', key: '_secondary', width: 12 },
@@ -792,6 +859,53 @@ const availableVehicles = computed(() => {
     v.status === 'Available' && v.type !== 'Ambulance' && (allowed.length === 0 || allowed.includes(v.type)),
   )
 })
+
+// Available responders, plus whichever are already on this request (so an
+// admin removing one sees who they are removing, and toggling a different
+// row's checkbox never silently drops one just by being absent from the list).
+const responderPickerList = computed(() => {
+  const assignedIds = responderModal.value.selectedIds
+  return responders.value.filter(r => r.status === 'available' || assignedIds.has(r.responder_id))
+})
+
+const openResponderModal = () => {
+  const assigned = selectedRequest.value?.responders || []
+  responderModal.value = {
+    isOpen: true,
+    loading: false,
+    error: '',
+    selectedIds: new Set(assigned.map(r => r.responder_id)),
+  }
+}
+
+const toggleResponder = async (responder) => {
+  const { selectedIds } = responderModal.value
+  const next = new Set(selectedIds)
+  if (next.has(responder.responder_id)) next.delete(responder.responder_id)
+  else next.add(responder.responder_id)
+
+  responderModal.value.loading = true
+  responderModal.value.error = ''
+  try {
+    const res = await fetch(`${API_BASE}/service-requests/${itemId(selectedRequest.value)}/responders`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ responder_ids: Array.from(next) }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const firstError = data.errors ? Object.values(data.errors)[0]?.[0] : null
+      throw new Error(firstError || data.message || 'Failed to update responders')
+    }
+    responderModal.value.selectedIds = next
+    selectedRequest.value.responders = data.responders
+    await fetchRequests()
+  } catch (error) {
+    responderModal.value.error = error.message
+  } finally {
+    responderModal.value.loading = false
+  }
+}
 
 const vehicleTypesByService = ref({})
 const fetchVehicleTypes = async () => {
@@ -858,9 +972,19 @@ const submitWalkIn = async () => {
     createDialog.value.error = 'Pick a Head of the Family'
     return
   }
-  if (!isResident && (!form.walk_in_name.trim() || !form.walk_in_contact_number.trim())) {
-    createDialog.value.error = 'Name and contact number are required for someone with no account'
-    return
+  if (!isResident) {
+    if (!form.walk_in_first_name.trim() || !form.walk_in_last_name.trim() || !form.walk_in_contact_number.trim()) {
+      createDialog.value.error = 'Name and contact number are required for someone with no account'
+      return
+    }
+    if (phoneFormat(form.walk_in_contact_number) !== true) {
+      createDialog.value.error = 'Enter a valid contact number (e.g. 09171234567)'
+      return
+    }
+    if (nameFormat(form.walk_in_first_name) !== true || nameFormat(form.walk_in_last_name) !== true) {
+      createDialog.value.error = 'Names may only contain letters'
+      return
+    }
   }
   if (!form.service_id) {
     createDialog.value.error = 'Pick a service'
@@ -878,7 +1002,7 @@ const submitWalkIn = async () => {
     if (isResident) {
       body.append('resident_id', form.resident_id)
     } else {
-      body.append('walk_in_name', form.walk_in_name.trim())
+      body.append('walk_in_name', `${form.walk_in_first_name.trim()} ${form.walk_in_last_name.trim()}`)
       body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
     }
     body.append('service_id', form.service_id)

@@ -10,6 +10,8 @@ const Map<String, (String, String)> _strings = {
   'common.calling': ('Calling', 'Tumatawag sa'),
   'common.close': ('Close', 'Isara'),
 
+  'request.responders_heading': ('Responders', 'Mga Tumutugon'),
+
   'timeline.submitted': ('Request submitted', 'Naisumite ang kahilingan'),
   'timeline.review': ('Under review by MDRRMO', 'Sinusuri ng MDRRMO'),
   'timeline.booked': ('Booked by MDRRMO', 'Nakabook sa MDRRMO'),

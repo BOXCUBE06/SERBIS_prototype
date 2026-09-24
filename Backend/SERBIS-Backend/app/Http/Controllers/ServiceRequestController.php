@@ -6,6 +6,7 @@ use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\Resident;
+use App\Models\Responder;
 use App\Models\Service;
 use App\Models\ServiceAudience;
 use App\Models\ServiceRequest;
@@ -286,7 +287,7 @@ class ServiceRequestController extends Controller
         // conductionRequests.people: C5's bridge — the Bookings queue's
         // Responding row needs its linked trip record (and who is driving
         // it) without a second round trip per row.
-        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people'])
+        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people', 'responders'])
             ->latest();
 
         // Only the rows the admin's sections cover: Resident Requests and
@@ -314,10 +315,12 @@ class ServiceRequestController extends Controller
             // internal_notes is the operator-only scratch pad (see its migration) —
             // hidden here rather than on the model, since adminIndex() and this
             // same method's admin branch above both need it visible.
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin'])
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'responders'])
                 ->where('resident_id', $residentId)
                 ->get()
                 ->makeHidden('internal_notes');
+
+            $serviceRequests->each(fn (ServiceRequest $r) => $this->decorateResponders($r));
         }
 
         return response()->json($serviceRequests);
@@ -1156,9 +1159,36 @@ class ServiceRequestController extends Controller
         // staff only, and this route serves the same model to both audiences.
         if ($user instanceof Resident) {
             $serviceRequest->makeHidden('internal_notes');
+            $serviceRequest->load('responders');
+            $this->decorateResponders($serviceRequest);
         }
 
         return response()->json($serviceRequest);
+    }
+
+    /**
+     * Resident-facing only: names, positions, contact numbers and photo_url
+     * of who's handling the request — but only once there's someone to
+     * name (Booked/Responding) and someone assigned. Otherwise the
+     * 'responders' key is hidden entirely rather than sent as [], so the
+     * app's existing "field absent" checks keep working unchanged.
+     */
+    private function decorateResponders(ServiceRequest $r): void
+    {
+        $show = in_array($r->status, ['Booked', 'Responding'], true) && $r->responders->isNotEmpty();
+
+        if (! $show) {
+            $r->makeHidden('responders');
+
+            return;
+        }
+
+        $r->setRelation('responders', $r->responders->map(fn (Responder $resp) => [
+            'name' => $resp->name,
+            'position' => $resp->position,
+            'contact_no' => $resp->contact_no,
+            'photo_url' => $resp->photo_path ? Storage::disk(self::publicDisk())->url($resp->photo_path) : null,
+        ]));
     }
 
     // Shared by validId() and sitePhoto() below — same ownership guard, same
@@ -1320,6 +1350,7 @@ class ServiceRequestController extends Controller
             // Pending, so cancelling has to hand the unit back or it leaks out of
             // the fleet with no request pointing at it.
             $this->releaseVehicle($serviceRequest->vehicle_id);
+            $serviceRequest->releaseResponders();
 
             $serviceRequest->update(['status' => 'Cancelled']);
         });
@@ -1465,7 +1496,10 @@ class ServiceRequestController extends Controller
      */
     private function respondingPushBody(ServiceRequest $serviceRequest): string
     {
-        return 'Your '.$serviceRequest->service->service_name.' request has been approved and is being responded to. — MDRRMO Echague';
+        $names = $serviceRequest->responders->pluck('name')->implode(', ');
+        $crew = $names !== '' ? ' Responder(s): '.$names.'.' : '';
+
+        return 'Your '.$serviceRequest->service->service_name.' request has been approved and is being responded to.'.$crew.' — MDRRMO Echague';
     }
 
     private function reschedulePushBody(ServiceRequest $serviceRequest, string $reason): string
@@ -1610,6 +1644,35 @@ class ServiceRequestController extends Controller
             }
         }
 
+        // Dispatch needs a crew. A responder's status is only ever 'deployed'
+        // while attached to a Responding request (set below, released by
+        // releaseResponders() the moment that request ends) — since this
+        // request is not Responding yet (the same-status short-circuit above
+        // would have skipped this whole block otherwise), 'deployed' here can
+        // only mean "on a different request right now". Same check
+        // assignResponders() makes; kept here too since assignment and
+        // dispatch can happen minutes apart and a responder's status can
+        // change in between.
+        if (($validated['status'] ?? null) === 'Responding' && $serviceRequest->status !== 'Responding') {
+            $assigned = $serviceRequest->responders;
+
+            if ($assigned->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Cannot dispatch — no responders assigned.',
+                ]);
+            }
+
+            $blocked = $assigned->filter(fn (Responder $r) => $r->status !== 'available');
+
+            if ($blocked->isNotEmpty()) {
+                $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'status' => "Not available: {$names}.",
+                ]);
+            }
+        }
+
         // The picker's two rules, which until now lived only in the panel
         // (ServiceRequestQueue.vue's availableVehicles): a unit must be
         // Available, and its type must match the board — an ambulance request
@@ -1683,7 +1746,7 @@ class ServiceRequestController extends Controller
         // Captured before update() overwrites status — see the push block below.
         $oldStatus = $serviceRequest->status;
 
-        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest) {
+        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest, $oldStatus) {
             $this->syncFleet($serviceRequest, $validated);
 
             $bookingFields = Arr::only($validated, self::BOOKING_FIELDS);
@@ -1696,6 +1759,16 @@ class ServiceRequestController extends Controller
             // it always was.
             if ($isAmbulanceRequest && $bookingFields) {
                 AmbulanceBooking::updateOrCreate(['request_id' => $serviceRequest->request_id], $bookingFields);
+            }
+
+            $newStatus = $validated['status'] ?? $oldStatus;
+
+            if ($newStatus !== $oldStatus) {
+                if ($newStatus === 'Responding') {
+                    $serviceRequest->responders->each(fn (Responder $r) => $r->update(['status' => 'deployed']));
+                } elseif (in_array($newStatus, self::TERMINAL_STATUSES, true)) {
+                    $serviceRequest->releaseResponders();
+                }
             }
 
             // The bridge itself: this is the one place the instant path ever
@@ -2020,6 +2093,55 @@ class ServiceRequestController extends Controller
         $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']), $this->pushData($fresh));
 
         return response()->json($fresh);
+    }
+
+    /**
+     * Sets the full responder list on a request (sync, not append — resending
+     * the same set is a no-op, dropping one un-assigns it). Only before the
+     * request is dispatched: once it is Responding the crew is already out,
+     * and update()'s own transition guard is what actually deploys them
+     * (assigning here never changes a responder's status).
+     */
+    public function assignResponders(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::find($id);
+
+        if (! $serviceRequest) {
+            return response()->json(['message' => 'Service request not found'], 404);
+        }
+
+        if ($refusal = $this->refuseOutsideSections($request, $serviceRequest)) {
+            return $refusal;
+        }
+
+        if (! in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
+            return response()->json([
+                'message' => 'Responders can only be assigned before the request is dispatched.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'responder_ids' => 'present|array',
+            'responder_ids.*' => 'integer|exists:tbl_responders,responder_id',
+        ]);
+
+        $responders = Responder::whereIn('responder_id', $validated['responder_ids'])->get();
+
+        $blocked = $responders->filter(fn (Responder $r) => $r->status !== 'available');
+
+        if ($blocked->isNotEmpty()) {
+            $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');
+
+            throw ValidationException::withMessages([
+                'responder_ids' => "Not available: {$names}.",
+            ]);
+        }
+
+        $serviceRequest->responders()->sync(
+            $responders->mapWithKeys(fn (Responder $r) => [$r->responder_id => ['assigned_at' => now()]])
+        );
+
+        return response()->json($serviceRequest->fresh(['responders']));
     }
 
     public function destroy(Request $request, $id)

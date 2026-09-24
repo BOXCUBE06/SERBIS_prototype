@@ -99,7 +99,7 @@
         </template>
 
         <template v-slot:item.request_id="{ item }">
-          <span class="text-truncate d-block row-date">{{ item.request_id }}</span>
+          <span class="text-truncate d-block row-date">{{ transactionNo(item.request_id) }}</span>
         </template>
 
         <template v-slot:item._dateSubmitted="{ item }">
@@ -398,7 +398,7 @@
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.request_id }}</div>
+                <div class="font-weight-medium text-body-2">{{ transactionNo(selectedRequest.request_id) }}</div>
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Approved</div>
@@ -882,15 +882,30 @@
           ></v-autocomplete>
 
           <template v-else>
-            <v-text-field
-              v-model="createDialog.form.walk_in_name"
-              label="Full name"
-              placeholder="e.g. Juan Dela Cruz"
-              variant="outlined"
-              density="comfortable"
-              class="mb-2"
-              :rules="[required]"
-            ></v-text-field>
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.walk_in_first_name"
+                  label="First name"
+                  placeholder="e.g. Juan"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                  :rules="[required, nameFormat]"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="createDialog.form.walk_in_last_name"
+                  label="Last name"
+                  placeholder="e.g. Dela Cruz"
+                  variant="outlined"
+                  density="comfortable"
+                  class="mb-2"
+                  :rules="[required, nameFormat]"
+                ></v-text-field>
+              </v-col>
+            </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
               label="Contact number"
@@ -898,7 +913,7 @@
               variant="outlined"
               density="comfortable"
               class="mb-2"
-              :rules="[required]"
+              :rules="[required, phoneFormat]"
             ></v-text-field>
           </template>
 
@@ -1044,7 +1059,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection } from '@/composables/requestDisplay'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
@@ -1079,10 +1094,15 @@ const selectedIds = reactive(new Set())
 const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
+// Letters (incl. accented/Ñ), spaces, hyphens, apostrophes, periods — no digits.
+const nameFormat = (v) => !v || /^[\p{L}.'-]+(?:\s[\p{L}.'-]+)*$/u.test(v.trim()) || 'Letters only'
+// Same shapes ServiceRequestController's PhoneNumber::REGEX accepts.
+const phoneFormat = (v) => !v || /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(v.trim()) || 'Use 09XXXXXXXXX'
 
 const emptyCreateForm = () => ({
   resident_id: null,
-  walk_in_name: '',
+  walk_in_first_name: '',
+  walk_in_last_name: '',
   walk_in_contact_number: '',
   service_id: null,
   patient_name: '',
@@ -1259,11 +1279,11 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Transaction No.', key: 'request_id', width: 11 },
+    { title: 'Transaction No.', key: 'request_id', width: 8 },
     { title: 'Submitted', key: '_dateSubmitted', width: 11 },
     { title: 'Status', key: 'status', width: 7, sortable: false },
     { title: 'Scheduled', key: 'scheduled_at', width: 15 },
-    { title: 'Requester', key: '_requesterName', width: 12 },
+    { title: 'Requester', key: '_requesterName', width: 15 },
     { title: 'Phone', key: '_phone', width: 10 },
     { title: 'Barangay', key: '_secondary', width: 10 },
     { title: 'Patient', key: 'patient_name', width: 11 },
@@ -1591,9 +1611,19 @@ const submitWalkIn = async () => {
     createDialog.value.error = 'Pick a Head of the Family'
     return
   }
-  if (!isResident && (!form.walk_in_name.trim() || !form.walk_in_contact_number.trim())) {
-    createDialog.value.error = 'Name and contact number are required for someone with no account'
-    return
+  if (!isResident) {
+    if (!form.walk_in_first_name.trim() || !form.walk_in_last_name.trim() || !form.walk_in_contact_number.trim()) {
+      createDialog.value.error = 'Name and contact number are required for someone with no account'
+      return
+    }
+    if (phoneFormat(form.walk_in_contact_number) !== true) {
+      createDialog.value.error = 'Enter a valid contact number (e.g. 09171234567)'
+      return
+    }
+    if (nameFormat(form.walk_in_first_name) !== true || nameFormat(form.walk_in_last_name) !== true) {
+      createDialog.value.error = 'Names may only contain letters'
+      return
+    }
   }
   if (!form.service_id) {
     createDialog.value.error = 'Pick a service'
@@ -1620,7 +1650,7 @@ const submitWalkIn = async () => {
     if (isResident) {
       body.append('resident_id', form.resident_id)
     } else {
-      body.append('walk_in_name', form.walk_in_name.trim())
+      body.append('walk_in_name', `${form.walk_in_first_name.trim()} ${form.walk_in_last_name.trim()}`)
       body.append('walk_in_contact_number', form.walk_in_contact_number.trim())
     }
     body.append('service_id', form.service_id)

@@ -44,6 +44,8 @@ final class AdminSections
 
     public const LOGS = 'logs';
 
+    public const RESPONDERS = 'responders';
+
     /** Every section, in sidebar order. */
     public const ALL = [
         self::DASHBOARD,
@@ -62,6 +64,7 @@ final class AdminSections
         self::STAFF,
         self::FILES,
         self::LOGS,
+        self::RESPONDERS,
     ];
 
     /**
@@ -86,6 +89,7 @@ final class AdminSections
         self::RESIDENTS,
         self::FILES,
         self::LOGS,
+        self::RESPONDERS,
     ];
 
     /**

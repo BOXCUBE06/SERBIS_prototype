@@ -6,6 +6,13 @@ export const residentName = (resident) =>
 
 export const isWalkIn = (item) => !item?.resident && !item?.resident_id
 
+// request_id is already a unique, never-reused DB primary key — that part is
+// fine. It just prints as a bare small integer (1, 2, 3…), which reads like
+// a row index rather than a transaction number. Zero-pad it for display only;
+// nothing is stored or sent in this format.
+export const transactionNo = (requestId) =>
+  requestId === null || requestId === undefined ? 'N/A' : `TXN-${String(requestId).padStart(6, '0')}`
+
 export const requesterName = (item) =>
   item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
 

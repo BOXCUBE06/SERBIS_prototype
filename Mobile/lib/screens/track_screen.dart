@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../state/translations.dart';
+import '../data/hotlines.dart';
 import '../models/request_models.dart';
 import '../state/request_store.dart';
 import '../theme/app_theme.dart';
@@ -349,6 +350,15 @@ class _RequestCard extends StatelessWidget {
                   ],
                 ),
               ),
+            if (request.responders.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                tr(filipino, 'request.responders_heading'),
+                style: AppText.body(size: 11.5, weight: FontWeight.w700, color: AppColors.inkMuted),
+              ),
+              const SizedBox(height: 6),
+              ...request.responders.map((r) => _ResponderTile(responder: r)),
+            ],
             // No isNotEmpty guard any more: the timeline is derived from the
             // request's own status and timestamps, so every card has one --
             // including the server-loaded rows that used to lose the button
@@ -377,6 +387,52 @@ class _RequestCard extends StatelessWidget {
                 onPressed: () => showCancelDialog(context, request.refNo, onCancel, filipino: filipino),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResponderTile extends StatelessWidget {
+  final RequestResponder responder;
+  const _ResponderTile({required this.responder});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.blue50,
+              backgroundImage: responder.photoUrl != null ? NetworkImage(responder.photoUrl!) : null,
+              child: responder.photoUrl == null
+                  ? Text(
+                      responder.name.isEmpty ? '?' : responder.name[0].toUpperCase(),
+                      style: AppText.display(size: 14, color: AppColors.blue600),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(responder.name, style: AppText.display(size: 13)),
+                  Text(responder.position, style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                ],
+              ),
+            ),
+            if (responder.contactNo.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.call_outlined, size: 20, color: AppColors.blue600),
+                onPressed: () => callHotlineNumber(responder.contactNo),
+              ),
           ],
         ),
       ),

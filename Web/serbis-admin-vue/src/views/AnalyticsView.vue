@@ -262,7 +262,7 @@
            so it is complete for every row from day one. -->
       <v-col id="open-request-age" cols="12">
         <AnalyticsSection
-          title="Open Requests by Age"
+          title="How Long Requests Have Been Waiting"
           info="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
           :loading="loading"
           :error="error"
@@ -274,7 +274,7 @@
           <div style="height: 220px;">
             <Bar :data="agingChartData" :options="horizontalBarOptions" />
             <ChartDataTable
-              caption="Open requests by age — same data as the chart above"
+              caption="How long requests have been waiting — same data as the chart above"
               category-label="Age bucket"
               :labels="aging.labels"
               :series="[{ label: 'Open requests', data: aging.data }]"

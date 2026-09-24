@@ -33,6 +33,7 @@ const routes = [
   { path: '/files', component: () => import('../views/FilesView.vue'), meta: { section: 'files' } },
   { path: '/logs', component: () => import('../views/LogsView.vue'), meta: { section: 'logs' } },
   { path: '/vehicles', component: () => import('../views/VehiclesView.vue'), meta: { section: 'vehicles' } },
+  { path: '/responders', component: () => import('../views/ResponderView.vue'), meta: { section: 'responders' } },
   { path: '/inventory', component: () => import('../views/EquipmentInventoryView.vue'), meta: { section: 'inventory' } },
   { path: '/borrowings', component: () => import('../views/EquipmentBorrowingView.vue'), meta: { section: 'borrowings' } },
   { path: '/procurement', component: () => import('../views/ProcurementReferenceView.vue'), meta: { section: 'procurement' } },
