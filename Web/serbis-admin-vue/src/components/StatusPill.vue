@@ -9,7 +9,7 @@
 <template>
   <span
     class="tint-pill"
-    :class="{ 'tint-pill--sm': small }"
+    :class="{ 'tint-pill--sm': small, 'tint-pill--solid': solid }"
     :style="{ '--pill-accent': accent }"
   >
     <v-icon v-if="icon" start :size="small ? 12 : 14">{{ icon }}</v-icon>
@@ -26,6 +26,8 @@ const props = defineProps<{
   label?: string | null
   icon?: string | null
   small?: boolean
+  /** Filled with the accent and white text, for tables read at a glance. */
+  solid?: boolean
 }>()
 
 const accent = computed(() => pillAccent(props.status))
@@ -48,6 +50,10 @@ const accent = computed(() => pillAccent(props.status))
   white-space: nowrap;
   background: color-mix(in srgb, var(--pill-accent) 16%, rgb(var(--v-theme-surface)));
   color: color-mix(in srgb, var(--pill-accent) 60%, rgb(var(--v-theme-on-surface)));
+}
+.tint-pill--solid {
+  background: var(--pill-accent);
+  color: #fff;
 }
 .tint-pill--sm {
   padding: 1px 8px;

@@ -67,33 +67,25 @@
       </template>
     </PageHeader>
 
-    <!-- KPI strip: every headline number in one scannable row, independent of
-         the trend card's height. Cramming these into a sidebar next to the
-         hero card (the old layout) meant the two fought over vertical space —
-         the stats need their own row instead of being squeezed into 5/12
-         of one.
-
-         A CSS grid rather than v-col, because the number of cards is not fixed:
-         the ambulance card is only sent when something is pending, so the strip
-         is four wide or five wide depending on the day. v-col takes a twelfth,
-         and five cards do not divide twelve — md="2" left a third of the row
-         empty at four cards, and no integer column width fills it at five.
-         `repeat(N, 1fr)` fills the row at any N. -->
+    <!-- KPI strip. A card that counts requests filters the queue below; the
+         two that do not (residents, vehicles) still open their own page. The
+         grid is CSS rather than v-col because the card count is not fixed:
+         the ambulance and overdue cards only arrive when there is something
+         to act on, and five cards do not divide twelve columns. -->
     <v-row v-if="loading" class="mb-2">
       <v-col cols="12"><v-skeleton-loader type="card" height="88"></v-skeleton-loader></v-col>
     </v-row>
-    <!-- Only the cards for sections this account holds arrive; none at all is a
-         real answer, and a grid of zero columns is not a layout. -->
-    <div v-else-if="kpiStats.length > 0" class="kpi-grid mb-2" :style="{ '--kpi-count': kpiStats.length }">
+    <div v-else-if="kpiStats.length > 0" class="kpi-grid mb-4" :style="{ '--kpi-count': kpiStats.length }">
       <v-card
         v-for="(stat, i) in kpiStats" :key="stat.title"
         elevation="0" rounded="xl" class="soft-card stagger-item kpi-tile pa-3 h-100 d-flex align-center"
-        :class="{ 'cursor-pointer': stat.route }"
+        :class="{ 'cursor-pointer': isActionable(stat), 'kpi-tile--active': isActiveKpi(stat) }"
         :style="{ '--stagger-i': i }"
-        :role="stat.route ? 'button' : undefined"
-        :tabindex="stat.route ? 0 : undefined"
-        @click="stat.route && goTo(stat.route)"
-        @keydown.enter="stat.route && goTo(stat.route)"
+        :role="isActionable(stat) ? 'button' : undefined"
+        :tabindex="isActionable(stat) ? 0 : undefined"
+        :aria-pressed="KPI_FILTERS[stat.title] ? isActiveKpi(stat) : undefined"
+        @click="onKpi(stat)"
+        @keydown.enter="onKpi(stat)"
       >
         <v-avatar :color="stat.color || 'primary'" variant="tonal" size="40" rounded="lg" class="mr-3 flex-shrink-0">
           <v-icon :color="stat.color || 'primary'" size="20">{{ stat.icon || 'mdi-chart-arc' }}</v-icon>
@@ -105,349 +97,122 @@
       </v-card>
     </div>
 
-    <!-- Trend row: headline total + the period-scoped bar chart, grouped
-         together because both answer "what's happening in the selected
-         period", unlike the KPI strip above (always all-time / right-now). -->
-    <v-row v-if="loading" class="mb-2">
-      <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="pa-6" style="min-height: 220px;">
-          <v-skeleton-loader type="heading, text, image"></v-skeleton-loader>
-        </v-card>
-      </v-col>
-      <v-col cols="12" lg="5">
-        <v-skeleton-loader type="card" height="286"></v-skeleton-loader>
-      </v-col>
-    </v-row>
-
-    <v-row v-else class="mb-2">
-      <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card hero-tint stagger-item pa-6 h-100" :style="{ '--stagger-i': 6 }">
-          <div class="d-flex justify-space-between align-start mb-2 flex-wrap gap-2">
-            <div>
-              <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Requests Filed</div>
-              <div class="text-caption text-medium-emphasis">{{ periodLabelFor(heroPeriod) }}</div>
-            </div>
-            <div class="d-flex align-center gap-3">
-              <v-btn-toggle v-model="heroPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
-              </v-btn-toggle>
-              <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
-                <v-icon color="primary" size="20">mdi-chart-line</v-icon>
-              </v-avatar>
-            </div>
+    <!-- The work queue. Resident requests, ambulance bookings and equipment
+         loans share one table because staff triage by how long something has
+         waited, not by which form it came from; the tabs cut it back apart
+         the way the sidebar does. Only open items are listed here: the full
+         history lives on each page. -->
+    <v-card elevation="0" rounded="xl" class="soft-card queue-card">
+      <v-card-item class="pb-0">
+        <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+          <div>
+            <v-card-title class="text-body-1 font-weight-bold pa-0">Open Requests</v-card-title>
+            <v-card-subtitle class="pa-0">Oldest first, so the longest wait is at the top</v-card-subtitle>
           </div>
-          <div class="text-h1 font-weight-black mb-4">{{ displayValues.hero ?? heroTotal }}</div>
-          <div style="height: 70px;">
-            <Line v-if="chartDataRaw" :data="heroSparklineData" :options="sparklineOptions" />
+          <v-chip
+            v-if="statusFilter"
+            closable
+            size="small"
+            color="primary"
+            variant="tonal"
+            @click:close="statusFilter = null"
+          >Status: {{ statusFilter }}</v-chip>
+        </div>
+      </v-card-item>
+
+      <v-tabs v-model="queueTab" color="primary" density="compact" class="px-4">
+        <v-tab v-for="t in QUEUE_TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">
+          {{ t.title }}
+          <v-chip
+            size="x-small"
+            class="ml-2 font-weight-bold"
+            :color="t.value === 'overdue' && tabCounts[t.value] > 0 ? 'error' : undefined"
+            variant="tonal"
+          >{{ tabCounts[t.value] }}</v-chip>
+        </v-tab>
+      </v-tabs>
+      <v-divider></v-divider>
+
+      <v-alert v-if="loadError" type="warning" variant="tonal" density="compact" class="ma-4">{{ loadError }}</v-alert>
+
+      <v-data-table
+        v-model:sort-by="sortBy"
+        v-model:expanded="expanded"
+        :headers="headers"
+        :items="visibleRows"
+        :loading="loading"
+        item-value="key"
+        :items-per-page="10"
+        no-data-text="Nothing open here"
+        class="queue-table"
+      >
+        <template #item.filedAt="{ item }">
+          <div class="text-body-2 font-weight-bold">{{ fmtFiled(item.filedAt) }}</div>
+          <div class="text-caption" :class="item.overdue ? 'text-error font-weight-bold' : 'text-medium-emphasis'">
+            {{ item.overdue ? item.overdueLabel : waitLabel(item.filedAt) }}
           </div>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 7 }">
-          <v-card-item class="pb-0">
-            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
-              <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Request Trend</v-card-title>
-                <v-card-subtitle class="pa-0">{{ periodLabelFor(trendPeriod) }}</v-card-subtitle>
-              </div>
-              <v-btn-toggle v-model="trendPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
-              </v-btn-toggle>
-            </div>
-          </v-card-item>
-          <v-card-text class="pt-2">
-            <v-sheet height="220" color="transparent">
-              <Line v-if="chartDataRaw" :data="barChartData" :options="chartOptions" />
-              <div class="d-flex align-center justify-center h-100" v-else>
-                <v-progress-circular indeterminate color="primary"></v-progress-circular>
-              </div>
-            </v-sheet>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Geographic row: map + its data-table fallback, all-time scope -->
-    <!-- How long the open requests have been open. The KPI strip above counts
-         them but cannot say whether one has been sitting there for weeks, and
-         a stale request is a today problem rather than a quarterly one. Per
-         bucket there is no deep link: the requests list filter state doesn't
-         map onto these buckets (ResidentRequestQueue's/AmbulanceRequestQueue's
-         `filters` is {status, barangay, unit}, no time-open axis), so a
-         clickable bucket would have nowhere to land. The card as a whole
-         opens the fuller breakdown on Analytics. -->
-    <v-row class="mb-2">
-      <v-col cols="12">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item" :style="{ '--stagger-i': 7 }">
-          <v-card-item>
-            <!-- min-width-0 + wrapping title: at 430px this row measured
-                 315px inside a 295px card and clipped, because v-card-title
-                 is nowrap by default. -->
-            <div class="d-flex justify-space-between align-center flex-wrap gap-2">
-              <div class="min-width-0 d-flex align-center gap-1">
-                <v-card-title class="text-body-1 font-weight-bold pa-0 wrap-text">How Long Requests Have Been Waiting</v-card-title>
-                <!-- Names the statuses outright. The KPI strip above reads
-                     "Pending Service Requests: 8" while this card reads 32,
-                     and both are right — Pending is one status, open is every
-                     status that is not an ending. Unlabelled, the two numbers
-                     look like a contradiction to whoever has to put one of
-                     them in a monthly report. -->
-                <v-tooltip
-                  text="Pending, booked or being responded to. Ignores the period selectors on purpose, so an old request cannot hide."
-                  location="top"
-                  max-width="320"
-                >
-                  <template #activator="{ props: tip }">
-                    <v-icon
-                      v-bind="tip"
-                      size="16"
-                      class="text-medium-emphasis"
-                      tabindex="0"
-                      aria-label="Pending, booked or being responded to. Ignores the period selectors on purpose, so an old request cannot hide."
-                    >
-                      mdi-information-outline
-                    </v-icon>
-                  </template>
-                </v-tooltip>
-              </div>
-              <v-btn
-                variant="text"
-                color="primary"
-                class="text-none font-weight-bold"
-                append-icon="mdi-arrow-right"
-                @click="goTo('/analytics#open-request-age')"
-              >
-                See the breakdown
-              </v-btn>
-            </div>
-          </v-card-item>
-          <v-card-text class="pt-2">
-            <div v-if="aging.total === 0" class="text-center text-caption text-medium-emphasis py-6">
-              Nothing is open
-            </div>
-            <div v-else class="d-flex flex-wrap gap-3">
-              <div
-                v-for="(label, i) in aging.labels"
-                :key="label"
-                class="age-tile subtle-surface"
-                :class="{ 'age-tile--stale': i === aging.labels.length - 1 && aging.data[i] > 0 }"
-              >
-                <div class="age-count text-high-emphasis">{{ aging.data[i] }}</div>
-                <div class="text-caption text-medium-emphasis">{{ label }}</div>
-              </div>
-            </div>
-            <div v-if="aging.oldestDays > 0" class="text-caption text-medium-emphasis mt-3">
-              Oldest open request: <strong class="text-high-emphasis">{{ aging.oldestDays }} {{ aging.oldestDays === 1 ? 'day' : 'days' }}</strong>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <v-row class="mb-2">
-      <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 8 }">
-          <v-card-item>
-            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
-              <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Requests by Barangay</v-card-title>
-                <v-card-subtitle class="pa-0">{{ periodLabelFor(mapPeriod) }}</v-card-subtitle>
-              </div>
-              <v-btn-toggle v-model="mapPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
-                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
-              </v-btn-toggle>
-            </div>
-          </v-card-item>
-          <v-card-text class="pt-0">
-            <!-- 460, not the 320 this started at. Leaflet frames the view on
-                 the barangay polygons (fitBounds, below), and that cluster is
-                 close to square, so a 320px box in a 7/12 column drew a 3.3:1
-                 letterbox: boundaries in the middle third, the rest tiles with
-                 nothing plotted on them. -->
-            <div ref="mapEl" style="height: 460px; width: 100%; border-radius: 8px; z-index: 1;" class="subtle-surface"></div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 9 }">
-          <v-card-item>
-            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
-              <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Barangays with Most Requests</v-card-title>
-                <v-card-subtitle class="pa-0">{{ periodLabelFor(zonesPeriod) }}</v-card-subtitle>
-              </div>
-              <v-btn-toggle v-model="zonesPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
-                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
-              </v-btn-toggle>
-            </div>
-          </v-card-item>
-          <v-card-text class="pt-2">
-            <div v-if="topZones.length === 0 && walkInCount === 0" class="text-center text-caption text-medium-emphasis py-8">
-              No zone activity yet
-            </div>
-            <div v-else-if="topZones.length === 0" class="text-center text-caption text-medium-emphasis py-8">
-              No barangay activity yet
-            </div>
-            <div v-else>
-              <div v-for="(brgy, index) in topZones" :key="index" class="d-flex align-center py-2">
-                <div class="rank-badge mr-3">{{ index + 1 }}</div>
-                <div class="flex-grow-1 min-width-0">
-                  <div class="d-flex justify-space-between align-center mb-1">
-                    <span class="text-body-2 font-weight-bold text-truncate">{{ brgy.name }}</span>
-                    <span class="text-caption font-weight-bold text-medium-emphasis ml-2">{{ brgy.requests }}</span>
-                  </div>
-                  <div class="subtle-surface rounded-pill" style="height: 6px; overflow: hidden;">
-                    <div class="rounded-pill h-100" :class="`bg-${getHeatColor(brgy.percentage)}`" :style="{ width: brgy.percentage + '%' }"></div>
-                  </div>
+        </template>
+        <template #item.name="{ item }">
+          <div class="text-body-2 font-weight-bold">{{ item.name }}</div>
+        </template>
+        <template #item.type="{ item }">
+          <div class="d-flex align-center gap-2">
+            <v-icon size="16" class="text-medium-emphasis">{{ KIND_ICONS[item.kind] }}</v-icon>
+            <span class="text-body-2">{{ item.type }}</span>
+          </div>
+        </template>
+        <template #item.status="{ item }">
+          <StatusPill :status="item.status" solid />
+        </template>
+        <template #item.actions="{ item }">
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="primary"
+            class="text-none font-weight-bold"
+            :prepend-icon="isExpanded(item.key) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+            :aria-expanded="isExpanded(item.key)"
+            @click="toggleExpanded(item.key)"
+          >{{ isExpanded(item.key) ? 'Hide' : 'View Details' }}</v-btn>
+        </template>
+        <template #expanded-row="{ columns, item }">
+          <tr>
+            <td :colspan="columns.length" class="expanded-cell">
+              <div class="d-flex flex-wrap gap-6 align-center">
+                <div v-for="d in item.details" :key="d.label" class="min-width-0">
+                  <div class="text-caption text-medium-emphasis">{{ d.label }}</div>
+                  <div class="text-body-2 font-weight-bold">{{ d.value }}</div>
                 </div>
+                <v-spacer></v-spacer>
+                <v-btn
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  class="text-none font-weight-bold"
+                  append-icon="mdi-arrow-right"
+                  @click="goTo(KIND_ROUTES[item.kind])"
+                >Open in {{ KIND_PAGES[item.kind] }}</v-btn>
               </div>
-            </div>
-
-            <!-- Requests filed at the counter carry no barangay anywhere in
-                 the schema, so they cannot be ranked or drawn on the map. They
-                 used to be dropped by the join instead, which left both this
-                 list and the map reporting fewer requests than exist with
-                 nothing explaining the gap. Counted here instead, beside the
-                 reconciled total, so the section adds up. -->
-            <template v-if="sectionTotal > 0">
-              <v-divider class="my-2"></v-divider>
-              <div class="d-flex justify-space-between align-center py-1">
-                <span class="text-caption text-medium-emphasis">Walk-in (no barangay)</span>
-                <span class="text-caption font-weight-bold text-medium-emphasis">{{ walkInCount }}</span>
-              </div>
-              <div class="d-flex justify-space-between align-center py-1">
-                <span class="text-caption font-weight-bold text-high-emphasis">Total requests</span>
-                <span class="text-caption font-weight-bold text-high-emphasis">{{ sectionTotal }}</span>
-              </div>
-            </template>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Operational row: the feed staff act on, paired with the all-time
-         category breakdown that explains what it's mostly made of -->
-    <v-row>
-      <v-col cols="12" lg="7">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 10 }">
-          <v-card-item class="pb-0">
-            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
-              <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Activity Feed</v-card-title>
-                <v-card-subtitle class="pa-0">{{ periodLabelFor(feedPeriod) }}</v-card-subtitle>
-              </div>
-              <v-btn-toggle v-model="feedPeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
-              </v-btn-toggle>
-            </div>
-          </v-card-item>
-          <v-tabs v-model="feedTab" color="primary" density="compact" class="px-4">
-            <v-tab value="all" class="text-none font-weight-bold">All</v-tab>
-            <v-tab value="service" class="text-none font-weight-bold">Services</v-tab>
-            <v-tab value="borrow" class="text-none font-weight-bold">Borrowing</v-tab>
-          </v-tabs>
-          <v-divider></v-divider>
-
-          <v-card-text class="pt-2">
-            <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@5"></v-skeleton-loader>
-
-            <div v-else-if="filteredFeed.length === 0" class="text-center text-caption text-medium-emphasis py-8">
-              No activity {{ periodLabelFor(feedPeriod).toLowerCase() }}
-            </div>
-
-            <v-list v-else density="comfortable" class="pa-0">
-              <v-list-item v-for="(item, index) in filteredFeed.slice(0, 8)" :key="index" class="px-0">
-                <template v-slot:prepend>
-                  <v-avatar color="primary" variant="tonal" size="40" class="mr-1">
-                    <v-icon color="primary" size="18">{{ item.icon }}</v-icon>
-                  </v-avatar>
-                </template>
-                <v-list-item-title class="text-body-2 font-weight-bold text-truncate">{{ item.name }}</v-list-item-title>
-                <v-list-item-subtitle class="text-caption text-truncate">{{ item.meta }} &bull; {{ item.date }}</v-list-item-subtitle>
-                <template v-slot:append>
-                  <v-chip :color="getStatusColor(item.status)" size="x-small" variant="tonal" class="font-weight-bold">{{ item.status }}</v-chip>
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" lg="5">
-        <v-card elevation="0" rounded="xl" class="soft-card stagger-item h-100" :style="{ '--stagger-i': 11 }">
-          <v-card-item class="pb-0">
-            <div class="d-flex justify-space-between align-start flex-wrap gap-2">
-              <div>
-                <v-card-title class="text-body-1 font-weight-bold pa-0">Most Requested</v-card-title>
-                <v-card-subtitle class="pa-0">{{ periodLabelFor(volumePeriod) }}</v-card-subtitle>
-              </div>
-              <v-btn-toggle v-model="volumePeriod" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg">
-                <v-btn value="today" size="x-small" class="text-none font-weight-bold px-3">Today</v-btn>
-                <v-btn value="week" size="x-small" class="text-none font-weight-bold px-3">Week</v-btn>
-                <v-btn value="month" size="x-small" class="text-none font-weight-bold px-3">Month</v-btn>
-                <v-btn value="all" size="x-small" class="text-none font-weight-bold px-3">All</v-btn>
-              </v-btn-toggle>
-            </div>
-          </v-card-item>
-          <div class="px-4 pb-2">
-            <v-btn-toggle v-model="volumeToggle" color="primary" density="compact" variant="outlined" divided rounded="lg">
-              <v-btn size="small" class="text-none font-weight-bold" value="services">Services</v-btn>
-              <v-btn size="small" class="text-none font-weight-bold" value="items">Items</v-btn>
-            </v-btn-toggle>
-          </div>
-          <v-card-text class="pt-0">
-            <v-sheet height="320" color="transparent">
-              <Bar v-if="chartDataRaw && volumeChartData.labels.length > 0" :data="volumeChartData" :options="volumeChartOptions" :plugins="[volumeValueLabelsPlugin]" />
-              <div v-else-if="chartDataRaw" class="text-caption text-medium-emphasis text-center py-8">No data yet</div>
-              <div class="d-flex align-center justify-center h-100" v-else>
-                <v-progress-circular indeterminate color="primary"></v-progress-circular>
-              </div>
-            </v-sheet>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+    </v-card>
 
   </v-container>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useTheme } from 'vuetify'
-import { getToken } from '@/composables/authToken'
 import PageHeader from '@/components/PageHeader.vue'
-import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
-import { statusAccent } from '@/composables/borrowingStatus'
-import {
-  Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
-  BarElement, LineElement, PointElement, Filler
-} from 'chart.js'
-import { Bar, Line } from 'vue-chartjs'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-// Real PSA boundaries, Echague (PSGC PH023112000), filtered to the seeded
-// barangays. properties.name matches tbl_barangay.barangay_name exactly —
-// the choropleth joins on it, so the two must stay in step.
-import barangayBoundaries from '@/assets/echague-barangays.json'
+import StatusPill from '@/components/StatusPill.vue'
 import { API_BASE } from '@/config/api'
+import { authHeaders, isBookingOverdue } from '@/composables/adminUi'
+import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
+import { isAmbulanceRequest } from '@/composables/useRequestFetch'
+import { requesterName, requesterPhone, requesterBarangay } from '@/composables/requestDisplay'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
-
-ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
 
 const router = useRouter()
 const goTo = (route) => router.push(route)
@@ -458,58 +223,80 @@ const goTo = (route) => router.push(route)
 const { can } = useCurrentAdmin()
 const showBell = computed(() => can('logs') || can('borrowings') || can('ambulance'))
 
-// Chart.js draws to canvas, not the DOM, so it can't read CSS custom
-// properties the way the rest of the app does -- these read the active
-// theme's resolved hex through Vuetify's own reactive theme instance
-// instead, so the charts repaint when the toggle in AppSidebar flips
-// theme.global.name (see the P2 dark-mode audit, 2026-09-15: this data
-// used to hardcode the light theme's primary, so the dark charts and
-// choropleth never changed color at all).
-const theme = useTheme()
-const themeColors = computed(() => theme.global.current.value.colors)
-const hexToRgb = (hex) => {
-  const n = parseInt(hex.replace('#', ''), 16)
-  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
-}
-
 const kpiStats = ref([])
-const serviceRequests = ref([])
-const borrowRequests = ref([])
 const systemLogs = ref([])
 const followUps = ref([])
+const rows = ref([])
 const loading = ref(true)
+const loadError = ref('')
 
-const chartDataRaw = ref(null)
-const volumeToggle = ref('services')
-const feedTab = ref('all')
+// Which queue each request-counting card narrows to. Cards not listed here
+// (residents, vehicles) count something that is not a request and keep
+// opening their own page through `route`.
+const KPI_FILTERS = {
+  'Pending Service Requests': { tab: 'service', status: 'Pending' },
+  'Pending Borrow Requests': { tab: 'borrow', status: 'Pending' },
+  'Pending Ambulance Requests': { tab: 'ambulance', status: null },
+  'Equipment Overdue': { tab: 'overdue', status: null },
+}
 
-// Each stat-bearing card owns its period independently now — a single
-// shared toggle used to drive the hero card and the trend chart while the
-// map, the barangay ranking and the category breakdown were silently
-// always all-time, which is what the map/zones/volume cards default to
-// here so their look doesn't change until someone touches the toggle.
-const heroPeriod = ref('week')
-const trendPeriod = ref('week')
-const feedPeriod = ref('week')
-const mapPeriod = ref('all')
-const zonesPeriod = ref('all')
-const volumePeriod = ref('all')
+const QUEUE_TABS = [
+  { value: 'all', title: 'All Open' },
+  { value: 'service', title: 'Service Requests' },
+  { value: 'ambulance', title: 'Ambulance' },
+  { value: 'borrow', title: 'Borrowing' },
+  { value: 'overdue', title: 'Overdue' },
+]
+const KIND_ICONS = { service: 'mdi-clipboard-text-outline', ambulance: 'mdi-ambulance', borrow: 'mdi-toolbox-outline' }
+const KIND_ROUTES = { service: '/manage-requests', ambulance: '/conduction-requests', borrow: '/borrowings' }
+const KIND_PAGES = { service: 'Resident Requests', ambulance: 'Ambulance Dispatch', borrow: 'Equipment Borrowing' }
 
-const mapDataByPeriod = ref({}) // { today|week|month|all: [{name, requests}] } — feeds the Leaflet map + the barangay ranking
-const pieDataByPeriod = ref({}) // { today|week|month|all: { services: {...}, items: {...} } }
-// Requests with no barangay — walk-ins filed at the counter. Reported beside
-// the ranking rather than folded into it: there is no location on the record
-// to rank or draw, but they are still requests and the total has to say so.
-const walkInByPeriod = ref({}) // { today|week|month|all: N }
-const totalsByPeriod = ref({}) // { today|week|month|all: N } — barangays + walk-ins
-// Open-request age buckets. Not period-filtered by design — an old request
-// still open is the whole point, and scoping it to a window would hide it.
-const aging = ref({ labels: [], data: [], total: 0, oldestDays: 0 })
+const queueTab = ref('all')
+const statusFilter = ref(null)
+const sortBy = ref([{ key: 'filedAt', order: 'asc' }])
+const expanded = ref([])
 
-const PERIOD_LABELS = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All-time' }
-const periodLabelFor = (period) => PERIOD_LABELS[period] || ''
+const headers = [
+  { title: 'Time Filed', key: 'filedAt', sortable: true },
+  { title: 'Head of the Family', key: 'name', sortable: true },
+  { title: 'Request Type', key: 'type', sortable: true },
+  { title: 'Status', key: 'status', sortable: true },
+  { title: 'Quick Actions', key: 'actions', sortable: false, align: 'end' },
+]
 
-// Count-up animation for headline numbers on load / filter change
+const isActionable = (stat) => !!(KPI_FILTERS[stat.title] || stat.route)
+const isActiveKpi = (stat) => {
+  const f = KPI_FILTERS[stat.title]
+  return !!f && queueTab.value === f.tab && statusFilter.value === f.status
+}
+const onKpi = (stat) => {
+  const f = KPI_FILTERS[stat.title]
+  if (!f) {
+    if (stat.route) goTo(stat.route)
+    return
+  }
+  // Clicking the active card again clears it, so it behaves like a toggle.
+  if (isActiveKpi(stat)) {
+    queueTab.value = 'all'
+    statusFilter.value = null
+    return
+  }
+  // Status goes second: the tab watcher below clears a stale status on tab change.
+  queueTab.value = f.tab
+  statusFilter.value = f.status
+}
+
+// A tab change is a new question; a status narrowed by a card would silently
+// carry over and hide rows the tab name promises. flush 'sync' so a card's own
+// write to statusFilter, made right after the tab, is not undone by this.
+watch(queueTab, () => { statusFilter.value = null }, { flush: 'sync' })
+
+const isExpanded = (key) => expanded.value.includes(key)
+const toggleExpanded = (key) => {
+  expanded.value = isExpanded(key) ? expanded.value.filter((k) => k !== key) : [...expanded.value, key]
+}
+
+// Count-up animation for the headline numbers
 const displayValues = reactive({})
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -531,331 +318,138 @@ const animateValue = (key, target) => {
 }
 
 watch(kpiStats, (stats) => {
-  stats.forEach(stat => animateValue(stat.title, stat.value))
+  for (const stat of stats) animateValue(stat.title, stat.value)
 })
+
+// ---- The queue ----------------------------------------------------------
+
+const SERVICE_TERMINAL = new Set(['Resolved', 'Cancelled', 'Disapproved'])
+const BORROW_TERMINAL = new Set(BORROWING_STATUSES.filter((s) => s.terminal).map((s) => s.status))
+
+const DAY_MS = 86_400_000
+const fmtFiled = (ms) => new Date(ms).toLocaleString('en-PH', {
+  month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+})
+const fmtWhen = (value) => (value ? fmtFiled(new Date(value).getTime()) : '')
+
+const waitLabel = (ms) => {
+  const days = Math.floor((Date.now() - ms) / DAY_MS)
+  if (days >= 1) return `${days}d waiting`
+  const hours = Math.floor((Date.now() - ms) / 3_600_000)
+  return hours >= 1 ? `${hours}h waiting` : 'Just filed'
+}
+
+// due_date is a bare calendar date; new Date('2026-08-10') would parse as UTC
+// midnight and put "overdue" a day off, so it is built from its parts.
+const dueDay = (value) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '')
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null
+}
+const daysPastDue = (value) => {
+  const due = dueDay(value)
+  if (!due) return 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((today - due) / DAY_MS)
+}
+
+const serviceRow = (r) => {
+  const ambulance = isAmbulanceRequest(r)
+  const details = [
+    { label: 'Contact', value: requesterPhone(r) },
+    { label: 'Barangay', value: requesterBarangay(r) },
+  ]
+  if (ambulance && r.scheduled_at) details.push({ label: 'Scheduled for', value: fmtWhen(r.scheduled_at) })
+  return {
+    key: `svc-${r.request_id}`,
+    kind: ambulance ? 'ambulance' : 'service',
+    filedAt: new Date(r.created_at).getTime(),
+    name: requesterName(r),
+    type: r.service?.service_name || 'Other',
+    status: r.status,
+    overdue: ambulance && isBookingOverdue(r.status, r.scheduled_at),
+    overdueLabel: 'Booking time has passed',
+    details,
+  }
+}
+
+const borrowRow = (b) => {
+  const item = b.equipment?.item_name || b.other_equipment_text || 'Unknown item'
+  const details = [
+    { label: 'Contact', value: requesterPhone(b) },
+    { label: 'Barangay', value: requesterBarangay(b) },
+    { label: 'Quantity', value: String(b.quantity ?? 1) },
+  ]
+  if (b.due_date) details.push({ label: 'Due back', value: b.due_date })
+  return {
+    key: `bor-${b.borrow_id}`,
+    kind: 'borrow',
+    filedAt: new Date(b.created_at).getTime(),
+    name: requesterName(b),
+    type: item,
+    status: b.status,
+    overdue: daysPastDue(b.due_date) > 0,
+    overdueLabel: `${daysPastDue(b.due_date)}d overdue`,
+    details,
+  }
+}
+
+// One authed GET that is allowed to fail: an account without the section is
+// answered 403, and its queue is simply missing that kind of row.
+const fetchList = async (path) => {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() })
+    if (!res.ok) return null
+    const body = await res.json()
+    const list = body.data || body
+    return Array.isArray(list) ? list : null
+  } catch {
+    return null
+  }
+}
 
 const fetchDashboardData = async () => {
   loading.value = true
+  loadError.value = ''
   try {
-    const response = await fetch(`${API_BASE}/admin/dashboard`, {
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Accept': 'application/json'
-      }
-    })
+    const [dash, services, borrowings] = await Promise.all([
+      fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() }),
+      fetchList('/admin/service-requests'),
+      fetchList('/borrowings'),
+    ])
+    if (!dash.ok) throw new Error('Network response error')
 
-    if (!response.ok) throw new Error('Network response error')
-
-    const data = await response.json()
-
+    const data = await dash.json()
     kpiStats.value = data.kpiStats || []
-    serviceRequests.value = data.serviceRequests || []
-    borrowRequests.value = data.borrowRequests || []
     systemLogs.value = data.systemLogs || []
     followUps.value = data.followUps || []
-    mapDataByPeriod.value = data.mapDataByPeriod || {}
-    walkInByPeriod.value = data.walkInByPeriod || {}
-    totalsByPeriod.value = data.totalsByPeriod || {}
-    aging.value = data.aging || { labels: [], data: [], total: 0, oldestDays: 0 }
-    chartDataRaw.value = data.charts || null
-    pieDataByPeriod.value = data.charts?.pieByPeriod || {}
 
+    rows.value = [
+      ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
+      ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
+    ]
+    if (services === null && borrowings === null) loadError.value = 'The request list could not be loaded.'
   } catch (error) {
-    console.error("Failed to load dashboard:", error)
+    console.error('Failed to load dashboard:', error)
+    loadError.value = 'The dashboard could not be loaded.'
   } finally {
     loading.value = false
   }
 }
 
-// The feed merges two models that use two different status vocabularies:
-//   ServiceRequest     — Pending, Booked, Responding, Resolved, Disapproved, Cancelled
-//   EquipmentBorrowing — Pending, Approved, Released, Returned, Denied, Cancelled
-// Two real defects fixed here, both found while building the one-definition
-// status-color pass (docs/ui-audit and the request-lifecycle color audit):
-// 1. 'Booked' had no case at all and fell through to grey — a booked request
-//    read as an unknown state on the feed.
-// 2. 'Responding' was bucketed with 'approved'/'released' under 'primary'.
-//    Every other view colors Responding with `info`; only this switch
-//    disagreed. Same status, two colors, depending which screen you read it
-//    from.
-// Approved keeps its own color (borrowingStatus.ts) rather than sharing
-// Responding's `info` — the two never render in the same table, but a
-// shared color definition should still mean one thing per hue. Cancelled
-// uses the neutral slate both families settled on (adminUi.ts,
-// CANCELLED_COLOR) rather than Denied/Disapproved's red: checked both
-// ServiceRequestController.php:962 and EquipmentBorrowingController.php:281
-// before relying on this — in both models it's the resident withdrawing
-// their own request, never a staff refusal.
-const getStatusColor = (status) => {
-  if (!status) return 'grey'
-  switch (status.toLowerCase()) {
-    case 'pending': return 'warning'
-    case 'booked': return BOOKED_COLOR
-    case 'responding': return 'info'
-    case 'approved': return statusAccent('Approved')
-    case 'released': return 'primary'
-    case 'resolved':
-    case 'returned': return 'success'
-    case 'disapproved':
-    case 'denied': return 'error'
-    case 'cancelled': return CANCELLED_COLOR
-    default: return 'grey'
-  }
-}
-
-const getHeatColor = (percentage) => {
-  if (percentage > 70) return 'error'
-  if (percentage > 40) return 'warning'
-  return 'primary'
-}
-
-// Top 5 zones ranked by request volume, percentage relative to the busiest zone
-const topZones = computed(() => {
-  const list = mapDataByPeriod.value[zonesPeriod.value] || []
-  if (list.length === 0) return []
-  const max = Math.max(...list.map(b => b.requests))
-  return [...list]
-    .sort((a, b) => b.requests - a.requests)
-    .slice(0, 5)
-    .map(b => ({ ...b, percentage: max > 0 ? Math.round((b.requests / max) * 100) : 0 }))
+const rowsForTab = (tab) => rows.value.filter((r) => {
+  if (tab === 'all') return true
+  if (tab === 'overdue') return r.overdue
+  return r.kind === tab
 })
 
-// Both follow the ranking's own period toggle, not the map's — they are read
-// as part of that list's arithmetic, so they have to move with it.
-const walkInCount = computed(() => walkInByPeriod.value[zonesPeriod.value] ?? 0)
-const sectionTotal = computed(() => totalsByPeriod.value[zonesPeriod.value] ?? 0)
+const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.value, rowsForTab(t.value).length])))
 
-// Headline metric: real aggregate from the backend's day-by-day series (not the 5-item sample lists)
-const heroTotal = computed(() => {
-  if (!chartDataRaw.value) return 0
-  if (heroPeriod.value === 'today') {
-    const series = chartDataRaw.value.bar.week
-    return series.data.at(-1) || 0
-  }
-  const series = chartDataRaw.value.bar[heroPeriod.value]
-  return series.data.reduce((a, b) => a + b, 0)
-})
-
-watch(heroTotal, (val) => animateValue('hero', val))
-
-const heroSparklineData = computed(() => {
-  if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const key = heroPeriod.value === 'today' ? 'week' : heroPeriod.value
-  const source = chartDataRaw.value.bar[key]
-  const primary = themeColors.value.primary
-  return {
-    labels: source.labels,
-    datasets: [{
-      data: source.data,
-      borderColor: primary,
-      backgroundColor: `rgba(${hexToRgb(primary)}, 0.15)`,
-      fill: true,
-      borderWidth: 2,
-      tension: 0.4
-    }]
-  }
-})
-
-const sparklineOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: { x: { display: false }, y: { display: false } },
-  elements: { point: { radius: 0 } }
-}
-
-// Unified activity feed — merges service + borrow requests into one timeline
-const unifiedFeed = computed(() => {
-  const svc = serviceRequests.value.map(item => ({
-    kind: 'service', name: item.resident, meta: item.type, date: item.date, status: item.status, icon: 'mdi-account'
-  }))
-  const brw = borrowRequests.value.map(item => ({
-    kind: 'borrow', name: item.borrower, meta: item.equipment, date: item.date, status: item.status, icon: 'mdi-toolbox-outline'
-  }))
-  return [...svc, ...brw].sort((a, b) => new Date(b.date) - new Date(a.date))
-})
-
-const isWithinPeriod = (dateStr, period) => {
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return true
-  const now = new Date()
-  if (period === 'today') return d.toDateString() === now.toDateString()
-  if (period === 'week') { const wk = new Date(now); wk.setDate(now.getDate() - 7); return d >= wk }
-  if (period === 'month') { const mo = new Date(now); mo.setDate(now.getDate() - 30); return d >= mo }
-  return true
-}
-
-const filteredFeed = computed(() => {
-  return unifiedFeed.value.filter(item => {
-    if (feedTab.value !== 'all' && item.kind !== feedTab.value) return false
-    return isWithinPeriod(item.date, feedPeriod.value)
-  })
-})
-
-const volumeChartData = computed(() => {
-  const source = pieDataByPeriod.value[volumePeriod.value]?.[volumeToggle.value]
-  if (!source) return { labels: [], datasets: [] }
-  const paired = source.labels
-    .map((label, i) => ({ label, value: source.data[i] }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 8)
-  return {
-    labels: paired.map(p => p.label),
-    datasets: [{
-      label: 'Requests',
-      backgroundColor: themeColors.value.primary,
-      borderRadius: 4,
-      barThickness: 14,
-      data: paired.map(p => p.value)
-    }]
-  }
-})
-
-// Compare-Categories charts should show every value as text, not hover-only —
-// a vue-chartjs `:plugins` prop scopes this to the Request Volume chart alone,
-// so the trend/sparkline Line charts elsewhere on the page stay uncluttered.
-const volumeValueLabelsPlugin = {
-  id: 'volumeValueLabels',
-  afterDatasetsDraw(chart) {
-    const { ctx } = chart
-    const onSurface = getComputedStyle(document.documentElement).getPropertyValue('--v-theme-on-surface').trim() || '0,0,0'
-    ctx.save()
-    ctx.fillStyle = `rgba(${onSurface}, 0.85)`
-    ctx.font = '700 11px sans-serif'
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = 'left'
-    chart.data.datasets.forEach((dataset, dsIndex) => {
-      chart.getDatasetMeta(dsIndex).data.forEach((bar, i) => {
-        const value = dataset.data[i]
-        if (value === undefined || value === null) return
-        ctx.fillText(String(value), bar.x + 6, bar.y)
-      })
-    })
-    ctx.restore()
-  }
-}
-
-const volumeChartOptions = {
-  indexAxis: 'y',
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { beginAtZero: true, ticks: { precision: 0 }, grace: '15%' },
-    y: { ticks: { font: { size: 11 } } }
-  }
-}
-
-// Daily counts over a rolling window — a time axis, so a Line/area chart
-// reads the trend correctly. A bar-per-day implies discrete unrelated
-// categories, which is the wrong shape for this data (see chart-type rules:
-// time-series belongs on Line, Bar is for unordered category comparison).
-const barChartData = computed(() => {
-  if (!chartDataRaw.value) return { labels: [], datasets: [] }
-  const key = trendPeriod.value === 'today' ? 'week' : trendPeriod.value
-  const source = chartDataRaw.value.bar[key]
-  const primary = themeColors.value.primary
-  return {
-    labels: source.labels,
-    datasets: [{
-      label: 'Requests',
-      data: source.data,
-      borderColor: primary,
-      backgroundColor: `rgba(${hexToRgb(primary)}, 0.15)`,
-      fill: true,
-      borderWidth: 2,
-      tension: 0.35,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      pointBackgroundColor: primary,
-      pointBorderColor: '#fff',
-      pointBorderWidth: 1,
-    }]
-  }
-})
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  interaction: { mode: 'index', intersect: false },
-  scales: {
-    x: { grid: { display: false } },
-    y: { beginAtZero: true, ticks: { precision: 0 } }
-  }
-}
-
-// Define colors based on request density. Neutral (zero requests) has no
-// theme token -- it's an explicit per-theme pair, same pattern as the
-// pill-cancelled slate in settings.scss, rather than one literal blind to
-// which theme is active.
-const getMapColor = (d) => {
-  if (d > 30) return themeColors.value.error       // High
-  if (d > 15) return themeColors.value.warning      // Medium
-  if (d > 0) return themeColors.value.success       // Low
-  return theme.global.name.value === 'dark' ? '#3A4459' : '#e0e0e0' // Zero requests
-}
-
-const mapEl = ref(null)
-let map = null
-let geoLayer = null
-
-// Keyed on the exact backend name — no case folding, so a rename on either
-// side fails loudly as an unmatched grey polygon rather than silently.
-const requestCountByName = computed(() =>
-  Object.fromEntries((mapDataByPeriod.value[mapPeriod.value] || []).map(b => [b.name, b.requests]))
+const visibleRows = computed(() =>
+  rowsForTab(queueTab.value).filter((r) => !statusFilter.value || r.status === statusFilter.value)
 )
 
-const styleFor = (feature) => ({
-  fillColor: getMapColor(requestCountByName.value[feature.properties.name] ?? 0),
-  weight: 2,
-  opacity: 1,
-  color: 'white',
-  dashArray: '3',
-  fillOpacity: 0.7,
-})
-
-const tooltipFor = (feature) => {
-  const name = feature.properties.name
-  const count = requestCountByName.value[name] ?? 0
-  return `<b>${name}</b><br>${count} ${count === 1 ? 'Request' : 'Requests'}`
-}
-
-onMounted(() => {
-  fetchDashboardData()
-
-  map = L.map(mapEl.value)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap',
-    className: 'map-tiles',
-  }).addTo(map)
-
-  geoLayer = L.geoJSON(barangayBoundaries, {
-    style: styleFor,
-    onEachFeature: (feature, layer) => layer.bindTooltip(tooltipFor(feature)),
-  }).addTo(map)
-
-  // Frame the barangays themselves rather than hardcoding a centre and zoom,
-  // so the view stays correct if the boundary file changes.
-  map.fitBounds(geoLayer.getBounds(), { padding: [12, 12] })
-})
-
-// Repaint whenever counts arrive or change. The map is built on mount with
-// whatever data exists (usually none), so this — not a timer — is what makes
-// the fetch land. Also repaints on a theme toggle: Leaflet isn't reactive,
-// so getMapColor's new theme-token values wouldn't otherwise reach the
-// choropleth until something else re-triggered this watcher.
-watch([requestCountByName, () => theme.global.name.value], () => {
-  if (!geoLayer) return
-  geoLayer.setStyle(styleFor)
-  geoLayer.eachLayer((layer) => layer.setTooltipContent(tooltipFor(layer.feature)))
-})
-
-onUnmounted(() => {
-  map?.remove()
-  map = null
-  geoLayer = null
-})
+onMounted(fetchDashboardData)
 </script>
 
 <style scoped>
@@ -865,8 +459,8 @@ onUnmounted(() => {
 .min-width-0 {
   min-width: 0;
 }
-.gap-4 {
-  gap: 16px;
+.gap-6 {
+  gap: 24px;
 }
 
 /* Soft UI Evolution: layered shadow depth instead of flat borders, theme-aware */
@@ -879,21 +473,9 @@ onUnmounted(() => {
   transform: translateY(-4px);
   box-shadow: 0 4px 10px rgba(var(--v-theme-on-surface), 0.06), 0 12px 24px rgba(var(--v-theme-on-surface), 0.14);
 }
-
-.hero-tint {
-  background: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.10), rgba(var(--v-theme-primary), 0.02));
-}
-
-.subtle-surface {
-  background-color: rgba(var(--v-theme-on-surface), 0.05);
-}
-
-/* OSM ships only light tiles, so a raster filter is the one way to keep the
-   map from being a floodlight in dark mode without adding a tile provider (and
-   an API key). Applied to the tile layer alone — the choropleth lives in the
-   overlay pane above it and keeps its true colours. */
-.v-theme--dark .map-tiles {
-  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.8);
+/* The queue is a working surface, not a tile: it should not lift under the cursor. */
+.queue-card:hover {
+  transform: none;
 }
 
 .lh-1 {
@@ -902,6 +484,10 @@ onUnmounted(() => {
 
 .kpi-tile {
   min-height: 72px;
+}
+.kpi-tile--active {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
 }
 
 /* Wraps rather than truncating. A tile is ~306px at 1920 with five cards and
@@ -938,51 +524,13 @@ onUnmounted(() => {
   }
 }
 
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* v-card-title and v-card-subtitle both ship nowrap + ellipsis, which clipped
-   this card's header inside its own width at phone size. */
-.wrap-text {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-}
-
-.age-tile {
-  flex: 1 1 140px;
-  border-radius: 12px;
-  padding: 12px 16px;
-}
-
-/* The oldest bucket gets a quiet warning tint, never an alarm red: this is
-   administrative software and an old request is a queue to work through, not
-   an emergency (PRODUCT.md, calm over alarming). */
-.age-tile--stale {
-  background-color: rgba(var(--v-theme-warning), 0.12);
-}
-
-.age-count {
-  font-size: 24px;
+.queue-table :deep(th) {
   font-weight: 700;
-  line-height: 1.2;
+  white-space: nowrap;
 }
-
-.rank-badge {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 800;
-  background-color: rgba(var(--v-theme-on-surface), 0.06);
-  flex-shrink: 0;
+.expanded-cell {
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  padding: 12px 16px;
 }
 
 .stagger-item {

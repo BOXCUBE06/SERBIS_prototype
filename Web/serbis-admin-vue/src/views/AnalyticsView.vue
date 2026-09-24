@@ -483,6 +483,10 @@
       </v-col>
     </v-row>
 
+    <!-- Live all-time picture (map, trend, volume) moved here from the Dashboard,
+         which is now the triage queue. Ignores the filter bar above: it reads
+         its own endpoint with its own period toggles. -->
+    <DashboardInsights class="mt-2" />
   </v-container>
 </template>
 
@@ -496,6 +500,7 @@ import { Bar } from 'vue-chartjs'
 import PageHeader from '@/components/PageHeader.vue'
 import AnalyticsSection from '@/components/AnalyticsSection.vue'
 import ChartDataTable from '@/components/ChartDataTable.vue'
+import DashboardInsights from '@/components/DashboardInsights.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
