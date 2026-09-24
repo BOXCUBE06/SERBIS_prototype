@@ -274,6 +274,8 @@ const getActionColor = (action) => {
     case 'updated': return 'blue'    // was 'update'
     case 'deleted': return 'red'     // was 'delete'
     case 'login':   return 'purple'
+    case 'exported':
+    case 'printed': return 'teal'
     default:        return 'grey'
   }
 }

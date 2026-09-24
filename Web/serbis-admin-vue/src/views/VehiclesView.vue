@@ -7,6 +7,7 @@
           title="Vehicles"
         >
           <template v-slot:actions>
+            <ExportMenu type="vehicle" :rows="filteredVehicles" plain />
             <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
               <v-icon start size="20">mdi-plus</v-icon> Add Unit
             </v-btn>
@@ -238,6 +239,7 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import ExportMenu from '@/components/ExportMenu.vue'
 
 const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']

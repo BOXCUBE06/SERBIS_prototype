@@ -174,6 +174,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by('password-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
         });
 
+        // A print/export log is one row per click: generous for a busy desk,
+        // but a loop cannot fill the Activity Log. Keyed on the account, like
+        // the limiters above.
+        RateLimiter::for('export-log', function (Request $request) {
+            return Limit::perMinute(30)->by('export-log:'.$request->user()->admin_id);
+        });
+
         RateLimiter::for('sms-blast', function (Request $request) {
             return Limit::perHour(3)->by('admin:'.$request->user()->admin_id);
         });

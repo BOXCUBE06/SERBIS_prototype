@@ -67,6 +67,7 @@
           @click:row="(_e, { item }) => openDetail(item)"
         >
           <template v-slot:actions>
+            <ExportMenu type="trip" :rows="filteredItems" :selected-ids="selectedIds" show-selection />
             <v-btn
               color="primary"
               variant="flat"
@@ -77,6 +78,15 @@
               <v-icon start size="small">mdi-plus</v-icon>
               Ambulance Trip Record
             </v-btn>
+          </template>
+
+          <template v-slot:item.select="{ item }">
+            <v-checkbox-btn
+              :model-value="selectedIds.has(item.conduction_request_id)"
+              density="compact"
+              :aria-label="`Select ${item.patient_name || 'unnamed patient'}'s trip record`"
+              @click.stop="toggleSelect(item)"
+            ></v-checkbox-btn>
           </template>
 
           <template v-slot:item.patient="{ item }">
@@ -292,6 +302,7 @@
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
             <StatusPill :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
+            <ExportMenu type="trip" :row="selected" />
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
@@ -513,7 +524,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
@@ -524,6 +535,8 @@ import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import ExportMenu from '@/components/ExportMenu.vue'
+import { useSelection } from '@/composables/requestDisplay'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
@@ -576,6 +589,7 @@ const nameInitials = (name) => {
 // `value` gives the composite columns something to sort on; the key still
 // names the cell slot.
 const headers = [
+  { title: '', key: 'select', sortable: false, width: '48px' },
   { title: 'Patient', key: 'patient', value: 'patient_name', width: '28%' },
   { title: 'Status', key: 'trip_status', width: '18%' },
   { title: 'From → To', key: 'trip', value: (r) => `${r.origin || ''} ${r.destination || ''}`, width: '34%' },
@@ -987,6 +1001,9 @@ const submitCreate = async () => {
 // Detail dialog
 const detail = ref({ open: false })
 const selected = ref(null)
+// Ticked trip records, for bulk print/export.
+const selectedIds = reactive(new Set())
+const { toggleSelect } = useSelection(selected, selectedIds, (r) => r.conduction_request_id)
 
 const openDetail = (item) => {
   apiError.value = ''

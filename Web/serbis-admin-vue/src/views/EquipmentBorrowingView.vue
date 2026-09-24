@@ -85,6 +85,19 @@
     >
       <template v-slot:summary>{{ resultSummary }}</template>
 
+      <template v-slot:actions>
+        <ExportMenu type="borrowing" :rows="activeItems" :selected-ids="selectedIds" show-selection />
+      </template>
+
+      <template v-slot:item.select="{ item }">
+        <v-checkbox-btn
+          :model-value="selectedIds.has(item.borrow_id)"
+          density="compact"
+          :aria-label="`Select ${personName(item)}'s borrowing`"
+          @click.stop="toggleSelect(item)"
+        ></v-checkbox-btn>
+      </template>
+
       <template v-slot:filters>
         <v-select
           v-model="itemFilter"
@@ -242,6 +255,19 @@
     >
       <template v-slot:summary>{{ resultSummary }}</template>
 
+      <template v-slot:actions>
+        <ExportMenu type="borrowing" :rows="historyItems" :selected-ids="selectedIds" show-selection />
+      </template>
+
+      <template v-slot:item.select="{ item }">
+        <v-checkbox-btn
+          :model-value="selectedIds.has(item.borrow_id)"
+          density="compact"
+          :aria-label="`Select ${personName(item)}'s borrowing`"
+          @click.stop="toggleSelect(item)"
+        ></v-checkbox-btn>
+      </template>
+
       <template v-slot:filters>
         <v-select
           v-model="itemFilter"
@@ -302,6 +328,7 @@
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">Borrowing Request Details</span>
             <StatusPill :status="selectedRecord?.status" :icon="statusIcon(selectedRecord?.status)" />
+            <ExportMenu v-if="selectedRecord" type="borrowing" :row="selectedRecord" />
           </div>
           <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="closeModal"></v-btn>
         </v-card-title>
@@ -780,6 +807,8 @@ import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import ExportMenu from '@/components/ExportMenu.vue'
+import { useSelection } from '@/composables/requestDisplay'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -827,6 +856,9 @@ const apiError = ref('')
 const liveMessage = ref('')
 const modal = ref({ isOpen: false })
 const selectedRecord = ref(null)
+// Ticked rows, shared by both tables (borrow_ids do not repeat across them).
+const selectedIds = reactive(new Set())
+const { toggleSelect } = useSelection(selectedRecord, selectedIds, (b) => b.borrow_id)
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const emptyAction = () => ({
@@ -864,6 +896,7 @@ const personName = (b) => `${b.resident?.last_name || ''}, ${b.resident?.first_n
 const personSecondary = (b) => displayPhone(b.resident?.phone_number) || b.resident?.barangay?.barangay_name || null
 
 const activeHeaders = [
+  { title: '', key: 'select', sortable: false, width: '48px' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '13%' },
   { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '23%' },
@@ -873,6 +906,7 @@ const activeHeaders = [
 ]
 
 const historyHeaders = [
+  { title: '', key: 'select', sortable: false, width: '48px' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '17%' },
   { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '25%' },
