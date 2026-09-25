@@ -10,8 +10,11 @@
 
       <div class="sidebar-header d-flex align-center justify-space-between mb-2 mt-2 px-4">
         <div class="d-flex align-center">
-          <div class="logo-accent"></div>
-          <span class="text-h6 font-weight-black text-white tracking-widest">SERBIS</span>
+          <span class="brand-tile"><img :src="logoUrl" alt="" width="40" height="40"></span>
+          <div class="brand-text">
+            <span class="brand-word text-h6 text-white tracking-widest">SERBIS</span>
+            <span class="brand-sub text-white-50">MDRRMO Echague</span>
+          </div>
         </div>
         <v-btn
           :icon="theme.global.name.value === 'dark' ? 'mdi-weather-sunny' : 'mdi-weather-night'"
@@ -24,51 +27,40 @@
       </div>
 
       <div ref="navScrollEl" class="nav-scroll px-4">
-        <div v-if="mainMenu.length > 0" class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest">Main Menu</div>
-        <v-list v-if="mainMenu.length > 0" bg-color="transparent" density="compact" nav class="px-0">
-          <v-list-item
-            v-for="item in mainMenu"
-            :key="item.to"
-            :to="item.to"
-            class="nav-item"
-            rounded="pill"
-            active-class="active-nav-item"
-            slim
-            :ripple="false"
+        <template v-for="(group, gi) in menu" :key="group.key">
+          <button
+            type="button"
+            class="group-toggle text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest"
+            :class="{ 'mt-3': gi > 0 }"
+            :aria-expanded="!collapsed.includes(group.key)"
+            :aria-controls="`nav-group-${group.key}`"
+            @click="toggleGroup(group.key)"
           >
-            <template v-slot:prepend>
-              <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
-                <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-              </v-avatar>
-            </template>
-            <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-              {{ item.title }}
-            </v-list-item-title>
-          </v-list-item>
-        </v-list>
-
-        <div v-if="systemMenu.length > 0" class="text-caption font-weight-medium text-white-50 mt-3 mb-1 px-2 tracking-widest">System</div>
-        <v-list v-if="systemMenu.length > 0" bg-color="transparent" density="compact" nav class="px-0">
-          <v-list-item
-            v-for="item in systemMenu"
-            :key="item.to"
-            :to="item.to"
-            class="nav-item"
-            rounded="pill"
-            active-class="active-nav-item"
-            slim
-            :ripple="false"
-          >
-            <template v-slot:prepend>
-              <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
-                <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-              </v-avatar>
-            </template>
-            <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-              {{ item.title }}
-            </v-list-item-title>
-          </v-list-item>
-        </v-list>
+            {{ group.label }}
+            <v-icon size="16" class="group-chevron" :class="{ 'is-collapsed': collapsed.includes(group.key) }">mdi-chevron-down</v-icon>
+          </button>
+          <v-list v-show="!collapsed.includes(group.key)" :id="`nav-group-${group.key}`" bg-color="transparent" density="compact" nav class="px-0">
+            <v-list-item
+              v-for="item in group.items"
+              :key="item.to"
+              :to="item.to"
+              class="nav-item"
+              rounded="pill"
+              active-class="active-nav-item"
+              slim
+              :ripple="false"
+            >
+              <template v-slot:prepend>
+                <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
+                  <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
+                </v-avatar>
+              </template>
+              <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
+                {{ item.title }}
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </template>
       </div>
 
       <div class="sidebar-footer px-4 pb-4">
@@ -118,7 +110,8 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
-import { ADMIN_SECTIONS } from '@/composables/adminSections'
+import { ADMIN_SECTIONS, SECTION_GROUPS, sectionForPath } from '@/composables/adminSections'
+import logoUrl from '@/assets/logo/serbis-logo.png'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
 
@@ -158,15 +151,38 @@ const isOpen = defineModel<boolean>('open', { default: true })
 // what the account does not hold either way.
 const { can, loadCurrentAdmin } = useCurrentAdmin()
 
-const mainMenu = computed(() => ADMIN_SECTIONS.filter((s) => s.group === 'main' && can(s.key)))
-const systemMenu = computed(() => ADMIN_SECTIONS.filter((s) => s.group === 'system' && can(s.key)))
+const menu = computed(() => SECTION_GROUPS
+  .map((g) => ({ ...g, items: ADMIN_SECTIONS.filter((s) => s.group === g.key && can(s.key)) }))
+  .filter((g) => g.items.length > 0))
+
+// Collapsed group keys, remembered per browser. Storage can throw (private
+// window, blocked site data), so the menu just starts expanded then.
+const COLLAPSED_KEY = 'serbis.sidebar.collapsed'
+const readCollapsed = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]') } catch { return [] }
+}
+const collapsed = ref<string[]>(readCollapsed())
+const saveCollapsed = () => {
+  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed.value)) } catch { /* not remembered */ }
+}
+const toggleGroup = (key: string) => {
+  collapsed.value = collapsed.value.includes(key) ? collapsed.value.filter((k) => k !== key) : [...collapsed.value, key]
+  saveCollapsed()
+}
+
+// Landing on a page opens its group, so the active item is never hidden.
+watch(() => route.path, (path) => {
+  const key = ADMIN_SECTIONS.find((s) => s.key === sectionForPath(path))?.group
+  if (key && collapsed.value.includes(key)) {
+    collapsed.value = collapsed.value.filter((k) => k !== key)
+    saveCollapsed()
+  }
+}, { immediate: true })
 
 onMounted(() => { loadCurrentAdmin() })
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-
 /* .modern-drawer's background lives in App.vue now -- it was a byte-for-byte
    duplicate here (this file is scoped, App.vue's copy is global and already
    matched this element by class name regardless). One definition, theme-aware. */
@@ -209,11 +225,24 @@ onMounted(() => { loadCurrentAdmin() })
   margin-bottom: 2px;
 }
 
-.logo-accent {
-  width: 4px; height: 20px;
-  background-color: #fff;
-  margin-right: 12px; border-radius: 2px;
+.group-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; border: 0; background: none; cursor: pointer; text-align: left;
+  border-radius: 6px;
 }
+.group-toggle:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+.group-chevron { transition: transform 150ms; }
+.group-chevron.is-collapsed { transform: rotate(-90deg); }
+
+/* 40px tile; the source is 2000px, so it only ever scales down. */
+.brand-tile {
+  width: 40px; height: 40px; flex: none; margin-right: 12px;
+  border-radius: 10px; overflow: hidden;
+}
+.brand-tile img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.brand-text { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+.brand-word { font-weight: 800; }
+.brand-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;

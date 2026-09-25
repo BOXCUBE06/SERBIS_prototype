@@ -437,6 +437,8 @@ import BarangayDemand from '@/components/BarangayDemand.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+// Side effect only: sets the chart font default, which this page's own charts need too.
+import '@/composables/useChartTheme'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 

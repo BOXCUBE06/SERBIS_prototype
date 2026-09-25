@@ -126,18 +126,18 @@
         @click:row="(_event, { item }) => openRow(item)"
       >
         <template #item.filedAt="{ item }">
-          <div class="cell-primary">{{ fmtFiled(item.filedAt) }}</div>
-          <div v-if="item.note" class="cell-secondary" :class="`wait-${item.noteTone}`">{{ item.note }}</div>
+          <div class="cell-primary" :title="fmtFiled(item.filedAt)">{{ fmtFiled(item.filedAt) }}</div>
+          <div v-if="item.note" class="cell-secondary" :class="`wait-${item.noteTone}`" :title="item.note">{{ item.note }}</div>
         </template>
         <template #item.name="{ item }">
           <!-- A real link so the row can be reached from the keyboard; a click
                anywhere else on the row goes to the same place. -->
-          <router-link :to="rowLink(item)" class="cell-primary row-link" @click.stop>{{ item.name }}</router-link>
+          <router-link :to="rowLink(item)" class="cell-primary row-link" :title="item.name" @click.stop>{{ item.name }}</router-link>
         </template>
         <template #item.type="{ item }">
-          <div class="d-flex align-center ga-2">
+          <div class="d-flex align-center ga-2 min-width-0">
             <v-icon size="16" class="text-medium-emphasis">{{ KIND_ICONS[item.kind] }}</v-icon>
-            <span class="cell-primary">{{ item.type }}</span>
+            <span class="cell-primary" :title="item.type">{{ item.type }}</span>
             <v-chip v-if="item.shortStock" size="x-small" color="error" variant="tonal" class="font-weight-bold" :title="`${item.onHand} on hand`">Short stock</v-chip>
           </div>
         </template>
@@ -145,8 +145,8 @@
           <StatusPill :status="item.status" solid class="status-badge" />
         </template>
       </v-data-table>
-      <div v-if="pageCount > 1" class="d-flex justify-center pa-3">
-        <v-pagination v-model="page" :length="pageCount" :total-visible="5" density="comfortable" rounded="circle"></v-pagination>
+      <div class="queue-pager d-flex justify-center pa-3">
+        <v-pagination v-if="pageCount > 1" v-model="page" :length="pageCount" :total-visible="5" density="comfortable" rounded="circle"></v-pagination>
       </div>
     </v-card>
     </v-col></v-row>
@@ -216,10 +216,10 @@ const page = ref(1)
 const sortBy = ref([{ key: 'filedAt', order: 'asc' }])
 
 const headers = [
-  { title: 'Time Filed', key: 'filedAt', sortable: true },
-  { title: 'Head of the Family', key: 'name', sortable: true },
-  { title: 'Request Type', key: 'type', sortable: true },
-  { title: 'Status', key: 'status', sortable: true },
+  { title: 'Time Filed', key: 'filedAt', sortable: true, width: '22%' },
+  { title: 'Head of the Family', key: 'name', sortable: true, width: '26%' },
+  { title: 'Request Type', key: 'type', sortable: true, width: '34%' },
+  { title: 'Status', key: 'status', sortable: true, width: '18%' },
 ]
 
 // A tab change is a new list; page 3 of the last one would be blank.
@@ -375,9 +375,6 @@ const summary = computed(() => {
     trips: tripsOut.value,
     overdue: overdueRows.value.length,
     ambulance: open('ambulance', 'Pending'),
-    bookings: open('ambulance', 'Booked'),
-    services: open('service', 'Pending'),
-    borrowing: open('borrow', 'Pending'),
   })
 })
 
@@ -555,6 +552,26 @@ onMounted(fetchDashboardData)
   color: var(--dash-muted) !important;
   white-space: nowrap;
 }
+/* Fixed columns and a fixed row height, so no tab or page reflows the card.
+   The wrapper reserves header + PAGE_SIZE rows; the pager slot is always there. */
+.queue-table {
+  --v-table-row-height: 52px;
+}
+.queue-table :deep(table) {
+  table-layout: fixed;
+}
+.queue-table :deep(.v-table__wrapper) {
+  min-height: calc(var(--v-table-header-height, 56px) + 5 * var(--v-table-row-height));
+}
+.queue-table :deep(td) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: var(--v-table-row-height);
+}
+.queue-pager {
+  min-height: 64px;
+}
 .queue-table :deep(.queue-row) {
   cursor: pointer;
 }
@@ -570,11 +587,19 @@ onMounted(fetchDashboardData)
   font-weight: 600;
   color: var(--dash-text);
 }
+.cell-primary,
+.cell-secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cell-secondary {
   font-size: 12px;
   font-weight: 400;
 }
 .row-link {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-decoration: none;
 }
 .row-link:hover {

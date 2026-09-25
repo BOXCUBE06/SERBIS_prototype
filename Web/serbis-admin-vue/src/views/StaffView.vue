@@ -418,7 +418,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { initials as computeInitials } from '@/composables/adminUi'
-import { ASSIGNABLE_SECTIONS } from '@/composables/adminSections'
+import { ASSIGNABLE_SECTIONS, SECTION_GROUPS } from '@/composables/adminSections'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { loadCurrentAdmin } from '@/composables/useCurrentAdmin'
@@ -505,10 +505,9 @@ const accessSummary = (item) => {
 
 // The checkboxes follow the sidebar, so choosing what an account can open reads
 // like the menu it will get.
-const accessGroups = [
-  { label: 'Main menu', items: ASSIGNABLE_SECTIONS.filter((s) => s.group === 'main') },
-  { label: 'System', items: ASSIGNABLE_SECTIONS.filter((s) => s.group === 'system') },
-]
+const accessGroups = SECTION_GROUPS
+  .map((g) => ({ label: g.label, items: ASSIGNABLE_SECTIONS.filter((s) => s.group === g.key) }))
+  .filter((g) => g.items.length > 0)
 
 const accessDialog = ref({ show: false, item: null, loading: false, error: '', superAdmin: false, granted: [] })
 

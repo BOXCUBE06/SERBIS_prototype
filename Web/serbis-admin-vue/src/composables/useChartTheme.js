@@ -9,6 +9,9 @@ import {
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Filler)
 
+// Canvas text does not inherit CSS, so the app font is set here, once, for every chart.
+ChartJS.defaults.font.family = "'Plus Jakarta Sans Variable', system-ui, sans-serif"
+
 const hexToRgb = (hex) => {
   const n = Number.parseInt(String(hex).replace('#', ''), 16)
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`

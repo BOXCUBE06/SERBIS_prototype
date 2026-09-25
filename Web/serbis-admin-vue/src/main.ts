@@ -15,8 +15,10 @@ import App from './App.vue'
 import router from './router'
 import { installSessionExpiryHandler } from '@/composables/apiSession'
 
-// Styles
-//import 'unfonts.css'
+// Fonts: one variable face for the UI, mono only for transaction numbers (.mono).
+import '@fontsource-variable/plus-jakarta-sans'
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/500.css'
 
 const app = createApp(App)
 
