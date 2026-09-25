@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class ServiceActiveStatusTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -172,6 +173,7 @@ class ServiceActiveStatusTest extends TestCase
         ]);
 
         $this->activeService->update(['is_active' => false]);
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)
             ->putJson("/api/service-requests/{$request->getKey()}", ['status' => 'Responding'])

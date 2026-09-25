@@ -13,6 +13,7 @@ use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\ExpectationFailedException;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -33,7 +34,7 @@ use Tests\TestCase;
  */
 class AmbulanceDispatchRegressionTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -131,6 +132,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'description' => 'Chest pains',
             'status' => 'Pending',
         ]);
+        $this->assignResponder($request);
 
         // Approve & Dispatch.
         $this->putJson("/api/service-requests/{$request->getKey()}", [
@@ -237,6 +239,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'resident_id' => $firstResident->getKey(), 'service_id' => $this->ambulance->service_id,
             'description' => 'First patient', 'status' => 'Pending',
         ]);
+        $this->assignResponder($first);
         $this->putJson("/api/service-requests/{$first->getKey()}", [
             'status' => 'Responding', 'vehicle_id' => $this->vehicleA->vehicle_id,
         ])->assertOk();

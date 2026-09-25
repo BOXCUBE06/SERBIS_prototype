@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -27,7 +28,7 @@ use Tests\TestCase;
  */
 class ServiceRequestAmbulanceApprovalGateTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -128,6 +129,7 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
         Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
         $request = $this->bookedAmbulanceRequest();
+        $this->assignResponder($request);
 
         $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
             'vehicle_id' => $this->vehicle->vehicle_id,
@@ -154,6 +156,7 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
             'description' => 'Fallen tree scheduled for pickup',
             'status' => 'Booked',
         ]);
+        $this->assignResponder($request);
         // No booking row at all for a non-ambulance request — approved_at
         // has nowhere to live.
         $this->assertNull($request->ambulanceBooking);
@@ -176,6 +179,7 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
             'description' => 'Chest pains, needs transport',
             'status' => 'Pending',
         ]);
+        $this->assignResponder($request);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',

@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -33,7 +34,7 @@ use Tests\TestCase;
  */
 class ServiceRequestTransitionPushTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -125,6 +126,7 @@ class ServiceRequestTransitionPushTest extends TestCase
             'description' => 'Fallen tree blocking the road',
             'status' => 'Pending',
         ]);
+        $this->assignResponder($request);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", ['status' => 'Responding'])->assertOk();
 
@@ -140,6 +142,7 @@ class ServiceRequestTransitionPushTest extends TestCase
             'description' => 'Fallen tree blocking the road',
             'status' => 'Booked',
         ]);
+        $this->assignResponder($request);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", ['status' => 'Responding'])->assertOk();
 

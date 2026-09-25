@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -29,7 +30,7 @@ use Tests\TestCase;
  */
 class ServiceRequestVehicleGuardTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -90,6 +91,7 @@ class ServiceRequestVehicleGuardTest extends TestCase
     public function test_an_available_ambulance_is_accepted_on_an_ambulance_request(): void
     {
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -110,6 +112,7 @@ class ServiceRequestVehicleGuardTest extends TestCase
         ]);
 
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -128,6 +131,7 @@ class ServiceRequestVehicleGuardTest extends TestCase
         $this->unit->update(['status' => 'Maintenance']);
 
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -145,6 +149,7 @@ class ServiceRequestVehicleGuardTest extends TestCase
         $this->unit->update(['status' => 'Dispatched']);
 
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -162,6 +167,7 @@ class ServiceRequestVehicleGuardTest extends TestCase
         // change a note. By then the unit is Dispatched, not Available, so a
         // guard without this exemption would reject the request's own vehicle.
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',

@@ -14,6 +14,7 @@ use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -37,7 +38,7 @@ use Tests\TestCase;
  */
 class IntakeRelativesTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -226,6 +227,7 @@ class IntakeRelativesTest extends TestCase
         ]))->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -243,6 +245,7 @@ class IntakeRelativesTest extends TestCase
         ]))->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->assignResponder($request);
         // Requests already on file predate the rule and carry no relatives.
         ServiceRequestRelative::query()->delete();
 
@@ -265,6 +268,7 @@ class IntakeRelativesTest extends TestCase
         ]))->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -379,6 +383,7 @@ class IntakeRelativesTest extends TestCase
         ]))->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
