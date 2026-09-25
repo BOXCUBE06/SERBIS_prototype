@@ -98,10 +98,10 @@
         <div class="dash-card-subtitle">{{ currentTab.hint }}</div>
       </div>
 
-      <v-tabs v-model="queueTab" color="primary" density="compact" class="px-4">
+      <v-tabs v-model="queueTab" color="primary" density="compact" height="48" hide-slider class="dash-tabs px-4">
         <v-tab v-for="t in QUEUE_TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">
           {{ t.title }}
-          <v-chip size="x-small" class="ml-2 font-weight-bold" variant="tonal">{{ tabCounts[t.value] }}</v-chip>
+          <v-chip size="x-small" class="ml-2 font-weight-bold" variant="tonal" :color="queueTab === t.value ? 'primary' : undefined">{{ tabCounts[t.value] }}</v-chip>
         </v-tab>
       </v-tabs>
       <v-divider></v-divider>
@@ -522,7 +522,20 @@ onMounted(fetchDashboardData)
   padding: var(--dash-pad) var(--dash-pad) 8px;
 }
 
+.dash-tabs :deep(.v-tab) {
+  height: 34px;
+  align-self: center;
+  min-width: 0;
+  margin-right: 4px;
+  border-radius: 999px;
+}
+.dash-tabs :deep(.v-tab--selected) {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary-strong));
+}
+
 .queue-table :deep(th) {
+  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 6%, rgb(var(--v-theme-surface))) !important;
   font-size: 12px !important;
   font-weight: 600 !important;
   letter-spacing: 0.04em;
@@ -533,8 +546,12 @@ onMounted(fetchDashboardData)
 .queue-table :deep(.queue-row) {
   cursor: pointer;
 }
-.queue-table :deep(.queue-row:hover) {
+.queue-table :deep(.queue-row:hover > td) {
   background: rgba(var(--v-theme-primary), 0.06);
+}
+/* Inset shadow, not a border: the row keeps its size when the accent appears. */
+.queue-table :deep(.queue-row:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 rgb(var(--v-theme-primary));
 }
 .cell-primary {
   font-size: 14px;
