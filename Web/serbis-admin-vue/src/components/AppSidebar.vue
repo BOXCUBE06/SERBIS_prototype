@@ -25,8 +25,18 @@
 
       <div ref="navScrollEl" class="nav-scroll px-4">
         <template v-for="(group, gi) in menu" :key="group.key">
-          <div class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest" :class="{ 'mt-3': gi > 0 }">{{ group.label }}</div>
-          <v-list bg-color="transparent" density="compact" nav class="px-0">
+          <button
+            type="button"
+            class="group-toggle text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest"
+            :class="{ 'mt-3': gi > 0 }"
+            :aria-expanded="!collapsed.includes(group.key)"
+            :aria-controls="`nav-group-${group.key}`"
+            @click="toggleGroup(group.key)"
+          >
+            {{ group.label }}
+            <v-icon size="16" class="group-chevron" :class="{ 'is-collapsed': collapsed.includes(group.key) }">mdi-chevron-down</v-icon>
+          </button>
+          <v-list v-show="!collapsed.includes(group.key)" :id="`nav-group-${group.key}`" bg-color="transparent" density="compact" nav class="px-0">
             <v-list-item
               v-for="item in group.items"
               :key="item.to"
@@ -97,7 +107,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
-import { ADMIN_SECTIONS, SECTION_GROUPS } from '@/composables/adminSections'
+import { ADMIN_SECTIONS, SECTION_GROUPS, sectionForPath } from '@/composables/adminSections'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
 
@@ -140,6 +150,30 @@ const { can, loadCurrentAdmin } = useCurrentAdmin()
 const menu = computed(() => SECTION_GROUPS
   .map((g) => ({ ...g, items: ADMIN_SECTIONS.filter((s) => s.group === g.key && can(s.key)) }))
   .filter((g) => g.items.length > 0))
+
+// Collapsed group keys, remembered per browser. Storage can throw (private
+// window, blocked site data), so the menu just starts expanded then.
+const COLLAPSED_KEY = 'serbis.sidebar.collapsed'
+const readCollapsed = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]') } catch { return [] }
+}
+const collapsed = ref<string[]>(readCollapsed())
+const saveCollapsed = () => {
+  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed.value)) } catch { /* not remembered */ }
+}
+const toggleGroup = (key: string) => {
+  collapsed.value = collapsed.value.includes(key) ? collapsed.value.filter((k) => k !== key) : [...collapsed.value, key]
+  saveCollapsed()
+}
+
+// Landing on a page opens its group, so the active item is never hidden.
+watch(() => route.path, (path) => {
+  const key = ADMIN_SECTIONS.find((s) => s.key === sectionForPath(path))?.group
+  if (key && collapsed.value.includes(key)) {
+    collapsed.value = collapsed.value.filter((k) => k !== key)
+    saveCollapsed()
+  }
+}, { immediate: true })
 
 onMounted(() => { loadCurrentAdmin() })
 </script>
@@ -188,6 +222,15 @@ onMounted(() => { loadCurrentAdmin() })
   min-height: 38px;
   margin-bottom: 2px;
 }
+
+.group-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; border: 0; background: none; cursor: pointer; text-align: left;
+  border-radius: 6px;
+}
+.group-toggle:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+.group-chevron { transition: transform 150ms; }
+.group-chevron.is-collapsed { transform: rotate(-90deg); }
 
 .logo-accent {
   width: 4px; height: 20px;
