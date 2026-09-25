@@ -1,0 +1,23 @@
+/* Card shell shared by the dashboard's KPI cards, queue and charts. The colour
+   variables it reads (--dash-*) are set on the view's root. */
+.v-card.dash-card {
+  border: 0;
+  box-shadow: var(--dash-shadow);
+  border-radius: var(--dash-radius);
+  padding: var(--dash-pad);
+  background: rgb(var(--v-theme-surface));
+}
+/* The faint teal wash the Requests Filed card had, kept over the white surface. */
+.v-card.dash-card.dash-tint {
+  background: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.10), rgba(var(--v-theme-primary), 0.02)), rgb(var(--v-theme-surface));
+}
+.dash-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dash-text);
+}
+.dash-card-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dash-muted);
+}

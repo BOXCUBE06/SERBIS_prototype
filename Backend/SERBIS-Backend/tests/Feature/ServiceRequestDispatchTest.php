@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -30,7 +31,7 @@ use Tests\TestCase;
  */
 class ServiceRequestDispatchTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -93,6 +94,7 @@ class ServiceRequestDispatchTest extends TestCase
     public function test_dispatching_attaches_the_vehicle_to_the_request(): void
     {
         $request = $this->pendingRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)
             ->putJson("/api/service-requests/{$request->getKey()}", [
@@ -113,6 +115,7 @@ class ServiceRequestDispatchTest extends TestCase
     public function test_resolving_returns_the_vehicle_to_the_fleet(): void
     {
         $request = $this->pendingRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)
             ->putJson("/api/service-requests/{$request->getKey()}", [
@@ -162,6 +165,7 @@ class ServiceRequestDispatchTest extends TestCase
         // request must still be dispatchable once the first is closed. Before
         // the fix this left the fleet permanently empty.
         $first = $this->pendingRequest();
+        $this->assignResponder($first);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$first->getKey()}", [
             'status' => 'Responding',
@@ -174,6 +178,7 @@ class ServiceRequestDispatchTest extends TestCase
         ])->assertOk();
 
         $second = $this->pendingRequest();
+        $this->assignResponder($second);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$second->getKey()}", [
             'status' => 'Responding',
@@ -196,6 +201,7 @@ class ServiceRequestDispatchTest extends TestCase
         ]);
 
         $request = $this->pendingRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -232,6 +238,7 @@ class ServiceRequestDispatchTest extends TestCase
         $this->vehicle->update(['status' => 'Maintenance']);
 
         $request = $this->pendingRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -258,6 +265,7 @@ class ServiceRequestDispatchTest extends TestCase
         ]);
 
         $request = $this->pendingRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -277,6 +285,7 @@ class ServiceRequestDispatchTest extends TestCase
         // that same vehicle_id must not silently succeed with an unattached
         // unit — it must fail loudly and leave the loser's vehicle_id unset.
         $winner = $this->pendingRequest();
+        $this->assignResponder($winner);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$winner->getKey()}", [
             'status' => 'Responding',
@@ -284,6 +293,7 @@ class ServiceRequestDispatchTest extends TestCase
         ])->assertOk();
 
         $loser = $this->pendingRequest();
+        $this->assignResponder($loser);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$loser->getKey()}", [
             'status' => 'Responding',

@@ -12,6 +12,7 @@ use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -34,7 +35,7 @@ use Tests\TestCase;
  */
 class ResidentAmbulanceIntakeTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private Resident $resident;
 
@@ -304,6 +305,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -326,6 +328,7 @@ class ResidentAmbulanceIntakeTest extends TestCase
             ->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->assignResponder($request);
         $this->assertNull($request->patient_contact_number);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [

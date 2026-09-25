@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -39,7 +40,7 @@ use Tests\TestCase;
  */
 class ServiceRequestTransitionMatrixTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -153,6 +154,12 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     {
         $request = $this->requestWithStatus($from);
 
+        // Crewed for every move to Responding, so a blocked pair 422s on the
+        // matrix itself and never on the missing-responder guard.
+        if ($to === 'Responding') {
+            $this->assignResponder($request);
+        }
+
         $payload = ['status' => $to];
         // required_if:status,Disapproved fires on the status value alone —
         // present it every time the target is Disapproved so a blocked pair
@@ -176,6 +183,7 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     public function test_approving_a_pending_request_with_a_non_ambulance_vehicle(): void
     {
         $request = $this->requestWithStatus('Pending');
+        $this->assignResponder($request);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -192,6 +200,7 @@ class ServiceRequestTransitionMatrixTest extends TestCase
     public function test_approving_a_pending_request_with_no_vehicle(): void
     {
         $request = $this->requestWithStatus('Pending');
+        $this->assignResponder($request);
 
         $this->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -217,6 +226,7 @@ class ServiceRequestTransitionMatrixTest extends TestCase
         $request = $this->requestWithStatus('Booked', [
             'service_id' => $this->ambulance->getKey(),
         ]);
+        $this->assignResponder($request);
 
         AmbulanceBooking::create([
             'request_id' => $request->getKey(),

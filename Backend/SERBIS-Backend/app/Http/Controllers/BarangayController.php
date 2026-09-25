@@ -13,7 +13,8 @@ class BarangayController extends Controller
      */
     public function index()
     {
-        return response()->json(Barangay::all());
+        // Sorted here so every picker (app register, admin filters) is in the same order.
+        return response()->json(Barangay::orderBy('barangay_name')->get());
     }
 
     /**

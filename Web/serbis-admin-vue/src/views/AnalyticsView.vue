@@ -122,6 +122,11 @@
       </div>
     </v-alert>
 
+    <v-tabs v-model="tab" color="primary" class="mb-4">
+      <v-tab v-for="t in TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">{{ t.title }}</v-tab>
+    </v-tabs>
+
+    <template v-if="tab === 'demand'">
     <!-- 1. When demand arrives, split into two ordinary bar charts instead of
          a day x hour heatmap: which weekday, and which quarter of the day
          (see AnalyticsReport::demandByWeekdayHour / timeBlockFor). -->
@@ -172,9 +177,7 @@
     </v-row>
 
     <v-row class="mb-2">
-      <!-- 2. Seasonality and mix. Months are ordered discrete buckets whose
-           segments sum to a real total, which is what a stacked bar is for. -->
-      <v-col cols="12" lg="7">
+      <v-col cols="12">
         <AnalyticsSection
           title="Requests by month and service"
           :loading="loading"
@@ -232,10 +235,42 @@
         </AnalyticsSection>
       </v-col>
 
+    </v-row>
+    </template>
+
+    <template v-if="tab === 'barangays'">
+    <v-row>
+      <!-- 9. Barangays: the map and the residents-vs-requests ranking are one
+           set of numbers, so one section. Built from the full barangay
+           roster, so a barangay with accounts but no requests still shows at
+           zero. No barangay filter — narrowing the one cross-barangay
+           comparison to one barangay would defeat its purpose. -->
+      <v-col cols="12">
+        <AnalyticsSection
+          title="Barangays"
+          :loading="loading"
+          :error="error"
+          :empty="!loading && !error && barangayCoverage.barangays.length === 0"
+          empty-text="No barangays configured"
+          @retry="fetchReport"
+        >
+          <BarangayDemand
+            :barangays="barangayCoverage.barangays"
+            :walk-in="barangayCoverage.walkIn"
+            :total-residents="barangayCoverage.totalResidents"
+            :total-requests="barangayCoverage.totalRequests"
+          />
+        </AnalyticsSection>
+      </v-col>
+    </v-row>
+    </template>
+
+    <template v-if="tab === 'operations'">
+    <v-row class="mb-2">
       <!-- 3. Are requests being closed, or accumulating? Proportion is the
            question, so the bars are normalised to 100%. Status colours are
            the app's own — reserved for state, never reused as series hues. -->
-      <v-col cols="12" lg="5">
+      <v-col cols="12">
         <AnalyticsSection
           title="Outcomes by month"
           :loading="loading"
@@ -288,6 +323,9 @@
       </v-col>
     </v-row>
 
+    </template>
+
+    <template v-if="tab === 'equipment'">
     <v-row>
       <!-- 6. Equipment utilization. Built from the full catalogue, so a
            never-borrowed item shows as a zero row rather than not showing at
@@ -329,19 +367,14 @@
     </v-row>
 
     <v-row>
-      <!-- 7. Equipment returns: on-time vs overdue. Deliberately calm: this is a
-           standing operational fact, not an incident, so overdue reads in
-           the same neutral tiles as everything else on the page rather than
-           an alarm colour. currentlyOverdue ignores the date filter on
-           purpose (see AnalyticsReport::loanTurnaround) — a borrowed item
-           that went out last quarter and never came back must not disappear
-           because the filter bar says "this month". -->
+      <!-- 7. Equipment returns: on-time vs late, calm neutral tiles rather than
+           an alarm colour. Overdue loans still out are listed on the Dashboard. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment returns"
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && loans.returnedLate.of === 0 && loans.currentlyOverdue === 0"
+          :empty="!loading && !error && loans.returnedLate.of === 0"
           empty-text="No equipment returned in this range"
           @retry="fetchReport"
         >
@@ -355,44 +388,23 @@
                 {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned in this range
               </div>
             </div>
-
-            <div class="stat-tile subtle-surface">
-              <div class="text-caption text-medium-emphasis">Currently overdue</div>
-              <div class="stat-value text-high-emphasis">{{ loans.currentlyOverdue }}</div>
-              <div class="text-caption text-medium-emphasis">As of today, not scoped to this range</div>
-            </div>
           </div>
         </AnalyticsSection>
       </v-col>
     </v-row>
 
-    <v-row>
-      <!-- 8. Most used vehicles. Its own Today/This week/This month toggle,
-           independent of the page's shared date filter (see
-           AnalyticsReport::mostUsedVehicles — all three periods come back in
-           one payload, so the toggle never requeries). No barangay/service
-           filter — the trip log carries no resident_id at all (filed by
-           MDRRMO staff, not a resident) and every conduction request is the
-           same one dispatch service, so neither filter has anything to
-           narrow. Only ambulances are actually dispatched through this flow;
-           boats, fire trucks and rescue vehicles carry no trips here. -->
+    <v-row v-if="loading || error || selectedVehicleTrips.some(v => v.trips > 0)">
+      <!-- 8. Most used vehicles, over the page's date range. No barangay/service
+           filter: the trip log carries no resident_id and every conduction
+           request is the same one dispatch service, so neither has anything
+           to narrow. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Most used vehicles"
           :loading="loading"
           :error="error"
-          :empty="!loading && !error && selectedVehicleTrips.every(v => v.trips === 0)"
-          empty-text="No dispatch trips in this period"
-          @retry="fetchReport"
+                    @retry="fetchReport"
         >
-          <template #actions>
-            <v-btn-toggle v-model="vehiclePeriod" mandatory density="compact" variant="outlined" color="primary" divided rounded="lg">
-              <v-btn value="today" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">Today</v-btn>
-              <v-btn value="week" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This week</v-btn>
-              <v-btn value="month" size="x-small" class="text-none font-weight-bold px-2 toggle-btn-text">This month</v-btn>
-            </v-btn-toggle>
-          </template>
-
           <div :style="{ height: Math.max(120, selectedVehicleTrips.length * 40) + 'px' }">
             <Bar :data="vehicleTripsChartData" :options="horizontalBarOptions" />
             <ChartDataTable
@@ -406,82 +418,7 @@
       </v-col>
     </v-row>
 
-    <v-row>
-      <!-- 9. Barangay: residents vs requests. Built from the full barangay
-           roster, so an account-but-no-request barangay and a neither
-           barangay both still show at zero rather than dropping out. No
-           barangay filter — filtering the one cross-barangay comparison
-           down to one barangay would defeat its purpose. -->
-      <v-col cols="12">
-        <AnalyticsSection
-          title="Barangay: residents vs requests"
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && barangayCoverage.barangays.length === 0"
-          empty-text="No barangays configured"
-          @retry="fetchReport"
-        >
-          <div class="table-scroll">
-            <table class="data-table text-body-2">
-              <thead>
-                <tr>
-                  <th class="text-left" scope="col">Barangay</th>
-                  <th class="text-right" scope="col">Residents</th>
-                  <th class="text-right" scope="col">Requests</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in barangayCoverage.barangays" :key="row.name">
-                  <td>{{ row.name }}</td>
-                  <td class="text-right" :class="{ 'text-medium-emphasis': row.residents === 0 }">{{ row.residents }}</td>
-                  <td class="text-right" :class="{ 'text-medium-emphasis': row.requests === 0 }">{{ row.requests }}</td>
-                </tr>
-                <tr v-if="barangayCoverage.walkIn > 0">
-                  <td class="text-medium-emphasis">Walk-in (no barangay)</td>
-                  <td class="text-right text-medium-emphasis">—</td>
-                  <td class="text-right">{{ barangayCoverage.walkIn }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="text-caption text-medium-emphasis mt-3">
-            {{ barangayCoverage.totalResidents.toLocaleString() }} registered
-            {{ barangayCoverage.totalResidents === 1 ? 'resident' : 'residents' }}
-            &bull; {{ barangayCoverage.totalRequests.toLocaleString() }}
-            {{ barangayCoverage.totalRequests === 1 ? 'request' : 'requests' }} in this range
-          </div>
-        </AnalyticsSection>
-      </v-col>
-    </v-row>
-
-    <v-row>
-      <!-- 10. App adoption. Same base query and month rollup as sections 2
-           and 3, labelled by origin instead of service or status — respects
-           the barangay filter exactly as that shared query already does: a
-           walk-in carries no barangay, so filtering by one legitimately
-           zeroes the walk-in series rather than hiding the section. -->
-      <v-col cols="12">
-        <AnalyticsSection
-          title="App adoption"
-          :loading="loading"
-          :error="error"
-          :empty="!loading && !error && adoption.total === 0"
-          empty-text="No requests in this range"
-          @retry="fetchReport"
-        >
-          <div style="height: 260px;">
-            <Bar :data="adoptionChartDataNormalised" :options="percentStackedOptions" />
-            <ChartDataTable
-              caption="App adoption — request counts by origin (the chart shows share, this table the real counts)"
-              category-label="Month"
-              :labels="adoption.labels"
-              :series="adoption.series"
-            />
-          </div>
-        </AnalyticsSection>
-      </v-col>
-    </v-row>
+    </template>
 
   </v-container>
 </template>
@@ -496,6 +433,7 @@ import { Bar } from 'vue-chartjs'
 import PageHeader from '@/components/PageHeader.vue'
 import AnalyticsSection from '@/components/AnalyticsSection.vue'
 import ChartDataTable from '@/components/ChartDataTable.vue'
+import BarangayDemand from '@/components/BarangayDemand.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
@@ -538,6 +476,14 @@ const ALL = 'all'
  */
 const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#19a371', '#be8100', '#d16f94', '#008300', '#4a3aa7', '#e34948']
 const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+
+const TABS = [
+  { value: 'demand', title: 'Demand' },
+  { value: 'barangays', title: 'Barangays' },
+  { value: 'operations', title: 'Operations' },
+  { value: 'equipment', title: 'Equipment & Vehicles' },
+]
+const tab = ref('demand')
 
 const preset = ref('quarter')
 const volumeView = ref('chart')
@@ -659,6 +605,7 @@ onMounted(async () => {
   // first payload has rendered, and the app scrolls an inner wrapper rather
   // than the document, so the native jump has nothing to move.
   if (window.location.hash === '#open-request-age') {
+    tab.value = 'operations'
     await nextTick()
     document.querySelector('#open-request-age')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -703,15 +650,11 @@ const equipmentUtilization = computed(() => report.value?.equipmentUtilization ?
 const loans = computed(() => report.value?.loans ?? {
   daysOut: { medianDays: null, n: 0 },
   returnedLate: { count: 0, of: 0, percent: null },
-  currentlyOverdue: 0,
 })
-const vehicleTrips = computed(() => report.value?.vehicleTrips ?? { today: [], week: [], month: [] })
-const vehiclePeriod = ref('week')
-const selectedVehicleTrips = computed(() => vehicleTrips.value[vehiclePeriod.value] ?? [])
+const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
 })
-const adoption = computed(() => report.value?.adoption ?? EMPTY_STACK)
 
 const seriesPalette = computed(() => (isDark.value ? SERIES_DARK : SERIES_LIGHT))
 
@@ -873,28 +816,6 @@ const outcomeChartDataNormalised = computed(() => {
     labels: outcomes.value.labels,
     datasets: outcomes.value.series.map(s => ({
       ...stackedDataset(s, statusColor(s.label)),
-      data: s.data.map((v, i) => (totals[i] ? (v / totals[i]) * 100 : 0)),
-      rawData: s.data,
-    })),
-  }
-})
-
-/** App vs Walk-in is a binary origin, not a status and not a categorical series — its own two-colour mapping rather than reusing either palette. */
-const adoptionColor = (label) => {
-  const c = themeColors.value
-
-  return label === 'App' ? c.primary : (isDark.value ? '#94A3B8' : CANCELLED_COLOR)
-}
-
-const adoptionChartDataNormalised = computed(() => {
-  const totals = adoption.value.labels.map((_, i) =>
-    adoption.value.series.reduce((sum, s) => sum + (s.data[i] || 0), 0)
-  )
-
-  return {
-    labels: adoption.value.labels,
-    datasets: adoption.value.series.map(s => ({
-      ...stackedDataset(s, adoptionColor(s.label)),
       data: s.data.map((v, i) => (totals[i] ? (v / totals[i]) * 100 : 0)),
       rawData: s.data,
     })),

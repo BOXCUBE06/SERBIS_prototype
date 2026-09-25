@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             // 1. Independent Tables
             BarangaySeeder::class,
+            EchagueBarangaySeeder::class, // Matches the rows above by name, then adds the rest
             AdminSeeder::class,
             SmsBlastCodeSeeder::class,
             ServiceSeeder::class,

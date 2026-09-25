@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\ConductionRequest;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Models\Responder;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\AmbulanceAvailability;
 use App\Support\AdminSections;
 use App\Support\AnalyticsCache;
 use App\Support\AnalyticsReport;
@@ -77,6 +79,46 @@ class AnalyticsController extends Controller
     }
 
     /**
+     * GET /admin/analytics/barangays — one row per barangay for the map's hover
+     * card: how many households are registered there and how many requests are
+     * waiting on staff right now.
+     *
+     * Built from the barangay roster outward, so a barangay with no residents
+     * and no requests is still a row, at zero. Residents are heads of the
+     * family, as everywhere else; pending is service requests in status
+     * Pending, by the filing account's barangay. A walk-in has no barangay and
+     * is not in any row. Live rather than cached: three grouped counts over a
+     * 64-row roster.
+     */
+    public function barangays(): JsonResponse
+    {
+        $residents = DB::table('tbl_residents')
+            ->where('account_type', Resident::TYPE_HEAD_OF_FAMILY)
+            ->groupBy('barangay_id')
+            ->selectRaw('barangay_id, COUNT(*) as total')
+            ->pluck('total', 'barangay_id');
+
+        $pending = DB::table('tbl_service_request')
+            ->join('tbl_residents', 'tbl_service_request.resident_id', '=', 'tbl_residents.resident_id')
+            ->where('tbl_service_request.status', 'Pending')
+            ->groupBy('tbl_residents.barangay_id')
+            ->selectRaw('tbl_residents.barangay_id as barangay_id, COUNT(*) as total')
+            ->pluck('total', 'barangay_id');
+
+        $rows = DB::table('tbl_barangay')
+            ->orderBy('barangay_name')
+            ->get(['barangay_id', 'barangay_name', 'psgc_code'])
+            ->map(fn ($b) => [
+                'psgc_code' => $b->psgc_code,
+                'name' => $b->barangay_name,
+                'residents_count' => (int) ($residents[$b->barangay_id] ?? 0),
+                'pending_requests_count' => (int) ($pending[$b->barangay_id] ?? 0),
+            ]);
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
      * What each headline card counts, by the section that owns the page it links
      * to. Carried on the card in the cached payload and removed before the
      * response leaves, so an admin sees the cards for the sections they hold.
@@ -90,7 +132,10 @@ class AnalyticsController extends Controller
         'Equipment Overdue' => AdminSections::BORROWINGS,
     ];
 
-    public function index(Request $request): JsonResponse
+    /** A booking starting this soon already holds its unit; later ones only show in the Today rail. */
+    private const UNIT_HOLD_HOURS = 2;
+
+    public function index(Request $request, AmbulanceAvailability $availability): JsonResponse
     {
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
         // ~25 queries per admin dashboard load). One entry for everyone: the
@@ -402,7 +447,41 @@ class AnalyticsController extends Controller
             ]), true);
         });
 
-        return response()->json($this->limitToSections($payload, $request->user()));
+        $payload = $this->limitToSections($payload, $request->user());
+
+        // Outside the cache: these answers are "right now" and the cache is not
+        // invalidated by the clock. Counts and ids only, so no section gate.
+        $payload['responders'] = [
+            'available' => Responder::where('status', 'available')->count(),
+            'total' => Responder::count(),
+        ];
+        $payload['bookingConflicts'] = $availability->conflictingRequestIds(now(), now()->addDay());
+        $payload['units'] = ['free' => $this->unitsFreeNow(), 'total' => Vehicle::count()];
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Units that could leave now: not in Maintenance, not out on a trip
+     * (departed, not yet returned), and not due on a booking within the hold.
+     */
+    private function unitsFreeNow(): int
+    {
+        $onTrip = ConductionRequest::query()
+            ->select('vehicle_id')
+            ->whereNotNull('vehicle_id') // NOT IN against a NULL matches nothing
+            ->whereNotNull('departed_office_at')
+            ->whereNull('returned_office_at');
+
+        return Vehicle::query()
+            ->where('status', '!=', 'Maintenance')
+            ->whereNotIn('vehicle_id', $onTrip)
+            ->whereDoesntHave('serviceRequests', fn ($request) => $request
+                ->whereNotIn('status', ServiceRequest::TERMINAL_STATUSES)
+                ->whereHas('ambulanceBooking', fn ($booking) => $booking
+                    ->where('scheduled_at', '>=', now())
+                    ->where('scheduled_at', '<', now()->addHours(self::UNIT_HOLD_HOURS))))
+            ->count();
     }
 
     /**

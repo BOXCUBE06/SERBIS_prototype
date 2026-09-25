@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -35,7 +36,7 @@ use Tests\TestCase;
  */
 class AmbulanceDispatchBridgeTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -100,6 +101,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
     public function test_approving_an_ambulance_request_creates_a_linked_trip_record(): void
     {
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->assertSame(0, ConductionRequest::count());
 
@@ -119,6 +121,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         // No patient_name/patient_address/etc — this request predates C3, or
         // was filed by the mobile app, which does not send them either.
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -141,6 +144,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
     public function test_the_stub_prefers_structured_columns_when_present(): void
     {
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->bookingFor($request, [
             'patient_name' => 'Juan Dela Cruz',
@@ -169,6 +173,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
             'walk_in_name' => 'Pedro Ramos',
             'walk_in_contact_number' => '09179876543',
         ]);
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -186,6 +191,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
             'unit_identifier' => 'AMB-02', 'type' => 'Ambulance', 'specification' => 'Type II', 'status' => 'Available',
         ]);
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -219,6 +225,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
     public function test_resolving_is_refused_until_arrival_and_a_driver_are_recorded(): void
     {
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -287,6 +294,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
     public function test_a_stated_no_arrival_reason_satisfies_the_gate_in_place_of_arrival(): void
     {
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -336,6 +344,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         // Removing the requirement must not turn the readings into something
         // that blocks: a trip that does carry both resolves exactly as before.
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -363,6 +372,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
         // ConductionRequestController's own ordering rule is untouched by the
         // resolve gate change and still applies whenever both are entered.
         $request = $this->ambulanceRequest();
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
@@ -386,6 +396,7 @@ class AmbulanceDispatchBridgeTest extends TestCase
             'description' => 'Fallen tree',
             'status' => 'Pending',
         ]);
+        $this->assignResponder($request);
 
         $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',

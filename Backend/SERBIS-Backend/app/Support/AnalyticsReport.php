@@ -595,9 +595,8 @@ class AnalyticsReport
      * Section 8 — most used vehicles: trips per vehicle, ranked, from the
      * conduction (ambulance dispatch) trip log.
      *
-     * Its own Today / This week / This month, independent of the page's
-     * shared date filter — all three computed in one pass so the toggle on
-     * screen never requeries. Manila calendar boundaries: 'today' is
+     * `range` follows the page's date filter. Today / This week / This month
+     * are the older fixed windows, all computed in one pass. Manila calendar boundaries: 'today' is
      * midnight-to-now, 'week' is Monday-to-now, 'month' is the 1st-to-now,
      * matching this class's other calendar-boxed windows (resolveRange())
      * rather than a rolling N-day lookback.
@@ -627,11 +626,21 @@ class AnalyticsReport
             ->select('vehicle_id', 'unit_identifier', 'type')
             ->get();
 
+        // 'range' follows the page's date filter; the panel reads only this.
+        // today/week/month stay for the existing consumers of the payload.
+        $windows = [
+            'today' => [$boundaries['today']->utc(), null],
+            'week' => [$boundaries['week']->utc(), null],
+            'month' => [$boundaries['month']->utc(), null],
+            'range' => [$this->from, $this->to],
+        ];
+
         $result = [];
 
-        foreach ($boundaries as $key => $start) {
+        foreach ($windows as $key => [$since, $until]) {
             $tripsByVehicle = DB::table('tbl_conduction_requests')
-                ->where('created_at', '>=', $start->utc())
+                ->where('created_at', '>=', $since)
+                ->when($until, fn ($q) => $q->where('created_at', '<', $until))
                 ->whereNotNull('vehicle_id')
                 ->groupBy('vehicle_id')
                 ->selectRaw('vehicle_id, COUNT(*) as total')

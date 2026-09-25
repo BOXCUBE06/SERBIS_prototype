@@ -1608,9 +1608,12 @@ const updateStatus = async (record, newStatus, extra = {}) => {
   }
 }
 
-onMounted(() => {
-  fetchData()
+onMounted(async () => {
   fetchMasterLists()
+  await fetchData()
+  // Dashboard rows deep-link here with ?request=<borrow_id>.
+  const target = borrowings.value.find((b) => b.borrow_id === Number(route.query.request))
+  if (target) openDetail(target)
 })
 </script>
 

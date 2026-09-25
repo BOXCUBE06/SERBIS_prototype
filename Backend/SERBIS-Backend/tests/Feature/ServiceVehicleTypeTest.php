@@ -12,6 +12,7 @@ use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\AssignsResponders;
 use Tests\TestCase;
 
 /**
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class ServiceVehicleTypeTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssignsResponders, RefreshDatabase;
 
     private User $admin;
 
@@ -79,6 +80,8 @@ class ServiceVehicleTypeTest extends TestCase
 
     private function dispatch(ServiceRequest $request, Vehicle $unit)
     {
+        $this->assignResponder($request);
+
         return $this->actingAs($this->admin)->putJson("/api/service-requests/{$request->getKey()}", [
             'status' => 'Responding',
             'vehicle_id' => $unit->vehicle_id,
