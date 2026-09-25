@@ -212,6 +212,8 @@
       </v-col>
     </v-row>
 
+    <DashboardCharts :fleet="fleet" />
+
   </v-container>
 </template>
 
@@ -221,6 +223,7 @@ import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DashboardRail from '@/components/DashboardRail.vue'
+import DashboardCharts from '@/components/DashboardCharts.vue'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
