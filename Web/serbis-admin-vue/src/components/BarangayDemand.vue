@@ -99,7 +99,7 @@
       </div>
       <div class="text-caption text-medium-emphasis mt-3">
         {{ totalResidents.toLocaleString() }} registered {{ totalResidents === 1 ? 'resident' : 'residents' }}
-        &bull; {{ totalRequests.toLocaleString() }} requests and equipment loans in this range
+        &bull; {{ totalRequests.toLocaleString() }} requests + loans in this range
       </div>
     </v-col>
   </v-row>
