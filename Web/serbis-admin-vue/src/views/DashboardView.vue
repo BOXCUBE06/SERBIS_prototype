@@ -245,11 +245,12 @@ const loaded = reactive({ services: false, borrowings: false })
 // (residents, vehicles) count something that is not a request and keep
 // opening their own page through `route`.
 // `source` is the list the card is counted from, so a card and the tab it
-// opens always use the same rows. The server's own figure differs: it counts
-// ambulance bookings inside "Pending Service Requests" and counts ambulance
-// trips not yet departed, which is not what the queue lists.
+// opens always use the same rows and statuses (Pending, Booked, Responding).
+// The server's own figure differs: it counts Pending only, ambulance bookings
+// included, and counts ambulance trips not yet departed, which is not what the
+// queue lists.
 const KPI_FILTERS = {
-  'Pending Service Requests': { tab: 'service', status: 'Pending', source: 'services' },
+  'Pending Service Requests': { tab: 'service', status: null, source: 'services', label: 'Open Service Requests' },
   'Pending Borrow Requests': { tab: 'borrow', status: 'Pending', source: 'borrowings' },
   'Pending Ambulance Requests': { tab: 'ambulance', status: null, source: 'services', label: 'Open Ambulance Requests' },
   'Equipment Overdue': { tab: 'overdue', status: null, source: 'borrowings' },
