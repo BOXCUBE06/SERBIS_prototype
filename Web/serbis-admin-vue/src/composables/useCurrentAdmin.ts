@@ -23,6 +23,9 @@ const isSuperAdmin = ref(false)
 /** The signed-in admin's name, for what the panel prints ("Prepared by"). */
 export const adminName = ref('')
 
+/** Just the first name, for greetings. */
+export const adminFirstName = ref('')
+
 /** The token the state above was read for, so a new sign-in never inherits the last one's menu. */
 let loadedFor: string | null = null
 let inFlight: Promise<void> | null = null
@@ -31,6 +34,7 @@ export function resetCurrentAdmin(): void {
   sections.value = null
   isSuperAdmin.value = false
   adminName.value = ''
+  adminFirstName.value = ''
   loadedFor = null
 }
 
@@ -55,6 +59,7 @@ export async function loadCurrentAdmin(force = false): Promise<void> {
       sections.value = Array.isArray(data.sections) ? data.sections : null
       isSuperAdmin.value = !!data.user?.is_super_admin
       adminName.value = [data.user?.first_name, data.user?.last_name].filter(Boolean).join(' ')
+      adminFirstName.value = data.user?.first_name ?? ''
       loadedFor = token
     } catch {
       // Unreachable server: leave the state as it was. Every page has its own

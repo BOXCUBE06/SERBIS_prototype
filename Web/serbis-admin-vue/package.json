@@ -10,6 +10,7 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint src",
+    "test": "node --test \"src/**/*.test.js\"",
     "test:e2e": "playwright test"
   },
   "dependencies": {

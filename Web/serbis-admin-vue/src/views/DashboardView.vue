@@ -1,10 +1,18 @@
 <template>
   <v-container fluid class="dashboard-bg">
 
-    <PageHeader
-      title="Dashboard"
-    >
-      <template v-slot:actions>
+    <div class="dash-header d-flex justify-space-between align-start flex-wrap gap-3">
+      <div class="min-width-0">
+        <h2 class="dash-title">Welcome back, {{ adminFirstName || 'there' }}</h2>
+        <!-- Only once every list has arrived: a half-loaded count would read as a calm shift. -->
+        <p v-if="summary" class="dash-summary">
+          <template v-for="(part, i) in summary" :key="i">
+            <b v-if="part.tone" :class="`tone-${part.tone}`">{{ part.text }}</b>
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </p>
+      </div>
+      <div class="d-flex align-center flex-wrap gap-3">
         <!-- The bell carries the activity log and the follow-up calls. An account
              holding none of the sections those come from would open an empty
              list, so it is not drawn. -->
@@ -64,8 +72,8 @@
         </v-menu>
 
         <v-avatar color="primary" size="44" class="cursor-pointer font-weight-bold text-white">J</v-avatar>
-      </template>
-    </PageHeader>
+      </div>
+    </div>
 
     <!-- Live strip: what is true right now. Each item opens its own page,
          filtered; an item whose data the account cannot read is left out. -->
@@ -211,7 +219,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import PageHeader from '@/components/PageHeader.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DashboardToday from '@/components/DashboardToday.vue'
 import DashboardCharts from '@/components/DashboardCharts.vue'
@@ -220,7 +227,8 @@ import { authHeaders } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName, requesterPhone, requesterBarangay } from '@/composables/requestDisplay'
-import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
+import { useCurrentAdmin, adminFirstName } from '@/composables/useCurrentAdmin'
+import { welcomeSentence } from '@/composables/dashboardWelcome'
 import { DAY_MS, waitBucket } from '@/composables/dashboardTrends'
 
 const router = useRouter()
@@ -466,6 +474,19 @@ const tripsOut = computed(() => (trips.value || [])
     departedAt: new Date(t.departed_office_at).getTime(),
   })))
 
+const summary = computed(() => {
+  if (loading.value || loadError.value) return null
+  const open = (kind, status) => rows.value.filter((r) => r.kind === kind && r.status === status).length
+  return welcomeSentence({
+    trips: tripsOut.value.length,
+    overdue: overdueRows.value.length,
+    ambulance: open('ambulance', 'Pending'),
+    bookings: open('ambulance', 'Booked'),
+    services: open('service', 'Pending'),
+    borrowing: open('borrow', 'Pending'),
+  })
+})
+
 const nextBooking = computed(() => rows.value
   .filter((r) => r.status === 'Booked' && r.scheduledAt > Date.now())
   .toSorted((a, b) => a.scheduledAt - b.scheduledAt)[0])
@@ -495,6 +516,39 @@ onMounted(fetchDashboardData)
 <style scoped>
 .dashboard-bg {
   background-color: rgb(var(--v-theme-background));
+  /* Dashboard-only design tokens. Text on the surface uses the -strong warning
+     and error variants: the base ones fail AA as text on white. */
+  --dash-text: rgb(var(--v-theme-on-surface));
+  --dash-muted: rgba(var(--v-theme-on-surface), 0.62);
+  --dash-warn: rgb(var(--v-theme-warning-strong));
+  --dash-bad: rgb(var(--v-theme-error-strong));
+}
+.dash-header {
+  margin-bottom: 24px;
+}
+.dash-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--dash-text);
+}
+.dash-summary {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--dash-muted);
+}
+.dash-summary b {
+  font-weight: 700;
+}
+.dash-summary .tone-default {
+  color: var(--dash-text);
+}
+.dash-summary .tone-warning {
+  color: var(--dash-warn);
+}
+.dash-summary .tone-error {
+  color: var(--dash-bad);
 }
 .min-width-0 {
   min-width: 0;
