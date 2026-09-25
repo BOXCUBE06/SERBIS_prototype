@@ -1692,7 +1692,11 @@ watch(search, () => { page.value = 1 })
 watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
 
-onMounted(fetchData)
+onMounted(async () => {
+  await fetchData()
+  // Dashboard rows deep-link here with ?request=<request_id>.
+  selectRequestById(Number(route.query.request))
+})
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
 

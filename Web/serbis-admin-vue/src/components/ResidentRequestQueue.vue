@@ -1032,7 +1032,12 @@ watch(search, () => { page.value = 1 })
 watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
 
-onMounted(fetchData)
+onMounted(async () => {
+  await fetchData()
+  // Dashboard rows deep-link here with ?request=<request_id>.
+  const target = requests.value.find((r) => r.request_id === Number(route.query.request))
+  if (target) selectRequest(target)
+})
 onMounted(fetchVehicleTypes)
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
