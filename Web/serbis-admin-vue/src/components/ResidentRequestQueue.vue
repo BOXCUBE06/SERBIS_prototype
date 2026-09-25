@@ -89,7 +89,7 @@
         </template>
 
         <template v-slot:item.request_id="{ item }">
-          <span class="text-truncate d-block row-date">{{ transactionNo(item.request_id) }}</span>
+          <span class="text-truncate d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
         </template>
 
         <template v-slot:item._dateSubmitted="{ item }">
@@ -286,7 +286,7 @@
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
-                <div class="font-weight-medium text-body-2">{{ transactionNo(selectedRequest.request_id) }}</div>
+                <div class="font-weight-medium text-body-2 mono">{{ transactionNo(selectedRequest.request_id) }}</div>
               </v-col>
               <v-col cols="12" sm="4">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>

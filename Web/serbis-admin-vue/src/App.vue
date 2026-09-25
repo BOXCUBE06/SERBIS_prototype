@@ -49,10 +49,6 @@ useAppTheme().init()
 </script>
 
 <style>
-.v-application {
-  font-family: 'Inter', sans-serif !important;
-}
-
 /* Shared theme-aware surfaces. Vuetify's own bg-surface-light resolves to a
    fixed grey (#424242) that ignores the palette, so tint on-surface instead —
    that tracks whichever theme is active. */
@@ -156,7 +152,6 @@ useAppTheme().init()
 }
 
 .modern-drawer {
-  font-family: 'Inter', sans-serif;
   /* #154c41 is a one-off lighter highlight for this gradient's near stop,
      not used anywhere else -- nothing to collapse it onto. The far stop is
      the secondary token (already exactly this value in vuetify.ts). */

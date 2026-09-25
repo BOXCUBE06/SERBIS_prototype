@@ -12,7 +12,7 @@
         <div class="d-flex align-center">
           <span class="brand-tile"><img :src="logoUrl" alt="" width="40" height="40"></span>
           <div class="brand-text">
-            <span class="text-h6 font-weight-black text-white tracking-widest">SERBIS</span>
+            <span class="brand-word text-h6 text-white tracking-widest">SERBIS</span>
             <span class="brand-sub text-white-50">MDRRMO Echague</span>
           </div>
         </div>
@@ -183,8 +183,6 @@ onMounted(() => { loadCurrentAdmin() })
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-
 /* .modern-drawer's background lives in App.vue now -- it was a byte-for-byte
    duplicate here (this file is scoped, App.vue's copy is global and already
    matched this element by class name regardless). One definition, theme-aware. */
@@ -243,6 +241,7 @@ onMounted(() => { loadCurrentAdmin() })
 }
 .brand-tile img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .brand-text { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+.brand-word { font-weight: 800; }
 .brand-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {

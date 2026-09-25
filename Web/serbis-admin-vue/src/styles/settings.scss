@@ -5,9 +5,10 @@
  */
 
 // https://vuetifyjs.com/features/sass-variables/`
-// @use 'vuetify/settings' with (
-//   $color-pack: false
-// );
+@use 'vuetify/settings' with (
+  $body-font-family: ('Plus Jakarta Sans Variable', system-ui, sans-serif),
+  $heading-font-family: ('Plus Jakarta Sans Variable', system-ui, sans-serif)
+);
 
 // Vuetify's VMessages animates the swap between a field's hint and its
 // error message with an absolutely-positioned leave transition
@@ -25,6 +26,18 @@
 // instead of animating it out over the incoming one.
 .v-messages__message {
   transition: none !important;
+}
+
+/* Figures line up in columns instead of jittering as digits change. Chart.js
+   draws to canvas, which ignores this; only HTML text is covered. */
+table, .kpi-value, .map-tip {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transaction No. and request IDs only. */
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 500;
 }
 
 /* ServiceRequest-family status pills — Pending/Booked/Responding/Resolved/
