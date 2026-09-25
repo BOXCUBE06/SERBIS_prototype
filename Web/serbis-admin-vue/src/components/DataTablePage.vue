@@ -31,6 +31,7 @@
       :model-value="status"
       @update:model-value="$emit('update:status', $event)"
       :items="tabs"
+      :loading="loading"
       class="mb-4"
     />
 

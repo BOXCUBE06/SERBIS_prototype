@@ -19,6 +19,7 @@
                   of {{ residents.length }} accounts
                 </template>
               </span>
+              <span v-else class="skel skel-pill" style="width: 7.5em; height: 2em" aria-hidden="true"></span>
             </template>
 
             <template v-slot:actions>

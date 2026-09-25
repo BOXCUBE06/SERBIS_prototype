@@ -29,6 +29,14 @@
 }
 .v-theme--dark .skel { --skel-shine: rgba(255, 255, 255, 0.05); }
 .skel-line { height: 12px; }
+/* Stands in for a count chip; em-sized so it matches the text beside it. */
+.skel-pill {
+  display: inline-block;
+  vertical-align: middle;
+  width: 2em;
+  height: 1.4em;
+  border-radius: 999px;
+}
 @keyframes skel-appear { to { opacity: 1; } }
 @keyframes skel-shimmer { to { transform: translateX(100%); } }
 

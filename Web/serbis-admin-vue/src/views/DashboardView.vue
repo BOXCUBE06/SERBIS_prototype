@@ -78,9 +78,8 @@
 
     <!-- What is true right now. Each card opens its own page, filtered; a card
          whose data the account cannot read is left out. -->
-    <!-- Four placeholders: the count most accounts get. -->
-    <div v-if="loading" class="kpi-grid mb-2" style="--kpi-count: 4" aria-hidden="true">
-      <v-card v-for="n in 4" :key="n" elevation="0" class="dash-card kpi-card h-100">
+    <div v-if="loading" class="kpi-grid mb-2" :style="{ '--kpi-count': kpiCount }" aria-hidden="true">
+      <v-card v-for="n in kpiCount" :key="n" elevation="0" class="dash-card kpi-card h-100">
         <span class="skel kpi-skel-icon"></span>
         <div class="flex-grow-1 min-width-0">
           <span class="skel kpi-skel-label"></span>
@@ -113,7 +112,8 @@
       <v-tabs v-model="queueTab" color="primary" density="compact" height="48" hide-slider class="dash-tabs px-4">
         <v-tab v-for="t in QUEUE_TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">
           {{ t.title }}
-          <v-chip size="x-small" class="ml-2 font-weight-bold" variant="tonal" :color="queueTab === t.value ? 'primary' : undefined">{{ tabCounts[t.value] }}</v-chip>
+          <span v-if="loading" class="skel skel-pill ml-2" aria-hidden="true"></span>
+          <v-chip v-else size="x-small" class="ml-2 font-weight-bold" variant="tonal" :color="queueTab === t.value ? 'primary' : undefined">{{ tabCounts[t.value] }}</v-chip>
         </v-tab>
       </v-tabs>
       <v-divider></v-divider>
@@ -393,15 +393,21 @@ const summary = computed(() => {
   })
 })
 
+// Which cards this account gets, known before anything loads: the server always
+// sends units and responders; trips and overdue need their section. The
+// skeleton counts this, the real cards read it.
+const kpiShown = computed(() => ({ units: true, responders: true, trips: can('ambulance'), overdue: can('borrowings') }))
+const kpiCount = computed(() => Object.values(kpiShown.value).filter(Boolean).length)
+
 // Number colour: red for a problem, amber for nothing left to send out.
 const kpis = computed(() => {
   const link = (section, to) => (can(section) ? to : undefined)
   const emptyTone = (free) => (free === 0 ? 'warning' : 'default')
   const items = []
-  if (units.value) items.push({ label: 'Available Units', icon: 'mdi-ambulance', accent: 'primary', value: `${units.value.free}/${units.value.total}`, tone: emptyTone(units.value.free), to: link('vehicles', '/vehicles') })
-  if (responders.value) items.push({ label: 'Available Responders', icon: 'mdi-account-hard-hat', accent: 'info', value: `${responders.value.available}/${responders.value.total}`, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
-  if (trips.value) items.push({ label: 'Ongoing Trips', icon: 'mdi-map-marker-path', accent: 'slate', value: tripsOut.value, tone: 'default', to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
-  if (loaded.borrowings) {
+  if (kpiShown.value.units && units.value) items.push({ label: 'Available Units', icon: 'mdi-ambulance', accent: 'primary', value: `${units.value.free}/${units.value.total}`, tone: emptyTone(units.value.free), to: link('vehicles', '/vehicles') })
+  if (kpiShown.value.responders && responders.value) items.push({ label: 'Available Responders', icon: 'mdi-account-hard-hat', accent: 'info', value: `${responders.value.available}/${responders.value.total}`, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
+  if (kpiShown.value.trips && trips.value) items.push({ label: 'Ongoing Trips', icon: 'mdi-map-marker-path', accent: 'slate', value: tripsOut.value, tone: 'default', to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
+  if (kpiShown.value.overdue && loaded.borrowings) {
     const n = overdueRows.value.length
     items.push({ label: 'Overdue Borrowing', icon: 'mdi-alert-circle-outline', accent: 'error', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
   }
