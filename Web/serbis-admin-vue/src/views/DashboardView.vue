@@ -7,7 +7,7 @@
         <!-- Only once every list has arrived: a half-loaded count would read as a calm shift. -->
         <p v-if="summary" class="dash-summary content-in">
           <template v-for="(part, i) in summary" :key="i">
-            <b v-if="part.tone" class="count-chip" :class="`tone-${part.tone}`">{{ part.text }}</b>
+            <b v-if="part.tone" :key="part.text" class="count-chip value-in" :class="`tone-${part.tone}`">{{ part.text }}</b>
             <template v-else>{{ part.text }}</template>
           </template>
         </p>
@@ -96,7 +96,7 @@
         </v-avatar>
         <div class="min-width-0">
           <div class="kpi-label">{{ k.label }}</div>
-          <div class="kpi-value" :class="`tone-${k.tone}`">{{ k.value }}</div>
+          <div class="kpi-value" :class="`tone-${k.tone}`"><span :key="k.value" class="value-in">{{ k.value }}</span></div>
         </div>
       </v-card>
     </div>
