@@ -156,7 +156,7 @@ const RAMP_MIN = 0.25
 const RAMP_MAX = 0.85
 const fillFor = (code) => {
   const pending = statOf(code).pending_requests_count
-  if (pending === 0) return { fill: 'rgb(var(--v-theme-on-surface))', fillOpacity: 0.08 }
+  if (pending === 0) return { fill: 'rgb(var(--v-theme-on-surface))', fillOpacity: 0.06 }
   return { fill: 'rgb(var(--v-theme-primary))', fillOpacity: RAMP_MIN + (RAMP_MAX - RAMP_MIN) * (pending / maxPending.value) }
 }
 
@@ -244,15 +244,17 @@ const focused = (event, shape, force = false) => {
 .outline-stroke path {
   fill: none;
   stroke: rgba(var(--v-theme-on-surface), 0.7);
-  stroke-width: 3;
+  /* Half of it is covered by the fills, so 3.5 leaves 1.75px outside Echague. */
+  stroke-width: 3.5;
 }
 .outline-cover path {
   fill: rgb(var(--v-theme-surface));
   stroke: none;
 }
 .brgy {
-  stroke: rgb(var(--v-theme-surface));
-  stroke-width: 0.75;
+  /* Same border whatever the fill, so barangays stay distinct at zero and at max. */
+  stroke: rgba(var(--v-theme-on-surface), 0.35);
+  stroke-width: 1;
   cursor: pointer;
   outline: none;
 }
@@ -292,8 +294,8 @@ const focused = (event, shape, force = false) => {
 }
 .legend-none {
   margin-left: 8px;
-  background: rgba(var(--v-theme-on-surface), 0.08);
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.35);
 }
 .legend-ramp {
   width: 96px;
