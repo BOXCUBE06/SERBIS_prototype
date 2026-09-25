@@ -50,6 +50,10 @@ export default createVuetify({
           // the shallowest darkening on the ramp that clears AA, kept close to
           // the token so Responding still reads as the same blue.
           'info-strong': '#155FA8',
+          // Neutral counterpart to the status colours, for things that are
+          // information rather than good or bad (the dashboard's Ongoing Trips
+          // tile, the Filed series). 4.76:1 on the plain surface.
+          slate: '#64748B',
         },
       },
       dark: {
@@ -86,6 +90,8 @@ export default createVuetify({
           'warning-strong': '#F5A524',
           'error-strong': '#F16565',
           'info-strong': '#7C9CC4',
+          // 6.7:1 on the dark surface.
+          slate: '#94A3B8',
         },
       },
     },
