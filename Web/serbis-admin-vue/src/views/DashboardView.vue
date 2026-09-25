@@ -91,8 +91,8 @@
          its own page. Only open items; the full history lives on each page. -->
     <v-card elevation="0" class="dash-card dash-panel">
       <div class="panel-head">
-        <div class="card-title">Open Requests</div>
-        <div class="card-subtitle">{{ currentTab.hint }}</div>
+        <div class="dash-card-title">Open Requests</div>
+        <div class="dash-card-subtitle">{{ currentTab.hint }}</div>
       </div>
 
       <v-tabs v-model="queueTab" color="primary" density="compact" class="px-4">
@@ -145,11 +145,7 @@
       </div>
     </v-card>
 
-    <DashboardCharts
-      :history="history"
-      :rows="rows"
-      :loading="loading"
-    />
+    <DashboardCharts :history="history" :top="top" :loading="loading" />
 
   </v-container>
 </template>
@@ -159,6 +155,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StatusPill from '@/components/StatusPill.vue'
 import DashboardCharts from '@/components/DashboardCharts.vue'
+import '@/components/dashboard.css'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
@@ -179,8 +176,10 @@ const showBell = computed(() => can('logs') || can('borrowings') || can('ambulan
 const systemLogs = ref([])
 const followUps = ref([])
 const rows = ref([])
-// Every service request, for the performance row: { filedAt, resolvedAt, respondedAt, service }.
+// Every service request, for the filed/resolved chart: { filedAt, resolvedAt }.
 const history = ref([])
+// Last 30 days by service and by equipment item, for Most Requested.
+const top = ref(null)
 // { free, total }: not in Maintenance, not out on a trip, no booking in the next 2h.
 const units = ref(null)
 // Trip records, or null when the account cannot read them.
@@ -327,6 +326,7 @@ const fetchDashboardData = async () => {
     responders.value = data.responders ?? null
     units.value = data.units ?? null
     trips.value = tripList
+    top.value = data.charts?.pieByPeriod?.month ?? null
 
     rows.value = [
       ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
@@ -335,8 +335,6 @@ const fetchDashboardData = async () => {
     history.value = (services || []).map((r) => ({
       filedAt: new Date(r.created_at).getTime(),
       resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
-      respondedAt: r.first_responded_at ? new Date(r.first_responded_at).getTime() : null,
-      service: r.service?.service_name || 'Other',
     }))
     loaded.services = services !== null
     loaded.borrowings = borrowings !== null
@@ -408,12 +406,6 @@ onMounted(fetchDashboardData)
   --dash-radius: 12px;
   --dash-pad: 20px;
 }
-.dash-card {
-  border: 1px solid var(--dash-line);
-  border-radius: var(--dash-radius);
-  padding: var(--dash-pad);
-  background: rgb(var(--v-theme-surface));
-}
 .kpi-label {
   font-size: 13px;
   font-weight: 500;
@@ -471,22 +463,12 @@ onMounted(fetchDashboardData)
   min-width: 0;
 }
 .dash-panel {
-  padding: 0;
+  padding: 0 !important;
   overflow: hidden;
   margin-bottom: 24px;
 }
 .panel-head {
   padding: var(--dash-pad) var(--dash-pad) 8px;
-}
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--dash-text);
-}
-.card-subtitle {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--dash-muted);
 }
 
 .queue-table :deep(th) {

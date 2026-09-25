@@ -1,0 +1,18 @@
+/* Card shell shared by the dashboard's KPI cards, queue and charts. The colour
+   variables it reads (--dash-*) are set on the view's root. */
+.v-card.dash-card {
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius);
+  padding: var(--dash-pad);
+  background: rgb(var(--v-theme-surface));
+}
+.dash-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dash-text);
+}
+.dash-card-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dash-muted);
+}

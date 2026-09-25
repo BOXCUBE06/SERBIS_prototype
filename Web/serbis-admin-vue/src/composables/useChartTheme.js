@@ -4,10 +4,10 @@
 import { computed } from 'vue'
 import { useTheme } from 'vuetify'
 import {
-  Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
+  Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Filler,
 } from 'chart.js'
 
-ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement)
+ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Filler)
 
 const hexToRgb = (hex) => {
   const n = Number.parseInt(String(hex).replace('#', ''), 16)
