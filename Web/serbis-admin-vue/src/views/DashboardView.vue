@@ -188,7 +188,12 @@
     </v-card>
       </v-col>
       <v-col cols="12" lg="4">
-        <DashboardRail :rows="rows" />
+        <DashboardToday
+          :rows="rows"
+          :trips="tripsOut"
+          :conflicts="bookingConflicts"
+          :known="{ bookings: loaded.services && can('ambulance'), trips: trips !== null, overdue: loaded.borrowings }"
+        />
       </v-col>
     </v-row>
 
@@ -209,7 +214,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusPill from '@/components/StatusPill.vue'
-import DashboardRail from '@/components/DashboardRail.vue'
+import DashboardToday from '@/components/DashboardToday.vue'
 import DashboardCharts from '@/components/DashboardCharts.vue'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
@@ -238,6 +243,8 @@ const vehicles = ref(null)
 const trips = ref(null)
 // { available, total } across all responders, from the dashboard payload.
 const responders = ref(null)
+// Booked request ids whose unit overlaps another booking in the next 24h.
+const bookingConflicts = ref([])
 const loading = ref(true)
 const loadError = ref('')
 // Which lists arrived. A 403 or 500 on one must not read as "nothing open".
@@ -329,6 +336,7 @@ const serviceRow = (r) => {
   const statusAt = new Date(r.status_changed_at ?? r.created_at).getTime()
   const row = {
     key: `svc-${r.request_id}`,
+    requestId: r.request_id,
     kind: ambulance ? 'ambulance' : 'service',
     filedAt,
     statusAt,
@@ -338,6 +346,7 @@ const serviceRow = (r) => {
     residentId: r.resident_id,
     unit: r.vehicle?.unit_identifier,
     scheduledAt: r.scheduled_at ? new Date(r.scheduled_at).getTime() : null,
+    patient: r.patient_name,
     overdue: false,
     note: waitNote(r.status, filedAt),
     details,
@@ -407,6 +416,7 @@ const fetchDashboardData = async () => {
     systemLogs.value = data.systemLogs || []
     followUps.value = data.followUps || []
     responders.value = data.responders ?? null
+    bookingConflicts.value = data.bookingConflicts || []
     trips.value = tripList
 
     rows.value = [
