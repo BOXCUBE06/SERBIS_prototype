@@ -13,6 +13,10 @@ import 'vuetify/styles'
 
 // https://vuetifyjs.com/en/introduction/why-vuetify/#feature-guides
 export default createVuetify({
+  // Fade and a 0.98 scale (styles/motion.css), not the default grow-from-activator.
+  defaults: {
+    VDialog: { transition: 'dialog-soft' },
+  },
   theme: {
     defaultTheme: 'light',
     themes: {

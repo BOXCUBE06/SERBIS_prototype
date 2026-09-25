@@ -33,7 +33,7 @@
         </div>
         <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
         <div v-else-if="ranked.length === 0" class="empty content-in">Nothing in the last 30 days</div>
-        <div v-else class="chart-box content-in">
+        <div v-else :key="view" class="chart-box content-in">
           <Bar :data="rankData" :options="rankOptions" />
           <ChartDataTable :caption="`Most requested ${view}, last 30 days — same data as the chart above`" category-label="Name" :labels="ranked.map((r) => r.label)" :series="[{ label: 'Count', data: ranked.map((r) => r.value) }]" />
         </div>

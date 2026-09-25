@@ -12,7 +12,12 @@
     <v-main>
       <div v-if="!isAuthPage" class="outer-wrapper" :class="{ 'outer-wrapper--mobile': mobile }">
         <div class="inner-wrapper" :class="{ 'inner-wrapper--fixed': isFixedHeight }">
-          <RouterView />
+          <!-- Only the page moves; sidebar and header stay put. -->
+          <RouterView v-slot="{ Component }">
+            <Transition name="page" mode="out-in">
+              <component :is="Component" />
+            </Transition>
+          </RouterView>
         </div>
       </div>
       <RouterView v-else />

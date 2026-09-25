@@ -120,8 +120,9 @@
 
       <v-alert v-if="loadError" type="warning" variant="tonal" density="compact" class="ma-4">{{ loadError }}</v-alert>
 
+      <!-- Keyed on load and tab, so each new body mounts and fades in. -->
       <v-data-table
-        :key="loading ? 'loading' : 'ready'"
+        :key="loading ? 'loading' : queueTab"
         v-model:sort-by="sortBy"
         v-model:page="page"
         :headers="headers"

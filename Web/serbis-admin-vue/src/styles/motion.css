@@ -45,6 +45,18 @@
 .is-refreshing tbody,
 .is-dim { opacity: 0.6; }
 
+/* Route change: the new page rises 4px as it fades in; the old one only fades. */
+.page-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.page-leave-active { transition: opacity var(--motion-fast) var(--ease-out); }
+.page-enter-from { opacity: 0; transform: translateY(4px); }
+.page-leave-to { opacity: 0; }
+
+/* Every v-dialog (the default in plugins/vuetify.ts). The scrim keeps Vuetify's own fade. */
+.dialog-soft-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.dialog-soft-leave-active { transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
+.dialog-soft-enter-from,
+.dialog-soft-leave-to { opacity: 0; transform: scale(0.98); }
+
 /* Near-instant rather than none, so transitionend/animationend handlers
    (Vuetify overlays, Vue <Transition>) still fire and nothing gets stuck. */
 @media (prefers-reduced-motion: reduce) {
