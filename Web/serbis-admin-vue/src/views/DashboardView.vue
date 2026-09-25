@@ -78,17 +78,18 @@
     <!-- What is true right now. Each card opens its own page, filtered; a card
          whose data the account cannot read is left out. -->
     <v-skeleton-loader v-if="loading" type="text" height="88" class="mb-4"></v-skeleton-loader>
-    <v-row v-else-if="kpis.length > 0" class="mb-2">
-      <v-col v-for="k in kpis" :key="k.label" cols="12" sm="6" lg>
-        <v-card :to="k.to" elevation="0" class="dash-card kpi-card" :class="{ 'kpi-link': k.to }" :style="{ '--kpi': `var(--v-theme-${k.accent})` }">
-          <div class="kpi-tile"><v-icon size="22">{{ k.icon }}</v-icon></div>
-          <div class="min-width-0">
-            <div class="kpi-label">{{ k.label }}</div>
-            <div class="kpi-value" :class="`tone-${k.tone}`">{{ k.value }}</div>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <!-- A grid, not v-col: four or five cards depending on what the account can read. -->
+    <div v-else-if="kpis.length > 0" class="kpi-grid mb-2" :style="{ '--kpi-count': kpis.length }">
+      <v-card v-for="k in kpis" :key="k.label" :to="k.to" elevation="0" class="dash-card kpi-card h-100" :class="{ 'kpi-link': k.to }">
+        <v-avatar :color="k.accent" variant="tonal" size="40" rounded="lg" class="flex-shrink-0">
+          <v-icon :color="k.accent" size="20">{{ k.icon }}</v-icon>
+        </v-avatar>
+        <div class="min-width-0">
+          <div class="kpi-label">{{ k.label }}</div>
+          <div class="kpi-value" :class="`tone-${k.tone}`">{{ k.value }}</div>
+        </div>
+      </v-card>
+    </div>
 
     <!-- Everything open, one tab per kind of work. A row opens that request on
          its own page. Only open items; the full history lives on each page. -->
@@ -422,18 +423,23 @@ onMounted(fetchDashboardData)
   display: flex;
   align-items: center;
   gap: 14px;
-  /* Faint wash of the card's accent over the surface; --kpi is set per card. */
-  background: color-mix(in srgb, rgb(var(--kpi)) 6%, rgb(var(--v-theme-surface))) !important;
 }
-.kpi-tile {
-  flex: none;
+/* Two up on a phone, three on a tablet, then one row of whatever arrived, with
+   the 8px gap the cards had before the rebuild. */
+.kpi-grid {
   display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: rgb(var(--kpi));
-  background: rgba(var(--kpi), 0.14);
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 600px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .kpi-grid {
+    grid-template-columns: repeat(var(--kpi-count, 4), minmax(0, 1fr));
+  }
 }
 .kpi-label {
   font-size: 13px;
@@ -458,12 +464,9 @@ onMounted(fetchDashboardData)
 .kpi-value.tone-error {
   color: var(--dash-bad);
 }
-.kpi-link:hover {
-  background: color-mix(in srgb, rgb(var(--kpi)) 11%, rgb(var(--v-theme-surface))) !important;
-}
 /* Keyboard focus is an outline, so no card ever carries a resting border colour. */
 .kpi-link:focus-visible {
-  outline: 2px solid rgb(var(--kpi));
+  outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
 }
 /* The brand band. The secondary token is the sidebar's dark green in both
