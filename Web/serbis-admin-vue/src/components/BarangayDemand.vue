@@ -233,6 +233,8 @@ const focused = (event, shape, force = false) => {
   width: 100%;
   height: auto;
   max-height: 460px;
+  /* The container is not a control; only the barangay paths take focus. */
+  outline: none;
 }
 /* vector-effect keeps every stroke width in screen pixels however the viewBox scales. */
 .echague-map path {
@@ -253,6 +255,9 @@ const focused = (event, shape, force = false) => {
   stroke-width: 0.75;
   cursor: pointer;
   outline: none;
+}
+.brgy:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
 }
 .brgy-hi {
   fill: none;
