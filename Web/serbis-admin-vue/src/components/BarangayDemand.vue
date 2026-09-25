@@ -1,19 +1,71 @@
 <!--
   BarangayDemand.vue
 
-  Where requests come from, in one place: the choropleth map and the ranked
-  residents-vs-requests table are the same numbers, so they share one card and
-  one date range. The table's counts are the report's own (service requests and
-  equipment loans together, see BarangayRequestCounts); the map's hover figures
-  are live, from GET /admin/analytics/barangays.
+  Where requests come from, in one place: the map and the ranked
+  residents-vs-requests table share one card and one date range. The table's
+  counts are the report's own (service requests and equipment loans together,
+  see BarangayRequestCounts); the map's figures are live, from
+  GET /admin/analytics/barangays.
+
+  The map is a plain SVG of Echague, projected once with d3-geo: no basemap, no
+  tiles, no pan or zoom. Colours are theme CSS variables, so a theme flip needs
+  no repaint code.
 -->
 <template>
   <v-row>
     <v-col cols="12" lg="7">
-      <div ref="mapEl" class="map-box subtle-surface"></div>
-      <div class="text-caption text-medium-emphasis mt-2">
-        Darker means more pending requests; grey means none. Hover, tap or tab to a barangay for its figures.
+      <div ref="wrapEl" class="map-wrap" @click="clear" @keydown.esc="clear">
+        <svg
+          class="echague-map"
+          :viewBox="`0 0 ${W} ${H}`"
+          preserveAspectRatio="xMidYMid meet"
+          role="group"
+          aria-label="Map of Echague barangays, shaded by pending requests"
+        >
+          <!-- The outer boundary without merging geometry: every polygon's outline
+               is drawn 3px wide, then every polygon is covered with its own fill.
+               The covers hide the inner half of each line everywhere, so only the
+               half facing outside Echague (1.5px) survives. -->
+          <g class="outline-stroke"><path v-for="s in shapes" :key="s.code" :d="s.d" /></g>
+          <g class="outline-cover"><path v-for="s in shapes" :key="s.code" :d="s.d" /></g>
+          <g>
+            <path
+              v-for="s in shapes"
+              :key="s.code"
+              :d="s.d"
+              class="brgy"
+              :style="fillFor(s.code)"
+              tabindex="0"
+              role="img"
+              :aria-label="label(s)"
+              @pointerenter="track($event, s)"
+              @pointermove="track($event, s)"
+              @pointerleave="leave"
+              @click.stop="track($event, s)"
+              @focus="focused($event, s)"
+              @blur="clear"
+              @keydown.enter.prevent="focused($event, s, true)"
+            />
+          </g>
+          <!-- Drawn last, so the hovered border is never under a neighbour. -->
+          <path v-if="active" :d="active.d" class="brgy-hi" />
+        </svg>
+
+        <div v-if="active" ref="tipEl" class="map-tip" :style="pos ? { left: pos.left + 'px', top: pos.top + 'px' } : { visibility: 'hidden' }" role="tooltip">
+          <strong>{{ active.name }}</strong>
+          <div>Residents: {{ statOf(active.code).residents_count }}</div>
+          <div>Pending requests: {{ statOf(active.code).pending_requests_count }}</div>
+        </div>
       </div>
+
+      <div class="legend text-caption text-medium-emphasis mt-2">
+        <span>Pending requests</span>
+        <span class="legend-swatch legend-none"></span><span>0</span>
+        <template v-if="maxPending > 0">
+          <span class="legend-swatch legend-ramp"></span><span>{{ maxPending }}</span>
+        </template>
+      </div>
+      <div class="text-caption text-medium-emphasis mt-1">Hover, tap or tab to a barangay for its figures.</div>
       <v-alert v-if="statsFailed" type="warning" variant="tonal" density="compact" class="mt-2">
         Could not load the per-barangay figures, so the map shows every barangay at zero.
       </v-alert>
@@ -54,13 +106,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useTheme } from 'vuetify'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { ref, computed, nextTick, onMounted } from 'vue'
+import { geoMercator, geoPath } from 'd3-geo'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
-// Every barangay of Echague. Polygons are matched to tbl_barangay rows by
+// Every barangay of Echague. Matched to tbl_barangay rows by
 // properties.psgc_code, never by name (names differ between sources).
 import barangayBoundaries from '@/assets/echague-barangays.json'
 
@@ -71,20 +121,35 @@ const props = defineProps({
   totalRequests: { type: Number, default: 0 },
 })
 
-const theme = useTheme()
-const colors = computed(() => theme.global.current.value.colors)
-
 const max = computed(() => Math.max(0, ...props.barangays.map((b) => b.requests)))
 const ranked = computed(() => props.barangays
   .toSorted((a, b) => b.requests - a.requests || a.name.localeCompare(b.name))
   .map((b) => ({ ...b, percent: max.value > 0 ? Math.round((b.requests / max.value) * 100) : 0 })))
 
-// ---- Map figures: residents and pending requests per barangay ---------------
+// ---- Projection: once, at import; the boundaries never change ------------------
 
-// { psgc_code: { name, residents_count, pending_requests_count } }
+const W = 600
+const PAD = 8
+const projection = geoMercator().fitWidth(W - PAD * 2, barangayBoundaries)
+const [tx, ty] = projection.translate()
+projection.translate([tx + PAD, ty + PAD])
+const toPath = geoPath(projection)
+const [[, y0], [, y1]] = toPath.bounds(barangayBoundaries)
+const H = Math.ceil(y1 - y0) + PAD * 2
+
+const shapes = barangayBoundaries.features.map((f) => ({
+  code: f.properties.psgc_code,
+  name: f.properties.name,
+  d: toPath(f),
+}))
+
+// ---- Figures -----------------------------------------------------------------
+
+// { psgc_code: { residents_count, pending_requests_count } }
 const statByCode = ref({})
 const statsFailed = ref(false)
 const maxPending = computed(() => Math.max(0, ...Object.values(statByCode.value).map((s) => s.pending_requests_count)))
+const statOf = (code) => statByCode.value[code] ?? { residents_count: 0, pending_requests_count: 0 }
 
 const loadStats = async () => {
   try {
@@ -96,106 +161,59 @@ const loadStats = async () => {
     statsFailed.value = true
   }
 }
+onMounted(loadStats)
 
-const statFor = (feature) => statByCode.value[feature.properties.psgc_code] ?? {
-  name: feature.properties.name, residents_count: 0, pending_requests_count: 0,
+// Teal ramp by pending requests against the busiest barangay; none is a light
+// neutral. The legend's gradient uses the same two ends.
+const RAMP_MIN = 0.25
+const RAMP_MAX = 0.85
+const fillFor = (code) => {
+  const pending = statOf(code).pending_requests_count
+  if (pending === 0) return { fill: 'rgb(var(--v-theme-on-surface))', fillOpacity: 0.08 }
+  return { fill: 'rgb(var(--v-theme-primary))', fillOpacity: RAMP_MIN + (RAMP_MAX - RAMP_MIN) * (pending / maxPending.value) }
 }
 
-// Teal ramp by pending requests, against the busiest barangay; none is a light neutral.
-const styleFor = (feature) => {
-  const pending = statFor(feature).pending_requests_count
-  const share = maxPending.value > 0 ? pending / maxPending.value : 0
-  return {
-    fillColor: pending === 0 ? colors.value['on-surface'] : colors.value.primary,
-    fillOpacity: pending === 0 ? 0.08 : 0.25 + 0.6 * share,
-    color: colors.value.surface,
-    weight: 1,
-    opacity: 1,
-  }
-}
-const highlight = (layer) => {
-  layer.setStyle({ color: colors.value['primary-strong'], weight: 3 })
-  layer.bringToFront()
-}
+const label = (s) => `${s.name}. Residents: ${statOf(s.code).residents_count}. Pending requests: ${statOf(s.code).pending_requests_count}.`
 
-const describe = (feature) => {
-  const s = statFor(feature)
-  return `${feature.properties.name}. Residents: ${s.residents_count}. Pending requests: ${s.pending_requests_count}.`
-}
+// ---- Hover, tap and keyboard focus all land here ------------------------------
 
-// Built as DOM nodes, so a name is never parsed as markup.
-const tooltipFor = (feature) => {
-  const s = statFor(feature)
-  const box = document.createElement('div')
-  const name = document.createElement('strong')
-  name.textContent = feature.properties.name
-  box.append(name)
-  for (const line of [`Residents: ${s.residents_count}`, `Pending requests: ${s.pending_requests_count}`]) {
-    const row = document.createElement('div')
-    row.textContent = line
-    box.append(row)
-  }
-  return box
+const GAP = 12
+const wrapEl = ref(null)
+const tipEl = ref(null)
+const active = ref(null)
+const pos = ref(null)
+
+// Follows the pointer; flips to the other side of it near the card's edge so
+// the tooltip never leaves the card.
+const show = async (shape, clientX, clientY) => {
+  active.value = shape
+  await nextTick()
+  const tip = tipEl.value
+  if (!tip || !wrapEl.value) return
+  const box = wrapEl.value.getBoundingClientRect()
+  const x = clientX - box.left
+  const y = clientY - box.top
+  const left = x + GAP + tip.offsetWidth > box.width ? x - GAP - tip.offsetWidth : x + GAP
+  const top = y + GAP + tip.offsetHeight > box.height ? y - GAP - tip.offsetHeight : y + GAP
+  pos.value = { left: Math.max(0, left), top: Math.max(0, top) }
 }
 
-const mapEl = ref(null)
-let map = null
-let geoLayer = null
-
-// Hover, tap and keyboard focus all end in the same highlight and tooltip.
-const wire = (feature, layer) => {
-  layer.bindTooltip(() => tooltipFor(feature), { sticky: true })
-  layer.on({
-    mouseover: () => highlight(layer),
-    mouseout: () => geoLayer.resetStyle(layer),
-    click: (event) => layer.openTooltip(event.latlng),
-  })
+const clear = () => {
+  active.value = null
+  pos.value = null
 }
 
-const makeReachable = (layer) => {
-  const el = layer.getElement()
-  if (!el) return
-  el.setAttribute('tabindex', '0')
-  el.setAttribute('role', 'img')
-  el.setAttribute('aria-label', describe(layer.feature))
-  el.addEventListener('focus', () => {
-    highlight(layer)
-    layer.openTooltip(layer.getBounds().getCenter())
-  })
-  el.addEventListener('blur', () => {
-    geoLayer.resetStyle(layer)
-    layer.closeTooltip()
-  })
+const track = (event, shape) => show(shape, event.clientX, event.clientY)
+// A finger lifting is not the pointer leaving; a tap elsewhere clears (wrapper click).
+const leave = (event) => {
+  if (event.pointerType === 'mouse') clear()
 }
-
-onMounted(() => {
-  // eslint-disable-next-line unicorn/no-array-callback-reference -- Leaflet, not Array#map
-  map = L.map(mapEl.value)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap',
-    className: 'map-tiles',
-  }).addTo(map)
-
-  geoLayer = L.geoJSON(barangayBoundaries, { style: styleFor, onEachFeature: wire }).addTo(map)
-  geoLayer.eachLayer(makeReachable)
-
-  // The whole of Echague, every polygon in view.
-  map.fitBounds(geoLayer.getBounds(), { padding: [12, 12] })
-  loadStats()
-})
-
-// Leaflet is not reactive: repaint when the figures or the theme change.
-watch([statByCode, () => theme.global.name.value], () => {
-  if (!geoLayer) return
-  geoLayer.setStyle(styleFor)
-  geoLayer.eachLayer((layer) => layer.getElement()?.setAttribute('aria-label', describe(layer.feature)))
-})
-
-onUnmounted(() => {
-  map?.remove()
-  map = null
-  geoLayer = null
-})
+// Mouse clicks focus the path too; only keyboard focus places the tooltip itself.
+const focused = (event, shape, force = false) => {
+  if (!force && !event.target.matches(':focus-visible')) return
+  const r = event.target.getBoundingClientRect()
+  show(shape, r.left + r.width / 2, r.top + r.height / 2)
+}
 </script>
 
 <style scoped>
@@ -219,33 +237,77 @@ onUnmounted(() => {
   background-color: rgb(var(--v-theme-surface));
   font-weight: 700;
 }
-.map-box {
-  height: 460px;
-  width: 100%;
-  border-radius: 8px;
-  z-index: 1;
+
+.map-wrap {
+  position: relative;
 }
-/* Leaflet's tooltip is white by default; bring it onto the theme. */
-.map-box :deep(.leaflet-tooltip) {
+.echague-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 460px;
+}
+/* vector-effect keeps every stroke width in screen pixels however the viewBox scales. */
+.echague-map path {
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.outline-stroke path {
+  fill: none;
+  stroke: rgba(var(--v-theme-on-surface), 0.7);
+  stroke-width: 3;
+}
+.outline-cover path {
+  fill: rgb(var(--v-theme-surface));
+  stroke: none;
+}
+.brgy {
+  stroke: rgb(var(--v-theme-surface));
+  stroke-width: 0.75;
+  cursor: pointer;
+  outline: none;
+}
+.brgy-hi {
+  fill: none;
+  stroke: rgb(var(--v-theme-primary));
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+.map-tip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
-  border-color: rgba(var(--v-theme-on-surface), 0.2);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
   box-shadow: 0 2px 8px rgba(var(--v-shadow-color), 0.25);
 }
-.map-box :deep(.leaflet-tooltip::before) {
-  display: none;
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.map-box :deep(path:focus-visible) {
-  outline: 2px solid rgb(var(--v-theme-primary));
+.legend-swatch {
+  width: 28px;
+  height: 10px;
+  border-radius: 3px;
 }
-.subtle-surface {
-  background-color: rgba(var(--v-theme-on-surface), 0.05);
+.legend-none {
+  margin-left: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
 }
-/* OSM ships only light tiles; invert the tile layer alone in dark mode so the
-   choropleth above it keeps its true colours. */
-.v-theme--dark .map-tiles {
-  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.8);
+.legend-ramp {
+  width: 96px;
+  background: linear-gradient(90deg, rgba(var(--v-theme-primary), 0.25), rgba(var(--v-theme-primary), 0.85));
 }
+
 .bar-track {
   height: 4px;
   margin-top: 2px;
