@@ -101,18 +101,19 @@ const duplicates = computed(() => {
   return groups
 })
 
-// Staff took these on and then nothing closed them. Pending is not here: that
-// is the queue's job, and it already shows how long each has waited.
+// Staff took these on and then nothing closed them, aged from the last status
+// change. Pending is not here: that is the queue's job, and it already shows
+// how long each has waited.
 const stale = computed(() => props.rows
-  .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status) && Date.now() - r.filedAt > STALE_DAYS * DAY_MS)
-  .toSorted((a, b) => a.filedAt - b.filedAt)
-  .map((r) => ({ key: r.key, title: r.name, subtitle: r.type, status: r.status, badge: `${Math.floor((Date.now() - r.filedAt) / DAY_MS)}d` })))
+  .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status) && Date.now() - r.statusAt > STALE_DAYS * DAY_MS)
+  .toSorted((a, b) => a.statusAt - b.statusAt)
+  .map((r) => ({ key: r.key, title: r.name, subtitle: r.type, status: r.status, badge: `${Math.floor((Date.now() - r.statusAt) / DAY_MS)}d` })))
 
 // What staff have taken on and not closed, with the unit on it. Only ambulance
 // requests carry a unit; the rest say so plainly.
 const active = computed(() => props.rows
   .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status))
-  .toSorted((a, b) => a.filedAt - b.filedAt)
+  .toSorted((a, b) => a.statusAt - b.statusAt)
   .map((r) => ({ key: r.key, title: r.name, subtitle: `${r.type} • ${r.unit || 'No unit assigned'}`, status: r.status })))
 
 const lists = computed(() => ({ overdue: overdue.value, duplicates: duplicates.value, stale: stale.value, active: active.value }))
@@ -120,7 +121,7 @@ const lists = computed(() => ({ overdue: overdue.value, duplicates: duplicates.v
 const PANES = {
   overdue: { hint: 'Call these households', empty: 'Nothing overdue', route: '/borrowings' },
   duplicates: { hint: `Same person, filed within ${DUPLICATE_WINDOW_MIN} minutes`, empty: 'None found', route: '/manage-requests' },
-  stale: { hint: `Responding or Booked for more than ${STALE_DAYS} days`, empty: 'Nothing stale', route: '/manage-requests' },
+  stale: { hint: `Responding or Booked, unchanged for more than ${STALE_DAYS} days`, empty: 'Nothing stale', route: '/manage-requests' },
   active: { hint: 'Responding or Booked, with the unit on each', empty: 'Nothing in progress', route: '/manage-requests' },
 }
 const current = computed(() => PANES[tab.value])

@@ -428,6 +428,8 @@ const serviceRow = (r) => {
     key: `svc-${r.request_id}`,
     kind: ambulance ? 'ambulance' : 'service',
     filedAt,
+    // Null until the first status move; the rail ages Responding/Booked from here.
+    statusAt: new Date(r.status_changed_at ?? r.created_at).getTime(),
     name: requesterName(r),
     type: r.service?.service_name || 'Other',
     status: r.status,
