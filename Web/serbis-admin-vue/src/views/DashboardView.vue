@@ -158,7 +158,7 @@
         :items="visibleRows"
         :loading="loading"
         item-value="key"
-        :items-per-page="10"
+        :items-per-page="8"
         no-data-text="Nothing open here"
         class="queue-table"
       >
@@ -182,14 +182,14 @@
         </template>
         <template #item.actions="{ item }">
           <v-btn
-            size="small"
+            size="x-small"
             variant="tonal"
             color="primary"
             class="text-none font-weight-bold"
             :prepend-icon="isExpanded(item.key) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
             :aria-expanded="isExpanded(item.key)"
             @click="toggleExpanded(item.key)"
-          >{{ isExpanded(item.key) ? 'Hide' : 'View Details' }}</v-btn>
+          >{{ isExpanded(item.key) ? 'Hide' : 'Details' }}</v-btn>
         </template>
         <template #expanded-row="{ columns, item }">
           <tr>
@@ -308,7 +308,7 @@ const headers = [
   { title: 'Head of the Family', key: 'name', sortable: true },
   { title: 'Request Type', key: 'type', sortable: true },
   { title: 'Status', key: 'status', sortable: true },
-  { title: 'Quick Actions', key: 'actions', sortable: false, align: 'end' },
+  { title: 'Quick Actions', key: 'actions', sortable: false, align: 'end', width: 110 },
 ]
 
 const isActionable = (stat) => !!(KPI_FILTERS[stat.title] || stat.route)
