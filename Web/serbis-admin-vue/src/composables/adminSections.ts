@@ -47,6 +47,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   // Below Resource Management on purpose: it is the list of what the catalogue
   // above does not carry, and it is read next to it, not next to the board.
   { key: 'procurement', to: '/procurement', title: 'Procurement Reference', icon: 'mdi-clipboard-list-outline', group: 'resources' },
+  { key: 'files', to: '/files', title: 'Documents', icon: 'mdi-folder-outline', group: 'resources' },
 
   { key: 'residents', to: '/users', title: 'Residents', icon: 'mdi-account-group-outline', group: 'residents' },
   { key: 'sms', to: '/sms', title: 'Text Blast (SMS)', icon: 'mdi-message-text-fast-outline', group: 'residents' },
@@ -56,7 +57,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'service_vehicles', to: '/service-vehicles', title: 'Service Vehicles', icon: 'mdi-truck-outline', group: 'configuration' },
 
   { key: 'staff', to: '/staff', title: 'Staff Accounts', icon: 'mdi-shield-account-outline', group: 'system', superAdminOnly: true },
-  { key: 'files', to: '/files', title: 'Documents', icon: 'mdi-folder-outline', group: 'system' },
   { key: 'logs', to: '/logs', title: 'Activity Logs', icon: 'mdi-history', group: 'system' },
 ]
 
