@@ -24,51 +24,30 @@
       </div>
 
       <div ref="navScrollEl" class="nav-scroll px-4">
-        <div v-if="mainMenu.length > 0" class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest">Main Menu</div>
-        <v-list v-if="mainMenu.length > 0" bg-color="transparent" density="compact" nav class="px-0">
-          <v-list-item
-            v-for="item in mainMenu"
-            :key="item.to"
-            :to="item.to"
-            class="nav-item"
-            rounded="pill"
-            active-class="active-nav-item"
-            slim
-            :ripple="false"
-          >
-            <template v-slot:prepend>
-              <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
-                <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-              </v-avatar>
-            </template>
-            <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-              {{ item.title }}
-            </v-list-item-title>
-          </v-list-item>
-        </v-list>
-
-        <div v-if="systemMenu.length > 0" class="text-caption font-weight-medium text-white-50 mt-3 mb-1 px-2 tracking-widest">System</div>
-        <v-list v-if="systemMenu.length > 0" bg-color="transparent" density="compact" nav class="px-0">
-          <v-list-item
-            v-for="item in systemMenu"
-            :key="item.to"
-            :to="item.to"
-            class="nav-item"
-            rounded="pill"
-            active-class="active-nav-item"
-            slim
-            :ripple="false"
-          >
-            <template v-slot:prepend>
-              <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
-                <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-              </v-avatar>
-            </template>
-            <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-              {{ item.title }}
-            </v-list-item-title>
-          </v-list-item>
-        </v-list>
+        <template v-for="(group, gi) in menu" :key="group.key">
+          <div class="text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest" :class="{ 'mt-3': gi > 0 }">{{ group.label }}</div>
+          <v-list bg-color="transparent" density="compact" nav class="px-0">
+            <v-list-item
+              v-for="item in group.items"
+              :key="item.to"
+              :to="item.to"
+              class="nav-item"
+              rounded="pill"
+              active-class="active-nav-item"
+              slim
+              :ripple="false"
+            >
+              <template v-slot:prepend>
+                <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
+                  <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
+                </v-avatar>
+              </template>
+              <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
+                {{ item.title }}
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </template>
       </div>
 
       <div class="sidebar-footer px-4 pb-4">
@@ -118,7 +97,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
-import { ADMIN_SECTIONS } from '@/composables/adminSections'
+import { ADMIN_SECTIONS, SECTION_GROUPS } from '@/composables/adminSections'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
 
@@ -158,8 +137,9 @@ const isOpen = defineModel<boolean>('open', { default: true })
 // what the account does not hold either way.
 const { can, loadCurrentAdmin } = useCurrentAdmin()
 
-const mainMenu = computed(() => ADMIN_SECTIONS.filter((s) => s.group === 'main' && can(s.key)))
-const systemMenu = computed(() => ADMIN_SECTIONS.filter((s) => s.group === 'system' && can(s.key)))
+const menu = computed(() => SECTION_GROUPS
+  .map((g) => ({ ...g, items: ADMIN_SECTIONS.filter((s) => s.group === g.key && can(s.key)) }))
+  .filter((g) => g.items.length > 0))
 
 onMounted(() => { loadCurrentAdmin() })
 </script>
