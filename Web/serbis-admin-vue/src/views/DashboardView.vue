@@ -375,9 +375,6 @@ const summary = computed(() => {
     trips: tripsOut.value,
     overdue: overdueRows.value.length,
     ambulance: open('ambulance', 'Pending'),
-    bookings: open('ambulance', 'Booked'),
-    services: open('service', 'Pending'),
-    borrowing: open('borrow', 'Pending'),
   })
 })
 
