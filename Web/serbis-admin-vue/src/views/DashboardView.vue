@@ -84,11 +84,9 @@
       </v-card>
     </v-card>
 
-    <!-- The work queue. Resident requests, ambulance bookings and equipment
-         loans share one table because staff triage by how long something has
-         waited, not by which form it came from; the tabs cut it back apart
-         the way the sidebar does. Only open items are listed here: the full
-         history lives on each page. -->
+    <!-- The work queue, cut by what staff have to do: answer (Backlog), chase
+         (Stale), or hand out (Borrowing). Only open items; the full history
+         lives on each page. -->
     <v-row>
       <v-col cols="12" lg="8">
     <v-card elevation="0" rounded="xl" class="soft-card queue-card">
@@ -96,7 +94,7 @@
         <div class="d-flex justify-space-between align-center flex-wrap gap-2">
           <div>
             <v-card-title class="text-body-1 font-weight-bold pa-0">Open Requests</v-card-title>
-            <v-card-subtitle class="pa-0">Oldest first, so the longest wait is at the top</v-card-subtitle>
+            <v-card-subtitle class="pa-0">{{ currentTab.hint }}</v-card-subtitle>
           </div>
           <v-chip
             v-if="bucketFilter"
@@ -115,7 +113,7 @@
           <v-chip
             size="x-small"
             class="ml-2 font-weight-bold"
-            :color="t.value === 'overdue' && tabCounts[t.value] > 0 ? 'error' : undefined"
+            :color="t.value === 'stale' && tabCounts[t.value] > 0 ? 'error' : undefined"
             variant="tonal"
           >{{ tabCounts[t.value] }}</v-chip>
         </v-tab>
@@ -132,7 +130,7 @@
         :loading="loading"
         item-value="key"
         :items-per-page="8"
-        no-data-text="Nothing open here"
+        :no-data-text="currentTab.empty"
         class="queue-table"
       >
         <template #item.filedAt="{ item }">
@@ -148,6 +146,7 @@
           <div class="d-flex align-center gap-2">
             <v-icon size="16" class="text-medium-emphasis">{{ KIND_ICONS[item.kind] }}</v-icon>
             <span class="text-body-2">{{ item.type }}</span>
+            <v-chip v-if="item.shortStock" size="x-small" color="error" variant="tonal" class="font-weight-bold" :title="`${item.onHand} on hand`">Short stock</v-chip>
           </div>
         </template>
         <template #item.status="{ item }">
@@ -244,18 +243,21 @@ const loadError = ref('')
 // Which lists arrived. A 403 or 500 on one must not read as "nothing open".
 const loaded = reactive({ services: false, borrowings: false })
 
+const STALE_DAYS = 3
+const IN_PROGRESS = new Set(['Responding', 'Booked'])
+const isStale = (r) => IN_PROGRESS.has(r.status) && Date.now() - r.statusAt > STALE_DAYS * DAY_MS
+
 const QUEUE_TABS = [
-  { value: 'all', title: 'All Open' },
-  { value: 'service', title: 'Service Requests' },
-  { value: 'ambulance', title: 'Ambulance' },
-  { value: 'borrow', title: 'Borrowing' },
-  { value: 'overdue', title: 'Overdue' },
+  { value: 'backlog', title: 'Backlog', test: (r) => r.kind !== 'borrow' && r.status === 'Pending', hint: 'Pending, oldest first', empty: 'No pending requests' },
+  // Aged from the last status change, not filing: staff took these on and nothing closed them.
+  { value: 'stale', title: 'Stale', test: (r) => r.kind !== 'borrow' && isStale(r), hint: `Responding or Booked, unchanged for more than ${STALE_DAYS} days`, empty: 'Nothing stale' },
+  { value: 'borrow', title: 'Borrowing', test: (r) => r.kind === 'borrow', hint: 'Open equipment loans, oldest first', empty: 'No open loans' },
 ]
 const KIND_ICONS = { service: 'mdi-clipboard-text-outline', ambulance: 'mdi-ambulance', borrow: 'mdi-toolbox-outline' }
 const KIND_ROUTES = { service: '/manage-requests', ambulance: '/conduction-requests', borrow: '/borrowings' }
 const KIND_PAGES = { service: 'Resident Requests', ambulance: 'Ambulance Dispatch', borrow: 'Equipment Borrowing' }
 
-const queueTab = ref('all')
+const queueTab = ref('backlog')
 const bucketFilter = ref(null)
 const sortBy = ref([{ key: 'filedAt', order: 'asc' }])
 const expanded = ref([])
@@ -272,11 +274,11 @@ const headers = [
 // rows the tab name promises.
 watch(queueTab, () => { bucketFilter.value = null }, { flush: 'sync' })
 
-// The waiting chart counts requests, so picking a bar starts from All Open.
+// The aging chart counts the backlog, so picking a bar opens it there.
 // Picking the same bar again clears it.
 const onBucket = (bucket) => {
   const again = bucketFilter.value === bucket
-  queueTab.value = 'all'
+  queueTab.value = 'backlog'
   bucketFilter.value = again ? null : bucket
 }
 
@@ -323,12 +325,13 @@ const serviceRow = (r) => {
   ]
   if (ambulance && r.scheduled_at) details.push({ label: 'Scheduled for', value: fmtWhen(r.scheduled_at) })
   const filedAt = new Date(r.created_at).getTime()
-  return {
+  // status_changed_at is null until the first status move.
+  const statusAt = new Date(r.status_changed_at ?? r.created_at).getTime()
+  const row = {
     key: `svc-${r.request_id}`,
     kind: ambulance ? 'ambulance' : 'service',
     filedAt,
-    // Null until the first status move; the rail ages Responding/Booked from here.
-    statusAt: new Date(r.status_changed_at ?? r.created_at).getTime(),
+    statusAt,
     name: requesterName(r),
     type: r.service?.service_name || 'Other',
     status: r.status,
@@ -339,6 +342,8 @@ const serviceRow = (r) => {
     note: waitNote(r.status, filedAt),
     details,
   }
+  if (isStale(row)) row.note = `${Math.floor((Date.now() - statusAt) / DAY_MS)}d unchanged`
+  return row
 }
 
 const borrowRow = (b) => {
@@ -351,7 +356,11 @@ const borrowRow = (b) => {
   if (b.due_date) details.push({ label: 'Due back', value: b.due_date })
   const filedAt = new Date(b.created_at).getTime()
   const late = b.status === 'Released' && daysPastDue(b.due_date) > 0
+  // Stock only leaves the shelf on release, so only a loan not yet released can come up short.
+  const onHand = b.equipment?.available_quantity
   return {
+    onHand,
+    shortStock: ['Pending', 'Approved'].includes(b.status) && onHand != null && (b.quantity ?? 1) > onHand,
     key: `bor-${b.borrow_id}`,
     kind: 'borrow',
     filedAt,
@@ -422,18 +431,16 @@ const fetchDashboardData = async () => {
   }
 }
 
-const rowsForTab = (tab) => rows.value.filter((r) => {
-  if (tab === 'all') return true
-  if (tab === 'overdue') return r.overdue
-  return r.kind === tab
-})
-
-const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.value, rowsForTab(t.value).length])))
+const currentTab = computed(() => QUEUE_TABS.find((t) => t.value === queueTab.value))
+const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.value, rows.value.filter((r) => t.test(r)).length])))
 
 const visibleRows = computed(() =>
-  rowsForTab(queueTab.value)
-    .filter((r) => !bucketFilter.value || (r.kind !== 'borrow' && waitBucket(r.filedAt) === bucketFilter.value))
+  rows.value
+    .filter((r) => currentTab.value.test(r))
+    .filter((r) => !bucketFilter.value || waitBucket(r.filedAt) === bucketFilter.value)
 )
+
+const overdueRows = computed(() => rows.value.filter((r) => r.overdue))
 
 // A unit sitting on a Booked ambulance request is spoken for, though the
 // vehicle row stays 'Available' until it actually leaves.
@@ -478,7 +485,7 @@ const strip = computed(() => {
     items.push({ icon: 'mdi-calendar-clock', label: 'Next booking', value: b ? `${fmtShort(b.scheduledAt)} · ${b.unit || 'No unit'}` : 'None', warn: !!b && !b.unit, to: link('ambulance', { path: '/conduction-requests', query: { status: 'Booked' } }) })
   }
   if (loaded.borrowings) {
-    const n = rowsForTab('overdue').length
+    const n = overdueRows.value.length
     items.push({ icon: 'mdi-alert-circle-outline', label: 'Overdue loans', value: n, warn: n > 0, to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
   }
   return items
