@@ -22,6 +22,19 @@
           <Bar :data="waitData" :options="waitOptions" />
           <ChartDataTable caption="Open requests by waiting time — same data as the chart above" category-label="Waiting" :labels="WAIT_BUCKETS" :series="[{ label: 'Open requests', data: waitCounts }]" />
         </div>
+        <!-- The chart is mouse-only; these do the same filter from the keyboard. -->
+        <div class="d-flex flex-wrap ga-1 mt-3" role="group" aria-label="Filter the table by waiting time">
+          <v-btn
+            v-for="(bucket, i) in WAIT_BUCKETS"
+            :key="bucket"
+            size="x-small"
+            :variant="activeBucket === bucket ? 'flat' : 'tonal'"
+            color="primary"
+            class="text-none font-weight-bold"
+            :aria-pressed="activeBucket === bucket"
+            @click="emit('pick-bucket', bucket)"
+          >{{ BUCKET_SHORT[i] }} · {{ waitCounts[i] }}</v-btn>
+        </div>
       </AnalyticsSection>
     </v-col>
 
@@ -66,6 +79,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 const emit = defineEmits(['pick-bucket'])
+
+const BUCKET_SHORT = ['Under a day', '1–3d', '3–7d', '7+d']
 
 const { colors, isDark, legend, base, horizontal, donut } = useChartTheme()
 
