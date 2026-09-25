@@ -80,9 +80,12 @@
     <v-skeleton-loader v-if="loading" type="text" height="88" class="mb-4"></v-skeleton-loader>
     <v-row v-else-if="kpis.length > 0" class="mb-2">
       <v-col v-for="k in kpis" :key="k.label" cols="12" sm="6" lg>
-        <v-card :to="k.to" elevation="0" class="dash-card kpi-card" :class="{ 'kpi-link': k.to }">
-          <div class="kpi-label">{{ k.label }}</div>
-          <div class="kpi-value" :class="`tone-${k.tone}`">{{ k.value }}</div>
+        <v-card :to="k.to" elevation="0" class="dash-card kpi-card" :class="{ 'kpi-link': k.to }" :style="{ '--kpi': `var(--v-theme-${k.accent})` }">
+          <div class="kpi-tile"><v-icon size="22">{{ k.icon }}</v-icon></div>
+          <div class="min-width-0">
+            <div class="kpi-label">{{ k.label }}</div>
+            <div class="kpi-value" :class="`tone-${k.tone}`">{{ k.value }}</div>
+          </div>
         </v-card>
       </v-col>
     </v-row>
@@ -380,12 +383,12 @@ const kpis = computed(() => {
   const link = (section, to) => (can(section) ? to : undefined)
   const emptyTone = (free) => (free === 0 ? 'warning' : 'default')
   const items = []
-  if (units.value) items.push({ label: 'Available Units', value: `${units.value.free}/${units.value.total}`, tone: emptyTone(units.value.free), to: link('vehicles', '/vehicles') })
-  if (responders.value) items.push({ label: 'Available Responders', value: `${responders.value.available}/${responders.value.total}`, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
-  if (trips.value) items.push({ label: 'Ongoing Trips', value: tripsOut.value, tone: 'default', to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
+  if (units.value) items.push({ label: 'Available Units', icon: 'mdi-ambulance', accent: 'primary', value: `${units.value.free}/${units.value.total}`, tone: emptyTone(units.value.free), to: link('vehicles', '/vehicles') })
+  if (responders.value) items.push({ label: 'Available Responders', icon: 'mdi-account-hard-hat', accent: 'info', value: `${responders.value.available}/${responders.value.total}`, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
+  if (trips.value) items.push({ label: 'Ongoing Trips', icon: 'mdi-map-marker-path', accent: 'slate', value: tripsOut.value, tone: 'default', to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
   if (loaded.borrowings) {
     const n = overdueRows.value.length
-    items.push({ label: 'Overdue Borrowing', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
+    items.push({ label: 'Overdue Borrowing', icon: 'mdi-alert-circle-outline', accent: 'error', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
   }
   return items
 })
@@ -405,6 +408,23 @@ onMounted(fetchDashboardData)
   --dash-line: rgba(var(--v-theme-on-surface), 0.12);
   --dash-radius: 12px;
   --dash-pad: 20px;
+}
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  /* Faint wash of the card's accent over the surface; --kpi is set per card. */
+  background: color-mix(in srgb, rgb(var(--kpi)) 6%, rgb(var(--v-theme-surface))) !important;
+}
+.kpi-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: rgb(var(--kpi));
+  background: rgba(var(--kpi), 0.14);
 }
 .kpi-label {
   font-size: 13px;
@@ -430,7 +450,12 @@ onMounted(fetchDashboardData)
   color: var(--dash-bad);
 }
 .kpi-link:hover {
-  border-color: rgb(var(--v-theme-primary));
+  background: color-mix(in srgb, rgb(var(--kpi)) 11%, rgb(var(--v-theme-surface))) !important;
+}
+/* Keyboard focus is an outline, so no card ever carries a resting border colour. */
+.kpi-link:focus-visible {
+  outline: 2px solid rgb(var(--kpi));
+  outline-offset: 2px;
 }
 /* The brand band. The secondary token is the sidebar's dark green in both
    themes, and on-secondary is the text colour Vuetify derives for it, so
