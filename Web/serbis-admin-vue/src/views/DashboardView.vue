@@ -75,22 +75,17 @@
       </div>
     </div>
 
-    <!-- Live strip: what is true right now. Each item opens its own page,
-         filtered; an item whose data the account cannot read is left out. -->
-    <v-skeleton-loader v-if="loading" type="text" height="64" class="mb-4"></v-skeleton-loader>
-    <v-card v-else-if="strip.length > 0" elevation="0" rounded="xl" class="soft-card queue-card live-strip mb-4">
-      <v-card
-        v-for="item in strip" :key="item.label"
-        :to="item.to" variant="text" rounded="0"
-        class="live-item d-flex align-center pa-3"
-      >
-        <v-icon :color="item.warn ? 'error' : 'primary'" size="22" class="mr-3">{{ item.icon }}</v-icon>
-        <div class="min-width-0">
-          <div class="text-body-1 font-weight-black lh-1" :class="{ 'text-error': item.warn }">{{ item.value }}</div>
-          <div class="text-caption font-weight-bold text-medium-emphasis">{{ item.label }}</div>
-        </div>
-      </v-card>
-    </v-card>
+    <!-- What is true right now. Each card opens its own page, filtered; a card
+         whose data the account cannot read is left out. -->
+    <v-skeleton-loader v-if="loading" type="text" height="88" class="mb-4"></v-skeleton-loader>
+    <v-row v-else-if="kpis.length > 0" class="mb-2">
+      <v-col v-for="k in kpis" :key="k.label" cols="12" sm="6" lg>
+        <v-card :to="k.to" elevation="0" class="dash-card kpi-card" :class="{ 'kpi-link': k.to }">
+          <div class="kpi-label">{{ k.label }}</div>
+          <div class="kpi-value" :class="`tone-${k.tone}`">{{ k.value }}</div>
+        </v-card>
+      </v-col>
+    </v-row>
 
     <!-- The work queue, cut by what staff have to do: answer (Backlog), chase
          (Stale), or hand out (Borrowing). Only open items; the full history
@@ -487,25 +482,17 @@ const summary = computed(() => {
   })
 })
 
-const nextBooking = computed(() => rows.value
-  .filter((r) => r.status === 'Booked' && r.scheduledAt > Date.now())
-  .toSorted((a, b) => a.scheduledAt - b.scheduledAt)[0])
-
-const fmtShort = (ms) => new Date(ms).toLocaleString('en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-
-const strip = computed(() => {
+// Number colour: red for a problem, amber for nothing left to send out.
+const kpis = computed(() => {
   const link = (section, to) => (can(section) ? to : undefined)
+  const emptyTone = (free) => (free === 0 ? 'warning' : 'default')
   const items = []
-  if (units.value) items.push({ icon: 'mdi-ambulance', label: 'Units free', value: `${units.value.free}/${units.value.total}`, to: link('vehicles', '/vehicles') })
-  if (trips.value) items.push({ icon: 'mdi-map-marker-path', label: 'Trips out', value: tripsOut.value.length, to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
-  if (responders.value) items.push({ icon: 'mdi-account-hard-hat', label: 'Responders free', value: `${responders.value.available}/${responders.value.total}`, to: link('responders', '/responders') })
-  if (loaded.services) {
-    const b = nextBooking.value
-    items.push({ icon: 'mdi-calendar-clock', label: 'Next booking', value: b ? `${fmtShort(b.scheduledAt)} · ${b.unit || 'No unit'}` : 'None', warn: !!b && !b.unit, to: link('ambulance', { path: '/conduction-requests', query: { status: 'Booked' } }) })
-  }
+  if (units.value) items.push({ label: 'Available Units', value: `${units.value.free}/${units.value.total}`, tone: emptyTone(units.value.free), to: link('vehicles', '/vehicles') })
+  if (responders.value) items.push({ label: 'Available Responders', value: `${responders.value.available}/${responders.value.total}`, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
+  if (trips.value) items.push({ label: 'Ongoing Trips', value: tripsOut.value.length, tone: 'default', to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
   if (loaded.borrowings) {
     const n = overdueRows.value.length
-    items.push({ icon: 'mdi-alert-circle-outline', label: 'Overdue loans', value: n, warn: n > 0, to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
+    items.push({ label: 'Overdue Borrowing', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
   }
   return items
 })
@@ -522,6 +509,41 @@ onMounted(fetchDashboardData)
   --dash-muted: rgba(var(--v-theme-on-surface), 0.62);
   --dash-warn: rgb(var(--v-theme-warning-strong));
   --dash-bad: rgb(var(--v-theme-error-strong));
+  --dash-line: rgba(var(--v-theme-on-surface), 0.12);
+  --dash-radius: 12px;
+  --dash-pad: 20px;
+}
+.dash-card {
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius);
+  padding: var(--dash-pad);
+  background: rgb(var(--v-theme-surface));
+}
+.kpi-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dash-muted);
+}
+.kpi-value {
+  margin-top: 6px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value.tone-default {
+  color: var(--dash-text);
+}
+.kpi-value.tone-warning {
+  color: var(--dash-warn);
+}
+.kpi-value.tone-error {
+  color: var(--dash-bad);
+}
+.kpi-link:hover {
+  border-color: rgb(var(--v-theme-primary));
 }
 .dash-header {
   margin-bottom: 24px;
@@ -570,19 +592,6 @@ onMounted(fetchDashboardData)
 /* The queue is a working surface, not a tile: it should not lift under the cursor. */
 .queue-card:hover {
   transform: none;
-}
-
-.lh-1 {
-  line-height: 1;
-}
-
-/* One row on desktop; wraps two-up on a phone. */
-.live-strip {
-  display: flex;
-  flex-wrap: wrap;
-}
-.live-item {
-  flex: 1 1 160px;
 }
 
 .queue-table :deep(th) {
