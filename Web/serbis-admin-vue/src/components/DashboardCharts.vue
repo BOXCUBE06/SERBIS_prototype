@@ -58,7 +58,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
-const { colors, isDark, legend, base, horizontal } = useChartTheme()
+const { colors, legend, base, horizontal } = useChartTheme()
 
 // ---- Filed & Resolved -----------------------------------------------------
 
@@ -73,17 +73,30 @@ const flowSeries = computed(() => [
   { label: 'Resolved', data: countByDay(props.history.map((h) => h.resolvedAt).filter(Boolean), days) },
 ])
 // Filed is neutral load; resolved is the good news, so it takes the brand teal.
-const flowColors = computed(() => [isDark.value ? '#94A3B8' : '#64748B', colors.value.primary])
+const flowColors = computed(() => [colors.value.slate, colors.value.primary])
+const FILL_TOP = [0.16, 0.4]
+
+// Fades from the series colour at the line to nothing at the axis. The canvas
+// gradient needs the chart area, which does not exist on the first pass.
+const fade = (color, top) => ({ chart }) => {
+  const area = chart.chartArea
+  if (!area) return withAlpha(color, top / 2)
+  const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom)
+  gradient.addColorStop(0, withAlpha(color, top))
+  gradient.addColorStop(1, withAlpha(color, 0))
+  return gradient
+}
 const flowData = computed(() => ({
   labels: dayLabels,
   datasets: flowSeries.value.map((s, i) => ({
     label: s.label,
     data: s.data,
     borderColor: flowColors.value[i],
-    backgroundColor: withAlpha(flowColors.value[i], 0.14),
+    backgroundColor: fade(flowColors.value[i], FILL_TOP[i]),
     borderWidth: 2,
     fill: true,
-    tension: 0.4,
+    // Monotone: the curve never dips below zero or overshoots a peak.
+    cubicInterpolationMode: 'monotone',
     pointRadius: 0,
     pointHoverRadius: 4,
   })),
@@ -134,11 +147,8 @@ const ranked = computed(() => {
   return (t?.labels ?? []).map((label, i) => ({ label, value: t.data[i] })).toSorted((a, b) => b.value - a.value).slice(0, TOP)
 })
 
-// #1 stands out, 2-4 are worth a look, the rest are background.
-const rankColor = (i) => {
-  if (i === 0) return colors.value.error
-  return i <= 3 ? colors.value.warning : colors.value.primary
-}
+// One teal ramp, darkest for #1.
+const rankColor = (i) => withAlpha(colors.value.primary, 1 - i * 0.09)
 const rankData = computed(() => ({
   labels: ranked.value.map((r) => r.label),
   datasets: [{
