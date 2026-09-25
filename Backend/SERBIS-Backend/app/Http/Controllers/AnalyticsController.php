@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\ConductionRequest;
 use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
+use App\Models\Responder;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\AmbulanceAvailability;
 use App\Support\AdminSections;
 use App\Support\AnalyticsCache;
 use App\Support\AnalyticsReport;
@@ -90,7 +92,7 @@ class AnalyticsController extends Controller
         'Equipment Overdue' => AdminSections::BORROWINGS,
     ];
 
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, AmbulanceAvailability $availability): JsonResponse
     {
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
         // ~25 queries per admin dashboard load). One entry for everyone: the
@@ -402,7 +404,17 @@ class AnalyticsController extends Controller
             ]), true);
         });
 
-        return response()->json($this->limitToSections($payload, $request->user()));
+        $payload = $this->limitToSections($payload, $request->user());
+
+        // Outside the cache: neither model invalidates it, and both answers are
+        // "right now". Counts and ids only, so no section gate.
+        $payload['responders'] = [
+            'available' => Responder::where('status', 'available')->count(),
+            'total' => Responder::count(),
+        ];
+        $payload['bookingConflicts'] = $availability->conflictingRequestIds(now(), now()->addDay());
+
+        return response()->json($payload);
     }
 
     /**

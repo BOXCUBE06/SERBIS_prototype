@@ -7,6 +7,7 @@ use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The single source of truth for "which ambulances are free between two
@@ -72,12 +73,38 @@ class AmbulanceAvailability
                     ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
                     ->whereNotIn('tbl_service_request.status', ServiceRequestController::TERMINAL_STATUSES)
                     ->where('tbl_ambulance_bookings.scheduled_at', '<', $end)
-                    ->whereRaw(
-                        'COALESCE(tbl_ambulance_bookings.scheduled_end, DATE_ADD(tbl_ambulance_bookings.scheduled_at, INTERVAL ? HOUR)) > ?',
-                        [ServiceRequestController::DEFAULT_BOOKING_HOURS, $start->toDateTimeString()]
-                    )
+                    ->whereRaw(self::windowEnd('tbl_ambulance_bookings').' > ?', [$start->toDateTimeString()])
                     ->when($excludeServiceRequestId, fn (Builder $q) => $q->where('tbl_service_request.request_id', '!=', $excludeServiceRequestId));
             })
             ->get();
+    }
+
+    /**
+     * Active bookings that share a unit with another active booking whose
+     * window overlaps theirs, limited to bookings starting in [$from, $to).
+     * The write path should never let this happen; the dashboard flags it
+     * when it does. Same half-open test and default window as above.
+     */
+    public function conflictingRequestIds(Carbon $from, Carbon $to): array
+    {
+        return DB::table('tbl_ambulance_bookings as a')
+            ->join('tbl_service_request as ra', 'ra.request_id', '=', 'a.request_id')
+            ->join('tbl_service_request as rb', fn ($join) => $join->on('rb.vehicle_id', '=', 'ra.vehicle_id')->on('rb.request_id', '!=', 'ra.request_id'))
+            ->join('tbl_ambulance_bookings as b', 'b.request_id', '=', 'rb.request_id')
+            ->whereNotIn('ra.status', ServiceRequestController::TERMINAL_STATUSES)
+            ->whereNotIn('rb.status', ServiceRequestController::TERMINAL_STATUSES)
+            ->whereRaw('b.scheduled_at < '.self::windowEnd('a'))
+            ->whereRaw(self::windowEnd('b').' > a.scheduled_at')
+            ->where('a.scheduled_at', '>=', $from)
+            ->where('a.scheduled_at', '<', $to)
+            ->distinct()
+            ->pluck('a.request_id')
+            ->all();
+    }
+
+    /** A booking's end: scheduled_end, or the default window approve() falls back to. */
+    private static function windowEnd(string $table): string
+    {
+        return sprintf('COALESCE(%1$s.scheduled_end, DATE_ADD(%1$s.scheduled_at, INTERVAL %2$d HOUR))', $table, ServiceRequestController::DEFAULT_BOOKING_HOURS);
     }
 }
