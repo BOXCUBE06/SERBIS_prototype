@@ -10,8 +10,11 @@
 
       <div class="sidebar-header d-flex align-center justify-space-between mb-2 mt-2 px-4">
         <div class="d-flex align-center">
-          <div class="logo-accent"></div>
-          <span class="text-h6 font-weight-black text-white tracking-widest">SERBIS</span>
+          <span class="brand-tile"><img :src="logoUrl" alt="" width="40" height="40"></span>
+          <div class="brand-text">
+            <span class="text-h6 font-weight-black text-white tracking-widest">SERBIS</span>
+            <span class="brand-sub text-white-50">MDRRMO Echague</span>
+          </div>
         </div>
         <v-btn
           :icon="theme.global.name.value === 'dark' ? 'mdi-weather-sunny' : 'mdi-weather-night'"
@@ -108,6 +111,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
 import { ADMIN_SECTIONS, SECTION_GROUPS, sectionForPath } from '@/composables/adminSections'
+import logoUrl from '@/assets/logo/serbis-logo.png'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
 
@@ -232,11 +236,14 @@ onMounted(() => { loadCurrentAdmin() })
 .group-chevron { transition: transform 150ms; }
 .group-chevron.is-collapsed { transform: rotate(-90deg); }
 
-.logo-accent {
-  width: 4px; height: 20px;
-  background-color: #fff;
-  margin-right: 12px; border-radius: 2px;
+/* 40px tile; the source is 2000px, so it only ever scales down. */
+.brand-tile {
+  width: 40px; height: 40px; flex: none; margin-right: 12px;
+  border-radius: 10px; overflow: hidden;
 }
+.brand-tile img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.brand-text { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+.brand-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
