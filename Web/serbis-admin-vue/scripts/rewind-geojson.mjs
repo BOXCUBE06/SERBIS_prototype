@@ -13,7 +13,7 @@ const reverseRings = (geometry) => {
   const rewind = (rings) => rings.map((ring) => ring.toReversed())
   geometry.coordinates = geometry.type === 'Polygon'
     ? rewind(geometry.coordinates)
-    : geometry.coordinates.map(rewind)
+    : geometry.coordinates.map((polygon) => rewind(polygon))
 }
 
 let fixed = 0

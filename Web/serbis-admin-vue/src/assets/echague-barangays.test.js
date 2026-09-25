@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { geoArea } from 'd3-geo'
 import { buildEchagueMap } from '../composables/echagueMap.js'
 
-const collection = JSON.parse(readFileSync(new URL('./echague-barangays.json', import.meta.url), 'utf8'))
+const collection = JSON.parse(readFileSync(new URL('echague-barangays.json', import.meta.url), 'utf8'))
 
 test('64 barangays, each with a PSGC code', () => {
   assert.equal(collection.features.length, 64)
