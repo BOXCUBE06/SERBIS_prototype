@@ -5,7 +5,7 @@
   asked for most. Nothing here fetches; the view hands over what it loaded.
 -->
 <template>
-  <v-row>
+  <v-row class="mb-2">
     <v-col cols="12" lg="8">
       <v-card elevation="0" class="dash-card h-100">
         <div class="dash-card-title">Filed &amp; Resolved</div>

@@ -1,7 +1,8 @@
 /* Card shell shared by the dashboard's KPI cards, queue and charts. The colour
    variables it reads (--dash-*) are set on the view's root. */
 .v-card.dash-card {
-  border: 1px solid var(--dash-line);
+  border: 0;
+  box-shadow: var(--dash-shadow);
   border-radius: var(--dash-radius);
   padding: var(--dash-pad);
   background: rgb(var(--v-theme-surface));

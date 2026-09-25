@@ -92,6 +92,7 @@
 
     <!-- Everything open, one tab per kind of work. A row opens that request on
          its own page. Only open items; the full history lives on each page. -->
+    <v-row class="mb-2"><v-col cols="12">
     <v-card elevation="0" class="dash-card dash-panel">
       <div class="panel-head">
         <div class="dash-card-title">Open Requests</div>
@@ -147,6 +148,7 @@
         <v-pagination v-model="page" :length="pageCount" :total-visible="5" density="comfortable" rounded="circle"></v-pagination>
       </div>
     </v-card>
+    </v-col></v-row>
 
     <DashboardCharts :history="history" :top="top" :loading="loading" />
 
@@ -405,9 +407,16 @@ onMounted(fetchDashboardData)
   --dash-muted: rgba(var(--v-theme-on-surface), 0.62);
   --dash-warn: rgb(var(--v-theme-warning-strong));
   --dash-bad: rgb(var(--v-theme-error-strong));
-  --dash-line: rgba(var(--v-theme-on-surface), 0.12);
-  --dash-radius: 12px;
+  /* The card shape from before the rebuild: Vuetify's rounded-xl (24px) and the
+     soft two-layer shadow, with no border. One place, so every card matches. */
+  --dash-radius: 24px;
+  --dash-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
   --dash-pad: 20px;
+}
+/* on-surface is light in the dark theme, so the same shadow would glow. Use
+   the shadow colour token and rely on surface vs background to separate cards. */
+.v-theme--dark .dashboard-bg {
+  --dash-shadow: 0 1px 2px rgba(var(--v-shadow-color), 0.4), 0 4px 14px rgba(var(--v-shadow-color), 0.25);
 }
 .kpi-card {
   display: flex;
@@ -464,6 +473,7 @@ onMounted(fetchDashboardData)
   margin-bottom: 24px;
   padding: 24px var(--dash-pad);
   border-radius: var(--dash-radius);
+  box-shadow: var(--dash-shadow);
   background: linear-gradient(
     135deg,
     color-mix(in srgb, rgb(var(--v-theme-primary)) 55%, rgb(var(--v-theme-secondary))) 0%,
@@ -516,7 +526,6 @@ onMounted(fetchDashboardData)
 .dash-panel {
   padding: 0 !important;
   overflow: hidden;
-  margin-bottom: 24px;
 }
 .panel-head {
   padding: var(--dash-pad) var(--dash-pad) 8px;
