@@ -1,13 +1,13 @@
 <template>
   <v-container fluid class="dashboard-bg">
 
-    <div class="dash-header d-flex justify-space-between align-start flex-wrap ga-3">
+    <div class="dash-band d-flex justify-space-between align-start flex-wrap ga-3">
       <div class="min-width-0">
         <h2 class="dash-title">Welcome back, {{ adminFirstName || 'there' }}</h2>
         <!-- Only once every list has arrived: a half-loaded count would read as a calm shift. -->
         <p v-if="summary" class="dash-summary">
           <template v-for="(part, i) in summary" :key="i">
-            <b v-if="part.tone" :class="`tone-${part.tone}`">{{ part.text }}</b>
+            <b v-if="part.tone" class="count-chip" :class="`tone-${part.tone}`">{{ part.text }}</b>
             <template v-else>{{ part.text }}</template>
           </template>
         </p>
@@ -18,7 +18,7 @@
              list, so it is not drawn. -->
         <v-menu v-if="showBell" location="bottom end">
           <template v-slot:activator="{ props }">
-            <v-btn icon="mdi-bell-outline" variant="outlined" v-bind="props" aria-label="System notifications">
+            <v-btn icon="mdi-bell-outline" variant="outlined" class="band-btn" v-bind="props" aria-label="System notifications">
               <!-- A count when staff have someone to ring, a plain dot for activity. -->
               <v-badge v-if="followUps.length > 0" color="error" :content="followUps.length">
                 <v-icon>mdi-bell-outline</v-icon>
@@ -71,7 +71,7 @@
           </v-card>
         </v-menu>
 
-        <v-avatar color="primary" size="44" class="cursor-pointer font-weight-bold text-white">J</v-avatar>
+        <v-avatar size="44" class="band-avatar cursor-pointer font-weight-bold">J</v-avatar>
       </div>
     </div>
 
@@ -432,32 +432,58 @@ onMounted(fetchDashboardData)
 .kpi-link:hover {
   border-color: rgb(var(--v-theme-primary));
 }
-.dash-header {
+/* The brand band. The secondary token is the sidebar's dark green in both
+   themes, and on-secondary is the text colour Vuetify derives for it, so
+   nothing here is a literal colour. */
+.dash-band {
   margin-bottom: 24px;
+  padding: 24px var(--dash-pad);
+  border-radius: var(--dash-radius);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, rgb(var(--v-theme-primary)) 55%, rgb(var(--v-theme-secondary))) 0%,
+    rgb(var(--v-theme-secondary)) 100%
+  );
+  color: rgb(var(--v-theme-on-secondary));
 }
 .dash-title {
   font-size: 28px;
   font-weight: 700;
   line-height: 1.2;
-  color: var(--dash-text);
+  color: rgb(var(--v-theme-on-secondary));
 }
 .dash-summary {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
   font-size: 15px;
   font-weight: 400;
-  color: var(--dash-muted);
+  line-height: 1.9;
+  color: rgba(var(--v-theme-on-secondary), 0.85);
 }
-.dash-summary b {
+.count-chip {
+  display: inline-block;
+  padding: 0 10px;
+  border-radius: 999px;
   font-weight: 700;
+  line-height: 1.5;
 }
-.dash-summary .tone-default {
-  color: var(--dash-text);
+.count-chip.tone-default {
+  background: rgba(var(--v-theme-on-secondary), 0.16);
+  color: rgb(var(--v-theme-on-secondary));
 }
-.dash-summary .tone-warning {
-  color: var(--dash-warn);
+.count-chip.tone-warning {
+  background: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-on-warning));
 }
-.dash-summary .tone-error {
-  color: var(--dash-bad);
+.count-chip.tone-error {
+  background: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-on-error));
+}
+.band-btn {
+  color: rgb(var(--v-theme-on-secondary));
+}
+.band-avatar {
+  background: rgba(var(--v-theme-on-secondary), 0.16);
+  color: rgb(var(--v-theme-on-secondary));
 }
 .min-width-0 {
   min-width: 0;
