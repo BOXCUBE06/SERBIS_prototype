@@ -488,7 +488,7 @@ onMounted(fetchVehicles)
   overflow: hidden;
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
-.composition-bar .seg { height: 100%; transition: width 0.4s ease; }
+.composition-bar .seg { height: 100%; transition: width var(--motion-slow) var(--ease-out); }
 .seg-available { background: rgb(var(--v-theme-primary)); }
 .seg-dispatched { background: rgb(var(--v-theme-warning)); }
 .seg-maintenance { background: rgb(var(--v-theme-error)); }
@@ -504,7 +504,7 @@ onMounted(fetchVehicles)
   border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
   background: rgba(var(--v-theme-on-surface), 0.02);
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+  transition: border-color var(--motion-base) var(--ease-out), background-color var(--motion-base) var(--ease-out), transform var(--motion-fast) var(--ease-out);
   text-align: left;
 }
 .stat-tile:hover { transform: translateY(-2px); }
@@ -555,7 +555,7 @@ onMounted(fetchVehicles)
   letter-spacing: 0.04em;
   border: none;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: filter var(--motion-fast) var(--ease-out);
 }
 .status-pill:hover { filter: brightness(0.97); }
 /* Text uses the -strong tokens, not the plain ones: raw primary/warning/

@@ -1060,7 +1060,7 @@ onUnmounted(releaseResidentPhotos)
 .status-field { width: 150px; max-width: 100%; }
 
 .tab-btn {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--motion-base) var(--ease-in-out);
   border-bottom: 3px solid transparent;
 }
 /* primary-strong exists for exactly this: primary alone is only 5.15:1 on a
@@ -1072,7 +1072,7 @@ onUnmounted(releaseResidentPhotos)
   color: rgb(var(--v-theme-primary-strong)) !important;
 }
 
-.transition-btn { transition: transform 0.2s ease, opacity 0.2s ease; }
+.transition-btn { transition: transform var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
 .transition-btn:hover { transform: translateY(-2px); opacity: 0.95; }
 
 /* Avatars — the old blue-on-light-blue pairing measured 3.28:1. Tinting the

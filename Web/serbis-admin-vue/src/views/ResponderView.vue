@@ -425,7 +425,7 @@ onMounted(fetchResponders)
   letter-spacing: 0.04em;
   border: none;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: filter var(--motion-fast) var(--ease-out);
 }
 .status-pill:hover { filter: brightness(0.97); }
 .pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }

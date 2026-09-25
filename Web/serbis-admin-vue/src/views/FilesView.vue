@@ -662,7 +662,7 @@ onMounted(fetchFiles)
   border-width: 2px !important;
   border-radius: 16px;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: background-color var(--motion-base) var(--ease-out), border-color var(--motion-base) var(--ease-out);
   background-color: rgba(var(--v-theme-on-surface), 0.02);
 }
 .dropzone:hover,

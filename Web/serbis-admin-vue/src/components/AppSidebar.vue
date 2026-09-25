@@ -231,7 +231,7 @@ onMounted(() => { loadCurrentAdmin() })
   border-radius: 6px;
 }
 .group-toggle:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
-.group-chevron { transition: transform 150ms; }
+.group-chevron { transition: transform var(--motion-fast) var(--ease-out); }
 .group-chevron.is-collapsed { transform: rotate(-90deg); }
 
 /* 40px tile; the source is 2000px, so it only ever scales down. */
@@ -245,7 +245,7 @@ onMounted(() => { loadCurrentAdmin() })
 .brand-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all var(--motion-base) var(--ease-out) !important;
 }
 
 .nav-item:hover:not(.active-nav-item) {

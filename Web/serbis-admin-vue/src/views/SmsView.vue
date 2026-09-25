@@ -1110,11 +1110,11 @@ const rotateBlastCode = async () => {
 .gap-4 { gap: 16px; }
 
 .fade-in {
-  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeIn var(--motion-slow) var(--ease-out);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(15px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

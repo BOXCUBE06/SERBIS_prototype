@@ -1124,7 +1124,7 @@ onUnmounted(() => listAbortController.abort())
   border-radius: 6px;
   color: #fff;
   background-color: rgba(0, 0, 0, 0.6);
-  transition: opacity 150ms ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .attachment-tile:hover .attachment-badge,
@@ -1144,7 +1144,7 @@ onUnmounted(() => listAbortController.abort())
   color: #fff;
   background-color: rgba(0, 0, 0, 0.55);
   opacity: 0;
-  transition: opacity 150ms ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .attachment-tile:hover .attachment-scrim,
@@ -1181,7 +1181,7 @@ onUnmounted(() => listAbortController.abort())
   cursor: pointer;
   border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
   border-left: 3px solid transparent;
-  transition: background-color 150ms ease;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 .request-row:hover {
   background-color: rgba(var(--v-theme-on-surface), 0.04);

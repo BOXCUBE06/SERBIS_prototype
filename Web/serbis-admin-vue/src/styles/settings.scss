@@ -168,7 +168,7 @@ table, .kpi-value, .map-tip {
  * it was the one part of the dead copy worth keeping. */
 .btn-soft-shadow {
   box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28) !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--motion-base) var(--ease-out), box-shadow var(--motion-base) var(--ease-out);
 }
 .btn-soft-shadow:hover {
   transform: translateY(-2px);

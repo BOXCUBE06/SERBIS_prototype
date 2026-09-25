@@ -169,8 +169,4 @@ useAppTheme().init()
     radial-gradient(circle at -10% 50%, rgba(52, 195, 154, 0.05) 0%, transparent 60%),
     rgb(var(--v-theme-background)) !important;
 }
-
-.nav-item {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
 </style>

@@ -396,7 +396,7 @@ onMounted(fetchEquipments)
   border-radius: 16px;
   cursor: default;
   text-align: left;
-  transition: transform 0.15s ease, border-color 0.2s ease;
+  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-base) var(--ease-out);
 }
 .metric-tile[class*="attn"], .metric-tile:has(.mdi-alert-octagon-outline) { cursor: pointer; }
 .metric-tile--active { border-color: rgb(var(--v-theme-error)) !important; background: rgba(var(--v-theme-error), 0.06) !important; }
@@ -451,7 +451,7 @@ onMounted(fetchEquipments)
   background: rgba(var(--v-theme-on-surface), 0.08);
   overflow: hidden;
 }
-.gauge-fill { display: block; height: 100%; border-radius: 5px; transition: width 0.4s ease; }
+.gauge-fill { display: block; height: 100%; border-radius: 5px; transition: width var(--motion-slow) var(--ease-out); }
 .fill-available { background: rgb(var(--v-theme-primary)); }
 .fill-low { background: rgb(var(--v-theme-warning)); }
 .fill-depleted { background: rgb(var(--v-theme-error)); }

@@ -72,7 +72,7 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
   border-right: 1px solid rgba(var(--v-theme-on-surface), 0.14);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 .segmented-tabs__seg:last-child {
   border-right: none;

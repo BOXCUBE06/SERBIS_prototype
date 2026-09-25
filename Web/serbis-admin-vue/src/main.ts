@@ -19,6 +19,7 @@ import { installSessionExpiryHandler } from '@/composables/apiSession'
 import '@fontsource-variable/plus-jakarta-sans'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
+import '@/styles/motion.css'
 
 const app = createApp(App)
 
