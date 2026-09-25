@@ -107,7 +107,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { geoMercator, geoPath } from 'd3-geo'
+import { buildEchagueMap } from '@/composables/echagueMap'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
 // Every barangay of Echague. Matched to tbl_barangay rows by
@@ -128,20 +128,7 @@ const ranked = computed(() => props.barangays
 
 // ---- Projection: once, at import; the boundaries never change ------------------
 
-const W = 600
-const PAD = 8
-const projection = geoMercator().fitWidth(W - PAD * 2, barangayBoundaries)
-const [tx, ty] = projection.translate()
-projection.translate([tx + PAD, ty + PAD])
-const toPath = geoPath(projection)
-const [[, y0], [, y1]] = toPath.bounds(barangayBoundaries)
-const H = Math.ceil(y1 - y0) + PAD * 2
-
-const shapes = barangayBoundaries.features.map((f) => ({
-  code: f.properties.psgc_code,
-  name: f.properties.name,
-  d: toPath(f),
-}))
+const { W, H, shapes } = buildEchagueMap(barangayBoundaries)
 
 // ---- Figures -----------------------------------------------------------------
 
