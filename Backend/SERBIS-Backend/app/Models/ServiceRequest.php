@@ -23,7 +23,7 @@ class ServiceRequest extends Model
 {
     use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
 
-    protected $ignoreLogging = ['created_at', 'updated_at'];
+    protected $ignoreLogging = ['created_at', 'updated_at', 'status_changed_at'];
 
     /**
      * Statuses that mean the office has answered a request that was waiting
@@ -55,6 +55,7 @@ class ServiceRequest extends Model
         'approved_at' => 'datetime',
         'first_responded_at' => 'datetime',
         'resolved_at' => 'datetime',
+        'status_changed_at' => 'datetime',
     ];
 
     /**
@@ -99,6 +100,9 @@ class ServiceRequest extends Model
      */
     public function stampLifecycle(?string $from, ?string $to): void
     {
+        // Every move, unlike the two below: the dashboard ages a request from here.
+        $this->status_changed_at = now();
+
         if ($this->first_responded_at === null
             && $from === 'Pending'
             && in_array($to, self::RESPONSE_STATUSES, true)

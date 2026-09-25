@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -104,7 +105,7 @@ class ServiceRequestLifecycleTimestampsTest extends TestCase
      * no longer reads the annotation and would run this once with no
      * arguments instead of reporting it as misconfigured.
      */
-    #[\PHPUnit\Framework\Attributes\DataProvider('respondingStatuses')]
+    #[DataProvider('respondingStatuses')]
     public function test_leaving_pending_stamps_the_first_response(string $status): void
     {
         $request = $this->pendingRequest();
@@ -170,6 +171,30 @@ class ServiceRequestLifecycleTimestampsTest extends TestCase
         $this->assertNotNull($fresh->first_responded_at);
         $this->assertNotNull($fresh->resolved_at);
         $this->assertTrue($fresh->resolved_at->greaterThan($fresh->first_responded_at));
+    }
+
+    public function test_every_status_move_restamps_status_changed_at(): void
+    {
+        $request = $this->pendingRequest();
+        $this->assertNull($request->status_changed_at, 'filed, never moved');
+
+        $request->update(['status' => 'Responding']);
+        $first = $request->fresh()->status_changed_at;
+        $this->assertNotNull($first);
+
+        $this->travel(2)->hours();
+        $request->fresh()->update(['status' => 'Resolved']);
+
+        $this->assertTrue($request->fresh()->status_changed_at->greaterThan($first), 'unlike first_responded_at, it moves every time');
+    }
+
+    public function test_an_edit_that_does_not_move_the_status_leaves_status_changed_at_alone(): void
+    {
+        $request = $this->pendingRequest();
+
+        $request->update(['internal_notes' => 'Called the barangay captain']);
+
+        $this->assertNull($request->fresh()->status_changed_at);
     }
 
     public function test_an_edit_that_does_not_move_the_status_stamps_nothing(): void
