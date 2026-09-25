@@ -3,7 +3,7 @@
 
   The dashboard's one side card, "Needs attention": equipment to chase, requests
   that look filed twice, and requests that have sat too long after staff took
-  them on. All derived from the open rows the dashboard already holds, so
+  them on, and what is in progress right now. All derived from the open rows the dashboard already holds, so
   nothing here fetches.
 -->
 <template>
@@ -56,11 +56,13 @@ const props = defineProps({
 const DUPLICATE_WINDOW_MIN = 10
 const STALE_DAYS = 3
 const TOP = 5
+const IN_PROGRESS = new Set(['Responding', 'Booked'])
 
 const TABS = [
   { value: 'overdue', title: 'Overdue' },
   { value: 'duplicates', title: 'Duplicates' },
   { value: 'stale', title: 'Stale' },
+  { value: 'active', title: 'Active' },
 ]
 const tab = ref('overdue')
 
@@ -102,16 +104,24 @@ const duplicates = computed(() => {
 // Staff took these on and then nothing closed them. Pending is not here: that
 // is the queue's job, and it already shows how long each has waited.
 const stale = computed(() => props.rows
-  .filter((r) => r.kind !== 'borrow' && ['Responding', 'Booked'].includes(r.status) && Date.now() - r.filedAt > STALE_DAYS * DAY_MS)
+  .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status) && Date.now() - r.filedAt > STALE_DAYS * DAY_MS)
   .toSorted((a, b) => a.filedAt - b.filedAt)
   .map((r) => ({ key: r.key, title: r.name, subtitle: r.type, status: r.status, badge: `${Math.floor((Date.now() - r.filedAt) / DAY_MS)}d` })))
 
-const lists = computed(() => ({ overdue: overdue.value, duplicates: duplicates.value, stale: stale.value }))
+// What staff have taken on and not closed, with the unit on it. Only ambulance
+// requests carry a unit; the rest say so plainly.
+const active = computed(() => props.rows
+  .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status))
+  .toSorted((a, b) => a.filedAt - b.filedAt)
+  .map((r) => ({ key: r.key, title: r.name, subtitle: `${r.type} • ${r.unit || 'No unit assigned'}`, status: r.status })))
+
+const lists = computed(() => ({ overdue: overdue.value, duplicates: duplicates.value, stale: stale.value, active: active.value }))
 
 const PANES = {
   overdue: { hint: 'Call these households', empty: 'Nothing overdue', route: '/borrowings' },
   duplicates: { hint: `Same person, filed within ${DUPLICATE_WINDOW_MIN} minutes`, empty: 'None found', route: '/manage-requests' },
   stale: { hint: `Responding or Booked for more than ${STALE_DAYS} days`, empty: 'Nothing stale', route: '/manage-requests' },
+  active: { hint: 'Responding or Booked, with the unit on each', empty: 'Nothing in progress', route: '/manage-requests' },
 }
 const current = computed(() => PANES[tab.value])
 const shown = computed(() => lists.value[tab.value].slice(0, TOP))
