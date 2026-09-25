@@ -200,7 +200,6 @@
     <DashboardCharts
       :history="history"
       :rows="rows"
-      :fleet="fleet"
       :active-bucket="bucketFilter"
       :loading="loading"
       @pick-bucket="onBucket"
@@ -236,7 +235,7 @@ const showBell = computed(() => can('logs') || can('borrowings') || can('ambulan
 const systemLogs = ref([])
 const followUps = ref([])
 const rows = ref([])
-// Every service request, for the chart row: { filedAt, resolvedAt, service }.
+// Every service request, for the performance row: { filedAt, resolvedAt, respondedAt, service }.
 const history = ref([])
 const vehicles = ref(null)
 // Trip records, or null when the account cannot read them.
@@ -427,6 +426,7 @@ const fetchDashboardData = async () => {
     history.value = (services || []).map((r) => ({
       filedAt: new Date(r.created_at).getTime(),
       resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
+      respondedAt: r.first_responded_at ? new Date(r.first_responded_at).getTime() : null,
       service: r.service?.service_name || 'Other',
     }))
     loaded.services = services !== null
@@ -457,16 +457,8 @@ const overdueRows = computed(() => rows.value.filter((r) => r.overdue))
 const fleet = computed(() => {
   if (vehicles.value === null) return null
   const assigned = new Set(rows.value.filter((r) => r.kind === 'ambulance' && r.status === 'Booked' && r.unit).map((r) => r.unit))
-  const onStatus = (status) => vehicles.value.filter((v) => v.status === status).length
-  const availableStatus = vehicles.value.filter((v) => v.status === 'Available')
-  const assignedCount = availableStatus.filter((v) => assigned.has(v.unit_identifier)).length
-  return {
-    total: vehicles.value.length,
-    available: availableStatus.length - assignedCount,
-    assigned: assignedCount,
-    onTrip: onStatus('Dispatched'),
-    maintenance: onStatus('Maintenance'),
-  }
+  const free = vehicles.value.filter((v) => v.status === 'Available' && !assigned.has(v.unit_identifier))
+  return { total: vehicles.value.length, available: free.length }
 })
 
 // Left the office and not back yet, per the trip log.
