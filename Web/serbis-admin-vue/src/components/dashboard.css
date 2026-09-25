@@ -7,6 +7,10 @@
   padding: var(--dash-pad);
   background: rgb(var(--v-theme-surface));
 }
+/* The faint teal wash the Requests Filed card had, kept over the white surface. */
+.v-card.dash-card.dash-tint {
+  background: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.10), rgba(var(--v-theme-primary), 0.02)), rgb(var(--v-theme-surface));
+}
 .dash-card-title {
   font-size: 16px;
   font-weight: 600;

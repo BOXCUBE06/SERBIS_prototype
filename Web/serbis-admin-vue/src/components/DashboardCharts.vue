@@ -7,7 +7,7 @@
 <template>
   <v-row class="mb-2">
     <v-col cols="12" lg="8">
-      <v-card elevation="0" class="dash-card h-100">
+      <v-card elevation="0" class="dash-card dash-tint h-100">
         <div class="dash-card-title">Filed &amp; Resolved</div>
         <div class="dash-card-subtitle mb-3">Last 30 days</div>
         <v-skeleton-loader v-if="loading" type="image" height="260"></v-skeleton-loader>
@@ -26,9 +26,9 @@
             <div class="dash-card-title">Most Requested</div>
             <div class="dash-card-subtitle">{{ view === 'services' ? 'Requests by service' : 'Times borrowed by item' }}, last 30 days</div>
           </div>
-          <v-btn-toggle v-model="view" mandatory density="compact" variant="outlined" divided color="primary" aria-label="Most requested">
-            <v-btn value="services" size="small" class="text-none">Services</v-btn>
-            <v-btn value="items" size="small" class="text-none">Equipment</v-btn>
+          <v-btn-toggle v-model="view" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg" aria-label="Most requested">
+            <v-btn value="services" size="x-small" class="text-none font-weight-bold px-3">Services</v-btn>
+            <v-btn value="items" size="x-small" class="text-none font-weight-bold px-3">Equipment</v-btn>
           </v-btn-toggle>
         </div>
         <v-skeleton-loader v-if="loading" type="image" height="260"></v-skeleton-loader>
