@@ -208,7 +208,7 @@
     </v-card>
       </v-col>
       <v-col cols="12" lg="4">
-        <DashboardRail :rows="rows" :vehicles="vehicles" />
+        <DashboardRail :rows="rows" />
       </v-col>
     </v-row>
 
