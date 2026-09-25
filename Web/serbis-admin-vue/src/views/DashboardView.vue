@@ -237,7 +237,10 @@ const followUps = ref([])
 const rows = ref([])
 // Every service request, for the performance row: { filedAt, resolvedAt, respondedAt, service }.
 const history = ref([])
+// Only to name the unit on a trip; the strip's count comes from the server.
 const vehicles = ref(null)
+// { free, total }: not in Maintenance, not out on a trip, no booking in the next 2h.
+const units = ref(null)
 // Trip records, or null when the account cannot read them.
 const trips = ref(null)
 // { available, total } across all responders, from the dashboard payload.
@@ -415,6 +418,7 @@ const fetchDashboardData = async () => {
     systemLogs.value = data.systemLogs || []
     followUps.value = data.followUps || []
     responders.value = data.responders ?? null
+    units.value = data.units ?? null
     bookingConflicts.value = data.bookingConflicts || []
     trips.value = tripList
 
@@ -452,14 +456,6 @@ const visibleRows = computed(() =>
 
 const overdueRows = computed(() => rows.value.filter((r) => r.overdue))
 
-// A unit sitting on a Booked ambulance request is spoken for, though the
-// vehicle row stays 'Available' until it actually leaves.
-const fleet = computed(() => {
-  if (vehicles.value === null) return null
-  const assigned = new Set(rows.value.filter((r) => r.kind === 'ambulance' && r.status === 'Booked' && r.unit).map((r) => r.unit))
-  const free = vehicles.value.filter((v) => v.status === 'Available' && !assigned.has(v.unit_identifier))
-  return { total: vehicles.value.length, available: free.length }
-})
 
 // Left the office and not back yet, per the trip log.
 const tripsOut = computed(() => (trips.value || [])
@@ -479,7 +475,7 @@ const fmtShort = (ms) => new Date(ms).toLocaleString('en-PH', { weekday: 'short'
 const strip = computed(() => {
   const link = (section, to) => (can(section) ? to : undefined)
   const items = []
-  if (fleet.value) items.push({ icon: 'mdi-ambulance', label: 'Units free', value: `${fleet.value.available}/${fleet.value.total}`, to: link('vehicles', '/vehicles') })
+  if (units.value) items.push({ icon: 'mdi-ambulance', label: 'Units free', value: `${units.value.free}/${units.value.total}`, to: link('vehicles', '/vehicles') })
   if (trips.value) items.push({ icon: 'mdi-map-marker-path', label: 'Trips out', value: tripsOut.value.length, to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
   if (responders.value) items.push({ icon: 'mdi-account-hard-hat', label: 'Responders free', value: `${responders.value.available}/${responders.value.total}`, to: link('responders', '/responders') })
   if (loaded.services) {

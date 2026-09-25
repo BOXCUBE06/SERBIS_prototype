@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AmbulanceBooking;
+use App\Models\ConductionRequest;
 use App\Models\Responder;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -14,8 +15,8 @@ use Tests\Concerns\MakesAdmins;
 use Tests\TestCase;
 
 /**
- * The dashboard's live strip and Today rail: responder counts, and bookings in
- * the next 24 hours that share a unit with an overlapping booking.
+ * The dashboard's live strip and Today rail: units free now, responder counts,
+ * and bookings in the next 24 hours that share a unit with an overlapping booking.
  */
 class DashboardLiveFiguresTest extends TestCase
 {
@@ -49,6 +50,21 @@ class DashboardLiveFiguresTest extends TestCase
         return $request->getKey();
     }
 
+    /** A trip that left the office 30 minutes ago. */
+    private function trip(?Vehicle $vehicle, array $overrides = []): ConductionRequest
+    {
+        return ConductionRequest::create(array_merge([
+            'vehicle_id' => $vehicle?->vehicle_id,
+            'patient_name' => 'Test Patient',
+            'patient_address' => 'Purok 1',
+            'patient_contact_number' => '09170000000',
+            'medical_diagnosis' => 'Transport',
+            'origin' => 'Purok 1',
+            'destination' => 'Echague District Hospital',
+            'departed_office_at' => now()->subMinutes(30),
+        ], $overrides));
+    }
+
     private function conflicts(): array
     {
         return collect($this->getJson('/api/admin/dashboard')->assertOk()->json('bookingConflicts'))->sort()->values()->all();
@@ -61,6 +77,22 @@ class DashboardLiveFiguresTest extends TestCase
         }
 
         $this->getJson('/api/admin/dashboard')->assertOk()->assertJsonPath('responders', ['available' => 2, 'total' => 4]);
+    }
+
+    public function test_units_free_leaves_out_maintenance_open_trips_and_imminent_bookings(): void
+    {
+        $this->unit('FREE-01');
+        $this->booking($this->unit('LATER-01'), now()->addHours(5));
+        $this->booking($this->unit('CANC-01'), now()->addHour(), status: 'Cancelled');
+        $this->trip($this->unit('BACK-01'), ['returned_office_at' => now()->subHour()]);
+
+        $this->unit('MAINT-01')->update(['status' => 'Maintenance']);
+        $this->booking($this->unit('SOON-01'), now()->addHour());
+        $this->trip($this->unit('TRIP-01'));
+        // A trip with no unit recorded must not make NOT IN match nothing.
+        $this->trip(null);
+
+        $this->getJson('/api/admin/dashboard')->assertOk()->assertJsonPath('units', ['free' => 4, 'total' => 7]);
     }
 
     public function test_overlapping_bookings_on_one_unit_are_both_flagged(): void

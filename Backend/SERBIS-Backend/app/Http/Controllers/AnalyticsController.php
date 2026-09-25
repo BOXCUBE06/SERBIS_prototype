@@ -92,6 +92,9 @@ class AnalyticsController extends Controller
         'Equipment Overdue' => AdminSections::BORROWINGS,
     ];
 
+    /** A booking starting this soon already holds its unit; later ones only show in the Today rail. */
+    private const UNIT_HOLD_HOURS = 2;
+
     public function index(Request $request, AmbulanceAvailability $availability): JsonResponse
     {
         // Cached for 5 minutes (perf audit finding #2 — this endpoint ran
@@ -406,15 +409,39 @@ class AnalyticsController extends Controller
 
         $payload = $this->limitToSections($payload, $request->user());
 
-        // Outside the cache: neither model invalidates it, and both answers are
-        // "right now". Counts and ids only, so no section gate.
+        // Outside the cache: these answers are "right now" and the cache is not
+        // invalidated by the clock. Counts and ids only, so no section gate.
         $payload['responders'] = [
             'available' => Responder::where('status', 'available')->count(),
             'total' => Responder::count(),
         ];
         $payload['bookingConflicts'] = $availability->conflictingRequestIds(now(), now()->addDay());
+        $payload['units'] = ['free' => $this->unitsFreeNow(), 'total' => Vehicle::count()];
 
         return response()->json($payload);
+    }
+
+    /**
+     * Units that could leave now: not in Maintenance, not out on a trip
+     * (departed, not yet returned), and not due on a booking within the hold.
+     */
+    private function unitsFreeNow(): int
+    {
+        $onTrip = ConductionRequest::query()
+            ->select('vehicle_id')
+            ->whereNotNull('vehicle_id') // NOT IN against a NULL matches nothing
+            ->whereNotNull('departed_office_at')
+            ->whereNull('returned_office_at');
+
+        return Vehicle::query()
+            ->where('status', '!=', 'Maintenance')
+            ->whereNotIn('vehicle_id', $onTrip)
+            ->whereDoesntHave('serviceRequests', fn ($request) => $request
+                ->whereNotIn('status', ServiceRequest::TERMINAL_STATUSES)
+                ->whereHas('ambulanceBooking', fn ($booking) => $booking
+                    ->where('scheduled_at', '>=', now())
+                    ->where('scheduled_at', '<', now()->addHours(self::UNIT_HOLD_HOURS))))
+            ->count();
     }
 
     /**
