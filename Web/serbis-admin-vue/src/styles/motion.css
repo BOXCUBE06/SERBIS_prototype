@@ -8,6 +8,43 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* The one skeleton primitive. Hidden for its first 150ms, so a fast response
+   never flashes it. --skel-bg lets a dark band (the dashboard welcome) retint it. */
+.skel {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--skel-bg, rgba(var(--v-theme-on-surface), 0.08));
+  opacity: 0;
+  animation: skel-appear 1ms 150ms forwards;
+}
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skel-shine, rgba(255, 255, 255, 0.5)), transparent);
+  animation: skel-shimmer 1.4s 150ms linear infinite;
+}
+.v-theme--dark .skel { --skel-shine: rgba(255, 255, 255, 0.05); }
+.skel-line { height: 12px; }
+@keyframes skel-appear { to { opacity: 1; } }
+@keyframes skel-shimmer { to { transform: translateX(100%); } }
+
+/* Real content replacing a skeleton. */
+.content-in,
+.table-fade tbody {
+  animation: content-in var(--motion-base) var(--ease-out) backwards;
+}
+@keyframes content-in { from { opacity: 0; } }
+
+/* A refetch keeps the rows on screen, dimmed, under the table's own progress bar. */
+.v-table tbody { transition: opacity var(--motion-fast) var(--ease-out); }
+.is-dim { transition: opacity var(--motion-fast) var(--ease-out); }
+.is-refreshing tbody,
+.is-dim { opacity: 0.6; }
+
 /* Near-instant rather than none, so transitionend/animationend handlers
    (Vuetify overlays, Vue <Transition>) still fire and nothing gets stuck. */
 @media (prefers-reduced-motion: reduce) {
@@ -17,4 +54,5 @@
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+  .skel::after { display: none; }
 }

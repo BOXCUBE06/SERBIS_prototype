@@ -5,12 +5,13 @@
       <div class="min-width-0">
         <h2 class="dash-title">Welcome back, {{ adminFirstName || 'there' }}</h2>
         <!-- Only once every list has arrived: a half-loaded count would read as a calm shift. -->
-        <p v-if="summary" class="dash-summary">
+        <p v-if="summary" class="dash-summary content-in">
           <template v-for="(part, i) in summary" :key="i">
             <b v-if="part.tone" class="count-chip" :class="`tone-${part.tone}`">{{ part.text }}</b>
             <template v-else>{{ part.text }}</template>
           </template>
         </p>
+        <p v-else-if="loading" class="dash-summary" aria-hidden="true"><span class="skel skel-summary"></span></p>
       </div>
       <div class="d-flex align-center flex-wrap ga-3">
         <!-- The bell carries the activity log and the follow-up calls. An account
@@ -77,9 +78,18 @@
 
     <!-- What is true right now. Each card opens its own page, filtered; a card
          whose data the account cannot read is left out. -->
-    <v-skeleton-loader v-if="loading" type="text" height="88" class="mb-4"></v-skeleton-loader>
+    <!-- Four placeholders: the count most accounts get. -->
+    <div v-if="loading" class="kpi-grid mb-2" style="--kpi-count: 4" aria-hidden="true">
+      <v-card v-for="n in 4" :key="n" elevation="0" class="dash-card kpi-card h-100">
+        <span class="skel kpi-skel-icon"></span>
+        <div class="flex-grow-1 min-width-0">
+          <span class="skel kpi-skel-label"></span>
+          <span class="skel kpi-skel-value"></span>
+        </div>
+      </v-card>
+    </div>
     <!-- A grid, not v-col: four or five cards depending on what the account can read. -->
-    <div v-else-if="kpis.length > 0" class="kpi-grid mb-2" :style="{ '--kpi-count': kpis.length }">
+    <div v-else-if="kpis.length > 0" class="kpi-grid mb-2 content-in" :style="{ '--kpi-count': kpis.length }">
       <v-card v-for="k in kpis" :key="k.label" :to="k.to" elevation="0" class="dash-card kpi-card h-100" :class="{ 'kpi-link': k.to }">
         <v-avatar :color="k.accent" variant="tonal" size="40" rounded="lg" class="flex-shrink-0">
           <v-icon :color="k.accent" size="20">{{ k.icon }}</v-icon>
@@ -111,20 +121,23 @@
       <v-alert v-if="loadError" type="warning" variant="tonal" density="compact" class="ma-4">{{ loadError }}</v-alert>
 
       <v-data-table
+        :key="loading ? 'loading' : 'ready'"
         v-model:sort-by="sortBy"
         v-model:page="page"
         :headers="headers"
         :items="visibleRows"
-        :loading="loading"
         item-value="key"
         :items-per-page="PAGE_SIZE"
         must-sort
         hide-default-footer
         :row-props="() => ({ class: 'queue-row' })"
         :no-data-text="currentTab.empty"
-        class="queue-table"
+        class="queue-table table-fade"
         @click:row="(_event, { item }) => openRow(item)"
       >
+        <template v-if="loading" #body>
+          <SkeletonRows :rows="PAGE_SIZE" :columns="headers.length" />
+        </template>
         <template #item.filedAt="{ item }">
           <div class="cell-primary" :title="fmtFiled(item.filedAt)">{{ fmtFiled(item.filedAt) }}</div>
           <div v-if="item.note" class="cell-secondary" :class="`wait-${item.noteTone}`" :title="item.note">{{ item.note }}</div>
@@ -161,6 +174,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StatusPill from '@/components/StatusPill.vue'
 import DashboardCharts from '@/components/DashboardCharts.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 import '@/components/dashboard.css'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
@@ -460,6 +474,32 @@ onMounted(fetchDashboardData)
 }
 .kpi-value.tone-error {
   color: var(--dash-bad);
+}
+/* Placeholders sized to the real card: 40px icon, 13px label, 32px value. */
+.kpi-skel-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+.kpi-skel-label {
+  width: 60%;
+  height: 13px;
+  margin: 3px 0;
+}
+.kpi-skel-value {
+  width: 72px;
+  height: 35px;
+  margin-top: 6px;
+}
+/* The welcome sentence, on the dark band. */
+.skel-summary {
+  --skel-bg: rgba(var(--v-theme-on-secondary), 0.16);
+  --skel-shine: rgba(255, 255, 255, 0.12);
+  display: inline-block;
+  vertical-align: middle;
+  width: min(420px, 80%);
+  height: 15px;
 }
 /* Keyboard focus is an outline, so no card ever carries a resting border colour. */
 .kpi-link:focus-visible {

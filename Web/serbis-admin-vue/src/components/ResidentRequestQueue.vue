@@ -4,10 +4,8 @@
 
       <PageHeader v-if="standalone" title="Resident Requests" />
 
-      <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
-
       <DataTablePage
-        v-else
+        :loading="initialLoad"
         class="request-table"
         v-model:search="search"
         search-placeholder="Search by transaction number, name, service, barangay..."

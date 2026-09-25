@@ -75,15 +75,8 @@
           >{{ statusFilter }}</v-chip>
         </div>
 
-        <!-- Loading -->
-        <template v-if="loading">
-          <v-card elevation="0" rounded="xl" class="mb-8 pa-8 group-card">
-            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-          </v-card>
-        </template>
-
         <!-- Empty -->
-        <div v-else-if="filteredVehicles.length === 0" class="empty-state group-card">
+        <div v-if="!firstLoad && filteredVehicles.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-truck-remove-outline</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
             {{ vehicles.length > 0 ? 'No units match your filters' : 'No units in the fleet yet' }}
@@ -100,13 +93,19 @@
              four stacked grids. -->
         <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
           <v-data-table
+            :key="firstLoad ? 'loading' : 'ready'"
+            :loading="refreshing"
+            :class="{ 'is-refreshing': refreshing }"
             :headers="fleetHeaders"
             :items="filteredVehicles"
             :items-per-page="10"
             item-value="vehicle_id"
             density="comfortable"
-            class="fleet-table"
+            class="fleet-table table-fade"
           >
+            <template v-if="firstLoad" #body>
+              <SkeletonRows :rows="10" :columns="fleetHeaders.length" />
+            </template>
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
@@ -239,6 +238,7 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 
 const API = `${API_BASE}/vehicles`
@@ -254,6 +254,9 @@ const statusMeta = {
 
 const vehicles = ref([])
 const loading = ref(false)
+// Skeleton rows on the first load only; a refetch dims the rows it already has.
+const firstLoad = computed(() => loading.value && vehicles.value.length === 0)
+const refreshing = computed(() => loading.value && vehicles.value.length > 0)
 const apiError = ref('')
 const search = ref('')
 const typeFilter = ref('All')

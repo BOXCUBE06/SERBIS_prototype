@@ -121,16 +121,8 @@
             </template>
           </v-alert>
 
-          <!-- Loading -->
-          <div v-if="initialLoad" class="pa-6 flex-grow-1">
-            <!-- `table`, not list rows: an avatar-two-line skeleton promises
-                 the shape of a list and then a seven-column table arrives,
-                 which is a guaranteed layout shift on every load. -->
-            <v-skeleton-loader type="table" class="mb-1"></v-skeleton-loader>
-          </div>
-
           <!-- Empty -->
-          <div v-else-if="filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
+          <div v-if="!initialLoad && filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
               {{ residents.length > 0 ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
@@ -155,18 +147,22 @@
 
           <v-data-table
             v-else
+            :key="initialLoad ? 'loading' : 'ready'"
             :headers="headers"
             :items="filteredAndSortedResidents"
             :items-per-page="-1"
             fixed-header
             :height="tableHeight"
             hover
-            class="elegant-table flex-grow-1"
+            class="elegant-table flex-grow-1 table-fade"
             item-value="resident_id"
             @click:row="selectRow"
             :row-props="rowProps"
           >
             <template v-slot:bottom></template>
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="10" :columns="headers.length" />
+            </template>
 
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
@@ -545,6 +541,7 @@ import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PurokSelect from '@/components/PurokSelect.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const { mdAndUp } = useDisplay()
 

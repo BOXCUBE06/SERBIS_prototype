@@ -26,9 +26,7 @@
           {{ apiError }}
         </v-alert>
 
-        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
-
-        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
+        <v-card v-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
             <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
@@ -45,6 +43,8 @@
              <style> for the scroll threshold). -->
         <DataTablePage
           v-else
+          :loading="initialLoad"
+          :refreshing="reloading"
           v-model:search="search"
           search-placeholder="Patient, origin or destination"
           :tabs="statusTabItems"

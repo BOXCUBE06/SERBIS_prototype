@@ -43,16 +43,18 @@
           </div>
         </v-alert>
 
-        <v-skeleton-loader v-if="initialLoad" type="table" rounded="xl"></v-skeleton-loader>
-
-        <v-card v-else elevation="0" rounded="xl" class="group-card">
+        <v-card elevation="0" rounded="xl" class="group-card">
           <v-data-table
+            :key="initialLoad ? 'loading' : 'ready'"
             :headers="headers"
             :items="admins"
             :items-per-page="10"
             item-value="admin_id"
-            class="staff-table"
+            class="staff-table table-fade"
           >
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="10" :columns="headers.length" />
+            </template>
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
@@ -424,6 +426,7 @@ import { useRowNumbers } from '@/composables/rowNumber'
 import { loadCurrentAdmin } from '@/composables/useCurrentAdmin'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/admins`
 

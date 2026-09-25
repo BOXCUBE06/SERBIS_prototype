@@ -135,13 +135,8 @@
             </v-alert>
           </v-card>
 
-          <!-- Loading skeleton -->
-          <v-card v-if="loadingList" elevation="0" rounded="xl" class="subtle-border pa-8">
-            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-          </v-card>
-
           <!-- Empty state -->
-          <div v-else-if="visibleFiles.length === 0" class="empty-state subtle-surface">
+          <div v-if="!firstLoad && visibleFiles.length === 0" class="empty-state subtle-surface">
             <v-icon size="48" class="text-medium-emphasis mb-3">mdi-file-hidden</v-icon>
             <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
               {{ files.length > 0 ? 'No materials match your filter' : 'No materials published yet' }}
@@ -159,13 +154,19 @@
                VehiclesView, so all four read the same way. -->
           <v-card v-else elevation="0" rounded="xl" class="subtle-border overflow-hidden">
             <v-data-table
+              :key="firstLoad ? 'loading' : 'ready'"
+              :loading="refreshing"
+              :class="{ 'is-refreshing': refreshing }"
               :headers="materialHeaders"
               :items="visibleFiles"
               :items-per-page="10"
               item-value="files_id"
               density="comfortable"
-              class="materials-table"
+              class="materials-table table-fade"
             >
+              <template v-if="firstLoad" #body>
+                <SkeletonRows :rows="10" :columns="materialHeaders.length" />
+              </template>
               <template v-slot:item.rowNumber="{ item }">
                 <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
               </template>
@@ -315,12 +316,16 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/admin/info-materials`
 
 const files = ref([])
 const search = ref('')
 const loadingList = ref(true)
+// Skeleton rows on the first load only; a refetch dims the rows it already has.
+const firstLoad = computed(() => loadingList.value && files.value.length === 0)
+const refreshing = computed(() => loadingList.value && files.value.length > 0)
 
 // Upload staging
 const fileInput = ref(null)

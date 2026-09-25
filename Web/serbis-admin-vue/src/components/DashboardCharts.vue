@@ -10,9 +10,9 @@
       <v-card elevation="0" class="dash-card dash-tint h-100">
         <div class="dash-card-title">Filed &amp; Resolved</div>
         <div class="dash-card-subtitle mb-3">Last 30 days</div>
-        <v-skeleton-loader v-if="loading" type="image" height="260"></v-skeleton-loader>
-        <div v-else-if="history.length === 0" class="empty">No requests yet</div>
-        <div v-else class="chart-box">
+        <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
+        <div v-else-if="history.length === 0" class="empty content-in">No requests yet</div>
+        <div v-else class="chart-box content-in">
           <Line :data="flowData" :options="flowOptions" :plugins="[crosshair]" />
           <ChartDataTable caption="Requests filed and resolved per day, last 30 days — same data as the chart above" category-label="Day" :labels="dayLabels" :series="flowSeries" />
         </div>
@@ -31,9 +31,9 @@
             <v-btn value="items" size="x-small" class="text-none font-weight-bold px-3">Equipment</v-btn>
           </v-btn-toggle>
         </div>
-        <v-skeleton-loader v-if="loading" type="image" height="260"></v-skeleton-loader>
-        <div v-else-if="ranked.length === 0" class="empty">Nothing in the last 30 days</div>
-        <div v-else class="chart-box">
+        <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
+        <div v-else-if="ranked.length === 0" class="empty content-in">Nothing in the last 30 days</div>
+        <div v-else class="chart-box content-in">
           <Bar :data="rankData" :options="rankOptions" />
           <ChartDataTable :caption="`Most requested ${view}, last 30 days — same data as the chart above`" category-label="Name" :labels="ranked.map((r) => r.label)" :series="[{ label: 'Count', data: ranked.map((r) => r.value) }]" />
         </div>
@@ -170,6 +170,16 @@ const rankOptions = computed(() => ({
 </script>
 
 <style scoped>
+/* The plot area with two faint axis lines, at the chart's own 260px. */
+.skel-plot {
+  --axis: rgba(var(--v-theme-on-surface), 0.12);
+  height: 260px;
+  border-radius: 12px;
+  background:
+    linear-gradient(var(--axis), var(--axis)) 32px calc(100% - 28px) / calc(100% - 48px) 1px no-repeat,
+    linear-gradient(var(--axis), var(--axis)) 32px 16px / 1px calc(100% - 44px) no-repeat,
+    rgba(var(--v-theme-on-surface), 0.05);
+}
 .chart-box {
   position: relative;
   height: 260px;

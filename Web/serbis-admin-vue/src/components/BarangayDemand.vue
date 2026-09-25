@@ -81,6 +81,7 @@
             </tr>
           </thead>
           <tbody>
+            <SkeletonRows v-if="loading" :rows="8" :columns="3" />
             <tr v-for="row in ranked" :key="row.name">
               <td>{{ row.name }}</td>
               <td class="text-right" :class="{ 'text-medium-emphasis': row.residents === 0 }">{{ row.residents }}</td>
@@ -97,7 +98,7 @@
           </tbody>
         </table>
       </div>
-      <div class="text-caption text-medium-emphasis mt-3">
+      <div class="text-caption text-medium-emphasis mt-3" :style="{ visibility: loading ? 'hidden' : undefined }">
         {{ totalResidents.toLocaleString() }} registered {{ totalResidents === 1 ? 'resident' : 'residents' }}
         &bull; {{ totalRequests.toLocaleString() }} requests + loans in this range
       </div>
@@ -108,6 +109,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { buildEchagueMap } from '@/composables/echagueMap'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 import { API_BASE } from '@/config/api'
 import { authHeaders } from '@/composables/adminUi'
 // Every barangay of Echague. Matched to tbl_barangay rows by
@@ -119,6 +121,9 @@ const props = defineProps({
   walkIn: { type: Number, default: 0 },
   totalResidents: { type: Number, default: 0 },
   totalRequests: { type: Number, default: 0 },
+  // The map needs no placeholder: the boundaries are bundled, so it draws as a
+  // neutral silhouette until the figures land and the fills fade in.
+  loading: { type: Boolean, default: false },
 })
 
 const max = computed(() => Math.max(0, ...props.barangays.map((b) => b.requests)))
@@ -257,6 +262,7 @@ const focused = (event, shape, force = false) => {
   stroke-width: 1;
   cursor: pointer;
   outline: none;
+  transition: fill-opacity var(--motion-base) var(--ease-out);
 }
 .brgy:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));

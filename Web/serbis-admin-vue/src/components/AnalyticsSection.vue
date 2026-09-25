@@ -15,6 +15,7 @@
 -->
 <template>
   <v-card elevation="0" rounded="xl" class="soft-card h-100">
+    <v-progress-linear v-if="refreshing" indeterminate color="primary" height="2" absolute location="top"></v-progress-linear>
     <v-card-item>
       <div class="d-flex justify-space-between align-center flex-wrap gap-2">
         <div class="d-flex align-center gap-1 min-w-0">
@@ -31,7 +32,7 @@
       </div>
     </v-card-item>
 
-    <v-card-text :class="bodyClass">
+    <v-card-text :class="[bodyClass, { 'is-dim': refreshing }]">
       <v-skeleton-loader v-if="loading" :type="skeleton" />
 
       <div v-else-if="error" class="text-center py-8">
@@ -56,7 +57,9 @@
 defineProps({
   title: { type: String, required: true },
   info: { type: String, default: '' },
+  // First load only; a refetch passes `refreshing` and keeps the body on screen.
   loading: { type: Boolean, default: false },
+  refreshing: { type: Boolean, default: false },
   error: { type: String, default: '' },
   empty: { type: Boolean, default: false },
   emptyText: { type: String, default: 'Nothing in this range' },
