@@ -34,12 +34,10 @@
       @click:close="apiError = ''"
     >{{ apiError }}</v-alert>
 
-    <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
-
     <!-- A failed load used to render as an empty table, indistinguishable
          from an empty database — the operator would read a dead API as a
          quiet morning. -->
-    <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
+    <v-card v-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
       <div class="text-center py-12 px-6">
         <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
         <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load borrowings</div>
@@ -62,6 +60,8 @@
          table on this page now uses. -->
     <DataTablePage
       v-else-if="activeTab === 'board'"
+      :loading="initialLoad"
+      :refreshing="reloading"
       v-model:search="search"
       search-placeholder="Resident, item or purpose"
       :tabs="activeStatusTabs"
@@ -232,6 +232,8 @@
          pipeline glance. -->
     <DataTablePage
       v-else
+      :loading="initialLoad"
+      :refreshing="reloading"
       v-model:search="search"
       search-placeholder="Resident, item or purpose"
       :tabs="historyStatusTabs"
