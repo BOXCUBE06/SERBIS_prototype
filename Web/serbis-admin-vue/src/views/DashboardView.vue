@@ -125,6 +125,14 @@
             variant="tonal"
             @click:close="statusFilter = null"
           >Status: {{ statusFilter }}</v-chip>
+          <v-chip
+            v-if="bucketFilter"
+            closable
+            size="small"
+            color="primary"
+            variant="tonal"
+            @click:close="bucketFilter = null"
+          >Waiting: {{ bucketFilter }}</v-chip>
         </div>
       </v-card-item>
 
@@ -212,7 +220,14 @@
       </v-col>
     </v-row>
 
-    <DashboardCharts :fleet="fleet" />
+    <DashboardCharts
+      :history="history"
+      :rows="rows"
+      :fleet="fleet"
+      :active-bucket="bucketFilter"
+      :loading="loading"
+      @pick-bucket="onBucket"
+    />
 
   </v-container>
 </template>
@@ -230,7 +245,7 @@ import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName, requesterPhone, requesterBarangay } from '@/composables/requestDisplay'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
-import { DAY_MS, weekDelta } from '@/composables/dashboardTrends'
+import { DAY_MS, waitBucket, weekDelta } from '@/composables/dashboardTrends'
 
 const router = useRouter()
 const goTo = (route) => router.push(route)
@@ -245,6 +260,8 @@ const kpiStats = ref([])
 const systemLogs = ref([])
 const followUps = ref([])
 const rows = ref([])
+// Every service request, for the chart row: { filedAt, resolvedAt, service }.
+const history = ref([])
 // Filing times of every request, closed ones too: the 7-day delta is about
 // intake, and `rows` holds open items only.
 const filedTimes = reactive({ service: [], ambulance: [], borrow: [] })
@@ -282,6 +299,7 @@ const KIND_PAGES = { service: 'Resident Requests', ambulance: 'Ambulance Dispatc
 
 const queueTab = ref('all')
 const statusFilter = ref(null)
+const bucketFilter = ref(null)
 const sortBy = ref([{ key: 'filedAt', order: 'asc' }])
 const expanded = ref([])
 
@@ -318,7 +336,15 @@ const onKpi = (stat) => {
 // A tab change is a new question; a status narrowed by a card would silently
 // carry over and hide rows the tab name promises. flush 'sync' so a card's own
 // write to statusFilter, made right after the tab, is not undone by this.
-watch(queueTab, () => { statusFilter.value = null }, { flush: 'sync' })
+watch(queueTab, () => { statusFilter.value = null; bucketFilter.value = null }, { flush: 'sync' })
+
+// The waiting chart counts requests, so picking a bar starts from All Open.
+// Picking the same bar again clears it.
+const onBucket = (bucket) => {
+  const again = bucketFilter.value === bucket
+  queueTab.value = 'all'
+  bucketFilter.value = again ? null : bucket
+}
 
 // More arriving is more work, so up reads as a warning and down as relief.
 const deltaText = (d) => {
@@ -476,6 +502,11 @@ const fetchDashboardData = async () => {
       ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
     ]
     vehicles.value = fleet
+    history.value = (services || []).map((r) => ({
+      filedAt: new Date(r.created_at).getTime(),
+      resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
+      service: r.service?.service_name || 'Other',
+    }))
     filedTimes.service = (services || []).filter((r) => !isAmbulanceRequest(r)).map((r) => new Date(r.created_at).getTime())
     filedTimes.ambulance = (services || []).filter(isAmbulanceRequest).map((r) => new Date(r.created_at).getTime())
     filedTimes.borrow = (borrowings || []).map((b) => new Date(b.created_at).getTime())
@@ -500,7 +531,9 @@ const rowsForTab = (tab) => rows.value.filter((r) => {
 const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.value, rowsForTab(t.value).length])))
 
 const visibleRows = computed(() =>
-  rowsForTab(queueTab.value).filter((r) => !statusFilter.value || r.status === statusFilter.value)
+  rowsForTab(queueTab.value)
+    .filter((r) => !statusFilter.value || r.status === statusFilter.value)
+    .filter((r) => !bucketFilter.value || (r.kind !== 'borrow' && waitBucket(r.filedAt) === bucketFilter.value))
 )
 
 // A unit sitting on a Booked ambulance request is spoken for, though the

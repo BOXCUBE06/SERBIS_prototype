@@ -20,3 +20,25 @@ export const weekDelta = (times, now = Date.now()) => {
   }
   return current - previous
 }
+
+// Same four buckets and edges as AnalyticsReport::openRequestAging on the
+// server, so the dashboard chart and the Analytics page cannot disagree.
+export const WAIT_BUCKETS = ['Under a day', '1-3 days', '3-7 days', '7+ days']
+
+export const waitBucket = (filedAt, now = Date.now()) => {
+  const days = (now - filedAt) / DAY_MS
+  if (days < 1) {
+    return WAIT_BUCKETS[0]
+  }
+  if (days < 3) {
+    return WAIT_BUCKETS[1]
+  }
+  return days < 7 ? WAIT_BUCKETS[2] : WAIT_BUCKETS[3]
+}
+
+// Local midnights of the last n days, oldest first, today last.
+export const lastDays = (n, now = new Date()) =>
+  Array.from({ length: n }, (_, i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - (n - 1 - i)))
+
+export const countByDay = (times, days) =>
+  days.map((d) => times.filter((t) => t >= d.getTime() && t < d.getTime() + DAY_MS).length)

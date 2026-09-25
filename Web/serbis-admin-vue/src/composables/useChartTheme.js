@@ -14,6 +14,9 @@ const hexToRgb = (hex) => {
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
+// `hex` is a #rrggbb theme colour; the alpha is what dims a bar that is not selected.
+export const withAlpha = (hex, alpha) => `rgba(${hexToRgb(hex)}, ${alpha})`
+
 export function useChartTheme() {
   const theme = useTheme()
   const colors = computed(() => theme.global.current.value.colors)
