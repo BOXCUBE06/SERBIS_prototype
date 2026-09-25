@@ -79,6 +79,46 @@ class AnalyticsController extends Controller
     }
 
     /**
+     * GET /admin/analytics/barangays — one row per barangay for the map's hover
+     * card: how many households are registered there and how many requests are
+     * waiting on staff right now.
+     *
+     * Built from the barangay roster outward, so a barangay with no residents
+     * and no requests is still a row, at zero. Residents are heads of the
+     * family, as everywhere else; pending is service requests in status
+     * Pending, by the filing account's barangay. A walk-in has no barangay and
+     * is not in any row. Live rather than cached: three grouped counts over a
+     * 64-row roster.
+     */
+    public function barangays(): JsonResponse
+    {
+        $residents = DB::table('tbl_residents')
+            ->where('account_type', Resident::TYPE_HEAD_OF_FAMILY)
+            ->groupBy('barangay_id')
+            ->selectRaw('barangay_id, COUNT(*) as total')
+            ->pluck('total', 'barangay_id');
+
+        $pending = DB::table('tbl_service_request')
+            ->join('tbl_residents', 'tbl_service_request.resident_id', '=', 'tbl_residents.resident_id')
+            ->where('tbl_service_request.status', 'Pending')
+            ->groupBy('tbl_residents.barangay_id')
+            ->selectRaw('tbl_residents.barangay_id as barangay_id, COUNT(*) as total')
+            ->pluck('total', 'barangay_id');
+
+        $rows = DB::table('tbl_barangay')
+            ->orderBy('barangay_name')
+            ->get(['barangay_id', 'barangay_name', 'psgc_code'])
+            ->map(fn ($b) => [
+                'psgc_code' => $b->psgc_code,
+                'name' => $b->barangay_name,
+                'residents_count' => (int) ($residents[$b->barangay_id] ?? 0),
+                'pending_requests_count' => (int) ($pending[$b->barangay_id] ?? 0),
+            ]);
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
      * What each headline card counts, by the section that owns the page it links
      * to. Carried on the card in the cached payload and removed before the
      * response leaves, so an admin sees the cards for the sections they hold.
