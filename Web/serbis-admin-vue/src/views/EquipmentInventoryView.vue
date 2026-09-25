@@ -16,7 +16,7 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
         <!-- Metric tiles -->
-        <v-row v-if="!initialLoad && equipments.length > 0" class="mb-2">
+        <v-row v-if="initialLoad || equipments.length > 0" class="mb-2">
           <v-col v-for="m in metricTiles" :key="m.key" cols="6" md="3">
             <button type="button" class="metric-tile group-card" :class="{ 'metric-tile--active': m.filter && statusFilter === m.filter }" @click="m.filter && (statusFilter = statusFilter === m.filter ? 'All' : m.filter)">
               <div class="metric-icon" :style="{ background: `rgba(var(--v-theme-${m.color}), 0.12)` }">
@@ -24,14 +24,17 @@
               </div>
               <div class="text-truncate">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis text-truncate">{{ m.title }}</div>
-                <div class="metric-number text-high-emphasis">{{ m.value }}</div>
+                <div class="metric-number text-high-emphasis">
+                  <span v-if="initialLoad" class="skel skel-pill" aria-hidden="true"></span>
+                  <span v-else class="content-in">{{ m.value }}</span>
+                </div>
               </div>
             </button>
           </v-col>
         </v-row>
 
         <!-- Controls -->
-        <div v-if="!initialLoad && equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
+        <div v-if="initialLoad || equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -48,13 +51,8 @@
           ></v-select>
         </div>
 
-        <!-- Loading -->
-        <v-card v-if="initialLoad" elevation="0" rounded="xl" class="group-card pa-6">
-          <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-        </v-card>
-
         <!-- Empty -->
-        <div v-else-if="filteredEquipments.length === 0" class="empty-state group-card">
+        <div v-if="!initialLoad && filteredEquipments.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-package-variant</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
             {{ equipments.length > 0 ? 'No items match your filters' : 'No equipment yet' }}
@@ -71,13 +69,17 @@
              puts whatever is running out at the top. -->
         <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
           <v-data-table
+            :key="initialLoad ? 'loading' : 'ready'"
             :headers="inventoryHeaders"
             :items="filteredEquipments"
             :items-per-page="10"
             item-value="equipment_id"
             density="comfortable"
-            class="inventory-table"
+            class="inventory-table table-fade"
           >
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="10" :columns="inventoryHeaders.length" />
+            </template>
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
@@ -196,6 +198,7 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/equipments`
 

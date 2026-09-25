@@ -13,9 +13,7 @@
         </v-alert>
 
         <v-card elevation="0" rounded="xl" class="checkbox-grid-card">
-          <v-skeleton-loader v-if="initialLoad" type="table" class="pa-4"></v-skeleton-loader>
-
-          <v-table v-else class="checkbox-grid">
+          <v-table :key="initialLoad ? 'loading' : 'ready'" class="checkbox-grid table-fade">
             <thead>
               <tr>
                 <th scope="col" class="text-left">Service</th>
@@ -25,6 +23,7 @@
               </tr>
             </thead>
             <tbody>
+              <SkeletonRows v-if="initialLoad" :rows="6" :columns="ACCOUNT_TYPE_ITEMS.length + 1" />
               <tr v-for="row in rows" :key="row.code" :data-code="row.code">
                 <th scope="row" class="text-left font-weight-bold checkbox-grid-service">
                   <span :class="{ 'text-disabled': !row.is_active }">{{ row.name }}</span>
@@ -58,6 +57,7 @@ import { ACCOUNT_TYPE_ITEMS } from '@/composables/accountType'
 import { authHeaders, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 import '@/styles/checkbox-grid.css'
 
 // One row per thing a resident can ask for, including the two that are not

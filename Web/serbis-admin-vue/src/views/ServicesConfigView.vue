@@ -80,13 +80,8 @@
 
           <v-divider></v-divider>
 
-          <!-- Loading -->
-          <div v-if="initialLoad" class="pa-5">
-            <v-skeleton-loader v-for="n in 6" :key="n" type="list-item-two-line" class="mb-2"></v-skeleton-loader>
-          </div>
-
           <!-- Empty -->
-          <div v-else-if="filteredServices.length === 0" class="empty-state">
+          <div v-if="!initialLoad && filteredServices.length === 0" class="empty-state">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-clipboard-list-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
               {{ services.length > 0 ? 'No services match your search' : 'No services configured yet' }}
@@ -112,6 +107,7 @@
           <!-- Table -->
           <v-data-table
             v-else
+            :key="initialLoad ? 'loading' : 'ready'"
             :headers="headers"
             :items="filteredServices"
             v-model:page="page"
@@ -119,10 +115,13 @@
             :sort-by="sortBy"
             item-value="service_id"
             hover
-            class="services-table"
+            class="services-table table-fade"
             :items-per-page-options="[10, 25, 50, -1]"
             items-per-page-text="Rows per page"
           >
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="itemsPerPage > 0 ? itemsPerPage : 10" :columns="headers.length" />
+            </template>
             <template v-slot:item.rowNumber="{ index }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(index) }}</span>
             </template>
@@ -277,6 +276,7 @@ import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/services`
 
