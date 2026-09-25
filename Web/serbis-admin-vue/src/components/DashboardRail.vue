@@ -36,9 +36,10 @@
     </v-list>
     <div v-else class="pa-4 pt-0 text-caption text-medium-emphasis">{{ current.empty }}</div>
 
-    <div v-if="lists[tab].length > 0" class="px-4 pb-3">
-      <v-btn :to="current.route" size="small" variant="text" color="primary" class="text-none font-weight-bold px-0" append-icon="mdi-arrow-right">
-        See all {{ lists[tab].length }}
+    <!-- One link per page the rows live on, with its own count. -->
+    <div v-if="links.length > 0" class="px-4 pb-3 d-flex flex-wrap ga-4">
+      <v-btn v-for="l in links" :key="l.route" :to="l.route" size="small" variant="text" color="primary" class="text-none font-weight-bold px-0" append-icon="mdi-arrow-right">
+        See all {{ links.length > 1 ? l.label + ' ' : '' }}{{ l.count }}
       </v-btn>
     </div>
   </v-card>
@@ -56,6 +57,12 @@ const props = defineProps({
 const DUPLICATE_WINDOW_MIN = 10
 const STALE_DAYS = 3
 const TOP = 5
+// Where a row is worked on. Same pages as the queue's Open link.
+const PAGES = {
+  service: { route: '/manage-requests', label: 'requests' },
+  ambulance: { route: '/conduction-requests', label: 'ambulance' },
+  borrow: { route: '/borrowings', label: 'equipment' },
+}
 const IN_PROGRESS = new Set(['Responding', 'Booked'])
 
 const TABS = [
@@ -69,7 +76,7 @@ const tab = ref('overdue')
 const overdue = computed(() => props.rows
   .filter((r) => r.overdue)
   .toSorted((a, b) => b.daysLate - a.daysLate)
-  .map((r) => ({ key: r.key, title: r.name, subtitle: `${r.type} • ${r.phone}`, badge: `${r.daysLate}d` })))
+  .map((r) => ({ key: r.key, title: r.name, subtitle: `${r.type} • ${r.phone}`, route: PAGES.borrow.route, badge: `${r.daysLate}d` })))
 
 // Sorted by filing time, a burst is a run where each request lands within the
 // window of the one before it.
@@ -82,7 +89,7 @@ const duplicates = computed(() => {
   const groups = []
   const close = (id, run) => {
     if (run.length > 1) {
-      groups.push({ key: `${id}-${run[0].filedAt}`, title: `${run[0].name} ×${run.length}`, subtitle: run.map((r) => r.type).join(', ') })
+      groups.push({ key: `${id}-${run[0].filedAt}`, title: `${run[0].name} ×${run.length}`, subtitle: run.map((r) => r.type).join(', '), route: PAGES.service.route })
     }
   }
   for (const [id, list] of byResident) {
@@ -107,24 +114,30 @@ const duplicates = computed(() => {
 const stale = computed(() => props.rows
   .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status) && Date.now() - r.statusAt > STALE_DAYS * DAY_MS)
   .toSorted((a, b) => a.statusAt - b.statusAt)
-  .map((r) => ({ key: r.key, title: r.name, subtitle: r.type, status: r.status, badge: `${Math.floor((Date.now() - r.statusAt) / DAY_MS)}d` })))
+  .map((r) => ({ key: r.key, title: r.name, subtitle: r.type, route: PAGES[r.kind].route, status: r.status, badge: `${Math.floor((Date.now() - r.statusAt) / DAY_MS)}d` })))
 
 // What staff have taken on and not closed, with the unit on it. Only ambulance
 // requests carry a unit; the rest say so plainly.
 const active = computed(() => props.rows
   .filter((r) => r.kind !== 'borrow' && IN_PROGRESS.has(r.status))
   .toSorted((a, b) => a.statusAt - b.statusAt)
-  .map((r) => ({ key: r.key, title: r.name, subtitle: `${r.type} • ${r.unit || 'No unit assigned'}`, status: r.status })))
+  .map((r) => ({ key: r.key, title: r.name, subtitle: `${r.type} • ${r.unit || 'No unit assigned'}`, route: PAGES[r.kind].route, status: r.status })))
 
 const lists = computed(() => ({ overdue: overdue.value, duplicates: duplicates.value, stale: stale.value, active: active.value }))
 
 const PANES = {
-  overdue: { hint: 'Call these households', empty: 'Nothing overdue', route: '/borrowings' },
-  duplicates: { hint: `Same person, filed within ${DUPLICATE_WINDOW_MIN} minutes`, empty: 'None found', route: '/manage-requests' },
-  stale: { hint: `Responding or Booked, unchanged for more than ${STALE_DAYS} days`, empty: 'Nothing stale', route: '/manage-requests' },
-  active: { hint: 'Responding or Booked, with the unit on each', empty: 'Nothing in progress', route: '/manage-requests' },
+  overdue: { hint: 'Call these households', empty: 'Nothing overdue' },
+  duplicates: { hint: `Same person, filed within ${DUPLICATE_WINDOW_MIN} minutes`, empty: 'None found' },
+  stale: { hint: `Responding or Booked, unchanged for more than ${STALE_DAYS} days`, empty: 'Nothing stale' },
+  active: { hint: 'Responding or Booked, with the unit on each', empty: 'Nothing in progress' },
 }
 const current = computed(() => PANES[tab.value])
+const links = computed(() => {
+  const byRoute = new Map()
+  for (const item of lists.value[tab.value]) byRoute.set(item.route, (byRoute.get(item.route) ?? 0) + 1)
+  const labelOf = (route) => Object.values(PAGES).find((p) => p.route === route).label
+  return [...byRoute].map(([route, count]) => ({ route, count, label: labelOf(route) }))
+})
 const shown = computed(() => lists.value[tab.value].slice(0, TOP))
 </script>
 
