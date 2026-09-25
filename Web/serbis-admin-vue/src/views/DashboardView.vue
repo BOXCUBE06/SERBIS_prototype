@@ -68,7 +68,7 @@
     </PageHeader>
 
     <!-- KPI strip. A card that counts requests filters the queue below; the
-         two that do not (residents, vehicles) still open their own page. The
+         one that does not (vehicles) still opens its own page. The
          grid is CSS rather than v-col because the card count is not fixed:
          the ambulance and overdue cards only arrive when there is something
          to act on, and five cards do not divide twelve columns. -->
@@ -93,6 +93,12 @@
         <div class="min-width-0">
           <div class="text-h6 font-weight-black lh-1">{{ displayValues[stat.title] ?? stat.value }}</div>
           <div class="text-caption font-weight-bold text-medium-emphasis kpi-label" :title="stat.title">{{ stat.label || stat.title }}</div>
+          <div
+            v-if="stat.delta != null"
+            class="text-caption font-weight-bold"
+            :class="deltaClass(stat.delta)"
+            :title="stat.title === 'Equipment Overdue' ? 'Loans that fell due in the last 7 days, against the 7 before' : 'Filed in the last 7 days, against the 7 before'"
+          >{{ deltaText(stat.delta) }}</div>
         </div>
       </v-card>
     </div>
@@ -221,6 +227,7 @@ import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName, requesterPhone, requesterBarangay } from '@/composables/requestDisplay'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
+import { DAY_MS, weekDelta } from '@/composables/dashboardTrends'
 
 const router = useRouter()
 const goTo = (route) => router.push(route)
@@ -235,6 +242,9 @@ const kpiStats = ref([])
 const systemLogs = ref([])
 const followUps = ref([])
 const rows = ref([])
+// Filing times of every request, closed ones too: the 7-day delta is about
+// intake, and `rows` holds open items only.
+const filedTimes = reactive({ service: [], ambulance: [], borrow: [] })
 const vehicles = ref(null)
 const loading = ref(true)
 const loadError = ref('')
@@ -242,8 +252,8 @@ const loadError = ref('')
 const loaded = reactive({ services: false, borrowings: false })
 
 // Which queue each request-counting card narrows to. Cards not listed here
-// (residents, vehicles) count something that is not a request and keep
-// opening their own page through `route`.
+// (vehicles) count something that is not a request and keep opening their own
+// page through `route`.
 // `source` is the list the card is counted from, so a card and the tab it
 // opens always use the same rows and statuses (Pending, Booked, Responding).
 // The server's own figure differs: it counts Pending only, ambulance bookings
@@ -307,6 +317,20 @@ const onKpi = (stat) => {
 // write to statusFilter, made right after the tab, is not undone by this.
 watch(queueTab, () => { statusFilter.value = null }, { flush: 'sync' })
 
+// More arriving is more work, so up reads as a warning and down as relief.
+const deltaText = (d) => {
+  if (d === 0) {
+    return '– same as prev 7 days'
+  }
+  return `${d > 0 ? '▲' : '▼'} ${Math.abs(d)} vs prev 7 days`
+}
+const deltaClass = (d) => {
+  if (d === 0) {
+    return 'text-medium-emphasis'
+  }
+  return d > 0 ? 'text-warning-strong' : 'text-success-strong'
+}
+
 const isExpanded = (key) => expanded.value.includes(key)
 const toggleExpanded = (key) => {
   expanded.value = isExpanded(key) ? expanded.value.filter((k) => k !== key) : [...expanded.value, key]
@@ -338,7 +362,6 @@ const animateValue = (key, target) => {
 const SERVICE_TERMINAL = new Set(['Resolved', 'Cancelled', 'Disapproved'])
 const BORROW_TERMINAL = new Set(BORROWING_STATUSES.filter((s) => s.terminal).map((s) => s.status))
 
-const DAY_MS = 86_400_000
 const fmtFiled = (ms) => new Date(ms).toLocaleString('en-PH', {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
 })
@@ -408,6 +431,7 @@ const borrowRow = (b) => {
     phone: requesterPhone(b),
     daysLate: daysPastDue(b.due_date),
     overdue: late,
+    dueAt: dueDay(b.due_date)?.getTime(),
     note: late ? `${daysPastDue(b.due_date)}d overdue` : waitNote(b.status, filedAt),
     details,
   }
@@ -449,6 +473,9 @@ const fetchDashboardData = async () => {
       ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
     ]
     vehicles.value = fleet
+    filedTimes.service = (services || []).filter((r) => !isAmbulanceRequest(r)).map((r) => new Date(r.created_at).getTime())
+    filedTimes.ambulance = (services || []).filter(isAmbulanceRequest).map((r) => new Date(r.created_at).getTime())
+    filedTimes.borrow = (borrowings || []).map((b) => new Date(b.created_at).getTime())
     loaded.services = services !== null
     loaded.borrowings = borrowings !== null
     const missing = [!loaded.services && 'resident requests and ambulance bookings', !loaded.borrowings && 'equipment loans'].filter(Boolean)
@@ -473,16 +500,50 @@ const visibleRows = computed(() =>
   rowsForTab(queueTab.value).filter((r) => !statusFilter.value || r.status === statusFilter.value)
 )
 
+// A unit sitting on a Booked ambulance request is spoken for, though the
+// vehicle row stays 'Available' until it actually leaves.
+const fleet = computed(() => {
+  if (vehicles.value === null) return null
+  const assigned = new Set(rows.value.filter((r) => r.kind === 'ambulance' && r.status === 'Booked' && r.unit).map((r) => r.unit))
+  const onStatus = (status) => vehicles.value.filter((v) => v.status === status).length
+  const availableStatus = vehicles.value.filter((v) => v.status === 'Available')
+  const assignedCount = availableStatus.filter((v) => assigned.has(v.unit_identifier)).length
+  return {
+    total: vehicles.value.length,
+    available: availableStatus.length - assignedCount,
+    assigned: assignedCount,
+    onTrip: onStatus('Dispatched'),
+    maintenance: onStatus('Maintenance'),
+  }
+})
+
+// Intake trend for a card. Overdue has no filing date worth trending, so it
+// counts loans that fell due in each week and are still out. The fleet has no
+// history to compare, so it gets none.
+const deltaFor = (f) => {
+  if (!f || !loaded[f.source]) return null
+  const times = f.tab === 'overdue' ? rowsForTab('overdue').map((r) => r.dueAt) : filedTimes[f.tab]
+  return weekDelta(times)
+}
+
 // The server's cards, with the request-counting ones recounted from the queue.
-const cards = computed(() => kpiStats.value.map((stat) => {
+// Total Residents is dropped: it is not a queue, and the Users page has it.
+const cards = computed(() => kpiStats.value.filter((stat) => stat.title !== 'Total Residents').map((stat) => {
+  if (stat.title === 'Available Vehicles' && fleet.value) {
+    return { ...stat, value: `${fleet.value.available}/${fleet.value.total}`, label: 'Fleet available' }
+  }
   const f = KPI_FILTERS[stat.title]
   if (!f || !loaded[f.source]) return stat
   const count = rowsForTab(f.tab).filter((r) => !f.status || r.status === f.status).length
-  return { ...stat, value: String(count), label: f.label }
+  return { ...stat, value: String(count), label: f.label, delta: deltaFor(f) }
 }))
 
 watch(cards, (stats) => {
-  for (const stat of stats) animateValue(stat.title, stat.value)
+  for (const stat of stats) {
+    // "3/14" is not a number to count up to.
+    if (String(stat.value).includes('/')) displayValues[stat.title] = stat.value
+    else animateValue(stat.title, stat.value)
+  }
 })
 
 onMounted(fetchDashboardData)
