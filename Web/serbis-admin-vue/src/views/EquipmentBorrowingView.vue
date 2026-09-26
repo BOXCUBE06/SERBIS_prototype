@@ -333,7 +333,7 @@
     <!-- Not persistent: this reads a record. The one input on it, the handover
          photo picker, uploads on pick, so there is no unsaved state to lose. -->
     <v-dialog v-model="modal.isOpen" max-width="min(820px, 95vw)" transition="dialog-fade-transition">
-      <v-card rounded="lg" elevation="4">
+      <v-card rounded="lg" elevation="4" class="d-flex flex-column detail-modal-card">
         <DetailDialogHeader
           :name="[selectedRecord?.resident?.first_name, selectedRecord?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family'"
           :initials="initials(selectedRecord?.resident)"
@@ -347,36 +347,11 @@
         </DetailDialogHeader>
         <v-divider></v-divider>
 
-        <v-card-text class="pa-0">
-          <v-row class="ma-0 h-100">
-            <v-col cols="12" md="5" class="subtle-surface pa-6 border-e">
-              <div class="mb-3">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
-                <div class="font-weight-medium text-body-1 text-high-emphasis mono">{{ borrowingTransactionNo(selectedRecord?.borrow_id) }}</div>
-              </div>
-              <div class="mb-3">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone Number</div>
-                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ displayPhone(selectedRecord?.resident?.phone_number) || 'N/A' }}</div>
-              </div>
-              <!-- The account holder above stays the contact either way — the
-                   request was filed from their account and resident_id is
-                   required. This says who the item is FOR, which is the part
-                   that separates an institutional loan from a personal one. -->
-              <div class="mb-3">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Borrowing For</div>
-                <div
-                  class="font-weight-medium text-body-1"
-                  :class="unnamedOrganization(selectedRecord) ? 'text-error font-italic' : 'text-high-emphasis'"
-                >{{ borrowingForLabel(selectedRecord) }}</div>
-                <div v-if="isOrganization(selectedRecord)" class="text-caption text-medium-emphasis">Organization</div>
-              </div>
-            </v-col>
-
-            <v-col cols="12" md="7" class="pa-6 bg-surface">
+        <v-card-text class="pa-6 overflow-y-auto flex-grow-1">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <template v-if="selectedRecord?.status === 'Denied'">
-                <h3 class="text-subtitle-1 font-weight-bold mb-4 text-error text-uppercase">Reason for Denial</h3>
+                <h3 class="sect-label text-error">Reason for Denial</h3>
                 <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
                   <div class="text-body-1 text-high-emphasis">{{ selectedRecord?.denial_reason || 'No reason was recorded.' }}</div>
                   <div v-if="selectedRecord?.denial_reason_code === 'Unavailable'" class="text-caption text-medium-emphasis mt-2">
@@ -413,7 +388,42 @@
                 :title="dueLabel(selectedRecord)"
               >Due back on {{ fmtDate(selectedRecord?.due_date) }}.</v-alert>
 
-              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Equipment Requested</h3>
+              <div class="detail-cols">
+                <section class="detail-section">
+                  <h3 class="sect-label">Request</h3>
+                  <dl class="kv">
+                    <dt>Transaction</dt><dd class="mono">{{ borrowingTransactionNo(selectedRecord?.borrow_id) }}</dd>
+                    <dt>Requested on</dt><dd>{{ fmtDateTime(selectedRecord?.created_at) }}</dd>
+                    <template v-if="selectedRecord?.due_date">
+                      <dt>Due back on</dt><dd :class="{ 'text-error': isOverdue(selectedRecord) }">{{ fmtDate(selectedRecord?.due_date) }}</dd>
+                    </template>
+                    <template v-if="selectedRecord?.released_at">
+                      <dt>Released on</dt><dd class="text-primary">{{ fmtDateTime(selectedRecord?.released_at) }}</dd>
+                    </template>
+                    <template v-if="selectedRecord?.returned_at">
+                      <dt>Returned on</dt><dd class="text-success">{{ fmtDateTime(selectedRecord?.returned_at) }}</dd>
+                    </template>
+                  </dl>
+                </section>
+
+                <section class="detail-section">
+                  <h3 class="sect-label">Borrower</h3>
+                  <!-- The account holder stays the contact either way — the
+                       request was filed from their account and resident_id is
+                       required. Borrowing For says who the item is FOR, which
+                       separates an institutional loan from a personal one. -->
+                  <dl class="kv">
+                    <dt>Phone</dt><dd>{{ displayPhone(selectedRecord?.resident?.phone_number) || 'N/A' }}</dd>
+                    <dt>Borrowing for</dt>
+                    <dd :class="unnamedOrganization(selectedRecord) ? 'text-error font-italic' : ''">
+                      {{ borrowingForLabel(selectedRecord) }}
+                      <div v-if="isOrganization(selectedRecord)" class="text-caption text-medium-emphasis">Organization</div>
+                    </dd>
+                  </dl>
+                </section>
+              </div>
+
+              <h3 class="sect-label">Equipment Requested</h3>
               <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
                 <div>
                   <div class="text-h5 font-weight-black text-high-emphasis">{{ itemName(selectedRecord) }}</div>
@@ -435,7 +445,7 @@
                 <div class="text-h3 font-weight-black text-high-emphasis">{{ selectedRecord?.quantity }}<span class="text-h5 text-medium-emphasis ml-1">×</span></div>
               </v-card>
 
-              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Purpose</h3>
+              <h3 class="sect-label">Purpose</h3>
               <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
                 <!-- Requests filed before the field existed have no purpose, and
                      an empty box reads as a resident who left it blank. -->
@@ -446,7 +456,7 @@
                 >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
               </v-card>
 
-              <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Handover</h3>
+              <h3 class="sect-label">Handover</h3>
               <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
                 <div class="d-flex align-center gap-2">
                   <v-icon
@@ -474,7 +484,7 @@
                    backend refuses the upload, so offering it would be a button
                    that always fails. -->
               <template v-if="photoStages(selectedRecord).length > 0">
-                <h3 class="text-subtitle-1 font-weight-bold mb-4 text-high-emphasis text-uppercase">Condition Photos</h3>
+                <h3 class="sect-label">Condition Photos</h3>
                 <v-row class="mb-6">
                   <v-col
                     v-for="stage in photoStages(selectedRecord)"
@@ -611,45 +621,30 @@
                 </div>
               </v-card>
 
-              <v-row class="mb-4">
-                <v-col cols="6">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Requested On</div>
-                  <div class="font-weight-medium text-body-1 text-high-emphasis">{{ fmtDateTime(selectedRecord?.created_at) }}</div>
-                </v-col>
-                <v-col cols="6" v-if="selectedRecord?.due_date">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Due Back On</div>
-                  <div
-                    class="font-weight-medium text-body-1"
-                    :class="isOverdue(selectedRecord) ? 'text-error' : 'text-high-emphasis'"
-                  >{{ fmtDate(selectedRecord?.due_date) }}</div>
-                </v-col>
-                <v-col cols="6" v-if="selectedRecord?.released_at">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Released On</div>
-                  <div class="font-weight-medium text-body-1 text-primary">{{ fmtDateTime(selectedRecord?.released_at) }}</div>
-                </v-col>
-                <v-col cols="6" v-if="selectedRecord?.returned_at">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Returned On</div>
-                  <div class="font-weight-medium text-body-1 text-success">{{ fmtDateTime(selectedRecord?.returned_at) }}</div>
-                </v-col>
-              </v-row>
-            </v-col>
-          </v-row>
         </v-card-text>
 
         <!-- Terminal-list check, not the two words it used to name: a
              Cancelled record matches none of the branches inside, so the old
              version rendered this footer empty. -->
-        <v-card-actions
+        <div
           v-if="selectedRecord && !terminalStatuses.includes(selectedRecord.status)"
-          class="pa-6 d-flex justify-end subtle-surface border-t gap-3"
+          class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4"
         >
           <template v-if="selectedRecord.status === 'Pending'">
-            <v-btn color="error" variant="outlined" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny Request</v-btn>
-            <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve Request</v-btn>
+            <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny Request</v-btn>
+            <v-spacer></v-spacer>
+            <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve Request</v-btn>
           </template>
-          <v-btn v-else-if="selectedRecord.status === 'Approved'" color="primary" variant="flat" class="px-6 text-none font-weight-bold w-100" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
-          <v-btn v-else-if="selectedRecord.status === 'Released'" color="success" variant="flat" class="px-6 text-none font-weight-bold w-100" height="44" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
-        </v-card-actions>
+          <template v-else-if="selectedRecord.status === 'Approved'">
+            <v-spacer></v-spacer>
+            <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
+          </template>
+          <template v-else-if="selectedRecord.status === 'Released'">
+            <v-spacer></v-spacer>
+            <v-btn color="success" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
+          </template>
+        </div>
+
       </v-card>
     </v-dialog>
 
@@ -813,6 +808,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
+import '@/components/detail-dialog.css'
 import { useSelection, borrowingTransactionNo } from '@/composables/requestDisplay'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 

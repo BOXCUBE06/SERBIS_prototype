@@ -609,6 +609,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
+import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
@@ -1016,35 +1017,6 @@ onUnmounted(() => listAbortController.abort())
 }
 .vehicle-option:last-child { border-bottom: none; }
 .vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
-
-.detail-modal-card { max-height: 90vh; }
-.detail-section { margin-bottom: 24px; }
-.detail-cols { display: block; }
-@media (min-width: 720px) {
-  .detail-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
-  .detail-cols .kv { grid-template-columns: 100px 1fr; }
-}
-.sect-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  margin: 0 0 8px;
-}
-.kv {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 8px 16px;
-  font-size: 15px;
-}
-.kv dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
-.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.detail-footer {
-  flex-shrink: 0;
-  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  background: rgb(var(--v-theme-surface));
-}
 
 .cursor-pointer {
   cursor: pointer;
