@@ -119,7 +119,7 @@
 
         <template v-slot:item.created_at="{ item }">
           <div class="text-truncate row-date">{{ formatDate(item.created_at) }}</div>
-          <div v-if="item._waitDays !== null" class="text-caption" :class="item._waitDays > WAIT_RED_DAYS ? 'text-error' : 'text-medium-emphasis'">
+          <div v-if="item._waitDays !== null" class="text-caption" :class="WAIT_CLASS[waitTone(item._waitDays)]">
             {{ item._waitDays }}d waiting
           </div>
         </template>
@@ -132,7 +132,7 @@
       <v-dialog
         :model-value="!!selectedRequest"
         @update:model-value="(v) => { if (!v) selectedRequest = null }"
-        max-width="720"
+        max-width="min(820px, 95vw)"
         class="detail-modal"
       >
         <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
@@ -140,7 +140,7 @@
             :name="requesterName(selectedRequest)"
             :initials="requesterInitials(selectedRequest)"
             :secondary="requesterBarangay(selectedRequest)"
-            :note="waitNote"
+            :wait-days="waitDays"
             @close="selectedRequest = null"
           >
             <template v-slot:status><StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending')" /></template>
@@ -152,6 +152,7 @@
           <div class="pa-6 overflow-y-auto flex-grow-1">
             <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
+            <div class="detail-cols">
             <section class="detail-section">
               <h3 class="sect-label">Request</h3>
               <dl class="kv">
@@ -163,6 +164,22 @@
                 </template>
               </dl>
             </section>
+
+            <section class="detail-section">
+              <h3 class="sect-label">Assignment</h3>
+              <dl class="kv">
+                <dt>Unit</dt>
+                <dd :class="{ 'text-medium-emphasis': !selectedRequest.vehicle }">{{ selectedRequest.vehicle ? vehicleName(selectedRequest.vehicle) : 'None assigned' }}</dd>
+                <dt>Responders</dt>
+                <dd>
+                  <template v-if="selectedRequest.responders?.length">
+                    <v-chip v-for="r in selectedRequest.responders" :key="r.responder_id" size="small" class="mr-1 mb-1">{{ r.name }}</v-chip>
+                  </template>
+                  <span v-else class="text-medium-emphasis">None assigned</span>
+                </dd>
+              </dl>
+            </section>
+            </div>
 
             <section class="detail-section">
               <h3 class="sect-label">Description</h3>
@@ -180,21 +197,6 @@
             <section class="detail-section">
               <h3 class="sect-label">Contact</h3>
               <dl class="kv"><dt>Phone</dt><dd>{{ requesterPhone(selectedRequest) }}</dd></dl>
-            </section>
-
-            <section class="detail-section">
-              <h3 class="sect-label">Assignment</h3>
-              <dl class="kv">
-                <dt>Unit</dt>
-                <dd :class="{ 'text-medium-emphasis': !selectedRequest.vehicle }">{{ selectedRequest.vehicle ? vehicleName(selectedRequest.vehicle) : 'None assigned' }}</dd>
-                <dt>Responders</dt>
-                <dd>
-                  <template v-if="selectedRequest.responders?.length">
-                    <v-chip v-for="r in selectedRequest.responders" :key="r.responder_id" size="small" class="mr-1 mb-1">{{ r.name }}</v-chip>
-                  </template>
-                  <span v-else class="text-medium-emphasis">None assigned</span>
-                </dd>
-              </dl>
             </section>
 
             <section v-if="closedLabel" class="detail-section">
@@ -600,7 +602,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, authHeaders, openWaitDays, WAIT_RED_DAYS } from '@/composables/adminUi'
+import { outcomeLabel, authHeaders, openWaitDays, waitTone } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -882,10 +884,9 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     }),
   })
 
-const waitNote = computed(() => {
-  const days = openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at)
-  return days === null || selectedRequest.value?.status !== 'Pending' ? null : `${days}d waiting`
-})
+const WAIT_CLASS = { muted: 'text-medium-emphasis', warning: 'text-warning-strong', error: 'text-error' }
+
+const waitDays = computed(() => (selectedRequest.value?.status === 'Pending' ? openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at) : null))
 
 const CLOSED_LABELS = { Resolved: 'Resolved on', Disapproved: 'Disapproved on', Cancelled: 'Cancelled on' }
 const closedLabel = computed(() => CLOSED_LABELS[selectedRequest.value?.status] || null)
@@ -1018,8 +1019,13 @@ onUnmounted(() => listAbortController.abort())
 
 .detail-modal-card { max-height: 90vh; }
 .detail-section { margin-bottom: 24px; }
+.detail-cols { display: block; }
+@media (min-width: 720px) {
+  .detail-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+  .detail-cols .kv { grid-template-columns: 100px 1fr; }
+}
 .sect-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1030,7 +1036,7 @@ onUnmounted(() => listAbortController.abort())
   display: grid;
   grid-template-columns: 130px 1fr;
   gap: 8px 16px;
-  font-size: 0.875rem;
+  font-size: 15px;
 }
 .kv dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }

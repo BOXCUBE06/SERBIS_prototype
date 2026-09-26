@@ -172,7 +172,7 @@
       <v-dialog
         :model-value="!!selectedRequest"
         @update:model-value="(v) => { if (!v) selectedRequest = null }"
-        max-width="720"
+        max-width="min(820px, 95vw)"
         class="detail-modal"
       >
         <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
@@ -180,7 +180,7 @@
             :name="requesterName(selectedRequest)"
             :initials="requesterInitials(selectedRequest)"
             :secondary="requesterBarangay(selectedRequest)"
-            :note="waitNote"
+            :wait-days="waitDays"
             @close="selectedRequest = null"
           >
             <template v-slot:status>
@@ -1236,10 +1236,7 @@ const reasonCopy = computed(() => {
   }
 })
 
-const waitNote = computed(() => {
-  const days = openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at)
-  return days === null || selectedRequest.value?.status !== 'Pending' ? null : `${days}d waiting`
-})
+const waitDays = computed(() => (selectedRequest.value?.status === 'Pending' ? openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at) : null))
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')

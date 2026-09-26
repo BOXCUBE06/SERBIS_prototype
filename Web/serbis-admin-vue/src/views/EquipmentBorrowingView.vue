@@ -332,7 +332,7 @@
     <!-- Detail modal (full record + fallback actions) -->
     <!-- Not persistent: this reads a record. The one input on it, the handover
          photo picker, uploads on pick, so there is no unsaved state to lose. -->
-    <v-dialog v-model="modal.isOpen" max-width="900" transition="dialog-fade-transition">
+    <v-dialog v-model="modal.isOpen" max-width="min(820px, 95vw)" transition="dialog-fade-transition">
       <v-card rounded="lg" elevation="4">
         <DetailDialogHeader
           :name="[selectedRecord?.resident?.first_name, selectedRecord?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family'"

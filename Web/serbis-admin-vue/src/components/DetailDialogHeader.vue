@@ -13,7 +13,7 @@
       </v-avatar>
       <div class="min-width-0">
         <div class="header-label">Requester</div>
-        <div class="text-h6 font-weight-bold text-truncate header-name">{{ name }}</div>
+        <div class="font-weight-bold text-truncate header-name">{{ name }}</div>
         <div v-if="secondary" class="text-caption text-medium-emphasis text-truncate">{{ secondary }}</div>
       </div>
     </div>
@@ -21,7 +21,7 @@
       <div>
         <div class="header-label">Status</div>
         <slot name="status"></slot>
-        <div v-if="note" class="text-caption text-medium-emphasis mt-1">{{ note }}</div>
+        <div v-if="waitDays !== null && waitDays !== undefined" class="text-caption mt-1" :class="WAIT_CLASS[waitTone(waitDays)]">{{ waitDays }}d waiting</div>
       </div>
       <slot name="actions"></slot>
       <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="$emit('close')"></v-btn>
@@ -30,21 +30,26 @@
 </template>
 
 <script setup lang="ts">
+import { waitTone } from '@/composables/adminUi'
+
+// warning-strong: the base amber fails AA as text.
+const WAIT_CLASS = { muted: 'text-medium-emphasis', warning: 'text-warning-strong', error: 'text-error' }
+
 defineProps<{
   name: string
   initials: string
   secondary?: string | null
-  /** "Nd waiting" line under the status; open requests only. */
-  note?: string | null
+  /** Days waiting, shown under the status; open requests only. */
+  waitDays?: number | null
 }>()
 defineEmits<{ close: [] }>()
 </script>
 
 <style scoped>
 .min-width-0 { min-width: 0; }
-.header-name { line-height: 1.2; }
+.header-name { font-size: 18px; line-height: 1.2; }
 .header-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;

@@ -279,3 +279,9 @@ export function openWaitDays(status: string | null | undefined, createdAt: strin
   const ms = new Date(createdAt).getTime()
   return Number.isNaN(ms) ? null : Math.max(0, Math.floor((Date.now() - ms) / 864e5))
 }
+
+/** Colour tone for a wait: amber from WAIT_AMBER_DAYS, red past WAIT_RED_DAYS. */
+export function waitTone(days: number): 'muted' | 'warning' | 'error' {
+  if (days > WAIT_RED_DAYS) { return 'error' }
+  return days >= WAIT_AMBER_DAYS ? 'warning' : 'muted'
+}

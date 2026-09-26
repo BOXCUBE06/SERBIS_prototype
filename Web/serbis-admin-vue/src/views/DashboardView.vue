@@ -178,7 +178,7 @@ import DashboardCharts from '@/components/DashboardCharts.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
 import '@/components/dashboard.css'
 import { API_BASE } from '@/config/api'
-import { authHeaders, WAIT_AMBER_DAYS, WAIT_RED_DAYS } from '@/composables/adminUi'
+import { authHeaders, waitTone } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName } from '@/composables/requestDisplay'
@@ -245,13 +245,6 @@ const BORROW_TERMINAL = new Set(BORROWING_STATUSES.filter((s) => s.terminal).map
 const fmtFiled = (ms) => new Date(ms).toLocaleString('en-PH', {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
 })
-
-const waitTone = (days) => {
-  if (days > WAIT_RED_DAYS) {
-    return 'error'
-  }
-  return days >= WAIT_AMBER_DAYS ? 'warning' : 'muted'
-}
 
 // Only a Pending request is waiting on staff; later statuses have moved on.
 const waitNote = (status, ms) => {
