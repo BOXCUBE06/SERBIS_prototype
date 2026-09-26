@@ -13,6 +13,12 @@ export const isWalkIn = (item) => !item?.resident && !item?.resident_id
 export const transactionNo = (requestId) =>
   requestId === null || requestId === undefined ? 'N/A' : `TXN-${String(requestId).padStart(6, '0')}`
 
+// Same reasoning, separate table: tbl_equipment_borrowing has its own PK
+// (borrow_id) unrelated to tbl_service_request's request_id, so it needs its
+// own prefix rather than reusing TXN- and colliding on the same number.
+export const borrowingTransactionNo = (borrowId) =>
+  borrowId === null || borrowId === undefined ? 'N/A' : `BOR-${String(borrowId).padStart(6, '0')}`
+
 export const requesterName = (item) =>
   item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
 

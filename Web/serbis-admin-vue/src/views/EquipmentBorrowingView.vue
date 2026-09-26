@@ -63,7 +63,7 @@
       :loading="initialLoad"
       :refreshing="reloading"
       v-model:search="search"
-      search-placeholder="Resident, item or purpose"
+      search-placeholder="Transaction No., resident, item or purpose"
       :tabs="activeStatusTabs"
       :status="statusFilter"
       @update:status="statusFilter = $event"
@@ -96,6 +96,10 @@
           :aria-label="`Select ${personName(item)}'s borrowing`"
           @click.stop="toggleSelect(item)"
         ></v-checkbox-btn>
+      </template>
+
+      <template v-slot:item.borrow_id="{ item }">
+        <span class="text-truncate d-block mono">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
 
       <template v-slot:filters>
@@ -235,7 +239,7 @@
       :loading="initialLoad"
       :refreshing="reloading"
       v-model:search="search"
-      search-placeholder="Resident, item or purpose"
+      search-placeholder="Transaction No., resident, item or purpose"
       :tabs="historyStatusTabs"
       :status="outcomeFilter"
       @update:status="outcomeFilter = $event"
@@ -268,6 +272,10 @@
           :aria-label="`Select ${personName(item)}'s borrowing`"
           @click.stop="toggleSelect(item)"
         ></v-checkbox-btn>
+      </template>
+
+      <template v-slot:item.borrow_id="{ item }">
+        <span class="text-truncate d-block mono">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
 
       <template v-slot:filters>
@@ -342,6 +350,10 @@
         <v-card-text class="pa-0">
           <v-row class="ma-0 h-100">
             <v-col cols="12" md="5" class="subtle-surface pa-6 border-e">
+              <div class="mb-3">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
+                <div class="font-weight-medium text-body-1 text-high-emphasis mono">{{ borrowingTransactionNo(selectedRecord?.borrow_id) }}</div>
+              </div>
               <div class="mb-3">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone Number</div>
                 <div class="font-weight-medium text-body-1 text-high-emphasis">{{ displayPhone(selectedRecord?.resident?.phone_number) || 'N/A' }}</div>
@@ -801,7 +813,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
-import { useSelection } from '@/composables/requestDisplay'
+import { useSelection, borrowingTransactionNo } from '@/composables/requestDisplay'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -890,21 +902,23 @@ const personSecondary = (b) => displayPhone(b.resident?.phone_number) || b.resid
 
 const activeHeaders = [
   { title: '', key: 'select', sortable: false, width: '48px' },
-  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },
-  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '13%' },
-  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '23%' },
-  { title: 'Status', key: 'status', width: '13%' },
-  { title: 'Timeline', key: 'timeline', value: 'due_date', width: '14%' },
+  { title: 'Transaction No.', key: 'borrow_id', width: '11%' },
+  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
+  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '12%' },
+  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '20%' },
+  { title: 'Status', key: 'status', width: '12%' },
+  { title: 'Timeline', key: 'timeline', value: 'due_date', width: '12%' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '16%' },
 ]
 
 const historyHeaders = [
   { title: '', key: 'select', sortable: false, width: '48px' },
-  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '24%' },
-  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '17%' },
-  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '25%' },
-  { title: 'Requested', key: 'created_at', width: '18%' },
-  { title: 'Outcome', key: 'status', width: '16%' },
+  { title: 'Transaction No.', key: 'borrow_id', width: '13%' },
+  { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
+  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '15%' },
+  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '22%' },
+  { title: 'Requested', key: 'created_at', width: '16%' },
+  { title: 'Outcome', key: 'status', width: '13%' },
 ]
 
 // Sourced from the master lists (/equipments, /barangays — same endpoints
@@ -943,7 +957,10 @@ const matchesSearch = (b) => {
   // make every uncatalogued row a hit for the word "unknown".
   const item = `${b.equipment?.item_name || ''} ${b.other_equipment_text || ''}`.toLowerCase()
   const purpose = (b.purpose || '').toLowerCase()
-  return name.includes(q) || item.includes(q) || purpose.includes(q)
+  // Same lookup path as the request queues (d2018bad): a borrower reading
+  // "BOR-000042" off the panel over the phone has to find that row too.
+  const txn = borrowingTransactionNo(b.borrow_id).toLowerCase()
+  return name.includes(q) || item.includes(q) || purpose.includes(q) || txn.includes(q)
 }
 
 const matchesItem = (b) =>
