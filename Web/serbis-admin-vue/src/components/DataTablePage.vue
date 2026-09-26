@@ -183,7 +183,7 @@ const emit = defineEmits([
   'update:search',
   'update:status',
   'update:page',
-  'update:itemsPerPage',
+  'update:items-per-page',
   'click:row',
   'clear-filter',
   'clear-all',
@@ -191,9 +191,9 @@ const emit = defineEmits([
 
 // This component's own slots are not v-data-table's; forwarding `actions` or
 // `summary` down would collide with any same-named table slot.
-const OWN_SLOTS = ['filters', 'actions', 'summary', 'before-table']
+const OWN_SLOTS = new Set(['filters', 'actions', 'summary', 'before-table'])
 const slots = useSlots()
-const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => !OWN_SLOTS.includes(name)))
+const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => !OWN_SLOTS.has(name)))
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
 
@@ -208,7 +208,7 @@ const tableMinHeight = computed(() => tableBodyHeight.value + HEADER_HEIGHT)
 
 // A smaller page size can strand the current page past the new last page.
 const onItemsPerPage = (value) => {
-  emit('update:itemsPerPage', value)
+  emit('update:items-per-page', value)
   emit('update:page', 1)
 }
 

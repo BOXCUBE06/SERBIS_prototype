@@ -617,7 +617,7 @@ const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) 
 // tab's count should not move just because a different status tab is
 // selected.
 const statusTabItems = computed(() => {
-  const searched = items.value.filter(matchesSearch)
+  const searched = items.value.filter((i) => matchesSearch(i))
   return [
     { value: ALL_STATUS, label: ALL_STATUS, count: searched.length },
     ...RAW_TRIP_STATUSES.map((s) => ({

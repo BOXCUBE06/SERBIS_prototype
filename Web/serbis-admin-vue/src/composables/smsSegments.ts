@@ -170,14 +170,8 @@ export function nameCharacter(char: string): string {
  * general "word dot word" rule would refuse every sentence typed without a
  * space after its full stop. Keep the two in step.
  */
-const LINK_PATTERN = new RegExp(
-  'https?://' +
-    '|www\.' +
-    '|\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd)\b' +
-    '|\b\d{1,3}(?:\.\d{1,3}){3}\b' +
-    '|\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|ph|io|info|biz|edu|gov|co|me|ly|gl|tk|xyz|site|online|app|dev|link|click|shop|store|live|fun|top|vip|club)\b',
-  'i',
-)
+const LINK_PATTERN =
+  /https?:\/\/|www\.|\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|ph|io|info|biz|edu|gov|co|me|ly|gl|tk|xyz|site|online|app|dev|link|click|shop|store|live|fun|top|vip|club)\b/i
 
 /** The first URL or domain in the message, as typed, or null when there is none. */
 export function findLink(message: string): string | null {

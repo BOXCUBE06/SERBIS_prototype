@@ -144,7 +144,7 @@ const TOP = 8
 const view = ref('services')
 const ranked = computed(() => {
   const t = props.top?.[view.value]
-  return (t?.labels ?? []).map((label, i) => ({ label, value: t.data[i] })).toSorted((a, b) => b.value - a.value).slice(0, TOP)
+  return (t?.labels ?? []).map((label, i) => ({ label, value: t.data[i] })).slice().sort((a, b) => b.value - a.value).slice(0, TOP)
 })
 
 // One teal ramp, darkest for #1.

@@ -558,7 +558,7 @@ const applyTemplate = (label) => {
 const sms = computed(() => describeSms(message.value))
 
 const offendingSummary = computed(() =>
-  sms.value.offendingCharacters.map(nameCharacter).join(', '))
+  sms.value.offendingCharacters.map((c) => nameCharacter(c)).join(', '))
 
 // SkySMS charges 10 to 50 credits a recipient for a link or domain and does not
 // deliver the message, so one blocks the send here and on the server.
@@ -640,7 +640,7 @@ let countRequestId = 0
 //
 // Sorted numerically because the select appends in click order, and [2,1] is
 // the same blast as [1,2].
-const selectionKey = (ids) => [...ids].map(Number).sort((a, b) => a - b).join(',')
+const selectionKey = (ids) => [...ids].map(Number).slice().sort((a, b) => a - b).join(',')
 
 const currentSelectionKey = computed(() => selectionKey(selectedBarangays.value))
 

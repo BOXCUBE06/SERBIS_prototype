@@ -213,7 +213,7 @@ export function prepareRows(type, rows, { sort = 'newest', from = '', to = '' } 
     return !!day && (!from || day >= from) && (!to || day <= to)
   }
 
-  return rows.filter((r) => inRange(r)).toSorted(SORTS[sort](t))
+  return rows.filter((r) => inRange(r)).slice().sort(SORTS[sort](t))
 }
 
 /** `serbis-<type>-<range or today>.<ext>`, so a file says what it holds without opening it. */
