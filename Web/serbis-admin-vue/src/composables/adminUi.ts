@@ -265,3 +265,17 @@ export function pendingWaitLabel(status: string | null | undefined, createdAt: s
 
   return `Waiting ${relativeMagnitude(diffMs)}`
 }
+
+// Wait thresholds, shared by the dashboard queue and the request tables so
+// "red" means the same number of days everywhere.
+export const WAIT_AMBER_DAYS = 3
+export const WAIT_RED_DAYS = 7
+
+const OPEN_STATUSES = new Set(['Pending', 'Booked', 'Responding'])
+
+/** Whole days an open request has been on the board; null once it is closed. */
+export function openWaitDays(status: string | null | undefined, createdAt: string | Date | null | undefined): number | null {
+  if (!OPEN_STATUSES.has(status || 'Pending') || !createdAt) return null
+  const ms = new Date(createdAt).getTime()
+  return Number.isNaN(ms) ? null : Math.max(0, Math.floor((Date.now() - ms) / 864e5))
+}

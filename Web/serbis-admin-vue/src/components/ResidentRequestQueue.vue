@@ -87,43 +87,45 @@
         </template>
 
         <template v-slot:item.request_id="{ item }">
-          <span class="text-truncate d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
+          <span class="d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
         </template>
 
-        <template v-slot:item._dateSubmitted="{ item }">
-          <span class="text-truncate d-block row-date">{{ item._dateSubmitted }}</span>
+        <template v-slot:item._requesterName="{ item }">
+          <PersonCell
+            :name="item._requesterName"
+            :secondary="item._barangay"
+            :initials="requesterInitials(item)"
+            :title="item._requesterName"
+          />
+        </template>
+
+        <template v-slot:item._secondary="{ item }">
+          <span class="text-truncate d-block" :title="item._secondary">{{ item._secondary }}</span>
         </template>
 
         <template v-slot:item.status="{ item }">
           <span class="status-col-pill"><StatusPill small :status="outcomeLabel(item.status || 'Pending')" /></span>
         </template>
 
-        <template v-slot:item._requesterName="{ item }">
-          <PersonCell
-            :name="item._requesterName"
-            :initials="requesterInitials(item)"
-            :title="item._requesterName"
-          />
-        </template>
-
-        <template v-slot:item._phone="{ item }">
-          <span class="text-truncate d-block" :title="item._phone">{{ item._phone }}</span>
-        </template>
-
-        <template v-slot:item._barangay="{ item }">
-          <span class="text-truncate d-block" :title="item._barangay">{{ item._barangay }}</span>
-        </template>
-
-        <template v-slot:item._secondary="{ item }">
-          <span class="text-medium-emphasis text-truncate d-block" :title="item._secondary">{{ item._secondary }}</span>
-        </template>
-
         <template v-slot:item._unit="{ item }">
-          <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+          <template v-if="item._unit || item.responders?.length">
+            <div class="text-truncate">{{ item._unit || 'No unit' }}</div>
+            <div v-if="item.responders?.length" class="text-caption text-medium-emphasis">
+              {{ item.responders.length }} {{ item.responders.length === 1 ? 'responder' : 'responders' }}
+            </div>
+          </template>
+          <span v-else class="text-medium-emphasis">—</span>
         </template>
 
-        <template v-slot:item._resolvedAt="{ item }">
-          <span class="text-truncate d-block row-date" :class="item._resolvedAt ? '' : 'text-medium-emphasis'">{{ item._resolvedAt || '—' }}</span>
+        <template v-slot:item.created_at="{ item }">
+          <div class="text-truncate row-date">{{ formatDate(item.created_at) }}</div>
+          <div v-if="item._waitDays !== null" class="text-caption" :class="item._waitDays > WAIT_RED_DAYS ? 'text-error' : 'text-medium-emphasis'">
+            {{ item._waitDays }}d waiting
+          </div>
+        </template>
+
+        <template v-slot:item._closedTs="{ item }">
+          <span class="text-truncate d-block row-date" :class="item._closedTs ? '' : 'text-medium-emphasis'">{{ item._closedTs ? formatDate(item._closedTs) : '—' }}</span>
         </template>
       </DataTablePage>
 
@@ -662,7 +664,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, pendingWaitLabel, authHeaders } from '@/composables/adminUi'
+import { outcomeLabel, pendingWaitLabel, authHeaders, openWaitDays, WAIT_RED_DAYS } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -832,15 +834,14 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Transaction No.', key: 'request_id', width: 8 },
-    { title: 'Submitted', key: '_dateSubmitted', width: 12 },
-    { title: 'Status', key: 'status', width: 9, sortable: false },
-    { title: 'Requester', key: '_requesterName', width: 20 },
-    { title: 'Phone', key: '_phone', width: 11 },
-    { title: 'Barangay', key: '_barangay', width: 12 },
-    { title: 'Service', key: '_secondary', width: 12 },
-    { title: 'Unit', key: '_unit', width: 8, sortable: false },
-    { title: 'Resolved / Disapproved', key: '_resolvedAt', width: 16 },
+    { title: 'TXN No.', key: 'request_id', width: 10 },
+    { title: 'Requester', key: '_requesterName', width: 22 },
+    { title: 'Service', key: '_secondary', width: 14 },
+    { title: 'Status', key: 'status', width: 10, sortable: false },
+    { title: 'Assigned', key: '_unit', width: 14, sortable: false },
+    { title: 'Submitted', key: 'created_at', width: 12 },
+    // Nothing is closed on these tabs, so the column would be all dashes.
+    ...(['Pending', 'Responding'].includes(filters.status) ? [] : [{ title: 'Closed', key: '_closedTs', width: 12 }]),
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
@@ -937,10 +938,10 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     requesterName,
     secondaryFn: (r) => r.service?.service_name || 'Other',
     decorate: (r) => ({
-      _dateSubmitted: formatDate(r.created_at),
-      _phone: requesterPhone(r),
       _barangay: requesterBarangay(r),
-      _resolvedAt: r.resolved_at ? formatDate(r.resolved_at) : '',
+      _waitDays: openWaitDays(r.status, r.created_at),
+      // resolved_at is stamped for Resolved, Cancelled and Disapproved alike.
+      _closedTs: r.resolved_at || null,
     }),
   })
 

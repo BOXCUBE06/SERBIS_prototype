@@ -178,7 +178,7 @@ import DashboardCharts from '@/components/DashboardCharts.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
 import '@/components/dashboard.css'
 import { API_BASE } from '@/config/api'
-import { authHeaders } from '@/composables/adminUi'
+import { authHeaders, WAIT_AMBER_DAYS, WAIT_RED_DAYS } from '@/composables/adminUi'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName } from '@/composables/requestDisplay'
@@ -211,9 +211,6 @@ const loading = ref(true)
 const loadError = ref('')
 // Which lists arrived. A 403 or 500 on one must not read as "nothing open".
 const loaded = reactive({ services: false, borrowings: false })
-
-const WAIT_AMBER_DAYS = 3
-const WAIT_RED_DAYS = 7
 
 const QUEUE_TABS = [
   { value: 'services', title: 'Services', test: (r) => r.kind === 'service', hint: 'Resident requests still open', empty: 'No open service requests' },
