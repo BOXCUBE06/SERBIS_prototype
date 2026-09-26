@@ -326,14 +326,18 @@
          photo picker, uploads on pick, so there is no unsaved state to lose. -->
     <v-dialog v-model="modal.isOpen" max-width="900" transition="dialog-fade-transition">
       <v-card rounded="lg" elevation="4">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <div class="d-flex align-center gap-3">
-            <span class="text-h6 font-weight-bold text-high-emphasis">Borrowing Request Details</span>
+        <DetailDialogHeader
+          :name="[selectedRecord?.resident?.first_name, selectedRecord?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family'"
+          :initials="initials(selectedRecord?.resident)"
+          :secondary="selectedRecord?.resident?.barangay?.barangay_name"
+          @close="closeModal"
+        >
+          <template v-slot:status>
             <StatusPill :status="selectedRecord?.status" :icon="statusIcon(selectedRecord?.status)" />
-            <ExportMenu v-if="selectedRecord" type="borrowing" :row="selectedRecord" />
-          </div>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="closeModal"></v-btn>
-        </v-card-title>
+          </template>
+          <template v-slot:actions><ExportMenu v-if="selectedRecord" type="borrowing" :row="selectedRecord" /></template>
+        </DetailDialogHeader>
+        <v-divider></v-divider>
 
         <v-card-text class="pa-0">
           <v-row class="ma-0 h-100">
@@ -810,6 +814,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
+import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
 import { useSelection } from '@/composables/requestDisplay'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 

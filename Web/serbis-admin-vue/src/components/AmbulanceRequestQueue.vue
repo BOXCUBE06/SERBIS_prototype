@@ -176,24 +176,18 @@
         class="detail-modal"
       >
         <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
-          <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
-            <div class="d-flex align-center gap-3 min-width-0">
-              <v-avatar color="primary" variant="tonal" size="52" class="flex-shrink-0">
-                <span class="text-h6 font-weight-black">
-                  {{ requesterInitials(selectedRequest) }}
-                </span>
-              </v-avatar>
-              <div class="min-width-0">
-                <div class="text-h6 font-weight-bold text-truncate" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ requesterBarangay(selectedRequest) }}</div>
-              </div>
-            </div>
-            <div class="d-flex align-center gap-2 flex-shrink-0">
+          <DetailDialogHeader
+            :name="requesterName(selectedRequest)"
+            :initials="requesterInitials(selectedRequest)"
+            :secondary="requesterBarangay(selectedRequest)"
+            :note="waitNote"
+            @close="selectedRequest = null"
+          >
+            <template v-slot:status>
               <StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)" />
-              <ExportMenu type="booking" :row="selectedRequest" />
-              <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="selectedRequest = null"></v-btn>
-            </div>
-          </div>
+            </template>
+            <template v-slot:actions><ExportMenu type="booking" :row="selectedRequest" /></template>
+          </DetailDialogHeader>
 
           <v-divider></v-divider>
 
@@ -211,17 +205,6 @@
               {{ isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)
                 ? 'Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.'
                 : `Scheduled for ${formatDateTime(selectedRequest.scheduled_at)}.` }}
-            </v-alert>
-
-            <v-alert
-              v-if="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
-              type="info"
-              variant="tonal"
-              class="mb-4"
-              density="compact"
-              :title="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
-            >
-              Filed {{ formatDateTime(selectedRequest.created_at) }}, no action taken yet.
             </v-alert>
 
             <h3 class="section-title">Action</h3>
@@ -1048,13 +1031,14 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, authHeaders } from '@/composables/adminUi'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, authHeaders } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
@@ -1252,6 +1236,10 @@ const reasonCopy = computed(() => {
   }
 })
 
+const waitNote = computed(() => {
+  const days = openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at)
+  return days === null || selectedRequest.value?.status !== 'Pending' ? null : `${days}d waiting`
+})
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
