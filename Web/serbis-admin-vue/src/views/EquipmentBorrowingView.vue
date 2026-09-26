@@ -342,23 +342,9 @@
         <v-card-text class="pa-0">
           <v-row class="ma-0 h-100">
             <v-col cols="12" md="5" class="subtle-surface pa-6 border-e">
-              <div class="d-flex flex-column align-center mb-6">
-                <v-avatar size="80" class="avatar-tint mb-3">
-                  <span class="text-h4 font-weight-black avatar-initials">{{ initials(selectedRecord?.resident) }}</span>
-                </v-avatar>
-                <div class="text-h6 font-weight-bold text-center text-high-emphasis">
-                  {{ selectedRecord?.resident?.first_name }} {{ selectedRecord?.resident?.last_name }}
-                </div>
-                <div class="text-caption text-medium-emphasis text-uppercase font-weight-bold mt-1">Head of the Family Profile</div>
-              </div>
-              <v-divider class="mb-4"></v-divider>
               <div class="mb-3">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone Number</div>
                 <div class="font-weight-medium text-body-1 text-high-emphasis">{{ displayPhone(selectedRecord?.resident?.phone_number) || 'N/A' }}</div>
-              </div>
-              <div class="mb-3">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
-                <div class="font-weight-medium text-body-1 text-high-emphasis">{{ selectedRecord?.resident?.barangay?.barangay_name || 'N/A' }}</div>
               </div>
               <!-- The account holder above stays the contact either way — the
                    request was filed from their account and resident_id is
