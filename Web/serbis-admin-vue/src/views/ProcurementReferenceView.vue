@@ -176,7 +176,7 @@ import SkeletonRows from '@/components/SkeletonRows.vue'
  * needed Equipment Borrowing and was handed every borrower's contact details.
  */
 
-const CLOSED_STATUSES = ['Returned', 'Denied', 'Cancelled']
+const CLOSED_STATUSES = new Set(['Returned', 'Denied', 'Cancelled'])
 const ALL_STATUS = 'All'
 
 // The server's definition of this page: a borrowing whose item is free text
@@ -222,7 +222,7 @@ const distinctItems = computed(
   () => new Set(rows.value.map((b) => String(b.other_equipment_text).trim().toLowerCase())).size
 )
 
-const openCount = computed(() => rows.value.filter((b) => !CLOSED_STATUSES.includes(b.status)).length)
+const openCount = computed(() => rows.value.filter((b) => !CLOSED_STATUSES.has(b.status)).length)
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()

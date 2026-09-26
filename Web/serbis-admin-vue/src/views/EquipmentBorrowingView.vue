@@ -382,7 +382,7 @@
                    inside the 1-day reminder window (matches
                    SendReturnDueReminders' own window), blue otherwise. -->
               <v-alert
-                v-else-if="selectedRecord?.due_date && !terminalStatuses.includes(selectedRecord.status)"
+                v-else-if="selectedRecord?.due_date && !terminalStatuses.has(selectedRecord.status)"
                 :type="['Due today', 'Due tomorrow'].includes(dueLabel(selectedRecord)) ? 'warning' : 'info'"
                 variant="tonal" class="mb-4" density="compact"
                 :title="dueLabel(selectedRecord)"
@@ -627,7 +627,7 @@
              Cancelled record matches none of the branches inside, so the old
              version rendered this footer empty. -->
         <div
-          v-if="selectedRecord && !terminalStatuses.includes(selectedRecord.status)"
+          v-if="selectedRecord && !terminalStatuses.has(selectedRecord.status)"
           class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4"
         >
           <template v-if="selectedRecord.status === 'Pending'">
@@ -884,7 +884,7 @@ const notify = (text, color = 'success') => {
   requestAnimationFrame(() => { liveMessage.value = text })
 }
 
-const terminalStatuses = columns.filter((c) => c.terminal).map((c) => c.status)
+const terminalStatuses = new Set(columns.filter((c) => c.terminal).map((c) => c.status))
 
 // `value` gives each composite column something to sort on; the key still
 // names the cell slot.
@@ -932,14 +932,14 @@ const itemOptions = computed(() => [
   ...[...equipmentMaster.value]
     .map((e) => e.item_name)
     .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b)),
+    .toSorted((a, b) => a.localeCompare(b)),
 ])
 const barangayOptions = computed(() => [
   ALL_BARANGAYS,
   ...[...barangayMaster.value]
     .map((b) => b.barangay_name)
     .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b)),
+    .toSorted((a, b) => a.localeCompare(b)),
 ])
 
 // `clearable` writes null, not '', so the guard is not decorative.
@@ -1006,7 +1006,7 @@ const activeItems = computed(() => {
       if (statusFilter.value === 'Overdue') return isOverdue(b)
       return b.status === statusFilter.value
     })
-    .sort((a, b) => {
+    .toSorted((a, b) => {
       const byOverdue = Number(isOverdue(b)) - Number(isOverdue(a))
       if (byOverdue) return byOverdue
       const byStage = STAGE_RANK[a.status] - STAGE_RANK[b.status]
@@ -1036,15 +1036,15 @@ const activeStatusTabs = computed(() => {
 
 const historyItems = computed(() =>
   borrowings.value
-    .filter((b) => terminalStatuses.includes(b.status) && matchesFilters(b))
+    .filter((b) => terminalStatuses.has(b.status) && matchesFilters(b))
     .filter((b) => outcomeFilter.value === ALL_OUTCOMES || b.status === outcomeFilter.value)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+    .toSorted((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
 
 // Same shape as activeStatusTabs, for History's terminal outcomes —
 // replaces the old "Outcome" v-select.
 const historyStatusTabs = computed(() => {
-  const rows = borrowings.value.filter((b) => terminalStatuses.includes(b.status) && matchesFilters(b))
+  const rows = borrowings.value.filter((b) => terminalStatuses.has(b.status) && matchesFilters(b))
   return [
     { value: ALL_OUTCOMES, label: 'All', count: rows.length },
     ...columns.filter((c) => c.terminal).map((c) => ({
@@ -1056,10 +1056,10 @@ const historyStatusTabs = computed(() => {
 })
 
 const totalActive = computed(
-  () => borrowings.value.filter((b) => !terminalStatuses.includes(b.status)).length,
+  () => borrowings.value.filter((b) => !terminalStatuses.has(b.status)).length,
 )
 const totalHistory = computed(
-  () => borrowings.value.filter((b) => terminalStatuses.includes(b.status)).length,
+  () => borrowings.value.filter((b) => terminalStatuses.has(b.status)).length,
 )
 
 // Counts the tab actually showing, against that tab's unfiltered total. Says
@@ -1215,11 +1215,11 @@ const borrowerHistory = computed(() => {
     .filter((b) => b.resident_id === residentId
       && b.borrow_id !== selectedRecord.value?.borrow_id
       && (b.return_condition || b.return_condition_note))
-    .sort((a, b) => new Date(b.returned_at || b.created_at) - new Date(a.returned_at || a.created_at))
+    .toSorted((a, b) => new Date(b.returned_at || b.created_at) - new Date(a.returned_at || a.created_at))
 })
 
 const isOverdue = (item) => {
-  if (!item || terminalStatuses.includes(item.status)) return false
+  if (!item || terminalStatuses.has(item.status)) return false
   const delta = dueDelta(item)
   return delta !== null && delta < 0
 }

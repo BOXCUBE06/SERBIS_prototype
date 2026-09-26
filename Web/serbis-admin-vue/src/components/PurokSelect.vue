@@ -37,7 +37,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-const PUROK_OPTIONS = ['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6']
+const PUROK_OPTIONS = new Set(['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6'])
 const NOT_SPECIFIED = 'Not specified'
 const OTHER = 'Other (type it in)'
 const CHOICES = [NOT_SPECIFIED, ...PUROK_OPTIONS, OTHER]
@@ -51,7 +51,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-const isListed = (value: string) => PUROK_OPTIONS.includes(value.trim())
+const isListed = (value: string) => PUROK_OPTIONS.has(value.trim())
 
 // Whether "Other" is chosen. Starts true for a saved value that is not on the
 // list, so an address typed before this picker existed is shown, not lost.

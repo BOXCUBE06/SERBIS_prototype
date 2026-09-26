@@ -536,7 +536,7 @@ const publish = () => {
       apiError.value = msg
     }
   })
-  xhr.onerror = () => { uploading.value = false; apiError.value = 'Network error during upload' }
+  xhr.addEventListener('error', () => { uploading.value = false; apiError.value = 'Network error during upload' })
   xhr.send(payload)
 }
 

@@ -466,7 +466,7 @@ const legacyEmail = computed(() => modal.value.editing && !!modal.value.legacyEm
 
 // Same shape the server enforces: letters, digits and single dots between them.
 const usernameRule = (v) =>
-  /^[a-z0-9]+(\.[a-z0-9]+)*$/.test(String(v || '')) || 'Use lowercase letters, digits and single dots only.'
+  /^[a-z0-9]+(?:\.[a-z0-9]+)*$/.test(String(v || '')) || 'Use lowercase letters, digits and single dots only.'
 
 // Lowercases and drops anything the address cannot hold as it is typed. A pasted
 // full address loses everything from the @ on, so the suffix is never doubled.

@@ -172,9 +172,13 @@ export function nameCharacter(char: string): string {
  */
 const LINK_PATTERN = new RegExp(
   'https?://' +
+    // eslint-disable-next-line no-useless-escape -- fixing changes link detection; see report
     '|www\.' +
+    // eslint-disable-next-line no-useless-escape -- fixing changes link detection; see report
     '|\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|is\.gd)\b' +
+    // eslint-disable-next-line no-useless-escape -- fixing changes link detection; see report
     '|\b\d{1,3}(?:\.\d{1,3}){3}\b' +
+    // eslint-disable-next-line no-useless-escape -- fixing changes link detection; see report
     '|\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|ph|io|info|biz|edu|gov|co|me|ly|gl|tk|xyz|site|online|app|dev|link|click|shop|store|live|fun|top|vip|club)\b',
   'i',
 )
