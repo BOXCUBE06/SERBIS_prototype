@@ -115,8 +115,7 @@ const formattingOff = {
  * unnoticed — which is the same failure the layout rules caused, just smaller.
  *
  * What stays at `error` is the short list that can actually be a defect:
- * `no-undef` above, `unicorn/no-array-sort` (sorts the receiver in place, so a
- * prop or a computed is mutated), `unicorn/no-array-callback-reference`
+ * `no-undef` above, `unicorn/no-array-callback-reference`
  * (passes the index as a second argument to a callback that takes one),
  * `unicorn/prefer-add-event-listener` (an `onx =` assignment silently replaces
  * a handler somebody else registered), the two `regexp` rules (an unused
@@ -168,6 +167,16 @@ for (const rule of preferenceRules) {
   }
 }
 
+// Chrome 109 has no Array#toSorted, so copy-then-sort is the supported form, and
+// this rule flags that form too. Same file scope as the stock rule (see above).
+const arraySortOff = base
+  .filter((config) => config.rules && 'unicorn/no-array-sort' in config.rules)
+  .map((config) => ({
+    name: 'serbis/no-array-sort-off',
+    ...(config.files ? { files: config.files } : {}),
+    rules: { 'unicorn/no-array-sort': 'off' },
+  }))
+
 /**
  * `update:modelValue` is Vue's own v-model contract, not a name this codebase
  * chose. The rule wants kebab-case and the framework requires this exact
@@ -190,5 +199,6 @@ export default [
   undefinedIdentifiers,
   formattingOff,
   ...preferencesToWarn,
+  ...arraySortOff,
   vModelEventName,
 ]

@@ -683,7 +683,7 @@ const filteredAndSortedResidents = computed(() => {
         (r.phone_number || '').includes(q)
     })
   }
-  return result.toSorted((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
+  return result.slice().sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
 })
 
 const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')

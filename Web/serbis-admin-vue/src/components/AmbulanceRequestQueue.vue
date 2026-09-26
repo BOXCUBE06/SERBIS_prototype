@@ -1286,7 +1286,8 @@ const bookingUnitOptions = computed(() => {
           ? 'Under maintenance'
           : 'Already booked for this window',
     }))
-    .toSorted((a, b) => Number(b.available) - Number(a.available))
+    .slice()
+    .sort((a, b) => Number(b.available) - Number(a.available))
 })
 
 const residentOptions = computed(() => residents.value
@@ -1294,7 +1295,8 @@ const residentOptions = computed(() => residents.value
     title: `${r.last_name}, ${r.first_name}${r.barangay?.barangay_name ? ' — ' + r.barangay.barangay_name : ''}`,
     value: r.resident_id,
   }))
-  .toSorted((a, b) => a.title.localeCompare(b.title)))
+  .slice()
+  .sort((a, b) => a.title.localeCompare(b.title)))
 
 const selectedVehicle = computed(() =>
   vehicles.value.find(v => v.vehicle_id === formData.value.vehicle_id) || null

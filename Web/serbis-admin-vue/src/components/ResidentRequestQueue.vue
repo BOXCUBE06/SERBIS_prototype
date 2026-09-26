@@ -863,7 +863,8 @@ const residentOptions = computed(() => residents.value
     title: `${r.last_name}, ${r.first_name}${r.barangay?.barangay_name ? ' — ' + r.barangay.barangay_name : ''}`,
     value: r.resident_id,
   }))
-  .toSorted((a, b) => a.title.localeCompare(b.title)))
+  .slice()
+  .sort((a, b) => a.title.localeCompare(b.title)))
 
 const serviceOptions = computed(() => services.value
   .filter(s => s.code !== AMBULANCE_SERVICE_CODE && s.is_active !== false)

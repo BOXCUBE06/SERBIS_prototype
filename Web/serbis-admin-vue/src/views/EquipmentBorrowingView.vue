@@ -932,14 +932,16 @@ const itemOptions = computed(() => [
   ...[...equipmentMaster.value]
     .map((e) => e.item_name)
     .filter(Boolean)
-    .toSorted((a, b) => a.localeCompare(b)),
+    .slice()
+    .sort((a, b) => a.localeCompare(b)),
 ])
 const barangayOptions = computed(() => [
   ALL_BARANGAYS,
   ...[...barangayMaster.value]
     .map((b) => b.barangay_name)
     .filter(Boolean)
-    .toSorted((a, b) => a.localeCompare(b)),
+    .slice()
+    .sort((a, b) => a.localeCompare(b)),
 ])
 
 // `clearable` writes null, not '', so the guard is not decorative.
@@ -1006,7 +1008,8 @@ const activeItems = computed(() => {
       if (statusFilter.value === 'Overdue') return isOverdue(b)
       return b.status === statusFilter.value
     })
-    .toSorted((a, b) => {
+    .slice()
+    .sort((a, b) => {
       const byOverdue = Number(isOverdue(b)) - Number(isOverdue(a))
       if (byOverdue) return byOverdue
       const byStage = STAGE_RANK[a.status] - STAGE_RANK[b.status]
@@ -1038,7 +1041,8 @@ const historyItems = computed(() =>
   borrowings.value
     .filter((b) => terminalStatuses.has(b.status) && matchesFilters(b))
     .filter((b) => outcomeFilter.value === ALL_OUTCOMES || b.status === outcomeFilter.value)
-    .toSorted((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+    .slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
 )
 
 // Same shape as activeStatusTabs, for History's terminal outcomes —
@@ -1215,7 +1219,8 @@ const borrowerHistory = computed(() => {
     .filter((b) => b.resident_id === residentId
       && b.borrow_id !== selectedRecord.value?.borrow_id
       && (b.return_condition || b.return_condition_note))
-    .toSorted((a, b) => new Date(b.returned_at || b.created_at) - new Date(a.returned_at || a.created_at))
+    .slice()
+    .sort((a, b) => new Date(b.returned_at || b.created_at) - new Date(a.returned_at || a.created_at))
 })
 
 const isOverdue = (item) => {

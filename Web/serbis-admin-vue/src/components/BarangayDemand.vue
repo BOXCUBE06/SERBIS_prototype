@@ -128,7 +128,8 @@ const props = defineProps({
 
 const max = computed(() => Math.max(0, ...props.barangays.map((b) => b.requests)))
 const ranked = computed(() => props.barangays
-  .toSorted((a, b) => b.requests - a.requests || a.name.localeCompare(b.name))
+  .slice()
+  .sort((a, b) => b.requests - a.requests || a.name.localeCompare(b.name))
   .map((b) => ({ ...b, percent: max.value > 0 ? Math.round((b.requests / max.value) * 100) : 0 })))
 
 // ---- Projection: once, at import; the boundaries never change ------------------

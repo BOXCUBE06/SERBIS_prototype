@@ -640,7 +640,7 @@ let countRequestId = 0
 //
 // Sorted numerically because the select appends in click order, and [2,1] is
 // the same blast as [1,2].
-const selectionKey = (ids) => [...ids].map(Number).toSorted((a, b) => a - b).join(',')
+const selectionKey = (ids) => [...ids].map(Number).slice().sort((a, b) => a - b).join(',')
 
 const currentSelectionKey = computed(() => selectionKey(selectedBarangays.value))
 

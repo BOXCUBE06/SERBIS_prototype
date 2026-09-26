@@ -24,6 +24,10 @@ const requireApiBase = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  build: {
+    // Chrome 109 is the floor: nothing newer than ES2022 is emitted or assumed.
+    target: ['chrome109', 'firefox115', 'safari15'],
+  },
   plugins: [
     requireApiBase,
     Vue({
