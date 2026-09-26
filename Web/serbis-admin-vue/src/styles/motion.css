@@ -1,0 +1,106 @@
+/* Motion tokens. Every duration and easing in the panel reads from here.
+   Nothing runs longer than --motion-slow; exits use --motion-fast. */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The one skeleton primitive. Hidden for its first 150ms, so a fast response
+   never flashes it. --skel-bg lets a dark band (the dashboard welcome) retint it. */
+.skel {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--skel-bg, rgba(var(--v-theme-on-surface), 0.08));
+  opacity: 0;
+  animation: skel-appear 1ms 150ms forwards;
+}
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skel-shine, rgba(255, 255, 255, 0.5)), transparent);
+  animation: skel-shimmer 1.4s 150ms linear infinite;
+}
+.v-theme--dark .skel { --skel-shine: rgba(255, 255, 255, 0.05); }
+.skel-line { height: 12px; }
+/* Stands in for a count chip; em-sized so it matches the text beside it. */
+.skel-pill {
+  display: inline-block;
+  vertical-align: middle;
+  width: 2em;
+  height: 1.4em;
+  border-radius: 999px;
+}
+@keyframes skel-appear { to { opacity: 1; } }
+@keyframes skel-shimmer { to { transform: translateX(100%); } }
+
+/* Real content replacing a skeleton. */
+.content-in,
+.table-fade tbody {
+  animation: content-in var(--motion-base) var(--ease-out) backwards;
+}
+@keyframes content-in { from { opacity: 0; } }
+
+/* A refetch keeps the rows on screen, dimmed, under the table's own progress bar. */
+.v-table tbody { transition: opacity var(--motion-fast) var(--ease-out); }
+.is-dim { transition: opacity var(--motion-fast) var(--ease-out); }
+.is-refreshing tbody,
+.is-dim { opacity: 0.6; }
+
+/* Route change: the new page rises 4px as it fades in; the old one only fades. */
+.page-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.page-leave-active { transition: opacity var(--motion-fast) var(--ease-out); }
+.page-enter-from { opacity: 0; transform: translateY(4px); }
+.page-leave-to { opacity: 0; }
+
+/* Every v-dialog (the default in plugins/vuetify.ts). The scrim keeps Vuetify's own fade. */
+.dialog-soft-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.dialog-soft-leave-active { transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
+.dialog-soft-enter-from,
+.dialog-soft-leave-to { opacity: 0; transform: scale(0.98); }
+
+/* A changed figure (KPI value, welcome count): keyed on its value, so the new
+   one mounts and slides up 4px. A fade, never a counter. */
+.value-in {
+  display: inline-block;
+  animation: value-in var(--motion-base) var(--ease-out) backwards;
+}
+@keyframes value-in { from { opacity: 0; transform: translateY(4px); } }
+
+/* Feedback: hover colours at --motion-fast; a pressed button settles to 0.98. */
+.v-btn {
+  transition-property: background-color, color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out);
+}
+.v-btn__overlay { transition-duration: var(--motion-fast); }
+.v-btn:active:not(:disabled) { transform: scale(0.98); }
+.v-table tbody td { transition: background-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
+
+/* A status change recolours the pill instead of snapping. */
+.status-pill,
+.tint-pill { transition: background-color var(--motion-base) var(--ease-out), color var(--motion-base) var(--ease-out); }
+
+/* Every v-snackbar (the default in plugins/vuetify.ts): up 8px and in. */
+.snack-up-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.snack-up-leave-active { transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
+.snack-up-enter-from,
+.snack-up-leave-to { opacity: 0; transform: translateY(8px); }
+
+/* Near-instant rather than none, so transitionend/animationend handlers
+   (Vuetify overlays, Vue <Transition>) still fire and nothing gets stuck. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skel::after { display: none; }
+}

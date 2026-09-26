@@ -16,7 +16,7 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
         <!-- Metric tiles -->
-        <v-row v-if="!initialLoad && equipments.length > 0" class="mb-2">
+        <v-row v-if="initialLoad || equipments.length > 0" class="mb-2">
           <v-col v-for="m in metricTiles" :key="m.key" cols="6" md="3">
             <button type="button" class="metric-tile group-card" :class="{ 'metric-tile--active': m.filter && statusFilter === m.filter }" @click="m.filter && (statusFilter = statusFilter === m.filter ? 'All' : m.filter)">
               <div class="metric-icon" :style="{ background: `rgba(var(--v-theme-${m.color}), 0.12)` }">
@@ -24,14 +24,17 @@
               </div>
               <div class="text-truncate">
                 <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis text-truncate">{{ m.title }}</div>
-                <div class="metric-number text-high-emphasis">{{ m.value }}</div>
+                <div class="metric-number text-high-emphasis">
+                  <span v-if="initialLoad" class="skel skel-pill" aria-hidden="true"></span>
+                  <span v-else class="content-in">{{ m.value }}</span>
+                </div>
               </div>
             </button>
           </v-col>
         </v-row>
 
         <!-- Controls -->
-        <div v-if="!initialLoad && equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
+        <div v-if="initialLoad || equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -48,13 +51,8 @@
           ></v-select>
         </div>
 
-        <!-- Loading -->
-        <v-card v-if="initialLoad" elevation="0" rounded="xl" class="group-card pa-6">
-          <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-        </v-card>
-
         <!-- Empty -->
-        <div v-else-if="filteredEquipments.length === 0" class="empty-state group-card">
+        <div v-if="!initialLoad && filteredEquipments.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-package-variant</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
             {{ equipments.length > 0 ? 'No items match your filters' : 'No equipment yet' }}
@@ -71,13 +69,17 @@
              puts whatever is running out at the top. -->
         <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
           <v-data-table
+            :key="initialLoad ? 'loading' : 'ready'"
             :headers="inventoryHeaders"
             :items="filteredEquipments"
             :items-per-page="10"
             item-value="equipment_id"
             density="comfortable"
-            class="inventory-table"
+            class="inventory-table table-fade"
           >
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="10" :columns="inventoryHeaders.length" />
+            </template>
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
@@ -117,11 +119,11 @@
             <template v-slot:item.actions="{ item }">
               <div class="d-flex justify-end gap-1">
                 <v-btn
-                  icon="mdi-pencil-outline" variant="text" size="small"
+                  icon="mdi-pencil-outline" variant="outlined" color="primary" size="small"
                   :aria-label="`Edit ${item.item_name}`" @click="openEdit(item)"
                 ></v-btn>
                 <v-btn
-                  icon="mdi-delete-outline" variant="text" size="small" color="error"
+                  icon="mdi-delete-outline" variant="outlined" size="small" color="error"
                   :aria-label="`Delete ${item.item_name}`" @click="askDelete(item)"
                 ></v-btn>
               </div>
@@ -137,7 +139,7 @@
       <v-card rounded="xl" class="pa-2">
         <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
           <span class="text-h6 font-weight-bold text-high-emphasis">{{ modal.editing ? 'Edit equipment' : 'Add equipment' }}</span>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="modal.show = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="modal.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert v-if="modal.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ modal.error }}</v-alert>
@@ -164,7 +166,7 @@
           <v-select v-model="form.status" :items="['Available', 'Unavailable']" label="Status *" variant="outlined" density="comfortable" rounded="lg" class="mt-1"></v-select>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="modal.loading" @click="modal.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="modal.loading" @click="modal.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="modal.loading" @click="saveEquipment">
             {{ modal.editing ? 'Save' : 'Add' }}
           </v-btn>
@@ -180,7 +182,7 @@
           <strong class="text-high-emphasis">{{ deleteDialog.item?.item_name }}</strong> will be permanently removed from the inventory. This cannot be undone.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="deleteDialog.loading" @click="confirmDelete">Delete</v-btn>
         </v-card-actions>
       </v-card>
@@ -196,6 +198,7 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/equipments`
 
@@ -396,7 +399,7 @@ onMounted(fetchEquipments)
   border-radius: 16px;
   cursor: default;
   text-align: left;
-  transition: transform 0.15s ease, border-color 0.2s ease;
+  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-base) var(--ease-out);
 }
 .metric-tile[class*="attn"], .metric-tile:has(.mdi-alert-octagon-outline) { cursor: pointer; }
 .metric-tile--active { border-color: rgb(var(--v-theme-error)) !important; background: rgba(var(--v-theme-error), 0.06) !important; }
@@ -451,7 +454,7 @@ onMounted(fetchEquipments)
   background: rgba(var(--v-theme-on-surface), 0.08);
   overflow: hidden;
 }
-.gauge-fill { display: block; height: 100%; border-radius: 5px; transition: width 0.4s ease; }
+.gauge-fill { display: block; height: 100%; border-radius: 5px; transition: width var(--motion-slow) var(--ease-out); }
 .fill-available { background: rgb(var(--v-theme-primary)); }
 .fill-low { background: rgb(var(--v-theme-warning)); }
 .fill-depleted { background: rgb(var(--v-theme-error)); }

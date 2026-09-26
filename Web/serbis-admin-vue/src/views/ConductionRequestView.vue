@@ -26,9 +26,7 @@
           {{ apiError }}
         </v-alert>
 
-        <v-skeleton-loader v-if="initialLoad" type="table" class="rounded-lg"></v-skeleton-loader>
-
-        <v-card v-else-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
+        <v-card v-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
           <div class="text-center py-12 px-6">
             <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
             <div class="text-body-1 font-weight-bold text-high-emphasis">Could not load ambulance trip records</div>
@@ -45,6 +43,8 @@
              <style> for the scroll threshold). -->
         <DataTablePage
           v-else
+          :loading="initialLoad"
+          :refreshing="reloading"
           v-model:search="search"
           search-placeholder="Patient, origin or destination"
           :tabs="statusTabItems"
@@ -132,7 +132,7 @@
               Linked to booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
             </div>
           </div>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
           <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
@@ -146,7 +146,7 @@
             <v-alert v-if="bookingsError" type="warning" variant="tonal" border="start" density="compact" class="mb-2">
               Could not load approved requests to link: {{ bookingsError }}
               <template v-slot:append>
-                <v-btn variant="text" size="small" class="text-none font-weight-bold" :loading="bookingsLoading" @click="fetchBookings">Retry</v-btn>
+                <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="bookingsLoading" @click="fetchBookings">Retry</v-btn>
               </template>
             </v-alert>
             <v-autocomplete
@@ -192,7 +192,7 @@
                 <v-alert type="warning" variant="tonal" border="start" density="compact">
                   Could not load the fleet list: {{ vehiclesError }}
                   <template v-slot:append>
-                    <v-btn variant="text" size="small" class="text-none font-weight-bold" :loading="vehiclesLoading" @click="fetchVehicles">Retry</v-btn>
+                    <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="vehiclesLoading" @click="fetchVehicles">Retry</v-btn>
                   </template>
                 </v-alert>
               </v-col>
@@ -247,7 +247,7 @@
               <div class="d-flex align-center justify-space-between mb-1">
                 <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
                 <v-btn
-                  variant="text"
+                  variant="outlined" color="primary"
                   size="small"
                   density="compact"
                   class="text-none"
@@ -274,7 +274,7 @@
                 <v-btn
                   v-if="idx > 0 || group.min < 1"
                   icon="mdi-close"
-                  variant="text"
+                  variant="outlined" color="error"
                   size="small"
                   :aria-label="`Remove ${group.singular} ${idx + 1}`"
                   @click="removePerson(group.field, idx)"
@@ -287,7 +287,7 @@
           </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitCreate">
             {{ createDialog.conflict ? 'File anyway' : 'File request' }}
           </v-btn>
@@ -304,7 +304,7 @@
             <StatusPill :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
             <ExportMenu type="trip" :row="selected" />
           </div>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 65vh;">
           <!-- Only ever present on a trip dispatched from a resident's own
@@ -470,7 +470,7 @@
                 <div class="d-flex align-center justify-space-between mb-1">
                   <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
                   <v-btn
-                    variant="text"
+                    variant="outlined" color="primary"
                     size="small"
                     density="compact"
                     class="text-none"
@@ -497,7 +497,7 @@
                   <v-btn
                     v-if="idx > 0 || group.min < 1"
                     icon="mdi-close"
-                    variant="text"
+                    variant="outlined" color="error"
                     size="small"
                     :aria-label="`Remove ${group.singular} ${idx + 1}`"
                     @click="removeTripPerson(group.field, idx)"
@@ -511,7 +511,7 @@
           </v-row>
         </v-card-text>
         <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitTripLog">Save trip log</v-btn>
         </v-card-actions>
       </v-card>

@@ -19,6 +19,7 @@
                   of {{ residents.length }} accounts
                 </template>
               </span>
+              <span v-else class="skel skel-pill" style="width: 7.5em; height: 2em" aria-hidden="true"></span>
             </template>
 
             <template v-slot:actions>
@@ -117,20 +118,12 @@
           >
             {{ apiError }}
             <template v-slot:append>
-              <v-btn variant="text" class="text-none font-weight-bold" @click="loadAll">Retry</v-btn>
+              <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="loadAll">Retry</v-btn>
             </template>
           </v-alert>
 
-          <!-- Loading -->
-          <div v-if="initialLoad" class="pa-6 flex-grow-1">
-            <!-- `table`, not list rows: an avatar-two-line skeleton promises
-                 the shape of a list and then a seven-column table arrives,
-                 which is a guaranteed layout shift on every load. -->
-            <v-skeleton-loader type="table" class="mb-1"></v-skeleton-loader>
-          </div>
-
           <!-- Empty -->
-          <div v-else-if="filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
+          <div v-if="!initialLoad && filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
               {{ residents.length > 0 ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
@@ -155,18 +148,22 @@
 
           <v-data-table
             v-else
+            :key="initialLoad ? 'loading' : 'ready'"
             :headers="headers"
             :items="filteredAndSortedResidents"
             :items-per-page="-1"
             fixed-header
             :height="tableHeight"
             hover
-            class="elegant-table flex-grow-1"
+            class="elegant-table flex-grow-1 table-fade"
             item-value="resident_id"
             @click:row="selectRow"
             :row-props="rowProps"
           >
             <template v-slot:bottom></template>
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="10" :columns="headers.length" />
+            </template>
 
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
@@ -272,7 +269,7 @@
           <span class="text-h6 font-weight-bold text-high-emphasis">
             {{ modal.isEditing ? 'Edit account' : 'New account' }}
           </span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
 
         <v-card-text class="pa-6">
@@ -420,7 +417,7 @@
         </v-card-text>
 
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 bg-surface">
-          <v-btn variant="text" rounded="lg" height="48" class="px-4 text-none font-weight-bold" :disabled="loading" @click="closeModal">
+          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="px-4 text-none font-weight-bold" :disabled="loading" @click="closeModal">
             Cancel
           </v-btn>
           <v-btn
@@ -448,7 +445,7 @@
           This cannot be undone — deactivate the account instead if you only want to suspend access.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -483,7 +480,7 @@
           </template>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -545,6 +542,7 @@ import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PurokSelect from '@/components/PurokSelect.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const { mdAndUp } = useDisplay()
 
@@ -1060,7 +1058,7 @@ onUnmounted(releaseResidentPhotos)
 .status-field { width: 150px; max-width: 100%; }
 
 .tab-btn {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--motion-base) var(--ease-in-out);
   border-bottom: 3px solid transparent;
 }
 /* primary-strong exists for exactly this: primary alone is only 5.15:1 on a
@@ -1072,7 +1070,7 @@ onUnmounted(releaseResidentPhotos)
   color: rgb(var(--v-theme-primary-strong)) !important;
 }
 
-.transition-btn { transition: transform 0.2s ease, opacity 0.2s ease; }
+.transition-btn { transition: transform var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
 .transition-btn:hover { transform: translateY(-2px); opacity: 0.95; }
 
 /* Avatars — the old blue-on-light-blue pairing measured 3.28:1. Tinting the

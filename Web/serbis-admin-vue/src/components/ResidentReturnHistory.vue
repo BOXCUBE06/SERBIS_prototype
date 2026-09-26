@@ -42,10 +42,10 @@
 
           <template v-if="row.has_return_photo">
             <v-btn
-              variant="text"
+              variant="outlined" color="primary"
               size="small"
               density="comfortable"
-              class="text-none px-0 mt-1"
+              class="text-none mt-1"
               :loading="photos[row.borrow_id]?.loading"
               @click="togglePhoto(row.borrow_id)"
             >

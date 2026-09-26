@@ -32,27 +32,36 @@
         </v-alert>
 
         <!-- Summary -->
-        <v-card v-if="!initialLoad && rows.length > 0" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
+        <v-card v-if="initialLoad || rows.length > 0" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
           <div class="d-flex flex-wrap gap-8">
             <div>
               <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Requests logged</div>
-              <div class="text-h4 font-weight-bold text-high-emphasis">{{ rows.length }}</div>
+              <div class="text-h4 font-weight-bold text-high-emphasis">
+                <span v-if="initialLoad" class="skel skel-pill" aria-hidden="true"></span>
+                <span v-else class="content-in">{{ rows.length }}</span>
+              </div>
             </div>
             <div>
               <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Distinct items</div>
-              <div class="text-h4 font-weight-bold text-high-emphasis">{{ distinctItems }}</div>
+              <div class="text-h4 font-weight-bold text-high-emphasis">
+                <span v-if="initialLoad" class="skel skel-pill" aria-hidden="true"></span>
+                <span v-else class="content-in">{{ distinctItems }}</span>
+              </div>
             </div>
             <div>
               <!-- Still open is the number that decides whether to procure:
                    a denied or cancelled row is demand that went away. -->
               <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Still open</div>
-              <div class="text-h4 font-weight-bold text-high-emphasis">{{ openCount }}</div>
+              <div class="text-h4 font-weight-bold text-high-emphasis">
+                <span v-if="initialLoad" class="skel skel-pill" aria-hidden="true"></span>
+                <span v-else class="content-in">{{ openCount }}</span>
+              </div>
             </div>
           </div>
         </v-card>
 
         <!-- Controls -->
-        <div v-if="!initialLoad && rows.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6">
+        <div v-if="initialLoad || rows.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6">
           <v-text-field
             v-model="search"
             prepend-inner-icon="mdi-magnify"
@@ -68,16 +77,13 @@
             class="control-field-sm"
           ></v-select>
           <v-spacer></v-spacer>
-          <span class="page-subtitle text-medium-emphasis">{{ filtered.length }} of {{ rows.length }}</span>
-        </div>
-
-        <div v-if="initialLoad" class="d-flex justify-center py-16">
-          <v-progress-circular indeterminate color="primary" size="40"></v-progress-circular>
+          <span v-if="initialLoad" class="skel skel-pill" style="width: 4em" aria-hidden="true"></span>
+          <span v-else class="page-subtitle text-medium-emphasis">{{ filtered.length }} of {{ rows.length }}</span>
         </div>
 
         <!-- Empty is the good state here: nobody has had to ask for something
              the office does not carry. Said plainly rather than as a blank table. -->
-        <v-card v-else-if="rows.length === 0" elevation="0" rounded="xl" class="group-card pa-12 text-center">
+        <v-card v-if="!initialLoad && rows.length === 0" elevation="0" rounded="xl" class="group-card pa-12 text-center">
           <v-icon size="48" color="medium-emphasis">mdi-clipboard-check-outline</v-icon>
           <div class="text-h6 font-weight-bold text-high-emphasis mt-4">No uncatalogued requests</div>
           <div class="text-body-2 text-medium-emphasis mt-1">
@@ -87,13 +93,19 @@
 
         <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
           <v-data-table
+            :key="initialLoad ? 'loading' : 'ready'"
+            :loading="reloading && !initialLoad"
+            :class="{ 'is-refreshing': reloading && !initialLoad }"
             :headers="headers"
             :items="filtered"
             item-value="borrow_id"
             :items-per-page="10"
             density="comfortable"
-            class="text-body-2 procurement-table"
+            class="text-body-2 procurement-table table-fade"
           >
+            <template v-if="initialLoad" #body>
+              <SkeletonRows :rows="10" :columns="headers.length" />
+            </template>
             <template v-slot:item.number="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
@@ -146,6 +158,7 @@ import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borr
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 /**
  * The MDRRMC procurement reference: every borrow request that named an item the

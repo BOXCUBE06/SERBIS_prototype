@@ -44,11 +44,15 @@
                   :items-length="systemTotal"
                   :items-per-page="itemsPerPage"
                   :page="systemPage"
-                  :loading="loading"
+                  :loading="loading && systemLogs.length > 0"
+                  :class="{ 'is-refreshing': loading && systemLogs.length > 0 }"
                   hover
                   class="bg-transparent logs-table"
                   @update:options="onSystemOptions"
                 >
+                  <template v-if="loading && systemLogs.length === 0" #body>
+                    <SkeletonRows :rows="itemsPerPage" :columns="systemHeaders.length" />
+                  </template>
                   <template v-slot:item.rowNumber="{ index }">
                     <span class="row-number text-medium-emphasis">{{ systemRowNumber(index) }}</span>
                   </template>
@@ -74,11 +78,15 @@
                   :items-length="smsTotal"
                   :items-per-page="itemsPerPage"
                   :page="smsPage"
-                  :loading="loading"
+                  :loading="loading && smsLogs.length > 0"
+                  :class="{ 'is-refreshing': loading && smsLogs.length > 0 }"
                   hover
                   class="bg-transparent logs-table"
                   @update:options="onSmsOptions"
                 >
+                  <template v-if="loading && smsLogs.length === 0" #body>
+                    <SkeletonRows :rows="itemsPerPage" :columns="smsHeaders.length" />
+                  </template>
                   <template v-slot:item.rowNumber="{ index }">
                     <span class="row-number text-medium-emphasis">{{ smsRowNumber(index) }}</span>
                   </template>
@@ -125,6 +133,7 @@ import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 // The SMS History status chip. Sent is the only green: it is set only after
 // SkySMS's own message list says every recipient's message was sent.

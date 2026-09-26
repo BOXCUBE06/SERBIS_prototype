@@ -11,6 +11,8 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement, ArcEle
 
 // Canvas text does not inherit CSS, so the app font is set here, once, for every chart.
 ChartJS.defaults.font.family = "'Plus Jakarta Sans Variable', system-ui, sans-serif"
+// Canvas ignores CSS motion rules, so the token ceiling and reduced motion are mirrored here.
+ChartJS.defaults.animation.duration = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 320
 
 const hexToRgb = (hex) => {
   const n = Number.parseInt(String(hex).replace('#', ''), 16)

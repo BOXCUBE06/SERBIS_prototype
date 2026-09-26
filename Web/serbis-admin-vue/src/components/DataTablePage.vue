@@ -31,6 +31,7 @@
       :model-value="status"
       @update:model-value="$emit('update:status', $event)"
       :items="tabs"
+      :loading="loading"
       class="mb-4"
     />
 
@@ -75,7 +76,7 @@
           @click:close="clearOne(f.key)"
         >{{ f.label }}</v-chip>
         <v-btn
-          variant="text"
+          variant="outlined" color="primary"
           size="small"
           class="text-none font-weight-bold"
           @click="clearAll"
@@ -86,7 +87,10 @@
     <slot name="before-table" />
 
     <div class="dtp-table-wrap" :style="{ minHeight: tableMinHeight + 'px' }">
+      <!-- Keyed on first load, so the body that replaces the skeleton mounts
+           fresh and fades in (.table-fade). -->
       <v-data-table
+        :key="loading ? 'loading' : 'ready'"
         :headers="headers"
         :items="items"
         :items-per-page="itemsPerPage"
@@ -95,10 +99,15 @@
         hide-default-footer
         :no-data-text="noDataText"
         :row-props="rowProps"
-        class="dtp-table"
+        class="dtp-table table-fade"
+        :class="{ 'is-refreshing': refreshing && !loading }"
+        :loading="refreshing && !loading"
         @click:row="(event, ctx) => $emit('click:row', event, ctx)"
         @update:page="$emit('update:page', $event)"
       >
+        <template v-if="loading" #body>
+          <SkeletonRows :rows="itemsPerPage" :columns="headers.length" />
+        </template>
         <template v-for="slotName in forwardSlotNames" :key="slotName" v-slot:[slotName]="slotProps">
           <slot :name="slotName" v-bind="slotProps ?? {}" />
         </template>
@@ -140,6 +149,7 @@
 <script setup>
 import { computed, useSlots } from 'vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const props = defineProps({
   searchable: { type: Boolean, default: true },
@@ -155,6 +165,9 @@ const props = defineProps({
   itemValue: { type: String, default: 'id' },
   rowProps: { type: [Function, Object], default: undefined },
   noDataText: { type: String, default: 'No results' },
+  // First load: skeleton rows. A later refetch: current rows dimmed instead.
+  loading: { type: Boolean, default: false },
+  refreshing: { type: Boolean, default: false },
 
   page: { type: Number, default: 1 },
   itemsPerPage: { type: Number, default: 10 },

@@ -30,7 +30,10 @@
       @click="$emit('update:modelValue', item.value)"
     >
       {{ item.label }}
-      <span v-if="item.count !== undefined" class="segmented-tabs__count">{{ item.count }}</span>
+      <template v-if="item.count !== undefined">
+        <span v-if="loading" class="skel skel-pill" aria-hidden="true"></span>
+        <span v-else class="segmented-tabs__count">{{ item.count }}</span>
+      </template>
     </button>
   </div>
 </template>
@@ -45,6 +48,8 @@ export interface SegmentedTabItem {
 defineProps<{
   modelValue: string | number
   items: SegmentedTabItem[]
+  /** First load: counts are placeholders, never a misleading 0. */
+  loading?: boolean
 }>()
 
 defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
@@ -72,7 +77,7 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
   border-right: 1px solid rgba(var(--v-theme-on-surface), 0.14);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 .segmented-tabs__seg:last-child {
   border-right: none;
@@ -114,6 +119,9 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
 .segmented-tabs__seg--active {
   background: rgb(var(--v-theme-primary));
   color: #fff;
+}
+.segmented-tabs__seg--active .skel {
+  --skel-bg: rgba(255, 255, 255, 0.3);
 }
 .segmented-tabs__count {
   font-weight: 800;

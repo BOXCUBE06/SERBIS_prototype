@@ -75,7 +75,7 @@
 
           <v-btn
             v-if="hasFilters"
-            variant="text"
+            variant="outlined"
             size="small"
             color="primary"
             class="text-none font-weight-bold"
@@ -134,7 +134,8 @@
       <v-col cols="12">
         <AnalyticsSection
           title="When requests are filed"
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && demand.total === 0"
           empty-text="No requests in this range"
@@ -180,7 +181,8 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Requests by month and service"
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && volume.total === 0"
           empty-text="No requests in this range"
@@ -248,13 +250,14 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Barangays"
-          :loading="loading"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && barangayCoverage.barangays.length === 0"
           empty-text="No barangays configured"
           @retry="fetchReport"
         >
           <BarangayDemand
+            :loading="firstLoad"
             :barangays="barangayCoverage.barangays"
             :walk-in="barangayCoverage.walkIn"
             :total-residents="barangayCoverage.totalResidents"
@@ -273,7 +276,8 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Outcomes by month"
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && outcomes.total === 0"
           empty-text="No requests in this range"
@@ -299,7 +303,8 @@
         <AnalyticsSection
           title="How Long Requests Have Been Waiting"
           info="Pending, booked or being responded to. Ignores the date filter on purpose, so an old request cannot hide outside the range."
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && aging.total === 0"
           empty-text="Nothing is open"
@@ -333,7 +338,8 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment utilization"
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && equipmentUtilization.items.length === 0"
           empty-text="No equipment in the catalogue"
@@ -372,7 +378,8 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Equipment returns"
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
           :empty="!loading && !error && loans.returnedLate.of === 0"
           empty-text="No equipment returned in this range"
@@ -401,7 +408,8 @@
       <v-col cols="12">
         <AnalyticsSection
           title="Most used vehicles"
-          :loading="loading"
+          :loading="firstLoad"
+          :refreshing="refreshing"
           :error="error"
                     @retry="fetchReport"
         >
@@ -497,6 +505,9 @@ const serviceId = ref(ALL)
 const report = ref(null)
 const loading = ref(true)
 const error = ref('')
+// Skeletons on the first load only; a filter change keeps the old figures, dimmed.
+const firstLoad = computed(() => loading.value && !report.value)
+const refreshing = computed(() => loading.value && !!report.value)
 
 const barangays = ref([])
 const services = ref([])

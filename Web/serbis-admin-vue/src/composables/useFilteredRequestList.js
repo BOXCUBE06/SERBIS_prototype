@@ -33,6 +33,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
       return requesterName(r).toLowerCase().includes(searchLower) ||
              (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
              (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower) ||
+             (r.resident?.phone_number || r.walk_in_contact_number || '').includes(searchLower) ||
              String(r.request_id ?? '').toLowerCase().includes(searchLower)
     }).map(r => ({
       ...r,

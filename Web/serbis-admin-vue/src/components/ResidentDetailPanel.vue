@@ -2,7 +2,7 @@
   <div class="detail-panel">
     <div class="detail-head">
       <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">{{ accountTypeLabel(resident.account_type) }} profile</span>
-      <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close profile" @click="$emit('close')"></v-btn>
+      <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close profile" @click="$emit('close')"></v-btn>
     </div>
 
     <!-- The open profile is not in the list behind this dialog. Stated rather
@@ -15,7 +15,7 @@
         Not in the current view — {{ barangayName }}
       </span>
       <v-btn
-        variant="text"
+        variant="outlined" color="primary"
         size="small"
         class="text-none font-weight-bold"
         @click="$emit('clear-filters')"
@@ -123,7 +123,7 @@
     <div class="detail-actions">
       <v-btn
         color="error"
-        variant="text"
+        variant="outlined"
         height="44"
         rounded="lg"
         class="text-none font-weight-bold mr-auto"

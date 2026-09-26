@@ -10,7 +10,7 @@
     <v-card rounded="lg">
       <v-card-title class="d-flex justify-space-between align-center pa-6 border-b">
         <span class="text-h6 font-weight-bold">{{ heading }}</span>
-        <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="$emit('update:modelValue', false)"></v-btn>
+        <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="$emit('update:modelValue', false)"></v-btn>
       </v-card-title>
 
       <v-card-text class="pa-6">
@@ -32,8 +32,8 @@
         <div class="d-flex align-center justify-space-between mb-1">
           <div class="field-label">Columns</div>
           <div>
-            <v-btn size="x-small" variant="text" class="text-none" @click="prefs.columns = fields.map((x) => x.key)">All</v-btn>
-            <v-btn size="x-small" variant="text" class="text-none" @click="prefs.columns = defaultColumns(type)">Defaults</v-btn>
+            <v-btn size="x-small" variant="outlined" color="primary" class="text-none" @click="prefs.columns = fields.map((x) => x.key)">All</v-btn>
+            <v-btn size="x-small" variant="outlined" color="primary" class="text-none" @click="prefs.columns = defaultColumns(type)">Defaults</v-btn>
           </div>
         </div>
         <v-row dense class="mb-2">
@@ -73,7 +73,7 @@
       </v-card-text>
 
       <v-card-actions class="pa-6 pt-0 justify-end gap-2">
-        <v-btn variant="text" class="text-none" @click="$emit('update:modelValue', false)">Cancel</v-btn>
+        <v-btn variant="outlined" color="primary" class="text-none" @click="$emit('update:modelValue', false)">Cancel</v-btn>
         <v-btn color="primary" variant="flat" class="text-none font-weight-bold" :disabled="!prefs.columns.length" @click="confirm">
           {{ isPrint ? 'Print' : 'Export' }}
         </v-btn>

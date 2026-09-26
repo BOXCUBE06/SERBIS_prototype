@@ -75,15 +75,8 @@
           >{{ statusFilter }}</v-chip>
         </div>
 
-        <!-- Loading -->
-        <template v-if="loading">
-          <v-card elevation="0" rounded="xl" class="mb-8 pa-8 group-card">
-            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-          </v-card>
-        </template>
-
         <!-- Empty -->
-        <div v-else-if="filteredVehicles.length === 0" class="empty-state group-card">
+        <div v-if="!firstLoad && filteredVehicles.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-truck-remove-outline</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
             {{ vehicles.length > 0 ? 'No units match your filters' : 'No units in the fleet yet' }}
@@ -100,13 +93,19 @@
              four stacked grids. -->
         <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
           <v-data-table
+            :key="firstLoad ? 'loading' : 'ready'"
+            :loading="refreshing"
+            :class="{ 'is-refreshing': refreshing }"
             :headers="fleetHeaders"
             :items="filteredVehicles"
             :items-per-page="10"
             item-value="vehicle_id"
             density="comfortable"
-            class="fleet-table"
+            class="fleet-table table-fade"
           >
+            <template v-if="firstLoad" #body>
+              <SkeletonRows :rows="10" :columns="fleetHeaders.length" />
+            </template>
             <template v-slot:item.rowNumber="{ item }">
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
@@ -160,11 +159,11 @@
             <template v-slot:item.actions="{ item }">
               <div class="d-flex justify-end gap-1">
                 <v-btn
-                  icon="mdi-pencil-outline" variant="text" size="small"
+                  icon="mdi-pencil-outline" variant="outlined" color="primary" size="small"
                   :aria-label="`Edit ${item.unit_identifier}`" @click="openEdit(item)"
                 ></v-btn>
                 <v-btn
-                  icon="mdi-delete-outline" variant="text" size="small" color="error"
+                  icon="mdi-delete-outline" variant="outlined" size="small" color="error"
                   :aria-label="`Delete ${item.unit_identifier}`" @click="askDelete(item)"
                 ></v-btn>
               </div>
@@ -184,7 +183,7 @@
           <span class="font-weight-bold text-uppercase" :class="`text-${statusMeta[statusDialog.newStatus]?.color}`">{{ statusDialog.newStatus }}</span>?
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="statusDialog.loading" @click="executeStatusChange">Confirm</v-btn>
         </v-card-actions>
       </v-card>
@@ -195,7 +194,7 @@
       <v-card rounded="xl" class="pa-2">
         <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
           <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit unit' : 'Add unit' }}</span>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="formDialog.show = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="formDialog.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
@@ -207,7 +206,7 @@
           </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="saveVehicle">
             {{ formDialog.editing ? 'Save' : 'Add unit' }}
           </v-btn>
@@ -223,7 +222,7 @@
           <strong class="text-high-emphasis">{{ deleteDialog.vehicle?.unit_identifier }}</strong> will be permanently removed from the fleet. This cannot be undone.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="deleteDialog.loading" @click="confirmDelete">Delete</v-btn>
         </v-card-actions>
       </v-card>
@@ -239,6 +238,7 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 
 const API = `${API_BASE}/vehicles`
@@ -254,6 +254,9 @@ const statusMeta = {
 
 const vehicles = ref([])
 const loading = ref(false)
+// Skeleton rows on the first load only; a refetch dims the rows it already has.
+const firstLoad = computed(() => loading.value && vehicles.value.length === 0)
+const refreshing = computed(() => loading.value && vehicles.value.length > 0)
 const apiError = ref('')
 const search = ref('')
 const typeFilter = ref('All')
@@ -488,7 +491,7 @@ onMounted(fetchVehicles)
   overflow: hidden;
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
-.composition-bar .seg { height: 100%; transition: width 0.4s ease; }
+.composition-bar .seg { height: 100%; transition: width var(--motion-slow) var(--ease-out); }
 .seg-available { background: rgb(var(--v-theme-primary)); }
 .seg-dispatched { background: rgb(var(--v-theme-warning)); }
 .seg-maintenance { background: rgb(var(--v-theme-error)); }
@@ -504,7 +507,7 @@ onMounted(fetchVehicles)
   border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
   background: rgba(var(--v-theme-on-surface), 0.02);
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+  transition: border-color var(--motion-base) var(--ease-out), background-color var(--motion-base) var(--ease-out), transform var(--motion-fast) var(--ease-out);
   text-align: left;
 }
 .stat-tile:hover { transform: translateY(-2px); }
@@ -555,7 +558,7 @@ onMounted(fetchVehicles)
   letter-spacing: 0.04em;
   border: none;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: filter var(--motion-fast) var(--ease-out);
 }
 .status-pill:hover { filter: brightness(0.97); }
 /* Text uses the -strong tokens, not the plain ones: raw primary/warning/

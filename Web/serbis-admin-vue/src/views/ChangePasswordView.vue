@@ -53,7 +53,7 @@
         >
           Save and continue
         </v-btn>
-        <v-btn variant="text" block class="text-none mt-2" :disabled="loading" @click="signOut">
+        <v-btn variant="outlined" color="primary" block class="text-none mt-2" :disabled="loading" @click="signOut">
           Sign out
         </v-btn>
       </v-form>

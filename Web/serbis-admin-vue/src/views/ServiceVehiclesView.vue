@@ -8,21 +8,24 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
           {{ apiError }}
           <template v-slot:append>
-            <v-btn variant="text" class="text-none font-weight-bold" @click="load">Retry</v-btn>
+            <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="load">Retry</v-btn>
           </template>
         </v-alert>
 
         <v-card elevation="0" rounded="xl" class="checkbox-grid-card">
-          <v-skeleton-loader v-if="initialLoad" type="table" class="pa-4"></v-skeleton-loader>
-
-          <v-table v-else class="checkbox-grid">
+          <v-table :key="initialLoad ? 'loading' : 'ready'" class="checkbox-grid table-fade">
             <thead>
               <tr>
                 <th scope="col" class="text-left">Service</th>
                 <th v-for="type in types" :key="type" scope="col" class="checkbox-grid-check">{{ type }}</th>
+                <!-- The unit types arrive with the rows; three stand in until then. -->
+                <template v-if="initialLoad">
+                  <th v-for="n in 3" :key="n" class="checkbox-grid-check"><span class="skel skel-line" aria-hidden="true"></span></th>
+                </template>
               </tr>
             </thead>
             <tbody>
+              <SkeletonRows v-if="initialLoad" :rows="6" :columns="4" />
               <tr v-for="row in rows" :key="row.code" :data-code="row.code">
                 <th scope="row" class="text-left font-weight-bold checkbox-grid-service">
                   <span :class="{ 'text-disabled': !row.is_active }">{{ row.name }}</span>
@@ -56,6 +59,7 @@ import { onMounted, ref } from 'vue'
 import { authHeaders, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 import '@/styles/checkbox-grid.css'
 
 // One row per service that dispatches a unit. Ticking a box saves at once, like

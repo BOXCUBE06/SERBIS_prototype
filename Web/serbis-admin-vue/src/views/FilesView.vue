@@ -120,7 +120,7 @@
               >
                 <v-icon start>mdi-send</v-icon> Publish
               </v-btn>
-              <v-btn icon="mdi-close" variant="text" size="small" :disabled="uploading" @click="clearStaged"></v-btn>
+              <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" :disabled="uploading" @click="clearStaged"></v-btn>
             </div>
             <v-progress-linear
               v-if="uploading"
@@ -135,13 +135,8 @@
             </v-alert>
           </v-card>
 
-          <!-- Loading skeleton -->
-          <v-card v-if="loadingList" elevation="0" rounded="xl" class="subtle-border pa-8">
-            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-          </v-card>
-
           <!-- Empty state -->
-          <div v-else-if="visibleFiles.length === 0" class="empty-state subtle-surface">
+          <div v-if="!firstLoad && visibleFiles.length === 0" class="empty-state subtle-surface">
             <v-icon size="48" class="text-medium-emphasis mb-3">mdi-file-hidden</v-icon>
             <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
               {{ files.length > 0 ? 'No materials match your filter' : 'No materials published yet' }}
@@ -159,13 +154,19 @@
                VehiclesView, so all four read the same way. -->
           <v-card v-else elevation="0" rounded="xl" class="subtle-border overflow-hidden">
             <v-data-table
+              :key="firstLoad ? 'loading' : 'ready'"
+              :loading="refreshing"
+              :class="{ 'is-refreshing': refreshing }"
               :headers="materialHeaders"
               :items="visibleFiles"
               :items-per-page="10"
               item-value="files_id"
               density="comfortable"
-              class="materials-table"
+              class="materials-table table-fade"
             >
+              <template v-if="firstLoad" #body>
+                <SkeletonRows :rows="10" :columns="materialHeaders.length" />
+              </template>
               <template v-slot:item.rowNumber="{ item }">
                 <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
               </template>
@@ -233,7 +234,7 @@
                     <v-icon start size="18">mdi-download</v-icon> Download
                   </v-btn>
                   <v-btn
-                    icon="mdi-delete-outline" variant="text" size="small" color="error"
+                    icon="mdi-delete-outline" variant="outlined" size="small" color="error"
                     :aria-label="`Delete ${item.title}`"
                     @click="askDelete(item)"
                   ></v-btn>
@@ -256,7 +257,7 @@
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
           <v-spacer></v-spacer>
-          <v-btn variant="text" class="text-none" @click="deleteDialog = false" :disabled="deleting">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none" @click="deleteDialog = false" :disabled="deleting">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="text-none font-weight-bold" :loading="deleting" @click="confirmDelete">
             Delete
           </v-btn>
@@ -289,7 +290,7 @@
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
           <v-spacer></v-spacer>
-          <v-btn variant="text" class="text-none" @click="cancelVerify" :disabled="verifying === pendingVerify?.files_id">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none" @click="cancelVerify" :disabled="verifying === pendingVerify?.files_id">Cancel</v-btn>
           <v-btn
             color="success" variant="flat" rounded="lg" class="text-none font-weight-bold"
             :loading="verifying === pendingVerify?.files_id"
@@ -303,7 +304,7 @@
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
       <template v-slot:actions>
-        <v-btn icon="mdi-close" variant="text" size="small" @click="snackbar.show = false"></v-btn>
+        <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="snackbar.show = false"></v-btn>
       </template>
     </v-snackbar>
   </v-container>
@@ -315,12 +316,16 @@ import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/admin/info-materials`
 
 const files = ref([])
 const search = ref('')
 const loadingList = ref(true)
+// Skeleton rows on the first load only; a refetch dims the rows it already has.
+const firstLoad = computed(() => loadingList.value && files.value.length === 0)
+const refreshing = computed(() => loadingList.value && files.value.length > 0)
 
 // Upload staging
 const fileInput = ref(null)
@@ -662,7 +667,7 @@ onMounted(fetchFiles)
   border-width: 2px !important;
   border-radius: 16px;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: background-color var(--motion-base) var(--ease-out), border-color var(--motion-base) var(--ease-out);
   background-color: rgba(var(--v-theme-on-surface), 0.02);
 }
 .dropzone:hover,

@@ -30,13 +30,7 @@
           >{{ statusFilter }}</v-chip>
         </div>
 
-        <template v-if="loading">
-          <v-card elevation="0" rounded="xl" class="mb-8 pa-8 group-card">
-            <v-skeleton-loader type="table-row@6" class="bg-transparent"></v-skeleton-loader>
-          </v-card>
-        </template>
-
-        <div v-else-if="filteredResponders.length === 0" class="empty-state group-card">
+        <div v-if="!firstLoad && filteredResponders.length === 0" class="empty-state group-card">
           <v-icon size="48" class="text-medium-emphasis mb-3">mdi-account-hard-hat-outline</v-icon>
           <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
             {{ responders.length > 0 ? 'No responders match your filters' : 'No responders yet' }}
@@ -48,13 +42,19 @@
 
         <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
           <v-data-table
+            :key="firstLoad ? 'loading' : 'ready'"
+            :loading="refreshing"
+            :class="{ 'is-refreshing': refreshing }"
             :headers="headers"
             :items="filteredResponders"
             :items-per-page="10"
             item-value="responder_id"
             density="comfortable"
-            class="responder-table"
+            class="responder-table table-fade"
           >
+            <template v-if="firstLoad" #body>
+              <SkeletonRows :rows="10" :columns="headers.length" />
+            </template>
             <template v-slot:item.name="{ item }">
               <div class="d-flex align-center gap-3 py-2">
                 <v-avatar size="40" color="primary" variant="tonal">
@@ -100,8 +100,8 @@
 
             <template v-slot:item.actions="{ item }">
               <div class="d-flex justify-end gap-1">
-                <v-btn icon="mdi-pencil-outline" variant="text" size="small" :aria-label="`Edit ${item.name}`" @click="openEdit(item)"></v-btn>
-                <v-btn icon="mdi-delete-outline" variant="text" size="small" color="error" :aria-label="`Delete ${item.name}`" @click="askDelete(item)"></v-btn>
+                <v-btn icon="mdi-pencil-outline" variant="outlined" color="primary" size="small" :aria-label="`Edit ${item.name}`" @click="openEdit(item)"></v-btn>
+                <v-btn icon="mdi-delete-outline" variant="outlined" size="small" color="error" :aria-label="`Delete ${item.name}`" @click="askDelete(item)"></v-btn>
               </div>
             </template>
           </v-data-table>
@@ -119,7 +119,7 @@
           <span class="font-weight-bold text-uppercase">{{ statusLabel(statusDialog.newStatus) }}</span>?
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="statusDialog.loading" @click="executeStatusChange">Confirm</v-btn>
         </v-card-actions>
       </v-card>
@@ -130,7 +130,7 @@
       <v-card rounded="xl" class="pa-2">
         <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
           <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit responder' : 'Add responder' }}</span>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="formDialog.show = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="formDialog.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
@@ -163,7 +163,7 @@
           </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="saveResponder">
             {{ formDialog.editing ? 'Save' : 'Add responder' }}
           </v-btn>
@@ -179,7 +179,7 @@
           <strong class="text-high-emphasis">{{ deleteDialog.responder?.name }}</strong> will be permanently removed. This cannot be undone.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="deleteDialog.loading" @click="confirmDelete">Delete</v-btn>
         </v-card-actions>
       </v-card>
@@ -194,6 +194,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
+import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const API = `${API_BASE}/responders`
 const STATUSES = ['available', 'deployed', 'off_duty']
@@ -202,6 +203,9 @@ const statusLabel = (s) => STATUS_LABELS[s] || s
 
 const responders = ref([])
 const loading = ref(false)
+// Skeleton rows on the first load only; a refetch dims the rows it already has.
+const firstLoad = computed(() => loading.value && responders.value.length === 0)
+const refreshing = computed(() => loading.value && responders.value.length > 0)
 const apiError = ref('')
 const search = ref('')
 const statusFilter = ref('All')
@@ -425,7 +429,7 @@ onMounted(fetchResponders)
   letter-spacing: 0.04em;
   border: none;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: filter var(--motion-fast) var(--ease-out);
 }
 .status-pill:hover { filter: brightness(0.97); }
 .pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }

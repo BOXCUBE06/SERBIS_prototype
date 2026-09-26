@@ -60,10 +60,10 @@
              date/datetime input was always clearable by backspacing it —
              a read-only picker has no other way to reach blank, and the
              trip log's four checkpoints are genuinely nullable. -->
-        <v-btn variant="text" size="small" class="text-none" @click="clear">Clear</v-btn>
+        <v-btn variant="outlined" color="primary" size="small" class="text-none" @click="clear">Clear</v-btn>
         <v-spacer></v-spacer>
-        <v-btn variant="text" size="small" class="text-none" @click="cancel">Cancel</v-btn>
-        <v-btn color="primary" variant="text" size="small" class="text-none" @click="confirm">OK</v-btn>
+        <v-btn variant="outlined" color="primary" size="small" class="text-none" @click="cancel">Cancel</v-btn>
+        <v-btn color="primary" variant="flat" size="small" class="text-none" @click="confirm">OK</v-btn>
       </v-card-actions>
     </v-card>
   </v-menu>
