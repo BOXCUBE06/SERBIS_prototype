@@ -4,10 +4,10 @@
 //
 // Field groups drive the detail print: `time` and `actor` fields are always
 // printed there (every timestamp and who did it), the rest follow the chosen
-// columns. Reference numbers (Request No., Trip No.) are on by default;
+// columns. Reference numbers (Transaction No., Trip No.) are on by default;
 // internal foreign-key ids are `off` until someone ticks them.
 import { displayPhone } from '@/composables/phoneNumber'
-import { isWalkIn, requesterName } from '@/composables/requestDisplay'
+import { isWalkIn, requesterName, transactionNo, borrowingTransactionNo } from '@/composables/requestDisplay'
 
 const TZ = 'Asia/Manila'
 const dateTimeFormat = new Intl.DateTimeFormat('en-PH', { timeZone: TZ, dateStyle: 'medium', timeStyle: 'short' })
@@ -35,7 +35,7 @@ const requesterFields = [
 ]
 
 const requestFields = [
-  f('request_id', 'Request No.', (r) => r.request_id, 'id'),
+  f('request_id', 'Transaction No.', (r) => transactionNo(r.request_id), 'id'),
   f('status', 'Status', (r) => r.status || 'Pending'),
   f('service', 'Service', (r) => r.service?.service_name || 'Other'),
   ...requesterFields,
@@ -64,7 +64,7 @@ const requestPhotos = (r) => [
 ]
 
 const bookingFields = [
-  f('request_id', 'Request No.', (r) => r.request_id, 'id'),
+  f('request_id', 'Transaction No.', (r) => transactionNo(r.request_id), 'id'),
   f('status', 'Status', (r) => r.status || 'Pending'),
   ...requesterFields,
   f('patient_name', 'Patient', (r) => r.patient_name || ''),
@@ -92,7 +92,7 @@ const bookingFields = [
 const borrowerName = (r) => `${r.resident?.first_name || ''} ${r.resident?.last_name || ''}`.trim()
 
 const borrowingFields = [
-  f('borrow_id', 'Borrowing No.', (r) => r.borrow_id, 'id'),
+  f('borrow_id', 'Transaction No.', (r) => borrowingTransactionNo(r.borrow_id), 'id'),
   f('status', 'Status', (r) => r.status),
   f('item', 'Item', (r) => r.equipment?.item_name || r.other_equipment_text || ''),
   f('quantity', 'Quantity', (r) => r.quantity),
