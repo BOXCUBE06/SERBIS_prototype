@@ -269,8 +269,9 @@ class MockRequestSeeder extends Seeder
                 $this->createServiceRequest([
                     'resident_id' => $resident->resident_id,
                     'service_id' => $service->service_id,
-                    'description' => self::SERVICE_DESCRIPTIONS[$service->code].' — near '.$this->randomFrom(self::PUROKS).', '.($resident->barangay?->barangay_name ?? self::BARANGAYS[0]).'.',
-                    'landmark' => random_int(0, 1) === 1 ? 'Near the barangay hall' : null,
+                    'description' => self::SERVICE_DESCRIPTIONS[$service->code],
+                    // Location is its own field; it used to be tacked onto the description.
+                    'landmark' => 'Near '.$this->randomFrom(self::PUROKS).', '.($resident->barangay?->barangay_name ?? self::BARANGAYS[0]),
                     'fulfillment_method' => $service->code === 'relief-goods-distribution' ? ($isDelivery ? 'Delivery' : 'Pickup') : null,
                     'delivery_address' => $isDelivery ? $this->randomAddress($resident) : null,
                     'status' => $status,
