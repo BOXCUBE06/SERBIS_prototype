@@ -136,176 +136,81 @@
         class="detail-modal"
       >
         <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
-          <div class="d-flex justify-space-between align-center pa-6 pb-4" style="flex-shrink: 0;">
-            <div class="d-flex align-center gap-3 min-width-0">
-              <v-avatar color="primary" variant="tonal" size="52" class="flex-shrink-0">
-                <span class="text-h6 font-weight-black">
-                  {{ requesterInitials(selectedRequest) }}
-                </span>
-              </v-avatar>
-              <div class="min-width-0">
-                <div class="text-h6 font-weight-bold text-truncate" style="line-height: 1.2;">{{ requesterName(selectedRequest) }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ requesterBarangay(selectedRequest) }}</div>
-              </div>
-            </div>
-            <div class="d-flex align-center gap-2 flex-shrink-0">
-              <StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending')" />
-              <ExportMenu type="request" :row="selectedRequest" />
-              <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="selectedRequest = null"></v-btn>
-            </div>
-          </div>
+          <DetailDialogHeader
+            :name="requesterName(selectedRequest)"
+            :initials="requesterInitials(selectedRequest)"
+            :secondary="requesterBarangay(selectedRequest)"
+            :note="waitNote"
+            @close="selectedRequest = null"
+          >
+            <template v-slot:status><StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending')" /></template>
+            <template v-slot:actions><ExportMenu type="request" :row="selectedRequest" /></template>
+          </DetailDialogHeader>
 
           <v-divider></v-divider>
 
           <div class="pa-6 overflow-y-auto flex-grow-1">
             <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
-            <v-alert
-              v-if="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
-              type="info"
-              variant="tonal"
-              class="mb-4"
-              density="compact"
-              :title="pendingWaitLabel(selectedRequest.status, selectedRequest.created_at)"
-            >
-              Filed {{ formatDateTime(selectedRequest.created_at) }}, no action taken yet.
-            </v-alert>
+            <section class="detail-section">
+              <h3 class="sect-label">Request</h3>
+              <dl class="kv">
+                <dt>Service</dt><dd class="font-weight-bold">{{ selectedRequest.service?.service_name || 'Other' }}</dd>
+                <dt>Transaction</dt><dd class="mono">{{ transactionNo(selectedRequest.request_id) }}</dd>
+                <dt>Submitted</dt><dd>{{ formatDateTime(selectedRequest.created_at) }}</dd>
+                <template v-if="selectedRequest.preferred_date">
+                  <dt>Preferred date</dt><dd>{{ formatPreferredDate(selectedRequest.preferred_date) }}</dd>
+                </template>
+              </dl>
+            </section>
 
-            <h3 class="section-title">Action</h3>
-
-            <div v-if="selectedRequest.status === 'Responding' && isProgramRequest(selectedRequest)" class="detail-group">
-              <v-alert type="success" variant="tonal" border="start" rounded="lg">
-                <div class="text-subtitle-2 font-weight-bold">Approved</div>
-                <div class="text-body-2">Mark it resolved once the office has carried it out.</div>
-              </v-alert>
-            </div>
-
-            <div v-else-if="selectedRequest.status === 'Responding'" class="detail-group">
-              <v-alert type="info" variant="tonal" border="start" rounded="lg" class="d-flex align-center">
-                <template v-slot:prepend><v-icon size="28">mdi-progress-clock</v-icon></template>
-                <div class="text-subtitle-2 font-weight-bold">In progress</div>
-                <div v-if="selectedRequest.vehicle" class="text-body-2">
-                  {{ vehicleName(selectedRequest.vehicle) }} ({{ selectedRequest.vehicle.type || 'Unit' }})
-                </div>
-              </v-alert>
-            </div>
-
-            <div v-if="showActions" class="detail-group d-flex align-center flex-wrap gap-3">
-              <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-                <div v-if="!isProgramRequest(selectedRequest)" class="d-flex align-center gap-3 min-width-0 mr-auto dispatch-state">
-                  <v-avatar :color="formData.vehicle_id ? 'success' : undefined" variant="tonal" size="36">
-                    <v-icon size="20" :color="formData.vehicle_id ? 'success' : undefined">
-                      {{ formData.vehicle_id ? vehicleIcon(selectedVehicle?.type) : 'mdi-car-off' }}
-                    </v-icon>
-                  </v-avatar>
-                  <div class="min-width-0">
-                    <div class="text-body-2 font-weight-bold text-truncate">
-                      {{ formData.vehicle_id ? getSelectedVehicleName() : 'No vehicle selected' }}
-                    </div>
-                    <div class="text-caption text-medium-emphasis text-truncate">
-                      <template v-if="formData.vehicle_id">
-                        Ready to dispatch<template v-if="selectedVehicle?.specification"> &bull; {{ selectedVehicle.specification }}</template>
-                      </template>
-                      <template v-else>Optional — approving without one sends no unit.</template>
-                    </div>
-                  </div>
-                </div>
-
-                <v-btn
-                  v-if="!isProgramRequest(selectedRequest)"
-                  color="primary"
-                  variant="outlined"
-                  class="text-none font-weight-bold"
-                  height="40"
-                  @click="vehicleModal.isOpen = true"
-                >
-                  {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
-                </v-btn>
-                <v-btn
-                  color="primary"
-                  variant="outlined"
-                  class="text-none font-weight-bold"
-                  height="40"
-                  @click="openResponderModal"
-                >
-                  {{ (selectedRequest.responders?.length || 0) > 0 ? `Responders (${selectedRequest.responders.length})` : 'Select Responders' }}
-                </v-btn>
-                <v-btn color="error" variant="text" class="text-none font-weight-bold" :class="{ 'ml-auto': isProgramRequest(selectedRequest) }" height="40" :loading="loading" @click="openReason('disapprove')">
-                  Disapprove
-                </v-btn>
-                <v-btn
-                  color="secondary"
-                  variant="flat"
-                  class="text-none font-weight-bold text-white"
-                  height="40"
-                  :loading="loading"
-                  @click="openReason('approve')"
-                >
-                  {{ isProgramRequest(selectedRequest) ? 'Approve' : 'Approve & Dispatch' }}
-                </v-btn>
-              </template>
-              <template v-else-if="selectedRequest.status === 'Responding'">
-                <v-btn color="success" variant="flat" class="text-none font-weight-bold w-100" height="40" :loading="loading" @click="openResolveConfirm">
-                  Mark as Resolved
-                </v-btn>
-              </template>
-            </div>
-
-            <div v-if="!showActions && selectedRequest.status !== 'Responding'" class="text-caption text-medium-emphasis detail-group">
-              This request is closed — no action needed.
-            </div>
-
-            <h3 class="section-title">Details</h3>
-
-            <div class="detail-group">
-              <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-2">Description</div>
+            <section class="detail-section">
+              <h3 class="sect-label">Description</h3>
               <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
                 <template v-if="descriptionLines.length > 0">
                   <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
                 </template>
                 <template v-else>No description provided by the Head of the Family.</template>
               </v-card>
-            </div>
+              <dl v-if="selectedRequest.landmark" class="kv mt-3">
+                <dt>Location</dt><dd>{{ selectedRequest.landmark }}</dd>
+              </dl>
+            </section>
 
-            <v-row class="detail-group">
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Service</div>
-                <div class="font-weight-bold text-body-1">{{ selectedRequest.service?.service_name || 'Other' }}</div>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Submitted</div>
-                <div class="font-weight-medium text-body-2">{{ formatDateTime(selectedRequest.created_at) }}</div>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Phone</div>
-                <div class="font-weight-medium text-body-2">{{ requesterPhone(selectedRequest) }}</div>
-              </v-col>
-              <v-col v-if="selectedRequest.preferred_date" cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Preferred date</div>
-                <div class="font-weight-medium text-body-2">{{ formatPreferredDate(selectedRequest.preferred_date) }}</div>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Transaction No.</div>
-                <div class="font-weight-medium text-body-2 mono">{{ transactionNo(selectedRequest.request_id) }}</div>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Barangay</div>
-                <div class="font-weight-medium text-body-2">{{ requesterBarangay(selectedRequest) }}</div>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Unit</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.vehicle ? vehicleName(selectedRequest.vehicle) : 'Unassigned' }}</div>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Resolved / Disapproved</div>
-                <div class="font-weight-medium text-body-2">{{ selectedRequest.resolved_at ? formatDateTime(selectedRequest.resolved_at) : '—' }}</div>
-              </v-col>
-            </v-row>
+            <section class="detail-section">
+              <h3 class="sect-label">Contact</h3>
+              <dl class="kv"><dt>Phone</dt><dd>{{ requesterPhone(selectedRequest) }}</dd></dl>
+            </section>
+
+            <section class="detail-section">
+              <h3 class="sect-label">Assignment</h3>
+              <dl class="kv">
+                <dt>Unit</dt>
+                <dd :class="{ 'text-medium-emphasis': !selectedRequest.vehicle }">{{ selectedRequest.vehicle ? vehicleName(selectedRequest.vehicle) : 'None assigned' }}</dd>
+                <dt>Responders</dt>
+                <dd>
+                  <template v-if="selectedRequest.responders?.length">
+                    <v-chip v-for="r in selectedRequest.responders" :key="r.responder_id" size="small" class="mr-1 mb-1">{{ r.name }}</v-chip>
+                  </template>
+                  <span v-else class="text-medium-emphasis">None assigned</span>
+                </dd>
+              </dl>
+            </section>
+
+            <section v-if="closedLabel" class="detail-section">
+              <h3 class="sect-label">Outcome</h3>
+              <dl class="kv">
+                <dt>{{ closedLabel }}</dt><dd>{{ formatDateTime(selectedRequest.resolved_at) }}</dd>
+                <template v-if="selectedRequest.status === 'Disapproved' && selectedRequest.remarks">
+                  <dt>Reason</dt><dd>{{ selectedRequest.remarks }}</dd>
+                </template>
+              </dl>
+            </section>
 
             <template v-if="attachments.length > 0">
-            <h3 class="section-title">Attachments</h3>
+            <h3 class="sect-label">Attachments</h3>
 
-            <div class="detail-group">
+            <div class="detail-section">
               <div class="d-flex flex-wrap gap-3 attachments-row">
                 <div v-for="a in attachments" :key="a.key">
                   <v-skeleton-loader
@@ -353,6 +258,37 @@
                 </div>
               </div>
             </div>
+            </template>
+          </div>
+
+          <div v-if="showActions" class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4">
+            <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
+              <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+                Disapprove
+              </v-btn>
+              <v-spacer></v-spacer>
+              <v-btn
+                v-if="!isProgramRequest(selectedRequest)"
+                color="primary"
+                variant="outlined"
+                class="text-none font-weight-bold"
+                height="40"
+                @click="vehicleModal.isOpen = true"
+              >
+                {{ formData.vehicle_id ? selectedVehicle?.unit_identifier : 'Select Vehicle' }}
+              </v-btn>
+              <v-btn color="primary" variant="outlined" class="text-none font-weight-bold" height="40" @click="openResponderModal">
+                {{ (selectedRequest.responders?.length || 0) > 0 ? `Responders (${selectedRequest.responders.length})` : 'Select Responders' }}
+              </v-btn>
+              <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" :loading="loading" @click="openReason('approve')">
+                {{ isProgramRequest(selectedRequest) ? 'Approve' : 'Approve & Dispatch' }}
+              </v-btn>
+            </template>
+            <template v-else>
+              <v-spacer></v-spacer>
+              <v-btn color="success" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="openResolveConfirm">
+                Mark as Resolved
+              </v-btn>
             </template>
           </div>
         </v-card>
@@ -664,12 +600,13 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, pendingWaitLabel, authHeaders, openWaitDays, WAIT_RED_DAYS } from '@/composables/adminUi'
+import { outcomeLabel, authHeaders, openWaitDays, WAIT_RED_DAYS } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
@@ -945,6 +882,14 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     }),
   })
 
+const waitNote = computed(() => {
+  const days = openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at)
+  return days === null || selectedRequest.value?.status !== 'Pending' ? null : `${days}d waiting`
+})
+
+const CLOSED_LABELS = { Resolved: 'Resolved on', Disapproved: 'Disapproved on', Cancelled: 'Cancelled on' }
+const closedLabel = computed(() => CLOSED_LABELS[selectedRequest.value?.status] || null)
+
 const showActions = computed(() =>
   selectedRequest.value && (
     selectedRequest.value.status === 'Pending'
@@ -1071,21 +1016,28 @@ onUnmounted(() => listAbortController.abort())
 .vehicle-option:last-child { border-bottom: none; }
 .vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
 
-.detail-group { margin-bottom: 28px; }
-.detail-group:last-child { margin-bottom: 0; }
-
-.section-title {
-  font-size: 0.78rem;
-  font-weight: 800;
+.detail-modal-card { max-height: 90vh; }
+.detail-section { margin-bottom: 24px; }
+.sect-label {
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgb(var(--v-theme-primary-strong));
-  margin: 28px 0 12px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  margin: 0 0 8px;
 }
-.section-title:first-child { margin-top: 0; }
-
-.dispatch-state {
-  flex: 1 1 200px;
+.kv {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px 16px;
+  font-size: 0.875rem;
+}
+.kv dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.detail-footer {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  background: rgb(var(--v-theme-surface));
 }
 
 .cursor-pointer {
