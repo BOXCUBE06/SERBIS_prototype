@@ -76,7 +76,7 @@
           @click:close="clearOne(f.key)"
         >{{ f.label }}</v-chip>
         <v-btn
-          variant="text"
+          variant="outlined" color="primary"
           size="small"
           class="text-none font-weight-bold"
           @click="clearAll"

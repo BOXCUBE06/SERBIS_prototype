@@ -100,8 +100,8 @@
 
             <template v-slot:item.actions="{ item }">
               <div class="d-flex justify-end gap-1">
-                <v-btn icon="mdi-pencil-outline" variant="text" size="small" :aria-label="`Edit ${item.name}`" @click="openEdit(item)"></v-btn>
-                <v-btn icon="mdi-delete-outline" variant="text" size="small" color="error" :aria-label="`Delete ${item.name}`" @click="askDelete(item)"></v-btn>
+                <v-btn icon="mdi-pencil-outline" variant="outlined" color="primary" size="small" :aria-label="`Edit ${item.name}`" @click="openEdit(item)"></v-btn>
+                <v-btn icon="mdi-delete-outline" variant="outlined" size="small" color="error" :aria-label="`Delete ${item.name}`" @click="askDelete(item)"></v-btn>
               </div>
             </template>
           </v-data-table>
@@ -119,7 +119,7 @@
           <span class="font-weight-bold text-uppercase">{{ statusLabel(statusDialog.newStatus) }}</span>?
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="statusDialog.loading" @click="executeStatusChange">Confirm</v-btn>
         </v-card-actions>
       </v-card>
@@ -130,7 +130,7 @@
       <v-card rounded="xl" class="pa-2">
         <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
           <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit responder' : 'Add responder' }}</span>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="formDialog.show = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="formDialog.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
@@ -163,7 +163,7 @@
           </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
           <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="saveResponder">
             {{ formDialog.editing ? 'Save' : 'Add responder' }}
           </v-btn>
@@ -179,7 +179,7 @@
           <strong class="text-high-emphasis">{{ deleteDialog.responder?.name }}</strong> will be permanently removed. This cannot be undone.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="deleteDialog.loading" @click="confirmDelete">Delete</v-btn>
         </v-card-actions>
       </v-card>

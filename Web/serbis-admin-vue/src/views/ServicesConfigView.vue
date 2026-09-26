@@ -10,7 +10,7 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
           {{ apiError }}
           <template v-slot:append>
-            <v-btn variant="text" class="text-none font-weight-bold" @click="fetchServices">Retry</v-btn>
+            <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="fetchServices">Retry</v-btn>
           </template>
         </v-alert>
 
@@ -74,7 +74,7 @@
               >
                 {{ categoryFilter }}
               </v-chip>
-              <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="clearFilters">Clear all</v-btn>
+              <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" @click="clearFilters">Clear all</v-btn>
             </div>
           </div>
 
@@ -195,7 +195,7 @@
           <span class="text-h6 font-weight-bold text-high-emphasis">
             Edit service
           </span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
 
         <v-card-text class="px-6 py-2">
@@ -246,7 +246,7 @@
         </v-card-text>
 
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="modal.loading" @click="closeModal">
+          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="modal.loading" @click="closeModal">
             Cancel
           </v-btn>
           <v-btn

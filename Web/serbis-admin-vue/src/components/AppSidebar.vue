@@ -94,7 +94,7 @@
         Are you sure you want to log out of the SERBIS admin panel?
       </v-card-text>
       <v-card-actions class="pa-6 pt-4 d-flex justify-end" style="gap: 12px">
-        <v-btn color="grey-darken-2" variant="text" class="px-4 text-none" @click="showLogoutDialog = false" :disabled="isLoggingOut">
+        <v-btn color="primary" variant="outlined" class="px-4 text-none" @click="showLogoutDialog = false" :disabled="isLoggingOut">
           Cancel
         </v-btn>
         <v-btn color="error" variant="flat" class="px-5 text-none" @click="handleLogout" :loading="isLoggingOut">

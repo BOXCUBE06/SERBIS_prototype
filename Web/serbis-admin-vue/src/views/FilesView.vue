@@ -120,7 +120,7 @@
               >
                 <v-icon start>mdi-send</v-icon> Publish
               </v-btn>
-              <v-btn icon="mdi-close" variant="text" size="small" :disabled="uploading" @click="clearStaged"></v-btn>
+              <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" :disabled="uploading" @click="clearStaged"></v-btn>
             </div>
             <v-progress-linear
               v-if="uploading"
@@ -234,7 +234,7 @@
                     <v-icon start size="18">mdi-download</v-icon> Download
                   </v-btn>
                   <v-btn
-                    icon="mdi-delete-outline" variant="text" size="small" color="error"
+                    icon="mdi-delete-outline" variant="outlined" size="small" color="error"
                     :aria-label="`Delete ${item.title}`"
                     @click="askDelete(item)"
                   ></v-btn>
@@ -257,7 +257,7 @@
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
           <v-spacer></v-spacer>
-          <v-btn variant="text" class="text-none" @click="deleteDialog = false" :disabled="deleting">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none" @click="deleteDialog = false" :disabled="deleting">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="text-none font-weight-bold" :loading="deleting" @click="confirmDelete">
             Delete
           </v-btn>
@@ -290,7 +290,7 @@
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
           <v-spacer></v-spacer>
-          <v-btn variant="text" class="text-none" @click="cancelVerify" :disabled="verifying === pendingVerify?.files_id">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none" @click="cancelVerify" :disabled="verifying === pendingVerify?.files_id">Cancel</v-btn>
           <v-btn
             color="success" variant="flat" rounded="lg" class="text-none font-weight-bold"
             :loading="verifying === pendingVerify?.files_id"
@@ -304,7 +304,7 @@
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
       <template v-slot:actions>
-        <v-btn icon="mdi-close" variant="text" size="small" @click="snackbar.show = false"></v-btn>
+        <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="snackbar.show = false"></v-btn>
       </template>
     </v-snackbar>
   </v-container>

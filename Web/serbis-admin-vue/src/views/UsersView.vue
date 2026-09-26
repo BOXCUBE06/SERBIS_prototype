@@ -118,7 +118,7 @@
           >
             {{ apiError }}
             <template v-slot:append>
-              <v-btn variant="text" class="text-none font-weight-bold" @click="loadAll">Retry</v-btn>
+              <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="loadAll">Retry</v-btn>
             </template>
           </v-alert>
 
@@ -269,7 +269,7 @@
           <span class="text-h6 font-weight-bold text-high-emphasis">
             {{ modal.isEditing ? 'Edit account' : 'New account' }}
           </span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
         </v-card-title>
 
         <v-card-text class="pa-6">
@@ -417,7 +417,7 @@
         </v-card-text>
 
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 bg-surface">
-          <v-btn variant="text" rounded="lg" height="48" class="px-4 text-none font-weight-bold" :disabled="loading" @click="closeModal">
+          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="px-4 text-none font-weight-bold" :disabled="loading" @click="closeModal">
             Cancel
           </v-btn>
           <v-btn
@@ -445,7 +445,7 @@
           This cannot be undone — deactivate the account instead if you only want to suspend access.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="deleteDialog.loading" @click="deleteDialog.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -480,7 +480,7 @@
           </template>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">
             Cancel
           </v-btn>
           <v-btn

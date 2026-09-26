@@ -538,7 +538,7 @@
                            replacing is what is left. -->
                       <v-btn
                         v-if="canRemovePhoto(selectedRecord, stage)"
-                        variant="text"
+                        variant="outlined"
                         color="error"
                         size="small"
                         rounded="lg"
@@ -662,7 +662,7 @@
         <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
           <span>{{ actionCopy.title }}</span>
           <v-btn
-            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="loading" @click="actionDialog.open = false"
           ></v-btn>
         </v-card-title>
@@ -755,7 +755,7 @@
           </template>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="actionDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="actionDialog.open = false">Cancel</v-btn>
           <v-btn
             :color="actionDialog.status === 'Denied' ? 'error' : 'primary'"
             variant="flat"
@@ -780,7 +780,7 @@
           borrowing is still {{ removePhotoDialog.stage === 'release' ? 'Released' : 'Returned' }}.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="!!photoRemoving" @click="removePhotoDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="!!photoRemoving" @click="removePhotoDialog.open = false">Cancel</v-btn>
           <v-btn color="error" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="!!photoRemoving" @click="confirmRemovePhoto">Remove</v-btn>
         </v-card-actions>
       </v-card>

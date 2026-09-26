@@ -75,7 +75,7 @@
 
           <v-btn
             v-if="hasFilters"
-            variant="text"
+            variant="outlined"
             size="small"
             color="primary"
             class="text-none font-weight-bold"

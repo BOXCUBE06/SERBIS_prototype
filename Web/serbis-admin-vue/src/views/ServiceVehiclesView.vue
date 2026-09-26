@@ -8,7 +8,7 @@
         <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
           {{ apiError }}
           <template v-slot:append>
-            <v-btn variant="text" class="text-none font-weight-bold" @click="load">Retry</v-btn>
+            <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="load">Retry</v-btn>
           </template>
         </v-alert>
 

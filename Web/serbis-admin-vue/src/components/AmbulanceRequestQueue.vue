@@ -45,7 +45,7 @@
         <template v-slot:actions>
           <v-btn
             color="primary"
-            variant="text"
+            variant="outlined"
             class="text-none font-weight-bold"
             height="40"
             @click="openDayView"
@@ -70,7 +70,7 @@
           <div class="d-flex align-center justify-space-between px-4 py-2 subtle-surface rounded-lg mb-3">
             <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
             <div class="d-flex align-center gap-2">
-              <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+              <v-btn size="small" height="36" variant="outlined" color="primary" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
               <v-btn
                 color="error"
                 variant="flat"
@@ -258,7 +258,7 @@
                 >
                   {{ formData.vehicle_id ? 'Change Vehicle' : 'Select Vehicle' }}
                 </v-btn>
-                <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+                <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                   Disapprove
                 </v-btn>
                 <v-btn
@@ -294,16 +294,16 @@
                   >
                     Approve &amp; Assign Unit
                   </v-btn>
-                  <v-btn variant="text" class="text-none font-weight-bold" height="40" @click="openReschedule">
+                  <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="openReschedule">
                     Reschedule
                   </v-btn>
-                  <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+                  <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                     Reject
                   </v-btn>
                 </template>
 
                 <template v-else>
-                  <v-btn variant="text" class="text-none font-weight-bold" height="40" @click="openReschedule">
+                  <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="openReschedule">
                     Reschedule
                   </v-btn>
                   <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" @click="emit('dispatch-booking', selectedRequest)">
@@ -489,7 +489,7 @@
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
           <span class="text-h6 font-weight-bold">{{ lightboxAttachment?.label }}</span>
-          <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="lightbox.open = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="lightbox.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-0 subtle-surface">
           <v-img
@@ -508,7 +508,7 @@
           <span class="text-h6 font-weight-bold">
             {{ selectedRequest?.status === 'Booked' ? 'Approve & Assign Unit' : 'Available Vehicles' }}
           </span>
-          <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
 
         <v-alert v-if="selectedRequest?.status === 'Booked' && apiError" type="error" variant="tonal" density="compact" class="ma-4 mb-0">{{ apiError }}</v-alert>
@@ -598,7 +598,7 @@
         </v-card-text>
 
         <v-card-actions v-if="selectedRequest?.status === 'Booked'" class="pa-4 border-t d-flex justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" :disabled="loading" @click="vehicleModal.isOpen = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" :disabled="loading" @click="vehicleModal.isOpen = false">Cancel</v-btn>
           <v-btn
             color="secondary"
             variant="flat"
@@ -618,7 +618,7 @@
         <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
           <span>{{ reasonCopy.title }}</span>
           <v-btn
-            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="loading || bulkLoading" @click="reasonDialog.open = false"
           ></v-btn>
         </v-card-title>
@@ -643,10 +643,10 @@
             ></v-textarea>
             <v-btn
               v-else
-              variant="text"
+              variant="outlined" color="primary"
               size="small"
               density="compact"
-              class="text-none px-0"
+              class="text-none"
               prepend-icon="mdi-plus"
               @click="noteExpanded = true"
             >
@@ -658,7 +658,7 @@
           </div>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
           <v-btn
             :color="reasonDialog.kind === 'approve' ? 'secondary' : 'error'"
             variant="flat"
@@ -689,7 +689,7 @@
           </p>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" :disabled="loading" @click="resolveDialog.open = false">
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" :disabled="loading" @click="resolveDialog.open = false">
             Cancel
           </v-btn>
           <v-btn
@@ -711,7 +711,7 @@
         <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
           <span>Reschedule booking</span>
           <v-btn
-            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="loading" @click="rescheduleDialog.open = false"
           ></v-btn>
         </v-card-title>
@@ -755,7 +755,7 @@
           ></v-textarea>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="rescheduleDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="rescheduleDialog.open = false">Cancel</v-btn>
           <v-btn
             color="secondary"
             variant="flat"
@@ -788,7 +788,7 @@
               hide-details
               style="max-width: 170px;"
             ></DateTimePickerField>
-            <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="dayView.open = false"></v-btn>
+            <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="dayView.open = false"></v-btn>
           </div>
         </v-card-title>
 
@@ -833,7 +833,7 @@
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <span class="text-h6 font-weight-bold">Log Service Request</span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
           <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ createDialog.error }}</v-alert>
@@ -943,7 +943,7 @@
           <div class="mb-2">
             <div class="d-flex align-center justify-space-between mb-1">
               <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">Patient / Relatives</span>
-              <v-btn variant="text" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addRelative">
+              <v-btn variant="outlined" color="primary" size="small" density="compact" class="text-none" prepend-icon="mdi-plus" @click="addRelative">
                 Add relative
               </v-btn>
             </div>
@@ -962,7 +962,7 @@
               ></v-text-field>
               <v-btn
                 icon="mdi-close"
-                variant="text"
+                variant="tonal" rounded="circle"
                 size="small"
                 :aria-label="`Remove relative ${idx + 1}`"
                 @click="removeRelative(idx)"
@@ -1011,7 +1011,7 @@
           </template>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn
             color="secondary"
             variant="flat"

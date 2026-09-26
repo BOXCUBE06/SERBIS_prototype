@@ -19,7 +19,7 @@
         <v-btn
           v-bind="menu"
           color="primary"
-          variant="text"
+          variant="outlined"
           class="text-none font-weight-bold"
           height="40"
           :loading="busy"

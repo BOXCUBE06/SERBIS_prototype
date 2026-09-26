@@ -17,7 +17,7 @@
             <!-- Reachable from the header rather than buried in a settings page —
                  the two people who know the code are the ones who need this. -->
             <v-btn
-              variant="text" size="small" class="text-none flex-shrink-0"
+              variant="outlined" color="primary" size="small" class="text-none flex-shrink-0"
               prepend-icon="mdi-key-outline"
               @click="openManageCode"
             >Text blast code</v-btn>
@@ -219,7 +219,7 @@
                        an emoji has no plain twin, and a button that does nothing
                        reads as broken. -->
                   <template v-if="canSimplifyCharacters" #append>
-                    <v-btn variant="text" size="small" class="text-none font-weight-bold" @click="simplifyCharacters">
+                    <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" @click="simplifyCharacters">
                       Use plain characters
                     </v-btn>
                   </template>
@@ -283,7 +283,7 @@
               </div>
             </div>
             <v-btn
-              variant="text" size="small" class="text-none ml-auto flex-shrink-0"
+              variant="outlined" color="primary" size="small" class="text-none ml-auto flex-shrink-0"
               prepend-icon="mdi-refresh"
               :loading="deliveries.loading"
               @click="fetchDeliveries"
@@ -359,7 +359,7 @@
         <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
           <span>Confirm this blast</span>
           <v-btn
-            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="loading" @click="cancelSend"
           ></v-btn>
         </v-card-title>
@@ -384,7 +384,7 @@
         </v-card-text>
         <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
           <v-btn
-            variant="text"
+            variant="outlined" color="primary"
             class="text-none font-weight-bold"
             height="44"
             :disabled="loading"
@@ -411,7 +411,7 @@
         <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
           <span>Text blast code</span>
           <v-btn
-            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="manageCodeDialog.loading" @click="closeManageCode"
           ></v-btn>
         </v-card-title>
@@ -453,7 +453,7 @@
         </v-card-text>
         <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
           <v-btn
-            variant="text"
+            variant="outlined" color="primary"
             class="text-none font-weight-bold"
             height="44"
             :disabled="manageCodeDialog.loading"

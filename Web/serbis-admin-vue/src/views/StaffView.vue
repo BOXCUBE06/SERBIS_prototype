@@ -23,7 +23,7 @@
         >
           {{ apiError }}
           <template #append>
-            <v-btn variant="text" size="small" class="text-none" @click="fetchAdmins">Try again</v-btn>
+            <v-btn variant="outlined" color="primary" size="small" class="text-none" @click="fetchAdmins">Try again</v-btn>
           </template>
         </v-alert>
 
@@ -101,14 +101,14 @@
             <template #item.actions="{ item }">
               <div class="d-flex justify-end gap-1">
                 <v-btn
-                  variant="text" size="small" class="text-none font-weight-bold"
+                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
                   :aria-label="`Edit ${fullName(item)}`"
                   @click="openEdit(item)"
                 >
                   Edit
                 </v-btn>
                 <v-btn
-                  variant="text" size="small" class="text-none font-weight-bold"
+                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
                   :aria-label="`Choose which sections ${fullName(item)} can open`"
                   @click="openAccess(item)"
                 >
@@ -118,7 +118,7 @@
                      server refuses both, this only spares the round trip. -->
                 <v-btn
                   v-if="!isClosed(item) && !isSelf(item)"
-                  variant="text" size="small" class="text-none font-weight-bold"
+                  variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
                   :aria-label="`Reset the password of ${fullName(item)}`"
                   @click="askReset(item)"
                 >
@@ -126,7 +126,7 @@
                 </v-btn>
                 <v-btn
                   v-if="isClosed(item)"
-                  variant="text" size="small" color="success" class="text-none font-weight-bold"
+                  variant="outlined" size="small" color="success" class="text-none font-weight-bold"
                   :aria-label="`Reactivate ${fullName(item)}`"
                   :loading="busyId === idOf(item)"
                   @click="reactivate(item)"
@@ -135,7 +135,7 @@
                 </v-btn>
                 <v-btn
                   v-else
-                  variant="text" size="small" color="error" class="text-none font-weight-bold"
+                  variant="outlined" size="small" color="error" class="text-none font-weight-bold"
                   :aria-label="`Close the account of ${fullName(item)}`"
                   :disabled="isSelf(item)"
                   @click="askClose(item)"
@@ -163,7 +163,7 @@
           <span class="text-h6 font-weight-bold text-high-emphasis">
             {{ modal.editing ? 'Edit staff account' : 'Add staff account' }}
           </span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="modal.show = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="modal.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert
@@ -255,7 +255,7 @@
           </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="modal.loading" @click="modal.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="modal.loading" @click="modal.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -277,7 +277,7 @@
           <span class="text-h6 font-weight-bold text-high-emphasis">
             Access for {{ fullName(accessDialog.item) }}
           </span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="accessDialog.show = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="accessDialog.show = false"></v-btn>
         </v-card-title>
         <v-card-text class="px-6 py-2">
           <v-alert
@@ -299,7 +299,7 @@
               Sections this account can open
             </span>
             <v-btn
-              variant="text" size="small" class="text-none font-weight-bold"
+              variant="outlined" color="primary" size="small" class="text-none font-weight-bold"
               :disabled="accessDialog.superAdmin" @click="toggleAllSections"
             >
               {{ allSectionsGranted ? 'Clear all' : 'Select all' }}
@@ -317,7 +317,7 @@
           </div>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="accessDialog.loading" @click="accessDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="accessDialog.loading" @click="accessDialog.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -344,7 +344,7 @@
           </div>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="closeDialog.loading" @click="closeDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="closeDialog.loading" @click="closeDialog.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -367,7 +367,7 @@
           their own the next time they sign in.
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" :disabled="resetDialog.loading" @click="resetDialog.show = false">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="resetDialog.loading" @click="resetDialog.show = false">
             Cancel
           </v-btn>
           <v-btn
@@ -394,7 +394,7 @@
           <div class="temp-password" data-testid="temporary-password">{{ tempDialog.password }}</div>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="text" rounded="lg" class="text-none" @click="copyTemporary">
+          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" @click="copyTemporary">
             {{ tempDialog.copied ? 'Copied' : 'Copy' }}
           </v-btn>
           <v-btn

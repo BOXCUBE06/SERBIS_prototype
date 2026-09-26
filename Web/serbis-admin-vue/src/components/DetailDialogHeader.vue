@@ -24,7 +24,7 @@
         <div v-if="waitDays !== null && waitDays !== undefined" class="text-caption mt-1" :class="WAIT_CLASS[waitTone(waitDays)]">{{ waitDays }}d waiting</div>
       </div>
       <slot name="actions"></slot>
-      <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="$emit('close')"></v-btn>
+      <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="$emit('close')"></v-btn>
     </div>
   </div>
 </template>

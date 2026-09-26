@@ -60,7 +60,7 @@
           <div class="d-flex align-center justify-space-between px-4 py-2 subtle-surface rounded-lg mb-3">
             <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
             <div class="d-flex align-center gap-2">
-              <v-btn size="small" height="36" variant="text" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
+              <v-btn size="small" height="36" variant="outlined" color="primary" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
               <v-btn
                 color="error"
                 variant="flat"
@@ -265,7 +265,7 @@
 
           <div v-if="showActions" class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4">
             <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-              <v-btn color="error" variant="text" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+              <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
                 Disapprove
               </v-btn>
               <v-spacer></v-spacer>
@@ -301,7 +301,7 @@
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
           <span class="text-h6 font-weight-bold">{{ lightboxAttachment?.label }}</span>
-          <v-btn icon="mdi-close" variant="text" density="comfortable" aria-label="Close" @click="lightbox.open = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="lightbox.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-0 subtle-surface">
           <v-img
@@ -318,7 +318,7 @@
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
           <span class="text-h6 font-weight-bold">Available Vehicles</span>
-          <v-btn icon="mdi-close" variant="text" density="comfortable" @click="vehicleModal.isOpen = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="vehicleModal.isOpen = false"></v-btn>
         </v-card-title>
 
         <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
@@ -366,7 +366,7 @@
       <v-card rounded="lg" elevation="6">
         <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
           <span class="text-h6 font-weight-bold">Select Responders</span>
-          <v-btn icon="mdi-close" variant="text" density="comfortable" @click="responderModal.isOpen = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="responderModal.isOpen = false"></v-btn>
         </v-card-title>
 
         <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
@@ -404,7 +404,7 @@
         <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
           <span>{{ reasonCopy.title }}</span>
           <v-btn
-            icon="mdi-close" variant="text" size="small" aria-label="Close"
+            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="loading || bulkLoading" @click="reasonDialog.open = false"
           ></v-btn>
         </v-card-title>
@@ -429,10 +429,10 @@
             ></v-textarea>
             <v-btn
               v-else
-              variant="text"
+              variant="outlined" color="primary"
               size="small"
               density="compact"
-              class="text-none px-0"
+              class="text-none"
               prepend-icon="mdi-plus"
               @click="noteExpanded = true"
             >
@@ -444,7 +444,7 @@
           </div>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="reasonDialog.open = false">Cancel</v-btn>
           <v-btn
             :color="reasonDialog.kind === 'approve' ? 'secondary' : 'error'"
             variant="flat"
@@ -475,7 +475,7 @@
           </p>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" :disabled="loading" @click="resolveDialog.open = false">
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" :disabled="loading" @click="resolveDialog.open = false">
             Cancel
           </v-btn>
           <v-btn
@@ -496,7 +496,7 @@
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
           <span class="text-h6 font-weight-bold">Log Service Request</span>
-          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
         <v-card-text class="pa-6" style="max-height: 70vh;">
           <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ createDialog.error }}</v-alert>
@@ -583,7 +583,7 @@
           ></v-textarea>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
-          <v-btn variant="text" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn
             color="secondary"
             variant="flat"
