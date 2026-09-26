@@ -63,7 +63,7 @@
         <v-btn variant="outlined" color="primary" size="small" class="text-none" @click="clear">Clear</v-btn>
         <v-spacer></v-spacer>
         <v-btn variant="outlined" color="primary" size="small" class="text-none" @click="cancel">Cancel</v-btn>
-        <v-btn color="primary" variant="outlined" size="small" class="text-none" @click="confirm">OK</v-btn>
+        <v-btn color="primary" variant="flat" size="small" class="text-none" @click="confirm">OK</v-btn>
       </v-card-actions>
     </v-card>
   </v-menu>
