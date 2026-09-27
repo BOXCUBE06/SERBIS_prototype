@@ -1,7 +1,7 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
     <div class="w-100">
-      <PageHeader title="Residents">
+      <PageHeader title="Accounts">
             <!-- On the title's own line, as a chip: a count that sat below the
                  title in grey read as a caption, not as a number worth
                  noticing. Says "of" only when something is being hidden. The
@@ -45,7 +45,7 @@
             <v-text-field
               v-model="search"
               prepend-inner-icon="mdi-magnify"
-              label="Search residents"
+              label="Search accounts"
               placeholder="Name or mobile number"
               clearable
               variant="outlined"
@@ -126,12 +126,12 @@
           <div v-if="!initialLoad && filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length > 0 ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
+              {{ residents.length > 0 ? 'No accounts match your filters' : 'No accounts registered yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
               {{ residents.length > 0
                 ? 'Try a different keyword, status, or barangay.'
-                : 'Add the first head of the family account to get started.' }}
+                : 'Add the first account to get started.' }}
             </div>
             <v-btn
               v-if="residents.length > 0"
@@ -706,7 +706,7 @@ const resultAnnouncement = computed(() => {
   const shown = filteredAndSortedResidents.value.length
   const total = residents.value.length
   if (shown === total) return ''
-  return `${shown} of ${total} heads of the family shown`
+  return `${shown} of ${total} accounts shown`
 })
 
 const selectionHidden = computed(() => {

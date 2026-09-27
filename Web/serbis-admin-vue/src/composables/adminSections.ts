@@ -16,7 +16,7 @@ export const SECTION_GROUPS: { key: SectionGroup; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'requests', label: 'Requests' },
   { key: 'resources', label: 'Resources' },
-  { key: 'residents', label: 'Residents' },
+  { key: 'residents', label: 'Accounts' },
   { key: 'configuration', label: 'Configuration' },
   { key: 'system', label: 'System' },
 ]
@@ -49,7 +49,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'procurement', to: '/procurement', title: 'Procurement Reference', icon: 'mdi-clipboard-list-outline', group: 'resources' },
   { key: 'files', to: '/files', title: 'Documents', icon: 'mdi-folder-outline', group: 'resources' },
 
-  { key: 'residents', to: '/users', title: 'Residents', icon: 'mdi-account-group-outline', group: 'residents' },
+  { key: 'residents', to: '/users', title: 'Accounts', icon: 'mdi-account-group-outline', group: 'residents' },
   { key: 'sms', to: '/sms', title: 'Text Blast (SMS)', icon: 'mdi-message-text-fast-outline', group: 'residents' },
 
   { key: 'services', to: '/services-config', title: 'Manage Services', icon: 'mdi-wrench-outline', group: 'configuration' },
