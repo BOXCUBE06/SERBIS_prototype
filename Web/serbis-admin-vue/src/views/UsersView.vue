@@ -66,22 +66,33 @@
               class="status-field"
             ></v-select>
 
-            <v-select
-              v-model="filters.type"
-              :items="ACCOUNT_TYPE_FILTER_ITEMS"
-              label="Account type"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="lg"
-              class="type-field"
-            ></v-select>
           </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
-               all without sight: the selected barangay was carried by colour
-               and a 3px underline alone, and the group had no accessible name
-               saying what these buttons even filter. -->
+               all without sight: the selected type/barangay was carried by
+               colour and a 3px underline alone, and the group had no
+               accessible name saying what these buttons even filter. Each
+               tab's count reflects status/barangay/search — everything but
+               the type itself — so switching tabs previews how many rows
+               will show before the click. -->
+          <div
+            class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
+            role="group"
+            aria-label="Filter by account type"
+          >
+            <v-btn
+              v-for="t in ACCOUNT_TYPE_FILTER_ITEMS"
+              :key="t.value"
+              variant="text"
+              :aria-pressed="filters.type === t.value"
+              :class="['tab-btn text-none px-4 rounded-0', filters.type === t.value ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
+              @click="filters.type = t.value"
+            >
+              {{ t.value === 'All' ? 'All' : t.title }}
+              <span class="tab-count">{{ typeCounts[t.value] ?? 0 }}</span>
+            </v-btn>
+          </div>
+
           <div
             class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
             role="group"
@@ -658,10 +669,12 @@ const notify = (text, color = 'success') => {
 }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
-const filteredAndSortedResidents = computed(() => {
+// Status, barangay and search — everything the type tabs sit above. Split out
+// so typeCounts can read "how many would show if I picked this tab" without
+// the type filter it is itself choosing between.
+const residentsBeforeType = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
-  if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
   if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
   // Trimmed: a leading space is trivially common when pasting from a list, and
   // it used to return zero rows with no explanation.
@@ -683,6 +696,21 @@ const filteredAndSortedResidents = computed(() => {
         (r.phone_number || '').includes(q)
     })
   }
+  return result
+})
+
+const typeCounts = computed(() => {
+  const list = residentsBeforeType.value
+  const counts = { All: list.length }
+  for (const type of Object.values(ACCOUNT_TYPE)) {
+    counts[type] = list.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === type).length
+  }
+  return counts
+})
+
+const filteredAndSortedResidents = computed(() => {
+  let result = residentsBeforeType.value
+  if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
   return result.slice().sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
 })
 
@@ -1059,6 +1087,16 @@ onUnmounted(releaseResidentPhotos)
 .search-field { width: 260px; max-width: 100%; }
 .status-field { width: 150px; max-width: 100%; }
 
+/* The count beside each type tab's label — same idea as .count-chip, sized
+   down to sit inline in a tab. Colour rides on font-weight/parent colour
+   rather than its own token, so it dims with the tab's own inactive/active
+   state instead of needing a second colour rule. */
+.tab-count {
+  margin-left: 5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
 .tab-btn {
   transition: all var(--motion-base) var(--ease-in-out);
   border-bottom: 3px solid transparent;
@@ -1182,7 +1220,6 @@ onUnmounted(releaseResidentPhotos)
 }
 .type-pill--institution { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
 .type-pill--plain { color: rgba(var(--v-theme-on-surface), 0.82); padding-left: 0; }
-.type-field { width: 170px; max-width: 100%; }
 
 /* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
 .status-pill {
