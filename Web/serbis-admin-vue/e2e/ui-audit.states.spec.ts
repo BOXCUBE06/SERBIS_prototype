@@ -234,7 +234,7 @@ test('residents states', async ({ browser }) => {
     await gotoThemed(page, '/users', theme)
 
     // Create dialog is persistent — closed via its own X button below.
-    await page.getByRole('button', { name: 'Add Head of the Family' }).click({ timeout: T })
+    await page.getByRole('button', { name: 'Add account' }).click({ timeout: T })
     await page.getByRole('button', { name: 'Create Account' }).click({ timeout: T })
     await snap(page, `residents--create-validation-error--${theme}`)
     await closeDialogByLabel(page, 'Close dialog')

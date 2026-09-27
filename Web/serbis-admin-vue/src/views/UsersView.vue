@@ -1,7 +1,7 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
     <div class="w-100">
-      <PageHeader title="Residents">
+      <PageHeader title="Accounts">
             <!-- On the title's own line, as a chip: a count that sat below the
                  title in grey read as a caption, not as a number worth
                  noticing. Says "of" only when something is being hidden. The
@@ -45,7 +45,7 @@
             <v-text-field
               v-model="search"
               prepend-inner-icon="mdi-magnify"
-              label="Search residents"
+              label="Search accounts"
               placeholder="Name or mobile number"
               clearable
               variant="outlined"
@@ -66,22 +66,33 @@
               class="status-field"
             ></v-select>
 
-            <v-select
-              v-model="filters.type"
-              :items="ACCOUNT_TYPE_FILTER_ITEMS"
-              label="Account type"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="lg"
-              class="type-field"
-            ></v-select>
           </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
-               all without sight: the selected barangay was carried by colour
-               and a 3px underline alone, and the group had no accessible name
-               saying what these buttons even filter. -->
+               all without sight: the selected type/barangay was carried by
+               colour and a 3px underline alone, and the group had no
+               accessible name saying what these buttons even filter. Each
+               tab's count reflects status/barangay/search — everything but
+               the type itself — so switching tabs previews how many rows
+               will show before the click. -->
+          <div
+            class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
+            role="group"
+            aria-label="Filter by account type"
+          >
+            <v-btn
+              v-for="t in ACCOUNT_TYPE_FILTER_ITEMS"
+              :key="t.value"
+              variant="text"
+              :aria-pressed="filters.type === t.value"
+              :class="['tab-btn text-none px-4 rounded-0', filters.type === t.value ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
+              @click="filters.type = t.value"
+            >
+              {{ t.value === 'All' ? 'All' : t.title }}
+              <span class="tab-count">{{ typeCounts[t.value] ?? 0 }}</span>
+            </v-btn>
+          </div>
+
           <div
             class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
             role="group"
@@ -126,12 +137,12 @@
           <div v-if="!initialLoad && filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
             <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
             <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length > 0 ? 'No heads of the family match your filters' : 'No heads of the family registered yet' }}
+              {{ residents.length > 0 ? 'No accounts match your filters' : 'No accounts registered yet' }}
             </div>
             <div class="text-body-1 text-medium-emphasis mb-5">
               {{ residents.length > 0
                 ? 'Try a different keyword, status, or barangay.'
-                : 'Add the first head of the family account to get started.' }}
+                : 'Add the first account to get started.' }}
             </div>
             <v-btn
               v-if="residents.length > 0"
@@ -183,13 +194,20 @@
             </template>
 
             <template v-slot:item.fullName="{ item }">
-              <v-tooltip :text="fullName(item)" location="top">
+              <v-tooltip :text="primaryName(item)" location="top">
                 <template v-slot:activator="{ props }">
                   <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                    {{ fullName(item) }}
+                    {{ primaryName(item) }}
                   </div>
                 </template>
               </v-tooltip>
+              <!-- Barangay and organization accounts have no personal name of
+                   their own — the row's identity is the hall or the group —
+                   so the contact person (who staff would actually call) is a
+                   second line rather than the headline. -->
+              <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
+                {{ contactName(item) }}
+              </div>
             </template>
 
             <template v-slot:item.account_type="{ item }">
@@ -546,35 +564,6 @@ import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const { mdAndUp } = useDisplay()
 
-// Four columns are fixed px and four are percentages, and the percentages add
-// to 51 rather than to what is left of 100. The table is `table-layout: fixed`,
-// so a percentage is taken from the full table width, not from the space the
-// px columns leave — the two have to be budgeted together or they overlap.
-//
-// The pill columns are px because their content does not vary: they were 10%
-// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
-// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
-// spilled out of the cell and scrolled the whole card sideways. Both are now
-// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
-// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
-//
-// Width otherwise follows variance: the columns that differ per row get the
-// percentages. 55% + 442px still fits the 1000px min-width with room to spare,
-// and `table-layout: fixed` hands the slack back to every column in proportion.
-const headers = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Last Name', key: 'last_name', width: '9%' },
-  { title: 'First Name', key: 'first_name', width: '9%' },
-  { title: 'Type', key: 'account_type', width: '230px' },
-  // The longest real barangay name in the data is "San Antonio Ugad", which
-  // was still clipping when this column was 15% of a narrower table.
-  { title: 'Barangay', key: 'barangay_name', width: '14%' },
-  { title: 'Mobile Number', key: 'phone_number', width: '14%' },
-  { title: 'Status', key: 'status', align: 'center', width: '160px' },
-  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
-]
-
 const residents = ref([])
 // resident_id -> object URL. Only rows the server says have a photo are ever
 // fetched; the rest fall through to initials without a request.
@@ -593,6 +582,47 @@ const form = ref(null)
 
 const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
+
+// Four columns are fixed px and the rest are percentages, and the percentages
+// add to less than what is left of 100. The table is `table-layout: fixed`,
+// so a percentage is taken from the full table width, not from the space the
+// px columns leave — the two have to be budgeted together or they overlap.
+//
+// The pill columns are px because their content does not vary: they were 10%
+// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
+// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
+// spilled out of the cell and scrolled the whole card sideways. Both are now
+// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
+// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
+//
+// Width otherwise follows variance: the columns that differ per row get the
+// percentages, and `table-layout: fixed` hands the slack back to every column
+// in proportion.
+//
+// Type only shows on the All tab: on a single-type tab every row already
+// carries the same value, so the column is a repeated word rather than
+// information, and dropping it from the headers array (not just hiding its
+// cells) hands its width back to Name and Barangay for free.
+const headers = computed(() => {
+  const cols = [
+    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+    { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
+    { title: 'Name', key: 'fullName', width: '18%' },
+  ]
+  if (filters.value.type === 'All') {
+    cols.push({ title: 'Type', key: 'account_type', width: '230px' })
+  }
+  cols.push(
+    // The longest real barangay name in the data is "San Antonio Ugad", which
+    // was still clipping when this column was 15% of a narrower table.
+    { title: 'Barangay', key: 'barangay_name', width: '14%' },
+    { title: 'Mobile Number', key: 'phone_number', width: '14%' },
+    { title: 'Status', key: 'status', align: 'center', width: '160px' },
+    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
+  )
+  return cols
+})
+
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
 // `reject` is set when the dialog is refusing a pending organization rather than
@@ -645,6 +675,17 @@ const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boole
 const initials = (r) => computeInitials(r)
 const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
 
+// The Name column's headline: a person for a head of the family, the
+// institution itself for a barangay or organization account.
+const primaryName = (r) => {
+  if (r.account_type === ACCOUNT_TYPE.barangay) return barangayOf(r)
+  if (r.account_type === ACCOUNT_TYPE.organization) return r.organization_name || accountTypeLabel(r.account_type)
+  return fullName(r)
+}
+// The second line under it — who to actually call — only where the headline
+// isn't already a person.
+const contactName = (r) => (r.account_type === ACCOUNT_TYPE.barangay || r.account_type === ACCOUNT_TYPE.organization) ? fullName(r) : null
+
 const liveMessage = ref('')
 
 const notify = (text, color = 'success') => {
@@ -658,10 +699,12 @@ const notify = (text, color = 'success') => {
 }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
-const filteredAndSortedResidents = computed(() => {
+// Status, barangay and search — everything the type tabs sit above. Split out
+// so typeCounts can read "how many would show if I picked this tab" without
+// the type filter it is itself choosing between.
+const residentsBeforeType = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
-  if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
   if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
   // Trimmed: a leading space is trivially common when pasting from a list, and
   // it used to return zero rows with no explanation.
@@ -683,6 +726,21 @@ const filteredAndSortedResidents = computed(() => {
         (r.phone_number || '').includes(q)
     })
   }
+  return result
+})
+
+const typeCounts = computed(() => {
+  const list = residentsBeforeType.value
+  const counts = { All: list.length }
+  for (const type of Object.values(ACCOUNT_TYPE)) {
+    counts[type] = list.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === type).length
+  }
+  return counts
+})
+
+const filteredAndSortedResidents = computed(() => {
+  let result = residentsBeforeType.value
+  if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
   return result.slice().sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
 })
 
@@ -706,7 +764,7 @@ const resultAnnouncement = computed(() => {
   const shown = filteredAndSortedResidents.value.length
   const total = residents.value.length
   if (shown === total) return ''
-  return `${shown} of ${total} heads of the family shown`
+  return `${shown} of ${total} accounts shown`
 })
 
 const selectionHidden = computed(() => {
@@ -799,9 +857,6 @@ const loadAll = async () => {
 const openAddModal = () => {
   modalError.value = ''
   clearFieldErrors()
-  // Rules fire on a pristine form otherwise: reopening after a failed save
-  // would show the previous attempt's red before anything was typed.
-  form.value?.resetValidation()
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
@@ -809,12 +864,16 @@ const openAddModal = () => {
     status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
+  // The dialog's inputs mount on this same tick with :rules attached, and
+  // Vuetify validates a freshly mounted field against its initial value —
+  // resetValidation() has to run after that mount, not before, or the blank
+  // required fields show red the instant the dialog opens.
+  nextTick(() => form.value?.resetValidation())
 }
 
 const openExistingEditModal = (item) => {
   modalError.value = ''
   clearFieldErrors()
-  form.value?.resetValidation()
   formData.value = {
     first_name: item.first_name,
     middle_name: item.middle_name,
@@ -829,6 +888,7 @@ const openExistingEditModal = (item) => {
     organization_name: item.organization_name ?? '',
   }
   modal.value = { isOpen: true, isEditing: true, targetId: idOf(item) }
+  nextTick(() => form.value?.resetValidation())
 }
 
 const closeModal = () => { modal.value.isOpen = false }
@@ -1057,6 +1117,16 @@ onUnmounted(releaseResidentPhotos)
 .search-field { width: 260px; max-width: 100%; }
 .status-field { width: 150px; max-width: 100%; }
 
+/* The count beside each type tab's label — same idea as .count-chip, sized
+   down to sit inline in a tab. Colour rides on font-weight/parent colour
+   rather than its own token, so it dims with the tab's own inactive/active
+   state instead of needing a second colour rule. */
+.tab-count {
+  margin-left: 5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
 .tab-btn {
   transition: all var(--motion-base) var(--ease-in-out);
   border-bottom: 3px solid transparent;
@@ -1180,7 +1250,6 @@ onUnmounted(releaseResidentPhotos)
 }
 .type-pill--institution { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
 .type-pill--plain { color: rgba(var(--v-theme-on-surface), 0.82); padding-left: 0; }
-.type-field { width: 170px; max-width: 100%; }
 
 /* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
 .status-pill {

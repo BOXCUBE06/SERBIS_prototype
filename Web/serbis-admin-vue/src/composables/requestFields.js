@@ -7,7 +7,7 @@
 // columns. Reference numbers (Transaction No., Trip No.) are on by default;
 // internal foreign-key ids are `off` until someone ticks them.
 import { displayPhone } from '@/composables/phoneNumber'
-import { isWalkIn, requesterName, transactionNo, borrowingTransactionNo } from '@/composables/requestDisplay'
+import { isWalkIn, requesterName, transactionNo, borrowingTransactionNo, tripNo } from '@/composables/requestDisplay'
 
 const TZ = 'Asia/Manila'
 const dateTimeFormat = new Intl.DateTimeFormat('en-PH', { timeZone: TZ, dateStyle: 'medium', timeStyle: 'short' })
@@ -116,7 +116,7 @@ const borrowingFields = [
 ]
 
 const tripFields = [
-  f('conduction_request_id', 'Trip No.', (r) => r.conduction_request_id, 'id'),
+  f('conduction_request_id', 'Trip No.', (r) => tripNo(r.conduction_request_id), 'id'),
   f('trip_status', 'Status', (r) => r.trip_status || ''),
   f('unit', 'Vehicle', (r) => r.vehicle || ''),
   f('patient_name', 'Patient', (r) => r.patient_name || ''),
@@ -140,7 +140,7 @@ const tripFields = [
   f('departed_destination_at', 'Departed destination', (r) => manilaDateTime(r.departed_destination_at), 'time'),
   f('returned_office_at', 'Returned to office', (r) => manilaDateTime(r.returned_office_at), 'time'),
   f('vehicle_id', 'Vehicle ID (internal)', (r) => r.vehicle_id ?? '', 'id', true),
-  f('service_request_id', 'Booking No.', (r) => r.service_request_id ?? '', 'id', true),
+  f('service_request_id', 'Booking No.', (r) => r.service_request_id ? transactionNo(r.service_request_id) : '', 'id', true),
 ]
 
 const vehicleFields = [

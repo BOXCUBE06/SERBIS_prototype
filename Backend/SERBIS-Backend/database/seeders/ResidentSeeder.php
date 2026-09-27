@@ -58,9 +58,48 @@ class ResidentSeeder extends Seeder
             $credentials[] = ['email' => $email, 'password' => $password];
         }
 
+        // One Barangay hall and one Organization account, so the panel's
+        // account-type tabs have something to show beyond head_of_family.
+        // Different barangay ids from each other: ResidentController enforces
+        // one barangay account per barangay_id, and this seeder's fixtures
+        // must stay valid against that rule (an org account carries no such
+        // restriction, so it may share a barangay_id with the hall).
+        DB::table('tbl_residents')->insert([
+            [
+                'barangay_id' => $barangayIds[0],
+                'first_name' => 'Barangay',
+                'middle_name' => null,
+                'last_name' => 'Hall',
+                'phone_number' => fake()->unique()->phoneNumber(),
+                'password' => Hash::make(Str::password(16)),
+                'photo' => null,
+                'status' => 'Active',
+                'email_address' => fake()->unique()->safeEmail(),
+                'account_type' => 'barangay',
+                'organization_name' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'barangay_id' => $barangayIds[1] ?? $barangayIds[0],
+                'first_name' => fake()->firstName(),
+                'middle_name' => null,
+                'last_name' => fake()->lastName(),
+                'phone_number' => fake()->unique()->phoneNumber(),
+                'password' => Hash::make(Str::password(16)),
+                'photo' => null,
+                'status' => 'Active',
+                'email_address' => fake()->unique()->safeEmail(),
+                'account_type' => 'organization',
+                'organization_name' => 'Echague Community Council',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
         $this->command?->info(
             'ResidentSeeder: created '.self::RESIDENT_COUNT.' residents across barangay ids '
-            .implode(', ', $barangayIds).'.'
+            .implode(', ', $barangayIds).', plus one barangay hall and one organization account.'
         );
 
         // Passwords are random and hashed on insert, so this is the only

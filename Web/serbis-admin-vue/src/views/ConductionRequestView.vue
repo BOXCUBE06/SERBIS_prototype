@@ -129,7 +129,7 @@
                  (ServiceRequestController::adminStore()) — nothing here is
                  locked, so this is a note to the operator, not a guarantee. -->
             <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis">
-              Linked to booking #{{ createDialog.form.service_request_id }} — prefilled from the booking, check every field before filing.
+              Linked to booking No. {{ createDialog.form.service_request_id ? transactionNo(createDialog.form.service_request_id) : '' }} — prefilled from the booking, check every field before filing.
             </div>
           </div>
           <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
@@ -228,7 +228,7 @@
                  store(), vehicle_override_reason). -->
             <v-alert v-if="createDialog.conflict" type="warning" variant="tonal" border="start" density="compact" class="mb-4">
               This unit is already on a trip — heading to {{ createDialog.conflict.destination }}
-              (trip #{{ createDialog.conflict.conduction_request_id }}).
+              ({{ tripNo(createDialog.conflict.conduction_request_id) }}).
             </v-alert>
             <v-textarea
               v-if="createDialog.conflict"
@@ -322,7 +322,7 @@
               <div>
                 <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
                 <div class="text-body-2">
-                  Booking #{{ selected.service_request_id }}
+                  Booking No. {{ selected.service_request_id ? transactionNo(selected.service_request_id) : '' }}
                   <template v-if="selected.service_request?.scheduled_at">
                     — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
                   </template>
@@ -536,7 +536,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
-import { useSelection } from '@/composables/requestDisplay'
+import { useSelection, tripNo, transactionNo } from '@/composables/requestDisplay'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
