@@ -228,7 +228,7 @@
                  store(), vehicle_override_reason). -->
             <v-alert v-if="createDialog.conflict" type="warning" variant="tonal" border="start" density="compact" class="mb-4">
               This unit is already on a trip — heading to {{ createDialog.conflict.destination }}
-              (trip #{{ createDialog.conflict.conduction_request_id }}).
+              ({{ tripNo(createDialog.conflict.conduction_request_id) }}).
             </v-alert>
             <v-textarea
               v-if="createDialog.conflict"
@@ -536,7 +536,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
-import { useSelection } from '@/composables/requestDisplay'
+import { useSelection, tripNo } from '@/composables/requestDisplay'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.

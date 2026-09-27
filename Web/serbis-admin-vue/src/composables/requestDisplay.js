@@ -19,6 +19,11 @@ export const transactionNo = (requestId) =>
 export const borrowingTransactionNo = (borrowId) =>
   borrowId === null || borrowId === undefined ? 'N/A' : `BOR-${String(borrowId).padStart(6, '0')}`
 
+// Same reasoning, separate table again: tbl_conduction_requests.conduction_request_id
+// is its own PK, unrelated to tbl_service_request's request_id.
+export const tripNo = (conductionRequestId) =>
+  conductionRequestId === null || conductionRequestId === undefined ? 'N/A' : `TRP-${String(conductionRequestId).padStart(6, '0')}`
+
 export const requesterName = (item) =>
   item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
 
