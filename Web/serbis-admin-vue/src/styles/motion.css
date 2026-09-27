@@ -59,11 +59,15 @@
 .page-enter-from { opacity: 0; transform: translateY(4px); }
 .page-leave-to { opacity: 0; }
 
-/* Every v-dialog (the default in plugins/vuetify.ts). The scrim keeps Vuetify's own fade. */
-.dialog-soft-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
-.dialog-soft-leave-active { transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
+/* Every v-dialog (the default in plugins/vuetify.ts). The scrim keeps Vuetify's own fade.
+   Opacity only — no transform. A CSS transform on the dialog card is a new
+   containing block for any position:fixed content teleported inside it (a
+   nested v-select's menu), so while this class was applied the menu's own
+   position math ran against the wrong box and it rendered off the activator. */
+.dialog-soft-enter-active { transition: opacity var(--motion-base) var(--ease-out); }
+.dialog-soft-leave-active { transition: opacity var(--motion-fast) var(--ease-out); }
 .dialog-soft-enter-from,
-.dialog-soft-leave-to { opacity: 0; transform: scale(0.98); }
+.dialog-soft-leave-to { opacity: 0; }
 
 /* A changed figure (KPI value, welcome count): keyed on its value, so the new
    one mounts and slides up 4px. A fade, never a counter. */
