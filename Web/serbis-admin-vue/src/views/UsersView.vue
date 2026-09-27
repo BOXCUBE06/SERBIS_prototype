@@ -799,9 +799,6 @@ const loadAll = async () => {
 const openAddModal = () => {
   modalError.value = ''
   clearFieldErrors()
-  // Rules fire on a pristine form otherwise: reopening after a failed save
-  // would show the previous attempt's red before anything was typed.
-  form.value?.resetValidation()
   showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
@@ -809,12 +806,16 @@ const openAddModal = () => {
     status: RESIDENT_STATUS.active, account_type: ACCOUNT_TYPE.head, organization_name: '',
   }
   modal.value = { isOpen: true, isEditing: false, targetId: null }
+  // The dialog's inputs mount on this same tick with :rules attached, and
+  // Vuetify validates a freshly mounted field against its initial value —
+  // resetValidation() has to run after that mount, not before, or the blank
+  // required fields show red the instant the dialog opens.
+  nextTick(() => form.value?.resetValidation())
 }
 
 const openExistingEditModal = (item) => {
   modalError.value = ''
   clearFieldErrors()
-  form.value?.resetValidation()
   formData.value = {
     first_name: item.first_name,
     middle_name: item.middle_name,
@@ -829,6 +830,7 @@ const openExistingEditModal = (item) => {
     organization_name: item.organization_name ?? '',
   }
   modal.value = { isOpen: true, isEditing: true, targetId: idOf(item) }
+  nextTick(() => form.value?.resetValidation())
 }
 
 const closeModal = () => { modal.value.isOpen = false }
