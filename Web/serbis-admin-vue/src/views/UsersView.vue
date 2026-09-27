@@ -194,13 +194,20 @@
             </template>
 
             <template v-slot:item.fullName="{ item }">
-              <v-tooltip :text="fullName(item)" location="top">
+              <v-tooltip :text="primaryName(item)" location="top">
                 <template v-slot:activator="{ props }">
                   <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                    {{ fullName(item) }}
+                    {{ primaryName(item) }}
                   </div>
                 </template>
               </v-tooltip>
+              <!-- Barangay and organization accounts have no personal name of
+                   their own — the row's identity is the hall or the group —
+                   so the contact person (who staff would actually call) is a
+                   second line rather than the headline. -->
+              <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
+                {{ contactName(item) }}
+              </div>
             </template>
 
             <template v-slot:item.account_type="{ item }">
@@ -557,35 +564,6 @@ import SkeletonRows from '@/components/SkeletonRows.vue'
 
 const { mdAndUp } = useDisplay()
 
-// Four columns are fixed px and four are percentages, and the percentages add
-// to 51 rather than to what is left of 100. The table is `table-layout: fixed`,
-// so a percentage is taken from the full table width, not from the space the
-// px columns leave — the two have to be budgeted together or they overlap.
-//
-// The pill columns are px because their content does not vary: they were 10%
-// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
-// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
-// spilled out of the cell and scrolled the whole card sideways. Both are now
-// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
-// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
-//
-// Width otherwise follows variance: the columns that differ per row get the
-// percentages. 55% + 442px still fits the 1000px min-width with room to spare,
-// and `table-layout: fixed` hands the slack back to every column in proportion.
-const headers = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-  { title: 'Last Name', key: 'last_name', width: '9%' },
-  { title: 'First Name', key: 'first_name', width: '9%' },
-  { title: 'Type', key: 'account_type', width: '230px' },
-  // The longest real barangay name in the data is "San Antonio Ugad", which
-  // was still clipping when this column was 15% of a narrower table.
-  { title: 'Barangay', key: 'barangay_name', width: '14%' },
-  { title: 'Mobile Number', key: 'phone_number', width: '14%' },
-  { title: 'Status', key: 'status', align: 'center', width: '160px' },
-  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
-]
-
 const residents = ref([])
 // resident_id -> object URL. Only rows the server says have a photo are ever
 // fetched; the rest fall through to initials without a request.
@@ -604,6 +582,47 @@ const form = ref(null)
 
 const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
+
+// Four columns are fixed px and the rest are percentages, and the percentages
+// add to less than what is left of 100. The table is `table-layout: fixed`,
+// so a percentage is taken from the full table width, not from the space the
+// px columns leave — the two have to be budgeted together or they overlap.
+//
+// The pill columns are px because their content does not vary: they were 10%
+// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
+// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
+// spilled out of the cell and scrolled the whole card sideways. Both are now
+// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
+// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
+//
+// Width otherwise follows variance: the columns that differ per row get the
+// percentages, and `table-layout: fixed` hands the slack back to every column
+// in proportion.
+//
+// Type only shows on the All tab: on a single-type tab every row already
+// carries the same value, so the column is a repeated word rather than
+// information, and dropping it from the headers array (not just hiding its
+// cells) hands its width back to Name and Barangay for free.
+const headers = computed(() => {
+  const cols = [
+    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
+    { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
+    { title: 'Name', key: 'fullName', width: '18%' },
+  ]
+  if (filters.value.type === 'All') {
+    cols.push({ title: 'Type', key: 'account_type', width: '230px' })
+  }
+  cols.push(
+    // The longest real barangay name in the data is "San Antonio Ugad", which
+    // was still clipping when this column was 15% of a narrower table.
+    { title: 'Barangay', key: 'barangay_name', width: '14%' },
+    { title: 'Mobile Number', key: 'phone_number', width: '14%' },
+    { title: 'Status', key: 'status', align: 'center', width: '160px' },
+    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
+  )
+  return cols
+})
+
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
 // `reject` is set when the dialog is refusing a pending organization rather than
@@ -655,6 +674,17 @@ const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
 const initials = (r) => computeInitials(r)
 const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
+
+// The Name column's headline: a person for a head of the family, the
+// institution itself for a barangay or organization account.
+const primaryName = (r) => {
+  if (r.account_type === ACCOUNT_TYPE.barangay) return barangayOf(r)
+  if (r.account_type === ACCOUNT_TYPE.organization) return r.organization_name || accountTypeLabel(r.account_type)
+  return fullName(r)
+}
+// The second line under it — who to actually call — only where the headline
+// isn't already a person.
+const contactName = (r) => (r.account_type === ACCOUNT_TYPE.barangay || r.account_type === ACCOUNT_TYPE.organization) ? fullName(r) : null
 
 const liveMessage = ref('')
 
