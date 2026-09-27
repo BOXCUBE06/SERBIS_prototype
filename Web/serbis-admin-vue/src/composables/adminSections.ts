@@ -16,7 +16,7 @@ export const SECTION_GROUPS: { key: SectionGroup; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'requests', label: 'Requests' },
   { key: 'resources', label: 'Resources' },
-  { key: 'residents', label: 'Accounts' },
+  { key: 'residents', label: 'Community' },
   { key: 'configuration', label: 'Configuration' },
   { key: 'system', label: 'System' },
 ]
@@ -47,9 +47,12 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   // Below Resource Management on purpose: it is the list of what the catalogue
   // above does not carry, and it is read next to it, not next to the board.
   { key: 'procurement', to: '/procurement', title: 'Procurement Reference', icon: 'mdi-clipboard-list-outline', group: 'resources' },
-  { key: 'files', to: '/files', title: 'Documents', icon: 'mdi-folder-outline', group: 'resources' },
 
   { key: 'residents', to: '/users', title: 'Accounts', icon: 'mdi-account-group-outline', group: 'residents' },
+  // Moved out of Resources (2026-09-27): a resident-uploaded document reads
+  // next to the accounts it belongs to, not next to equipment and vehicles.
+  // Route and key are unchanged — only which group header it renders under.
+  { key: 'files', to: '/files', title: 'Documents', icon: 'mdi-folder-outline', group: 'residents' },
   { key: 'sms', to: '/sms', title: 'Text Blast (SMS)', icon: 'mdi-message-text-fast-outline', group: 'residents' },
 
   { key: 'services', to: '/services-config', title: 'Manage Services', icon: 'mdi-wrench-outline', group: 'configuration' },
