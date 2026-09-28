@@ -1,8 +1,9 @@
-// Brave only: a menu (v-select, v-autocomplete, v-menu) opens detached toward the
-// bottom-right, and a window resize snaps it into place. Vuetify's connected
-// location strategy recomputes on `resize`, so fire one two frames after each menu
-// opens, once per open, no polling. Dialogs are skipped. The extra resize
-// reaches every other resize listener once per open; remove this if Brave is fixed.
+// Brave only: a select inside a v-dialog opens detached toward the bottom-right, and
+// only for a trusted mouse click (Playwright's synthetic clicks never do it). One
+// recompute after opening corrects it, and Vuetify's connected location strategy
+// recomputes on `resize`, so fire one two frames after each menu opens, once per
+// open, no polling. Every menu gets it; dialogs themselves are skipped. The extra
+// resize reaches every other resize listener once per open; remove this if Brave is fixed.
 const open = new Set<Element>()
 
 function check(box: Element) {
