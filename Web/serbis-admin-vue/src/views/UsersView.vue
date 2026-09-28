@@ -110,6 +110,24 @@
             </v-btn>
           </div>
 
+          <!-- Bulk actions. Present only while rows are ticked, so the table is not
+               pushed around by a bar nobody asked for. -->
+          <div
+            v-if="selectedRows.length > 0"
+            class="bulk-bar px-6 py-2 border-b d-flex align-center flex-wrap gap-3 flex-shrink-0"
+            role="region"
+            aria-label="Bulk actions"
+          >
+            <span class="font-weight-bold text-body-2" aria-live="polite">{{ selectedRows.length }} selected</span>
+            <v-btn size="small" variant="tonal" color="primary" class="text-none font-weight-bold" @click="askBulk('activate')">
+              <v-icon start size="18">mdi-account-check-outline</v-icon>Activate
+            </v-btn>
+            <v-btn size="small" variant="tonal" color="warning" class="text-none font-weight-bold" @click="askBulk('deactivate')">
+              <v-icon start size="18">mdi-account-cancel-outline</v-icon>Deactivate
+            </v-btn>
+            <v-btn size="small" variant="text" class="text-none" @click="clearSelection">Clear selection</v-btn>
+          </div>
+
           <!-- Error -->
           <v-alert
             v-if="apiError"
@@ -169,8 +187,30 @@
               <SkeletonRows :rows="10" :columns="headers.length" />
             </template>
 
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
+            <!-- Own checkboxes rather than the table's `show-select`, so the click can
+                 be stopped here: a row opens the profile on click and on Enter, and
+                 ticking a box must not. Select-all covers the rows the filters show. -->
+            <template v-slot:header.select>
+              <v-checkbox-btn
+                density="compact"
+                color="white"
+                :model-value="allSelected"
+                :indeterminate="selectedRows.length > 0 && !allSelected"
+                aria-label="Select all accounts"
+                @update:model-value="toggleAll"
+                @click.stop
+              ></v-checkbox-btn>
+            </template>
+
+            <template v-slot:item.select="{ item }">
+              <div class="d-flex justify-center" @click.stop @keydown.stop>
+                <v-checkbox-btn
+                  density="compact"
+                  :model-value="selectedIds.has(idOf(item))"
+                  :aria-label="`Select ${primaryName(item)}`"
+                  @update:model-value="toggleRow(item)"
+                ></v-checkbox-btn>
+              </div>
             </template>
 
             <template v-slot:item.fullName="{ item }">
@@ -577,6 +617,63 @@
       </v-card>
     </v-dialog>
 
+    <!-- Bulk Activate / Deactivate: confirm, run, then the result. One dialog for
+         all three so the list of what was skipped is on screen when it is over. -->
+    <v-dialog v-model="bulk.show" max-width="520" :persistent="bulk.phase === 'running'">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">
+          <template v-if="bulk.phase === 'done'">Result</template>
+          <template v-else>{{ bulk.action === 'activate' ? 'Activate' : 'Deactivate' }} {{ bulk.eligible.length }} {{ bulk.eligible.length === 1 ? 'account' : 'accounts' }}?</template>
+        </v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis bulk-body">
+          <template v-if="bulk.phase !== 'done'">
+            <p v-if="bulk.eligible.length === 0">Nothing to do for this selection.</p>
+            <p v-else-if="bulk.action === 'deactivate'">
+              They will lose access to sign in and file requests, and stop receiving MDRRMO text blasts. They can be reactivated later.
+            </p>
+            <p v-else>They will be able to sign in and file requests again.</p>
+          </template>
+
+          <template v-else>
+            <p v-if="bulk.done.length > 0">
+              {{ bulk.action === 'activate' ? 'Activated' : 'Deactivated' }} {{ bulk.done.length }}
+              {{ bulk.done.length === 1 ? 'account' : 'accounts' }}.
+            </p>
+            <div v-if="bulk.failed.length > 0" class="mb-2">
+              <strong class="text-error">Failed ({{ bulk.failed.length }})</strong>
+              <ul><li v-for="f in bulk.failed" :key="idOf(f.item)">{{ primaryName(f.item) }} — {{ f.message }}</li></ul>
+            </div>
+          </template>
+
+          <div v-if="bulk.pending.length > 0" class="mb-2">
+            <strong class="text-high-emphasis">Skipped (pending review) ({{ bulk.pending.length }})</strong>
+            <ul><li v-for="p in bulk.pending" :key="idOf(p)">{{ primaryName(p) }}</li></ul>
+            <span>Review each in its profile, then approve it there.</span>
+          </div>
+          <p v-if="bulk.already.length > 0 && bulk.phase !== 'done'" class="mb-0">
+            {{ bulk.already.length }} already {{ bulk.action === 'activate' ? 'active' : 'deactivated' }}, left as they are.
+          </p>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <template v-if="bulk.phase === 'done'">
+            <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" @click="bulk.show = false">Close</v-btn>
+          </template>
+          <template v-else>
+            <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="bulk.phase === 'running'" @click="bulk.show = false">Cancel</v-btn>
+            <v-btn
+              :color="bulk.action === 'activate' ? 'primary' : 'warning'"
+              variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+              :disabled="bulk.eligible.length === 0"
+              :loading="bulk.phase === 'running'"
+              @click="runBulk"
+            >
+              {{ bulk.action === 'activate' ? 'Activate' : 'Deactivate' }} {{ bulk.eligible.length }}
+            </v-btn>
+          </template>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
     </v-snackbar>
@@ -606,7 +703,6 @@ import {
 } from '@/composables/accountName'
 import { getToken } from '@/composables/authToken'
 import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
-import { useRowNumbers } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
   releaseResidentPhotos,
@@ -677,7 +773,7 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // The account type is not a column: the tabs above already filter by it, and a
 // barangay or organization row says so in a tag beside its name.
 const headers = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
+  { title: '', key: 'select', sortable: false, align: 'center', width: '48px' },
   // No width: Name takes whatever the fixed columns leave, avatar included.
   // `value` is what the header sorts on: what the cell prints, not a raw column
   // (there is no `fullName` field, and the Name cell shows primaryName).
@@ -766,7 +862,8 @@ watch(detailOpen, (open) => {
 // search toolbar (56px), the barangay tabs (44px) and the table's own header
 // (44px) take another 144. Change any of those heights and this changes with it.
 const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 168px);' : ''))
-const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60vh'))
+// The bulk bar (48px) takes its room from the table while rows are ticked.
+const tableHeight = computed(() => (mdAndUp.value ? `calc(100vh - ${selectedRows.value.length > 0 ? 360 : 312}px)` : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
 // "Activate" for Pending and Deactivated alike, as in the profile's own button.
@@ -833,7 +930,25 @@ const filteredAndSortedResidents = computed(() => {
   return result.slice().sort((a, b) => primaryName(a).localeCompare(primaryName(b)))
 })
 
-const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
+// Ticked rows, by id. Only ever the rows the filters currently show: the watch
+// below drops the rest, so an action never lands on a row nobody can see.
+const selectedIds = ref(new Set())
+const selectedRows = computed(() => filteredAndSortedResidents.value.filter((r) => selectedIds.value.has(idOf(r))))
+const allSelected = computed(() => filteredAndSortedResidents.value.length > 0 && selectedRows.value.length === filteredAndSortedResidents.value.length)
+const toggleAll = (on) => { selectedIds.value = on ? new Set(filteredAndSortedResidents.value.map((r) => idOf(r))) : new Set() }
+const toggleRow = (item) => {
+  const next = new Set(selectedIds.value)
+  const id = idOf(item)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+const clearSelection = () => { selectedIds.value = new Set() }
+watch(filteredAndSortedResidents, (rows) => {
+  const visible = new Set(rows.map((r) => idOf(r)))
+  const kept = [...selectedIds.value].filter((id) => visible.has(id))
+  if (kept.length !== selectedIds.value.size) selectedIds.value = new Set(kept)
+})
 
 const clearFilters = () => {
   search.value = ''
@@ -888,7 +1003,7 @@ const onRowKeydown = (event, item) => {
 const rowProps = ({ item }) => {
   const isSelected = selectedResident.value && idOf(item) === idOf(selectedResident.value)
   return {
-    class: isSelected ? 'selected-row' : '',
+    class: [isSelected ? 'selected-row' : '', selectedIds.value.has(idOf(item)) ? 'is-checked' : ''],
     tabindex: 0,
     'aria-selected': isSelected ? 'true' : 'false',
     // Without this a focused row reads as a run of cell text with no statement
@@ -1147,6 +1262,28 @@ const confirmDeactivate = async () => {
   statusDialog.value = { show: false, item: null, loading: false, reject: false }
 }
 
+// The one status write, for the row toggle and the bulk loop alike. There is no
+// status-only endpoint: this is the full PUT with the row's own values.
+const putStatus = async (item, next) => {
+  const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      first_name: item.first_name,
+      middle_name: item.middle_name,
+      last_name: item.last_name,
+      phone_number: item.phone_number,
+      barangay_id: item.barangay_id,
+      // Omitted, ResidentController::update() would default this back to
+      // null — a status toggle must not silently wipe the resident's
+      // street address (MDRRMO feedback, 2026-09-19).
+      street_address: item.street_address ?? null,
+      status: next,
+    }),
+  })
+  if (!res.ok) throw new Error(await errorFrom(res))
+}
+
 const toggleStatus = async (item, forcedNext = null) => {
   // Pending and Deactivated both toggle to Active — activating a new signup and
   // re-enabling a suspended account are the same write. `forcedNext` is for
@@ -1157,23 +1294,7 @@ const toggleStatus = async (item, forcedNext = null) => {
   const isOrganization = item.account_type === ACCOUNT_TYPE.organization
   statusToggleLoading.value = true
   try {
-    const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        first_name: item.first_name,
-        middle_name: item.middle_name,
-        last_name: item.last_name,
-        phone_number: item.phone_number,
-        barangay_id: item.barangay_id,
-        // Omitted, ResidentController::update() would default this back to
-        // null — a status toggle must not silently wipe the resident's
-        // street address (MDRRMO feedback, 2026-09-19).
-        street_address: item.street_address ?? null,
-        status: next,
-      }),
-    })
-    if (!res.ok) throw new Error(await errorFrom(res))
+    await putStatus(item, next)
     await fetchResidents()
     if (next === RESIDENT_STATUS.active) {
       notify(isOrganization ? 'Organization approved' : 'Account activated')
@@ -1185,6 +1306,52 @@ const toggleStatus = async (item, forcedNext = null) => {
   } finally {
     statusToggleLoading.value = false
   }
+}
+
+
+// Bulk Activate / Deactivate: a loop over the single-account write. The list is
+// small and the admin limiter is 300 a minute, so a bulk endpoint would buy
+// nothing. Activate leaves Pending accounts alone: they need review in the
+// profile first. Deactivate takes them.
+const bulk = ref({ show: false, action: '', phase: 'confirm', eligible: [], pending: [], already: [], done: [], failed: [] })
+
+const askBulk = (action) => {
+  const rows = selectedRows.value
+  const activating = action === 'activate'
+  const inState = (r, status) => r.status === status
+  bulk.value = {
+    show: true,
+    action,
+    phase: 'confirm',
+    eligible: rows.filter((r) => (activating ? inState(r, RESIDENT_STATUS.deactivated) : !inState(r, RESIDENT_STATUS.deactivated))),
+    pending: activating ? rows.filter((r) => inState(r, RESIDENT_STATUS.pending)) : [],
+    already: rows.filter((r) => inState(r, activating ? RESIDENT_STATUS.active : RESIDENT_STATUS.deactivated)),
+    done: [],
+    failed: [],
+  }
+}
+
+const runBulk = async () => {
+  const b = bulk.value
+  const next = b.action === 'activate' ? RESIDENT_STATUS.active : RESIDENT_STATUS.deactivated
+  b.phase = 'running'
+  for (const item of b.eligible) {
+    try {
+      await putStatus(item, next)
+      b.done.push(item)
+    } catch (error) {
+      b.failed.push({ item, message: error.message })
+    }
+  }
+  try {
+    await fetchResidents()
+  } catch (error) {
+    notify(error.message, 'error')
+  }
+  clearSelection()
+  b.phase = 'done'
+  const failed = b.failed.length > 0
+  notify(failed ? `${b.done.length} done, ${b.failed.length} failed` : `${b.done.length} ${b.done.length === 1 ? 'account' : 'accounts'} updated`, failed ? 'error' : 'success')
 }
 
 const askDelete = (item) => { deleteDialog.value = { show: true, item, loading: false } }
@@ -1318,11 +1485,6 @@ onUnmounted(releaseResidentPhotos)
 }
 .elegant-table :deep(th:first-child),
 .elegant-table :deep(td:first-child) { padding-left: 0 !important; padding-right: 0 !important; }
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
 /* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
    two pill columns need their width for the pill rather than for gutters. */
 .elegant-table :deep(td) {
@@ -1381,6 +1543,9 @@ onUnmounted(releaseResidentPhotos)
 
 /* The tag beside a barangay or organization name. Same tint the Type pill had,
    sized down to sit on the name's line. */
+.bulk-bar { background: rgba(var(--v-theme-primary), 0.08); }
+.bulk-body ul { margin: 4px 0 0; padding-left: 20px; }
+.elegant-table :deep(tr.is-checked) { background: rgba(var(--v-theme-primary), 0.06); }
 .row-actions { display: flex; justify-content: flex-end; gap: 2px; }
 .name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .type-tag {
