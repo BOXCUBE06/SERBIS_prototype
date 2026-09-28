@@ -182,7 +182,7 @@
           <v-divider></v-divider>
 
           <div class="pa-6 overflow-y-auto flex-grow-1">
-            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact" closable @click:close="apiError = ''">{{ apiError }}</v-alert>
 
             <v-alert
               v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
@@ -221,8 +221,16 @@
                 <h3 class="sect-label">Assignment</h3>
                 <dl class="kv">
                   <dt>Unit</dt>
-                  <dd :class="{ 'text-medium-emphasis': !selectedRequest.vehicle }">{{ selectedRequest.vehicle ? `${vehicleName(selectedRequest.vehicle)} (${selectedRequest.vehicle.type || 'Unit'})` : 'None assigned' }}</dd>
+                  <dd :class="{ 'text-medium-emphasis': !assignedUnit }">
+                    {{ assignedUnit ? `${vehicleName(assignedUnit)} (${assignedUnit.type || 'Unit'})` : 'None assigned' }}
+                    <v-btn v-if="isPendingRequest" size="x-small" variant="tonal" color="primary" class="text-none ml-2" @click="vehicleModal.isOpen = true">
+                      {{ formData.vehicle_id ? 'Change' : 'Select' }}
+                    </v-btn>
+                  </dd>
                 </dl>
+                <div v-if="isPendingRequest && !formData.vehicle_id" id="dispatch-gate" class="text-caption text-medium-emphasis mt-2">
+                  Select a unit to enable Approve &amp; Dispatch.
+                </div>
               </section>
             </div>
 
@@ -363,9 +371,6 @@
                 Disapprove
               </v-btn>
               <v-spacer></v-spacer>
-              <v-btn color="primary" variant="outlined" class="text-none font-weight-bold" height="40" @click="vehicleModal.isOpen = true">
-                {{ formData.vehicle_id ? selectedVehicle?.unit_identifier : 'Select Vehicle' }}
-              </v-btn>
               <v-btn
                 color="secondary"
                 variant="flat"
@@ -378,9 +383,6 @@
               >
                 Approve & Dispatch
               </v-btn>
-              <span v-if="!formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
-                Disabled until a vehicle is chosen with the Select Vehicle button beside it.
-              </span>
             </template>
             <template v-else-if="selectedRequest.status === 'Responding'">
               <v-spacer></v-spacer>
@@ -1173,6 +1175,12 @@ const closedLabel = computed(() => CLOSED_LABELS[selectedRequest.value?.status] 
 
 const waitDays = computed(() => (selectedRequest.value?.status === 'Pending' ? openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at) : null))
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
+
+const isPendingRequest = computed(() => !selectedRequest.value?.status || selectedRequest.value.status === 'Pending')
+// While Pending this is the unit picked so far (a draft until Approve & Dispatch saves it); otherwise the saved one.
+const assignedUnit = computed(() => (isPendingRequest.value ? selectedVehicle.value : null) || selectedRequest.value?.vehicle || null)
+// A stale server error should not outlive the choice that may have caused it.
+watch(() => formData.value.vehicle_id, () => { apiError.value = '' })
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
 )

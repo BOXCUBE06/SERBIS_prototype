@@ -1653,7 +1653,9 @@ class ServiceRequestController extends Controller
         // assignResponders() makes; kept here too since assignment and
         // dispatch can happen minutes apart and a responder's status can
         // change in between.
-        if (($validated['status'] ?? null) === 'Responding' && $serviceRequest->status !== 'Responding') {
+        // Not for an ambulance request: its crew is recorded on the trip log, and
+        // Resolve requires a driver there.
+        if (($validated['status'] ?? null) === 'Responding' && $serviceRequest->status !== 'Responding' && ! $isAmbulanceRequest) {
             $assigned = $serviceRequest->responders;
 
             if ($assigned->isEmpty()) {

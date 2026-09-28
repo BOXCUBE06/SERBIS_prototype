@@ -105,6 +105,42 @@ class ServiceRequestAmbulanceApprovalGateTest extends TestCase
         return $request;
     }
 
+    /** An ambulance crew is recorded on the trip log, so dispatch does not ask for responders. */
+    public function test_a_pending_ambulance_request_dispatches_without_responders(): void
+    {
+        $request = ServiceRequest::create([
+            'resident_id' => $this->resident->getKey(),
+            'service_id' => $this->ambulance->getKey(),
+            'description' => 'Phoned-in transport',
+            'status' => 'Pending',
+        ]);
+        $this->assertCount(0, $request->responders);
+
+        $this->putJson("/api/service-requests/{$request->getKey()}", [
+            'status' => 'Responding',
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+
+        $this->assertSame('Responding', $request->fresh()->status);
+        $this->assertSame('Dispatched', $this->vehicle->fresh()->status);
+    }
+
+    public function test_a_non_ambulance_request_still_needs_responders_to_dispatch(): void
+    {
+        $request = ServiceRequest::create([
+            'resident_id' => $this->resident->getKey(),
+            'service_id' => $this->nonAmbulance->getKey(),
+            'description' => 'Blocked road',
+            'status' => 'Pending',
+        ]);
+
+        $this->putJson("/api/service-requests/{$request->getKey()}", ['status' => 'Responding'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->assertSame('Pending', $request->fresh()->status);
+    }
+
     public function test_an_unapproved_ambulance_booking_cannot_be_dispatched(): void
     {
         $request = $this->bookedAmbulanceRequest();
