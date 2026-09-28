@@ -118,6 +118,11 @@ useAppTheme().init()
   border-radius: 24px;
   overflow-y: auto;
   height: 100%;
+  /* Positioned so a page's position: absolute element (an .sr-only live region)
+     anchors inside this scroll box, where the overflow clips it. Unpositioned,
+     it anchors to the app root at the end of the content and stretches the
+     window past the viewport whenever a page is taller than the shell. */
+  position: relative;
 
   /* The scrollbar used to be hidden outright (`scrollbar-width: none` plus a
      `::-webkit-scrollbar { display: none }`). Content still scrolled — there

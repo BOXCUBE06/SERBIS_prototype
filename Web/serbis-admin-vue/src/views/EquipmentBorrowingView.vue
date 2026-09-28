@@ -2,7 +2,7 @@
   <!-- fill-height like every other page, not min-height: 100vh. The shell's
        content box is 100vh minus its 12px padding top and bottom, so a
        viewport-tall child always overshoots it and adds a scroll for nothing. -->
-  <v-container fluid class="borrowing-page fill-height align-start bg-background">
+  <v-container fluid class="fill-height align-start bg-background">
     <PageHeader
       title="Equipment Borrowing"
     />
@@ -1649,12 +1649,6 @@ onMounted(async () => {
    the same as every other page's header-to-content gap, not a third
    page-local value. */
 .page-tabs { margin-bottom: 24px; }
-
-/* The .sr-only live region below is position: absolute. With no positioned
-   ancestor inside the shell's scroll box it anchors to the app root, sits at the
-   end of the content, and stretches the window past the viewport whenever the
-   page is taller than it (a window scrollbar and a strip under the shell). */
-.borrowing-page { position: relative; }
 
 /* DataTablePage's own .dtp-table rule already sets table-layout: fixed and
    the header/row styling; this only adds the page-specific min-width floor
