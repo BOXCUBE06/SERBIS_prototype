@@ -45,10 +45,10 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
       const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
       if (statusA === 'Pending' && statusB !== 'Pending') {return -1}
       if (statusB === 'Pending' && statusA !== 'Pending') {return 1}
-      // Oldest first within a tier: the longest-waiting request is the one that
-      // most needs attention, so it surfaces at the top rather than sinking to
-      // the bottom of the page behind whatever was just filed.
-      return new Date(a.created_at) - new Date(b.created_at)
+      // Newest first within a tier: a request just filed must show at the top,
+      // or staff think the submit did nothing. The wait-days chip still flags
+      // the old ones.
+      return new Date(b.created_at) - new Date(a.created_at)
     })
   })
 
