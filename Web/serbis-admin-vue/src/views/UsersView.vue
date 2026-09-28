@@ -243,6 +243,40 @@
                 {{ residentSmsLabel(false) }}
               </span>
             </template>
+
+            <!-- Stopped on both click and keydown: a row opens the profile on click
+                 and on Enter, and a button pressed inside it must do only its own
+                 job. -->
+            <template v-slot:item.actions="{ item }">
+              <div class="row-actions" @click.stop @keydown.stop>
+                <v-tooltip text="Edit account" location="top">
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-pencil-outline"
+                      variant="text"
+                      size="small"
+                      :aria-label="`Edit ${primaryName(item)}`"
+                      @click="openExistingEditModal(item)"
+                    ></v-btn>
+                  </template>
+                </v-tooltip>
+                <v-tooltip :text="statusActionLabel(item)" location="top">
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      :icon="item.status === RESIDENT_STATUS.active ? 'mdi-account-cancel-outline' : 'mdi-account-check-outline'"
+                      variant="text"
+                      size="small"
+                      :color="item.status === RESIDENT_STATUS.active ? 'warning' : 'primary'"
+                      :disabled="statusToggleLoading"
+                      :aria-label="`${statusActionLabel(item)}: ${primaryName(item)}`"
+                      @click="askToggleStatus(item)"
+                    ></v-btn>
+                  </template>
+                </v-tooltip>
+              </div>
+            </template>
           </v-data-table>
         </v-card>
       </div>
@@ -662,6 +696,7 @@ const headers = [
     value: (item) => (residentSmsOptIn(item) ? 1 : 0),
     headerProps: { title: 'Blank means receiving text blasts. Only accounts that opted out show a pill.' },
   },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '104px' },
 ]
 
 // Sorting is client-side: GET /residents returns every account in one response
@@ -734,6 +769,8 @@ const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 168px);' 
 const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
+// "Activate" for Pending and Deactivated alike, as in the profile's own button.
+const statusActionLabel = (r) => (r.status === RESIDENT_STATUS.active ? 'Deactivate account' : 'Activate account')
 const isInstitution = (r) => Boolean(r.account_type) && r.account_type !== ACCOUNT_TYPE.head
 const initials = accountInitials
 
@@ -1344,6 +1381,7 @@ onUnmounted(releaseResidentPhotos)
 
 /* The tag beside a barangay or organization name. Same tint the Type pill had,
    sized down to sit on the name's line. */
+.row-actions { display: flex; justify-content: flex-end; gap: 2px; }
 .name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .type-tag {
   flex: none;
