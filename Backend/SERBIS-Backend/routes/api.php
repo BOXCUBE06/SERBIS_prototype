@@ -265,6 +265,13 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // apiResource so the literal segment is never read as another {id} action.
     Route::get('residents/{id}/return-history', [ResidentController::class, 'returnHistory'])
         ->middleware('section:residents');
+    // Staff set, replace or remove the photo of a barangay or organization
+    // account (a head of the family's photo stays their own: 422). The GET is
+    // outside this group, above. Literal segment before the apiResource.
+    Route::post('residents/{id}/photo', [ResidentController::class, 'uploadPhoto'])
+        ->middleware('section:residents');
+    Route::delete('residents/{id}/photo', [ResidentController::class, 'deletePhoto'])
+        ->middleware('section:residents');
     // Just id, name and barangay, for the request boards' walk-in picker. The
     // literal segment goes before the apiResource so `lookup` is never read as
     // a resident id. The full directory below stays with the Residents page.

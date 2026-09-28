@@ -108,9 +108,8 @@ class ResidentController extends Controller
             'phone_number' => $validated['phone_number'],
             'email_address' => $validated['email_address'] ?? null,
             'password' => bcrypt($validated['password']),
-            // No 'photo'. It is the resident's own face, uploaded from the
-            // mobile app by POST /api/me/photo; an admin creating the account
-            // has no file to attach and no business naming one.
+            // No 'photo'. A create carries no file; staff add a barangay's or
+            // organization's photo afterwards through POST /api/residents/{id}/photo.
             'status' => $validated['status'],
         ]);
         $this->applyAccountType($resident, $validated);
@@ -374,8 +373,10 @@ class ResidentController extends Controller
 
     /**
      * The resident replaces their own profile photo. Deliberately not part of
-     * PATCH /me and not reachable by an admin: the column is the resident's own
-     * face, and the only writer is the account it belongs to.
+     * PATCH /me, and an admin cannot use it for someone else: for a head of the
+     * family the column is their own face and the only writer is their own
+     * account. Staff set a barangay's or organization's photo through
+     * uploadPhoto() below, which is the one exception.
      */
     public function uploadMyPhoto(Request $request)
     {
@@ -387,34 +388,9 @@ class ResidentController extends Controller
             ], 403);
         }
 
-        $request->validate([
-            // Same ceiling as site_photo. A phone camera JPEG clears 4 MB after
-            // the platform's own compression; raising it further mostly buys
-            // slow uploads on the mobile connections this app is used on.
-            'photo' => 'required|file|mimes:jpg,jpeg,png|max:4096',
-        ]);
-
-        $file = $request->file('photo');
-
-        $path = $file->storeAs(
-            'resident-photos/'.$user->getKey(),
-            (string) Str::uuid().'.'.$file->extension(),
-            self::privateDisk()
-        );
-
-        if (! $path) {
+        if (! $this->savePhoto($request, $user)) {
             return response()->json(['message' => 'Could not store the photo.'], 500);
         }
-
-        // Read the old path before overwriting it: once the column is updated
-        // nothing points at the previous file and it would sit on the disk for
-        // the life of the deployment.
-        $previous = $user->photo;
-
-        $user->photo = $path;
-        $user->save();
-
-        $this->discardUpload($previous);
 
         return response()->json([
             'message' => 'Profile photo updated.',
@@ -436,16 +412,126 @@ class ResidentController extends Controller
             ], 403);
         }
 
-        $previous = $user->photo;
-
-        $user->photo = null;
-        $user->save();
-
-        $this->discardUpload($previous);
+        $this->clearPhoto($user);
 
         return response()->json([
             'message' => 'Profile photo removed.',
             'user' => $user->load('barangay'),
+        ]);
+    }
+
+    /**
+     * Staff set or replace a barangay's or organization's photo. Those accounts
+     * are shared by several people, so no one's face is at stake; a head of the
+     * family stays the owner of their own photo and is refused here.
+     */
+    public function uploadPhoto(Request $request, $id)
+    {
+        $resident = $this->institutionForPhoto($id);
+
+        if (! $this->savePhoto($request, $resident)) {
+            return response()->json(['message' => 'Could not store the photo.'], 500);
+        }
+
+        $this->logPhotoChange($request, $resident, 'photo_changed');
+
+        return response()->json([
+            'message' => 'Photo updated.',
+            'resident' => $resident->load('barangay'),
+        ]);
+    }
+
+    public function deletePhoto(Request $request, $id)
+    {
+        $resident = $this->institutionForPhoto($id);
+
+        $this->clearPhoto($resident);
+        $this->logPhotoChange($request, $resident, 'photo_removed');
+
+        return response()->json([
+            'message' => 'Photo removed.',
+            'resident' => $resident->load('barangay'),
+        ]);
+    }
+
+    /** 404 for an unknown id; 422 for a head of the family, whose photo is their own. */
+    private function institutionForPhoto($id): Resident
+    {
+        $resident = Resident::findOrFail($id);
+
+        if (! in_array($resident->account_type, [Resident::TYPE_BARANGAY, Resident::TYPE_ORGANIZATION], true)) {
+            throw ValidationException::withMessages([
+                'account_type' => 'Only barangay and organization accounts can have a photo set by staff.',
+            ]);
+        }
+
+        return $resident;
+    }
+
+    /**
+     * Validates the upload, stores it and swaps it in. False when the disk
+     * refused the file, which the caller reports as a 500.
+     */
+    private function savePhoto(Request $request, Resident $resident): bool
+    {
+        $request->validate([
+            // Same ceiling as site_photo. A phone camera JPEG clears 4 MB after
+            // the platform's own compression; raising it further mostly buys
+            // slow uploads on the mobile connections this app is used on.
+            'photo' => 'required|file|mimes:jpg,jpeg,png|max:4096',
+        ]);
+
+        $file = $request->file('photo');
+
+        $path = $file->storeAs(
+            'resident-photos/'.$resident->getKey(),
+            (string) Str::uuid().'.'.$file->extension(),
+            self::privateDisk()
+        );
+
+        if (! $path) {
+            return false;
+        }
+
+        // Read the old path before overwriting it: once the column is updated
+        // nothing points at the previous file and it would sit on the disk for
+        // the life of the deployment.
+        $previous = $resident->photo;
+
+        $resident->photo = $path;
+        $resident->save();
+
+        $this->discardUpload($previous);
+
+        return true;
+    }
+
+    private function clearPhoto(Resident $resident): void
+    {
+        $previous = $resident->photo;
+
+        $resident->photo = null;
+        $resident->save();
+
+        $this->discardUpload($previous);
+    }
+
+    // TracksHistory ignores the photo column (the path is not audit material), so
+    // a staff change would leave no trace without this row. No path in it.
+    private function logPhotoChange(Request $request, Resident $resident, string $action): void
+    {
+        DB::table('tbl_system_logs')->insert([
+            'admin_id' => $request->user()->getKey(),
+            'resident_id' => null,
+            'action_type' => $action,
+            'auditable_type' => Resident::class,
+            'auditable_id' => $resident->getKey(),
+            'old_values' => null,
+            'new_values' => null,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 

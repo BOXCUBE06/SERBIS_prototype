@@ -19,7 +19,9 @@ use Laravel\Sanctum\HasApiTokens;
 // be a mass-assignable free-form string that the admin panel rendered straight
 // into an <img src>, which made it an arbitrary URL fetched by every admin who
 // opened the resident list. It is now a storage path on the private disk,
-// written only by POST /api/me/photo, and a path handed to a client is a path a
+// written only by POST /api/me/photo (the account's own) and, for barangay and
+// organization accounts, POST /api/residents/{id}/photo (staff). A path handed to a
+// client is a path a
 // client can ask for — so clients get `has_photo` and the image itself comes
 // from GET /api/residents/{id}/photo.
 #[Table('tbl_residents', key: 'resident_id')]
