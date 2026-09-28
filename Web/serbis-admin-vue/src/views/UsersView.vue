@@ -332,6 +332,7 @@
                   label="Organization name *"
                   placeholder="Isabela State University"
                   :rules="[requiredRule('Organization name')]"
+                  validate-on="blur lazy"
                   :error-messages="fieldErrors.organization_name"
                   variant="outlined"
                   density="comfortable"
