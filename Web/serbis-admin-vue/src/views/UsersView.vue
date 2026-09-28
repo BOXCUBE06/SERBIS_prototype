@@ -300,7 +300,7 @@
               <v-col cols="12" class="d-flex align-center gap-4 mb-2">
                 <v-avatar size="70" class="avatar-tint">
                   <span class="avatar-initials text-h5">
-                    {{ (formData.first_name?.charAt(0) || '?') }}{{ (formData.last_name?.charAt(0) || '') }}
+                    {{ previewInitials }}
                   </span>
                 </v-avatar>
                 <!-- "Change Photo" lived here with no handler behind it, and it
@@ -640,6 +640,12 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
+const previewInitials = computed(() => {
+  const f = formData.value
+  if (f.account_type === ACCOUNT_TYPE.organization) return wordInitials(f.organization_name) || '?'
+  if (f.account_type === ACCOUNT_TYPE.barangay) return wordInitials(barangays.value.find((b) => b.barangay_id === f.barangay_id)?.barangay_name) || '?'
+  return `${f.first_name?.charAt(0) || '?'}${f.last_name?.charAt(0) || ''}`.toUpperCase()
+})
 
 // The profile dialog is open exactly when a resident is selected. There is no
 // second piece of state that can disagree with the first; the setter is what
@@ -673,7 +679,11 @@ const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60v
 
 const idOf = (r) => r?.resident_id ?? r?.id
 const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-const initials = (r) => computeInitials(r)
+// Head of the family: the person's initials. Barangay and organization: the
+// first letters of the first two words of primaryName(), so the avatar matches
+// the headline instead of the contact person under it.
+const wordInitials = (name) => (name || '').split(/\s+/).filter((w) => /^\p{L}/u.test(w)).slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase()
+const initials = (r) => (r.account_type === ACCOUNT_TYPE.head || !r.account_type ? computeInitials(r) : wordInitials(primaryName(r)))
 const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
 
 // The Name column's headline: a person for a head of the family, the
