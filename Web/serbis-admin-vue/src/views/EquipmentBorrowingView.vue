@@ -9,12 +9,10 @@
 
     <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">
       <v-tab value="board" class="text-none font-weight-bold">
-        <v-icon start>mdi-view-list-outline</v-icon>
         Active pipeline
         <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ activeItems.length }}</v-chip>
       </v-tab>
       <v-tab value="history" class="text-none font-weight-bold">
-        <v-icon start>mdi-archive-outline</v-icon>
         History
         <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ historyItems.length }}</v-chip>
       </v-tab>
@@ -77,6 +75,8 @@
       :items-per-page="activeItemsPerPage"
       @update:items-per-page="activeItemsPerPage = $event"
       result-noun="active requests"
+      selectable
+      v-model:selected="selected"
       class="borrow-table"
       :active-filters="activeFilters"
       @clear-filter="clearFilter"
@@ -89,15 +89,6 @@
         <ExportMenu type="borrowing" :rows="activeItems" :selected-ids="selectedIds" show-selection />
       </template>
 
-      <template v-slot:item.select="{ item }">
-        <v-checkbox-btn
-          :model-value="selectedIds.has(item.borrow_id)"
-          density="compact"
-          :aria-label="`Select ${personName(item)}'s borrowing`"
-          @click.stop="toggleSelect(item)"
-        ></v-checkbox-btn>
-      </template>
-
       <template v-slot:item.borrow_id="{ item }">
         <span class="text-truncate d-block mono">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
@@ -107,7 +98,6 @@
           v-model="itemFilter"
           :items="itemOptions"
           label="Equipment"
-          prepend-inner-icon="mdi-package-variant-closed"
           variant="outlined"
           density="compact"
           hide-details
@@ -118,30 +108,12 @@
           v-model="barangayFilter"
           :items="barangayOptions"
           label="Barangay"
-          prepend-inner-icon="mdi-map-marker-outline"
           variant="outlined"
           density="compact"
           hide-details
           rounded="lg"
           class="filter-field"
         ></v-select>
-      </template>
-
-      <!-- Terminal outcomes are structurally excluded from this table (see
-           activeItems' STAGE_RANK filter) — this is the only trace of them
-           on the Active pipeline pane, a jump straight to the History row
-           that already carries them. -->
-      <template v-if="terminalOutcomeCounts.length" v-slot:before-table>
-        <div class="text-caption text-medium-emphasis mb-3">
-          <template v-for="(o, i) in terminalOutcomeCounts" :key="o.status">
-            <a
-              href="#"
-              class="text-primary font-weight-bold text-decoration-none"
-              @click.prevent="goToOutcome(o.status)"
-            >{{ o.count }} {{ o.label }}</a><span v-if="i < terminalOutcomeCounts.length - 1"> &middot; </span>
-          </template>
-          — View in History
-        </div>
       </template>
 
       <template v-slot:item.resident="{ item }">
@@ -198,16 +170,18 @@
       </template>
 
       <template v-slot:item.actions="{ item }">
-        <div class="d-flex justify-end gap-2" @click.stop>
+        <!-- Same height and min-width, never wrapping: a row's action is always
+             in the same place at the same size. -->
+        <div class="row-actions d-flex justify-end flex-nowrap gap-2" @click.stop>
           <template v-if="item.status === 'Pending'">
             <v-btn
-              size="small" variant="outlined" color="error" class="text-none font-weight-bold"
+              height="32" variant="outlined" color="error" class="action-btn text-none font-weight-bold"
               :loading="processingId === (item.borrow_id || item.id)"
               :aria-label="`Deny ${cardLabel(item)}`"
               @click="requestAction(item, 'Denied')"
             >Deny</v-btn>
             <v-btn
-              size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+              height="32" variant="flat" color="primary" class="action-btn text-none font-weight-bold"
               :loading="processingId === (item.borrow_id || item.id)"
               :aria-label="`Approve ${cardLabel(item)}`"
               @click="requestAction(item, 'Approved')"
@@ -215,14 +189,14 @@
           </template>
           <v-btn
             v-else-if="item.status === 'Approved'"
-            size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+            height="32" variant="flat" color="primary" class="action-btn text-none font-weight-bold"
             :loading="processingId === (item.borrow_id || item.id)"
             :aria-label="`Release ${cardLabel(item)}`"
             @click="requestAction(item, 'Released')"
           >Release</v-btn>
           <v-btn
             v-else-if="item.status === 'Released'"
-            size="small" variant="flat" color="primary" class="text-none font-weight-bold"
+            height="32" variant="flat" color="primary" class="action-btn text-none font-weight-bold"
             :loading="processingId === (item.borrow_id || item.id)"
             :aria-label="`Confirm return of ${cardLabel(item)}`"
             @click="requestAction(item, 'Returned')"
@@ -253,6 +227,8 @@
       :items-per-page="historyItemsPerPage"
       @update:items-per-page="historyItemsPerPage = $event"
       result-noun="completed requests"
+      selectable
+      v-model:selected="selected"
       class="borrow-table"
       :active-filters="activeFilters"
       @clear-filter="clearFilter"
@@ -265,15 +241,6 @@
         <ExportMenu type="borrowing" :rows="historyItems" :selected-ids="selectedIds" show-selection />
       </template>
 
-      <template v-slot:item.select="{ item }">
-        <v-checkbox-btn
-          :model-value="selectedIds.has(item.borrow_id)"
-          density="compact"
-          :aria-label="`Select ${personName(item)}'s borrowing`"
-          @click.stop="toggleSelect(item)"
-        ></v-checkbox-btn>
-      </template>
-
       <template v-slot:item.borrow_id="{ item }">
         <span class="text-truncate d-block mono">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
@@ -283,7 +250,6 @@
           v-model="itemFilter"
           :items="itemOptions"
           label="Equipment"
-          prepend-inner-icon="mdi-package-variant-closed"
           variant="outlined"
           density="compact"
           hide-details
@@ -294,7 +260,6 @@
           v-model="barangayFilter"
           :items="barangayOptions"
           label="Barangay"
-          prepend-inner-icon="mdi-map-marker-outline"
           variant="outlined"
           density="compact"
           hide-details
@@ -333,7 +298,7 @@
     <!-- Not persistent: this reads a record. The one input on it, the handover
          photo picker, uploads on pick, so there is no unsaved state to lose. -->
     <v-dialog v-model="modal.isOpen" max-width="min(820px, 95vw)" transition="dialog-fade-transition">
-      <v-card rounded="lg" elevation="4" class="d-flex flex-column detail-modal-card">
+      <v-card rounded="lg" elevation="4" class="d-flex flex-column detail-modal-card borrow-detail">
         <DetailDialogHeader
           :name="[selectedRecord?.resident?.first_name, selectedRecord?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family'"
           :initials="initials(selectedRecord?.resident)"
@@ -347,7 +312,7 @@
         </DetailDialogHeader>
         <v-divider></v-divider>
 
-        <v-card-text class="pa-6 overflow-y-auto flex-grow-1">
+        <v-card-text class="px-8 py-6 overflow-y-auto flex-grow-1">
               <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
               <template v-if="selectedRecord?.status === 'Denied'">
@@ -372,9 +337,8 @@
 
               <v-alert
                 v-else-if="isOverdue(selectedRecord)"
-                type="error" variant="tonal" class="mb-4" density="compact"
-                :title="dueLabel(selectedRecord)"
-              >This item was due back on {{ fmtDate(selectedRecord?.due_date) }} and has not been returned.</v-alert>
+                type="error" variant="tonal" class="mb-6 text-body-2" density="compact"
+              >{{ dueLabel(selectedRecord) }} — due back on {{ fmtDate(selectedRecord?.due_date) }}, not yet returned.</v-alert>
 
               <!-- Not overdue yet, but still a live loan with a due date —
                    the countdown MDRRMO asked to be made prominent (feedback,
@@ -384,9 +348,8 @@
               <v-alert
                 v-else-if="selectedRecord?.due_date && !terminalStatuses.has(selectedRecord.status)"
                 :type="['Due today', 'Due tomorrow'].includes(dueLabel(selectedRecord)) ? 'warning' : 'info'"
-                variant="tonal" class="mb-4" density="compact"
-                :title="dueLabel(selectedRecord)"
-              >Due back on {{ fmtDate(selectedRecord?.due_date) }}.</v-alert>
+                variant="tonal" class="mb-6 text-body-2" density="compact"
+              >{{ dueLabel(selectedRecord) }} — due back on {{ fmtDate(selectedRecord?.due_date) }}.</v-alert>
 
               <div class="detail-cols">
                 <section class="detail-section">
@@ -424,61 +387,54 @@
               </div>
 
               <h3 class="sect-label">Equipment Requested</h3>
-              <v-card variant="outlined" border class="pa-6 mb-6 rounded-lg subtle-surface d-flex justify-space-between align-center">
-                <div>
-                  <div class="text-h5 font-weight-black text-high-emphasis">{{ itemName(selectedRecord) }}</div>
-                  <!-- An uncatalogued item has no stock row to quote, and the
-                       backend refuses to release one until staff add it to the
-                       inventory and attach it. Saying so here is what makes
-                       that 422 predictable instead of a surprise at the point
-                       of release. -->
-                  <div v-if="isUncatalogued(selectedRecord)" class="text-subtitle-2 font-weight-medium text-warning mt-1">
-                    Not in the inventory — add this item to the equipment list and attach it before releasing.
-                  </div>
-                  <div v-else class="text-subtitle-2 font-weight-medium text-medium-emphasis mt-1">
-                    Current Stock Available:
-                    <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-primary' : 'text-error'">
-                      {{ selectedRecord?.equipment?.available_quantity }}
-                    </span>
-                  </div>
-                </div>
-                <div class="text-h3 font-weight-black text-high-emphasis">{{ selectedRecord?.quantity }}<span class="text-h5 text-medium-emphasis ml-1">×</span></div>
-              </v-card>
+              <div class="d-flex align-baseline flex-wrap gap-3 mb-8">
+                <span class="text-body-1 font-weight-bold text-high-emphasis">{{ itemName(selectedRecord) }}</span>
+                <span class="text-body-1 text-medium-emphasis">&times;{{ selectedRecord?.quantity }}</span>
+                <!-- An uncatalogued item has no stock row to quote, and the
+                     backend refuses to release one until staff add it to the
+                     inventory and attach it. Saying so here is what makes
+                     that 422 predictable instead of a surprise at the point
+                     of release. -->
+                <span v-if="isUncatalogued(selectedRecord)" class="text-body-2 text-warning">
+                  Not in the inventory — add this item to the equipment list and attach it before releasing.
+                </span>
+                <span v-else class="text-body-2 text-medium-emphasis">
+                  Stock available:
+                  <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-primary' : 'text-error'">
+                    {{ selectedRecord?.equipment?.available_quantity }}
+                  </span>
+                </span>
+              </div>
 
               <h3 class="sect-label">Purpose</h3>
-              <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
-                <!-- Requests filed before the field existed have no purpose, and
-                     an empty box reads as a resident who left it blank. -->
-                <div
-                  class="text-body-1"
-                  :class="selectedRecord?.purpose ? 'text-high-emphasis' : 'text-medium-emphasis font-italic'"
-                  style="white-space: pre-wrap;"
-                >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
-              </v-card>
+              <!-- Requests filed before the field existed have no purpose, and
+                   an empty line reads as a resident who left it blank. -->
+              <div
+                class="text-body-1 mb-8"
+                :class="selectedRecord?.purpose ? 'text-high-emphasis' : 'text-medium-emphasis font-italic'"
+                style="white-space: pre-wrap;"
+              >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
 
               <h3 class="sect-label">Handover</h3>
-              <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
-                <div class="d-flex align-center gap-2">
-                  <v-icon
-                    size="20"
-                    :color="isDelivery(selectedRecord) ? 'primary' : 'medium-emphasis'"
-                  >{{ isDelivery(selectedRecord) ? 'mdi-truck-outline' : 'mdi-storefront-outline' }}</v-icon>
-                  <span class="text-body-1 font-weight-bold text-high-emphasis">
-                    {{ isDelivery(selectedRecord) ? 'Deliver to the borrower' : 'Collect from the MDRRMO office' }}
-                  </span>
-                </div>
-                <!-- Only a delivery has an address, and a delivery without one
-                     is a run nobody can make — so this says so rather than
-                     rendering an empty line. -->
-                <div v-if="isDelivery(selectedRecord)" class="mt-3">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Delivery address</div>
-                  <div
-                    class="text-body-1"
-                    :class="selectedRecord?.delivery_address ? 'text-high-emphasis' : 'text-error font-italic'"
-                    style="white-space: pre-wrap;"
-                  >{{ selectedRecord?.delivery_address || 'No address was recorded — ask the borrower before dispatching.' }}</div>
-                </div>
-              </v-card>
+              <div class="d-flex align-center gap-2 mb-1">
+                <v-icon
+                  size="18"
+                  :color="isDelivery(selectedRecord) ? 'primary' : 'medium-emphasis'"
+                >{{ isDelivery(selectedRecord) ? 'mdi-truck-outline' : 'mdi-storefront-outline' }}</v-icon>
+                <span class="text-body-1 text-high-emphasis">
+                  {{ isDelivery(selectedRecord) ? 'Deliver to the borrower' : 'Collect from the MDRRMO office' }}
+                </span>
+              </div>
+              <!-- Only a delivery has an address, and a delivery without one
+                   is a run nobody can make — so this says so rather than
+                   rendering an empty line. -->
+              <div
+                v-if="isDelivery(selectedRecord)"
+                class="text-body-2"
+                :class="selectedRecord?.delivery_address ? 'text-medium-emphasis' : 'text-error font-italic'"
+                style="white-space: pre-wrap;"
+              >{{ selectedRecord?.delivery_address || 'No address was recorded — ask the borrower before dispatching.' }}</div>
+              <div class="mb-8"></div>
 
               <!-- Only shown once something has changed hands. Before that the
                    backend refuses the upload, so offering it would be a button
@@ -591,15 +547,14 @@
                    decision they make themselves. -->
               <v-card
                 v-if="borrowerHistory.length > 0"
-                variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface"
+                variant="flat" class="pa-3 mb-6 rounded-lg subtle-surface"
               >
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
-                  This resident's past returns ({{ borrowerHistory.length }})
+                <div class="text-caption text-medium-emphasis mb-2">
+                  Past returns ({{ borrowerHistory.length }})
                 </div>
                 <div
                   v-for="past in borrowerHistory" :key="past.borrow_id"
                   class="d-flex align-start gap-3 mb-3"
-                  style="border-left: 3px solid rgb(var(--v-theme-outline)); padding-left: 12px;"
                 >
                   <div class="flex-grow-1 min-width-0">
                     <div class="d-flex align-center gap-2 mb-1">
@@ -630,19 +585,14 @@
           v-if="selectedRecord && !terminalStatuses.has(selectedRecord.status)"
           class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4"
         >
+          <!-- Default-size buttons, right-aligned. -->
+          <v-spacer></v-spacer>
           <template v-if="selectedRecord.status === 'Pending'">
-            <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny Request</v-btn>
-            <v-spacer></v-spacer>
-            <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve Request</v-btn>
+            <v-btn color="error" variant="outlined" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny Request</v-btn>
+            <v-btn color="primary" variant="flat" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve Request</v-btn>
           </template>
-          <template v-else-if="selectedRecord.status === 'Approved'">
-            <v-spacer></v-spacer>
-            <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
-          </template>
-          <template v-else-if="selectedRecord.status === 'Released'">
-            <v-spacer></v-spacer>
-            <v-btn color="success" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
-          </template>
+          <v-btn v-else-if="selectedRecord.status === 'Approved'" color="primary" variant="flat" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
+          <v-btn v-else-if="selectedRecord.status === 'Released'" color="success" variant="flat" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
         </div>
 
       </v-card>
@@ -809,7 +759,7 @@ import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
 import '@/components/detail-dialog.css'
-import { useSelection, borrowingTransactionNo } from '@/composables/requestDisplay'
+import { borrowingTransactionNo } from '@/composables/requestDisplay'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -858,8 +808,10 @@ const liveMessage = ref('')
 const modal = ref({ isOpen: false })
 const selectedRecord = ref(null)
 // Ticked rows, shared by both tables (borrow_ids do not repeat across them).
-const selectedIds = reactive(new Set())
-const { toggleSelect } = useSelection(selectedRecord, selectedIds, (b) => b.borrow_id)
+// Ticked rows on the current tab's table (DataTablePage's v-model:selected);
+// ExportMenu takes them as a Set.
+const selected = ref([])
+const selectedIds = computed(() => new Set(selected.value))
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const emptyAction = () => ({
@@ -896,19 +848,19 @@ const barangaySortValue = (b) => b.resident?.barangay?.barangay_name || ''
 const personName = (b) => `${b.resident?.last_name || ''}, ${b.resident?.first_name || ''}`
 const personSecondary = (b) => displayPhone(b.resident?.phone_number) || b.resident?.barangay?.barangay_name || null
 
+// The selection column is Vuetify's own (`selectable` on DataTablePage), so it
+// is not listed here. Actions is a fixed column wide enough for Deny + Approve.
 const activeHeaders = [
-  { title: '', key: 'select', sortable: false, width: '48px' },
   { title: 'Transaction No.', key: 'borrow_id', width: '11%' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '12%' },
   { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '20%' },
   { title: 'Status', key: 'status', width: '12%' },
   { title: 'Timeline', key: 'timeline', value: 'due_date', width: '12%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '16%' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '232px' },
 ]
 
 const historyHeaders = [
-  { title: '', key: 'select', sortable: false, width: '48px' },
   { title: 'Transaction No.', key: 'borrow_id', width: '13%' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '15%' },
@@ -972,26 +924,6 @@ const matchesBarangay = (b) =>
 // counts. Status/outcome are not among them — each segment needs the count
 // as if it, specifically, were the only one applied.
 const matchesFilters = (b) => matchesItem(b) && matchesBarangay(b) && matchesSearch(b)
-
-const countByStatus = (status) =>
-  borrowings.value.filter((b) => b.status === status && matchesFilters(b)).length
-
-// Returned/Denied/Cancelled rows never appear in the Active pipeline table —
-// they're terminal, so a link here jumps to History pre-filtered to that
-// outcome rather than pretending to filter a table that structurally
-// excludes them. Hidden at zero, same rule the segmented tabs already
-// follow, so a shortcut never points at an empty History view.
-const terminalOutcomeCounts = computed(() =>
-  columns
-    .filter((c) => c.terminal)
-    .map((c) => ({ status: c.status, label: c.label, count: countByStatus(c.status) }))
-    .filter((c) => c.count > 0),
-)
-
-const goToOutcome = (status) => {
-  activeTab.value = 'history'
-  outcomeFilter.value = status
-}
 
 // Overdue-first, then pipeline stage, then oldest-waiting first: the request
 // that has sat longest is the one due for a decision, not the newest one to
@@ -1657,6 +1589,15 @@ onMounted(async () => {
    own overflow-x, Vuetify's default, does the rest). */
 .borrow-table :deep(.dtp-table table) { min-width: 784px; }
 .borrow-table :deep(.dtp-table td) { white-space: nowrap; }
+.action-btn { min-width: 104px; }
+
+/* Borrowing's detail dialog: roomier than the shared body system, with a
+   label column wide enough for "Borrowing for" so both grids align. */
+.borrow-detail .detail-section { margin-bottom: 32px; }
+.borrow-detail .kv { gap: 10px 16px; }
+@media (min-width: 720px) {
+  .borrow-detail .detail-cols .kv { grid-template-columns: 120px 1fr; }
+}
 .cell-truncate {
   display: block;
   overflow: hidden;
