@@ -66,6 +66,23 @@
               class="status-field"
             ></v-select>
 
+            <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Cleared
+                 is "All"; the filter itself still holds the name or 'All'. -->
+            <v-autocomplete
+              v-model="barangayFilter"
+              :items="barangays"
+              item-title="barangay_name"
+              item-value="barangay_name"
+              label="Barangay"
+              placeholder="All barangays"
+              clearable
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              class="barangay-field"
+            ></v-autocomplete>
+
           </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
@@ -90,31 +107,6 @@
             >
               {{ t.value === 'All' ? 'All' : t.title }}
               <span class="tab-count">{{ typeCounts[t.value] ?? 0 }}</span>
-            </v-btn>
-          </div>
-
-          <div
-            class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
-            role="group"
-            aria-label="Filter by barangay"
-          >
-            <v-btn
-              variant="text"
-              :aria-pressed="filters.barangay === 'All'"
-              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === 'All' ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
-              @click="filters.barangay = 'All'"
-            >
-              All Barangays
-            </v-btn>
-            <v-btn
-              v-for="b in barangays"
-              :key="b.barangay_id"
-              variant="text"
-              :aria-pressed="filters.barangay === b.barangay_name"
-              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === b.barangay_name ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
-              @click="filters.barangay = b.barangay_name"
-            >
-              {{ b.barangay_name }}
             </v-btn>
           </div>
 
@@ -640,6 +632,10 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
+const barangayFilter = computed({
+  get: () => (filters.value.barangay === 'All' ? null : filters.value.barangay),
+  set: (name) => { filters.value.barangay = name ?? 'All' },
+})
 const previewInitials = computed(() => {
   const f = formData.value
   if (f.account_type === ACCOUNT_TYPE.organization) return wordInitials(f.organization_name) || '?'
@@ -1127,6 +1123,7 @@ onUnmounted(releaseResidentPhotos)
 .gap-4 { gap: 16px; }
 .search-field { width: 260px; max-width: 100%; }
 .status-field { width: 150px; max-width: 100%; }
+.barangay-field { width: 200px; max-width: 100%; }
 
 /* The count beside each type tab's label — same idea as .count-chip, sized
    down to sit inline in a tab. Colour rides on font-weight/parent colour
