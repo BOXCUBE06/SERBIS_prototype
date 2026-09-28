@@ -232,16 +232,12 @@
             </template>
 
             <template v-slot:item.sms_opt_in="{ item }">
-              <!-- Quieter than Status on purpose. Nearly every row is Receiving, so
-                   a pill on each one drowned the rows that are not: Receiving is a
-                   muted icon (the words stay for screen readers), and only Opted
-                   out keeps a pill. The Status column still carries Pending.
-                   A blast needs an Active account, a phone number and this switch,
-                   so the detail panel keeps the full pill for both states. -->
-              <template v-if="residentSmsOptIn(item)">
-                <v-icon size="18" class="sms-on" aria-hidden="true">mdi-message-text-outline</v-icon>
-                <span class="sr-only">{{ residentSmsLabel(true) }}</span>
-              </template>
+              <!-- An exception column: nearly every row is Receiving, so only the
+                   accounts that opted out draw anything. The header title says so,
+                   and the words stay for screen readers. A blast needs an Active
+                   account, a phone number and this switch, so the detail panel
+                   keeps the full pill for both states. -->
+              <span v-if="residentSmsOptIn(item)" class="sr-only">{{ residentSmsLabel(true) }}</span>
               <span v-else class="status-pill" :class="residentSmsPillClass(false)">
                 <span class="status-dot" :class="residentSmsDotClass(false)"></span>
                 {{ residentSmsLabel(false) }}
@@ -658,7 +654,14 @@ const headers = [
   { title: 'Mobile Number', key: 'phone_number', width: '150px', value: (item) => displayPhone(item.phone_number) },
   { title: 'Status', key: 'status', align: 'center', width: '150px', value: (item) => residentStatusLabel(item.status) },
   // 0 before 1, so ascending lists the opted-out accounts first.
-  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px', value: (item) => (residentSmsOptIn(item) ? 1 : 0) },
+  {
+    title: 'SMS Blasts',
+    key: 'sms_opt_in',
+    align: 'center',
+    width: '134px',
+    value: (item) => (residentSmsOptIn(item) ? 1 : 0),
+    headerProps: { title: 'Blank means receiving text blasts. Only accounts that opted out show a pill.' },
+  },
 ]
 
 // Sorting is client-side: GET /residents returns every account in one response
@@ -1213,7 +1216,6 @@ onUnmounted(releaseResidentPhotos)
 .name-text { min-width: 0; flex: 1; }
 /* Barangay and Mobile share this so neither reads lighter than the other. */
 .cell-text { font-size: 0.95rem; font-weight: 400; color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
-.sms-on { color: rgba(var(--v-theme-on-surface), 0.45); }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
