@@ -72,16 +72,14 @@
             aria-label="Filter by status"
             variant="outlined" density="compact" hide-details rounded="lg"
           ></v-select>
-          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Cleared
-               is "All"; the filter itself still holds the name or 'All'. -->
+          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. An
+               autocomplete so 60+ names can be typed for, styled and defaulted
+               ("All") like the Status select beside it. -->
           <v-autocomplete
-            v-model="barangayFilter"
-            :items="barangays"
-            item-title="barangay_name"
-            item-value="barangay_name"
+            v-model="filters.barangay"
+            :items="barangayItems"
             label="Barangay"
             aria-label="Filter by barangay"
-            clearable
             variant="outlined" density="compact" hide-details rounded="lg"
           ></v-autocomplete>
         </template>
@@ -142,11 +140,12 @@
           <span class="cell-truncate" :class="{ 'text-medium-emphasis': !item.middle_name }">{{ item.middle_name || '—' }}</span>
         </template>
 
-        <!-- Type chip on every account. An organization adds its name; a barangay
+        <!-- The type chip (same size as Status) on every account, on one line. An
+             organization adds its name, truncated with a tooltip; a barangay
              account's name would only repeat the Barangay column. -->
         <template v-slot:item.account="{ item }">
           <div class="account-cell">
-            <v-chip size="x-small" variant="tonal" label class="flex-shrink-0">{{ accountTypeLabel(item.account_type) }}</v-chip>
+            <StatusChip :status="accountTypeLabel(item.account_type)" class="flex-shrink-0" />
             <span v-if="item.account_type === ACCOUNT_TYPE.organization" class="cell-truncate" :title="item.organization_name">{{ item.organization_name || '—' }}</span>
           </div>
         </template>
@@ -616,31 +615,31 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // so the server has nothing to add. Each header sorts on what its cell prints
 // (`value`), not a raw column. The list itself arrives ordered by last name.
 //
-// Fixed-layout table: the pill and phone columns are px because their content
-// does not vary, Account takes what is left, and the table has a min-width
-// (see the style block) so a narrow card scrolls instead of crushing them. On a
-// phone Middle Name, Account and SMS Blasts are dropped (`dtp-hide-sm`).
+// Fixed-layout table with an explicit width per column, so nothing is left to
+// auto-size: the columns add up to 1284px, the table has a 1180px floor (see the
+// style block) and a narrower card scrolls sideways. On a phone Middle Name,
+// Account and SMS Blasts are dropped (`dtp-hide-sm`).
 const HIDE_SM = { class: 'dtp-hide-sm' }
 const headers = [
   { title: '', key: 'select', sortable: false, align: 'center', width: '48px' },
   { title: 'Last Name', key: 'last_name', width: '150px', value: (item) => item.last_name || '' },
-  { title: 'First Name', key: 'first_name', width: '120px', value: (item) => item.first_name || '' },
-  { title: 'Middle Name', key: 'middle_name', width: '90px', value: (item) => item.middle_name || '', headerProps: HIDE_SM, cellProps: HIDE_SM },
-  { title: 'Account', key: 'account', value: (item) => `${accountTypeLabel(item.account_type)} ${item.organization_name || ''}`, headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'First Name', key: 'first_name', width: '140px', value: (item) => item.first_name || '' },
+  { title: 'Middle Name', key: 'middle_name', width: '130px', value: (item) => item.middle_name || '', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Account', key: 'account', width: '220px', value: (item) => `${accountTypeLabel(item.account_type)} ${item.organization_name || ''}`, headerProps: HIDE_SM, cellProps: HIDE_SM },
   // The longest real barangay name in the data is "San Antonio Ugad".
-  { title: 'Barangay', key: 'barangay_name', width: '130px', value: (item) => barangayOf(item) },
-  { title: 'Mobile Number', key: 'phone_number', width: '125px', value: (item) => displayPhone(item.phone_number) },
-  { title: 'Status', key: 'status', width: '110px', value: (item) => residentStatusLabel(item.status) },
+  { title: 'Barangay', key: 'barangay_name', width: '160px', value: (item) => barangayOf(item) },
+  { title: 'Mobile Number', key: 'phone_number', width: '130px', value: (item) => displayPhone(item.phone_number) },
+  { title: 'Status', key: 'status', width: '100px', value: (item) => residentStatusLabel(item.status) },
   // 0 before 1, so ascending lists the opted-out accounts first.
   {
     title: 'SMS Blasts',
     key: 'sms_opt_in',
-    width: '90px',
+    width: '110px',
     value: (item) => (residentSmsOptIn(item) ? 1 : 0),
     headerProps: { title: 'Blank means receiving text blasts. Only accounts that opted out show a chip.', class: 'dtp-hide-sm' },
     cellProps: HIDE_SM,
   },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '88px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
 ]
 
 // The order the list already arrives in, shown as the header's sort arrow.
@@ -664,10 +663,7 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
-const barangayFilter = computed({
-  get: () => (filters.value.barangay === 'All' ? null : filters.value.barangay),
-  set: (name) => { filters.value.barangay = name ?? 'All' },
-})
+const barangayItems = computed(() => ['All', ...barangays.value.map((b) => b.barangay_name)])
 const editingAccount = computed(() =>
   modal.value.isEditing ? residents.value.find((r) => idOf(r) === modal.value.targetId) : null,
 )
@@ -1291,13 +1287,28 @@ onUnmounted(releaseResidentPhotos)
   letter-spacing: 0.02em;
 }
 
-/* Nine columns, four of them fixed px: below this the fixed layout would crush
-   the name and account columns, so the table scrolls sideways instead (same
-   floor the borrowing table carries). Phones drop three columns and lose the
-   floor, see DataTablePage's collapseMobile. */
-.accounts-table :deep(.dtp-table table) { min-width: 980px; }
+/* Every column has an explicit width (see `headers`), so below this floor the
+   table scrolls sideways instead of crushing any of them. Phones drop three
+   columns and lose the floor, see DataTablePage's collapseMobile. */
+.accounts-table :deep(.dtp-table table) { min-width: 1180px; }
 @media (max-width: 599px) {
   .accounts-table :deep(.dtp-table table) { min-width: 0; }
+}
+/* 12px gutters, not Vuetify's 16px: the widths above are tight enough that a
+   full gutter would clip a last name beside its avatar. */
+.accounts-table :deep(.dtp-table th),
+.accounts-table :deep(.dtp-table td) {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+/* Headers never wrap, and a title too long for its column ellipsizes instead of
+   running under the sort arrow into the next header. */
+.accounts-table :deep(.v-data-table-header__content) { min-width: 0; }
+.accounts-table :deep(.v-data-table-header__content > span) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cell-truncate {
