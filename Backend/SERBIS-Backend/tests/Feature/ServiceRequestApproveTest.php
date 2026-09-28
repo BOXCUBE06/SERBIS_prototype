@@ -291,6 +291,40 @@ class ServiceRequestApproveTest extends TestCase
         $this->assertSame($this->amb01->vehicle_id, $request->fresh()->vehicle_id);
     }
 
+    /**
+     * A re-approval that only swaps the unit was silent before — the full
+     * "approved" push above is suppressed on every re-approval, but the swap
+     * itself is now worth its own, shorter push.
+     */
+    public function test_re_approving_to_swap_the_unit_sends_exactly_one_push(): void
+    {
+        $target = Carbon::now('UTC')->addDays(2)->setTime(6, 0, 0);
+        $request = $this->bookedRequest($target);
+
+        // First approval, Fcm not configured yet — no-ops silently, same as
+        // every other test in this file that skips configureFcm().
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->amb01->vehicle_id,
+        ])->assertOk();
+
+        $this->configureFcm();
+        Http::fake(['fcm.googleapis.com/*' => Http::response(['name' => 'projects/x/messages/0:1'], 200)]);
+        DeviceToken::create([
+            'resident_id' => $this->resident->getKey(),
+            'token' => 'device-1',
+            'platform' => 'android',
+            'last_seen_at' => now(),
+        ]);
+
+        $this->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->amb02->vehicle_id,
+        ])->assertOk();
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($sent) => str_contains($sent['message']['notification']['body'], 'AMB-02')
+            && str_contains($sent['message']['notification']['body'], 'new unit'));
+    }
+
     public function test_a_push_failure_does_not_affect_the_approval(): void
     {
         $this->configureFcm();

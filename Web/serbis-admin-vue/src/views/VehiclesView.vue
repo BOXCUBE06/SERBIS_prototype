@@ -84,6 +84,20 @@
         <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
           Change <span class="font-weight-bold text-high-emphasis">{{ statusDialog.vehicle?.unit_identifier }}</span> to
           <span class="font-weight-bold text-uppercase" :class="`text-${statusMeta[statusDialog.newStatus]?.color}`">{{ statusDialog.newStatus }}</span>?
+          <!-- Known before Confirm — the fleet list this dialog reads from
+               already carries conflicting_bookings per unit (VehicleController::
+               index()), so this needs no extra call. Informational only: the
+               change still goes through either way (Maintenance keeps its own
+               server-side block for this same list; this is for Dispatched and
+               any other non-Available target). -->
+          <div v-if="statusDialog.vehicle?.conflicting_bookings?.length" class="mt-4">
+            <div class="text-caption font-weight-bold text-uppercase text-warning mb-1">
+              {{ statusDialog.vehicle.conflicting_bookings.length }} booking{{ statusDialog.vehicle.conflicting_bookings.length === 1 ? '' : 's' }} on this unit will need a new one
+            </div>
+            <div v-for="b in statusDialog.vehicle.conflicting_bookings" :key="b.request_id" class="text-body-2">
+              {{ transactionNo(b.request_id) }} — {{ b.patient_name || 'Unnamed patient' }} — {{ fmtDateTime(b.scheduled_at) }}
+            </div>
+          </div>
         </v-card-text>
         <v-card-actions class="pa-6 pt-2 justify-end gap-3">
           <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="statusDialog.loading" @click="statusDialog.show = false">Cancel</v-btn>
@@ -131,20 +145,29 @@
       </v-card>
     </v-dialog>
 
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3500" location="bottom right" rounded="lg">{{ snackbar.text }}</v-snackbar>
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="snackbar.link ? 6000 : 3500" location="bottom right" rounded="lg">
+      {{ snackbar.text }}
+      <template v-if="snackbar.link" v-slot:actions>
+        <v-btn variant="text" class="text-none font-weight-bold" @click="router.push(snackbar.link); snackbar.show = false">View</v-btn>
+      </template>
+    </v-snackbar>
   </v-container>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { transactionNo } from '@/composables/requestDisplay'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import RowActions from '@/components/RowActions.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
+
+const router = useRouter()
 
 const API = `${API_BASE}/vehicles`
 const STATUSES = ['Available', 'Dispatched', 'Maintenance']
@@ -206,7 +229,7 @@ const applyServerErrors = async (res) => {
   return data.message || 'Save failed'
 }
 
-const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
+const notify = (text, color = 'success', link = null) => { snackbar.value = { show: true, text, color, link } }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 
 const formatStatus = (status) => {
@@ -215,6 +238,8 @@ const formatStatus = (status) => {
   if (s === 'maintenance') return 'Maintenance'
   return 'Available'
 }
+
+const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 
 const statusChoices = STATUSES.map((s) => ({ value: s, label: s, status: s }))
 
@@ -293,10 +318,16 @@ const executeStatusChange = async () => {
   const id = vehicle.vehicle_id || vehicle.id
   try {
     const res = await fetch(`${API}/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: newStatus }) })
-    if (!res.ok) throw new Error('Failed to update status')
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.errors?.status?.[0] || data.message || 'Failed to update status')
     vehicle.status = newStatus
     statusDialog.value.show = false
-    notify(`${vehicle.unit_identifier} set to ${newStatus}`)
+    const conflicts = data.conflicting_bookings?.length || 0
+    if (conflicts > 0) {
+      notify(`${conflicts} booking${conflicts === 1 ? '' : 's'} ${conflicts === 1 ? 'needs' : 'need'} a new unit`, 'warning', '/conduction-requests')
+    } else {
+      notify(`${vehicle.unit_identifier} set to ${newStatus}`)
+    }
   } catch (error) {
     apiError.value = `Error updating ${vehicle.unit_identifier}: ${error.message}`
     notify(error.message, 'error')

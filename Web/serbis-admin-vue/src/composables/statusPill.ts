@@ -63,6 +63,10 @@ const RESOURCE_ACCENTS: Record<string, string> = {
   Active: '#297A67',
   Deactivated: accentOf('Cancelled'),
   'Opted out': accentOf('Cancelled'),
+  // The account-type chip in Accounts: a label, not a state, so neutral.
+  'Head of the Family': accentOf('Cancelled'),
+  Barangay: accentOf('Cancelled'),
+  Organization: accentOf('Cancelled'),
 }
 
 const ALL_ACCENTS: Record<string, string> = { ...SERVICE_REQUEST_ACCENTS, ...BORROWING_ACCENTS, ...RESOURCE_ACCENTS }

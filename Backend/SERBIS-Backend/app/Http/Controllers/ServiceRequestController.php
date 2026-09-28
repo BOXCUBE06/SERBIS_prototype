@@ -1508,6 +1508,20 @@ class ServiceRequestController extends Controller
             .$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at).'. Reason: '.$reason.' — MDRRMO Echague';
     }
 
+    /**
+     * Same schedule, different unit — the vehicle_id-only change on an
+     * already-Booked request (a re-approval that swaps units in approve(),
+     * or a plain vehicle_id edit through update()). Short on purpose: the
+     * schedule itself did not move, only which unit is coming.
+     */
+    private function unitReassignedPushBody(ServiceRequest $serviceRequest): string
+    {
+        $unit = $serviceRequest->vehicle?->unit_identifier ?? 'a different unit';
+
+        return 'Your ambulance booking for '.$this->forResident($serviceRequest->ambulanceBooking?->scheduled_at)
+            .' now has a new unit assigned: '.$unit.'. — MDRRMO Echague';
+    }
+
     public function update(Request $request, $id)
     {
         $serviceRequest = ServiceRequest::find($id);
@@ -1745,8 +1759,9 @@ class ServiceRequestController extends Controller
             }
         }
 
-        // Captured before update() overwrites status — see the push block below.
+        // Captured before update() overwrites status/vehicle_id — see the push block below.
         $oldStatus = $serviceRequest->status;
+        $oldVehicleId = $serviceRequest->vehicle_id;
 
         DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest, $oldStatus) {
             $this->syncFleet($serviceRequest, $validated);
@@ -1815,6 +1830,12 @@ class ServiceRequestController extends Controller
             if ($pushBody !== null) {
                 $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $pushBody, $this->pushData($serviceRequest));
             }
+        } elseif ($isAmbulanceRequest && $oldStatus === 'Booked' && $serviceRequest->vehicle_id !== $oldVehicleId) {
+            // Status didn't move — this is a plain reassignment (the unit
+            // pulled for an emergency, staff pick another one) rather than a
+            // dispatch, approval or rejection, so none of the branches above
+            // fire for it.
+            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->unitReassignedPushBody($serviceRequest), $this->pushData($serviceRequest));
         }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
@@ -1956,6 +1977,7 @@ class ServiceRequestController extends Controller
         // point, and only the first one is worth pushing to the resident — a
         // re-approval was re-sending the identical "approved" push every time.
         $wasAlreadyApproved = $serviceRequest->ambulanceBooking?->approved_at !== null;
+        $oldVehicleId = $serviceRequest->vehicle_id;
 
         DB::transaction(function () use ($request, $serviceRequest, $validated, $scheduledAt, $scheduledEnd) {
             // Same serialising lock as store(): whoever gets here first
@@ -2007,6 +2029,12 @@ class ServiceRequestController extends Controller
 
         if (! $wasAlreadyApproved) {
             $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->approvalPushBody($fresh), $this->pushData($fresh));
+        } elseif ($oldVehicleId !== $fresh->vehicle_id) {
+            // A re-approval that only swapped the unit — e.g. the assigned
+            // one got pulled for an emergency and staff reassigned this
+            // booking. Worth its own push even though the full "approved"
+            // one above is suppressed on every re-approval.
+            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->unitReassignedPushBody($fresh), $this->pushData($fresh));
         }
 
         return response()->json($fresh);

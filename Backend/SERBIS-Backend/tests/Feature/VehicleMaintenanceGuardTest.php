@@ -133,4 +133,21 @@ class VehicleMaintenanceGuardTest extends TestCase
 
         $this->assertSame('Maintenance', $this->vehicle->fresh()->status);
     }
+
+    /**
+     * Dispatched has no block — a unit pulled for a real emergency must still
+     * be recordable as such. The future booking rides along on the response
+     * instead, for the panel to act on.
+     */
+    public function test_dispatched_is_allowed_and_returns_the_future_booking(): void
+    {
+        $booking = $this->bookedRequest(Carbon::now('UTC')->addDays(3));
+
+        $response = $this->putJson("/api/vehicles/{$this->vehicle->getKey()}", [
+            'status' => 'Dispatched',
+        ])->assertOk();
+
+        $this->assertSame('Dispatched', $this->vehicle->fresh()->status);
+        $response->assertJsonPath('conflicting_bookings.0.request_id', $booking->request_id);
+    }
 }
