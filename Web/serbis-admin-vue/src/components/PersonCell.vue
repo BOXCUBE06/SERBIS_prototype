@@ -14,7 +14,10 @@
       <span class="font-weight-bold text-caption">{{ initials }}</span>
     </v-avatar>
     <div class="min-width-0">
-      <div class="text-body-2 font-weight-bold text-truncate">{{ name }}</div>
+      <div class="d-flex align-center">
+        <div class="text-body-2 font-weight-bold text-truncate">{{ name }}</div>
+        <slot name="badge" />
+      </div>
       <div v-if="secondary" class="text-caption text-medium-emphasis text-truncate">{{ secondary }}</div>
     </div>
   </div>
