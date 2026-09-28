@@ -424,7 +424,6 @@
                   v-model="formData.account_type"
                   :items="ACCOUNT_TYPE_ITEMS"
                   label="Account type *"
-                  :menu-props="{ transition: false }"
                   :error-messages="fieldErrors.account_type"
                   variant="outlined"
                   density="comfortable"
