@@ -1,251 +1,212 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <v-row>
-      <v-col cols="12">
-        <PageHeader title="Documents" />
+    <div class="w-100">
+      <PageHeader title="Documents" />
 
-        <v-card elevation="2" rounded="xl" class="pa-6 border-0">
+      <!-- Dropzone: one row, so the list starts without scrolling. -->
+      <div
+        v-if="!staged"
+        class="dropzone mb-4"
+        :class="{ 'dropzone--active': dragActive }"
+        role="button"
+        tabindex="0"
+        aria-label="Upload a file — drop it here or press Enter to browse"
+        @click="pickFile"
+        @keydown.enter.prevent="pickFile"
+        @keydown.space.prevent="pickFile"
+        @dragover.prevent="dragActive = true"
+        @dragleave.prevent="dragActive = false"
+        @drop.prevent="onDrop"
+      >
+        <v-icon size="20" color="primary">mdi-cloud-upload-outline</v-icon>
+        <span class="text-body-2 font-weight-medium text-high-emphasis">Drop a file here, or click to browse</span>
+        <span class="text-caption text-medium-emphasis">PDF or images — max 10 MB. This is what residents will download.</span>
+        <!-- Kept in step with InfoMaterialController::store's `mimes:` rule.
+             Word and ZIP were dropped there because these files are served
+             by public URL from the agency's own origin; offering them here
+             would only earn the admin a 422. The Word and archive icons
+             below stay — rows uploaded before the change still render. -->
+        <input
+          ref="fileInput"
+          type="file"
+          class="d-none"
+          accept=".pdf,.jpg,.jpeg,.png"
+          @change="onPick"
+        />
+      </div>
 
-          <!-- Filters -->
-          <v-row class="mb-6" align="center" justify="end">
-            <v-col cols="12" class="d-flex justify-end align-center gap-4 flex-wrap">
-              <v-slide-group v-model="typeFilter" class="type-filter" show-arrows mandatory>
-                <v-slide-group-item
-                  v-for="f in typeFilters"
-                  :key="f.value"
-                  :value="f.value"
-                  v-slot="{ isSelected, toggle }"
-                >
-                  <v-chip
-                    :color="isSelected ? 'primary' : undefined"
-                    :variant="isSelected ? 'flat' : 'tonal'"
-                    class="mr-2 font-weight-medium"
-                    @click="toggle"
-                  >{{ f.label }}</v-chip>
-                </v-slide-group-item>
-              </v-slide-group>
-
-              <v-select
-                v-model="dateFilter"
-                :items="dateFilters"
-                item-title="label"
-                item-value="value"
-                prepend-inner-icon="mdi-calendar-range"
-                variant="outlined"
-                density="compact"
-                hide-details
-                rounded="lg"
-                class="date-field"
-              ></v-select>
-
-              <v-text-field
-                v-model="search"
-                prepend-inner-icon="mdi-magnify"
-                placeholder="Search materials..."
-                variant="outlined"
-                density="compact"
-                hide-details
-                rounded="lg"
-                class="search-field"
-              ></v-text-field>
-            </v-col>
-          </v-row>
-
-          <!-- Dropzone / staging -->
-          <div
-            v-if="!staged"
-            class="dropzone subtle-border mb-6"
-            :class="{ 'dropzone--active': dragActive }"
-            role="button"
-            tabindex="0"
-            aria-label="Upload a file — drop it here or press Enter to browse"
-            @click="pickFile"
-            @keydown.enter.prevent="pickFile"
-            @keydown.space.prevent="pickFile"
-            @dragover.prevent="dragActive = true"
-            @dragleave.prevent="dragActive = false"
-            @drop.prevent="onDrop"
+      <v-card
+        v-else
+        variant="tonal"
+        color="primary"
+        rounded="lg"
+        class="pa-4 mb-4 staging-card"
+      >
+        <div class="d-flex align-center gap-3">
+          <v-icon :color="getFileIconColor(staged.ext)" size="40">{{ getFileIcon(staged.ext) }}</v-icon>
+          <div class="flex-grow-1 min-w-0">
+            <v-text-field
+              v-model="stagedTitle"
+              label="Title shown to residents *"
+              placeholder="Flood evacuation map — Barangay San Isidro"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              autofocus
+              @keydown.enter="publish"
+            ></v-text-field>
+            <div class="text-caption text-medium-emphasis mt-1 text-truncate">
+              {{ staged.name }} · {{ formatBytes(staged.size) }}
+            </div>
+          </div>
+          <v-btn
+            color="primary" variant="flat" rounded="lg"
+            class="text-none font-weight-bold" height="44"
+            :loading="uploading" :disabled="!stagedTitle.trim()"
+            @click="publish"
           >
-            <v-icon size="40" color="primary" class="mb-2">mdi-cloud-upload-outline</v-icon>
-            <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-              Drop a file here, or click to browse
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              PDF or images — max 10 MB. This is what residents will download.
-            </div>
-            <!-- Kept in step with InfoMaterialController::store's `mimes:` rule.
-                 Word and ZIP were dropped there because these files are served
-                 by public URL from the agency's own origin; offering them here
-                 would only earn the admin a 422. The Word and archive icons
-                 below stay — rows uploaded before the change still render. -->
-            <input
-              ref="fileInput"
-              type="file"
-              class="d-none"
-              accept=".pdf,.jpg,.jpeg,.png"
-              @change="onPick"
+            <v-icon start>mdi-send</v-icon> Publish
+          </v-btn>
+          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" :disabled="uploading" @click="clearStaged"></v-btn>
+        </div>
+        <v-progress-linear
+          v-if="uploading"
+          :model-value="progress"
+          color="primary"
+          height="6"
+          rounded
+          class="mt-3"
+        ></v-progress-linear>
+        <v-alert v-if="apiError" type="error" variant="tonal" density="compact" rounded="lg" class="mt-3">
+          {{ apiError }}
+        </v-alert>
+      </v-card>
+
+      <!-- Table and grid share the shell: tabs, search, date filter, chips and
+           footer. A row or a card opens the file in a new tab. -->
+      <DataTablePage
+        compact
+        collapse-mobile
+        class="materials-table"
+        :tabs="typeTabs"
+        :status="typeFilter"
+        @update:status="typeFilter = $event"
+        :loading="firstLoad"
+        :refreshing="refreshing"
+        v-model:search="search"
+        search-placeholder="Search materials"
+        :headers="materialHeaders"
+        :items="visibleFiles"
+        item-value="files_id"
+        :no-data-text="emptyText"
+        :page="page"
+        @update:page="page = $event"
+        :items-per-page="perPage"
+        @update:items-per-page="perPage = $event"
+        :items-per-page-options="perPageOptions"
+        result-noun="materials"
+        :active-filters="activeFilters"
+        @clear-filter="clearFilter"
+        @clear-all="clearFilter('date')"
+        @click:row="(_event, { item }) => openFile(item)"
+      >
+        <template v-slot:filters>
+          <v-select
+            v-model="dateFilter"
+            :items="dateFilters"
+            item-title="label"
+            item-value="value"
+            label="Uploaded"
+            variant="outlined" density="compact" hide-details rounded="lg"
+          ></v-select>
+          <v-btn-toggle v-model="view" mandatory divided density="compact" variant="outlined" rounded="lg" class="view-toggle" aria-label="View">
+            <v-btn value="table" icon="mdi-view-list" aria-label="Table view"></v-btn>
+            <v-btn value="grid" icon="mdi-view-grid-outline" aria-label="Grid view"></v-btn>
+          </v-btn-toggle>
+        </template>
+
+        <template v-if="view === 'grid'" v-slot:content>
+          <div v-if="firstLoad" class="file-grid" aria-hidden="true">
+            <div v-for="n in 6" :key="n" class="file-grid__skeleton"></div>
+          </div>
+          <div v-else-if="visibleFiles.length === 0" class="file-grid__empty text-body-2 text-medium-emphasis">{{ emptyText }}</div>
+          <div v-else class="file-grid">
+            <FileCard
+              v-for="f in pagedFiles"
+              :key="f.files_id"
+              :title="f.title"
+              :url="f.full_url"
+              :image="category(f.file_type) === 'image'"
+              :icon="getFileIcon(f.file_type)"
+              :meta="`${formatBytes(f.file_size, 1)} · ${relativeDate(f.created_at)}`"
+              :verified="!!f.verified"
+              :verified-by="verifiedBy(f)"
+              :busy="verifying === f.files_id"
+              @open="openFile(f)"
+              @download="openFile(f)"
+              @verify="onToggleVerified(f, !f.verified)"
+              @delete="askDelete(f)"
             />
           </div>
+        </template>
 
-          <v-card
-            v-else
-            variant="tonal"
-            color="primary"
-            rounded="lg"
-            class="pa-4 mb-6 staging-card"
-          >
-            <div class="d-flex align-center gap-3">
-              <v-icon :color="getFileIconColor(staged.ext)" size="40">{{ getFileIcon(staged.ext) }}</v-icon>
-              <div class="flex-grow-1 min-w-0">
-                <v-text-field
-                  v-model="stagedTitle"
-                  label="Title shown to residents *"
-                  placeholder="Flood evacuation map — Barangay San Isidro"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                  rounded="lg"
-                  autofocus
-                  @keydown.enter="publish"
-                ></v-text-field>
-                <div class="text-caption text-medium-emphasis mt-1 text-truncate">
-                  {{ staged.name }} · {{ formatBytes(staged.size) }}
-                </div>
-              </div>
-              <v-btn
-                color="primary" variant="flat" rounded="lg"
-                class="text-none font-weight-bold" height="44"
-                :loading="uploading" :disabled="!stagedTitle.trim()"
-                @click="publish"
-              >
-                <v-icon start>mdi-send</v-icon> Publish
-              </v-btn>
-              <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" :disabled="uploading" @click="clearStaged"></v-btn>
-            </div>
-            <v-progress-linear
-              v-if="uploading"
-              :model-value="progress"
-              color="primary"
-              height="6"
-              rounded
-              class="mt-3"
-            ></v-progress-linear>
-            <v-alert v-if="apiError" type="error" variant="tonal" density="compact" rounded="lg" class="mt-3">
-              {{ apiError }}
-            </v-alert>
-          </v-card>
+        <template v-slot:item.title="{ item }">
+          <PersonCell
+            :name="item.title"
+            :secondary="(item.file_type || 'file').toUpperCase()"
+            :icon="getFileIcon(item.file_type)"
+            size="36"
+          />
+        </template>
 
-          <!-- Empty state -->
-          <div v-if="!firstLoad && visibleFiles.length === 0" class="empty-state subtle-surface">
-            <v-icon size="48" class="text-medium-emphasis mb-3">mdi-file-hidden</v-icon>
-            <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-              {{ files.length > 0 ? 'No materials match your filter' : 'No materials published yet' }}
-            </div>
-            <div class="text-body-2 text-medium-emphasis">
-              {{ files.length > 0 ? 'Try a different search or type.' : 'Upload the first document residents will see.' }}
-            </div>
+        <template v-slot:item.file_type="{ item }">
+          <span class="text-body-2">{{ typeLabel(item.file_type) }}</span>
+        </template>
+
+        <template v-slot:item.file_size="{ item }">
+          <span class="text-body-2 text-medium-emphasis file-size">{{ formatBytes(item.file_size) }}</span>
+        </template>
+
+        <template v-slot:item.created_at="{ item }">
+          <span class="text-body-2 text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
+        </template>
+
+        <!-- Switch rather than a button pair: this is one state with two
+             directions, and a mistaken click has to be undoable. Who verified it
+             sits beside it on one line (MDRRMO feedback, 2026-09-18); the row is
+             a fixed height, so it truncates. Clicks stop here, a row opens the file. -->
+        <template v-slot:item.verified="{ item }">
+          <div class="d-flex align-center gap-2 min-w-0" @click.stop @keydown.stop>
+            <v-switch
+              :model-value="item.verified"
+              :loading="verifying === item.files_id"
+              :disabled="verifying === item.files_id"
+              :aria-label="`Mark ${item.title} as verified`"
+              color="success"
+              density="compact"
+              hide-details
+              inset
+              class="flex-grow-0"
+              @update:model-value="value => onToggleVerified(item, value)"
+            ></v-switch>
+            <span v-if="verifiedBy(item)" class="text-caption text-medium-emphasis cell-truncate" :title="verifiedBy(item)">
+              {{ verifiedBy(item) }}
+            </span>
           </div>
+        </template>
 
-          <!-- Materials list. This was a card grid, and it was the odd one out:
-               Resource Management, Vehicles and Activity Logs are all tables,
-               and the questions asked here are the ones a table answers - which
-               file is newest, which one is the 8 MB PDF, is the advisory still
-               up. Same v-data-table, same row height, same 10 per page as
-               VehiclesView, so all four read the same way. -->
-          <v-card v-else elevation="0" rounded="xl" class="subtle-border overflow-hidden">
-            <v-data-table
-              :key="firstLoad ? 'loading' : 'ready'"
-              :loading="refreshing"
-              :class="{ 'is-refreshing': refreshing }"
-              :headers="materialHeaders"
-              :items="visibleFiles"
-              :items-per-page="10"
-              item-value="files_id"
-              density="comfortable"
-              class="materials-table table-fade"
-            >
-              <template v-if="firstLoad" #body>
-                <SkeletonRows :rows="10" :columns="materialHeaders.length" />
-              </template>
-              <template v-slot:item.rowNumber="{ item }">
-                <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-              </template>
-
-              <template v-slot:item.title="{ item }">
-                <div class="d-flex align-center gap-3 py-2">
-                  <div
-                    class="icon-wrapper"
-                    :style="{ background: `rgba(var(--v-theme-${getFileIconColor(item.file_type)}), 0.14)` }"
-                  >
-                    <v-icon :color="getFileIconColor(item.file_type)" size="22">{{ getFileIcon(item.file_type) }}</v-icon>
-                  </div>
-                  <div class="min-w-0">
-                    <div class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.title }}</div>
-                    <span
-                      class="type-badge"
-                      :style="{
-                        background: `rgba(var(--v-theme-${getFileIconColor(item.file_type)}), 0.14)`,
-                        color: `rgb(var(--v-theme-${getFileIconColor(item.file_type)}))`,
-                      }"
-                    >{{ (item.file_type || 'file').toUpperCase() }}</span>
-                  </div>
-                </div>
-              </template>
-
-              <template v-slot:item.file_type="{ item }">
-                <span class="text-body-2 font-weight-medium text-high-emphasis">{{ typeLabel(item.file_type) }}</span>
-              </template>
-
-              <template v-slot:item.file_size="{ item }">
-                <span class="text-body-2 text-medium-emphasis file-size">{{ formatBytes(item.file_size) }}</span>
-              </template>
-
-              <template v-slot:item.created_at="{ item }">
-                <span class="text-body-2 text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
-              </template>
-
-              <!-- Switch rather than a button pair: this is one state with two
-                   directions, and a mistaken click has to be undoable. -->
-              <template v-slot:item.verified="{ item }">
-                <v-switch
-                  :model-value="item.verified"
-                  :loading="verifying === item.files_id"
-                  :disabled="verifying === item.files_id"
-                  :aria-label="`Mark ${item.title} as verified`"
-                  color="success"
-                  density="compact"
-                  hide-details
-                  inset
-                  @update:model-value="value => onToggleVerified(item, value)"
-                ></v-switch>
-                <!-- Who, not just that — MDRRMO feedback, 2026-09-18. -->
-                <div v-if="item.verified && item.verified_by_name" class="text-caption text-medium-emphasis" style="line-height: 1.3;">
-                  {{ item.verified_by_name }}<br>{{ item.verified_by_role }}
-                </div>
-              </template>
-
-              <template v-slot:item.actions="{ item }">
-                <div class="d-flex justify-end align-center gap-1">
-                  <v-btn
-                    variant="tonal" color="primary" size="small" rounded="lg"
-                    class="text-none"
-                    :href="item.full_url" target="_blank" rel="noopener"
-                  >
-                    <v-icon start size="18">mdi-download</v-icon> Download
-                  </v-btn>
-                  <v-btn
-                    icon="mdi-delete-outline" variant="outlined" size="small" color="error"
-                    :aria-label="`Delete ${item.title}`"
-                    @click="askDelete(item)"
-                  ></v-btn>
-                </div>
-              </template>
-            </v-data-table>
-          </v-card>
-
-        </v-card>
-      </v-col>
-    </v-row>
+        <template v-slot:item.actions="{ item }">
+          <RowActions
+            :label="item.title"
+            :editable="false"
+            :extra="{ label: 'Download', icon: 'mdi-download' }"
+            @extra="openFile(item)"
+            @delete="askDelete(item)"
+          />
+        </template>
+      </DataTablePage>
+    </div>
 
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog" max-width="420">
@@ -268,24 +229,25 @@
     <!-- Verify: who -->
     <v-dialog v-model="verifyDialog" max-width="440">
       <v-card rounded="xl" class="pa-2">
-        <v-card-title class="text-h6 font-weight-bold text-high-emphasis">Who verified this?</v-card-title>
+        <v-card-title class="text-h6 font-weight-bold text-high-emphasis">Mark as verified</v-card-title>
         <v-card-text class="text-body-2 text-medium-emphasis">
           <div class="mb-4">
-            Marking <strong class="text-high-emphasis">{{ pendingVerify?.title }}</strong> verified names the
-            person who checked it — an unnamed "verified" is what this replaces.
+            Enter the name and role of the person who checked
+            <strong class="text-high-emphasis">{{ pendingVerify?.title }}</strong>.
           </div>
           <v-text-field
             v-model="verifyName"
-            label="Name" placeholder="e.g. Dr. Ana Reyes"
+            label="Name *" placeholder="e.g. Dr. Ana Reyes"
             variant="outlined" density="comfortable" class="mb-2"
-            :error-messages="verifyError"
-            @update:model-value="verifyError = ''"
+            :error-messages="verifyErrors.name"
+            @update:model-value="verifyErrors.name = ''"
           ></v-text-field>
           <v-text-field
             v-model="verifyRole"
-            label="Role" placeholder="e.g. MDRRMO Medical Officer"
+            label="Role *" placeholder="e.g. MDRRMO Medical Officer"
             variant="outlined" density="comfortable"
-            @update:model-value="verifyError = ''"
+            :error-messages="verifyErrors.role"
+            @update:model-value="verifyErrors.role = ''"
           ></v-text-field>
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
@@ -311,12 +273,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import RowActions from '@/components/RowActions.vue'
+import FileCard from '@/components/FileCard.vue'
 
 const API = `${API_BASE}/admin/info-materials`
 
@@ -391,27 +355,72 @@ const category = (ext) => {
   return 'other'
 }
 
-const visibleFiles = computed(() => {
+// Search and date narrow the rows first; the type tabs then split that set, so
+// each tab's count is what it would show.
+const baseFiles = computed(() => {
   const q = search.value.trim().toLowerCase()
   const since = dateThreshold()
   return files.value.filter((f) => {
-    const matchesType = typeFilter.value === 'all' || category(f.file_type) === typeFilter.value
     const matchesSearch = !q || (f.title || '').toLowerCase().includes(q)
     const matchesDate = !since || new Date(f.created_at) >= since
-    return matchesType && matchesSearch && matchesDate
+    return matchesSearch && matchesDate
   })
 })
+const visibleFiles = computed(() =>
+  typeFilter.value === 'all' ? baseFiles.value : baseFiles.value.filter((f) => category(f.file_type) === typeFilter.value),
+)
+const typeTabs = computed(() => typeFilters.map((t) => ({
+  value: t.value,
+  label: t.label,
+  count: t.value === 'all' ? baseFiles.value.length : baseFiles.value.filter((f) => category(f.file_type) === t.value).length,
+})))
 
-const rowNumber = useRowNumbers(visibleFiles, 'files_id')
+const emptyText = computed(() => (files.value.length > 0 ? 'No materials match your filter' : 'No materials published yet'))
 
+// Date is the only filter that is not the tabs or search, so it is the only chip.
+const activeFilters = computed(() => (
+  dateFilter.value === 'all' ? [] : [{ key: 'date', label: `Uploaded: ${dateFilters.find((d) => d.value === dateFilter.value)?.label}` }]
+))
+const clearFilter = () => { dateFilter.value = 'all' }
+
+// Table or grid, remembered per browser. Storage can be blocked, so it is
+// always wrapped and the page works without it.
+const VIEW_KEY = 'serbis.documents.view'
+const readView = () => {
+  try { return localStorage.getItem(VIEW_KEY) === 'grid' ? 'grid' : 'table' } catch { return 'table' }
+}
+const view = ref(readView())
+watch(view, (value) => {
+  try { localStorage.setItem(VIEW_KEY, value) } catch { /* not remembered */ }
+  page.value = 1
+})
+
+// One page number, and a page size per view (a grid page is a multiple of its row).
+const page = ref(1)
+const tablePerPage = ref(10)
+const gridPerPage = ref(12)
+const perPage = computed({
+  get: () => (view.value === 'grid' ? gridPerPage.value : tablePerPage.value),
+  set: (n) => { if (view.value === 'grid') gridPerPage.value = n; else tablePerPage.value = n },
+})
+const perPageOptions = computed(() => (view.value === 'grid' ? [12, 24, 48] : [10, 25, 50]))
+const pagedFiles = computed(() => visibleFiles.value.slice((page.value - 1) * perPage.value, page.value * perPage.value))
+watch([search, typeFilter, dateFilter], () => { page.value = 1 })
+
+// A row or a card opens the file in a new tab, the same as Download.
+const openFile = (item) => window.open(item.full_url, '_blank', 'noopener')
+const verifiedBy = (item) => (item.verified && item.verified_by_name ? [item.verified_by_name, item.verified_by_role].filter(Boolean).join(', ') : '')
+
+// Fixed-layout table; identity gets the room. Type and Size go on a phone
+// (see DataTablePage's collapseMobile).
+const HIDE_SM = { class: 'dtp-hide-sm' }
 const materialHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'File', key: 'title', width: '32%' },
-  { title: 'Type', key: 'file_type', width: '12%' },
-  { title: 'Size', key: 'file_size', width: '9%' },
-  { title: 'Uploaded', key: 'created_at', width: '13%' },
-  { title: 'Verified', key: 'verified', width: '13%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '21%' },
+  { title: 'File', key: 'title', width: '38%' },
+  { title: 'Type', key: 'file_type', width: '130px', value: (item) => typeLabel(item.file_type), headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Size', key: 'file_size', width: '90px', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Uploaded', key: 'created_at', width: '130px' },
+  { title: 'Verified', key: 'verified', width: '230px', value: (item) => (item.verified ? 1 : 0) },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '88px' },
 ]
 
 // The badge on the file cell prints the raw extension; this column prints what
@@ -551,7 +560,7 @@ const verifyDialog = ref(false)
 const pendingVerify = ref(null)
 const verifyName = ref('')
 const verifyRole = ref('')
-const verifyError = ref('')
+const verifyErrors = ref({ name: '', role: '' })
 
 const onToggleVerified = (item, value) => {
   if (!value) {
@@ -562,7 +571,7 @@ const onToggleVerified = (item, value) => {
   pendingVerify.value = item
   verifyName.value = ''
   verifyRole.value = ''
-  verifyError.value = ''
+  verifyErrors.value = { name: '', role: '' }
   verifyDialog.value = true
 }
 
@@ -572,10 +581,12 @@ const cancelVerify = () => {
 }
 
 const confirmVerify = async () => {
-  if (!verifyName.value.trim() || !verifyRole.value.trim()) {
-    verifyError.value = 'Name and role are both required.'
-    return
+  // Both are required: the mark names who checked the file, or it means nothing.
+  verifyErrors.value = {
+    name: verifyName.value.trim() ? '' : 'Name is required.',
+    role: verifyRole.value.trim() ? '' : 'Role is required.',
   }
+  if (verifyErrors.value.name || verifyErrors.value.role) return
 
   const item = pendingVerify.value
   verifyDialog.value = false
@@ -649,23 +660,18 @@ onMounted(fetchFiles)
 <style scoped>
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-.gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
-.search-field { max-width: 240px; }
-.date-field { max-width: 170px; }
-.type-filter { max-width: 100%; }
 
-/* Dropzone */
+/* Dropzone: a single row (icon, text, hint), wrapping on a narrow screen. */
 .dropzone {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 32px 16px;
-  border-style: dashed !important;
-  border-width: 2px !important;
-  border-radius: 16px;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  min-height: 48px;
+  padding: 8px 16px;
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.3);
+  border-radius: 12px;
   cursor: pointer;
   transition: background-color var(--motion-base) var(--ease-out), border-color var(--motion-base) var(--ease-out);
   background-color: rgba(var(--v-theme-on-surface), 0.02);
@@ -673,61 +679,45 @@ onMounted(fetchFiles)
 .dropzone:hover,
 .dropzone:focus-visible {
   background-color: rgba(var(--v-theme-primary), 0.06);
-  border-color: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary));
   outline: none;
 }
 .dropzone--active {
   background-color: rgba(var(--v-theme-primary), 0.12);
-  border-color: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary));
 }
 
 .staging-card { border: 1px solid rgba(var(--v-theme-primary), 0.4); }
 
-/* Materials table. Fixed layout keeps the seven columns stable regardless
-   of file-title length. */
-.materials-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 700px; }
-.materials-table :deep(thead th) {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+/* Table: fixed layout keeps the columns stable whatever the file titles are;
+   below the floor it scrolls, on a phone (collapseMobile) the floor goes. */
+.materials-table :deep(.dtp-table table) { min-width: 760px; }
+@media (max-width: 599px) {
+  .materials-table :deep(.dtp-table table) { min-width: 0; }
 }
 .file-size { font-variant-numeric: tabular-nums; }
+.cell-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.icon-wrapper {
-  width: 44px;
-  height: 44px;
+/* Grid: as many 200px-plus columns as fit. */
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 16px;
+  padding: 4px 0;
+}
+.file-grid__skeleton {
+  height: 200px;
   border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
+  background: rgba(var(--v-theme-on-surface), 0.06);
 }
-.type-badge {
-  display: inline-block;
-  margin-top: 2px;
-  padding: 1px 8px;
-  border-radius: 6px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
+.file-grid__empty { padding: 48px 16px; text-align: center; }
 
-/* Empty state */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 56px 16px;
-  border-radius: 16px;
-}
+.view-toggle { flex: none; height: 40px; }
 
 @media (prefers-reduced-motion: reduce) {
   .dropzone { transition: none; }
