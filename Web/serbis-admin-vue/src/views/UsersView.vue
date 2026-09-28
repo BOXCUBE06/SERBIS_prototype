@@ -41,29 +41,29 @@
       <div class="residents-main">
         <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
 
-          <div class="px-6 py-2 border-b d-flex align-center flex-wrap gap-3 flex-shrink-0">
+          <div class="filter-bar px-6 py-2 border-b flex-shrink-0">
             <v-text-field
               v-model="search"
               prepend-inner-icon="mdi-magnify"
-              label="Search accounts"
-              placeholder="Name or mobile number"
+              placeholder="Search name or mobile number"
+              aria-label="Search accounts"
               clearable
               variant="outlined"
               density="compact"
               hide-details
               rounded="lg"
-              class="search-field"
+              class="filter-bar__search"
             ></v-text-field>
 
             <v-select
               v-model="filters.status"
-              :items="RESIDENT_STATUS_FILTER_ITEMS"
-              label="Status"
+              :items="statusFilterItems"
+              aria-label="Filter by status"
               variant="outlined"
               density="compact"
               hide-details
               rounded="lg"
-              class="status-field"
+              class="filter-bar__select"
             ></v-select>
 
             <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Cleared
@@ -73,16 +73,15 @@
               :items="barangays"
               item-title="barangay_name"
               item-value="barangay_name"
-              label="Barangay"
               placeholder="All barangays"
+              aria-label="Filter by barangay"
               clearable
               variant="outlined"
               density="compact"
               hide-details
               rounded="lg"
-              class="barangay-field"
+              class="filter-bar__select"
             ></v-autocomplete>
-
           </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
@@ -815,6 +814,8 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
+// "All" reads as a placeholder here: the select has no floating label to say what it filters.
+const statusFilterItems = RESIDENT_STATUS_FILTER_ITEMS.map((item) => (item.value === 'All' ? { ...item, title: 'All statuses' } : item))
 const barangayFilter = computed({
   get: () => (filters.value.barangay === 'All' ? null : filters.value.barangay),
   set: (name) => { filters.value.barangay = name ?? 'All' },
@@ -1423,9 +1424,6 @@ onUnmounted(releaseResidentPhotos)
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
-.search-field { width: 260px; max-width: 100%; }
-.status-field { width: 150px; max-width: 100%; }
-.barangay-field { width: 200px; max-width: 100%; }
 
 /* The count beside each type tab's label — same idea as .count-chip, sized
    down to sit inline in a tab. Colour rides on font-weight/parent colour
