@@ -57,7 +57,8 @@ class DemoAccountsSeeder extends Seeder
 
     /**
      * Per account, in ACCOUNTS order: [service code|null, status, days ago
-     * submitted, days from now scheduled (ambulance only)]. `null` is "Others".
+     * submitted, days from now scheduled (ambulance only; a Pending one has none,
+     * as store() makes a scheduled request Booked)]. `null` is "Others".
      * Every row must pass ServiceAudience::allows for that account's type.
      */
     private const PLAN = [
@@ -67,7 +68,7 @@ class DemoAccountsSeeder extends Seeder
         [[self::AMBULANCE, 'Resolved', 12, -10], ['debris-removal', 'Pending', 5, null], ['simulation-drills-nsed', 'Resolved', 55, null], ['animal-rescue', 'Responding', 6, null]],
         [[self::AMBULANCE, 'Disapproved', 8, -5], [self::AMBULANCE, 'Cancelled', 4, 6], ['relief-goods-distribution', 'Pending', 25, null]],
         [[self::AMBULANCE, 'Booked', 2, 10], ['road-clearing', 'Resolved', 45, null], ['mdrrmo-certification', 'Pending', 18, null]],
-        [['drrm-trainings-and-seminars', 'Resolved', 35, null], ['sandbagging', 'Cancelled', 11, null], [self::AMBULANCE, 'Pending', 0, 2]],
+        [['drrm-trainings-and-seminars', 'Resolved', 35, null], ['sandbagging', 'Cancelled', 11, null], [self::AMBULANCE, 'Pending', 0, null]],
         [['simulation-drills-nsed', 'Disapproved', 28, null], ['power-line-repair', 'Pending', 7, null], [self::AMBULANCE, 'Resolved', 50, -48]],
         [['debris-removal', 'Disapproved', 16, null], ['animal-rescue', 'Cancelled', 22, null], [null, 'Pending', 3, null]],
         [['mdrrmo-certification', 'Resolved', 58, null], ['road-clearing', 'Responding', 4, null], [self::AMBULANCE, 'Cancelled', 13, 5]],
