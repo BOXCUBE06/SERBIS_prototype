@@ -155,6 +155,7 @@
             :headers="headers"
             :items="filteredAndSortedResidents"
             :items-per-page="-1"
+            v-model:sort-by="sortBy"
             fixed-header
             :height="tableHeight"
             hover
@@ -653,7 +654,9 @@ const headers = computed(() => {
   const cols = [
     { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
     // No width: Name takes whatever the fixed columns leave, avatar included.
-    { title: 'Name', key: 'fullName' },
+    // `value` is what the header sorts on: what the cell prints, not a raw column
+    // (there is no `fullName` field, and the Name cell shows primaryName).
+    { title: 'Name', key: 'fullName', value: (item) => primaryName(item) },
   ]
   if (filters.value.type === 'All') {
     cols.push({ title: 'Type', key: 'account_type', width: '190px' })
@@ -661,13 +664,18 @@ const headers = computed(() => {
   cols.push(
     // The longest real barangay name in the data is "San Antonio Ugad", which
     // was still clipping when this column was 15% of a narrower table.
-    { title: 'Barangay', key: 'barangay_name', width: '150px' },
-    { title: 'Mobile Number', key: 'phone_number', width: '150px' },
-    { title: 'Status', key: 'status', align: 'center', width: '150px' },
-    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px' },
+    { title: 'Barangay', key: 'barangay_name', width: '150px', value: (item) => barangayOf(item) },
+    { title: 'Mobile Number', key: 'phone_number', width: '150px', value: (item) => displayPhone(item.phone_number) },
+    { title: 'Status', key: 'status', align: 'center', width: '150px', value: (item) => residentStatusLabel(item.status) },
+    // 0 before 1, so ascending lists the opted-out accounts first.
+    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px', value: (item) => (residentSmsOptIn(item) ? 1 : 0) },
   )
   return cols
 })
+
+// Sorting is client-side: GET /residents returns every account in one response
+// and the table holds them all (no paging), so the server has nothing to add.
+const sortBy = ref([{ key: 'fullName', order: 'asc' }])
 
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
@@ -792,7 +800,8 @@ const typeCounts = computed(() => {
 const filteredAndSortedResidents = computed(() => {
   let result = residentsBeforeType.value
   if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
-  return result.slice().sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
+  // The order the row numbers count in, and the table's default sort (Name A-Z).
+  return result.slice().sort((a, b) => primaryName(a).localeCompare(primaryName(b)))
 })
 
 const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
