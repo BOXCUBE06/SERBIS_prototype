@@ -100,12 +100,20 @@
           <span class="text-truncate d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
         </template>
 
-        <template v-slot:item._dateSubmitted="{ item }">
+        <template v-slot:item.created_at="{ item }">
           <span class="text-truncate d-block row-date">{{ item._dateSubmitted }}</span>
         </template>
 
         <template v-slot:item.status="{ item }">
-          <span class="status-col-pill"><StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" /></span>
+          <div class="status-col-pill d-flex flex-column align-start ga-1">
+            <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
+            <StatusPill
+              v-if="pendingWaitLabel(item.status, item.created_at)"
+              small
+              status="Pending"
+              :label="pendingWaitLabel(item.status, item.created_at)"
+            />
+          </div>
         </template>
 
         <template v-slot:item.scheduled_at="{ item }">
@@ -123,29 +131,17 @@
                 :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
               />
             </template>
-            <template v-else>
-              <span class="row-date">{{ item._dateSubmitted }}</span>
-              <StatusPill
-                v-if="pendingWaitLabel(item.status, item.created_at)"
-                small
-                status="Pending"
-                :label="pendingWaitLabel(item.status, item.created_at)"
-                class="ml-2"
-              />
-            </template>
+            <span v-else class="text-medium-emphasis">—</span>
           </div>
         </template>
 
         <template v-slot:item._requesterName="{ item }">
           <PersonCell
             :name="item._requesterName"
+            :secondary="item._phone"
             :initials="requesterInitials(item)"
             :title="item._requesterName"
           />
-        </template>
-
-        <template v-slot:item._phone="{ item }">
-          <span class="text-truncate d-block" :title="item._phone">{{ item._phone }}</span>
         </template>
 
         <template v-slot:item._secondary="{ item }">
@@ -157,16 +153,10 @@
         </template>
 
         <template v-slot:item._unit="{ item }">
-          <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+          <span v-if="item._unit" class="text-truncate d-block">{{ item._unit }}</span>
+          <v-chip v-else size="x-small" variant="tonal" label>Unassigned</v-chip>
         </template>
 
-        <template v-slot:item._dateApproved="{ item }">
-          <span class="text-truncate d-block row-date" :class="item._dateApproved ? '' : 'text-medium-emphasis'">{{ item._dateApproved || '—' }}</span>
-        </template>
-
-        <template v-slot:item._resolvedAt="{ item }">
-          <span class="text-truncate d-block row-date" :class="item._resolvedAt ? '' : 'text-medium-emphasis'">{{ item._resolvedAt || '—' }}</span>
-        </template>
       </DataTablePage>
 
       <v-dialog
@@ -1207,17 +1197,15 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Transaction No.', key: 'request_id', width: 8 },
-    { title: 'Submitted', key: '_dateSubmitted', width: 11 },
-    { title: 'Status', key: 'status', width: 7, sortable: false },
+    // minWidth fits "TXN-000000" in the mono face plus sort icon, so the ID never ellipsizes.
+    { title: 'Transaction No.', key: 'request_id', width: 10, minWidth: '150px' },
+    { title: 'Patient', key: 'patient_name', width: 12 },
+    { title: 'Requester', key: '_requesterName', width: 16 },
+    { title: 'Barangay', key: '_secondary', width: 11 },
     { title: 'Scheduled', key: 'scheduled_at', width: 15 },
-    { title: 'Requester', key: '_requesterName', width: 15 },
-    { title: 'Phone', key: '_phone', width: 10 },
-    { title: 'Barangay', key: '_secondary', width: 10 },
-    { title: 'Patient', key: 'patient_name', width: 11 },
-    { title: 'Unit', key: '_unit', width: 7, sortable: false },
-    { title: 'Approved', key: '_dateApproved', width: 10 },
-    { title: 'Resolved / Disapproved', key: '_resolvedAt', width: 13 },
+    { title: 'Unit', key: '_unit', width: 9, sortable: false },
+    { title: 'Submitted', key: 'created_at', width: 11 },
+    { title: 'Status', key: 'status', width: 12, sortable: false },
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
@@ -1309,8 +1297,6 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     decorate: (r) => ({
       _dateSubmitted: formatDate(r.created_at),
       _phone: requesterPhone(r),
-      _dateApproved: r.approved_at ? formatDate(r.approved_at) : '',
-      _resolvedAt: r.resolved_at ? formatDate(r.resolved_at) : '',
     }),
   })
 
