@@ -529,7 +529,14 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
-import { initials as computeInitials } from '@/composables/adminUi'
+import {
+  accountInitials,
+  barangayOf,
+  contactName,
+  fullName,
+  primaryName,
+  wordInitials,
+} from '@/composables/accountName'
 import { getToken } from '@/composables/authToken'
 import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
 import { useRowNumbers } from '@/composables/rowNumber'
@@ -680,24 +687,7 @@ const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 168px);' 
 const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
-const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-// Head of the family: the person's initials. Barangay and organization: the
-// first letters of the first two words of primaryName(), so the avatar matches
-// the headline instead of the contact person under it.
-const wordInitials = (name) => (name || '').split(/\s+/).filter((w) => /^\p{L}/u.test(w)).slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase()
-const initials = (r) => (r.account_type === ACCOUNT_TYPE.head || !r.account_type ? computeInitials(r) : wordInitials(primaryName(r)))
-const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
-
-// The Name column's headline: a person for a head of the family, the
-// institution itself for a barangay or organization account.
-const primaryName = (r) => {
-  if (r.account_type === ACCOUNT_TYPE.barangay) return barangayOf(r)
-  if (r.account_type === ACCOUNT_TYPE.organization) return r.organization_name || accountTypeLabel(r.account_type)
-  return fullName(r)
-}
-// The second line under it — who to actually call — only where the headline
-// isn't already a person.
-const contactName = (r) => (r.account_type === ACCOUNT_TYPE.barangay || r.account_type === ACCOUNT_TYPE.organization) ? fullName(r) : null
+const initials = accountInitials
 
 const liveMessage = ref('')
 
