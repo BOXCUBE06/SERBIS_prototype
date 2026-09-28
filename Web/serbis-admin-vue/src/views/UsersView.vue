@@ -227,24 +227,24 @@
                   </span>
                 </v-avatar>
                 <div class="name-text">
-                  <div class="name-line">
-                    <v-tooltip :text="primaryName(item)" location="top">
-                      <template v-slot:activator="{ props }">
-                        <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                          {{ primaryName(item) }}
-                        </div>
-                      </template>
-                    </v-tooltip>
-                    <!-- Only the exceptions carry a tag; a head of the family is the
-                         ordinary row and stays untagged. -->
+                  <v-tooltip :text="primaryName(item)" location="top">
+                    <template v-slot:activator="{ props }">
+                      <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
+                        {{ primaryName(item) }}
+                      </div>
+                    </template>
+                  </v-tooltip>
+                  <!-- Second line: the type tag (only the exceptions carry one; a head
+                       of the family stays untagged) and then the contact person, who
+                       staff would actually call. A barangay or organization has no
+                       personal name of its own, so the tag alone is the line when
+                       there is no contact. -->
+                  <div v-if="isInstitution(item) || contactName(item)" class="name-sub text-caption text-medium-emphasis">
                     <span v-if="isInstitution(item)" class="type-tag">{{ accountTypeLabel(item.account_type) }}</span>
-                  </div>
-                  <!-- Barangay and organization accounts have no personal name of
-                       their own — the row's identity is the hall or the group —
-                       so the contact person (who staff would actually call) is a
-                       second line rather than the headline. -->
-                  <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
-                    {{ contactName(item) }}
+                    <template v-if="contactName(item)">
+                      <span v-if="isInstitution(item)" aria-hidden="true">·</span>
+                      <span class="cell-truncate">{{ contactName(item) }}</span>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -781,7 +781,7 @@ const headers = [
   { title: 'Name', key: 'fullName', value: (item) => primaryName(item) },
   // The longest real barangay name in the data is "San Antonio Ugad", which
   // was still clipping when this column was 15% of a narrower table.
-  { title: 'Barangay', key: 'barangay_name', width: '150px', value: (item) => barangayOf(item) },
+  { title: 'Barangay', key: 'barangay_name', width: '170px', value: (item) => barangayOf(item) },
   { title: 'Mobile Number', key: 'phone_number', width: '150px', value: (item) => displayPhone(item.phone_number) },
   { title: 'Status', key: 'status', align: 'center', width: '150px', value: (item) => residentStatusLabel(item.status) },
   // 0 before 1, so ascending lists the opted-out accounts first.
@@ -1548,7 +1548,7 @@ onUnmounted(releaseResidentPhotos)
 .bulk-body ul { margin: 4px 0 0; padding-left: 20px; }
 .elegant-table :deep(tr.is-checked) { background: rgba(var(--v-theme-primary), 0.06); }
 .row-actions { display: flex; justify-content: flex-end; gap: 2px; }
-.name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.name-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .type-tag {
   flex: none;
   padding: 1px 7px;
