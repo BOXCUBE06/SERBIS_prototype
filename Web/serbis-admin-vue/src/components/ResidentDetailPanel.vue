@@ -1,15 +1,30 @@
 <template>
   <div class="detail-panel">
-    <div class="detail-head">
-      <span class="text-caption text-uppercase font-weight-bold text-medium-emphasis">{{ accountTypeLabel(resident.account_type) }} profile</span>
-      <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close profile" @click="$emit('close')"></v-btn>
-    </div>
+    <!-- Same header as the request, ambulance and borrowing dialogs. The name and
+         initials are the ones the table row shows (composables/accountName.ts),
+         so the row and the dialog it opens agree. -->
+    <DetailDialogHeader
+      label="Account"
+      :name="displayName"
+      :initials="initials"
+      :secondary="secondary"
+      :photo-url="photoUrl"
+      @close="$emit('close')"
+    >
+      <template v-slot:status>
+        <span class="status-pill" :class="residentStatusPillClass(resident.status)">
+          <span class="status-dot" :class="residentStatusDotClass(resident.status)"></span>
+          {{ residentStatusLabel(resident.status) }}
+        </span>
+      </template>
+    </DetailDialogHeader>
+    <v-divider></v-divider>
 
     <!-- The open profile is not in the list behind this dialog. Stated rather
          than silently closed: the actions below are live, and Delete pointed
          at a record the current view says is not there is the one mistake
          this screen can make that cannot be undone. -->
-    <div v-if="hiddenByFilter" class="mx-6 mb-2 hidden-note" role="status">
+    <div v-if="hiddenByFilter" class="mx-6 mt-4 hidden-note" role="status">
       <v-icon size="16" class="mr-2" aria-hidden="true">mdi-filter-off-outline</v-icon>
       <span class="flex-grow-1">
         Not in the current view — {{ barangayName }}
@@ -22,100 +37,87 @@
       >Show</v-btn>
     </div>
 
-    <!-- Two columns so the whole record is on screen at once: who they are and
-         how to reach them on the left, how their equipment came back on the
-         right. Under 720px they stack. -->
+    <!-- A self-registered organization cannot request anything until it is
+         approved here. Approve activates it; Reject deactivates it. -->
+    <div v-if="isPendingOrganization" class="pending-note mx-6 mt-4" role="status">
+      <v-icon size="16" class="mr-2" aria-hidden="true">mdi-clock-outline</v-icon>
+      <span>Awaiting your approval. This organization cannot request services until you approve it.</span>
+    </div>
+
+    <!-- Three sections. Contact and Registration sit side by side because they
+         are the same size; Equipment returns takes the full width below so an
+         account with no history is one short row, not a mostly empty half.
+         Under 720px everything stacks. -->
     <div class="detail-body">
-      <section class="detail-main" aria-label="Account details">
-        <div class="d-flex align-center ga-4 mb-4">
-          <v-avatar size="80" class="avatar-tint flex-shrink-0">
-            <v-img v-if="photoUrl" :src="photoUrl" :alt="`Photo of ${resident.first_name} ${resident.last_name}`"></v-img>
-            <span v-else class="avatar-initials text-h5">{{ initials }}</span>
-          </v-avatar>
+      <div class="detail-columns">
+        <section class="detail-section" aria-labelledby="detail-contact">
+          <h4 id="detail-contact" class="detail-heading">Contact</h4>
 
-          <div class="min-w-0">
-            <h3 class="text-h5 font-weight-bold text-high-emphasis detail-name">
-              {{ resident.first_name }} {{ resident.last_name }}
-            </h3>
+          <div class="detail-list">
+            <div>
+              <div class="detail-label">Phone number</div>
+              <a :href="`tel:${displayPhone(resident.phone_number)}`" class="detail-link text-body-1 font-weight-medium">
+                <v-icon size="18" class="mr-2 flex-none">mdi-phone</v-icon><span class="detail-link__text">{{ displayPhone(resident.phone_number) }}</span>
+              </a>
+            </div>
 
-            <span class="status-pill mt-2" :class="residentStatusPillClass(resident.status)">
-              <span class="status-dot" :class="residentStatusDotClass(resident.status)"></span>
-              {{ residentStatusLabel(resident.status) }}
-            </span>
-          </div>
-        </div>
+            <!-- Email is no longer collected (a phone number is the login), so newer
+                 accounts have none. Shown only for the accounts that gave one. -->
+            <div v-if="resident.email_address">
+              <div class="detail-label">Email address</div>
+              <a :href="`mailto:${resident.email_address}`" class="detail-link text-body-1 font-weight-medium">
+                <v-icon size="18" class="mr-2 flex-none">mdi-email-outline</v-icon><span class="detail-link__text">{{ resident.email_address }}</span>
+              </a>
+            </div>
 
-        <!-- A self-registered organization cannot request anything until it is
-             approved here. Approve activates it; Reject deactivates it. -->
-        <div v-if="isPendingOrganization" class="pending-note mb-4" role="status">
-          <v-icon size="16" class="mr-2" aria-hidden="true">mdi-clock-outline</v-icon>
-          <span>Awaiting your approval. This organization cannot request services until you approve it.</span>
-        </div>
-
-        <div class="detail-fields">
-          <h4 class="detail-heading detail-fields__full">Contact</h4>
-
-          <div>
-            <div class="detail-label">Phone number</div>
-            <a :href="`tel:${displayPhone(resident.phone_number)}`" class="detail-link text-body-1 font-weight-medium">
-              <v-icon size="18" class="mr-2">mdi-phone</v-icon>{{ displayPhone(resident.phone_number) }}
-            </a>
-          </div>
-
-          <!-- Email is no longer collected (a phone number is the login), so newer
-               accounts have none. Shown only for the accounts that gave one. -->
-          <div v-if="resident.email_address">
-            <div class="detail-label">Email address</div>
-            <a :href="`mailto:${resident.email_address}`" class="detail-link text-body-1 font-weight-medium">
-              <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>{{ resident.email_address }}
-            </a>
-          </div>
-
-          <div :class="{ 'detail-fields__full': !smsOptIn }">
-            <div class="detail-label">SMS blasts</div>
-            <span class="status-pill" :class="smsPillClass">
-              <span class="status-dot" :class="smsDotClass"></span>
-              {{ smsLabel }}
-            </span>
-            <!-- Said in words because the pill alone does not explain that this is
-                 the resident's own choice and not something the office switched
-                 off. There is no admin control for it: it is written from the
-                 mobile app through PATCH /me. -->
-            <div v-if="!smsOptIn" class="text-body-2 text-medium-emphasis mt-2">
-              This resident turned MDRRMO text blasts off in the app. Only they can turn them back on.
+            <div>
+              <div class="detail-label">SMS blasts</div>
+              <span class="status-pill" :class="smsPillClass">
+                <span class="status-dot" :class="smsDotClass"></span>
+                {{ smsLabel }}
+              </span>
+              <!-- Said in words because the pill alone does not explain that this is
+                   the account holder's own choice and not something the office
+                   switched off. There is no admin control for it: it is written
+                   from the mobile app through PATCH /me. -->
+              <div v-if="!smsOptIn" class="text-body-2 text-medium-emphasis mt-2">
+                This account holder turned MDRRMO text blasts off in the app. Only they can turn them back on.
+              </div>
             </div>
           </div>
+        </section>
 
-          <h4 class="detail-heading detail-fields__full">Registration</h4>
+        <section class="detail-section" aria-labelledby="detail-registration">
+          <h4 id="detail-registration" class="detail-heading">Registration</h4>
 
-          <div>
-            <div class="detail-label">Account type</div>
-            <div class="text-body-1 font-weight-medium text-high-emphasis">
-              {{ accountTypeLabel(resident.account_type) }}<template v-if="resident.organization_name"> · {{ resident.organization_name }}</template>
+          <div class="detail-list">
+            <div>
+              <div class="detail-label">Account type</div>
+              <div class="detail-value">{{ accountTypeLabel(resident.account_type) }}</div>
+            </div>
+
+            <div>
+              <div class="detail-label">Barangay</div>
+              <div class="detail-value">{{ barangayName }}</div>
+            </div>
+
+            <div>
+              <div class="detail-label">Registered on</div>
+              <div class="detail-value">{{ registeredOn }}</div>
+            </div>
+
+            <div>
+              <div class="detail-label">Account ID</div>
+              <div class="detail-value">#{{ residentId }}</div>
             </div>
           </div>
-
-          <div>
-            <div class="detail-label">Barangay</div>
-            <div class="text-body-1 font-weight-medium text-high-emphasis">{{ barangayName }}</div>
-          </div>
-
-          <div>
-            <div class="detail-label">Registered on</div>
-            <div class="text-body-1 font-weight-medium text-high-emphasis">{{ registeredOn }}</div>
-          </div>
-
-          <div>
-            <div class="detail-label">Resident ID</div>
-            <div class="text-body-1 font-weight-medium text-high-emphasis">#{{ residentId }}</div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <!-- For reading before approving a new borrow request. Information only:
            nothing here blocks or flags a request. -->
-      <section class="detail-returns" aria-label="Equipment returns">
-        <h4 class="detail-heading">Equipment returns</h4>
+      <section class="detail-section" aria-labelledby="detail-returns">
+        <h4 id="detail-returns" class="detail-heading">Equipment returns</h4>
         <ResidentReturnHistory :resident-id="residentId" />
       </section>
     </div>
@@ -187,9 +189,10 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
 import ResidentReturnHistory from '@/components/ResidentReturnHistory.vue'
 import { ACCOUNT_TYPE, accountTypeLabel } from '@/composables/accountType'
-import { initials as computeInitials } from '@/composables/adminUi'
+import { accountInitials, barangayOf, contactName, primaryName } from '@/composables/accountName'
 import { displayPhone } from '@/composables/phoneNumber'
 import { residentPhotoUrl } from '@/composables/residentPhoto'
 import {
@@ -224,8 +227,8 @@ const isPendingOrganization = computed(() =>
 
 const residentId = computed(() => props.resident.resident_id ?? props.resident.id)
 
-// Read-only here. The switch belongs to the resident and is written from the
-// mobile app; the panel reports it so a short delivery report has an
+// Read-only here. The switch belongs to the account holder and is written from
+// the mobile app; the panel reports it so a short delivery report has an
 // explanation on the same screen as the account.
 const smsOptIn = computed(() => residentSmsOptIn(props.resident))
 const smsLabel = computed(() => residentSmsLabel(smsOptIn.value))
@@ -233,8 +236,8 @@ const smsPillClass = computed(() => residentSmsPillClass(smsOptIn.value))
 const smsDotClass = computed(() => residentSmsDotClass(smsOptIn.value))
 
 // The panel is reused as the selection moves down the list, so the photo is
-// keyed off the id and cleared first — otherwise the previous resident's face
-// stays on screen under the new resident's name until the fetch returns.
+// keyed off the id and cleared first — otherwise the previous account's face
+// stays on screen under the new account's name until the fetch returns.
 const photoUrl = ref(null)
 watch(
   () => [residentId.value, props.resident.has_photo],
@@ -248,10 +251,11 @@ watch(
   },
   { immediate: true },
 )
-const initials = computed(() => computeInitials(props.resident))
-const barangayName = computed(
-  () => props.resident.barangay?.barangay_name || props.resident.barangay_name || 'N/A',
-)
+const displayName = computed(() => primaryName(props.resident))
+const initials = computed(() => accountInitials(props.resident))
+const barangayName = computed(() => barangayOf(props.resident))
+// The person to call for an institution; where a head of the family lives for a person.
+const secondary = computed(() => contactName(props.resident) ?? (barangayName.value === 'N/A' ? null : barangayName.value))
 const registeredOn = computed(() => {
   const v = props.resident.created_at
   if (!v) return '—'
@@ -275,10 +279,6 @@ const registeredOn = computed(() => {
   background: rgba(var(--v-theme-warning), 0.14);
   color: rgb(var(--v-theme-warning-strong));
 }
-/* Avatar — the old blue-on-light-blue pairing measured 3.28:1. Tinting the
-   primary token keeps the soft look and passes AA in both themes. */
-.avatar-tint { background: rgba(var(--v-theme-primary), 0.14) !important; }
-.avatar-initials { color: rgb(var(--v-theme-primary-strong)); font-weight: 800; letter-spacing: 0.02em; }
 
 /* Status pill — replaces the flat grey chip, which rendered white on #9E9E9E (2.68:1). */
 .status-pill {
@@ -323,51 +323,48 @@ const registeredOn = computed(() => {
 }
 .v-theme--dark .hidden-note { color: rgb(var(--v-theme-warning)); }
 
-.detail-head {
-  padding: 16px 24px 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* Two columns: account on the left, equipment returns on the right. The
-   fallback scroll is only for an account with a very long return history; an
-   ordinary record fits without it. */
+/* Spacing: 24px between sections, 16px from a heading's rule to its content,
+   16px between fields. The fallback scroll is only for an account with a very
+   long return history; an ordinary record fits without it. */
 .detail-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 8px 40px;
-  padding: 8px 24px 16px;
-  max-height: calc(100vh - 220px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 24px 16px;
+  max-height: calc(100vh - 260px);
   overflow-y: auto;
 }
-.min-w-0 { min-width: 0; }
-.detail-name { word-break: break-word; }
-
-.detail-fields {
+.detail-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 24px;
+  gap: 24px 40px;
 }
-.detail-fields__full { grid-column: 1 / -1; }
+.detail-section { min-width: 0; }
+.detail-list { display: flex; flex-direction: column; gap: 16px; }
+
+/* A section heading outranks a field label by size, weight, colour and the rule
+   under it; the two used to be the same 12px uppercase line. */
 .detail-heading {
-  font-size: 0.75rem;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  font-size: 0.9375rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
-.detail-fields .detail-heading { margin-top: 4px; }
 .detail-label {
   margin-bottom: 2px;
   font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
-.detail-returns { min-width: 0; }
-.detail-returns .detail-heading { margin-bottom: 12px; }
+.detail-value {
+  min-width: 0;
+  overflow-wrap: break-word;
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
 
 .detail-actions {
   display: flex;
@@ -379,16 +376,25 @@ const registeredOn = computed(() => {
 }
 
 @media (max-width: 719px) {
-  .detail-body { grid-template-columns: minmax(0, 1fr); }
+  .detail-columns { grid-template-columns: minmax(0, 1fr); }
+}
+/* Under 600px the header stacks Status under the name and the buttons wrap to
+   three rows, so the body gives up more height or the card itself scrolls and
+   carries the actions off screen. */
+@media (max-width: 599px) {
+  .detail-body { max-height: calc(100vh - 400px); }
 }
 
+/* overflow-wrap, not word-break: break-all — that split every address at the
+   line end mid-word; this only breaks a word too long to fit a line at all. */
 .detail-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  min-width: 0;
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
-  word-break: break-all;
 }
+.detail-link__text { min-width: 0; overflow-wrap: break-word; }
 .detail-link:hover { text-decoration: underline; }
 .detail-link:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));

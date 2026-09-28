@@ -11,11 +11,12 @@
 <template>
   <div class="detail-header">
     <v-avatar color="primary" variant="tonal" size="44" class="h-avatar">
-      <span class="text-subtitle-1 font-weight-black">{{ initials }}</span>
+      <v-img v-if="photoUrl" :src="photoUrl" alt=""></v-img>
+      <span v-else class="text-subtitle-1 font-weight-black">{{ initials }}</span>
     </v-avatar>
 
     <div class="h-stack h-requester">
-      <div class="header-label">Requester</div>
+      <div class="header-label">{{ label }}</div>
       <div class="h-value header-name text-truncate">{{ name }}</div>
       <div class="h-sub text-medium-emphasis text-truncate">{{ secondary }}</div>
     </div>
@@ -41,13 +42,17 @@ import { waitTone } from '@/composables/adminUi'
 // warning-strong: the base amber fails AA as text.
 const WAIT_CLASS = { muted: 'text-medium-emphasis', warning: 'text-warning-strong', error: 'text-error' }
 
-defineProps<{
+withDefaults(defineProps<{
   name: string
   initials: string
   secondary?: string | null
+  /** The requester's role word; the account dialog says "Account". */
+  label?: string
+  /** Shown in the avatar instead of the initials when set. */
+  photoUrl?: string | null
   /** Days waiting, shown under the status; open requests only. */
   waitDays?: number | null
-}>()
+}>(), { label: 'Requester', photoUrl: null })
 defineEmits<{ close: [] }>()
 </script>
 
