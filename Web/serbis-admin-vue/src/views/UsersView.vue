@@ -234,8 +234,8 @@
             <template v-slot:item.sms_opt_in="{ item }">
               <!-- Quieter than Status on purpose. Nearly every row is Receiving, so
                    a pill on each one drowned the rows that are not: Receiving is a
-                   muted icon (the words stay for screen readers), and only Not
-                   receiving keeps a pill. The Status column still carries Pending.
+                   muted icon (the words stay for screen readers), and only Opted
+                   out keeps a pill. The Status column still carries Pending.
                    A blast needs an Active account, a phone number and this switch,
                    so the detail panel keeps the full pill for both states. -->
               <template v-if="residentSmsOptIn(item)">
@@ -588,12 +588,11 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // so a percentage is taken from the full table width, not from the space the
 // px columns leave — the two have to be budgeted together or they overlap.
 //
-// The pill columns are px because their content does not vary: they were 10%
-// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
-// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
-// spilled out of the cell and scrolled the whole card sideways. Both are now
-// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
-// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
+// The pill columns are px because their content does not vary: as percentages
+// they shrank below the pill they print, and the pill spilled out of the cell
+// and scrolled the whole card sideways. Both are now their longest pill plus
+// the 16px cell padding either side — "DEACTIVATED" 112 + 32 (Status 150),
+// "OPTED OUT" 98 + 32 (SMS Blasts 134) — measured, not guessed.
 //
 // Width otherwise follows variance: the columns that differ per row get the
 // percentages, and `table-layout: fixed` hands the slack back to every column
@@ -617,8 +616,8 @@ const headers = computed(() => {
     // was still clipping when this column was 15% of a narrower table.
     { title: 'Barangay', key: 'barangay_name', width: '150px' },
     { title: 'Mobile Number', key: 'phone_number', width: '150px' },
-    { title: 'Status', key: 'status', align: 'center', width: '160px' },
-    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '150px' },
+    { title: 'Status', key: 'status', align: 'center', width: '150px' },
+    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px' },
   )
   return cols
 })
@@ -1191,7 +1190,7 @@ onUnmounted(releaseResidentPhotos)
 .elegant-table :deep(table) {
   table-layout: fixed !important;
   width: 100% !important;
-  min-width: 1040px;
+  min-width: 1000px;
 }
 .elegant-table :deep(th:first-child),
 .elegant-table :deep(td:first-child) { padding-left: 0 !important; padding-right: 0 !important; }
