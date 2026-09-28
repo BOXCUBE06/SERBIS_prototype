@@ -100,12 +100,20 @@
           <span class="text-truncate d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
         </template>
 
-        <template v-slot:item._dateSubmitted="{ item }">
+        <template v-slot:item.created_at="{ item }">
           <span class="text-truncate d-block row-date">{{ item._dateSubmitted }}</span>
         </template>
 
         <template v-slot:item.status="{ item }">
-          <span class="status-col-pill"><StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" /></span>
+          <div class="status-col-pill d-flex flex-column align-start ga-1">
+            <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
+            <StatusPill
+              v-if="pendingWaitLabel(item.status, item.created_at)"
+              small
+              status="Pending"
+              :label="pendingWaitLabel(item.status, item.created_at)"
+            />
+          </div>
         </template>
 
         <template v-slot:item.scheduled_at="{ item }">
@@ -123,29 +131,17 @@
                 :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
               />
             </template>
-            <template v-else>
-              <span class="row-date">{{ item._dateSubmitted }}</span>
-              <StatusPill
-                v-if="pendingWaitLabel(item.status, item.created_at)"
-                small
-                status="Pending"
-                :label="pendingWaitLabel(item.status, item.created_at)"
-                class="ml-2"
-              />
-            </template>
+            <span v-else class="text-medium-emphasis">—</span>
           </div>
         </template>
 
         <template v-slot:item._requesterName="{ item }">
           <PersonCell
             :name="item._requesterName"
+            :secondary="item._phone"
             :initials="requesterInitials(item)"
             :title="item._requesterName"
           />
-        </template>
-
-        <template v-slot:item._phone="{ item }">
-          <span class="text-truncate d-block" :title="item._phone">{{ item._phone }}</span>
         </template>
 
         <template v-slot:item._secondary="{ item }">
@@ -157,16 +153,10 @@
         </template>
 
         <template v-slot:item._unit="{ item }">
-          <span class="text-truncate d-block" :class="item._unit ? '' : 'text-medium-emphasis'">{{ item._unit || 'Unassigned' }}</span>
+          <span v-if="item._unit" class="text-truncate d-block">{{ item._unit }}</span>
+          <v-chip v-else size="x-small" variant="tonal" label>Unassigned</v-chip>
         </template>
 
-        <template v-slot:item._dateApproved="{ item }">
-          <span class="text-truncate d-block row-date" :class="item._dateApproved ? '' : 'text-medium-emphasis'">{{ item._dateApproved || '—' }}</span>
-        </template>
-
-        <template v-slot:item._resolvedAt="{ item }">
-          <span class="text-truncate d-block row-date" :class="item._resolvedAt ? '' : 'text-medium-emphasis'">{{ item._resolvedAt || '—' }}</span>
-        </template>
       </DataTablePage>
 
       <v-dialog
@@ -192,7 +182,7 @@
           <v-divider></v-divider>
 
           <div class="pa-6 overflow-y-auto flex-grow-1">
-            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact" closable @click:close="apiError = ''">{{ apiError }}</v-alert>
 
             <v-alert
               v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
@@ -231,8 +221,16 @@
                 <h3 class="sect-label">Assignment</h3>
                 <dl class="kv">
                   <dt>Unit</dt>
-                  <dd :class="{ 'text-medium-emphasis': !selectedRequest.vehicle }">{{ selectedRequest.vehicle ? `${vehicleName(selectedRequest.vehicle)} (${selectedRequest.vehicle.type || 'Unit'})` : 'None assigned' }}</dd>
+                  <dd :class="{ 'text-medium-emphasis': !assignedUnit }">
+                    {{ assignedUnit ? `${vehicleName(assignedUnit)} (${assignedUnit.type || 'Unit'})` : 'None assigned' }}
+                    <v-btn v-if="isPendingRequest" size="x-small" variant="tonal" color="primary" class="text-none ml-2" @click="vehicleModal.isOpen = true">
+                      {{ formData.vehicle_id ? 'Change' : 'Select' }}
+                    </v-btn>
+                  </dd>
                 </dl>
+                <div v-if="isPendingRequest && !formData.vehicle_id" id="dispatch-gate" class="text-caption text-medium-emphasis mt-2">
+                  Select a unit to enable Approve &amp; Dispatch.
+                </div>
               </section>
             </div>
 
@@ -373,9 +371,6 @@
                 Disapprove
               </v-btn>
               <v-spacer></v-spacer>
-              <v-btn color="primary" variant="outlined" class="text-none font-weight-bold" height="40" @click="vehicleModal.isOpen = true">
-                {{ formData.vehicle_id ? selectedVehicle?.unit_identifier : 'Select Vehicle' }}
-              </v-btn>
               <v-btn
                 color="secondary"
                 variant="flat"
@@ -388,9 +383,6 @@
               >
                 Approve & Dispatch
               </v-btn>
-              <span v-if="!formData.vehicle_id" id="dispatch-gate" class="d-sr-only">
-                Disabled until a vehicle is chosen with the Select Vehicle button beside it.
-              </span>
             </template>
             <template v-else-if="selectedRequest.status === 'Responding'">
               <v-spacer></v-spacer>
@@ -1183,6 +1175,12 @@ const closedLabel = computed(() => CLOSED_LABELS[selectedRequest.value?.status] 
 
 const waitDays = computed(() => (selectedRequest.value?.status === 'Pending' ? openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at) : null))
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
+
+const isPendingRequest = computed(() => !selectedRequest.value?.status || selectedRequest.value.status === 'Pending')
+// While Pending this is the unit picked so far (a draft until Approve & Dispatch saves it); otherwise the saved one.
+const assignedUnit = computed(() => (isPendingRequest.value ? selectedVehicle.value : null) || selectedRequest.value?.vehicle || null)
+// A stale server error should not outlive the choice that may have caused it.
+watch(() => formData.value.vehicle_id, () => { apiError.value = '' })
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
 )
@@ -1207,17 +1205,15 @@ const unitOptions = computed(() => {
 const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
-    { title: 'Transaction No.', key: 'request_id', width: 8 },
-    { title: 'Submitted', key: '_dateSubmitted', width: 11 },
-    { title: 'Status', key: 'status', width: 7, sortable: false },
+    // minWidth fits "TXN-000000" in the mono face plus sort icon, so the ID never ellipsizes.
+    { title: 'Transaction No.', key: 'request_id', width: 10, minWidth: '150px' },
+    { title: 'Patient', key: 'patient_name', width: 12 },
+    { title: 'Requester', key: '_requesterName', width: 16 },
+    { title: 'Barangay', key: '_secondary', width: 11 },
     { title: 'Scheduled', key: 'scheduled_at', width: 15 },
-    { title: 'Requester', key: '_requesterName', width: 15 },
-    { title: 'Phone', key: '_phone', width: 10 },
-    { title: 'Barangay', key: '_secondary', width: 10 },
-    { title: 'Patient', key: 'patient_name', width: 11 },
-    { title: 'Unit', key: '_unit', width: 7, sortable: false },
-    { title: 'Approved', key: '_dateApproved', width: 10 },
-    { title: 'Resolved / Disapproved', key: '_resolvedAt', width: 13 },
+    { title: 'Unit', key: '_unit', width: 9, sortable: false },
+    { title: 'Submitted', key: 'created_at', width: 11 },
+    { title: 'Status', key: 'status', width: 12, sortable: false },
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
@@ -1309,8 +1305,6 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     decorate: (r) => ({
       _dateSubmitted: formatDate(r.created_at),
       _phone: requesterPhone(r),
-      _dateApproved: r.approved_at ? formatDate(r.approved_at) : '',
-      _resolvedAt: r.resolved_at ? formatDate(r.resolved_at) : '',
     }),
   })
 

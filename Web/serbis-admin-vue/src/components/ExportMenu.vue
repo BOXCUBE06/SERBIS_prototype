@@ -21,7 +21,7 @@
           color="primary"
           variant="outlined"
           class="text-none font-weight-bold"
-          height="40"
+          :height="height"
           :loading="busy"
           :disabled="!row && !rows.length"
         >
@@ -72,6 +72,7 @@ const props = defineProps({
   // Lists that have no selection bar of their own show the count here.
   showSelection: { type: Boolean, default: false },
   plain: { type: Boolean, default: false },
+  height: { type: [Number, String], default: 40 },
 })
 
 const busy = ref(false)

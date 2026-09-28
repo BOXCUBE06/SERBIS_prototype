@@ -1,0 +1,30 @@
+/* Compact filter bar. Opt in with `class="filter-bar"` on the row that holds the
+   fields: each v-text-field / v-select / v-autocomplete inside is 36px tall,
+   sized to its content (`.filter-bar__search`, `.filter-bar__select`) and
+   left-aligned, with its placeholder standing in for a floating label. The
+   fields keep their own tokens and font; only the box changes.
+
+   Accounts uses it first. The other views' filter bars (DataTablePage,
+   RequestFiltersBar and the request boards) still use the stretched
+   outlined-with-label style and are a later pass. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.filter-bar .v-input { flex: 0 0 auto; }
+.filter-bar__search { width: 280px; max-width: 100%; }
+.filter-bar__select { width: 160px; max-width: 100%; }
+
+.filter-bar .v-field {
+  --v-input-control-height: 36px;
+  --v-field-padding-top: 0px;
+  --v-field-padding-bottom: 0px;
+  font-size: 0.875rem;
+}
+.filter-bar .v-field__input { min-height: 36px; padding-top: 0; padding-bottom: 0; }
+.filter-bar .v-field__prepend-inner,
+.filter-bar .v-field__append-inner,
+.filter-bar .v-field__clearable { padding-top: 0; align-items: center; }

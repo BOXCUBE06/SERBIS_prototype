@@ -1,4 +1,4 @@
-// M29: the app fetched Lexend and Inter from fonts.gstatic.com at runtime, so a
+// M29: the app fetched its fonts from fonts.gstatic.com at runtime, so a
 // first launch with no signal rendered in the platform default — every size and
 // metric the layout was tuned against, changed, on the launch this app exists
 // for. The fonts are bundled now.
@@ -56,8 +56,8 @@ void main() {
       expect(declaration.hasMatch(pubspec), isFalse);
     });
 
-    test('both families are declared', () {
-      expect(declared.keys, containsAll(<String>['Lexend', 'Inter']));
+    test('Plus Jakarta Sans is declared, and the old families are gone', () {
+      expect(declared.keys, <String>['PlusJakartaSans']);
     });
 
     test('every declared asset exists on disk', () {
@@ -73,32 +73,30 @@ void main() {
       }
     });
 
-    test('each family carries every weight the UI asks for', () {
+    test('the family carries every weight the UI asks for', () {
       // A weight that is declared but absent does not throw: Flutter picks the
       // nearest one, so a missing w600 renders as w400 and reads as a styling
       // slip rather than a missing asset.
-      for (final family in <String>['Lexend', 'Inter']) {
-        for (final weight in AppText.bundledWeights) {
-          expect(
-            declared[family],
-            contains('assets/fonts/$family-${weight.value}.ttf'),
-            reason: '$family is missing weight ${weight.value}',
-          );
-        }
+      for (final weight in AppText.bundledWeights) {
+        expect(
+          declared[AppText.family],
+          contains('assets/fonts/${AppText.family}-${weight.value}.ttf'),
+          reason: '${AppText.family} is missing weight ${weight.value}',
+        );
       }
     });
   });
 
   group('the styles name the bundled families', () {
-    test('display uses Lexend and body uses Inter', () {
+    test('display and body both use Plus Jakarta Sans', () {
       expect(AppText.display().fontFamily, AppText.displayFamily);
       expect(AppText.body().fontFamily, AppText.bodyFamily);
-      expect(AppText.displayFamily, 'Lexend');
-      expect(AppText.bodyFamily, 'Inter');
+      expect(AppText.displayFamily, 'PlusJakartaSans');
+      expect(AppText.bodyFamily, 'PlusJakartaSans');
     });
 
     test('the family name matches the pubspec exactly', () {
-      // Case included: 'lexend' would fall back silently.
+      // Case included: 'plusjakartasans' would fall back silently.
       expect(declared.keys, contains(AppText.displayFamily));
       expect(declared.keys, contains(AppText.bodyFamily));
     });

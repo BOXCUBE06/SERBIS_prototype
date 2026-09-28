@@ -19,6 +19,12 @@ class ResponderController extends Controller
         return response()->json($this->withPhotoUrls(Responder::all()));
     }
 
+    /** Names and positions only, for the trip log's driver picker — ambulance staff do not hold the responders section. */
+    public function names()
+    {
+        return response()->json(Responder::orderBy('name')->get(['name', 'position']));
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

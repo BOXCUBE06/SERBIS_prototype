@@ -41,29 +41,7 @@ class EquipmentBorrowingController extends Controller
     /** Shown as the notification's title on every push this controller sends, matching ServiceRequestController. */
     private const PUSH_TITLE = 'SERBIS';
 
-    /**
-     * Which column each handover stage writes, and which statuses it may be
-     * photographed in.
-     *
-     * A release photo is a record of what left the building, so it means
-     * nothing before the item has left: Released is when that happened, and
-     * Returned is still allowed because staff photographing after the fact is
-     * a late record, not a false one. A return photo is only meaningful once
-     * the item is back.
-     *
-     * Deliberately NOT open on Pending or Approved. Nothing has changed hands
-     * yet, so a photo filed against either would be evidence of a handover
-     * that has not happened — the exact claim a dispute would turn on.
-     *
-     * `removable_in` is narrower than `statuses`, and the difference is the
-     * point: a photo may be deleted only while the borrowing is still in the
-     * stage that photo belongs to. Staff who attached the wrong file can fix it
-     * at the counter; once the item has moved on — a release photo on a record
-     * that is now Returned — the picture is part of the trail of a finished
-     * handover and only replacement is left. Note the asymmetry with upload:
-     * a release photo may still be ADDED after the item is back (a late record
-     * is not a false one), but not removed then.
-     */
+    /** Column and allowed statuses per handover stage. A photo is evidence of a handover, so never before Released (release) or Returned (return); a release photo may still be added after return (a late record is not a false one) but is removable only while Released (`removable_in`). */
     private const PHOTO_STAGES = [
         'release' => [
             'column' => 'release_photo_path',
@@ -77,26 +55,7 @@ class EquipmentBorrowingController extends Controller
         ],
     ];
 
-    /**
-     * Which status each status may move to.
-     *
-     * The validation rule below constrains the status *word* and never the
-     * *move*, so any record could be pushed into any state — including
-     * backwards into Released, which re-ran the stock deduction for an item
-     * already back on the shelf and dropped the count for good.
-     *
-     * Returned, Denied and Cancelled are terminal: an item that came back has
-     * nothing left to decide, a refusal is answered by filing a new request
-     * rather than by reviving the old one, and a request the resident withdrew
-     * is not MDRRMO's to revive at all.
-     *
-     * Cancelled is a key here but appears in no list, which is deliberate:
-     * update()'s `in:` rule does not accept the word, so staff cannot put a
-     * record into it from the panel. cancel() is its only writer, and it works
-     * off CANCELLABLE_FROM below. The key still has to exist so that a record
-     * already Cancelled is refused every move by the check in update() with
-     * the same message as any other illegal transition.
-     */
+    /** Legal status moves. The `in:` rule constrained the word, never the move, so a record could go back to Released and re-run the stock deduction for an item already on the shelf. Returned, Denied and Cancelled are terminal; Cancelled is a key only so a cancelled row is refused with the same message (cancel() is its only writer). */
     private const TRANSITIONS = [
         'Pending' => ['Approved', 'Denied'],
         'Approved' => ['Released', 'Denied'],
@@ -106,19 +65,7 @@ class EquipmentBorrowingController extends Controller
         'Cancelled' => [],
     ];
 
-    /**
-     * Which statuses the resident may withdraw their own request from.
-     *
-     * The line is at Released because that is when the item is physically in
-     * the resident's hands — the same place ServiceRequestController::cancel()
-     * draws it at Responding. It is NOT a stock line: available_quantity moves
-     * in exactly two places, both in update() (decrement on Released from
-     * Approved, increment on Returned from Released), and store()'s own check
-     * is a satisfiability check, not a reservation. So neither Pending nor
-     * Approved has reserved anything, and cancelling one returns nothing to
-     * the shelf. Do not add stock handling to cancel() on the assumption that
-     * it does.
-     */
+    /** Withdrawable up to Released, when the item is physically with the resident. Not a stock line: stock moves only in update() on Released and Returned, so Pending and Approved reserved nothing and cancel() must not touch stock. */
     private const CANCELLABLE_FROM = ['Pending', 'Approved'];
 
     public function index(Request $request)
@@ -126,11 +73,7 @@ class EquipmentBorrowingController extends Controller
         // Added 'resident.barangay'
         $query = EquipmentBorrowing::with(['resident.barangay', 'equipment'])->orderBy('created_at', 'desc');
 
-        // Scopes to the caller for a resident, and refuses anything that is not
-        // active staff. This used to be a bare `instanceof Resident` check with
-        // no else, so a deactivated admin — or a tbl_user row with some other
-        // role — was handed every borrowing in the system, each carrying the
-        // borrower's name, barangay, phone number and email.
+        // Scopes to the caller for a resident and refuses anything but active staff; a bare instanceof once handed every borrowing (names, phones, emails) to a deactivated admin.
         if ($refusal = $this->scopeToOwner($request, $query, 'Borrowing record not found')) {
             return $refusal;
         }
@@ -140,9 +83,7 @@ class EquipmentBorrowingController extends Controller
 
     public function store(Request $request)
     {
-        // Equipment borrowing is one of the things the office can restrict by
-        // account type (Service Audience page). The app hides the tile; this is
-        // the check that holds for a hand-built request.
+        // Restrictable by account type (Service Audience page); the app hides the tile, this holds for a hand-built request.
         $account = $request->user();
 
         if ($account instanceof Resident && $account->isAwaitingApproval()) {
@@ -161,53 +102,19 @@ class EquipmentBorrowingController extends Controller
         }
 
         $validated = $request->validate([
-            // Exactly one of these two names the item, which the CHECK
-            // constraint on the table enforces underneath. `required_without`
-            // on both sides catches a request that names neither;
-            // `prohibits` catches one that names both, which would be a
-            // request that disagrees with itself about what is being borrowed.
-            // These rules are the readable 422; the constraint is the floor
-            // under a seeder or a tinker session that never reaches them.
+            // Exactly one names the item (the table's CHECK enforces it): required_without catches neither, prohibits catches both; these give the readable 422 the constraint would not.
             'equipment_id' => 'required_without:other_equipment_text|nullable|exists:tbl_equipments,equipment_id',
             'other_equipment_text' => 'required_without:equipment_id|nullable|string|max:255|prohibits:equipment_id',
             'quantity' => 'required|integer|min:1',
-            // Required on the way in, nullable in the column: rows filed
-            // before the column existed have no purpose, but a new request
-            // that does not say what the item is for gives MDRRMO nothing to
-            // decide on beyond stock. TrimStrings + ConvertEmptyStringsToNull
-            // run ahead of this, so a box of spaces fails `required` here
-            // rather than storing as a blank reason.
+            // Required on the way in, nullable in the column (old rows have none); TrimStrings + ConvertEmptyStringsToNull run first, so spaces fail required.
             'purpose' => 'required|string|max:255',
-            // `sometimes` rather than `required`: a client that says nothing
-            // about fulfilment means the only thing it could have meant before
-            // this existed, which is a pickup. The column's own default writes
-            // that, so an older mobile build keeps working unchanged rather
-            // than having every request rejected until it is updated.
+            // sometimes: a client that says nothing means Pickup (the column default), so older mobile builds keep working.
             'fulfillment_method' => 'sometimes|in:Pickup,Delivery',
-            // Only meaningful for a delivery, and required for one: there is
-            // nowhere else to get it from. tbl_residents holds a barangay and
-            // no street address, so an unanswered delivery is a run nobody can
-            // actually make.
+            // Required for a delivery (tbl_residents has no street address), else it is a run nobody can make.
             'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
         ]);
 
-        // The rules above bound the shape and never the amount, so a resident
-        // could file for fifty of an item the office owns four of. Nothing
-        // rejected it until an admin tried to release it, by which point the
-        // request had already been approved.
-        //
-        // This is a satisfiability check, not a reservation: stock moves only on
-        // Released, so two Pending requests for the whole shelf are both filed
-        // and the second one fails at release time. Reserving on Pending would
-        // let anyone empty the inventory with requests nobody ever approves.
-        // For the same reason no lock is taken — there is no write to race with.
-        //
-        // Skipped entirely when the request names free text instead of a
-        // catalogued item: there is no stock figure to check against, because
-        // the whole point of `other_equipment_text` is that MDRRMO has not
-        // catalogued the thing. An uncatalogued request is bounded at release
-        // time instead, by update() refusing to release one at all until staff
-        // have attached a real equipment row — see the guard there.
+        // A satisfiability check, not a reservation: stock moves only on Released, and reserving on Pending would let anyone empty the inventory with unapproved requests, so no lock either. Skipped for free-text items (no stock figure); update() refuses to release those until an equipment row is attached.
         $equipmentId = $validated['equipment_id'] ?? null;
 
         if ($equipmentId !== null) {
@@ -216,9 +123,7 @@ class EquipmentBorrowingController extends Controller
             if (! $equipment || $equipment->available_quantity < $validated['quantity']) {
                 $available = $equipment?->available_quantity ?? 0;
 
-                // Raised as a field error rather than a bare message so a client can
-                // put it on the quantity input. `update()` answers with a plain
-                // message because its 422 is about the record, not about one field.
+                // A field error, so a client can put it on the quantity input (update()'s 422 is about the record, so it is a plain message).
                 throw ValidationException::withMessages([
                     'quantity' => "Only {$available} of this item are available to borrow.",
                 ]);
@@ -226,29 +131,20 @@ class EquipmentBorrowingController extends Controller
         }
 
         $method = $validated['fulfillment_method'] ?? 'Pickup';
-        // Who the loan is for comes from the account, never from the request: a
-        // barangay or organization account is an institution, a head of the
-        // family is a household. A client can no longer claim otherwise.
+        // Who the loan is for comes from the account, never the request: institutions borrow as Organization, a head of the family as Resident.
         $isInstitution = $account instanceof Resident && ! $account->isHeadOfFamily();
         $borrowerType = $isInstitution ? 'Organization' : 'Resident';
         $organizationName = $isInstitution ? $this->institutionName($account) : null;
 
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $request->user()->getKey(),
-            // Exactly one of the next two is non-null, which the validation
-            // above and the table's CHECK constraint both guarantee. Written
-            // as an explicit either/or rather than passing both straight
-            // through, so an empty string surviving from a client cannot land
-            // as a second item source and trip the constraint with a 500.
+            // Exactly one is non-null (validation and the CHECK guarantee it); written either/or so a stray empty string cannot become a second item source and 500 on the constraint.
             'equipment_id' => $equipmentId,
             'other_equipment_text' => $equipmentId === null ? $validated['other_equipment_text'] : null,
             'quantity' => $validated['quantity'],
             'purpose' => $validated['purpose'],
             'fulfillment_method' => $method,
-            // Dropped rather than stored when the method is Pickup, so an
-            // address typed into the form and then switched away from cannot
-            // survive as a delivery instruction on a request nobody is
-            // delivering.
+            // Dropped for Pickup, so an address typed and then switched away from is not kept as a delivery instruction.
             'delivery_address' => $method === 'Delivery' ? ($validated['delivery_address'] ?? null) : null,
             'borrower_type' => $borrowerType,
             'organization_name' => $organizationName,
@@ -276,19 +172,7 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing);
     }
 
-    /**
-     * PATCH /borrowings/{id}/cancel — the resident withdraws their own request.
-     *
-     * Sits outside the is.admin group, so it takes the same scopeToOwner()
-     * guard the reads take. Without the staff branch that guard supplies, any
-     * token that was not a resident's could cancel any resident's request; with
-     * it, a non-owner resident is scoped out of the query and gets the same 404
-     * a missing record gets, so the response never confirms the record exists.
-     *
-     * No transaction and no lock: this writes one column on one row and touches
-     * no stock at all — see CANCELLABLE_FROM for why cancelling returns nothing
-     * to the shelf.
-     */
+    /** PATCH /borrowings/{id}/cancel — the resident withdraws their own request. Outside the is.admin group, so it uses scopeToOwner(): a non-owner gets the same 404 as a missing record. One column, no transaction, no stock (see CANCELLABLE_FROM). */
     public function cancel(Request $request, $id)
     {
         $query = EquipmentBorrowing::query();
@@ -303,9 +187,7 @@ class EquipmentBorrowingController extends Controller
             return response()->json(['message' => 'Borrowing record not found'], 404);
         }
 
-        // 422 rather than a silent no-op: a resident who taps Cancel on a row
-        // the office has already released is owed the reason, and the app
-        // reads this message straight onto the screen.
+        // 422, not a silent no-op: the app shows this message to a resident whose row the office has already released.
         if (! in_array($borrowing->status, self::CANCELLABLE_FROM, true)) {
             return response()->json([
                 'message' => 'Only a pending or approved request can be cancelled. Call the office instead.',
@@ -318,11 +200,7 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing);
     }
 
-    /** The catalogued item's name, or the free-text description for an uncatalogued ("Other") request. */
-    /**
-     * What the loan record calls the borrower: the organization's own name, or
-     * "Barangay <name>" for a barangay hall's shared account.
-     */
+    /** The borrower as named on the loan: the organization's own name, or "Barangay <name>" for a barangay hall's shared account. */
     private function institutionName(Resident $account): string
     {
         if ($account->account_type === Resident::TYPE_ORGANIZATION && $account->organization_name) {
@@ -332,6 +210,7 @@ class EquipmentBorrowingController extends Controller
         return 'Barangay '.($account->barangay?->barangay_name ?? '');
     }
 
+    /** The catalogued item's name, or the free-text description for an uncatalogued ("Other") request. */
     private function itemLabel(EquipmentBorrowing $borrowing): string
     {
         return $borrowing->equipment?->item_name ?? $borrowing->other_equipment_text;
@@ -368,32 +247,16 @@ class EquipmentBorrowingController extends Controller
             return response()->json(['message' => 'Borrowing record not found'], 404);
         }
 
-        // Counted from Manila's calendar, not app.timezone (UTC). Between 00:00
-        // and 08:00 Manila the UTC date is still yesterday, so `+7 days` capped
-        // one day short of what the panel's picker offers and its own default
-        // was refused with the raw rule text.
+        // Counted from Manila's calendar, not UTC: between 00:00 and 08:00 Manila the UTC date is still yesterday, which capped +7 days one short of the panel's picker and refused its own default.
         $officeToday = Carbon::now(self::OFFICE_TIMEZONE)->startOfDay();
         $earliestDue = $officeToday->copy()->addDays(self::MIN_LOAN_DAYS);
         $latestDue = $officeToday->copy()->addDays(self::MAX_LOAN_DAYS);
 
-        // Checked ahead of the full validate() below, and only when the
-        // status sent is one of the five real values — a garbage value still
-        // falls through to the enum rule's own message. Moved here (it used
-        // to run after validate()) because return_condition_note's
-        // required_if:status,Returned would otherwise fire on an illegal
-        // Returned attempt too (e.g. a Cancelled or Pending row), masking
-        // "cannot be moved to Returned" behind a note prompt for a move that
-        // was never going to happen.
+        // Checked ahead of validate() and only for a real status value (garbage falls to the enum rule): after validate(), return_condition_note's required_if would fire on an illegal Returned attempt and mask "cannot be moved to Returned".
         $requestedStatus = $request->input('status');
         $oldStatus = $borrowing->status;
 
-        // The five values the `in:` rule below accepts — deliberately not
-        // array_key_exists() against the full TRANSITIONS table, which also
-        // carries a 'Cancelled' key so an already-cancelled row still gets a
-        // transition message (see that class docblock). 'Cancelled' was never
-        // a legal *target* here — only cancel() may write it — so a request
-        // for it must keep falling through to validate()'s own field error
-        // below, not this early, differently-worded response.
+        // The five values the `in:` rule accepts, not TRANSITIONS' keys: 'Cancelled' is a key (so a cancelled row gets a transition message) but never a legal target here, so it must fall through to validate()'s field error.
         $updatableStatuses = ['Pending', 'Approved', 'Released', 'Returned', 'Denied'];
 
         if (
@@ -409,42 +272,17 @@ class EquipmentBorrowingController extends Controller
 
         $validated = $request->validate([
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
-            // Both optional: a status change on its own is still a valid call,
-            // and only two of the five transitions carry either of these.
-            //
-            // Bounded in both directions per agency policy: a loan runs
-            // 1-7 days. A same-day due date is not a real loan term any more
-            // than one already past is, and the upper bound is the agency's
-            // own policy cap. This used to allow same-day and +1 year, which
-            // were never real loan terms.
-            //
-            // Safe against the overdue case specifically: the panel sends
-            // `due_date` only when approving, or when releasing a row that
-            // never got one. Marking an overdue item Returned or Denied sends
-            // the status alone, so closing one out is untouched by the lower
-            // bound.
+            // Both optional (a bare status change is valid; only two transitions carry them). A loan runs 1-7 days per agency policy; it used to allow same-day and +1 year. Closing an overdue loan sends the status alone, so the lower bound never blocks it.
             'due_date' => [
                 'sometimes', 'nullable', 'date',
                 'after_or_equal:'.$earliestDue->toDateString(),
                 'before_or_equal:'.$latestDue->toDateString(),
             ],
             'denial_reason' => 'sometimes|nullable|string|max:255',
-            // What actually keys the "still needed?" reconfirm notification
-            // (EquipmentAvailabilityNotifier) — denial_reason alone is free
-            // text an admin typed, with nothing machine-readable to check
-            // later. Optional: an admin denying for a reason that is not
-            // unavailability sends neither this nor anything to reconfirm.
+            // What keys the "still needed?" reconfirm (EquipmentAvailabilityNotifier); denial_reason is free text. Optional: a non-availability denial sends neither.
             'denial_reason_code' => 'sometimes|nullable|in:Unavailable,Other',
             'return_condition' => 'sometimes|nullable|in:Good,Bad',
-            // MDRRMO feedback, 2026-09-19: required on every return, not just
-            // a Bad one — a Good return with no note is still one line staff
-            // typed nothing into for the next person deciding whether to lend
-            // again. Keyed on `status` rather than `return_condition`, so it
-            // fires whether or not the caller even sends a condition. No
-            // `sometimes` here: that rule skips everything else when the
-            // field is absent, which would let required_if never fire at all
-            // for exactly the case it exists to catch — a return with no note
-            // key in the payload, not just an empty one.
+            // MDRRMO feedback, 2026-09-19: required on every return, not just Bad. Keyed on status so it fires even with no condition sent; no `sometimes`, which would skip required_if when the key is absent.
             'return_condition_note' => 'nullable|string|max:500|required_if:status,Returned',
         ], [
             'due_date.date' => 'Pick a valid due date.',
@@ -455,18 +293,7 @@ class EquipmentBorrowingController extends Controller
 
         $newStatus = $validated['status'];
 
-        // An uncatalogued request has no equipment row, so there is no stock to
-        // deduct and nothing to hand over that the inventory knows about.
-        // Releasing one would leave the office having lent a physical item with
-        // no record of what left the building.
-        //
-        // Refused explicitly rather than skipped: releasing with the deduction
-        // quietly not happening is the same bug class as the double-deduction
-        // this branch was written to fix, and staff would have no way to tell
-        // the release had been half-processed. Approve and deny stay open — the
-        // office can still consider the request; they just have to catalogue
-        // the item before it goes out. Checked before the transaction opens, so
-        // it costs no lock.
+        // An uncatalogued request has no stock row, so releasing would lend an item with no record of what left. Refused, not skipped (a half-processed release is the double-deduction bug class); approve and deny stay open. Checked before the transaction, so it costs no lock.
         if ($newStatus === 'Released' && $borrowing->equipment_id === null) {
             return response()->json([
                 'message' => 'This request is for an item that is not in the inventory ('
@@ -477,15 +304,11 @@ class EquipmentBorrowingController extends Controller
 
         DB::beginTransaction();
 
-        // Set inside the Returned branch below, read after DB::commit() —
-        // the availability check does push/SMS, which has no business
-        // holding the row lock this transaction takes.
+        // Set in the Returned branch, read after commit: the availability check sends push/SMS and must not hold the row lock.
         $restockedEquipment = null;
 
         try {
-            // Named for the only status Released can be reached from. The old
-            // condition was `$oldStatus !== 'Released'`, which was true of a
-            // Returned record too and is what deducted the stock twice.
+            // Named for the only status Released is reachable from; `!== 'Released'` was also true of Returned and deducted stock twice.
             if ($newStatus === 'Released' && $oldStatus === 'Approved') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
                 if ($equipment->available_quantity < $borrowing->quantity) {
@@ -497,32 +320,15 @@ class EquipmentBorrowingController extends Controller
                 $borrowing->released_at = now();
             }
 
-            // Handle stock addition when returning
-            //
-            // Needs no null-equipment guard of its own, unlike the release
-            // branch above: Returned is reachable only from Released, and the
-            // check before this transaction refuses to release a record whose
-            // equipment_id is null. So anything arriving here has already been
-            // proved to have an equipment row.
+            // Restock on return. No null-equipment guard: Returned is reachable only from Released, and releasing refuses a null equipment_id.
             if ($newStatus === 'Returned' && $oldStatus === 'Released') {
                 $equipment = Equipment::lockForUpdate()->find($borrowing->equipment_id);
 
-                // increment() alone has no upper bound: a borrowing whose
-                // Released side never actually decremented stock (a seeded
-                // row, a manual fix, a double-processed record) returns into
-                // a total that never moved, pushing available_quantity past
-                // total_quantity with nothing to say so — this is exactly
-                // how the Oxygen Tank row (45 total, 46 available) got that
-                // way. Clamped here rather than trusted.
+                // Clamped: a Released side that never decremented (seeded row, manual fix, double-processed) would push available past total, which is how the Oxygen Tank got 45 total, 46 available.
                 $requested = $equipment->available_quantity + $borrowing->quantity;
                 $clampedTo = min($requested, $equipment->total_quantity);
 
-                // Logged explicitly rather than left to TracksHistory: a
-                // fully-clamped return (available_quantity already at
-                // total, nothing to add) leaves the column unchanged, and
-                // TracksHistory's own "no dirty attributes, don't log" rule
-                // (logAction, action 'updated') would silently drop that a
-                // clamp was even attempted.
+                // Logged explicitly: a fully-clamped return changes nothing, and TracksHistory drops updates with no dirty attributes, so the clamp would go unrecorded.
                 if ($clampedTo < $requested) {
                     DB::table('tbl_system_logs')->insert([
                         'admin_id' => Auth::user() instanceof User ? Auth::id() : null,
@@ -551,13 +357,9 @@ class EquipmentBorrowingController extends Controller
                 $restockedEquipment = $equipment;
             }
 
-            // Assigned key by key rather than by splat: `status` is handled by
-            // the transition logic above, and a splat would let a caller write
-            // any other fillable column through this route.
+            // Key by key, not a splat: a splat would let a caller write any other fillable column through this route.
             if (array_key_exists('due_date', $validated)) {
-                // A rescheduled due date invalidates any reminder already
-                // sent for the old one — see SendReturnDueReminders, which
-                // would otherwise stay silent for the rest of the loan.
+                // A rescheduled due date invalidates the reminder already sent for the old one (SendReturnDueReminders would stay silent).
                 if ($validated['due_date'] !== $borrowing->due_date?->format('Y-m-d')) {
                     $borrowing->return_reminder_sent_at = null;
                 }
@@ -573,9 +375,7 @@ class EquipmentBorrowingController extends Controller
                 $borrowing->return_condition = $validated['return_condition'];
             }
 
-            // Only a denial carries a reason. Moving off Denied clears it, or a
-            // request re-approved after a refusal keeps explaining a refusal
-            // that no longer applies.
+            // Only a denial carries a reason; moving off Denied clears it, or a re-approved request keeps explaining a refusal that no longer applies.
             if ($newStatus === 'Denied') {
                 if (array_key_exists('denial_reason', $validated)) {
                     $borrowing->denial_reason = $validated['denial_reason'];
@@ -623,34 +423,12 @@ class EquipmentBorrowingController extends Controller
         }
     }
 
-    /**
-     * POST /borrowings/{id}/photo — what the item looked like at handover.
-     *
-     * Its own route rather than a field on update(), because update() takes
-     * JSON and a file needs multipart. Folding it in would have meant every
-     * status change carrying a multipart encoder for a field it never sends.
-     *
-     * Admin-only, via the route group: releasing and returning are counter
-     * actions, and the photograph is taken by whoever is standing at the
-     * counter. The resident can read it back — see photo() — but never write
-     * it, or the evidence would be supplied by one side of any dispute it
-     * exists to settle.
-     *
-     * Never blocks anything. The status has already moved by the time this is
-     * called, and a borrowing with no photo is a normal, complete record. The
-     * office releases equipment in conditions where stopping to photograph it
-     * is the wrong advice; a hard requirement would be answered with a photo
-     * of the floor.
-     */
+    /** POST /borrowings/{id}/photo — the item at handover. Its own multipart route (update() takes JSON); admin-only, since the resident can read it (photo()) but supplying it would put the evidence in one side's hands. Never blocks: the status has moved and a photo-less record is complete, and a hard requirement would get a photo of the floor. */
     public function uploadPhoto(Request $request, $id)
     {
         $validated = $request->validate([
             'stage' => 'required|in:release,return',
-            // Matches site_photo on tbl_service_request: images only, 4MB. No
-            // pdf and no doc — this is a photograph of an object, and every
-            // other accepted type would only widen what can be written to
-            // disk. `mimes` checks the file's guessed type, not the name the
-            // client sent.
+            // Images only, 4MB, like site_photo; `mimes` checks the guessed type, not the client's filename.
             'photo' => 'required|file|mimes:jpg,jpeg,png|max:4096',
         ]);
 
@@ -673,29 +451,17 @@ class EquipmentBorrowingController extends Controller
 
         $file = $request->file('photo');
 
-        // Private disk, same as valid_id and site_photo. A handover photo shows
-        // a named resident's item and often their doorway, and it is evidence
-        // in a dispute between them and the office — a guessable public URL is
-        // the mistake this codebase has already paid for once. Foldered by
-        // borrow_id and named with a uuid, so a client filename never reaches
-        // the filesystem.
+        // Private disk like valid_id: a handover photo shows a resident's item and often their doorway and is dispute evidence, and a guessable public URL is a mistake this codebase has paid for. Foldered by borrow_id and named by uuid, so no client filename reaches the disk.
         $path = $file->storeAs(
             'borrowing-photos/'.$borrowing->getKey(),
             (string) Str::uuid().'.'.$file->extension(),
             self::privateDisk()
         );
 
-        // One photo per stage, so a re-upload replaces. The old file is deleted
-        // after the new path is safely on the row rather than before: losing
-        // the write would otherwise leave the record pointing at a file that
-        // has already been removed.
+        // One photo per stage, so a re-upload replaces; the old file is deleted after the new path is on the row, so a failed write cannot leave a dangling record.
         $previous = $borrowing->{$stage['column']};
 
-        // Assigned directly rather than through fill(). These two columns are
-        // NOT in $fillable on purpose — a filesystem path is written by this
-        // method and by nothing else, and leaving it mass-assignable would let
-        // any future update() splat point a record at an arbitrary file on the
-        // private disk, which is where government ID scans live.
+        // Direct assignment, not fill(): the path columns are outside $fillable so a future update() splat cannot point a record at any private-disk file (government ID scans live there).
         $borrowing->{$stage['column']} = $path;
         $borrowing->save();
 
@@ -706,20 +472,7 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing);
     }
 
-    /**
-     * DELETE /borrowings/{id}/photo/{stage} — takes one back off the record.
-     *
-     * Admin-only, like the upload. This exists for the wrong-file mistake —
-     * the photo of the previous borrower's item, the accidental shot of the
-     * counter — and for nothing else, which is why the window is narrower than
-     * the one for adding: see `removable_in` on PHOTO_STAGES. Once the record
-     * has moved past the stage, the photo is part of a finished handover, and
-     * a dispute is exactly when someone would want it gone.
-     *
-     * The row is written before the file is deleted, for the same reason
-     * uploadPhoto() deletes the old file last: a record pointing at a file that
-     * is not there is worse than a file with no record pointing at it.
-     */
+    /** DELETE /borrowings/{id}/photo/{stage} — for the wrong-file mistake only, so the window (`removable_in`) is narrower than for adding; after that the photo is part of a finished handover. The row is written before the file is deleted: a record pointing at a missing file is worse than an orphan file. */
     public function destroyPhoto(Request $request, $id, string $stage)
     {
         if (! array_key_exists($stage, self::PHOTO_STAGES)) {
@@ -758,15 +511,7 @@ class EquipmentBorrowingController extends Controller
         return response()->json($borrowing);
     }
 
-    /**
-     * GET /borrowings/{id}/photo/{stage} — reads one back.
-     *
-     * Read is wider than write. Staff need it to settle a dispute; the
-     * borrower needs it for the same reason, and evidence only one side can
-     * see is not evidence. scopeToOwner() gives exactly that: staff see every
-     * record, a resident sees their own, and a non-owner gets the same 404 a
-     * missing record gets so the response never confirms it exists.
-     */
+    /** GET /borrowings/{id}/photo/{stage} — staff and the borrower can read it (evidence one side cannot see is not evidence); scopeToOwner() gives a non-owner the same 404 as a missing record. */
     public function photo(Request $request, $id, string $stage)
     {
         if (! array_key_exists($stage, self::PHOTO_STAGES)) {
@@ -780,9 +525,7 @@ class EquipmentBorrowingController extends Controller
         }
 
         $borrowing = $query->find($id);
-        // $stage is checked against the constant above before it reaches this
-        // line, so the dynamic property is always one of two literals and
-        // carries no injection surface.
+        // $stage was checked against the constant above, so the dynamic property is one of two literals (no injection surface).
         $column = self::PHOTO_STAGES[$stage]['column'];
 
         if (! $borrowing || ! $borrowing->{$column}) {

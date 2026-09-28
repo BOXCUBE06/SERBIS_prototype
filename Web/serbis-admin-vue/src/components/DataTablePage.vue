@@ -20,6 +20,7 @@
     border
     rounded="lg"
     class="data-table-page bg-surface pa-4"
+    :class="{ 'dtp-compact': compact, 'dtp-collapse': collapseMobile }"
     :style="{
       '--dtp-row-height': ROW_HEIGHT + 'px',
       '--dtp-header-height': HEADER_HEIGHT + 'px',
@@ -32,6 +33,7 @@
       @update:model-value="$emit('update:status', $event)"
       :items="tabs"
       :loading="loading"
+      :tonal="compact"
       class="mb-4"
     />
 
@@ -62,7 +64,7 @@
     <!-- Always rendered at one chip-row's height, active filters or not, so
          applying the first filter never pushes the table down. Search's chip
          comes from `search` itself; every other filter from the caller. -->
-    <div class="dtp-filter-row d-flex align-center flex-wrap gap-2 mb-3">
+    <div v-if="!compact || allFilters.length" class="dtp-filter-row d-flex align-center flex-wrap gap-2 mb-3">
       <template v-if="allFilters.length">
         <span class="text-caption font-weight-bold text-medium-emphasis">Filtered by</span>
         <v-chip
@@ -86,7 +88,12 @@
 
     <slot name="before-table" />
 
-    <div class="dtp-table-wrap" :style="{ minHeight: tableMinHeight + 'px' }">
+    <!-- `content` replaces the table (a grid view, say) and keeps the toolbar,
+         tabs, filter chips and footer around it; the caller renders the page's
+         rows itself from the same page / items-per-page. -->
+    <slot v-if="$slots.content" name="content" />
+
+    <div v-else class="dtp-table-wrap" :style="{ minHeight: tableMinHeight + 'px' }">
       <!-- Keyed on first load, so the body that replaces the skeleton mounts
            fresh and fades in (.table-fade). -->
       <v-data-table
@@ -97,6 +104,11 @@
         :page="page"
         :item-value="itemValue"
         hide-default-footer
+        :sort-by="sortBy"
+        :show-select="selectable"
+        select-strategy="page"
+        :model-value="selected"
+        @update:model-value="$emit('update:selected', $event)"
         :no-data-text="noDataText"
         :row-props="rowProps"
         class="dtp-table table-fade"
@@ -119,7 +131,7 @@
         <slot name="summary">{{ defaultSummary }}</slot>
       </div>
       <div class="d-flex align-center flex-wrap gap-4">
-        <div class="d-flex align-center gap-2">
+        <div v-if="showRowsPerPage" class="d-flex align-center gap-2">
           <span class="text-body-2 text-medium-emphasis">Rows per page</span>
           <v-select
             :model-value="itemsPerPage"
@@ -134,6 +146,7 @@
           ></v-select>
         </div>
         <v-pagination
+          v-if="!compact || pageCount > 1"
           :model-value="page"
           @update:model-value="$emit('update:page', $event)"
           :length="pageCount"
@@ -177,12 +190,35 @@ const props = defineProps({
   // `{ key, label }` per active filter, search excluded (added here). Closing
   // a chip or Clear all only tells the caller which key to reset.
   activeFilters: { type: Array, default: () => [] },
+
+  // Opt-in row selection: Vuetify's own checkbox column, with the header box
+  // selecting (and indeterminate over) the rows on the current page. `selected`
+  // is the array of ticked item-value ids. Callers with their own select slot
+  // leave this off.
+  selectable: { type: Boolean, default: false },
+  selected: { type: Array, default: () => [] },
+
+  // The header sort shown on first render, e.g. [{ key: 'last_name', order: 'asc' }].
+  // Only the starting point: no update listener is bound, so the table still
+  // sorts itself when a header is clicked.
+  sortBy: { type: Array, default: () => [] },
+
+  // The resource lists' quieter shape: the filter-chip row appears only while a
+  // filter is active, the table has no border of its own (the card is the one
+  // border), and the footer is a step smaller. Off, every other list is as before.
+  compact: { type: Boolean, default: false },
+
+  // Phone widths (<600px) for a list whose first column is the identity: the
+  // fixed layout is dropped so that column keeps its width, and any header
+  // carrying `headerProps/cellProps: { class: 'dtp-hide-sm' }` is hidden.
+  collapseMobile: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
   'update:search',
   'update:status',
   'update:page',
+  'update:selected',
   'update:items-per-page',
   'click:row',
   'clear-filter',
@@ -191,11 +227,14 @@ const emit = defineEmits([
 
 // This component's own slots are not v-data-table's; forwarding `actions` or
 // `summary` down would collide with any same-named table slot.
-const OWN_SLOTS = new Set(['filters', 'actions', 'summary', 'before-table'])
+const OWN_SLOTS = new Set(['filters', 'actions', 'summary', 'before-table', 'content'])
 const slots = useSlots()
 const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => !OWN_SLOTS.has(name)))
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
+// Compact lists hide the pager and page size while everything fits the smallest
+// page size, so a short list has no controls that do nothing.
+const showRowsPerPage = computed(() => !props.compact || props.items.length > Math.min(...props.itemsPerPageOptions))
 
 // One fixed height for every row, never density — a row sized off its own
 // content is the layout shift this component exists to remove. The table
@@ -203,7 +242,15 @@ const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / prop
 // so switching tabs or filters never moves the footer.
 const ROW_HEIGHT = 48
 const HEADER_HEIGHT = 44
-const tableBodyHeight = computed(() => props.itemsPerPage * ROW_HEIGHT)
+// Compact lists reserve only the rows they show (at least one, for the empty
+// message), so a short list has no dead space; the footer still holds still
+// while paging because every full page is the same height.
+const rowsShown = computed(() => {
+  if (!props.compact) return props.itemsPerPage
+  const onPage = props.items.length - (props.page - 1) * props.itemsPerPage
+  return Math.min(props.itemsPerPage, Math.max(onPage, 1))
+})
+const tableBodyHeight = computed(() => rowsShown.value * ROW_HEIGHT)
 const tableMinHeight = computed(() => tableBodyHeight.value + HEADER_HEIGHT)
 
 // A smaller page size can strand the current page past the new last page.
@@ -293,6 +340,48 @@ const clearAll = () => {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
   overflow: hidden;
+}
+.dtp-compact .dtp-table-wrap {
+  border: none;
+  border-radius: 0;
+}
+/* Footer text at table-body size, muted; the select and pager follow. */
+.dtp-compact .dtp-footer,
+.dtp-compact .dtp-footer :deep(.text-body-2),
+.dtp-compact .dtp-footer :deep(.v-field__input),
+.dtp-compact .dtp-footer :deep(.v-btn) {
+  font-size: 0.8125rem !important;
+}
+.dtp-compact .dtp-footer {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+/* These rows open Edit on click, so they say so on hover. */
+.dtp-compact .dtp-table :deep(tbody tr:hover) {
+  background: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+/* Phones, for lists that opt in (collapseMobile): auto layout so the identity
+   column keeps room, the secondary column gone, and Status/Actions sized to
+   their content. The tab strip scrolls inside its own box. */
+@media (max-width: 599px) {
+  .dtp-collapse .dtp-table :deep(table) {
+    table-layout: auto;
+    min-width: 0;
+  }
+  .dtp-collapse .dtp-table :deep(th),
+  .dtp-collapse .dtp-table :deep(td) {
+    width: auto !important;
+  }
+  .dtp-collapse .dtp-table :deep(th:first-child),
+  .dtp-collapse .dtp-table :deep(td:first-child) {
+    min-width: 150px;
+  }
+  .dtp-collapse .dtp-table :deep(.dtp-hide-sm) {
+    display: none;
+  }
+  .dtp-collapse :deep(.segmented-tabs__seg) {
+    padding: 8px 10px;
+  }
 }
 
 /* Fixed layout: otherwise columns re-measure off the visible rows and the

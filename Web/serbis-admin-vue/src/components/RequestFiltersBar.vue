@@ -1,5 +1,17 @@
 <template>
   <v-select
+    v-if="statusOptions"
+    :model-value="status"
+    @update:model-value="$emit('update:status', $event)"
+    :items="statusOptions"
+    label="Status"
+    variant="outlined"
+    density="compact"
+    hide-details
+    rounded="lg"
+    class="filter-field"
+  ></v-select>
+  <v-select
     :model-value="barangay"
     @update:model-value="$emit('update:barangay', $event)"
     :items="barangayOptions"
@@ -29,6 +41,9 @@ defineProps({
   unit: { type: String, required: true },
   barangayOptions: { type: Array, required: true },
   unitOptions: { type: Array, required: true },
+  // Only the Resident queue passes these, and only while its All tab is active.
+  status: { type: String, default: 'All' },
+  statusOptions: { type: Array, default: null },
 })
-defineEmits(['update:barangay', 'update:unit'])
+defineEmits(['update:barangay', 'update:unit', 'update:status'])
 </script>

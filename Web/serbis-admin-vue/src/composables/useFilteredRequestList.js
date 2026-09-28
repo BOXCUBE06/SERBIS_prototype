@@ -1,10 +1,22 @@
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { API_BASE } from '@/config/api'
 
 export function useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn, decorate }) {
+  // The full list, so a barangay with no requests yet is still pickable. The
+  // endpoint is public; on failure the options fall back to the loaded rows.
+  const allBarangays = ref([])
+  fetch(`${API_BASE}/barangays`)
+    .then(r => (r.ok ? r.json() : []))
+    .then(rows => { allBarangays.value = rows.map(b => b.barangay_name) })
+    .catch(() => {})
+
   const barangayOptions = computed(() => {
-    const names = new Set(requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean))
-    return ['All', ...Array.from(names).slice().sort()]
+    const names = new Set([...allBarangays.value, ...requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean)])
+    return ['All', ...Array.from(names).sort()]
   })
+
+  // A tab wins; on All, the Status select (statusPick, Resident queue only) applies.
+  const activeStatus = computed(() => (filters.status === 'All' ? (filters.statusPick || 'All') : filters.status))
 
   const requestCounts = computed(() => {
     const counts = { All: requests.value.length, Pending: 0, Booked: 0, Responding: 0, Resolved: 0, Disapproved: 0, Cancelled: 0 }
@@ -17,7 +29,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
 
   const filteredAndSortedRequests = computed(() => {
     const searchLower = search.value.toLowerCase()
-    const currentStatus = filters.status
+    const currentStatus = activeStatus.value
 
     return requests.value.filter(r => {
       if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) {return false}
@@ -45,22 +57,22 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
       const statusA = a.status || 'Pending', statusB = b.status || 'Pending'
       if (statusA === 'Pending' && statusB !== 'Pending') {return -1}
       if (statusB === 'Pending' && statusA !== 'Pending') {return 1}
-      // Oldest first within a tier: the longest-waiting request is the one that
-      // most needs attention, so it surfaces at the top rather than sinking to
-      // the bottom of the page behind whatever was just filed.
-      return new Date(a.created_at) - new Date(b.created_at)
+      // Newest first within a tier: a request just filed must show at the top,
+      // or staff think the submit did nothing. The wait-days chip still flags
+      // the old ones.
+      return new Date(b.created_at) - new Date(a.created_at)
     })
   })
 
   const emptyListMessage = computed(() => {
     if (search.value) {return `No requests match "${search.value}"`}
-    if (filters.status !== 'All') {return `No ${filters.status.toLowerCase()} requests`}
+    if (activeStatus.value !== 'All') {return `No ${activeStatus.value.toLowerCase()} requests`}
     return 'No requests yet'
   })
 
   const activeFilters = computed(() => {
     const out = []
-    if (filters.status !== 'All') {out.push({ key: 'status', label: `Status: ${filters.status}` })}
+    if (activeStatus.value !== 'All') {out.push({ key: 'status', label: `Status: ${activeStatus.value}` })}
     if (filters.barangay !== 'All') {out.push({ key: 'barangay', label: `Barangay: ${filters.barangay}` })}
     if (filters.unit !== 'All') {out.push({ key: 'unit', label: `Unit: ${filters.unit}` })}
     return out
@@ -68,7 +80,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
 
   const clearFilter = (key) => {
     switch (key) {
-      case 'status': { filters.status = 'All'; break }
+      case 'status': { filters.status = 'All'; filters.statusPick = 'All'; break }
       case 'barangay': { filters.barangay = 'All'; break }
       case 'unit': { filters.unit = 'All'; break }
     }
@@ -76,6 +88,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
 
   const clearAllFilters = () => {
     filters.status = 'All'
+    filters.statusPick = 'All'
     filters.barangay = 'All'
     filters.unit = 'All'
   }

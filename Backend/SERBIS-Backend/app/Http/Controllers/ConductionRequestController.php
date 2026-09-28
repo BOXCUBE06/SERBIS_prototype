@@ -186,6 +186,15 @@ class ConductionRequestController extends Controller
                     ],
                 ], 409);
             }
+
+            // The panel only offers Booked requests, but the API took any
+            // status: a trip filed against a Pending booking sat "Awaiting
+            // departure" beside a booking the office had not yet approved.
+            if (ServiceRequest::whereKey($validated['service_request_id'])->value('status') !== 'Booked') {
+                throw ValidationException::withMessages([
+                    'service_request_id' => 'A trip record can only be filed against a Booked request.',
+                ]);
+            }
         }
 
         // A soft block, not a hard one: a unit already out on a trip is
@@ -386,6 +395,14 @@ class ConductionRequestController extends Controller
                     $raw,
                     self::OFFICE_TIMEZONE
                 )->utc();
+
+                // A checkpoint is something that already happened. The grace
+                // covers a browser clock a little ahead of the server's.
+                if ($validated[$field]->gt(now()->addMinutes(5))) {
+                    throw ValidationException::withMessages([
+                        $field => self::TRIP_SEQUENCE[$field].' cannot be in the future.',
+                    ]);
+                }
             }
         }
 

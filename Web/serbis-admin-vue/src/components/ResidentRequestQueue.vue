@@ -37,6 +37,8 @@
           <RequestFiltersBar
             v-model:barangay="filters.barangay"
             v-model:unit="filters.unit"
+            v-model:status="filters.statusPick"
+            :status-options="filters.status === 'All' ? statusTabs : null"
             :barangay-options="barangayOptions"
             :unit-options="unitOptions"
           />
@@ -90,13 +92,21 @@
           <span class="d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
         </template>
 
-        <template v-slot:item._requesterName="{ item }">
+        <template v-slot:item._firstName="{ item }">
           <PersonCell
-            :name="item._requesterName"
+            :name="item._firstName"
             :secondary="item._barangay"
             :initials="requesterInitials(item)"
             :title="item._requesterName"
-          />
+          >
+            <template v-if="requesterAccountType(item)" #badge>
+              <v-chip size="x-small" variant="tonal" label class="ml-2 flex-shrink-0">{{ requesterAccountType(item) }}</v-chip>
+            </template>
+          </PersonCell>
+        </template>
+
+        <template v-slot:item._lastName="{ item }">
+          <span class="text-truncate d-block font-weight-bold" :title="item._lastName">{{ item._lastName || '—' }}</span>
         </template>
 
         <template v-slot:item._secondary="{ item }">
@@ -468,10 +478,8 @@
             Resolving <strong class="text-high-emphasis">{{ resolveDialog.label }}</strong> closes it permanently.
             The status cannot be changed back from this panel.
           </p>
-          <p class="mb-0">
-            The trip log stays editable — return timestamps and odometer readings
-            can still be filled in after this. It is the status that is permanent,
-            not the record.
+          <p v-if="selectedRequest?.vehicle_id || selectedRequest?.responders?.length" class="mb-0">
+            The assigned unit and responders are released.
           </p>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
@@ -612,7 +620,7 @@ import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
 import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
+import { requesterName, requesterNameParts, requesterAccountType, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
@@ -637,7 +645,8 @@ const itemsPerPage = ref(10)
 
 const isProgramRequest = (r) => r?.service?.category === 'programs'
 
-const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
+// statusPick is the Status select on the All tab; the tabs own `status`.
+const filters = reactive({ status: 'All', statusPick: 'All', barangay: 'All', unit: 'All' })
 const vehicleModal = ref({ isOpen: false })
 const responderModal = ref({ isOpen: false, loading: false, error: '', selectedIds: new Set() })
 const selectedRequest = ref(null)
@@ -775,7 +784,8 @@ const HEADER_WIDTH_TOTAL = 96
 const tableHeaders = computed(() => {
   const columns = [
     { title: 'TXN No.', key: 'request_id', width: 10 },
-    { title: 'Requester', key: '_requesterName', width: 22 },
+    { title: 'First Name', key: '_firstName', width: 12 },
+    { title: 'Last Name', key: '_lastName', width: 12 },
     { title: 'Service', key: '_secondary', width: 14 },
     { title: 'Status', key: 'status', width: 10, sortable: false },
     { title: 'Assigned', key: '_unit', width: 14, sortable: false },
@@ -880,6 +890,7 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     secondaryFn: (r) => r.service?.service_name || 'Other',
     decorate: (r) => ({
       _barangay: requesterBarangay(r),
+      ...requesterNameParts(r),
       _waitDays: openWaitDays(r.status, r.created_at),
       // resolved_at is stamped for Resolved, Cancelled and Disapproved alike.
       _closedTs: r.resolved_at || null,
@@ -976,6 +987,7 @@ const submitWalkIn = async () => {
 
 watch(() => filters.status, () => { page.value = 1 })
 watch(search, () => { page.value = 1 })
+watch(() => filters.statusPick, () => { page.value = 1 })
 watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
 

@@ -1,114 +1,76 @@
 <template>
   <v-container fluid class="fill-height align-start page-background">
-    <v-row>
-      <v-col cols="12">
+    <PageHeader title="Responders">
+      <template v-slot:actions>
+        <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAdd">
+          <v-icon start size="18">mdi-plus</v-icon> Add Responder
+        </v-btn>
+      </template>
+    </PageHeader>
 
-        <PageHeader title="Responders">
-          <template v-slot:actions>
-            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-              <v-icon start size="20">mdi-plus</v-icon> Add Responder
-            </v-btn>
-          </template>
-        </PageHeader>
+    <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 w-100" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
-        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
-
-        <div v-if="!loading && responders.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6">
-          <v-text-field
-            v-model="search"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search name or position..."
+    <div class="w-100">
+      <DataTablePage
+        compact
+        collapse-mobile
+        @click:row="(_event, { item }) => openEdit(item)"
+        :tabs="statusTabs"
+        :status="statusFilter"
+        @update:status="statusFilter = $event"
+        :loading="firstLoad"
+        :refreshing="refreshing"
+        v-model:search="search"
+        search-placeholder="Search name or position"
+        :headers="headers"
+        :items="filteredResponders"
+        item-value="responder_id"
+        :no-data-text="responders.length > 0 ? 'No responders match your filters' : 'No responders yet'"
+        :page="page"
+        @update:page="page = $event"
+        :items-per-page="itemsPerPage"
+        @update:items-per-page="itemsPerPage = $event"
+        result-noun="responders"
+        :active-filters="activeFilters"
+        @clear-filter="clearFilter"
+        @clear-all="clearAllFilters"
+      >
+        <template v-slot:filters>
+          <v-select
+            v-model="positionFilter"
+            :items="positionOptions"
+            label="Position"
             variant="outlined" density="compact" hide-details rounded="lg"
-            class="control-field"
-          ></v-text-field>
-          <v-chip
-            v-if="statusFilter !== 'All'"
-            closable
-            variant="flat"
-            class="font-weight-bold"
-            @click:close="statusFilter = 'All'"
-          >{{ statusFilter }}</v-chip>
-        </div>
+          ></v-select>
+        </template>
 
-        <div v-if="!firstLoad && filteredResponders.length === 0" class="empty-state group-card">
-          <v-icon size="48" class="text-medium-emphasis mb-3">mdi-account-hard-hat-outline</v-icon>
-          <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ responders.length > 0 ? 'No responders match your filters' : 'No responders yet' }}
-          </div>
-          <div class="text-body-2 text-medium-emphasis">
-            {{ responders.length > 0 ? 'Clear the search to see everyone.' : 'Add the first responder to get started.' }}
-          </div>
-        </div>
+        <template v-slot:item.name="{ item }">
+          <PersonCell
+            :name="item.name"
+            :secondary="item.contact_no"
+            :initials="initials(item.name)"
+            :photo="item.photo_url"
+            size="36"
+          />
+        </template>
 
-        <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
-          <v-data-table
-            :key="firstLoad ? 'loading' : 'ready'"
-            :loading="refreshing"
-            :class="{ 'is-refreshing': refreshing }"
-            :headers="headers"
-            :items="filteredResponders"
-            :items-per-page="10"
-            item-value="responder_id"
-            density="comfortable"
-            class="responder-table table-fade"
-          >
-            <template v-if="firstLoad" #body>
-              <SkeletonRows :rows="10" :columns="headers.length" />
-            </template>
-            <template v-slot:item.name="{ item }">
-              <div class="d-flex align-center gap-3 py-2">
-                <v-avatar size="40" color="primary" variant="tonal">
-                  <v-img v-if="item.photo_url" :src="item.photo_url" :alt="item.name" cover></v-img>
-                  <span v-else class="text-body-2 font-weight-bold">{{ initials(item.name) }}</span>
-                </v-avatar>
-                <div class="min-w-0">
-                  <div class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.name }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.contact_no }}</div>
-                </div>
-              </div>
-            </template>
+        <template v-slot:item.status="{ item }">
+          <StatusChip
+            :status="PILL_KEY[item.status]"
+            :label="statusLabel(item.status)"
+            :items="statusChoices"
+            :current="item.status"
+            :aria-label="`${item.name} is ${statusLabel(item.status)}. Change status`"
+            @select="promptStatusChange(item, $event)"
+          />
+        </template>
 
-            <template v-slot:item.position="{ item }">
-              <span class="text-body-2 font-weight-medium text-high-emphasis">{{ item.position }}</span>
-            </template>
+        <template v-slot:item.actions="{ item }">
+          <RowActions :label="item.name" @edit="openEdit(item)" @delete="askDelete(item)" />
+        </template>
+      </DataTablePage>
+    </div>
 
-            <template v-slot:item.status="{ item }">
-              <v-menu location="bottom">
-                <template v-slot:activator="{ props }">
-                  <button
-                    type="button"
-                    class="status-pill"
-                    :class="`pill-${item.status}`"
-                    v-bind="props"
-                    :aria-label="`${item.name} is ${item.status}. Change status`"
-                  >
-                    <span class="font-weight-bold text-uppercase">{{ statusLabel(item.status) }}</span>
-                    <v-icon size="16" class="ml-auto">mdi-chevron-down</v-icon>
-                  </button>
-                </template>
-                <v-list density="compact" rounded="lg">
-                  <v-list-item
-                    v-for="s in STATUSES" :key="s"
-                    :disabled="s === item.status"
-                    @click="promptStatusChange(item, s)"
-                  >
-                    <v-list-item-title>{{ statusLabel(s) }}</v-list-item-title>
-                  </v-list-item>
-                </v-list>
-              </v-menu>
-            </template>
-
-            <template v-slot:item.actions="{ item }">
-              <div class="d-flex justify-end gap-1">
-                <v-btn icon="mdi-pencil-outline" variant="outlined" color="primary" size="small" :aria-label="`Edit ${item.name}`" @click="openEdit(item)"></v-btn>
-                <v-btn icon="mdi-delete-outline" variant="outlined" size="small" color="error" :aria-label="`Delete ${item.name}`" @click="askDelete(item)"></v-btn>
-              </div>
-            </template>
-          </v-data-table>
-        </v-card>
-
-      </v-col>
-    </v-row>
 
     <!-- Status confirm -->
     <v-dialog v-model="statusDialog.show" max-width="420">
@@ -190,16 +152,22 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import StatusChip from '@/components/StatusChip.vue'
+import RowActions from '@/components/RowActions.vue'
 
 const API = `${API_BASE}/responders`
 const STATUSES = ['available', 'deployed', 'off_duty']
 const STATUS_LABELS = { available: 'Available', deployed: 'Deployed', off_duty: 'Off Duty' }
 const statusLabel = (s) => STATUS_LABELS[s] || s
+// The colour key each status has in statusPill.ts.
+const PILL_KEY = { available: 'Available', deployed: 'Deployed', off_duty: 'Off duty' }
+const statusChoices = STATUSES.map((s) => ({ value: s, label: statusLabel(s), status: PILL_KEY[s] }))
 
 const responders = ref([])
 const loading = ref(false)
@@ -209,6 +177,9 @@ const refreshing = computed(() => loading.value && responders.value.length > 0)
 const apiError = ref('')
 const search = ref('')
 const statusFilter = ref('All')
+const positionFilter = ref('All')
+const page = ref(1)
+const itemsPerPage = ref(10)
 
 const statusDialog = ref({ show: false, responder: null, newStatus: '', loading: false })
 const formDialog = ref({ show: false, editing: false, loading: false, error: '' })
@@ -249,22 +220,42 @@ const notify = (text, color = 'success') => { snackbar.value = { show: true, tex
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
 const getAuthOnlyHeaders = () => ({ Authorization: `Bearer ${getToken()}`, Accept: 'application/json' })
 
-const filteredResponders = computed(() => {
+// Search and position narrow the rows first; the tabs then split that set by
+// status, so each tab's count is what it would show.
+const baseResponders = computed(() => {
   const q = search.value.trim().toLowerCase()
   return responders.value.filter((r) => {
-    const matchesStatus = statusFilter.value === 'All' || r.status === statusFilter.value
+    const matchesPosition = positionFilter.value === 'All' || r.position === positionFilter.value
     const matchesSearch = !q ||
       (r.name || '').toLowerCase().includes(q) ||
       (r.position || '').toLowerCase().includes(q)
-    return matchesStatus && matchesSearch
+    return matchesPosition && matchesSearch
   })
 })
+const filteredResponders = computed(() =>
+  statusFilter.value === 'All' ? baseResponders.value : baseResponders.value.filter((r) => r.status === statusFilter.value),
+)
+const statusTabs = computed(() => [
+  { value: 'All', label: 'All', count: baseResponders.value.length },
+  ...STATUSES.map((s) => ({ value: s, label: statusLabel(s), count: baseResponders.value.filter((r) => r.status === s).length })),
+])
 
+const positionOptions = computed(() => ['All', ...[...new Set(responders.value.map((r) => r.position).filter(Boolean))].sort()])
+
+// Status is the tabs, so it is not a chip here.
+const activeFilters = computed(() => (positionFilter.value === 'All' ? [] : [{ key: 'position', label: `Position: ${positionFilter.value}` }]))
+const clearFilter = () => { positionFilter.value = 'All' }
+const clearAllFilters = clearFilter
+watch([search, statusFilter, positionFilter], () => { page.value = 1 })
+
+// Fixed-layout table, same first three columns as Vehicles and Resource
+// Management so Status lines up across them. Position goes on a phone.
+const HIDE_SM = { class: 'dtp-hide-sm' }
 const headers = [
-  { title: 'Responder', key: 'name', width: '34%' },
-  { title: 'Position', key: 'position', width: '22%' },
-  { title: 'Status', key: 'status', width: '25%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '19%' },
+  { title: 'Responder', key: 'name', width: '35%' },
+  { title: 'Position', key: 'position', width: '200px', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Status', key: 'status', width: '160px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
 ]
 
 const fetchResponders = async () => {
@@ -401,43 +392,4 @@ onMounted(fetchResponders)
 <style scoped>
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
 .gap-3 { gap: 12px; }
-.min-w-0 { min-width: 0; }
-.control-field { width: 260px; max-width: 100%; }
-
-.group-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
-  box-shadow: 0 12px 40px -12px rgba(var(--v-theme-on-surface), 0.05) !important;
-}
-
-.responder-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
-.responder-table :deep(thead th) {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.status-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 128px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-  border: none;
-  cursor: pointer;
-  transition: filter var(--motion-fast) var(--ease-out);
-}
-.status-pill:hover { filter: brightness(0.97); }
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
-.pill-deployed { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
-.pill-off_duty { background: rgba(var(--v-theme-on-surface), 0.1); color: rgba(var(--v-theme-on-surface), 0.7); }
-
-.empty-state {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 64px 16px; border-radius: 16px;
-}
 </style>

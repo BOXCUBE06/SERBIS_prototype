@@ -27,6 +27,18 @@ export const tripNo = (conductionRequestId) =>
 export const requesterName = (item) =>
   item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
 
+// null for walk-ins: no account, so no type.
+const ACCOUNT_TYPE_LABELS = { head_of_family: 'Household', barangay: 'Barangay', organization: 'Org' }
+export const requesterAccountType = (item) => ACCOUNT_TYPE_LABELS[item?.resident?.account_type] || null
+
+// Walk-ins store one free-text walk_in_name, so split on the last space.
+export const requesterNameParts = (item) => {
+  if (item?.resident) {return { _firstName: item.resident.first_name || '', _lastName: item.resident.last_name || '' }}
+  const name = requesterName(item)
+  const i = name.lastIndexOf(' ')
+  return i === -1 ? { _firstName: name, _lastName: '' } : { _firstName: name.slice(0, i), _lastName: name.slice(i + 1) }
+}
+
 export const requesterInitials = (item) => {
   if (item?.resident) {return `${item.resident.first_name?.charAt(0) || ''}${item.resident.last_name?.charAt(0) || ''}`}
   const parts = (item?.walk_in_name || '').trim().split(/\s+/).filter(Boolean)

@@ -46,7 +46,26 @@ const BORROWING_ACCENTS: Record<string, string> = Object.fromEntries(
   BORROWING_STATUSES.map((s) => [s.status, s.accent]),
 )
 
-const ALL_ACCENTS: Record<string, string> = { ...SERVICE_REQUEST_ACCENTS, ...BORROWING_ACCENTS }
+// Vehicles, Responders and Resource Management share one map: available is
+// green, out on a job or running low is amber, off the roster or in the shop
+// is neutral. Red is kept for what blocks a request (an item with none left).
+const RESOURCE_ACCENTS: Record<string, string> = {
+  Available: '#297A67',
+  Dispatched: accentOf('Pending'),
+  Deployed: accentOf('Pending'),
+  'Low stock': accentOf('Pending'),
+  Maintenance: accentOf('Cancelled'),
+  Depleted: accentOf('Denied'),
+  Unavailable: accentOf('Denied'),
+  'Off duty': accentOf('Cancelled'),
+  // Accounts: a signed-up account is green, one switched off or opted out of
+  // texts is neutral. (Pending is the amber the request statuses already have.)
+  Active: '#297A67',
+  Deactivated: accentOf('Cancelled'),
+  'Opted out': accentOf('Cancelled'),
+}
+
+const ALL_ACCENTS: Record<string, string> = { ...SERVICE_REQUEST_ACCENTS, ...BORROWING_ACCENTS, ...RESOURCE_ACCENTS }
 
 export function pillAccent(status?: string | null): string {
   return ALL_ACCENTS[status || ''] || '#64748B'

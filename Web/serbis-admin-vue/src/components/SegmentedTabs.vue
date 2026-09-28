@@ -15,7 +15,7 @@
   followed).
 -->
 <template>
-  <div class="segmented-tabs" role="tablist">
+  <div class="segmented-tabs" :class="{ 'segmented-tabs--tonal': tonal }" role="tablist">
     <button
       v-for="item in items"
       :key="item.value"
@@ -50,6 +50,8 @@ defineProps<{
   items: SegmentedTabItem[]
   /** First load: counts are placeholders, never a misleading 0. */
   loading?: boolean
+  /** The selected segment as a soft tint instead of a solid fill. */
+  tonal?: boolean
 }>()
 
 defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
@@ -122,6 +124,11 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
 }
 .segmented-tabs__seg--active .skel {
   --skel-bg: rgba(255, 255, 255, 0.3);
+}
+/* Tonal: primary-strong on a primary tint keeps AA in both themes. */
+.segmented-tabs--tonal .segmented-tabs__seg--active {
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary-strong));
 }
 .segmented-tabs__count {
   font-weight: 800;

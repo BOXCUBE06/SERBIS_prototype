@@ -2,256 +2,188 @@
   <v-container fluid class="fill-height align-start bg-background">
     <div class="w-100">
       <PageHeader title="Accounts">
-            <!-- On the title's own line, as a chip: a count that sat below the
-                 title in grey read as a caption, not as a number worth
-                 noticing. Says "of" only when something is being hidden. The
-                 permanent "N of N" read as a standing accusation that a filter
-                 was on. ("residents" here is deliberate and ruled on; the
-                 heading beside it is the page/nav title.) -->
-            <template v-slot:badge>
-              <span v-if="!initialLoad" class="count-chip" role="status">
-                <template v-if="filteredAndSortedResidents.length === residents.length">
-                  <strong>{{ residents.length }}</strong>
-                  {{ residents.length === 1 ? 'account' : 'accounts' }}
-                </template>
-                <template v-else>
-                  <strong>{{ filteredAndSortedResidents.length }}</strong>
-                  of {{ residents.length }} accounts
-                </template>
-              </span>
-              <span v-else class="skel skel-pill" style="width: 7.5em; height: 2em" aria-hidden="true"></span>
+        <!-- On the title's own line, as a chip: a count that sat below the
+             title in grey read as a caption, not as a number worth
+             noticing. Says "of" only when something is being hidden. The
+             permanent "N of N" read as a standing accusation that a filter
+             was on. ("residents" here is deliberate and ruled on; the
+             heading beside it is the page/nav title.) -->
+        <template v-slot:badge>
+          <span v-if="!initialLoad" class="count-chip" role="status">
+            <template v-if="filteredAndSortedResidents.length === residents.length">
+              <strong>{{ residents.length }}</strong>
+              {{ residents.length === 1 ? 'account' : 'accounts' }}
             </template>
+            <template v-else>
+              <strong>{{ filteredAndSortedResidents.length }}</strong>
+              of {{ residents.length }} accounts
+            </template>
+          </span>
+          <span v-else class="skel skel-pill" style="width: 7.5em; height: 2em" aria-hidden="true"></span>
+        </template>
 
-            <template v-slot:actions>
-              <v-btn
-                color="primary"
-                elevation="0"
-                rounded="lg"
-                height="48"
-                class="px-5 text-none font-weight-bold text-white transition-btn"
-                @click="openAddModal"
-              >
-                <v-icon start>mdi-plus</v-icon> Add account
-              </v-btn>
-            </template>
+        <template v-slot:actions>
+          <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAddModal">
+            <v-icon start size="18">mdi-plus</v-icon> Add account
+          </v-btn>
+        </template>
       </PageHeader>
 
-    <div class="residents-layout" :style="rowStyle">
+      <v-alert v-if="apiError" type="error" variant="tonal" density="comfortable" rounded="lg" class="mb-4">
+        {{ apiError }}
+        <template v-slot:append>
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="loadAll">Retry</v-btn>
+        </template>
+      </v-alert>
 
-      <div class="residents-main">
-        <v-card elevation="3" rounded="lg" class="bg-surface w-100 h-100 d-flex flex-column">
+      <!-- The type tabs' counts reflect status/barangay/search, everything but
+           the type itself, so switching tabs previews how many rows will show. -->
+      <DataTablePage
+        compact
+        collapse-mobile
+        class="accounts-table"
+        :sort-by="defaultSort"
+        :tabs="typeTabs"
+        :status="filters.type"
+        @update:status="filters.type = $event"
+        :loading="initialLoad"
+        v-model:search="search"
+        search-placeholder="Search name or mobile number"
+        :headers="headers"
+        :items="filteredAndSortedResidents"
+        item-value="resident_id"
+        :no-data-text="residents.length > 0 ? 'No accounts match your filters' : 'No accounts registered yet'"
+        :page="page"
+        @update:page="page = $event"
+        :items-per-page="itemsPerPage"
+        @update:items-per-page="itemsPerPage = $event"
+        result-noun="accounts"
+        :active-filters="activeFilters"
+        @clear-filter="clearFilter"
+        @clear-all="clearFilters"
+        :row-props="rowProps"
+        @click:row="selectRow"
+      >
+        <template v-slot:filters>
+          <v-select
+            v-model="filters.status"
+            :items="RESIDENT_STATUS_FILTER_ITEMS"
+            label="Status"
+            aria-label="Filter by status"
+            variant="outlined" density="compact" hide-details rounded="lg"
+          ></v-select>
+          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Cleared
+               is "All"; the filter itself still holds the name or 'All'. -->
+          <v-autocomplete
+            v-model="barangayFilter"
+            :items="barangays"
+            item-title="barangay_name"
+            item-value="barangay_name"
+            label="Barangay"
+            aria-label="Filter by barangay"
+            clearable
+            variant="outlined" density="compact" hide-details rounded="lg"
+          ></v-autocomplete>
+        </template>
 
-          <div class="px-6 py-2 border-b d-flex align-center flex-wrap gap-3 flex-shrink-0">
-            <v-text-field
-              v-model="search"
-              prepend-inner-icon="mdi-magnify"
-              label="Search accounts"
-              placeholder="Name or mobile number"
-              clearable
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="lg"
-              class="search-field"
-            ></v-text-field>
-
-            <v-select
-              v-model="filters.status"
-              :items="RESIDENT_STATUS_FILTER_ITEMS"
-              label="Status"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="lg"
-              class="status-field"
-            ></v-select>
-
-            <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Cleared
-                 is "All"; the filter itself still holds the name or 'All'. -->
-            <v-autocomplete
-              v-model="barangayFilter"
-              :items="barangays"
-              item-title="barangay_name"
-              item-value="barangay_name"
-              label="Barangay"
-              placeholder="All barangays"
-              clearable
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="lg"
-              class="barangay-field"
-            ></v-autocomplete>
-
-          </div>
-
-          <!-- `aria-pressed` is what makes the active filter perceivable at
-               all without sight: the selected type/barangay was carried by
-               colour and a 3px underline alone, and the group had no
-               accessible name saying what these buttons even filter. Each
-               tab's count reflects status/barangay/search — everything but
-               the type itself — so switching tabs previews how many rows
-               will show before the click. -->
-          <div
-            class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
-            role="group"
-            aria-label="Filter by account type"
-          >
-            <v-btn
-              v-for="t in ACCOUNT_TYPE_FILTER_ITEMS"
-              :key="t.value"
-              variant="text"
-              :aria-pressed="filters.type === t.value"
-              :class="['tab-btn text-none px-4 rounded-0', filters.type === t.value ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
-              @click="filters.type = t.value"
-            >
-              {{ t.value === 'All' ? 'All' : t.title }}
-              <span class="tab-count">{{ typeCounts[t.value] ?? 0 }}</span>
+        <!-- Bulk actions. Present only while rows are ticked, so the table is not
+             pushed around by a bar nobody asked for. -->
+        <template v-if="selectedRows.length > 0" v-slot:before-table>
+          <div class="bulk-bar px-4 py-2 mb-3 rounded-lg d-flex align-center flex-wrap gap-3" role="region" aria-label="Bulk actions">
+            <span class="font-weight-bold text-body-2" aria-live="polite">{{ selectedRows.length }} selected</span>
+            <v-btn size="small" variant="tonal" color="primary" class="text-none font-weight-bold" @click="askBulk('activate')">
+              <v-icon start size="18">mdi-account-check-outline</v-icon>Activate
             </v-btn>
-          </div>
-
-          <!-- Error -->
-          <v-alert
-            v-if="apiError"
-            type="error"
-            variant="tonal"
-            density="comfortable"
-            rounded="0"
-            class="flex-shrink-0"
-          >
-            {{ apiError }}
-            <template v-slot:append>
-              <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="loadAll">Retry</v-btn>
-            </template>
-          </v-alert>
-
-          <!-- Empty -->
-          <div v-if="!initialLoad && filteredAndSortedResidents.length === 0" class="empty-state flex-grow-1">
-            <v-icon size="56" class="text-medium-emphasis mb-4">mdi-account-off-outline</v-icon>
-            <div class="text-h6 font-weight-bold text-high-emphasis mb-1">
-              {{ residents.length > 0 ? 'No accounts match your filters' : 'No accounts registered yet' }}
-            </div>
-            <div class="text-body-1 text-medium-emphasis mb-5">
-              {{ residents.length > 0
-                ? 'Try a different keyword, status, or barangay.'
-                : 'Add the first account to get started.' }}
-            </div>
-            <v-btn
-              v-if="residents.length > 0"
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              height="48"
-              class="px-6 text-none font-weight-bold"
-              @click="clearFilters"
-            >
-              Clear filters
+            <v-btn size="small" variant="tonal" color="warning" class="text-none font-weight-bold" @click="askBulk('deactivate')">
+              <v-icon start size="18">mdi-account-cancel-outline</v-icon>Deactivate
             </v-btn>
+            <v-btn size="small" variant="text" class="text-none" @click="clearSelection">Clear selection</v-btn>
           </div>
+        </template>
 
-          <v-data-table
-            v-else
-            :key="initialLoad ? 'loading' : 'ready'"
-            :headers="headers"
-            :items="filteredAndSortedResidents"
-            :items-per-page="-1"
-            fixed-header
-            :height="tableHeight"
-            hover
-            class="elegant-table flex-grow-1 table-fade"
-            item-value="resident_id"
-            @click:row="selectRow"
-            :row-props="rowProps"
-          >
-            <template v-slot:bottom></template>
-            <template v-if="initialLoad" #body>
-              <SkeletonRows :rows="10" :columns="headers.length" />
-            </template>
+        <!-- Own checkboxes rather than the table's `show-select`, so the click can
+             be stopped here: a row opens the profile on click and on Enter, and
+             ticking a box must not. Select-all covers every row the filters show,
+             across pages. -->
+        <template v-slot:header.select>
+          <v-checkbox-btn
+            density="compact"
+            :model-value="allSelected"
+            :indeterminate="selectedRows.length > 0 && !allSelected"
+            aria-label="Select all accounts"
+            @update:model-value="toggleAll"
+            @click.stop
+          ></v-checkbox-btn>
+        </template>
 
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-            </template>
+        <template v-slot:item.select="{ item }">
+          <div class="d-flex justify-center" @click.stop @keydown.stop>
+            <v-checkbox-btn
+              density="compact"
+              :model-value="selectedIds.has(idOf(item))"
+              :aria-label="`Select ${primaryName(item)}`"
+              @update:model-value="toggleRow(item)"
+            ></v-checkbox-btn>
+          </div>
+        </template>
 
-            <template v-slot:item.fullName="{ item }">
-              <div class="name-cell">
-                <v-avatar :color="undefined" size="36" class="avatar-tint flex-none">
-                  <v-img
-                    v-if="photoUrls[idOf(item)]"
-                    :src="photoUrls[idOf(item)]"
-                    :alt="`Photo of ${item.first_name} ${item.last_name}`"
-                  ></v-img>
-                  <span v-else class="avatar-initials">
-                    {{ initials(item) }}
-                  </span>
-                </v-avatar>
-                <div class="name-text">
-                  <v-tooltip :text="primaryName(item)" location="top">
-                    <template v-slot:activator="{ props }">
-                      <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                        {{ primaryName(item) }}
-                      </div>
-                    </template>
-                  </v-tooltip>
-                  <!-- Barangay and organization accounts have no personal name of
-                       their own — the row's identity is the hall or the group —
-                       so the contact person (who staff would actually call) is a
-                       second line rather than the headline. -->
-                  <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
-                    {{ contactName(item) }}
-                  </div>
-                </div>
-              </div>
-            </template>
+        <!-- The name columns are the person: the head of the family, or the
+             contact for a barangay or organization. The avatar is the account's
+             (its photo, else its initials). -->
+        <template v-slot:item.last_name="{ item }">
+          <PersonCell :name="item.last_name" :initials="initials(item)" :photo="photoUrls[idOf(item)]" />
+        </template>
 
-            <template v-slot:item.account_type="{ item }">
-              <span class="type-pill" :class="accountTypePillClass(item.account_type)">
-                {{ item.account_type === ACCOUNT_TYPE.organization && item.organization_name ? item.organization_name : accountTypeLabel(item.account_type) }}
-              </span>
-            </template>
+        <template v-slot:item.first_name="{ item }">
+          <span class="cell-truncate" :title="item.first_name">{{ item.first_name }}</span>
+        </template>
 
-            <template v-slot:item.barangay_name="{ item }">
-              <span class="cell-text cell-truncate">
-                {{ barangayOf(item) }}
-              </span>
-            </template>
+        <template v-slot:item.middle_name="{ item }">
+          <span class="cell-truncate" :class="{ 'text-medium-emphasis': !item.middle_name }">{{ item.middle_name || '—' }}</span>
+        </template>
 
-            <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
-            <template v-slot:item.phone_number="{ item }">
-              <span class="cell-text cell-truncate">{{ displayPhone(item.phone_number) }}</span>
-            </template>
+        <!-- Type chip on every account. An organization adds its name; a barangay
+             account's name would only repeat the Barangay column. -->
+        <template v-slot:item.account="{ item }">
+          <div class="account-cell">
+            <v-chip size="x-small" variant="tonal" label class="flex-shrink-0">{{ accountTypeLabel(item.account_type) }}</v-chip>
+            <span v-if="item.account_type === ACCOUNT_TYPE.organization" class="cell-truncate" :title="item.organization_name">{{ item.organization_name || '—' }}</span>
+          </div>
+        </template>
 
-            <template v-slot:item.status="{ item }">
-              <!-- Custom pill rather than a Vuetify chip: the flat grey chip Vuetify
-                   renders for "Deactivated" pairs white on #9E9E9E (2.68:1) in both
-                   themes. These tint the surface token instead, so all three states
-                   pass AA in light and dark. -->
-              <span class="status-pill" :class="residentStatusPillClass(item.status)">
-                <span class="status-dot" :class="residentStatusDotClass(item.status)"></span>
-                {{ residentStatusLabel(item.status) }}
-              </span>
-            </template>
+        <template v-slot:item.barangay_name="{ item }">
+          <span class="cell-truncate" :title="barangayOf(item)">{{ barangayOf(item) }}</span>
+        </template>
 
-            <template v-slot:item.sms_opt_in="{ item }">
-              <!-- Quieter than Status on purpose. Nearly every row is Receiving, so
-                   a pill on each one drowned the rows that are not: Receiving is a
-                   muted icon (the words stay for screen readers), and only Opted
-                   out keeps a pill. The Status column still carries Pending.
-                   A blast needs an Active account, a phone number and this switch,
-                   so the detail panel keeps the full pill for both states. -->
-              <template v-if="residentSmsOptIn(item)">
-                <v-icon size="18" class="sms-on" aria-hidden="true">mdi-message-text-outline</v-icon>
-                <span class="sr-only">{{ residentSmsLabel(true) }}</span>
-              </template>
-              <span v-else class="status-pill" :class="residentSmsPillClass(false)">
-                <span class="status-dot" :class="residentSmsDotClass(false)"></span>
-                {{ residentSmsLabel(false) }}
-              </span>
-            </template>
-          </v-data-table>
-        </v-card>
-      </div>
+        <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
+        <template v-slot:item.phone_number="{ item }">
+          <span class="cell-truncate">{{ displayPhone(item.phone_number) }}</span>
+        </template>
 
-    </div>
+        <template v-slot:item.status="{ item }">
+          <StatusChip :status="residentStatusLabel(item.status)" />
+        </template>
+
+        <!-- An exception column: nearly every row is Receiving, so only the
+             accounts that opted out draw anything. The words stay for screen
+             readers. -->
+        <template v-slot:item.sms_opt_in="{ item }">
+          <StatusChip v-if="!residentSmsOptIn(item)" :status="residentSmsLabel(false)" />
+          <span v-else class="sr-only">{{ residentSmsLabel(true) }}</span>
+        </template>
+
+        <!-- Edit, and the Activate/Deactivate toggle as the extra action. Delete
+             lives in the profile, not on the row. -->
+        <template v-slot:item.actions="{ item }">
+          <RowActions
+            :label="primaryName(item)"
+            :deletable="false"
+            :extra="statusExtra(item)"
+            @edit="openExistingEditModal(item)"
+            @extra="askToggleStatus(item)"
+          />
+        </template>
+      </DataTablePage>
     </div>
 
     <!-- The profile is a centred dialog, not a rail beside the table: the table
@@ -547,6 +479,63 @@
       </v-card>
     </v-dialog>
 
+    <!-- Bulk Activate / Deactivate: confirm, run, then the result. One dialog for
+         all three so the list of what was skipped is on screen when it is over. -->
+    <v-dialog v-model="bulk.show" max-width="520" :persistent="bulk.phase === 'running'">
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="pa-6 pb-2 text-h6 font-weight-bold text-high-emphasis">
+          <template v-if="bulk.phase === 'done'">Result</template>
+          <template v-else>{{ bulk.action === 'activate' ? 'Activate' : 'Deactivate' }} {{ bulk.eligible.length }} {{ bulk.eligible.length === 1 ? 'account' : 'accounts' }}?</template>
+        </v-card-title>
+        <v-card-text class="px-6 py-4 text-body-2 text-medium-emphasis bulk-body">
+          <template v-if="bulk.phase !== 'done'">
+            <p v-if="bulk.eligible.length === 0">Nothing to do for this selection.</p>
+            <p v-else-if="bulk.action === 'deactivate'">
+              They will lose access to sign in and file requests, and stop receiving MDRRMO text blasts. They can be reactivated later.
+            </p>
+            <p v-else>They will be able to sign in and file requests again.</p>
+          </template>
+
+          <template v-else>
+            <p v-if="bulk.done.length > 0">
+              {{ bulk.action === 'activate' ? 'Activated' : 'Deactivated' }} {{ bulk.done.length }}
+              {{ bulk.done.length === 1 ? 'account' : 'accounts' }}.
+            </p>
+            <div v-if="bulk.failed.length > 0" class="mb-2">
+              <strong class="text-error">Failed ({{ bulk.failed.length }})</strong>
+              <ul><li v-for="f in bulk.failed" :key="idOf(f.item)">{{ primaryName(f.item) }} — {{ f.message }}</li></ul>
+            </div>
+          </template>
+
+          <div v-if="bulk.pending.length > 0" class="mb-2">
+            <strong class="text-high-emphasis">Skipped (pending review) ({{ bulk.pending.length }})</strong>
+            <ul><li v-for="p in bulk.pending" :key="idOf(p)">{{ primaryName(p) }}</li></ul>
+            <span>Review each in its profile, then approve it there.</span>
+          </div>
+          <p v-if="bulk.already.length > 0 && bulk.phase !== 'done'" class="mb-0">
+            {{ bulk.already.length }} already {{ bulk.action === 'activate' ? 'active' : 'deactivated' }}, left as they are.
+          </p>
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
+          <template v-if="bulk.phase === 'done'">
+            <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" @click="bulk.show = false">Close</v-btn>
+          </template>
+          <template v-else>
+            <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="bulk.phase === 'running'" @click="bulk.show = false">Cancel</v-btn>
+            <v-btn
+              :color="bulk.action === 'activate' ? 'primary' : 'warning'"
+              variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
+              :disabled="bulk.eligible.length === 0"
+              :loading="bulk.phase === 'running'"
+              @click="runBulk"
+            >
+              {{ bulk.action === 'activate' ? 'Activate' : 'Deactivate' }} {{ bulk.eligible.length }}
+            </v-btn>
+          </template>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
     </v-snackbar>
@@ -564,19 +553,16 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { useDisplay } from 'vuetify'
 import { authHeaders } from '@/composables/adminUi'
 import {
   accountInitials,
   barangayOf,
-  contactName,
   fullName,
   primaryName,
   wordInitials,
 } from '@/composables/accountName'
 import { getToken } from '@/composables/authToken'
 import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
-import { useRowNumbers } from '@/composables/rowNumber'
 import {
   forgetResidentPhoto,
   releaseResidentPhotos,
@@ -587,26 +573,22 @@ import {
   ACCOUNT_TYPE_FILTER_ITEMS,
   ACCOUNT_TYPE_ITEMS,
   accountTypeLabel,
-  accountTypePillClass,
 } from '@/composables/accountType'
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_FILTER_ITEMS,
-  residentSmsDotClass,
   residentSmsLabel,
   residentSmsOptIn,
-  residentSmsPillClass,
-  residentStatusDotClass,
   residentStatusLabel,
-  residentStatusPillClass,
 } from '@/composables/residentStatus'
 import { API_BASE } from '@/config/api'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PurokSelect from '@/components/PurokSelect.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
-
-const { mdAndUp } = useDisplay()
+import DataTablePage from '@/components/DataTablePage.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import StatusChip from '@/components/StatusChip.vue'
+import RowActions from '@/components/RowActions.vue'
 
 const residents = ref([])
 // resident_id -> object URL. Only rows the server says have a photo are ever
@@ -630,44 +612,41 @@ const form = ref(null)
 const selectedResident = ref(null)
 const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 
-// Four columns are fixed px and the rest are percentages, and the percentages
-// add to less than what is left of 100. The table is `table-layout: fixed`,
-// so a percentage is taken from the full table width, not from the space the
-// px columns leave — the two have to be budgeted together or they overlap.
+// Sorting is client-side: GET /residents returns every account in one response,
+// so the server has nothing to add. Each header sorts on what its cell prints
+// (`value`), not a raw column. The list itself arrives ordered by last name.
 //
-// The pill columns are px because their content does not vary: as percentages
-// they shrank below the pill they print, and the pill spilled out of the cell
-// and scrolled the whole card sideways. Both are now their longest pill plus
-// the 16px cell padding either side — "DEACTIVATED" 112 + 32 (Status 150),
-// "OPTED OUT" 98 + 32 (SMS Blasts 134) — measured, not guessed.
-//
-// Width otherwise follows variance: the columns that differ per row get the
-// percentages, and `table-layout: fixed` hands the slack back to every column
-// in proportion.
-//
-// Type only shows on the All tab: on a single-type tab every row already
-// carries the same value, so the column is a repeated word rather than
-// information, and dropping it from the headers array (not just hiding its
-// cells) hands its width back to Name and Barangay for free.
-const headers = computed(() => {
-  const cols = [
-    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
-    // No width: Name takes whatever the fixed columns leave, avatar included.
-    { title: 'Name', key: 'fullName' },
-  ]
-  if (filters.value.type === 'All') {
-    cols.push({ title: 'Type', key: 'account_type', width: '190px' })
-  }
-  cols.push(
-    // The longest real barangay name in the data is "San Antonio Ugad", which
-    // was still clipping when this column was 15% of a narrower table.
-    { title: 'Barangay', key: 'barangay_name', width: '150px' },
-    { title: 'Mobile Number', key: 'phone_number', width: '150px' },
-    { title: 'Status', key: 'status', align: 'center', width: '150px' },
-    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px' },
-  )
-  return cols
-})
+// Fixed-layout table: the pill and phone columns are px because their content
+// does not vary, Account takes what is left, and the table has a min-width
+// (see the style block) so a narrow card scrolls instead of crushing them. On a
+// phone Middle Name, Account and SMS Blasts are dropped (`dtp-hide-sm`).
+const HIDE_SM = { class: 'dtp-hide-sm' }
+const headers = [
+  { title: '', key: 'select', sortable: false, align: 'center', width: '48px' },
+  { title: 'Last Name', key: 'last_name', width: '150px', value: (item) => item.last_name || '' },
+  { title: 'First Name', key: 'first_name', width: '120px', value: (item) => item.first_name || '' },
+  { title: 'Middle Name', key: 'middle_name', width: '90px', value: (item) => item.middle_name || '', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Account', key: 'account', value: (item) => `${accountTypeLabel(item.account_type)} ${item.organization_name || ''}`, headerProps: HIDE_SM, cellProps: HIDE_SM },
+  // The longest real barangay name in the data is "San Antonio Ugad".
+  { title: 'Barangay', key: 'barangay_name', width: '130px', value: (item) => barangayOf(item) },
+  { title: 'Mobile Number', key: 'phone_number', width: '125px', value: (item) => displayPhone(item.phone_number) },
+  { title: 'Status', key: 'status', width: '110px', value: (item) => residentStatusLabel(item.status) },
+  // 0 before 1, so ascending lists the opted-out accounts first.
+  {
+    title: 'SMS Blasts',
+    key: 'sms_opt_in',
+    width: '90px',
+    value: (item) => (residentSmsOptIn(item) ? 1 : 0),
+    headerProps: { title: 'Blank means receiving text blasts. Only accounts that opted out show a chip.', class: 'dtp-hide-sm' },
+    cellProps: HIDE_SM,
+  },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '88px' },
+]
+
+// The order the list already arrives in, shown as the header's sort arrow.
+const defaultSort = [{ key: 'last_name', order: 'asc' }]
+const page = ref(1)
+const itemsPerPage = ref(10)
 
 const modal = ref({ isOpen: false, isEditing: false, targetId: null })
 const deleteDialog = ref({ show: false, item: null, loading: false })
@@ -726,15 +705,9 @@ watch(detailOpen, (open) => {
   if (!open) nextTick(() => lastRow?.focus?.())
 })
 
-// Heights are worked out by hand from the pieces above the table, not measured
-// in a browser: the shell and container padding and the page header (72px: a
-// 48px title-and-actions row plus its 24px margin) take 168px in all; the card's
-// search toolbar (56px), the barangay tabs (44px) and the table's own header
-// (44px) take another 144. Change any of those heights and this changes with it.
-const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 168px);' : ''))
-const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60vh'))
-
 const idOf = (r) => r?.resident_id ?? r?.id
+// "Activate" for Pending and Deactivated alike, as in the profile's own button.
+const statusActionLabel = (r) => (r.status === RESIDENT_STATUS.active ? 'Deactivate account' : 'Activate account')
 const initials = accountInitials
 
 const liveMessage = ref('')
@@ -771,6 +744,7 @@ const residentsBeforeType = computed(() => {
         `${last}, ${first}`.includes(q) ||
         `${last} ${first}`.includes(q) ||
         (r.middle_name || '').toLowerCase().includes(q) ||
+        (r.organization_name || '').toLowerCase().includes(q) ||
         // Either spelling finds the number: staff type 0917… and the server
         // holds +63917….
         displayPhone(r.phone_number).includes(q) ||
@@ -792,14 +766,60 @@ const typeCounts = computed(() => {
 const filteredAndSortedResidents = computed(() => {
   let result = residentsBeforeType.value
   if (filters.value.type !== 'All') result = result.filter((r) => (r.account_type || ACCOUNT_TYPE.head) === filters.value.type)
-  return result.slice().sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
+  // The table's default order: last name, then first name, A-Z.
+  return result.slice().sort((a, b) =>
+    (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''))
 })
 
-const rowNumber = useRowNumbers(filteredAndSortedResidents, 'resident_id')
+const typeTabs = computed(() => ACCOUNT_TYPE_FILTER_ITEMS.map((t) => ({
+  value: t.value,
+  label: t.value === 'All' ? 'All' : t.title,
+  count: typeCounts.value[t.value] ?? 0,
+})))
 
+// Type is the tabs, so it is not a chip here.
+const activeFilters = computed(() => [
+  ...(filters.value.status === 'All' ? [] : [{ key: 'status', label: `Status: ${residentStatusLabel(filters.value.status)}` }]),
+  ...(filters.value.barangay === 'All' ? [] : [{ key: 'barangay', label: `Barangay: ${filters.value.barangay}` }]),
+])
+const clearFilter = (key) => { filters.value[key] = 'All' }
+watch([search, filters], () => { page.value = 1 }, { deep: true })
+
+// The row's Activate / Deactivate as RowActions' extra action.
+const statusExtra = (r) => {
+  const active = r.status === RESIDENT_STATUS.active
+  return {
+    label: statusActionLabel(r),
+    icon: active ? 'mdi-account-cancel-outline' : 'mdi-account-check-outline',
+    color: active ? 'warning' : 'primary',
+    disabled: statusToggleLoading.value,
+  }
+}
+
+// Ticked rows, by id. Only ever the rows the filters currently show: the watch
+// below drops the rest, so an action never lands on a row nobody can see.
+const selectedIds = ref(new Set())
+const selectedRows = computed(() => filteredAndSortedResidents.value.filter((r) => selectedIds.value.has(idOf(r))))
+const allSelected = computed(() => filteredAndSortedResidents.value.length > 0 && selectedRows.value.length === filteredAndSortedResidents.value.length)
+const toggleAll = (on) => { selectedIds.value = on ? new Set(filteredAndSortedResidents.value.map((r) => idOf(r))) : new Set() }
+const toggleRow = (item) => {
+  const next = new Set(selectedIds.value)
+  const id = idOf(item)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+const clearSelection = () => { selectedIds.value = new Set() }
+watch(filteredAndSortedResidents, (rows) => {
+  const visible = new Set(rows.map((r) => idOf(r)))
+  const kept = [...selectedIds.value].filter((id) => visible.has(id))
+  if (kept.length !== selectedIds.value.size) selectedIds.value = new Set(kept)
+})
+
+// "Clear all" in the filter row: search, status and barangay. The type tab stays.
 const clearFilters = () => {
   search.value = ''
-  filters.value = { status: 'All', barangay: 'All', type: 'All' }
+  filters.value = { ...filters.value, status: 'All', barangay: 'All' }
 }
 
 // True when the open profile is not in the list behind it — filter to one
@@ -850,7 +870,7 @@ const onRowKeydown = (event, item) => {
 const rowProps = ({ item }) => {
   const isSelected = selectedResident.value && idOf(item) === idOf(selectedResident.value)
   return {
-    class: isSelected ? 'selected-row' : '',
+    class: [isSelected ? 'selected-row' : '', selectedIds.value.has(idOf(item)) ? 'is-checked' : ''],
     tabindex: 0,
     'aria-selected': isSelected ? 'true' : 'false',
     // Without this a focused row reads as a run of cell text with no statement
@@ -1109,6 +1129,28 @@ const confirmDeactivate = async () => {
   statusDialog.value = { show: false, item: null, loading: false, reject: false }
 }
 
+// The one status write, for the row toggle and the bulk loop alike. There is no
+// status-only endpoint: this is the full PUT with the row's own values.
+const putStatus = async (item, next) => {
+  const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      first_name: item.first_name,
+      middle_name: item.middle_name,
+      last_name: item.last_name,
+      phone_number: item.phone_number,
+      barangay_id: item.barangay_id,
+      // Omitted, ResidentController::update() would default this back to
+      // null — a status toggle must not silently wipe the resident's
+      // street address (MDRRMO feedback, 2026-09-19).
+      street_address: item.street_address ?? null,
+      status: next,
+    }),
+  })
+  if (!res.ok) throw new Error(await errorFrom(res))
+}
+
 const toggleStatus = async (item, forcedNext = null) => {
   // Pending and Deactivated both toggle to Active — activating a new signup and
   // re-enabling a suspended account are the same write. `forcedNext` is for
@@ -1119,23 +1161,7 @@ const toggleStatus = async (item, forcedNext = null) => {
   const isOrganization = item.account_type === ACCOUNT_TYPE.organization
   statusToggleLoading.value = true
   try {
-    const res = await fetch(`${API_BASE}/residents/${idOf(item)}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        first_name: item.first_name,
-        middle_name: item.middle_name,
-        last_name: item.last_name,
-        phone_number: item.phone_number,
-        barangay_id: item.barangay_id,
-        // Omitted, ResidentController::update() would default this back to
-        // null — a status toggle must not silently wipe the resident's
-        // street address (MDRRMO feedback, 2026-09-19).
-        street_address: item.street_address ?? null,
-        status: next,
-      }),
-    })
-    if (!res.ok) throw new Error(await errorFrom(res))
+    await putStatus(item, next)
     await fetchResidents()
     if (next === RESIDENT_STATUS.active) {
       notify(isOrganization ? 'Organization approved' : 'Account activated')
@@ -1147,6 +1173,52 @@ const toggleStatus = async (item, forcedNext = null) => {
   } finally {
     statusToggleLoading.value = false
   }
+}
+
+
+// Bulk Activate / Deactivate: a loop over the single-account write. The list is
+// small and the admin limiter is 300 a minute, so a bulk endpoint would buy
+// nothing. Activate leaves Pending accounts alone: they need review in the
+// profile first. Deactivate takes them.
+const bulk = ref({ show: false, action: '', phase: 'confirm', eligible: [], pending: [], already: [], done: [], failed: [] })
+
+const askBulk = (action) => {
+  const rows = selectedRows.value
+  const activating = action === 'activate'
+  const inState = (r, status) => r.status === status
+  bulk.value = {
+    show: true,
+    action,
+    phase: 'confirm',
+    eligible: rows.filter((r) => (activating ? inState(r, RESIDENT_STATUS.deactivated) : !inState(r, RESIDENT_STATUS.deactivated))),
+    pending: activating ? rows.filter((r) => inState(r, RESIDENT_STATUS.pending)) : [],
+    already: rows.filter((r) => inState(r, activating ? RESIDENT_STATUS.active : RESIDENT_STATUS.deactivated)),
+    done: [],
+    failed: [],
+  }
+}
+
+const runBulk = async () => {
+  const b = bulk.value
+  const next = b.action === 'activate' ? RESIDENT_STATUS.active : RESIDENT_STATUS.deactivated
+  b.phase = 'running'
+  for (const item of b.eligible) {
+    try {
+      await putStatus(item, next)
+      b.done.push(item)
+    } catch (error) {
+      b.failed.push({ item, message: error.message })
+    }
+  }
+  try {
+    await fetchResidents()
+  } catch (error) {
+    notify(error.message, 'error')
+  }
+  clearSelection()
+  b.phase = 'done'
+  const failed = b.failed.length > 0
+  notify(failed ? `${b.done.length} done, ${b.failed.length} failed` : `${b.done.length} ${b.done.length === 1 ? 'account' : 'accounts'} updated`, failed ? 'error' : 'success')
 }
 
 const askDelete = (item) => { deleteDialog.value = { show: true, item, loading: false } }
@@ -1179,20 +1251,6 @@ onUnmounted(releaseResidentPhotos)
 </script>
 
 <style scoped>
-/* The table takes the whole page; the profile is a dialog (see the template).
-   `min-width: 0` is what lets a flex child shrink below its content instead of
-   pushing the card off the page. */
-.residents-layout {
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-}
-.residents-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-}
-
 /* The account count beside the title. primary-strong text on the 14% primary
    tint, the same AA-safe pairing the status pills use: primary itself is 4.28:1
    there and this is small type. */
@@ -1211,46 +1269,13 @@ onUnmounted(releaseResidentPhotos)
 }
 .count-chip strong { font-weight: 800; }
 
-.name-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.name-text { min-width: 0; flex: 1; }
-/* Barangay and Mobile share this so neither reads lighter than the other. */
-.cell-text { font-size: 0.95rem; font-weight: 400; color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
-.sms-on { color: rgba(var(--v-theme-on-surface), 0.45); }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
-.search-field { width: 260px; max-width: 100%; }
-.status-field { width: 150px; max-width: 100%; }
-.barangay-field { width: 200px; max-width: 100%; }
 
-/* The count beside each type tab's label — same idea as .count-chip, sized
-   down to sit inline in a tab. Colour rides on font-weight/parent colour
-   rather than its own token, so it dims with the tab's own inactive/active
-   state instead of needing a second colour rule. */
-.tab-count {
-  margin-left: 5px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
-}
-
-.tab-btn {
-  transition: all var(--motion-base) var(--ease-in-out);
-  border-bottom: 3px solid transparent;
-}
-/* primary-strong exists for exactly this: primary alone is only 5.15:1 on a
-   light surface, not enough for the underline's weight. primary-strong
-   reaches 7.94:1 on white and is already aliased to primary in the dark
-   theme (6.00:1 there), so one rule now covers both. */
-.active-tab {
-  border-bottom: 3px solid rgb(var(--v-theme-primary-strong)) !important;
-  color: rgb(var(--v-theme-primary-strong)) !important;
-}
-
-.transition-btn { transition: transform var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
-.transition-btn:hover { transform: translateY(-2px); opacity: 0.95; }
-
-/* Avatars — the old blue-on-light-blue pairing measured 3.28:1. Tinting the
-   primary token instead keeps the same soft look and passes AA in both themes. */
+/* Avatars in the add/edit dialog — the old blue-on-light-blue pairing measured
+   3.28:1. Tinting the primary token instead keeps the same soft look and passes
+   AA in both themes. */
 .avatar-tint {
   background: rgba(var(--v-theme-primary), 0.14) !important;
   display: inline-flex;
@@ -1259,149 +1284,39 @@ onUnmounted(releaseResidentPhotos)
   border-radius: 50%;
 }
 .avatar-initials {
-  /* Not primary: the table avatar draws these at body size, where primary on
-     the 14% tint is 4.25:1 and fails AA. See the token in plugins/vuetify.ts. */
+  /* Not primary: at body size primary on the 14% tint is 4.25:1 and fails AA.
+     See the token in plugins/vuetify.ts. */
   color: rgb(var(--v-theme-primary-strong));
   font-weight: 800;
   letter-spacing: 0.02em;
 }
 
-/* Table.
-   The 1000px min-width is load-bearing (860 before the row-number column and
-   the two fixed pill columns were budgeted). Below it the percentage columns
-   squeeze the pill columns under the width of the pill they print. `table-layout: fixed` with percentage
-   columns and no floor lets a narrow wrapper crush every column proportionally
-   instead of scrolling: measured at 430px the six data columns collapsed to
-   1px each and only the avatars rendered. Same bug class, same fix, as the
-   borrowing table (see EquipmentBorrowingView's own min-width comment). */
-.elegant-table :deep(table) {
-  table-layout: fixed !important;
-  width: 100% !important;
-  min-width: 1000px;
+/* Nine columns, four of them fixed px: below this the fixed layout would crush
+   the name and account columns, so the table scrolls sideways instead (same
+   floor the borrowing table carries). Phones drop three columns and lose the
+   floor, see DataTablePage's collapseMobile. */
+.accounts-table :deep(.dtp-table table) { min-width: 980px; }
+@media (max-width: 599px) {
+  .accounts-table :deep(.dtp-table table) { min-width: 0; }
 }
-.elegant-table :deep(th:first-child),
-.elegant-table :deep(td:first-child) { padding-left: 0 !important; padding-right: 0 !important; }
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-/* 16px, not 24px: seven columns share the card once SMS Blasts is in, and the
-   two pill columns need their width for the pill rather than for gutters. */
-.elegant-table :deep(td) {
-  padding: 6px 16px !important;
-  height: 56px !important;
-  font-size: 0.95rem;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
-  cursor: pointer;
-}
-.elegant-table :deep(th) {
-  font-size: 0.85rem !important;
-  font-weight: 700 !important;
-  color: #ffffff !important;
-  padding: 0 16px !important;
-  height: 44px !important;
-  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
-  /* secondary, not primary: this header carries white text, and primary
-     lightens to mint in the dark theme (white-on-mint ~2.2:1, fails AA).
-     secondary is the same #0A2620 in both themes on purpose (see
-     plugins/vuetify.ts) -- 16.02:1 with white, so the header stays legible
-     without needing its own per-theme override. */
-  background-color: rgb(var(--v-theme-secondary)) !important;
-  white-space: nowrap !important;
-}
+
 .cell-truncate {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.account-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
-/* Selection — previously these classes were applied but never styled, so the
-   chosen row was indistinguishable from the rest. */
-.elegant-table :deep(tr.selected-row) {
+/* Selection — the open row, and ticked rows. */
+.accounts-table :deep(tr.selected-row) {
   background: rgba(var(--v-theme-primary), 0.1) !important;
-  box-shadow: inset 4px 0 0 0 rgb(var(--v-theme-primary));
+  box-shadow: inset 3px 0 0 0 rgb(var(--v-theme-primary));
 }
-.elegant-table :deep(tr.selected-row td) { font-weight: 600; }
-.elegant-table :deep(tbody tr:focus-visible) {
-  outline: 3px solid rgb(var(--v-theme-primary));
-  outline-offset: -3px;
-}
-/* The scrollbar was hidden outright. With a min-width on the table the wrapper
-   is now the only thing that scrolls sideways, so hiding it would leave the
-   clipped columns with no cue that they exist at all — thin and tinted, not
-   absent. */
-.elegant-table :deep(.v-table__wrapper) {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(var(--v-theme-on-surface), 0.25) transparent;
-}
-.elegant-table :deep(.v-table__wrapper)::-webkit-scrollbar { height: 8px; }
-.elegant-table :deep(.v-table__wrapper)::-webkit-scrollbar-thumb {
-  background: rgba(var(--v-theme-on-surface), 0.25);
-  border-radius: 4px;
-}
+.accounts-table :deep(tr.is-checked) { background: rgba(var(--v-theme-primary), 0.06); }
 
-/* Account-type pill. Barangay and organization accounts are the exceptions
-   worth spotting in a list of households, so they get the tint; a head of the
-   family stays plain text. */
-.type-pill {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.type-pill--institution { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
-.type-pill--plain { color: rgba(var(--v-theme-on-surface), 0.82); padding-left: 0; }
-
-/* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-/* primary-strong, not primary. Measured in the browser: primary on its own
-   14% tint is 4.28:1 in the light theme, and at 12px/700 this is not WCAG
-   large text, so 4.5:1 applies — it was 0.22 short. The strong token is the
-   same fix the avatar initials already carry, and in dark the two tokens are
-   the same value, so nothing changes there. */
-.pill-active { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
-.pill-inactive {
-  background: rgba(var(--v-theme-on-surface), 0.1);
-  color: rgba(var(--v-theme-on-surface), 0.82);
-}
-/* Pending. The warning token itself is #F57C00 in light, which is 3.0:1 on
-   white — the pill text is 12px bold, so it needs 4.5:1, not the large-text
-   3:1. The darker amber (5.94:1 over the tint) is now the `warning-strong`
-   theme token rather than a hex hardcoded here; same value, one source, and
-   ManageRequestView's pills use it too. In dark the token is light enough to
-   use directly, which is what warning-strong aliases to there. */
-.pill-pending { background: rgba(var(--v-theme-warning), 0.14); color: rgb(var(--v-theme-warning-strong)); }
-.v-theme--dark .pill-pending {
-  background: rgba(var(--v-theme-warning), 0.1);
-  color: rgb(var(--v-theme-warning));
-}
-.status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.dot-active { background: rgb(var(--v-theme-primary)); }
-.dot-inactive { background: rgba(var(--v-theme-on-surface), 0.5); }
-.dot-pending { background: rgb(var(--v-theme-warning)); }
-
-.empty-state {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 64px 24px;
-}
+.bulk-bar { background: rgba(var(--v-theme-primary), 0.08); }
+.bulk-body ul { margin: 4px 0 0; padding-left: 20px; }
 
 /* Visible to a screen reader, to nothing else. clip rather than display:none,
    which would remove the node from the accessibility tree and silence the
@@ -1416,11 +1331,5 @@ onUnmounted(releaseResidentPhotos)
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  .tab-btn, .transition-btn { transition: none; }
-  .transition-btn:hover { transform: none; }
 }
 </style>
