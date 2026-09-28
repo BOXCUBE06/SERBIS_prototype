@@ -186,13 +186,18 @@
                   </span>
                 </v-avatar>
                 <div class="name-text">
-                  <v-tooltip :text="primaryName(item)" location="top">
-                    <template v-slot:activator="{ props }">
-                      <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                        {{ primaryName(item) }}
-                      </div>
-                    </template>
-                  </v-tooltip>
+                  <div class="name-line">
+                    <v-tooltip :text="primaryName(item)" location="top">
+                      <template v-slot:activator="{ props }">
+                        <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
+                          {{ primaryName(item) }}
+                        </div>
+                      </template>
+                    </v-tooltip>
+                    <!-- Only the exceptions carry a tag; a head of the family is the
+                         ordinary row and stays untagged. -->
+                    <span v-if="isInstitution(item)" class="type-tag">{{ accountTypeLabel(item.account_type) }}</span>
+                  </div>
                   <!-- Barangay and organization accounts have no personal name of
                        their own — the row's identity is the hall or the group —
                        so the contact person (who staff would actually call) is a
@@ -202,12 +207,6 @@
                   </div>
                 </div>
               </div>
-            </template>
-
-            <template v-slot:item.account_type="{ item }">
-              <span class="type-pill" :class="accountTypePillClass(item.account_type)">
-                {{ item.account_type === ACCOUNT_TYPE.organization && item.organization_name ? item.organization_name : accountTypeLabel(item.account_type) }}
-              </span>
             </template>
 
             <template v-slot:item.barangay_name="{ item }">
@@ -588,7 +587,6 @@ import {
   ACCOUNT_TYPE_FILTER_ITEMS,
   ACCOUNT_TYPE_ITEMS,
   accountTypeLabel,
-  accountTypePillClass,
 } from '@/composables/accountType'
 import {
   RESIDENT_STATUS,
@@ -646,32 +644,22 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // percentages, and `table-layout: fixed` hands the slack back to every column
 // in proportion.
 //
-// Type only shows on the All tab: on a single-type tab every row already
-// carries the same value, so the column is a repeated word rather than
-// information, and dropping it from the headers array (not just hiding its
-// cells) hands its width back to Name and Barangay for free.
-const headers = computed(() => {
-  const cols = [
-    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
-    // No width: Name takes whatever the fixed columns leave, avatar included.
-    // `value` is what the header sorts on: what the cell prints, not a raw column
-    // (there is no `fullName` field, and the Name cell shows primaryName).
-    { title: 'Name', key: 'fullName', value: (item) => primaryName(item) },
-  ]
-  if (filters.value.type === 'All') {
-    cols.push({ title: 'Type', key: 'account_type', width: '190px' })
-  }
-  cols.push(
-    // The longest real barangay name in the data is "San Antonio Ugad", which
-    // was still clipping when this column was 15% of a narrower table.
-    { title: 'Barangay', key: 'barangay_name', width: '150px', value: (item) => barangayOf(item) },
-    { title: 'Mobile Number', key: 'phone_number', width: '150px', value: (item) => displayPhone(item.phone_number) },
-    { title: 'Status', key: 'status', align: 'center', width: '150px', value: (item) => residentStatusLabel(item.status) },
-    // 0 before 1, so ascending lists the opted-out accounts first.
-    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px', value: (item) => (residentSmsOptIn(item) ? 1 : 0) },
-  )
-  return cols
-})
+// The account type is not a column: the tabs above already filter by it, and a
+// barangay or organization row says so in a tag beside its name.
+const headers = [
+  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
+  // No width: Name takes whatever the fixed columns leave, avatar included.
+  // `value` is what the header sorts on: what the cell prints, not a raw column
+  // (there is no `fullName` field, and the Name cell shows primaryName).
+  { title: 'Name', key: 'fullName', value: (item) => primaryName(item) },
+  // The longest real barangay name in the data is "San Antonio Ugad", which
+  // was still clipping when this column was 15% of a narrower table.
+  { title: 'Barangay', key: 'barangay_name', width: '150px', value: (item) => barangayOf(item) },
+  { title: 'Mobile Number', key: 'phone_number', width: '150px', value: (item) => displayPhone(item.phone_number) },
+  { title: 'Status', key: 'status', align: 'center', width: '150px', value: (item) => residentStatusLabel(item.status) },
+  // 0 before 1, so ascending lists the opted-out accounts first.
+  { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px', value: (item) => (residentSmsOptIn(item) ? 1 : 0) },
+]
 
 // Sorting is client-side: GET /residents returns every account in one response
 // and the table holds them all (no paging), so the server has nothing to add.
@@ -743,6 +731,7 @@ const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 168px);' 
 const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
+const isInstitution = (r) => Boolean(r.account_type) && r.account_type !== ACCOUNT_TYPE.head
 const initials = accountInitials
 
 const liveMessage = ref('')
@@ -1351,22 +1340,19 @@ onUnmounted(releaseResidentPhotos)
   border-radius: 4px;
 }
 
-/* Account-type pill. Barangay and organization accounts are the exceptions
-   worth spotting in a list of households, so they get the tint; a head of the
-   family stays plain text. */
-.type-pill {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The tag beside a barangay or organization name. Same tint the Type pill had,
+   sized down to sit on the name's line. */
+.name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.type-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.5;
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary-strong));
 }
-.type-pill--institution { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
-.type-pill--plain { color: rgba(var(--v-theme-on-surface), 0.82); padding-left: 0; }
 
 /* Status pills — replace the flat grey chip (white on #9E9E9E, 2.68:1). */
 .status-pill {

@@ -38,8 +38,3 @@ export const ACCOUNT_TYPE_ITEMS = [
 
 /** Same, with the list filter's "All" in front. */
 export const ACCOUNT_TYPE_FILTER_ITEMS = [{ title: 'All types', value: 'All' }, ...ACCOUNT_TYPE_ITEMS]
-
-/** Barangay and organization accounts get a tinted pill; heads stay plain. */
-export function accountTypePillClass(type?: string | null): string {
-  return !type || type === ACCOUNT_TYPE.head ? 'type-pill--plain' : 'type-pill--institution'
-}
