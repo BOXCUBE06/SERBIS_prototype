@@ -478,10 +478,8 @@
             Resolving <strong class="text-high-emphasis">{{ resolveDialog.label }}</strong> closes it permanently.
             The status cannot be changed back from this panel.
           </p>
-          <p class="mb-0">
-            The trip log stays editable — return timestamps and odometer readings
-            can still be filled in after this. It is the status that is permanent,
-            not the record.
+          <p v-if="selectedRequest?.vehicle_id || selectedRequest?.responders?.length" class="mb-0">
+            The assigned unit and responders are released.
           </p>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
