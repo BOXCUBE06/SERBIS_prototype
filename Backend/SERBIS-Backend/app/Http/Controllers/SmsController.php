@@ -28,10 +28,7 @@ class SmsController extends Controller
 {
     use PaginatesLists;
 
-    /**
-     * Residents per bulk request. The vendor's own cap; a bigger audience goes
-     * out as several requests, each recorded on its own.
-     */
+    /** Residents per bulk request (the vendor's own cap); a bigger audience goes out as several requests, each recorded on its own. */
     private const BULK_CHUNK = SkySmsGateway::MAX_BULK;
 
     public function sendBlast(Request $request, SmsGateway $gateway)
@@ -41,10 +38,7 @@ class SmsController extends Controller
                 'required',
                 'string',
                 'max:160',
-                // The vendor penalises a link or domain (10 to 50 credits per
-                // recipient) and reports the message as sent without delivering
-                // it. The panel refuses these before this point; this is the
-                // check that holds when the request did not come from the panel.
+                // The vendor bills a link or domain 10-50 credits and does not deliver it; the panel checks first, this holds for other callers.
                 function (string $attribute, mixed $value, \Closure $fail) {
                     if (SmsMessagePolicy::containsLink((string) $value)) {
                         $fail('A text blast cannot contain a link, web address or domain. The SMS provider penalises them and does not deliver the message. Remove it and send again.');
@@ -56,11 +50,7 @@ class SmsController extends Controller
             'code' => 'required|string',
         ]);
 
-        // One retry-safe attempt per key: a resubmitted request (a network
-        // hiccup, or a double click that slipped past the frontend's own
-        // guard) gets the stored result instead of a second billed send.
-        // Cache::add is atomic, so only the first caller with a given key
-        // claims it; a concurrent second request is told to wait.
+        // One attempt per Idempotency-Key: a resubmit gets the stored result, not a second billed send (Cache::add is atomic).
         $idempotencyKey = (string) $request->header('Idempotency-Key', '');
 
         if ($idempotencyKey === '') {
@@ -83,16 +73,7 @@ class SmsController extends Controller
             ], 409);
         }
 
-        // Before anything is resolved or sent. This endpoint is the only one in
-        // the application that spends money, and until now the sole thing
-        // standing in front of it was a client-side dialog — see the route
-        // definition, which notes that dialog does not survive a second tab, a
-        // reload mid-request, or a token replayed by hand. Holding the Text
-        // Blast section (EnsureSection) lets an admin open the page; it does
-        // not let them send. That takes a code shared between the two staff
-        // who are supposed to know it (MDRRMO feedback, 2026-09-19), not the
-        // caller's own account password, so an account given the section still
-        // cannot make it actually send without having been told the code.
+        // Before anything is resolved or sent: holding the Text Blast section only opens the page, sending needs the shared code (MDRRMO feedback, 2026-09-19).
         try {
             $this->assertCurrentCode($request);
         } catch (\Throwable $e) {
@@ -136,12 +117,7 @@ class SmsController extends Controller
 
             $groups[] = [
                 'residents' => $chunk->values(),
-                // Accepted is Queued, never Sent: SkySMS billed the messages when it
-                // took them and has said nothing about delivery. Only a later read
-                // of GET /sms/messages (SmsDeliveryController) may say Sent.
-                // Unknown is not failed: the request left and nothing came back,
-                // so the messages may well have gone. Recorded as Unconfirmed so
-                // nobody sends them again and pays twice.
+                // Accepted is Queued, never Sent (only GET /sms/messages may say Sent); Unknown is Unconfirmed, not failed, so nobody resends and pays twice.
                 'status' => match (true) {
                     $result->isAccepted() => Recipient::QUEUED,
                     $result->isUnknown() => Recipient::UNCONFIRMED,
@@ -163,9 +139,7 @@ class SmsController extends Controller
         $failed = $count(Recipient::FAILED);
 
         if ($unconfirmed > 0) {
-            // 202, not 200 and not 5xx. We cannot confirm delivery, so this is
-            // not success; but a 5xx is what staff are currently retrying, and a
-            // retry of a message that probably went out is a second bill.
+            // 202, not 200 or 5xx: delivery is unconfirmed, and a retry of a message that probably went out is a second bill.
             return $this->respond($cacheKey, response()->json([
                 'message' => 'SkySMS did not answer in time for '.$unconfirmed.' recipient(s), but the messages were most likely sent and billed. Do NOT send them again — check with a recipient before resending.',
                 'unconfirmed' => true,
@@ -204,11 +178,7 @@ class SmsController extends Controller
         return $this->respond($cacheKey, $this->blastFailureResponse($firstFailure, $failed));
     }
 
-    /**
-     * Stores the finished blast's response under its idempotency key so a
-     * resubmit of the same key returns this instead of sending again, then
-     * returns the response unchanged.
-     */
+    /** Stores the finished response under its idempotency key so a resubmit returns it, then returns it unchanged. */
     private function respond(string $cacheKey, JsonResponse $response): JsonResponse
     {
         Cache::put($cacheKey, [
@@ -220,14 +190,7 @@ class SmsController extends Controller
         return $response;
     }
 
-    /**
-     * One bulk request, retried while the vendor answers 429. Waits for the
-     * Retry-After it gives, or a doubling wait from the configured base, and
-     * gives up after a few tries so a stuck rate limit cannot hold the request
-     * open indefinitely.
-     *
-     * @param  array<int, string>  $phones
-     */
+    /** @param array<int, string> $phones One bulk request, retried on vendor 429 with Retry-After or a doubling wait. */
     private function sendChunk(SmsGateway $gateway, array $phones, string $message): SmsResult
     {
         $base = (float) config('services.skysms.retry_base_seconds', 2);
@@ -270,14 +233,7 @@ class SmsController extends Controller
         };
     }
 
-    /**
-     * The recipient count the Text Blast page shows before the Send button.
-     *
-     * Deliberately runs the identical resolution the send runs — see
-     * resolveRecipients() — rather than a cheaper SELECT COUNT(*). A count that
-     * disagrees with the send is worse than no count: it is quoted to the desk
-     * as the size of a blast that has not happened yet.
-     */
+    /** The pre-send recipient count; runs the same resolveRecipients() as the send so the quoted size matches the blast. */
     public function recipientCount(Request $request)
     {
         $validated = $request->validate([
@@ -290,20 +246,7 @@ class SmsController extends Controller
         ]);
     }
 
-    /**
-     * Remaining SMS credit, for the Text Blast page's header.
-     *
-     * Always 200, including on every failure path. The balance is decoration on
-     * a page whose actual job is sending: a 500 here would surface as a red
-     * alert on a form that works fine, and an unreachable vendor is not a
-     * reason to hold back an advisory. Callers branch on `available`, never on
-     * the status code.
-     *
-     * SkySMS documents no balance endpoint. Every accepted send reports
-     * `credits_remaining`, and the gateway remembers the latest one — so this
-     * is the balance as of the last message, not a live read, and says so.
-     * An empty account (a 402) is remembered too, and shown as out of credits.
-     */
+    /** Remaining SMS credit for the page header: always 200, and the balance as of the last message, not a live read (SkySMS has no balance endpoint). */
     public function balance(SmsGateway $gateway)
     {
         if (! $gateway->configured()) {
@@ -339,57 +282,12 @@ class SmsController extends Controller
         ]);
     }
 
-    /**
-     * The single definition of "who receives a blast to these barangays", shared
-     * by the send and by the page's pre-send preview.
-     *
-     * Extracted rather than copied because the last filter is PHP, not SQL. A
-     * preview written as a ->count() would count residents whose stored number
-     * PhoneNumber::normalize() rejects, and so quote a number the send would never
-     * match. Anything added here has to stay in one place for the two to keep
-     * agreeing.
-     *
-     * Resident ids come back alongside the numbers: the vendor only needs the
-     * number, but tbl_recipients records who was included, and that is not
-     * derivable afterwards — the filters here mean barangay membership is a
-     * different set.
-     *
-     * @param  array<int, int>  $barangayIds
-     */
-    /**
-     * How many wrong codes this gate accepts, and for how long.
-     *
-     * Five matches the tight tier of the 'login' limiter in AppServiceProvider,
-     * so the number this check allows is the same one everywhere in this
-     * application. The window is fifteen minutes rather than login's one,
-     * because the two endpoints are used at completely different rates: an
-     * office signs in repeatedly through a day, but sends a blast rarely, so a
-     * long decay costs a legitimate sender nothing.
-     *
-     * Only FAILURES are counted, and a success clears the tally, so an admin
-     * sending several blasts in a row is never throttled by this. The route
-     * itself is deliberately not throttled — that would cap legitimate sends.
-     */
+    /** Wrong codes allowed (5, like the login limiter) per 15-minute window; only failures count and a success clears the tally. */
     private const CODE_ATTEMPTS = 5;
 
     private const CODE_DECAY_SECONDS = 900;
 
-    /**
-     * Proves the caller knows the shared text-blast code, not their own
-     * account password. Holding the Text Blast section only decides who may
-     * open the page; among those, "knows the code" is what separates "may send
-     * a blast" from "may not", so an account given the section by a super
-     * admin still cannot spend anything until it has been told the code.
-     *
-     * $inputKey lets rotateBlastCode() reuse this same check against its own
-     * `current_code` field rather than duplicating the rate limit, the hash
-     * check and the logging.
-     *
-     * Every attempt is logged with the admin who made it — success and
-     * failure both — because this gate is the one thing standing between an
-     * admin token and a billed vendor call, and "who tried the code, and did
-     * it work" is exactly what gets asked about afterwards.
-     */
+    /** Proves the caller knows the shared blast code, not their password; rotateBlastCode() reuses it via $inputKey, and every attempt is logged with the admin. */
     private function assertCurrentCode(Request $request, string $inputKey = 'code'): void
     {
         $admin = $request->user();
@@ -401,17 +299,10 @@ class SmsController extends Controller
             ]);
         }
 
-        // Keyed on the account, not the IP: this route is behind auth:sanctum,
-        // so there is always an account to key on, and an office on one CGNAT
-        // address must not be able to lock its colleagues out of sending.
-        // Shared across sendBlast() and rotateBlastCode() on purpose — both
-        // are "prove you know the code" checks, and a caller should not get a
-        // second guessing budget by rotating instead of sending.
+        // Keyed on the account, not the IP (CGNAT offices), and shared with rotateBlastCode() so rotating is not a second guessing budget.
         $key = 'sms-blast-code:'.$admin->admin_id;
 
-        // Checked BEFORE the hash comparison, so once the limit is reached even
-        // the correct code is refused until the window passes. A gate that let
-        // a correct guess through on the sixth try would not be a limit.
+        // Checked before the hash, so once the limit is hit even the correct code is refused until the window passes.
         if (RateLimiter::tooManyAttempts($key, self::CODE_ATTEMPTS)) {
             Log::warning('SMS blast code attempt blocked: too many failures', [
                 'admin_id' => $admin->admin_id,
@@ -425,11 +316,7 @@ class SmsController extends Controller
 
         $blastCode = SmsBlastCode::first();
 
-        // Distinct from a wrong code: nobody has set one yet (a fresh
-        // deployment with no seed, or the seed step was skipped), and no
-        // code the caller types is ever going to satisfy that. Same shape as
-        // Fcm::sendToDevice()'s "not configured" branch — a missing setup
-        // step must not look identical to "you typed it wrong" in the logs.
+        // Distinct from a wrong code: none has been set yet (seed skipped), and that must not look like a typo in the logs.
         if (! $blastCode) {
             Log::error('SMS blast code attempt failed: no code configured', [
                 'admin_id' => $admin->admin_id,
@@ -459,12 +346,7 @@ class SmsController extends Controller
         Log::info('SMS blast code accepted', ['admin_id' => $admin->admin_id]);
     }
 
-    /**
-     * Rotation requires the current code, so no admin can reset it without
-     * already knowing it — the same reasoning AuthController's password
-     * change applies to a user's own password, here applied to the one code
-     * five equal accounts share.
-     */
+    /** Rotation requires the current code, so no admin can reset the shared code without already knowing it. */
     public function rotateBlastCode(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -478,9 +360,7 @@ class SmsController extends Controller
 
         $admin = $request->user();
 
-        // firstOrNew, not firstOrFail: the very first rotation (replacing a
-        // seeded code, or setting one for the first time if the seed step was
-        // skipped) has no row to update yet.
+        // firstOrNew: the very first rotation has no row to update yet.
         $blastCode = SmsBlastCode::firstOrNew();
         $blastCode->code_hash = Hash::make($validated['new_code']);
         $blastCode->updated_by = $admin->admin_id;
@@ -491,10 +371,7 @@ class SmsController extends Controller
         return response()->json(['message' => 'Text blast code updated.']);
     }
 
-    /**
-     * What the admin panel shows on the rotation form: who set the current
-     * code and when — never the code, never its hash.
-     */
+    /** What the rotation form shows: who set the code and when, never the code or its hash. */
     public function blastCodeStatus(): JsonResponse
     {
         $blastCode = SmsBlastCode::with('updatedByAdmin:admin_id,first_name,last_name')->first();
@@ -512,42 +389,28 @@ class SmsController extends Controller
         ]);
     }
 
+    /** The one definition of who receives a blast, shared by the send and the preview (the last filter is PHP, so no COUNT(*)); ids come back for tbl_recipients. @param array<int, int> $barangayIds */
     private function resolveRecipients(array $barangayIds)
     {
         $residents = Resident::whereIn('barangay_id', $barangayIds)
-            // Barangay and organization accounts are institutions, not
-            // households: a blast to "the residents of San Miguel" does not
-            // text the barangay hall's shared account.
+            // Barangay and organization accounts are institutions, so a blast to a barangay's residents skips them.
             ->where('account_type', Resident::TYPE_HEAD_OF_FAMILY)
             ->where('status', 'Active')
-            // The resident's own choice, set from the mobile app via PATCH /me.
-            // Compared against the column rather than the model's boolean cast
-            // because this runs as SQL; the column is NOT NULL with a default of
-            // 1, so there is no third state to account for.
+            // The resident's own choice (PATCH /me); compared on the column, not the boolean cast, since this is SQL.
             ->where('sms_opt_in', true)
             ->whereNotNull('phone_number')
             ->where('phone_number', '!=', '')
             ->get(['resident_id', 'barangay_id', 'phone_number']);
 
-        // A number the vendor will reject is not a recipient. Dropping those here
-        // rather than inside the send keeps tbl_recipients honest: it records who
-        // the message actually went to, and a resident whose number cannot be
-        // dialled did not receive it.
+        // A number the vendor would reject is not a recipient, so tbl_recipients only records who was actually texted.
         return $residents
             ->filter(fn ($resident) => PhoneNumber::normalize($resident->phone_number) !== '')
-            // Two resident rows sharing one handset (a household number typed
-            // under both heads) must not both count as a recipient — one text
-            // per phone, not per resident row.
+            // One text per phone, not per resident row, when a household number is shared.
             ->unique(fn ($resident) => PhoneNumber::normalize($resident->phone_number))
             ->values();
     }
 
-    /**
-     * Residents read their advisories here. Scoped to the blasts this resident
-     * was actually a recipient of, not to their barangay: a resident who was
-     * Inactive when the warning went out did not receive it, and showing it to
-     * them now would misrepresent what the agency sent.
-     */
+    /** Residents' advisories: only blasts this resident was a recipient of, not their barangay's. */
     public function advisories(Request $request)
     {
         $user = $request->user();
@@ -559,13 +422,7 @@ class SmsController extends Controller
         }
 
         $advisories = SmsLog::query()
-            // The feed shows what MDRRMO issued, not proof of delivery, so a
-            // Queued blast is here as well as a Sent one. 'Unconfirmed' means
-            // SkySMS never answered, not that nothing was sent — the handset most
-            // likely has the message, and a feed that omits it would contradict
-            // the phone the resident is holding. A blast that failed outright is
-            // withheld, and so is one the vendor reported failed for THIS
-            // resident's own number.
+            // Shows what MDRRMO issued, not proof of delivery: Queued, Sent and Unconfirmed count; a blast that failed outright or for this resident's number is withheld.
             ->whereIn('status', [Recipient::QUEUED, Recipient::SENT, Recipient::UNCONFIRMED])
             ->whereHas('recipients', fn ($query) => $query
                 ->where('resident_id', $user->getKey())
@@ -577,21 +434,7 @@ class SmsController extends Controller
         return response()->json(['data' => $advisories]);
     }
 
-    /**
-     * The admin panel's SMS History tab.
-     *
-     * The tab has existed for as long as the Logs page has, fetching GET
-     * /logs/sms — a route that was never registered, so the table was handed a
-     * 404 body where its rows should have been. Nothing was recorded to serve
-     * it either until 2026-08-03; sendBlast() posted to the vendor and
-     * persisted nothing at all.
-     *
-     * Shaped to the keys the table already asks for (user.name, message,
-     * recipient_count) rather than returning the model raw, mirroring
-     * SystemLogController. The recipient count is a withCount, not a loaded
-     * relation: a blast to a whole municipality is thousands of rows and the
-     * table shows a number.
-     */
+    /** The SMS History tab: shaped to the keys the table asks for (user.name, message, recipient_count), with recipients as a count, not a loaded relation. */
     public function history(Request $request)
     {
         $query = SmsLog::query()
@@ -601,26 +444,19 @@ class SmsController extends Controller
             ])
             ->withCount('recipients')
             ->latest()
-            // Tiebreaker, and this table needs it more than most: a blast
-            // writes one row per barangay inside the same second, so ties are
-            // the normal case here, not an edge one. Ordering by created_at
-            // alone lets a paginated read repeat or skip a row.
+            // Tiebreaker: a blast writes one row per barangay in the same second, so created_at alone can repeat or skip rows when paginated.
             ->orderBy('sms_log_id', 'desc');
 
         $this->applyHistorySearch($query, (string) $request->query('search', ''));
 
-        // One row per barangay per blast, so this grows faster than the number
-        // of messages actually sent. See App\Traits\PaginatesLists for why the
-        // other list endpoints were left returning bare arrays.
+        // One row per barangay per blast, so this grows fast; see PaginatesLists for why other lists stay bare arrays.
         $logs = $query->paginate($this->resolvePerPage($request));
 
         $mapped = collect($logs->items())->map(fn (SmsLog $log) => [
             'sms_log_id' => $log->sms_log_id,
             'created_at' => $log->created_at,
             'user' => [
-                // A blast outlives the admin who sent it: tbl_user rows can be
-                // removed, and a history row with a blank sender is worse than
-                // one that says so.
+                // A blast outlives its sender (tbl_user rows can be removed), so say so rather than show a blank.
                 'name' => $log->sender
                     ? $log->sender->first_name.' '.$log->sender->last_name
                     : 'Unknown sender',
@@ -628,9 +464,7 @@ class SmsController extends Controller
             'barangay' => $log->barangay?->barangay_name ?? 'Unknown barangay',
             'message' => $log->message_body,
             'recipient_count' => $log->recipients_count,
-            // Queued, Sent, Unconfirmed or Failed. Failed rows are shown here on purpose — this is
-            // the record somebody consults after a blast did not arrive. Only the
-            // resident-facing advisory feed filters them out.
+            // Queued, Sent, Unconfirmed or Failed; Failed is shown on purpose, since this is the record checked after a blast did not arrive.
             'status' => $log->status,
         ]);
 
@@ -641,29 +475,13 @@ class SmsController extends Controller
         ]);
     }
 
-    /**
-     * Server-side search for the SMS History tab. The Logs page's single
-     * search box filters both tabs, and it used to be Vuetify's client-side
-     * filter over the whole table; once the endpoint pages, a box that only
-     * searched the loaded page would hide blasts rather than find them.
-     *
-     * Every column this searches is stored, unlike the system-log tab where
-     * two of them are built in PHP.
-     */
+    /** Server-side search for the SMS History tab, so a paged table finds blasts instead of hiding them; every searched column is stored. */
     private function applyHistorySearch($query, string $search): void
     {
-        // Laravel's global TrimStrings and ConvertEmptyStringsToNull middleware
-        // have already run by this point, so a whitespace-only box arrives here
-        // as null and `(string) null` is ''. The trim is kept as belt-and-braces
-        // for any caller that reaches this method without passing through that
-        // middleware stack.
+        // TrimStrings and ConvertEmptyStringsToNull already ran, so an empty box arrives as ''; the trim guards callers that skip that middleware.
         $search = trim($search);
 
-        // Not behaviour on today's schema — message_body is NOT NULL, so the
-        // '%%' this would otherwise build matches every row and the result set
-        // is identical. It is here for cost: without it, every unfiltered load
-        // of the Logs page runs the two orWhereHas EXISTS subqueries below for
-        // nothing.
+        // Cost only: on today's schema '%%' matches every row, but this skips two EXISTS subqueries on every unfiltered load.
         if ($search === '') {
             return;
         }
@@ -682,21 +500,7 @@ class SmsController extends Controller
         });
     }
 
-    /**
-     * One log row per barangay per outcome, and one recipient row per resident
-     * under it. The vendor call is one request per chunk of recipients, but
-     * "what was sent to my barangay" is the question the record has to answer —
-     * and because a large audience is several requests that can end
-     * differently, a barangay can appear twice: once for the chunk that went
-     * out and once for the chunk that did not.
-     *
-     * A chunk's queue ids are kept on every log row the chunk produced. The
-     * vendor answers per request, not per barangay, and the order of `queue_ids`
-     * against the recipients is not documented, so an id is not pinned to one
-     * resident or one barangay.
-     *
-     * @param  array<int, array{residents: Collection, status: string, job: ?string, queue_ids: list<string>}>  $groups
-     */
+    /** One log row per barangay per outcome, one recipient row per resident; a chunk's queue ids go on every row it produced (the vendor answers per request). @param array<int, array{residents: Collection, status: string, job: ?string, queue_ids: list<string>}> $groups */
     private function recordBlast(int $senderId, array $groups, string $message): void
     {
         DB::transaction(function () use ($senderId, $groups, $message) {
