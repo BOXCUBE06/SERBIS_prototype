@@ -172,33 +172,34 @@
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
-            <template v-slot:item.photo="{ item }">
-              <v-avatar :color="undefined" size="36" class="my-1 avatar-tint">
-                <v-img
-                  v-if="photoUrls[idOf(item)]"
-                  :src="photoUrls[idOf(item)]"
-                  :alt="`Photo of ${item.first_name} ${item.last_name}`"
-                ></v-img>
-                <span v-else class="avatar-initials">
-                  {{ initials(item) }}
-                </span>
-              </v-avatar>
-            </template>
-
             <template v-slot:item.fullName="{ item }">
-              <v-tooltip :text="primaryName(item)" location="top">
-                <template v-slot:activator="{ props }">
-                  <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                    {{ primaryName(item) }}
+              <div class="name-cell">
+                <v-avatar :color="undefined" size="36" class="avatar-tint flex-none">
+                  <v-img
+                    v-if="photoUrls[idOf(item)]"
+                    :src="photoUrls[idOf(item)]"
+                    :alt="`Photo of ${item.first_name} ${item.last_name}`"
+                  ></v-img>
+                  <span v-else class="avatar-initials">
+                    {{ initials(item) }}
+                  </span>
+                </v-avatar>
+                <div class="name-text">
+                  <v-tooltip :text="primaryName(item)" location="top">
+                    <template v-slot:activator="{ props }">
+                      <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
+                        {{ primaryName(item) }}
+                      </div>
+                    </template>
+                  </v-tooltip>
+                  <!-- Barangay and organization accounts have no personal name of
+                       their own — the row's identity is the hall or the group —
+                       so the contact person (who staff would actually call) is a
+                       second line rather than the headline. -->
+                  <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
+                    {{ contactName(item) }}
                   </div>
-                </template>
-              </v-tooltip>
-              <!-- Barangay and organization accounts have no personal name of
-                   their own — the row's identity is the hall or the group —
-                   so the contact person (who staff would actually call) is a
-                   second line rather than the headline. -->
-              <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
-                {{ contactName(item) }}
+                </div>
               </div>
             </template>
 
@@ -209,14 +210,14 @@
             </template>
 
             <template v-slot:item.barangay_name="{ item }">
-              <span class="font-weight-medium text-body-1 text-high-emphasis cell-truncate">
+              <span class="cell-text cell-truncate">
                 {{ barangayOf(item) }}
               </span>
             </template>
 
             <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
             <template v-slot:item.phone_number="{ item }">
-              <span class="text-body-1 text-medium-emphasis cell-truncate">{{ displayPhone(item.phone_number) }}</span>
+              <span class="cell-text cell-truncate">{{ displayPhone(item.phone_number) }}</span>
             </template>
 
             <template v-slot:item.status="{ item }">
@@ -231,13 +232,19 @@
             </template>
 
             <template v-slot:item.sms_opt_in="{ item }">
-              <!-- Same pill as Status, on purpose: it is the second half of the
-                   same question. A blast needs an Active account, a phone
-                   number and this switch, so an operator counting a short
-                   delivery report reads both columns, not one. -->
-              <span class="status-pill" :class="residentSmsPillClass(residentSmsOptIn(item))">
-                <span class="status-dot" :class="residentSmsDotClass(residentSmsOptIn(item))"></span>
-                {{ residentSmsLabel(residentSmsOptIn(item)) }}
+              <!-- Quieter than Status on purpose. Nearly every row is Receiving, so
+                   a pill on each one drowned the rows that are not: Receiving is a
+                   muted icon (the words stay for screen readers), and only Not
+                   receiving keeps a pill. The Status column still carries Pending.
+                   A blast needs an Active account, a phone number and this switch,
+                   so the detail panel keeps the full pill for both states. -->
+              <template v-if="residentSmsOptIn(item)">
+                <v-icon size="18" class="sms-on" aria-hidden="true">mdi-message-text-outline</v-icon>
+                <span class="sr-only">{{ residentSmsLabel(true) }}</span>
+              </template>
+              <span v-else class="status-pill" :class="residentSmsPillClass(false)">
+                <span class="status-dot" :class="residentSmsDotClass(false)"></span>
+                {{ residentSmsLabel(false) }}
               </span>
             </template>
           </v-data-table>
@@ -598,20 +605,20 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // cells) hands its width back to Name and Barangay for free.
 const headers = computed(() => {
   const cols = [
-    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-    { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-    { title: 'Name', key: 'fullName', width: '18%' },
+    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
+    // No width: Name takes whatever the fixed columns leave, avatar included.
+    { title: 'Name', key: 'fullName' },
   ]
   if (filters.value.type === 'All') {
-    cols.push({ title: 'Type', key: 'account_type', width: '230px' })
+    cols.push({ title: 'Type', key: 'account_type', width: '190px' })
   }
   cols.push(
     // The longest real barangay name in the data is "San Antonio Ugad", which
     // was still clipping when this column was 15% of a narrower table.
-    { title: 'Barangay', key: 'barangay_name', width: '14%' },
-    { title: 'Mobile Number', key: 'phone_number', width: '14%' },
+    { title: 'Barangay', key: 'barangay_name', width: '150px' },
+    { title: 'Mobile Number', key: 'phone_number', width: '150px' },
     { title: 'Status', key: 'status', align: 'center', width: '160px' },
-    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
+    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '150px' },
   )
   return cols
 })
@@ -1118,6 +1125,11 @@ onUnmounted(releaseResidentPhotos)
 }
 .count-chip strong { font-weight: 800; }
 
+.name-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.name-text { min-width: 0; flex: 1; }
+/* Barangay and Mobile share this so neither reads lighter than the other. */
+.cell-text { font-size: 0.95rem; font-weight: 400; color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
+.sms-on { color: rgba(var(--v-theme-on-surface), 0.45); }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
@@ -1179,8 +1191,10 @@ onUnmounted(releaseResidentPhotos)
 .elegant-table :deep(table) {
   table-layout: fixed !important;
   width: 100% !important;
-  min-width: 1000px;
+  min-width: 1040px;
 }
+.elegant-table :deep(th:first-child),
+.elegant-table :deep(td:first-child) { padding-left: 0 !important; padding-right: 0 !important; }
 .row-number {
   font-size: 0.95rem;
   font-weight: 700;
