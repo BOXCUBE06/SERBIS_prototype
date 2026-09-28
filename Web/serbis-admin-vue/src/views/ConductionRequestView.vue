@@ -66,6 +66,12 @@
           @clear-all="clearAllFilters"
           @click:row="(_e, { item }) => openDetail(item)"
         >
+          <template v-slot:filters>
+            <DateTimePickerField v-model="dateFrom" type="date" label="Departed from" variant="outlined" density="compact" hide-details rounded="lg" class="filter-field"></DateTimePickerField>
+            <DateTimePickerField v-model="dateTo" type="date" label="Departed to" variant="outlined" density="compact" hide-details rounded="lg" class="filter-field"></DateTimePickerField>
+            <v-select v-model="vehicleFilter" :items="vehicleFilterOptions" label="Vehicle" variant="outlined" density="compact" hide-details rounded="lg" class="filter-field"></v-select>
+          </template>
+
           <template v-slot:actions>
             <ExportMenu type="trip" :rows="filteredItems" :selected-ids="selectedIds" show-selection />
             <v-btn
@@ -101,12 +107,24 @@
             <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
           </template>
 
-          <template v-slot:item.trip_status="{ item }">
-            <StatusPill small :status="pillStatus(item)" :label="outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason)" />
+          <template v-slot:item.service_request_id="{ item }">
+            <span class="text-body-2 mono">{{ item.service_request_id ? transactionNo(item.service_request_id) : '—' }}</span>
           </template>
 
-          <template v-slot:item.created_at="{ item }">
-            {{ fmtDateTime(item.created_at) }}
+          <template v-slot:item.vehicle_label="{ item }">
+            <span class="text-body-2 cell-truncate">{{ tripVehicleLabel(item) }}</span>
+          </template>
+
+          <template v-slot:item.departed_office_at="{ item }">
+            <span class="text-body-2">{{ fmtDateTime(item.departed_office_at) || '—' }}</span>
+          </template>
+
+          <template v-slot:item.returned_office_at="{ item }">
+            <span class="text-body-2">{{ fmtDateTime(item.returned_office_at) || '—' }}</span>
+          </template>
+
+          <template v-slot:item.trip_status="{ item }">
+            <StatusPill small :status="pillStatus(item)" :label="outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason)" />
           </template>
 
           <template v-slot:no-data>
@@ -263,7 +281,14 @@
                 :key="idx"
                 class="d-flex align-center gap-2 mb-2"
               >
+                <ResponderCombobox
+                  v-if="group.field === 'drivers'"
+                  v-model="createDialog.form[group.field][idx]"
+                  :items="responderNames"
+                  :label="`${group.singular} ${idx + 1}`"
+                />
                 <v-text-field
+                  v-else
                   v-model="createDialog.form[group.field][idx]"
                   :label="`${group.singular} ${idx + 1}`"
                   placeholder="Full name"
@@ -302,7 +327,6 @@
           <div class="d-flex align-center gap-3">
             <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
             <StatusPill :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
-            <ExportMenu type="trip" :row="selected" />
           </div>
           <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
         </v-card-title>
@@ -339,11 +363,16 @@
             </div>
           </v-alert>
 
-          <v-row class="mb-2">
+          <h3 class="section-title">Patient</h3>
+          <v-row>
             <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
-            <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Contact number</div><div class="field-value">{{ selected.patient_contact_number }}</div></v-col>
+            <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address || 'N/A' }}</div></v-col>
             <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
+          </v-row>
+
+          <h3 class="section-title">Route &amp; vehicle</h3>
+          <v-row>
             <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination || 'N/A' }}</div></v-col>
             <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selectedVehicleLabel }}<span v-if="selectedVehicleUnverified" class="text-caption text-medium-emphasis"> · fleet list unavailable</span></div></v-col>
@@ -352,8 +381,7 @@
             <v-col v-if="!selected.vehicle_id" cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
           </v-row>
 
-          <v-divider class="my-4"></v-divider>
-
+          <h3 class="section-title">Crew</h3>
           <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
             <div class="field-label">{{ group.label }}</div>
             <div v-if="peopleByRole(group.role).length > 0" class="field-value">
@@ -362,17 +390,23 @@
             <div v-else class="text-caption text-medium-emphasis">None recorded</div>
           </div>
 
-          <v-divider class="my-4"></v-divider>
+          <h3 class="section-title">Timeline</h3>
+          <v-timeline density="compact" align="start" side="end" truncate-line="both" class="trip-timeline">
+            <v-timeline-item
+              v-for="step in timelineSteps"
+              :key="step.label"
+              :dot-color="step.at || step.done ? step.color : 'grey-lighten-1'"
+              size="x-small"
+            >
+              <div class="field-label">{{ step.label }}</div>
+              <div v-if="step.at || !step.done" class="field-value mb-0">{{ step.at ? fmtDateTime(step.at) : '—' }}</div>
+              <div v-if="step.note" class="text-body-2 text-medium-emphasis">{{ step.note }}</div>
+            </v-timeline-item>
+          </v-timeline>
 
-          <h3 class="section-title">Trip log</h3>
-          <v-row>
-            <v-col cols="6"><div class="field-label">Departed office</div><div class="field-value">{{ fmtDateTime(selected.departed_office_at) || '—' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Arrived at destination</div><div class="field-value">{{ fmtDateTime(selected.arrived_destination_at) || '—' }}</div></v-col>
-            <v-col cols="12" v-if="selected.no_arrival_reason"><div class="field-label">No-arrival reason</div><div class="field-value">{{ selected.no_arrival_reason }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Departed destination</div><div class="field-value">{{ fmtDateTime(selected.departed_destination_at) || '—' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Returned to office</div><div class="field-value">{{ fmtDateTime(selected.returned_office_at) || '—' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Odometer start</div><div class="field-value">{{ selected.odometer_start ?? '—' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Odometer end</div><div class="field-value">{{ selected.odometer_end ?? '—' }}</div></v-col>
+          <v-row class="mt-1">
+            <v-col cols="6"><div class="field-label">Odometer at departure</div><div class="field-value">{{ selected.odometer_start ?? '—' }}</div></v-col>
+            <v-col cols="6"><div class="field-label">Odometer on return</div><div class="field-value">{{ selected.odometer_end ?? '—' }}</div></v-col>
             <v-col cols="12" v-if="selected.others"><div class="field-label">Others</div><div class="field-value">{{ selected.others }}</div></v-col>
           </v-row>
         </v-card-text>
@@ -402,54 +436,62 @@
                2026-09-18). Stacks to one column below md. -->
           <v-row>
             <v-col cols="12" md="6">
-              <h3 class="section-title">Departure &amp; arrival</h3>
+              <!-- Chronological: leave, arrive (or turn back), leave, return. Each
+                   checkpoint has a Now button so a time is one click while the
+                   crew is on the radio. -->
+              <h3 class="section-title">Departure</h3>
+              <v-row dense>
+                <v-col v-for="[field, label] in checkpointFields(['departed_office_at'])" :key="field" cols="12">
+                  <div class="d-flex align-center gap-2">
+                    <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+                    <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+                  </div>
+                </v-col>
+                <v-col cols="12">
+                  <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
+                </v-col>
+              </v-row>
+
+              <h3 class="section-title">Destination</h3>
               <v-row dense>
                 <v-col cols="12">
-                  <DateTimePickerField v-model="tripLog.form.departed_office_at" type="datetime-local" label="Departed office" variant="outlined" density="comfortable"></DateTimePickerField>
+                  <!-- Ticking clears both destination checkpoints (the server refuses
+                       them beside a reason) and asks for the reason instead. -->
+                  <v-checkbox
+                    :model-value="tripLog.form.did_not_arrive"
+                    @update:model-value="onDidNotArrive"
+                    label="Did not reach destination"
+                    density="compact"
+                    hide-details
+                  ></v-checkbox>
                 </v-col>
-                <v-col cols="12">
-                  <DateTimePickerField v-model="tripLog.form.arrived_destination_at" type="datetime-local" label="Arrived at destination" variant="outlined" density="comfortable"></DateTimePickerField>
-                </v-col>
-                <v-col cols="12">
+                <v-col v-if="tripLog.form.did_not_arrive" cols="12">
                   <v-textarea
                     v-model="tripLog.form.no_arrival_reason"
-                    label="No-arrival reason"
+                    label="Reason (required)"
                     placeholder="e.g. Patient had already been taken by a relative"
-                    hint="Only if the trip never reached its destination — an alternative to Arrived at destination, not an extra requirement."
-                    persistent-hint
                     variant="outlined"
                     density="comfortable"
                     rows="2"
                   ></v-textarea>
                 </v-col>
+                <v-col v-for="[field, label] in checkpointFields(tripLog.form.did_not_arrive ? [] : ['arrived_destination_at', 'departed_destination_at'])" :key="field" cols="12">
+                  <div class="d-flex align-center gap-2">
+                    <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+                    <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+                  </div>
+                </v-col>
               </v-row>
 
-              <h3 class="section-title">Return &amp; odometer</h3>
+              <h3 class="section-title">Return</h3>
               <v-row dense>
-                <v-col cols="12" sm="6">
-                  <!-- Disabled rather than left typeable and refused afterwards. A
-                       trip that never arrived has no departure from a destination
-                       it never reached, and a 422 explaining that after the fact is
-                       worse than a field that cannot be filled in the first place.
-                       The hint says why, so the control does not just look broken. -->
-                  <DateTimePickerField
-                    v-model="tripLog.form.departed_destination_at"
-                    type="datetime-local"
-                    label="Departed destination"
-                    variant="outlined"
-                    density="comfortable"
-                    :disabled="hasNoArrivalReason"
-                    :hint="hasNoArrivalReason ? 'Not applicable — this trip never reached its destination.' : undefined"
-                    :persistent-hint="hasNoArrivalReason"
-                  ></DateTimePickerField>
+                <v-col v-for="[field, label] in checkpointFields(['returned_office_at'])" :key="field" cols="12">
+                  <div class="d-flex align-center gap-2">
+                    <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+                    <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+                  </div>
                 </v-col>
-                <v-col cols="12" sm="6">
-                  <DateTimePickerField v-model="tripLog.form.returned_office_at" type="datetime-local" label="Returned to office" variant="outlined" density="comfortable"></DateTimePickerField>
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
-                </v-col>
-                <v-col cols="12" sm="6">
+                <v-col cols="12">
                   <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
                 </v-col>
                 <v-col cols="12">
@@ -486,7 +528,14 @@
                   :key="idx"
                   class="d-flex align-center gap-2 mb-2"
                 >
+                  <ResponderCombobox
+                    v-if="group.field === 'drivers'"
+                    v-model="tripLog.form[group.field][idx]"
+                    :items="responderNames"
+                    :label="`${group.singular} ${idx + 1}`"
+                  />
                   <v-text-field
+                    v-else
                     v-model="tripLog.form[group.field][idx]"
                     :label="`${group.singular} ${idx + 1}`"
                     placeholder="Full name"
@@ -531,6 +580,7 @@ import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/
 import { API_BASE } from '@/config/api'
 import AmbulanceRequestQueue from '@/components/AmbulanceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import ResponderCombobox from '@/components/ResponderCombobox.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -548,7 +598,10 @@ const ALL_STATUS = 'All'
 // tripStatusLabel() (adminUi.ts), so the underlying value stays exactly what
 // the API sends. Pill color still comes from sharedStatusLabel() separately
 // -- the two only disagree on the 'Not dispatched' text.
-const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed']
+const NO_ARRIVAL = 'No arrival'
+// Not a trip_status: a trip that turned back, whatever stage it is at.
+const RAW_TRIP_STATUSES = ['Not dispatched', 'In transit', 'Completed', NO_ARRIVAL]
+const tabLabel = (s) => (s === NO_ARRIVAL ? s : tripStatusLabel(s))
 
 // `max` mirrors ConductionRequestController's per-role limits (MAX_PEOPLE_PER_ROLE
 // for drivers, MAX_AUTHORIZED_PASSENGERS, MAX_PATIENT_RELATIVES). This only stops
@@ -590,10 +643,13 @@ const nameInitials = (name) => {
 // names the cell slot.
 const headers = [
   { title: '', key: 'select', sortable: false, width: '48px' },
-  { title: 'Patient', key: 'patient', value: 'patient_name', width: '28%' },
-  { title: 'Status', key: 'trip_status', width: '18%' },
-  { title: 'From → To', key: 'trip', value: (r) => `${r.origin || ''} ${r.destination || ''}`, width: '34%' },
-  { title: 'Filed', key: 'created_at', width: '20%' },
+  { title: 'Booking No.', key: 'service_request_id', width: '12%' },
+  { title: 'Patient', key: 'patient', value: 'patient_name', width: '19%' },
+  { title: 'From → To', key: 'trip', value: (r) => `${r.origin || ''} ${r.destination || ''}`, width: '21%' },
+  { title: 'Vehicle', key: 'vehicle_label', value: (r) => tripVehicleLabel(r), width: '11%' },
+  { title: 'Departed', key: 'departed_office_at', width: '13%' },
+  { title: 'Returned', key: 'returned_office_at', width: '13%' },
+  { title: 'Status', key: 'trip_status', width: '11%' },
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
@@ -609,21 +665,36 @@ const matchesSearch = (r) => {
   if (!q) return true
   return [r.patient_name, r.origin, r.destination].some((v) => (v || '').toLowerCase().includes(q))
 }
-const matchesStatus = (r) => statusFilter.value === ALL_STATUS || r.trip_status === statusFilter.value
-const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r)))
+// The one status tab a trip belongs to, so it is counted exactly once.
+const tabOf = (r) => (r.no_arrival_reason ? NO_ARRIVAL : r.trip_status)
+const matchesStatus = (r) => statusFilter.value === ALL_STATUS || tabOf(r) === statusFilter.value
+
+// Date range on the day the unit left (filed day if it has not left yet), and
+// one unit. Both compare in the office's local day, which is the viewer's.
+const dateFrom = ref('')
+const dateTo = ref('')
+const vehicleFilter = ref(ALL_STATUS)
+const localDay = (iso) => toInputValue(iso).slice(0, 10)
+const matchesDateAndVehicle = (r) => {
+  const day = localDay(r.departed_office_at || r.created_at)
+  if (dateFrom.value && day < dateFrom.value) return false
+  if (dateTo.value && day > dateTo.value) return false
+  return vehicleFilter.value === ALL_STATUS || r.vehicle_id === vehicleFilter.value
+}
+const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r) && matchesDateAndVehicle(r)))
 
 // SegmentedTabs' {value, label, count} shape. Counts are off the search
 // match only, same as AmbulanceRequestQueue's own requestCounts — a status
 // tab's count should not move just because a different status tab is
 // selected.
 const statusTabItems = computed(() => {
-  const searched = items.value.filter((i) => matchesSearch(i))
+  const searched = items.value.filter((i) => matchesSearch(i) && matchesDateAndVehicle(i))
   return [
     { value: ALL_STATUS, label: ALL_STATUS, count: searched.length },
     ...RAW_TRIP_STATUSES.map((s) => ({
       value: s,
-      label: tripStatusLabel(s),
-      count: searched.filter((r) => r.trip_status === s).length,
+      label: tabLabel(s),
+      count: searched.filter((r) => tabOf(r) === s).length,
     })),
   ]
 })
@@ -632,11 +703,23 @@ const statusTabItems = computed(() => {
 // this page has, but it still needs its own chip + Clear all target — the
 // active SegmentedTabs item shows the selection, not a way to jump back to
 // All in one click alongside a cleared search.
-const activeFilters = computed(() => (
-  statusFilter.value === ALL_STATUS ? [] : [{ key: 'status', label: `Status: ${tripStatusLabel(statusFilter.value)}` }]
-))
-const clearFilter = (key) => { if (key === 'status') statusFilter.value = ALL_STATUS }
-const clearAllFilters = () => { statusFilter.value = ALL_STATUS }
+const activeFilters = computed(() => {
+  const out = []
+  if (statusFilter.value !== ALL_STATUS) out.push({ key: 'status', label: `Status: ${tabLabel(statusFilter.value)}` })
+  if (dateFrom.value) out.push({ key: 'dateFrom', label: `From: ${dateFrom.value}` })
+  if (dateTo.value) out.push({ key: 'dateTo', label: `To: ${dateTo.value}` })
+  if (vehicleFilter.value !== ALL_STATUS) out.push({ key: 'vehicle', label: `Vehicle: ${vehicleFilterOptions.value.find((o) => o.value === vehicleFilter.value)?.title}` })
+  return out
+})
+const clearFilter = (key) => {
+  if (key === 'status') statusFilter.value = ALL_STATUS
+  if (key === 'dateFrom') dateFrom.value = ''
+  if (key === 'dateTo') dateTo.value = ''
+  if (key === 'vehicle') vehicleFilter.value = ALL_STATUS
+}
+const clearAllFilters = () => {
+  for (const key of ['status', 'dateFrom', 'dateTo', 'vehicle']) clearFilter(key)
+}
 
 // StatusPill's :status prop wants an accent-table key (Booked/Responding/
 // Resolved/'Resolved — no arrival') -- sharedStatusLabel() already maps a
@@ -648,7 +731,7 @@ const pillStatus = (item) => {
 }
 
 watch(search, () => { page.value = 1 })
-watch(statusFilter, () => { page.value = 1 })
+watch([statusFilter, dateFrom, dateTo, vehicleFilter], () => { page.value = 1 })
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -759,6 +842,12 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
   title: fleetUnitLabel(v),
   value: v.vehicle_id,
 })))
+const vehicleFilterOptions = computed(() => [{ title: 'All units', value: ALL_STATUS }, ...vehicleOptions.value])
+// Table cell: the unit's short name, else the free-text one for a unit outside the fleet.
+const tripVehicleLabel = (t) => {
+  if (!t.vehicle_id) return t.vehicle || '—'
+  return vehicles.value.find(v => v.vehicle_id === t.vehicle_id)?.unit_identifier || t.vehicle || `Unit #${t.vehicle_id}`
+}
 // vehicle_id is the trip's real link; the free-text `vehicle` column is only
 // what was typed or copied at filing and goes stale, so it is shown only for a
 // trip with no fleet unit. Not an eager-loaded relation: it would serialise
@@ -1013,9 +1102,25 @@ const openDetail = (item) => {
 
 const peopleByRole = (role) => (selected.value?.people || []).filter((p) => p.role === role)
 
+// A trip that turned back has no destination steps; it shows the reason instead.
+const timelineSteps = computed(() => {
+  const t = selected.value
+  if (!t) return []
+  return [
+    { label: 'Departed office', at: t.departed_office_at, color: 'primary' },
+    ...(t.no_arrival_reason
+      ? [{ label: 'Did not reach destination', done: true, note: t.no_arrival_reason, color: 'warning' }]
+      : [
+          { label: 'Arrived at destination', at: t.arrived_destination_at, color: 'primary' },
+          { label: 'Departed destination', at: t.departed_destination_at, color: 'primary' },
+        ]),
+    { label: 'Returned to office', at: t.returned_office_at, color: 'success' },
+  ]
+})
+
 // Trip log dialog
 const emptyTripLogForm = () => ({
-  departed_office_at: '', arrived_destination_at: '', no_arrival_reason: '', departed_destination_at: '', returned_office_at: '',
+  departed_office_at: '', arrived_destination_at: '', no_arrival_reason: '', did_not_arrive: false, departed_destination_at: '', returned_office_at: '',
   odometer_start: null, odometer_end: null, others: '',
   // All three PEOPLE_FIELDS roles — see ConductionRequestController::
   // tripLog(). A stub created by C5's bridge (openTripRecord below) always
@@ -1051,6 +1156,7 @@ const openTripLog = (record) => {
       departed_office_at: toInputValue(record.departed_office_at),
       arrived_destination_at: toInputValue(record.arrived_destination_at),
       no_arrival_reason: record.no_arrival_reason || '',
+      did_not_arrive: !!record.no_arrival_reason,
       departed_destination_at: toInputValue(record.departed_destination_at),
       returned_office_at: toInputValue(record.returned_office_at),
       odometer_start: record.odometer_start,
@@ -1064,19 +1170,38 @@ const openTripLog = (record) => {
   }
 }
 
-// Drives the Departed destination field's disabled state. Reads the form rather
-// than the saved record: the field must go dead as soon as staff type a reason,
-// not only after the log has been saved with one.
-const hasNoArrivalReason = computed(
-  () => (tripLog.value.form.no_arrival_reason || '').trim() !== '',
-)
-
 const CHECKPOINTS = [
   ['departed_office_at', 'Departed office'],
   ['arrived_destination_at', 'Arrived at destination'],
   ['departed_destination_at', 'Departed destination'],
   ['returned_office_at', 'Returned to office'],
 ]
+const checkpointFields = (fields) => CHECKPOINTS.filter(([field]) => fields.includes(field))
+const setNow = (field) => { tripLog.value.form[field] = toInputValue(new Date()) }
+
+// A trip either reached its destination or it did not: ticking drops both
+// destination checkpoints (the server refuses them beside a reason), unticking
+// drops the reason.
+const onDidNotArrive = (ticked) => {
+  const form = tripLog.value.form
+  form.did_not_arrive = !!ticked
+  if (ticked) {
+    form.arrived_destination_at = ''
+    form.departed_destination_at = ''
+  } else {
+    form.no_arrival_reason = ''
+  }
+}
+
+// Driver picker. Names only: the API's crew rows are free text, so this is a
+// suggestion list and a failed load just leaves it empty.
+const responderNames = ref([])
+const fetchResponderNames = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/responder-names`, { headers: getHeaders() })
+    if (res.ok) responderNames.value = (await res.json()).map((r) => r.name)
+  } catch { /* free typing still works */ }
+}
 
 // Same three rules the server enforces, checked client-side first so a mistake
 // shows next to the field instead of round-tripping to the API to find out.
@@ -1089,8 +1214,11 @@ const validateTripLog = (form) => {
   // Same two refusals the server added with the reduced sequence below. Checked
   // here first for the same reason the rest of this function exists — a mistake
   // belongs next to the field, not after a round trip.
-  const noArrival = (form.no_arrival_reason || '').trim() !== ''
+  const noArrival = form.did_not_arrive
 
+  if (noArrival && !(form.no_arrival_reason || '').trim()) {
+    return 'Enter why the trip did not reach its destination.'
+  }
   if (noArrival && form.arrived_destination_at) {
     return 'This trip has an arrival time recorded. A trip either arrived or it did not — clear the arrival time, or clear the no-arrival reason.'
   }
@@ -1114,6 +1242,9 @@ const validateTripLog = (form) => {
     }
   }
   const filled = checkpoints.filter((c) => c.at)
+  // Same 5-minute grace as the server, for a clock a little ahead.
+  const future = filled.find((c) => c.at.getTime() > Date.now() + 5 * 60_000)
+  if (future) return `${future.label} cannot be in the future.`
   for (let i = 1; i < filled.length; i++) {
     if (filled[i].at < filled[i - 1].at) {
       return `${filled[i].label} cannot be earlier than ${filled[i - 1].label}.`
@@ -1137,7 +1268,7 @@ const submitTripLog = async () => {
     const body = {
       departed_office_at: form.departed_office_at ? form.departed_office_at.replace('T', ' ') + ':00' : null,
       arrived_destination_at: form.arrived_destination_at ? form.arrived_destination_at.replace('T', ' ') + ':00' : null,
-      no_arrival_reason: form.no_arrival_reason || null,
+      no_arrival_reason: form.did_not_arrive ? form.no_arrival_reason.trim() : null,
       departed_destination_at: form.departed_destination_at ? form.departed_destination_at.replace('T', ' ') + ':00' : null,
       returned_office_at: form.returned_office_at ? form.returned_office_at.replace('T', ' ') + ':00' : null,
       odometer_start: form.odometer_start === '' ? null : form.odometer_start,
@@ -1173,6 +1304,7 @@ const submitTripLog = async () => {
 onMounted(() => {
   fetchData()
   fetchVehicles()
+  fetchResponderNames()
 })
 </script>
 
