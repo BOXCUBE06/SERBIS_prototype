@@ -254,4 +254,59 @@ class ServiceRequestTransitionPushTest extends TestCase
         Http::assertSentCount(1);
         Http::assertSent(fn ($sent) => str_contains($sent['message']['notification']['body'], 'approved'));
     }
+
+    /**
+     * update() (a plain PUT, not approve()) can also change vehicle_id on a
+     * Booked request without touching status — the emergency-pull reassign
+     * path. Same push as approve()'s own swap, added on a separate branch
+     * since this is a different code path.
+     */
+    public function test_booked_vehicle_only_change_via_update_sends_one_push(): void
+    {
+        $amb01 = Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'status' => 'Available']);
+        $amb02 = Vehicle::create(['unit_identifier' => 'AMB-02', 'type' => 'Ambulance', 'status' => 'Available']);
+
+        $request = ServiceRequest::create([
+            'resident_id' => $this->resident->getKey(),
+            'service_id' => $this->ambulance->service_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+            'vehicle_id' => $amb01->getKey(),
+        ]);
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
+            'scheduled_at' => Carbon::now('UTC')->addDays(2),
+        ]);
+
+        $this->putJson("/api/service-requests/{$request->getKey()}", [
+            'vehicle_id' => $amb02->getKey(),
+        ])->assertOk();
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($sent) => str_contains($sent['message']['notification']['body'], 'AMB-02'));
+    }
+
+    /** Nothing that matters to a resident changed — must not push. */
+    public function test_booked_update_with_no_change_sends_no_push(): void
+    {
+        $amb01 = Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'status' => 'Available']);
+
+        $request = ServiceRequest::create([
+            'resident_id' => $this->resident->getKey(),
+            'service_id' => $this->ambulance->service_id,
+            'description' => 'Scheduled hospital transfer',
+            'status' => 'Booked',
+            'vehicle_id' => $amb01->getKey(),
+        ]);
+        AmbulanceBooking::create([
+            'request_id' => $request->getKey(),
+            'scheduled_at' => Carbon::now('UTC')->addDays(2),
+        ]);
+
+        $this->putJson("/api/service-requests/{$request->getKey()}", [
+            'internal_notes' => 'Called to confirm pickup address.',
+        ])->assertOk();
+
+        Http::assertNothingSent();
+    }
 }
