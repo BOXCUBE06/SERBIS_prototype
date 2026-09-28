@@ -298,17 +298,53 @@
             <v-row>
               <v-col cols="12" class="d-flex align-center gap-4 mb-2">
                 <v-avatar size="70" class="avatar-tint">
-                  <span class="avatar-initials text-h5">
+                  <v-img v-if="editPhotoUrl" :src="editPhotoUrl" alt="" cover></v-img>
+                  <span v-else class="avatar-initials text-h5">
                     {{ previewInitials }}
                   </span>
                 </v-avatar>
-                <!-- "Change Photo" lived here with no handler behind it, and it
-                     could never have had one: POST /api/residents ignores a
-                     submitted photo on purpose, because the photo is the
-                     resident's own face and theirs to set. The avatar draws
-                     initials from the name being typed, so it is a preview, not
-                     a picture that was ever uploadable from this form. -->
-                <div>
+                <!-- Photo for a saved barangay or organization account only. A head
+                     of the family's photo is their own face and is set from the
+                     app; a new account has no id to attach a file to yet. The
+                     upload happens the moment a file is chosen, on its own
+                     request, so Cancel on this form does not undo it. -->
+                <div v-if="canEditPhoto" class="min-w-0">
+                  <div class="d-flex flex-wrap ga-2">
+                    <v-btn
+                      variant="tonal"
+                      size="small"
+                      class="text-none font-weight-bold"
+                      :loading="photoBusy"
+                      @click="photoInput?.click()"
+                    >
+                      <v-icon start size="18">mdi-camera-outline</v-icon>
+                      {{ editHasPhoto ? 'Replace photo' : 'Add photo' }}
+                    </v-btn>
+                    <v-btn
+                      v-if="editHasPhoto"
+                      variant="text"
+                      size="small"
+                      color="error"
+                      class="text-none font-weight-bold"
+                      :disabled="photoBusy"
+                      @click="removePhoto"
+                    >
+                      Remove
+                    </v-btn>
+                  </div>
+                  <div class="text-caption text-medium-emphasis mt-1">
+                    JPG or PNG, up to 4 MB. The photo saves right away; Cancel does not undo it.
+                  </div>
+                  <div v-if="photoError" class="text-caption text-error mt-1" role="alert">{{ photoError }}</div>
+                  <input
+                    ref="photoInput"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    class="d-none"
+                    @change="onPhotoPicked"
+                  />
+                </div>
+                <div v-else>
                   <div class="text-subtitle-2 font-weight-bold text-high-emphasis">Initials</div>
                 </div>
               </v-col>
@@ -529,6 +565,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
+import { authHeaders } from '@/composables/adminUi'
 import {
   accountInitials,
   barangayOf,
@@ -581,6 +618,9 @@ const initialLoad = ref(true)
 const loading = ref(false)
 const apiError = ref('')
 const modalError = ref('')
+const photoInput = ref(null)
+const photoBusy = ref(false)
+const photoError = ref('')
 const showPassword = ref(false)
 // Template ref for <v-form>. The markup carried `ref="form"` all along, but
 // nothing declared it in <script setup>, so it silently resolved to nothing —
@@ -649,6 +689,14 @@ const barangayFilter = computed({
   get: () => (filters.value.barangay === 'All' ? null : filters.value.barangay),
   set: (name) => { filters.value.barangay = name ?? 'All' },
 })
+const editingAccount = computed(() =>
+  modal.value.isEditing ? residents.value.find((r) => idOf(r) === modal.value.targetId) : null,
+)
+const canEditPhoto = computed(() =>
+  [ACCOUNT_TYPE.barangay, ACCOUNT_TYPE.organization].includes(editingAccount.value?.account_type),
+)
+const editHasPhoto = computed(() => Boolean(editingAccount.value?.has_photo))
+const editPhotoUrl = computed(() => (editHasPhoto.value ? photoUrls.value[modal.value.targetId] : null))
 const previewInitials = computed(() => {
   const f = formData.value
   if (f.account_type === ACCOUNT_TYPE.organization) return wordInitials(f.organization_name) || '?'
@@ -876,6 +924,7 @@ const openAddModal = () => {
 
 const openExistingEditModal = (item) => {
   modalError.value = ''
+  photoError.value = ''
   clearFieldErrors()
   formData.value = {
     first_name: item.first_name,
@@ -895,6 +944,54 @@ const openExistingEditModal = (item) => {
 }
 
 const closeModal = () => { modal.value.isOpen = false }
+
+// Same ceiling and types as the server (ResidentController::savePhoto); checked
+// here so a wrong file costs no upload.
+const PHOTO_MAX_BYTES = 4 * 1024 * 1024
+
+const changePhoto = async (method, file) => {
+  const id = modal.value.targetId
+  photoBusy.value = true
+  photoError.value = ''
+  try {
+    let body
+    if (file) {
+      body = new FormData()
+      body.append('photo', file)
+    }
+    const res = await fetch(`${API_BASE}/residents/${id}/photo`, { method, headers: authHeaders(false), body })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.errors?.photo?.[0] || data.message || 'Could not update the photo.')
+    }
+    // Drop the cached image first, or the row and the profile keep showing the old one.
+    forgetResidentPhoto(id)
+    delete photoUrls.value[id]
+    await fetchResidents()
+    notify(file ? 'Photo saved' : 'Photo removed')
+  } catch (error) {
+    photoError.value = error.message
+  } finally {
+    photoBusy.value = false
+  }
+}
+
+const onPhotoPicked = (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    photoError.value = 'Choose a JPG or PNG image.'
+    return
+  }
+  if (file.size > PHOTO_MAX_BYTES) {
+    photoError.value = 'That image is over 4 MB.'
+    return
+  }
+  changePhoto('POST', file)
+}
+
+const removePhoto = () => changePhoto('DELETE')
 
 // Client-side rules. The asterisks in the labels used to be decoration: no
 // field carried a rule and `saveUser` never called `form.validate()`, so an

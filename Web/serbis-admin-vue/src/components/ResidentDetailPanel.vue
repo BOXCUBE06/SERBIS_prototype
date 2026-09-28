@@ -240,7 +240,8 @@ const smsDotClass = computed(() => residentSmsDotClass(smsOptIn.value))
 // stays on screen under the new account's name until the fetch returns.
 const photoUrl = ref(null)
 watch(
-  () => [residentId.value, props.resident.has_photo],
+  // updated_at moves when staff replace the photo: has_photo stays true then.
+  () => [residentId.value, props.resident.has_photo, props.resident.updated_at],
   ([id, hasPhoto]) => {
     photoUrl.value = null
     if (!hasPhoto || id == null) return
