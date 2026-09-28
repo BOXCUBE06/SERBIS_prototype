@@ -281,10 +281,27 @@
                 :key="idx"
                 class="d-flex align-center gap-2 mb-2"
               >
-                <ResponderCombobox
+                <v-autocomplete
                   v-if="group.field === 'drivers'"
                   v-model="createDialog.form[group.field][idx]"
-                  :items="responderNames"
+                  :items="driverOptionsFor(createDialog.form[group.field][idx])"
+                  item-title="title"
+                  item-value="value"
+                  :label="`${group.singular} ${idx + 1}`"
+                  placeholder="Select a responder"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  clearable
+                >
+                  <template v-slot:item="{ item, props }">
+                    <v-list-item v-bind="props" :title="item.raw.title" :subtitle="item.raw.position"></v-list-item>
+                  </template>
+                </v-autocomplete>
+                <ResponderCombobox
+                  v-else-if="group.field === 'authorized_passengers'"
+                  v-model="createDialog.form[group.field][idx]"
+                  :items="passengerOptionsFor(createDialog.form.drivers)"
                   :label="`${group.singular} ${idx + 1}`"
                 />
                 <v-text-field
@@ -528,10 +545,27 @@
                   :key="idx"
                   class="d-flex align-center gap-2 mb-2"
                 >
-                  <ResponderCombobox
+                  <v-autocomplete
                     v-if="group.field === 'drivers'"
                     v-model="tripLog.form[group.field][idx]"
-                    :items="responderNames"
+                    :items="driverOptionsFor(tripLog.form[group.field][idx])"
+                    item-title="title"
+                    item-value="value"
+                    :label="`${group.singular} ${idx + 1}`"
+                    placeholder="Select a responder"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    clearable
+                  >
+                    <template v-slot:item="{ item, props }">
+                      <v-list-item v-bind="props" :title="item.raw.title" :subtitle="item.raw.position"></v-list-item>
+                    </template>
+                  </v-autocomplete>
+                  <ResponderCombobox
+                    v-else-if="group.field === 'authorized_passengers'"
+                    v-model="tripLog.form[group.field][idx]"
+                    :items="passengerOptionsFor(tripLog.form.drivers)"
                     :label="`${group.singular} ${idx + 1}`"
                   />
                   <v-text-field
@@ -1193,14 +1227,46 @@ const onDidNotArrive = (ticked) => {
   }
 }
 
-// Driver picker. Names only: the API's crew rows are free text, so this is a
-// suggestion list and a failed load just leaves it empty.
-const responderNames = ref([])
-const fetchResponderNames = async () => {
+// Driver/passenger picker source. The API's crew rows are free text server-
+// side either way — this only shapes what the two pickers offer.
+const responders = ref([]) // [{name, position}]
+const fetchResponders = async () => {
   try {
     const res = await fetch(`${API_BASE}/responder-names`, { headers: getHeaders() })
-    if (res.ok) responderNames.value = (await res.json()).map((r) => r.name)
-  } catch { /* free typing still works */ }
+    if (res.ok) responders.value = await res.json()
+  } catch { /* driver list stays empty; passenger combobox still allows free typing */ }
+}
+
+// Driver is a strict pick from Responders (MDRRMO feedback: a trip's driver
+// must be a real responder, not whatever was typed) — Ambulance Driver first,
+// then the rest, each labelled with its position.
+const AMBULANCE_DRIVER_POSITION = 'Ambulance Driver'
+// title = value = the name, so the field shows just the name once picked;
+// position rides along only for the dropdown's #item subtitle (see the
+// template above and ResponderCombobox.vue).
+const driverBaseOptions = computed(() => [...responders.value]
+  .sort((a, b) => {
+    const aFirst = a.position === AMBULANCE_DRIVER_POSITION
+    const bFirst = b.position === AMBULANCE_DRIVER_POSITION
+    if (aFirst !== bFirst) return aFirst ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+  .map((r) => ({ title: r.name, value: r.name, position: r.position })))
+// An older trip's driver may be free text from before this field was locked
+// down, or a responder since removed — add it as its own option so the
+// select still shows the saved value instead of going blank.
+const driverOptionsFor = (value) => {
+  if (!value || responders.value.some((r) => r.name === value)) return driverBaseOptions.value
+  return [...driverBaseOptions.value, { title: value, value, position: null }]
+}
+
+// Passenger stays a combobox (list or free typed name) — just excludes
+// whoever is already picked as a driver on this same form.
+const passengerOptionsFor = (drivers) => {
+  const excluded = new Set((drivers || []).filter(Boolean))
+  return responders.value
+    .filter((r) => !excluded.has(r.name))
+    .map((r) => ({ title: r.name, value: r.name, position: r.position }))
 }
 
 // Same three rules the server enforces, checked client-side first so a mistake
@@ -1304,7 +1370,7 @@ const submitTripLog = async () => {
 onMounted(() => {
   fetchData()
   fetchVehicles()
-  fetchResponderNames()
+  fetchResponders()
 })
 </script>
 
