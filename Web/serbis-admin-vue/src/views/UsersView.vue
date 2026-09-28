@@ -227,13 +227,12 @@
                   </span>
                 </v-avatar>
                 <div class="name-text">
-                  <v-tooltip :text="primaryName(item)" location="top">
-                    <template v-slot:activator="{ props }">
-                      <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                        {{ primaryName(item) }}
-                      </div>
-                    </template>
-                  </v-tooltip>
+                  <!-- Wraps to two lines, then clips: a long organization name reads
+                       in full instead of ending in an ellipsis. The title carries
+                       the whole name for the rare one that needs a third. -->
+                  <div class="name-clamp font-weight-bold text-high-emphasis text-body-1" :title="primaryName(item)">
+                    {{ primaryName(item) }}
+                  </div>
                   <!-- Second line: the type tag (only the exceptions carry one; a head
                        of the family stays untagged) and then the contact person, who
                        staff would actually call. A barangay or organization has no
@@ -243,7 +242,7 @@
                     <span v-if="isInstitution(item)" class="type-tag">{{ accountTypeLabel(item.account_type) }}</span>
                     <template v-if="contactName(item)">
                       <span v-if="isInstitution(item)" aria-hidden="true">·</span>
-                      <span class="cell-truncate">{{ contactName(item) }}</span>
+                      <span class="cell-truncate" :title="contactName(item)">{{ contactName(item) }}</span>
                     </template>
                   </div>
                 </div>
@@ -1548,6 +1547,14 @@ onUnmounted(releaseResidentPhotos)
 .bulk-body ul { margin: 4px 0 0; padding-left: 20px; }
 .elegant-table :deep(tr.is-checked) { background: rgba(var(--v-theme-primary), 0.06); }
 .row-actions { display: flex; justify-content: flex-end; gap: 2px; }
+.name-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
 .name-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .type-tag {
   flex: none;
