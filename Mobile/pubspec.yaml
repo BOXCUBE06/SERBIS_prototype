@@ -43,37 +43,28 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Bundled, not fetched. `google_fonts` downloaded Lexend and Inter from
+  # Bundled, not fetched. `google_fonts` downloaded its fonts from
   # fonts.gstatic.com on first use, so a first launch with no signal fell back
   # to the platform default — every size and metric the layout was tuned against
   # would change, on exactly the launch this app exists for. It was also an
   # unadvertised third-party request at startup.
   #
-  # Latin subsets, four static weights each. They carry ñ, the accented vowels
-  # and the '·' this UI uses as a separator, which is the whole character set
-  # English and Filipino need here; a third language will need them re-cut.
+  # One family, Plus Jakarta Sans (SIL OFL, licence beside the files), the same
+  # face the admin panel uses. Four static weights: the UI asks for 400, 500,
+  # 600 and 700 and nothing else. Full Latin set, so ñ, the accented vowels, ₱
+  # and the '·' separator this UI uses are all there.
   # Static instances rather than the variable font: Flutter maps `fontWeight`
   # onto a declared weight, and reaching a variable font's `wght` axis needs
   # `fontVariations` on every TextStyle, which `ThemeData.textTheme` would not
   # carry.
   fonts:
-    - family: Lexend
+    - family: PlusJakartaSans
       fonts:
-        - asset: assets/fonts/Lexend-400.ttf
+        - asset: assets/fonts/PlusJakartaSans-400.ttf
           weight: 400
-        - asset: assets/fonts/Lexend-500.ttf
+        - asset: assets/fonts/PlusJakartaSans-500.ttf
           weight: 500
-        - asset: assets/fonts/Lexend-600.ttf
+        - asset: assets/fonts/PlusJakartaSans-600.ttf
           weight: 600
-        - asset: assets/fonts/Lexend-700.ttf
-          weight: 700
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/Inter-400.ttf
-          weight: 400
-        - asset: assets/fonts/Inter-500.ttf
-          weight: 500
-        - asset: assets/fonts/Inter-600.ttf
-          weight: 600
-        - asset: assets/fonts/Inter-700.ttf
+        - asset: assets/fonts/PlusJakartaSans-700.ttf
           weight: 700

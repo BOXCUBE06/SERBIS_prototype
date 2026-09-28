@@ -65,16 +65,19 @@ class AppSpacing {
 class AppText {
   AppText._();
 
-  /// Headings and anything that carries emphasis.
+  /// The one bundled family, for headings and body alike.
   ///
   /// The family name has to match `pubspec.yaml` exactly — a typo does not fail
   /// the build, it silently falls back to the platform default, which is the
-  /// same failure `google_fonts` produced offline and the reason both families
-  /// are asserted in `test/app_fonts_test.dart`.
-  static const String displayFamily = 'Lexend';
+  /// same failure `google_fonts` produced offline and the reason it is asserted
+  /// in `test/app_fonts_test.dart`.
+  static const String family = 'PlusJakartaSans';
+
+  /// Headings and anything that carries emphasis.
+  static const String displayFamily = family;
 
   /// Body copy, and the family behind the whole Material text theme.
-  static const String bodyFamily = 'Inter';
+  static const String bodyFamily = family;
 
   /// Only these are bundled. A weight outside the set does not fail — Flutter
   /// picks the nearest declared one — so a `w300` would render as `w400` and
@@ -128,7 +131,7 @@ ThemeData buildAppTheme() {
   return base.copyWith(
     scaffoldBackgroundColor: AppColors.paper,
     // Replaces GoogleFonts.interTextTheme, which did the same thing over the
-    // network. `apply` keeps Material's own sizes and only swaps the family.
+    // network (and Inter itself, replaced by Plus Jakarta Sans). `apply` keeps Material's own sizes and only swaps the family.
     textTheme: base.textTheme.apply(fontFamily: AppText.bodyFamily),
     colorScheme: base.colorScheme.copyWith(
       primary: AppColors.green700,
