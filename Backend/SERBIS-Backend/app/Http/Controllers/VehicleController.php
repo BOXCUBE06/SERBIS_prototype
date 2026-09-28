@@ -5,14 +5,68 @@ namespace App\Http\Controllers;
 use App\Models\ServiceRequest;
 use App\Models\Vehicle;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class VehicleController extends Controller
 {
+    /**
+     * Every Ambulance unit's future Booked bookings, one query grouped in PHP
+     * by vehicle_id — what index() attaches to each row so the Vehicles page
+     * already has the conflict list before a status change is even picked,
+     * without a per-vehicle query or a call to a route the page may not hold
+     * the section for (see futureBookedBookings() below for the single-unit
+     * version the Maintenance guard and update() use).
+     */
+    private function futureBookedBookingsByVehicle(): Collection
+    {
+        return ServiceRequest::query()
+            ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
+            ->whereNotNull('tbl_service_request.vehicle_id')
+            ->where('tbl_service_request.status', 'Booked')
+            ->where('tbl_ambulance_bookings.scheduled_at', '>', now())
+            ->orderBy('tbl_ambulance_bookings.scheduled_at')
+            ->get([
+                'tbl_service_request.request_id',
+                'tbl_service_request.vehicle_id',
+                'tbl_ambulance_bookings.scheduled_at',
+                'tbl_ambulance_bookings.patient_name',
+            ])
+            ->groupBy('vehicle_id');
+    }
+
+    /**
+     * One vehicle's slice of the query above — the Maintenance guard and
+     * update()'s response share this. Runs the same batched query rather
+     * than a lighter single-vehicle one; both callers fire at most once per
+     * request and the fleet is small, so the extra rows cost nothing worth
+     * a second query to avoid.
+     */
+    private function futureBookedBookings(Vehicle $vehicle): Collection
+    {
+        return $this->futureBookedBookingsByVehicle()->get($vehicle->vehicle_id) ?? collect();
+    }
+
+    private function conflictPayload(Collection $bookings): Collection
+    {
+        return $bookings->map(fn (ServiceRequest $r) => [
+            'request_id' => $r->request_id,
+            'scheduled_at' => $r->scheduled_at,
+            'patient_name' => $r->patient_name,
+        ])->values();
+    }
+
     public function index()
     {
-        return response()->json(Vehicle::all());
+        $vehicles = Vehicle::all();
+        $conflicts = $this->futureBookedBookingsByVehicle();
+
+        $vehicles->each(function (Vehicle $v) use ($conflicts) {
+            $v->setAttribute('conflicting_bookings', $this->conflictPayload($conflicts->get($v->vehicle_id) ?? collect()));
+        });
+
+        return response()->json($vehicles);
     }
 
     public function store(Request $request)
@@ -71,30 +125,26 @@ class VehicleController extends Controller
         // the status alone would silently orphan every one of them. No force
         // flag: reassigning those bookings is a decision for a person, made
         // with the list below in hand, not a checkbox that skips past it.
-        if (($validated['status'] ?? null) === 'Maintenance' && $vehicle->status !== 'Maintenance') {
-            // Joined: scheduled_at now lives on tbl_ambulance_bookings.
-            // Selected under its plain name so it hydrates onto the model
-            // as the usual `scheduled_at` attribute, cast to Carbon as always.
-            $futureBookings = ServiceRequest::query()
-                ->join('tbl_ambulance_bookings', 'tbl_ambulance_bookings.request_id', '=', 'tbl_service_request.request_id')
-                ->where('tbl_service_request.vehicle_id', $vehicle->vehicle_id)
-                ->where('tbl_service_request.status', 'Booked')
-                ->where('tbl_ambulance_bookings.scheduled_at', '>', now())
-                ->orderBy('tbl_ambulance_bookings.scheduled_at')
-                ->get(['tbl_service_request.request_id', 'tbl_ambulance_bookings.scheduled_at']);
+        //
+        // Any OTHER status (in practice, just Dispatched — a unit pulled for a
+        // real emergency) does not block the same way: the change goes through
+        // and the conflict list rides along on the response instead, for the
+        // panel to act on (reassign the affected bookings) rather than being
+        // stopped from recording where the unit actually is.
+        $futureBookings = $this->futureBookedBookings($vehicle);
 
-            if ($futureBookings->isNotEmpty()) {
-                $names = $futureBookings
-                    ->map(fn (ServiceRequest $r) => "#{$r->request_id} ({$r->scheduled_at->toIso8601String()})")
-                    ->implode(', ');
+        if (($validated['status'] ?? null) === 'Maintenance' && $vehicle->status !== 'Maintenance' && $futureBookings->isNotEmpty()) {
+            $names = $futureBookings
+                ->map(fn (ServiceRequest $r) => "#{$r->request_id} ({$r->scheduled_at->toIso8601String()})")
+                ->implode(', ');
 
-                throw ValidationException::withMessages([
-                    'status' => "Cannot set this unit to Maintenance: it still holds future booked requests — {$names}.",
-                ]);
-            }
+            throw ValidationException::withMessages([
+                'status' => "Cannot set this unit to Maintenance: it still holds future booked requests — {$names}.",
+            ]);
         }
 
         $vehicle->update($validated);
+        $vehicle->setAttribute('conflicting_bookings', $this->conflictPayload($futureBookings));
 
         return response()->json($vehicle);
     }

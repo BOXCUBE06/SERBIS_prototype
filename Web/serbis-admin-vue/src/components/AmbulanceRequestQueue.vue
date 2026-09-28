@@ -153,8 +153,15 @@
         </template>
 
         <template v-slot:item._unit="{ item }">
-          <span v-if="item._unit" class="text-truncate d-block">{{ item._unit }}</span>
-          <v-chip v-else size="x-small" variant="tonal" label>Unassigned</v-chip>
+          <div class="d-flex flex-column ga-1">
+            <span v-if="item._unit" class="text-truncate d-block">{{ item._unit }}</span>
+            <v-chip v-else size="x-small" variant="tonal" label>Unassigned</v-chip>
+            <v-chip
+              v-if="needsNewUnit(item)"
+              size="x-small" color="warning" variant="tonal" label
+              :title="needsNewUnitTooltip(item)"
+            >Needs new unit</v-chip>
+          </div>
         </template>
 
       </DataTablePage>
@@ -404,6 +411,20 @@
                 </v-btn>
               </template>
               <template v-else>
+                <!-- Same unit picker "Approve & Assign Unit" opens (openAssignUnitModal
+                     already limits it to units free for this exact scheduled window,
+                     via AmbulanceAvailability), submitted the same way (approveBooking
+                     -> approve(), which already supports re-approving with a different
+                     unit — see its $wasAlreadyApproved handling). Shown for every Booked
+                     request that already has a unit, not just when it needs one — staff
+                     may want to swap for other reasons too; the branch above covers the
+                     unassigned case. -->
+                <v-btn
+                  variant="outlined" color="primary" class="text-none font-weight-bold" height="40"
+                  :loading="scheduledAvailabilityLoading" @click="openAssignUnitModal"
+                >
+                  Reassign unit
+                </v-btn>
                 <v-spacer></v-spacer>
                 <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="openReschedule">
                   Reschedule
@@ -1224,6 +1245,13 @@ const tableHeaders = computed(() => {
 
 if (statusTabs.includes(route.query.status)) filters.status = route.query.status
 
+// A Booked request's own vehicle went unavailable out from under it — pulled
+// for another emergency, sent to Maintenance, etc. Informational only: this
+// never blocks anything, it just tells staff a swap may be needed before the
+// scheduled time.
+const needsNewUnit = (item) => item.status === 'Booked' && !!item.vehicle && item.vehicle.status !== 'Available'
+const needsNewUnitTooltip = (item) => `Assigned unit is currently ${item.vehicle.status}. Reassign or confirm it will be back in time.`
+
 const isLandmarkRedundant = (landmark, pickup) => {
   if (!landmark || !pickup) return false
   const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -1276,10 +1304,13 @@ const bookingUnitOptions = computed(() => {
     .map(v => ({
       vehicle: v,
       available: freeIds.has(v.vehicle_id),
+      // Status wins over the window check — a Dispatched/Maintenance unit is
+      // excluded from availableAmbulances() regardless of the window, so
+      // "already booked" would be misleading for it.
       reason: freeIds.has(v.vehicle_id)
         ? null
-        : v.status === 'Maintenance'
-          ? 'Under maintenance'
+        : v.status === 'Maintenance' || v.status === 'Dispatched'
+          ? v.status
           : 'Already booked for this window',
     }))
     .slice()
