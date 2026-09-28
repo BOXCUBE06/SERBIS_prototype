@@ -59,6 +59,7 @@
               v-model="filters.status"
               :items="statusFilterItems"
               aria-label="Filter by status"
+              :menu-props="menuProps"
               variant="outlined"
               density="compact"
               hide-details
@@ -75,6 +76,7 @@
               item-value="barangay_name"
               placeholder="All barangays"
               aria-label="Filter by barangay"
+              :menu-props="menuProps"
               clearable
               variant="outlined"
               density="compact"
@@ -815,6 +817,7 @@ const formData = ref({
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
 // "All" reads as a placeholder here: the select has no floating label to say what it filters.
+const menuProps = { transition: 'menu-soft' }
 const statusFilterItems = RESIDENT_STATUS_FILTER_ITEMS.map((item) => (item.value === 'All' ? { ...item, title: 'All statuses' } : item))
 const barangayFilter = computed({
   get: () => (filters.value.barangay === 'All' ? null : filters.value.barangay),

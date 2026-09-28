@@ -97,6 +97,14 @@
 .snack-up-enter-from,
 .snack-up-leave-to { opacity: 0; transform: translateY(8px); }
 
+/* Filter-bar menus (select and autocomplete lists): fade plus a 4px slide down
+   into place; the exit is the short fade. Opt in with
+   :menu-props="{ transition: 'menu-soft' }". Reduced motion is the rule below. */
+.menu-soft-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.menu-soft-leave-active { transition: opacity var(--motion-fast) var(--ease-out); }
+.menu-soft-enter-from { opacity: 0; transform: translateY(-4px); }
+.menu-soft-leave-to { opacity: 0; }
+
 /* Near-instant rather than none, so transitionend/animationend handlers
    (Vuetify overlays, Vue <Transition>) still fire and nothing gets stuck. */
 @media (prefers-reduced-motion: reduce) {
