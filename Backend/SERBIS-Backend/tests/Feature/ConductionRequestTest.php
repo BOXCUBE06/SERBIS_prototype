@@ -196,12 +196,11 @@ class ConductionRequestTest extends TestCase
     }
 
     /**
-     * The flip is gated on the linked request currently being Booked, not
-     * fired unconditionally — a create-dialog call against anything else
-     * (here, still Pending: never approved, no vehicle assigned) must leave
-     * that request's status exactly as it was.
+     * Only a Booked request can have a trip filed against it. Here, still
+     * Pending (never approved, no vehicle assigned): refused, and its status
+     * is left exactly as it was.
      */
-    public function test_filing_a_trip_against_a_non_booked_request_does_not_change_its_status(): void
+    public function test_filing_a_trip_against_a_non_booked_request_is_refused(): void
     {
         $service = Service::create([
             'service_name' => 'Ambulance/Medical Response',
@@ -215,9 +214,21 @@ class ConductionRequestTest extends TestCase
 
         $this->postJson('/api/conduction-requests', $this->payload([
             'service_request_id' => $pendingRequest->request_id,
-        ]))->assertStatus(201);
+        ]))->assertStatus(422)
+            ->assertJsonValidationErrors(['service_request_id']);
 
         $this->assertSame('Pending', $pendingRequest->fresh()->status);
+        $this->assertSame(0, ConductionRequest::where('service_request_id', $pendingRequest->request_id)->count());
+    }
+
+    public function test_trip_log_refuses_a_checkpoint_in_the_future(): void
+    {
+        $conductionRequest = ConductionRequest::create($this->payload());
+
+        $this->patchJson("/api/conduction-requests/{$conductionRequest->conduction_request_id}/trip-log", [
+            'departed_office_at' => now('Asia/Manila')->addHour()->format('Y-m-d H:i:s'),
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['departed_office_at']);
     }
 
     /**
