@@ -66,6 +66,23 @@
               class="status-field"
             ></v-select>
 
+            <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Cleared
+                 is "All"; the filter itself still holds the name or 'All'. -->
+            <v-autocomplete
+              v-model="barangayFilter"
+              :items="barangays"
+              item-title="barangay_name"
+              item-value="barangay_name"
+              label="Barangay"
+              placeholder="All barangays"
+              clearable
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              class="barangay-field"
+            ></v-autocomplete>
+
           </div>
 
           <!-- `aria-pressed` is what makes the active filter perceivable at
@@ -90,31 +107,6 @@
             >
               {{ t.value === 'All' ? 'All' : t.title }}
               <span class="tab-count">{{ typeCounts[t.value] ?? 0 }}</span>
-            </v-btn>
-          </div>
-
-          <div
-            class="px-6 py-1 border-b subtle-surface d-flex align-center gap-2 overflow-x-auto flex-shrink-0"
-            role="group"
-            aria-label="Filter by barangay"
-          >
-            <v-btn
-              variant="text"
-              :aria-pressed="filters.barangay === 'All'"
-              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === 'All' ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
-              @click="filters.barangay = 'All'"
-            >
-              All Barangays
-            </v-btn>
-            <v-btn
-              v-for="b in barangays"
-              :key="b.barangay_id"
-              variant="text"
-              :aria-pressed="filters.barangay === b.barangay_name"
-              :class="['tab-btn text-none px-4 rounded-0', filters.barangay === b.barangay_name ? 'active-tab font-weight-black' : 'text-medium-emphasis font-weight-bold']"
-              @click="filters.barangay = b.barangay_name"
-            >
-              {{ b.barangay_name }}
             </v-btn>
           </div>
 
@@ -180,33 +172,34 @@
               <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
             </template>
 
-            <template v-slot:item.photo="{ item }">
-              <v-avatar :color="undefined" size="36" class="my-1 avatar-tint">
-                <v-img
-                  v-if="photoUrls[idOf(item)]"
-                  :src="photoUrls[idOf(item)]"
-                  :alt="`Photo of ${item.first_name} ${item.last_name}`"
-                ></v-img>
-                <span v-else class="avatar-initials">
-                  {{ initials(item) }}
-                </span>
-              </v-avatar>
-            </template>
-
             <template v-slot:item.fullName="{ item }">
-              <v-tooltip :text="primaryName(item)" location="top">
-                <template v-slot:activator="{ props }">
-                  <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
-                    {{ primaryName(item) }}
+              <div class="name-cell">
+                <v-avatar :color="undefined" size="36" class="avatar-tint flex-none">
+                  <v-img
+                    v-if="photoUrls[idOf(item)]"
+                    :src="photoUrls[idOf(item)]"
+                    :alt="`Photo of ${item.first_name} ${item.last_name}`"
+                  ></v-img>
+                  <span v-else class="avatar-initials">
+                    {{ initials(item) }}
+                  </span>
+                </v-avatar>
+                <div class="name-text">
+                  <v-tooltip :text="primaryName(item)" location="top">
+                    <template v-slot:activator="{ props }">
+                      <div v-bind="props" class="font-weight-bold text-high-emphasis text-body-1 cell-truncate">
+                        {{ primaryName(item) }}
+                      </div>
+                    </template>
+                  </v-tooltip>
+                  <!-- Barangay and organization accounts have no personal name of
+                       their own — the row's identity is the hall or the group —
+                       so the contact person (who staff would actually call) is a
+                       second line rather than the headline. -->
+                  <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
+                    {{ contactName(item) }}
                   </div>
-                </template>
-              </v-tooltip>
-              <!-- Barangay and organization accounts have no personal name of
-                   their own — the row's identity is the hall or the group —
-                   so the contact person (who staff would actually call) is a
-                   second line rather than the headline. -->
-              <div v-if="contactName(item)" class="text-caption text-medium-emphasis cell-truncate">
-                {{ contactName(item) }}
+                </div>
               </div>
             </template>
 
@@ -217,14 +210,14 @@
             </template>
 
             <template v-slot:item.barangay_name="{ item }">
-              <span class="font-weight-medium text-body-1 text-high-emphasis cell-truncate">
+              <span class="cell-text cell-truncate">
                 {{ barangayOf(item) }}
               </span>
             </template>
 
             <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
             <template v-slot:item.phone_number="{ item }">
-              <span class="text-body-1 text-medium-emphasis cell-truncate">{{ displayPhone(item.phone_number) }}</span>
+              <span class="cell-text cell-truncate">{{ displayPhone(item.phone_number) }}</span>
             </template>
 
             <template v-slot:item.status="{ item }">
@@ -239,13 +232,19 @@
             </template>
 
             <template v-slot:item.sms_opt_in="{ item }">
-              <!-- Same pill as Status, on purpose: it is the second half of the
-                   same question. A blast needs an Active account, a phone
-                   number and this switch, so an operator counting a short
-                   delivery report reads both columns, not one. -->
-              <span class="status-pill" :class="residentSmsPillClass(residentSmsOptIn(item))">
-                <span class="status-dot" :class="residentSmsDotClass(residentSmsOptIn(item))"></span>
-                {{ residentSmsLabel(residentSmsOptIn(item)) }}
+              <!-- Quieter than Status on purpose. Nearly every row is Receiving, so
+                   a pill on each one drowned the rows that are not: Receiving is a
+                   muted icon (the words stay for screen readers), and only Opted
+                   out keeps a pill. The Status column still carries Pending.
+                   A blast needs an Active account, a phone number and this switch,
+                   so the detail panel keeps the full pill for both states. -->
+              <template v-if="residentSmsOptIn(item)">
+                <v-icon size="18" class="sms-on" aria-hidden="true">mdi-message-text-outline</v-icon>
+                <span class="sr-only">{{ residentSmsLabel(true) }}</span>
+              </template>
+              <span v-else class="status-pill" :class="residentSmsPillClass(false)">
+                <span class="status-dot" :class="residentSmsDotClass(false)"></span>
+                {{ residentSmsLabel(false) }}
               </span>
             </template>
           </v-data-table>
@@ -299,17 +298,53 @@
             <v-row>
               <v-col cols="12" class="d-flex align-center gap-4 mb-2">
                 <v-avatar size="70" class="avatar-tint">
-                  <span class="avatar-initials text-h5">
-                    {{ (formData.first_name?.charAt(0) || '?') }}{{ (formData.last_name?.charAt(0) || '') }}
+                  <v-img v-if="editPhotoUrl" :src="editPhotoUrl" alt="" cover></v-img>
+                  <span v-else class="avatar-initials text-h5">
+                    {{ previewInitials }}
                   </span>
                 </v-avatar>
-                <!-- "Change Photo" lived here with no handler behind it, and it
-                     could never have had one: POST /api/residents ignores a
-                     submitted photo on purpose, because the photo is the
-                     resident's own face and theirs to set. The avatar draws
-                     initials from the name being typed, so it is a preview, not
-                     a picture that was ever uploadable from this form. -->
-                <div>
+                <!-- Photo for a saved barangay or organization account only. A head
+                     of the family's photo is their own face and is set from the
+                     app; a new account has no id to attach a file to yet. The
+                     upload happens the moment a file is chosen, on its own
+                     request, so Cancel on this form does not undo it. -->
+                <div v-if="canEditPhoto" class="min-w-0">
+                  <div class="d-flex flex-wrap ga-2">
+                    <v-btn
+                      variant="tonal"
+                      size="small"
+                      class="text-none font-weight-bold"
+                      :loading="photoBusy"
+                      @click="photoInput?.click()"
+                    >
+                      <v-icon start size="18">mdi-camera-outline</v-icon>
+                      {{ editHasPhoto ? 'Replace photo' : 'Add photo' }}
+                    </v-btn>
+                    <v-btn
+                      v-if="editHasPhoto"
+                      variant="text"
+                      size="small"
+                      color="error"
+                      class="text-none font-weight-bold"
+                      :disabled="photoBusy"
+                      @click="removePhoto"
+                    >
+                      Remove
+                    </v-btn>
+                  </div>
+                  <div class="text-caption text-medium-emphasis mt-1">
+                    JPG or PNG, up to 4 MB. The photo saves right away; Cancel does not undo it.
+                  </div>
+                  <div v-if="photoError" class="text-caption text-error mt-1" role="alert">{{ photoError }}</div>
+                  <input
+                    ref="photoInput"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    class="d-none"
+                    @change="onPhotoPicked"
+                  />
+                </div>
+                <div v-else>
                   <div class="text-subtitle-2 font-weight-bold text-high-emphasis">Initials</div>
                 </div>
               </v-col>
@@ -332,6 +367,7 @@
                   label="Organization name *"
                   placeholder="Isabela State University"
                   :rules="[requiredRule('Organization name')]"
+                  validate-on="blur lazy"
                   :error-messages="fieldErrors.organization_name"
                   variant="outlined"
                   density="comfortable"
@@ -529,7 +565,15 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useDisplay } from 'vuetify'
-import { initials as computeInitials } from '@/composables/adminUi'
+import { authHeaders } from '@/composables/adminUi'
+import {
+  accountInitials,
+  barangayOf,
+  contactName,
+  fullName,
+  primaryName,
+  wordInitials,
+} from '@/composables/accountName'
 import { getToken } from '@/composables/authToken'
 import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
 import { useRowNumbers } from '@/composables/rowNumber'
@@ -574,6 +618,9 @@ const initialLoad = ref(true)
 const loading = ref(false)
 const apiError = ref('')
 const modalError = ref('')
+const photoInput = ref(null)
+const photoBusy = ref(false)
+const photoError = ref('')
 const showPassword = ref(false)
 // Template ref for <v-form>. The markup carried `ref="form"` all along, but
 // nothing declared it in <script setup>, so it silently resolved to nothing —
@@ -588,12 +635,11 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // so a percentage is taken from the full table width, not from the space the
 // px columns leave — the two have to be budgeted together or they overlap.
 //
-// The pill columns are px because their content does not vary: they were 10%
-// and 8%, and the row-number column taking its 64px shrank SMS Blasts to 82px,
-// which is narrower than the 110px "RECEIVING" pill it has to print. The pill
-// spilled out of the cell and scrolled the whole card sideways. Both are now
-// their longest pill plus the 16px cell padding either side — "DEACTIVATED"
-// 128 + 32, "RECEIVING" 110 + 32 — measured, not guessed.
+// The pill columns are px because their content does not vary: as percentages
+// they shrank below the pill they print, and the pill spilled out of the cell
+// and scrolled the whole card sideways. Both are now their longest pill plus
+// the 16px cell padding either side — "DEACTIVATED" 112 + 32 (Status 150),
+// "OPTED OUT" 98 + 32 (SMS Blasts 134) — measured, not guessed.
 //
 // Width otherwise follows variance: the columns that differ per row get the
 // percentages, and `table-layout: fixed` hands the slack back to every column
@@ -605,20 +651,20 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // cells) hands its width back to Name and Barangay for free.
 const headers = computed(() => {
   const cols = [
-    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-    { title: '', key: 'photo', sortable: false, align: 'center', width: '76px' },
-    { title: 'Name', key: 'fullName', width: '18%' },
+    { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '44px' },
+    // No width: Name takes whatever the fixed columns leave, avatar included.
+    { title: 'Name', key: 'fullName' },
   ]
   if (filters.value.type === 'All') {
-    cols.push({ title: 'Type', key: 'account_type', width: '230px' })
+    cols.push({ title: 'Type', key: 'account_type', width: '190px' })
   }
   cols.push(
     // The longest real barangay name in the data is "San Antonio Ugad", which
     // was still clipping when this column was 15% of a narrower table.
-    { title: 'Barangay', key: 'barangay_name', width: '14%' },
-    { title: 'Mobile Number', key: 'phone_number', width: '14%' },
-    { title: 'Status', key: 'status', align: 'center', width: '160px' },
-    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '142px' },
+    { title: 'Barangay', key: 'barangay_name', width: '150px' },
+    { title: 'Mobile Number', key: 'phone_number', width: '150px' },
+    { title: 'Status', key: 'status', align: 'center', width: '150px' },
+    { title: 'SMS Blasts', key: 'sms_opt_in', align: 'center', width: '134px' },
   )
   return cols
 })
@@ -639,6 +685,24 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
+const barangayFilter = computed({
+  get: () => (filters.value.barangay === 'All' ? null : filters.value.barangay),
+  set: (name) => { filters.value.barangay = name ?? 'All' },
+})
+const editingAccount = computed(() =>
+  modal.value.isEditing ? residents.value.find((r) => idOf(r) === modal.value.targetId) : null,
+)
+const canEditPhoto = computed(() =>
+  [ACCOUNT_TYPE.barangay, ACCOUNT_TYPE.organization].includes(editingAccount.value?.account_type),
+)
+const editHasPhoto = computed(() => Boolean(editingAccount.value?.has_photo))
+const editPhotoUrl = computed(() => (editHasPhoto.value ? photoUrls.value[modal.value.targetId] : null))
+const previewInitials = computed(() => {
+  const f = formData.value
+  if (f.account_type === ACCOUNT_TYPE.organization) return wordInitials(f.organization_name) || '?'
+  if (f.account_type === ACCOUNT_TYPE.barangay) return wordInitials(barangays.value.find((b) => b.barangay_id === f.barangay_id)?.barangay_name) || '?'
+  return `${f.first_name?.charAt(0) || '?'}${f.last_name?.charAt(0) || ''}`.toUpperCase()
+})
 
 // The profile dialog is open exactly when a resident is selected. There is no
 // second piece of state that can disagree with the first; the setter is what
@@ -671,20 +735,7 @@ const rowStyle = computed(() => (mdAndUp.value ? 'height: calc(100vh - 168px);' 
 const tableHeight = computed(() => (mdAndUp.value ? 'calc(100vh - 312px)' : '60vh'))
 
 const idOf = (r) => r?.resident_id ?? r?.id
-const fullName = (r) => [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-const initials = (r) => computeInitials(r)
-const barangayOf = (r) => r.barangay?.barangay_name || r.barangay_name || 'N/A'
-
-// The Name column's headline: a person for a head of the family, the
-// institution itself for a barangay or organization account.
-const primaryName = (r) => {
-  if (r.account_type === ACCOUNT_TYPE.barangay) return barangayOf(r)
-  if (r.account_type === ACCOUNT_TYPE.organization) return r.organization_name || accountTypeLabel(r.account_type)
-  return fullName(r)
-}
-// The second line under it — who to actually call — only where the headline
-// isn't already a person.
-const contactName = (r) => (r.account_type === ACCOUNT_TYPE.barangay || r.account_type === ACCOUNT_TYPE.organization) ? fullName(r) : null
+const initials = accountInitials
 
 const liveMessage = ref('')
 
@@ -873,6 +924,7 @@ const openAddModal = () => {
 
 const openExistingEditModal = (item) => {
   modalError.value = ''
+  photoError.value = ''
   clearFieldErrors()
   formData.value = {
     first_name: item.first_name,
@@ -892,6 +944,54 @@ const openExistingEditModal = (item) => {
 }
 
 const closeModal = () => { modal.value.isOpen = false }
+
+// Same ceiling and types as the server (ResidentController::savePhoto); checked
+// here so a wrong file costs no upload.
+const PHOTO_MAX_BYTES = 4 * 1024 * 1024
+
+const changePhoto = async (method, file) => {
+  const id = modal.value.targetId
+  photoBusy.value = true
+  photoError.value = ''
+  try {
+    let body
+    if (file) {
+      body = new FormData()
+      body.append('photo', file)
+    }
+    const res = await fetch(`${API_BASE}/residents/${id}/photo`, { method, headers: authHeaders(false), body })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.errors?.photo?.[0] || data.message || 'Could not update the photo.')
+    }
+    // Drop the cached image first, or the row and the profile keep showing the old one.
+    forgetResidentPhoto(id)
+    delete photoUrls.value[id]
+    await fetchResidents()
+    notify(file ? 'Photo saved' : 'Photo removed')
+  } catch (error) {
+    photoError.value = error.message
+  } finally {
+    photoBusy.value = false
+  }
+}
+
+const onPhotoPicked = (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    photoError.value = 'Choose a JPG or PNG image.'
+    return
+  }
+  if (file.size > PHOTO_MAX_BYTES) {
+    photoError.value = 'That image is over 4 MB.'
+    return
+  }
+  changePhoto('POST', file)
+}
+
+const removePhoto = () => changePhoto('DELETE')
 
 // Client-side rules. The asterisks in the labels used to be decoration: no
 // field carried a rule and `saveUser` never called `form.validate()`, so an
@@ -1111,11 +1211,17 @@ onUnmounted(releaseResidentPhotos)
 }
 .count-chip strong { font-weight: 800; }
 
+.name-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.name-text { min-width: 0; flex: 1; }
+/* Barangay and Mobile share this so neither reads lighter than the other. */
+.cell-text { font-size: 0.95rem; font-weight: 400; color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)); }
+.sms-on { color: rgba(var(--v-theme-on-surface), 0.45); }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 .search-field { width: 260px; max-width: 100%; }
 .status-field { width: 150px; max-width: 100%; }
+.barangay-field { width: 200px; max-width: 100%; }
 
 /* The count beside each type tab's label — same idea as .count-chip, sized
    down to sit inline in a tab. Colour rides on font-weight/parent colour
@@ -1173,6 +1279,8 @@ onUnmounted(releaseResidentPhotos)
   width: 100% !important;
   min-width: 1000px;
 }
+.elegant-table :deep(th:first-child),
+.elegant-table :deep(td:first-child) { padding-left: 0 !important; padding-right: 0 !important; }
 .row-number {
   font-size: 0.95rem;
   font-weight: 700;

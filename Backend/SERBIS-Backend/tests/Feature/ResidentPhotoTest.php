@@ -7,6 +7,7 @@ use App\Models\Resident;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
@@ -252,5 +253,123 @@ class ResidentPhotoTest extends TestCase
         $this->postJson('/api/me/photo')->assertStatus(401);
         $this->deleteJson('/api/me/photo')->assertStatus(401);
         $this->getJson('/api/residents/'.$this->resident->getKey().'/photo')->assertStatus(401);
+        $this->postJson('/api/residents/'.$this->resident->getKey().'/photo')->assertStatus(401);
+        $this->deleteJson('/api/residents/'.$this->resident->getKey().'/photo')->assertStatus(401);
+    }
+
+    private function institution(string $type = Resident::TYPE_ORGANIZATION): Resident
+    {
+        $account = Resident::create([
+            'barangay_id' => $this->barangay->barangay_id,
+            'first_name' => 'Contact',
+            'last_name' => 'Person',
+            'phone_number' => $type === Resident::TYPE_ORGANIZATION ? '09174444444' : '09175555555',
+            'password' => Hash::make('password123'),
+            'status' => 'Active',
+        ]);
+        $account->forceFill([
+            'account_type' => $type,
+            'organization_name' => $type === Resident::TYPE_ORGANIZATION ? 'Echague Community Council' : null,
+        ])->save();
+
+        return $account;
+    }
+
+    private function staffUpload(Resident $target): TestResponse
+    {
+        return $this->actingAs($this->admin)->postJson('/api/residents/'.$target->getKey().'/photo', [
+            'photo' => self::fakePhoto(),
+        ]);
+    }
+
+    private function photoLogs(Resident $target, string $action)
+    {
+        return DB::table('tbl_system_logs')
+            ->where('auditable_type', Resident::class)
+            ->where('auditable_id', $target->getKey())
+            ->where('action_type', $action);
+    }
+
+    public function test_staff_can_set_replace_and_remove_an_organizations_photo(): void
+    {
+        $org = $this->institution();
+
+        $this->staffUpload($org)->assertOk()->assertJsonPath('resident.has_photo', true);
+        $first = $org->fresh()->photo;
+        Storage::disk($this->disk())->assertExists($first);
+
+        $this->staffUpload($org)->assertOk();
+        $second = $org->fresh()->photo;
+        $this->assertNotSame($first, $second);
+        Storage::disk($this->disk())->assertMissing($first);
+        Storage::disk($this->disk())->assertExists($second);
+
+        $this->actingAs($this->admin)->deleteJson('/api/residents/'.$org->getKey().'/photo')
+            ->assertOk()
+            ->assertJsonPath('resident.has_photo', false);
+        $this->assertNull($org->fresh()->photo);
+        Storage::disk($this->disk())->assertMissing($second);
+
+        // TracksHistory ignores the column, so these rows are the only trace.
+        $this->assertSame(2, $this->photoLogs($org, 'photo_changed')->count());
+        $this->assertSame(1, $this->photoLogs($org, 'photo_removed')->count());
+    }
+
+    public function test_the_photo_log_names_the_admin_and_never_holds_a_path(): void
+    {
+        $org = $this->institution();
+        $this->staffUpload($org)->assertOk();
+
+        $row = $this->photoLogs($org, 'photo_changed')->first();
+
+        $this->assertSame($this->admin->getKey(), (int) $row->admin_id);
+        $this->assertNull($row->resident_id);
+        $this->assertNull($row->old_values);
+        $this->assertNull($row->new_values);
+    }
+
+    public function test_staff_can_set_a_barangay_accounts_photo(): void
+    {
+        $hall = $this->institution(Resident::TYPE_BARANGAY);
+
+        $this->staffUpload($hall)->assertOk();
+
+        $this->assertNotNull($hall->fresh()->photo);
+    }
+
+    public function test_staff_cannot_set_a_head_of_the_familys_photo(): void
+    {
+        $this->staffUpload($this->resident)->assertStatus(422)->assertJsonValidationErrors('account_type');
+        $this->actingAs($this->admin)->deleteJson('/api/residents/'.$this->resident->getKey().'/photo')->assertStatus(422);
+
+        $this->assertNull($this->resident->fresh()->photo);
+        $this->assertSame([], Storage::disk($this->disk())->allFiles('resident-photos'));
+        $this->assertSame(0, $this->photoLogs($this->resident, 'photo_changed')->count());
+    }
+
+    public function test_staff_upload_rejects_a_non_image_and_an_unknown_id(): void
+    {
+        $org = $this->institution();
+
+        $this->actingAs($this->admin)->postJson('/api/residents/'.$org->getKey().'/photo', [
+            'photo' => UploadedFile::fake()->create('payload.php', 8),
+        ])->assertStatus(422);
+        $this->assertNull($org->fresh()->photo);
+
+        $this->actingAs($this->admin)->postJson('/api/residents/999999/photo', [
+            'photo' => self::fakePhoto(),
+        ])->assertStatus(404);
+    }
+
+    public function test_a_resident_cannot_use_the_staff_photo_routes(): void
+    {
+        $org = $this->institution();
+
+        $this->actingAs($this->other)->postJson('/api/residents/'.$org->getKey().'/photo', [
+            'photo' => self::fakePhoto(),
+        ])->assertStatus(403);
+        $this->actingAs($this->other)->deleteJson('/api/residents/'.$org->getKey().'/photo')->assertStatus(403);
+
+        $this->assertNull($org->fresh()->photo);
     }
 }

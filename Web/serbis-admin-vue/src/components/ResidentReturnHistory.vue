@@ -11,8 +11,12 @@
   <div>
     <div v-if="loading" class="text-body-2 text-medium-emphasis">Loading returns…</div>
     <div v-else-if="error" class="text-body-2 text-medium-emphasis" role="status">{{ error }}</div>
-    <div v-else-if="!summary || summary.total === 0" class="text-body-2 text-medium-emphasis">
-      No returned equipment yet.
+    <div v-else-if="!summary || summary.total === 0" class="empty-returns">
+      <v-icon size="20" aria-hidden="true">mdi-package-variant-closed</v-icon>
+      <div>
+        <div class="text-body-2 font-weight-medium text-high-emphasis">No returned equipment yet.</div>
+        <div class="text-caption text-medium-emphasis">Returns show here once this account's loans come back. Information only.</div>
+      </div>
     </div>
 
     <template v-else>
@@ -178,6 +182,15 @@ onBeforeUnmount(releasePhotos)
 </script>
 
 <style scoped>
+.empty-returns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
 .return-list { list-style: none; padding: 0; margin: 0; }
 .return-row { padding: 10px 0; border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
 .return-row:first-child { border-top: 0; padding-top: 0; }
