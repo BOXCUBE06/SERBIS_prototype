@@ -1,138 +1,70 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <v-row class="ma-0 w-100">
-      <v-col cols="12" class="pa-0 w-100">
+    <PageHeader title="Resource Management">
+      <template v-slot:actions>
+        <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAdd">
+          <v-icon start size="18">mdi-plus</v-icon> Add Equipment
+        </v-btn>
+      </template>
+    </PageHeader>
 
-        <PageHeader
-          title="Resource Management"
-        >
-          <template v-slot:actions>
-            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-              <v-icon start size="20">mdi-plus</v-icon> Add Equipment
-            </v-btn>
-          </template>
-        </PageHeader>
+    <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 w-100" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
-        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
+    <div class="w-100">
+      <!-- A list, not a card grid: the availability column reads straight down,
+           and sorting on it puts whatever is running out at the top. -->
+      <DataTablePage
+        compact
+        collapse-mobile
+        @click:row="(_event, { item }) => openEdit(item)"
+        :tabs="statusTabs"
+        :status="statusFilter"
+        @update:status="statusFilter = $event"
+        :loading="initialLoad"
+        v-model:search="search"
+        search-placeholder="Search equipment"
+        :headers="inventoryHeaders"
+        :items="filteredEquipments"
+        item-value="equipment_id"
+        :no-data-text="equipments.length > 0 ? 'No items match your filters' : 'No equipment yet'"
+        :page="page"
+        @update:page="page = $event"
+        :items-per-page="itemsPerPage"
+        @update:items-per-page="itemsPerPage = $event"
+        result-noun="items"
+      >
+        <template v-slot:summary>{{ summary }}</template>
 
-        <!-- Metric tiles -->
-        <v-row v-if="initialLoad || equipments.length > 0" class="mb-2">
-          <v-col v-for="m in metricTiles" :key="m.key" cols="6" md="3">
-            <button type="button" class="metric-tile group-card" :class="{ 'metric-tile--active': m.filter && statusFilter === m.filter }" @click="m.filter && (statusFilter = statusFilter === m.filter ? 'All' : m.filter)">
-              <div class="metric-icon" :style="{ background: `rgba(var(--v-theme-${m.color}), 0.12)` }">
-                <v-icon :color="m.color" size="24">{{ m.icon }}</v-icon>
-              </div>
-              <div class="text-truncate">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis text-truncate">{{ m.title }}</div>
-                <div class="metric-number text-high-emphasis">
-                  <span v-if="initialLoad" class="skel skel-pill" aria-hidden="true"></span>
-                  <span v-else class="content-in">{{ m.value }}</span>
-                </div>
-              </div>
-            </button>
-          </v-col>
-        </v-row>
+        <template v-slot:item.item_name="{ item }">
+          <PersonCell :name="item.item_name" :icon="itemIcon(item.item_name)" size="36" />
+        </template>
 
-        <!-- Controls -->
-        <div v-if="initialLoad || equipments.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6 mt-4">
-          <v-text-field
-            v-model="search"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search equipment..."
-            variant="outlined" density="compact" hide-details rounded="lg"
-            class="control-field"
-          ></v-text-field>
-          <v-select
-            v-model="statusFilter"
-            :items="statusOptions"
-            prepend-inner-icon="mdi-filter-variant"
-            variant="outlined" density="compact" hide-details rounded="lg"
-            class="control-field-sm"
-          ></v-select>
-        </div>
-
-        <!-- Empty -->
-        <div v-if="!initialLoad && filteredEquipments.length === 0" class="empty-state group-card">
-          <v-icon size="48" class="text-medium-emphasis mb-3">mdi-package-variant</v-icon>
-          <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ equipments.length > 0 ? 'No items match your filters' : 'No equipment yet' }}
+        <template v-slot:item.available_quantity="{ item }">
+          <div class="py-1">
+            <div class="d-flex align-baseline gap-1">
+              <span class="qty-available text-high-emphasis">{{ item.available_quantity }}</span>
+              <span class="text-body-2 text-medium-emphasis">/ {{ item.total_quantity }}</span>
+            </div>
+            <div class="gauge mt-1">
+              <span class="gauge-fill" :class="`fill-${stockState(item)}`" :style="{ width: gaugePct(item) }"></span>
+            </div>
           </div>
-          <div class="text-body-2 text-medium-emphasis">
-            {{ equipments.length > 0 ? 'Clear the search or filter to see all items.' : 'Add the first resource category to get started.' }}
-          </div>
-        </div>
+        </template>
 
-        <!-- Inventory list. The card grid gave every category the same visual
-             weight and pushed the one number the desk needs -- how many are on
-             the shelf right now -- into a different corner of each tile. As a
-             list the availability column reads straight down, and sorting on it
-             puts whatever is running out at the top. -->
-        <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
-          <v-data-table
-            :key="initialLoad ? 'loading' : 'ready'"
-            :headers="inventoryHeaders"
-            :items="filteredEquipments"
-            :items-per-page="10"
-            item-value="equipment_id"
-            density="comfortable"
-            class="inventory-table table-fade"
-          >
-            <template v-if="initialLoad" #body>
-              <SkeletonRows :rows="10" :columns="inventoryHeaders.length" />
-            </template>
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-            </template>
+        <template v-slot:item.state="{ item }">
+          <StatusChip :status="stateLabel(item)" />
+        </template>
 
-            <template v-slot:item.item_name="{ item }">
-              <div class="d-flex align-center gap-3 py-2 min-w-0">
-                <div class="icon-wrapper" :class="`iconbg-${stockState(item)}`">
-                  <v-icon :color="stateMeta[stockState(item)].color" size="22">{{ itemIcon(item.item_name) }}</v-icon>
-                </div>
-                <span class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.item_name }}</span>
-              </div>
-            </template>
+        <template v-slot:item.in_use="{ item }">
+          <span class="text-body-2 text-medium-emphasis">{{ inUse(item) }} in use</span>
+        </template>
 
-            <template v-slot:item.available_quantity="{ item }">
-              <div class="py-2">
-                <div class="d-flex align-baseline gap-1">
-                  <span class="qty-available" :class="`text-${stateMeta[stockState(item)].color}`">{{ item.available_quantity }}</span>
-                  <span class="text-body-2 text-medium-emphasis">/ {{ item.total_quantity }}</span>
-                </div>
-                <div class="gauge mt-1">
-                  <span class="gauge-fill" :class="`fill-${stockState(item)}`" :style="{ width: gaugePct(item) }"></span>
-                </div>
-              </div>
-            </template>
+        <template v-slot:item.actions="{ item }">
+          <RowActions :label="item.item_name" @edit="openEdit(item)" @delete="askDelete(item)" />
+        </template>
+      </DataTablePage>
+    </div>
 
-            <template v-slot:item.state="{ item }">
-              <span class="state-pill" :class="`pill-${stockState(item)}`">
-                <span class="dot" :class="`dot-${stockState(item)}`"></span>
-                {{ stateLabel(item) }}
-              </span>
-            </template>
-
-            <template v-slot:item.in_use="{ item }">
-              <span class="text-body-2 text-medium-emphasis">{{ inUse(item) }} in use</span>
-            </template>
-
-            <template v-slot:item.actions="{ item }">
-              <div class="d-flex justify-end gap-1">
-                <v-btn
-                  icon="mdi-pencil-outline" variant="outlined" color="primary" size="small"
-                  :aria-label="`Edit ${item.item_name}`" @click="openEdit(item)"
-                ></v-btn>
-                <v-btn
-                  icon="mdi-delete-outline" variant="outlined" size="small" color="error"
-                  :aria-label="`Delete ${item.item_name}`" @click="askDelete(item)"
-                ></v-btn>
-              </div>
-            </template>
-          </v-data-table>
-        </v-card>
-
-      </v-col>
-    </v-row>
 
     <!-- Add / Edit -->
     <v-dialog v-model="modal.show" max-width="500" persistent>
@@ -193,24 +125,22 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import StatusChip from '@/components/StatusChip.vue'
+import RowActions from '@/components/RowActions.vue'
 
 const API = `${API_BASE}/equipments`
-
-const stateMeta = {
-  available: { color: 'primary' },
-  low: { color: 'warning' },
-  depleted: { color: 'error' },
-}
 
 const equipments = ref([])
 const search = ref('')
 const statusFilter = ref('All')
+const page = ref(1)
+const itemsPerPage = ref(10)
 const initialLoad = ref(true)
 const apiError = ref('')
 
@@ -238,46 +168,46 @@ const stateLabel = (e) => {
 const inUse = (e) => Math.max(0, e.total_quantity - e.available_quantity)
 const gaugePct = (e) => `${e.total_quantity ? (e.available_quantity / e.total_quantity) * 100 : 0}%`
 
-const totalOwned = computed(() => equipments.value.reduce((a, e) => a + (e.total_quantity || 0), 0))
-const totalAvailable = computed(() => equipments.value.reduce((a, e) => a + (e.available_quantity || 0), 0))
-const needsAttention = computed(() => equipments.value.filter((e) => stockState(e) !== 'available').length)
-
-const metricTiles = computed(() => [
-  { key: 'cat', title: 'Items', value: equipments.value.length, icon: 'mdi-toolbox-outline', color: 'primary' },
-  { key: 'owned', title: 'Total Owned', value: totalOwned.value, icon: 'mdi-package-variant-closed', color: 'primary' },
-  { key: 'avail', title: 'Available', value: totalAvailable.value, icon: 'mdi-check-all', color: 'primary' },
-  { key: 'attn', title: 'Low / Depleted', value: needsAttention.value, icon: 'mdi-alert-octagon-outline', color: 'error', filter: 'Needs attention' },
+// Search narrows the rows first; the tabs then split that set into items in
+// stock and items running low or out, so each tab's count is what it would show.
+const baseEquipments = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return equipments.value.filter((e) => !q || (e.item_name || '').toLowerCase().includes(q))
+})
+const inStock = (e) => stockState(e) === 'available'
+const filteredEquipments = computed(() => {
+  if (statusFilter.value === 'Available') return baseEquipments.value.filter((e) => inStock(e))
+  if (statusFilter.value === 'Needs attention') return baseEquipments.value.filter((e) => !inStock(e))
+  return baseEquipments.value
+})
+const statusTabs = computed(() => [
+  { value: 'All', label: 'All', count: baseEquipments.value.length },
+  { value: 'Available', label: 'Available', count: baseEquipments.value.filter((e) => inStock(e)).length },
+  { value: 'Needs attention', label: 'Low / Depleted', count: baseEquipments.value.filter((e) => !inStock(e)).length },
 ])
 
-const statusOptions = ['All', 'Available', 'Low stock', 'Depleted', 'Needs attention']
-
-// `state` and `in_use` are derived, not columns on the row, so neither can be
-// sorted by the table's own comparator -- the status filter above covers that
-// question. `available_quantity` sorts, and it is the one worth sorting.
-const inventoryHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Item', key: 'item_name', width: '30%' },
-  { title: 'Available', key: 'available_quantity', width: '19%' },
-  { title: 'Status', key: 'state', sortable: false, width: '17%' },
-  { title: 'In use', key: 'in_use', sortable: false, width: '14%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '14%' },
-]
-
-const filteredEquipments = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  return equipments.value.filter((e) => {
-    const matchesSearch = !q || (e.item_name || '').toLowerCase().includes(q)
-    const state = stockState(e)
-    let matchesStatus = true
-    if (statusFilter.value === 'Available') matchesStatus = state === 'available'
-    else if (statusFilter.value === 'Low stock') matchesStatus = state === 'low'
-    else if (statusFilter.value === 'Depleted') matchesStatus = state === 'depleted'
-    else if (statusFilter.value === 'Needs attention') matchesStatus = state !== 'available'
-    return matchesSearch && matchesStatus
-  })
+// Footer summary: unit totals for the rows shown ("Available" sums units here,
+// which is why it is not a tab of its own).
+const summary = computed(() => {
+  const rows = filteredEquipments.value
+  const sum = (key) => rows.reduce((total, e) => total + (e[key] || 0), 0)
+  return `${rows.length} ${rows.length === 1 ? 'item' : 'items'} · ${sum('total_quantity')} owned · ${sum('available_quantity')} available`
 })
 
-const rowNumber = useRowNumbers(filteredEquipments, 'equipment_id')
+watch([search, statusFilter], () => { page.value = 1 })
+
+// `state` is derived, not a column on the row, so Status sorts on its label
+// through `value`; `available_quantity` sorts on the number; `in_use` does not
+// sort. Fixed-layout table with the same first three columns as Vehicles and
+// Responders, so Status lines up across them. In use goes on a phone.
+const HIDE_SM = { class: 'dtp-hide-sm' }
+const inventoryHeaders = [
+  { title: 'Item', key: 'item_name', width: '35%' },
+  { title: 'Available', key: 'available_quantity', width: '200px' },
+  { title: 'Status', key: 'state', value: (e) => stateLabel(e), width: '160px' },
+  { title: 'In use', key: 'in_use', sortable: false, width: '120px', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
+]
 
 const itemIcon = (name) => {
   const n = (name || '').toLowerCase()
@@ -379,73 +309,8 @@ onMounted(fetchEquipments)
 <style scoped>
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
-.gap-4 { gap: 16px; }
-.min-w-0 { min-width: 0; }
-.control-field { width: 260px; max-width: 100%; }
-.control-field-sm { width: 200px; max-width: 100%; }
 
-.group-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
-}
-
-/* Metric tiles */
-.metric-tile {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  cursor: default;
-  text-align: left;
-  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-base) var(--ease-out);
-}
-.metric-tile[class*="attn"], .metric-tile:has(.mdi-alert-octagon-outline) { cursor: pointer; }
-.metric-tile--active { border-color: rgb(var(--v-theme-error)) !important; background: rgba(var(--v-theme-error), 0.06) !important; }
-.metric-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
-.metric-number { font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
-
-/* Inventory list. Fixed layout keeps the six columns stable at their
-   declared widths regardless of item-name length. */
-.inventory-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
-.inventory-table :deep(thead th) {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.icon-wrapper { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
-.iconbg-available { background: rgba(var(--v-theme-primary), 0.12); }
-.iconbg-low { background: rgba(var(--v-theme-warning), 0.14); }
-.iconbg-depleted { background: rgba(var(--v-theme-error), 0.14); }
-
-.state-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  padding: 3px 10px;
-  border-radius: 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
-   error on their own tint measures under AA (see plugins/vuetify.ts for the
-   ratios) — same fix as UsersView's avatar initials and pill-pending. */
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
-.pill-low { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
-.pill-depleted { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
-
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
-.dot-available { background: rgb(var(--v-theme-primary)); }
-.dot-low { background: rgb(var(--v-theme-warning)); }
-.dot-depleted { background: rgb(var(--v-theme-error)); }
-
-.qty-available { font-size: 1.35rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+.qty-available { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .gauge {
   height: 6px;
@@ -454,7 +319,7 @@ onMounted(fetchEquipments)
   background: rgba(var(--v-theme-on-surface), 0.08);
   overflow: hidden;
 }
-.gauge-fill { display: block; height: 100%; border-radius: 5px; transition: width var(--motion-slow) var(--ease-out); }
+.gauge-fill { display: block; height: 100%; border-radius: 5px; }
 .fill-available { background: rgb(var(--v-theme-primary)); }
 .fill-low { background: rgb(var(--v-theme-warning)); }
 .fill-depleted { background: rgb(var(--v-theme-error)); }
@@ -468,20 +333,5 @@ onMounted(fetchEquipments)
   border-radius: 10px;
   font-size: 0.78rem;
   color: rgba(var(--v-theme-on-surface), 0.7);
-}
-
-.empty-state {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 64px 16px; border-radius: 16px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .metric-tile, .gauge-fill { transition: none; }
-  .metric-tile:hover { transform: none; }
-}
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 </style>

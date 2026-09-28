@@ -1,178 +1,81 @@
 <template>
   <v-container fluid class="fill-height align-start page-background">
-    <v-row>
-      <v-col cols="12">
+    <PageHeader title="Vehicles">
+      <template v-slot:actions>
+        <!-- One child, so the slot's 12px gap does not apply: 8px between the two. -->
+        <div class="d-flex align-center header-actions">
+          <ExportMenu type="vehicle" :rows="filteredVehicles" plain height="36" />
+          <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAdd">
+            <v-icon start size="18">mdi-plus</v-icon> Add Unit
+          </v-btn>
+        </div>
+      </template>
+    </PageHeader>
 
-        <PageHeader
-          title="Vehicles"
-        >
-          <template v-slot:actions>
-            <ExportMenu type="vehicle" :rows="filteredVehicles" plain />
-            <v-btn color="primary" variant="flat" rounded="lg" height="48" class="px-6 text-none font-weight-bold btn-soft-shadow" @click="openAdd">
-              <v-icon start size="20">mdi-plus</v-icon> Add Unit
-            </v-btn>
-          </template>
-        </PageHeader>
+    <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 w-100" density="compact" rounded="lg">{{ apiError }}</v-alert>
 
-        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="compact" rounded="lg">{{ apiError }}</v-alert>
-
-        <!-- Readiness overview -->
-        <v-card v-if="!loading && vehicles.length > 0" elevation="0" rounded="xl" class="group-card pa-6 mb-8">
-          <div class="d-flex flex-wrap align-center justify-space-between gap-6">
-            <div class="readiness-headline">
-              <div class="text-overline font-weight-bold text-medium-emphasis tracking-widest">Fleet Readiness</div>
-              <div class="d-flex align-end gap-2">
-                <span class="readiness-number text-high-emphasis">{{ counts.Available }}</span>
-                <span class="text-h6 text-medium-emphasis mb-1">/ {{ vehicles.length }} ready</span>
-              </div>
-              <div class="composition-bar mt-3">
-                <span class="seg seg-available" :style="{ width: pct('Available') }" :title="`Available ${counts.Available}`"></span>
-                <span class="seg seg-dispatched" :style="{ width: pct('Dispatched') }" :title="`Dispatched ${counts.Dispatched}`"></span>
-                <span class="seg seg-maintenance" :style="{ width: pct('Maintenance') }" :title="`Maintenance ${counts.Maintenance}`"></span>
-              </div>
-            </div>
-
-            <div class="d-flex gap-3 flex-wrap">
-              <button
-                v-for="s in STATUSES"
-                :key="s"
-                type="button"
-                class="stat-tile"
-                :class="[{ 'stat-tile--active': statusFilter === s }, `tile-${s.toLowerCase()}`]"
-                @click="statusFilter = statusFilter === s ? 'All' : s"
-              >
-                <span class="dot" :class="`dot-${s.toLowerCase()}`" :data-live="s === 'Available'"></span>
-                <span class="stat-value text-high-emphasis">{{ counts[s] }}</span>
-                <span class="stat-label text-medium-emphasis">{{ statusMeta[s].label }}</span>
-              </button>
-            </div>
-          </div>
-        </v-card>
-
-        <!-- Controls -->
-        <div v-if="!loading && vehicles.length > 0" class="d-flex flex-wrap align-center gap-3 mb-6">
-          <v-text-field
-            v-model="search"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search unit or spec..."
-            variant="outlined" density="compact" hide-details rounded="lg"
-            class="control-field"
-          ></v-text-field>
+    <div class="w-100">
+      <!-- The type is a column and a filter, not a heading, so a four-type
+           fleet is one list to scan for the free unit. Status is the tabs. -->
+      <DataTablePage
+        compact
+        collapse-mobile
+        @click:row="(_event, { item }) => openEdit(item)"
+        :tabs="statusTabs"
+        :status="statusFilter"
+        @update:status="statusFilter = $event"
+        :loading="firstLoad"
+        :refreshing="refreshing"
+        v-model:search="search"
+        search-placeholder="Search unit or specification"
+        :headers="fleetHeaders"
+        :items="filteredVehicles"
+        item-value="vehicle_id"
+        :no-data-text="vehicles.length > 0 ? 'No units match your filters' : 'No units in the fleet yet'"
+        :page="page"
+        @update:page="page = $event"
+        :items-per-page="itemsPerPage"
+        @update:items-per-page="itemsPerPage = $event"
+        result-noun="units"
+        :active-filters="activeFilters"
+        @clear-filter="clearFilter"
+        @clear-all="clearAllFilters"
+      >
+        <template v-slot:filters>
           <v-select
             v-model="typeFilter"
             :items="typeOptions"
-            prepend-inner-icon="mdi-shape-outline"
+            label="Type"
             variant="outlined" density="compact" hide-details rounded="lg"
-            class="control-field-sm"
           ></v-select>
-          <v-chip
-            v-if="statusFilter !== 'All'"
-            closable
-            :color="statusMeta[statusFilter]?.color"
-            variant="flat"
-            class="font-weight-bold"
-            @click:close="statusFilter = 'All'"
-          >{{ statusFilter }}</v-chip>
-        </div>
+        </template>
 
-        <!-- Empty -->
-        <div v-if="!firstLoad && filteredVehicles.length === 0" class="empty-state group-card">
-          <v-icon size="48" class="text-medium-emphasis mb-3">mdi-truck-remove-outline</v-icon>
-          <div class="text-subtitle-1 font-weight-bold text-high-emphasis">
-            {{ vehicles.length > 0 ? 'No units match your filters' : 'No units in the fleet yet' }}
-          </div>
-          <div class="text-body-2 text-medium-emphasis">
-            {{ vehicles.length > 0 ? 'Clear the search or filters to see all units.' : 'Add the first unit to get started.' }}
-          </div>
-        </div>
+        <template v-slot:item.unit_identifier="{ item }">
+          <PersonCell
+            :name="item.unit_identifier"
+            :secondary="item.specification || 'Standard Unit'"
+            :icon="getVehicleIcon(item.type)"
+            tinted
+            size="36"
+          />
+        </template>
 
-        <!-- Fleet list. A card per unit looked handsome and answered none of the
-             questions the desk actually asks -- which unit is free, what type it
-             is, in one scan down a column. The type is a column and a filter now
-             rather than a heading, so a four-type fleet is one list instead of
-             four stacked grids. -->
-        <v-card v-else elevation="0" rounded="xl" class="group-card overflow-hidden">
-          <v-data-table
-            :key="firstLoad ? 'loading' : 'ready'"
-            :loading="refreshing"
-            :class="{ 'is-refreshing': refreshing }"
-            :headers="fleetHeaders"
-            :items="filteredVehicles"
-            :items-per-page="10"
-            item-value="vehicle_id"
-            density="comfortable"
-            class="fleet-table table-fade"
-          >
-            <template v-if="firstLoad" #body>
-              <SkeletonRows :rows="10" :columns="fleetHeaders.length" />
-            </template>
-            <template v-slot:item.rowNumber="{ item }">
-              <span class="row-number text-medium-emphasis">{{ rowNumber(item) }}</span>
-            </template>
+        <template v-slot:item.status="{ item }">
+          <StatusChip
+            :status="item.status"
+            :items="statusChoices"
+            :current="item.status"
+            :aria-label="`${item.unit_identifier} is ${item.status}. Change status`"
+            @select="promptStatusChange(item, $event)"
+          />
+        </template>
 
-            <template v-slot:item.unit_identifier="{ item }">
-              <div class="d-flex align-center gap-3 py-2">
-                <div class="icon-wrapper" :class="`iconbg-${item.status.toLowerCase()}`">
-                  <v-icon :color="statusMeta[item.status].color" size="22">{{ getVehicleIcon(item.type) }}</v-icon>
-                </div>
-                <div class="min-w-0">
-                  <div class="text-body-1 font-weight-bold text-high-emphasis text-truncate">{{ item.unit_identifier }}</div>
-                  <div class="text-caption text-medium-emphasis text-truncate">
-                    {{ item.specification || 'Standard Unit' }}
-                  </div>
-                </div>
-              </div>
-            </template>
+        <template v-slot:item.actions="{ item }">
+          <RowActions :label="item.unit_identifier" @edit="openEdit(item)" @delete="askDelete(item)" />
+        </template>
+      </DataTablePage>
+    </div>
 
-            <template v-slot:item.type="{ item }">
-              <span class="text-body-2 font-weight-medium text-high-emphasis">{{ item.type }}</span>
-            </template>
-
-            <template v-slot:item.status="{ item }">
-              <v-menu location="bottom">
-                <template v-slot:activator="{ props }">
-                  <button
-                    type="button"
-                    class="status-pill"
-                    :class="`pill-${item.status.toLowerCase()}`"
-                    v-bind="props"
-                    :aria-label="`${item.unit_identifier} is ${item.status}. Change status`"
-                  >
-                    <span class="dot" :class="`dot-${item.status.toLowerCase()}`" :data-live="item.status === 'Available'"></span>
-                    <span class="font-weight-bold text-uppercase">{{ item.status }}</span>
-                    <v-icon size="16" class="ml-auto">mdi-chevron-down</v-icon>
-                  </button>
-                </template>
-                <v-list density="compact" rounded="lg">
-                  <v-list-item
-                    v-for="s in STATUSES" :key="s"
-                    :disabled="s === item.status"
-                    @click="promptStatusChange(item, s)"
-                  >
-                    <template v-slot:prepend><span class="dot mr-3" :class="`dot-${s.toLowerCase()}`"></span></template>
-                    <v-list-item-title>{{ s }}</v-list-item-title>
-                  </v-list-item>
-                </v-list>
-              </v-menu>
-            </template>
-
-            <template v-slot:item.actions="{ item }">
-              <div class="d-flex justify-end gap-1">
-                <v-btn
-                  icon="mdi-pencil-outline" variant="outlined" color="primary" size="small"
-                  :aria-label="`Edit ${item.unit_identifier}`" @click="openEdit(item)"
-                ></v-btn>
-                <v-btn
-                  icon="mdi-delete-outline" variant="outlined" size="small" color="error"
-                  :aria-label="`Delete ${item.unit_identifier}`" @click="askDelete(item)"
-                ></v-btn>
-              </div>
-            </template>
-          </v-data-table>
-        </v-card>
-
-      </v-col>
-    </v-row>
 
     <!-- Status confirm -->
     <v-dialog v-model="statusDialog.show" max-width="420">
@@ -233,12 +136,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
-import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import StatusChip from '@/components/StatusChip.vue'
+import RowActions from '@/components/RowActions.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 
 const API = `${API_BASE}/vehicles`
@@ -261,6 +166,8 @@ const apiError = ref('')
 const search = ref('')
 const typeFilter = ref('All')
 const statusFilter = ref('All')
+const page = ref(1)
+const itemsPerPage = ref(10)
 
 const statusDialog = ref({ show: false, vehicle: null, newStatus: '', loading: false })
 const formDialog = ref({ show: false, editing: false, loading: false, error: '' })
@@ -309,35 +216,46 @@ const formatStatus = (status) => {
   return 'Available'
 }
 
-const counts = computed(() => {
-  const c = { Available: 0, Dispatched: 0, Maintenance: 0 }
-  for (const v of vehicles.value) c[v.status] = (c[v.status] || 0) + 1
-  return c
-})
-const pct = (s) => vehicles.value.length > 0 ? `${(counts.value[s] / vehicles.value.length) * 100}%` : '0%'
+const statusChoices = STATUSES.map((s) => ({ value: s, label: s, status: s }))
 
 const typeOptions = computed(() => ['All', ...VEHICLE_TYPES.filter((t) => vehicles.value.some((v) => v.type === t))])
 
-const filteredVehicles = computed(() => {
+// Search and type narrow the rows first; the tabs then split that set by status,
+// so each tab's count is what it would show.
+const baseVehicles = computed(() => {
   const q = search.value.trim().toLowerCase()
   return vehicles.value.filter((v) => {
     const matchesType = typeFilter.value === 'All' || v.type === typeFilter.value
-    const matchesStatus = statusFilter.value === 'All' || v.status === statusFilter.value
     const matchesSearch = !q ||
       (v.unit_identifier || '').toLowerCase().includes(q) ||
       (v.specification || '').toLowerCase().includes(q)
-    return matchesType && matchesStatus && matchesSearch
+    return matchesType && matchesSearch
   })
 })
+const filteredVehicles = computed(() =>
+  statusFilter.value === 'All' ? baseVehicles.value : baseVehicles.value.filter((v) => v.status === statusFilter.value),
+)
+const statusTabs = computed(() => [
+  { value: 'All', label: 'All', count: baseVehicles.value.length },
+  ...STATUSES.map((s) => ({ value: s, label: s, count: baseVehicles.value.filter((v) => v.status === s).length })),
+])
 
-const rowNumber = useRowNumbers(filteredVehicles, 'vehicle_id')
+// Status is the tabs, so it is not a chip here.
+const activeFilters = computed(() => (typeFilter.value === 'All' ? [] : [{ key: 'type', label: `Type: ${typeFilter.value}` }]))
+const clearFilter = () => { typeFilter.value = 'All' }
+const clearAllFilters = clearFilter
+watch([search, statusFilter, typeFilter], () => { page.value = 1 })
 
+// Fixed-layout table: identity gets the room, the rest are sized to their content.
+// Identity 35% + a 200px second column + Status 160px is the same geometry as
+// Responders and Resource Management, so Status lines up across the three. On a
+// phone Type goes (the icon already says it); see DataTablePage's collapseMobile.
+const HIDE_SM = { class: 'dtp-hide-sm' }
 const fleetHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Unit', key: 'unit_identifier', width: '32%' },
-  { title: 'Type', key: 'type', width: '21%' },
-  { title: 'Status', key: 'status', width: '23%' },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '19%' },
+  { title: 'Unit', key: 'unit_identifier', width: '35%' },
+  { title: 'Type', key: 'type', width: '200px', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Status', key: 'status', width: '160px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
 ]
 
 const getVehicleIcon = (type) => ({
@@ -465,122 +383,6 @@ onMounted(fetchVehicles)
 
 <style scoped>
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
-.tracking-widest { letter-spacing: 0.12em; }
-.gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-.gap-4 { gap: 16px; }
-.gap-6 { gap: 24px; }
-.min-w-0 { min-width: 0; }
-.control-field { width: 260px; max-width: 100%; }
-.control-field-sm { width: 180px; max-width: 100%; }
-
-.group-card {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
-  box-shadow: 0 12px 40px -12px rgba(var(--v-theme-on-surface), 0.05) !important;
-}
-
-/* Readiness overview */
-.readiness-number { font-size: 3rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
-.composition-bar {
-  display: flex;
-  height: 10px;
-  width: 260px;
-  max-width: 60vw;
-  border-radius: 6px;
-  overflow: hidden;
-  background: rgba(var(--v-theme-on-surface), 0.08);
-}
-.composition-bar .seg { height: 100%; transition: width var(--motion-slow) var(--ease-out); }
-.seg-available { background: rgb(var(--v-theme-primary)); }
-.seg-dispatched { background: rgb(var(--v-theme-warning)); }
-.seg-maintenance { background: rgb(var(--v-theme-error)); }
-
-.stat-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 104px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-  background: rgba(var(--v-theme-on-surface), 0.02);
-  cursor: pointer;
-  transition: border-color var(--motion-base) var(--ease-out), background-color var(--motion-base) var(--ease-out), transform var(--motion-fast) var(--ease-out);
-  text-align: left;
-}
-.stat-tile:hover { transform: translateY(-2px); }
-.stat-tile--active.tile-available { border-color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), 0.08); }
-.stat-tile--active.tile-dispatched { border-color: rgb(var(--v-theme-warning)); background: rgba(var(--v-theme-warning), 0.1); }
-.stat-tile--active.tile-maintenance { border-color: rgb(var(--v-theme-error)); background: rgba(var(--v-theme-error), 0.1); }
-.stat-value { font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
-.stat-label { font-size: 0.75rem; font-weight: 600; }
-
-/* Status dots */
-.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
-.dot-available { background: rgb(var(--v-theme-primary)); }
-.dot-dispatched { background: rgb(var(--v-theme-warning)); }
-.dot-maintenance { background: rgb(var(--v-theme-error)); }
-.dot[data-live="true"] { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0.5); animation: livePulse 2s infinite; }
-@keyframes livePulse {
-  0% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0.5); }
-  70% { box-shadow: 0 0 0 6px rgba(var(--v-theme-primary), 0); }
-  100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0); }
-}
-
-/* Fleet list. Fixed layout keeps the five columns stable regardless of unit-
-   identifier length. */
-.fleet-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 640px; }
-.fleet-table :deep(thead th) {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.icon-wrapper { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
-.iconbg-available { background: rgba(var(--v-theme-primary), 0.12); }
-.iconbg-dispatched { background: rgba(var(--v-theme-warning), 0.14); }
-.iconbg-maintenance { background: rgba(var(--v-theme-error), 0.14); }
-
-/* Status pill (opens the change menu) */
-.status-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* Sized to its own label in a table cell. A full-width pill was right in a
-     card and reads as a stray button across a column. */
-  min-width: 148px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-  border: none;
-  cursor: pointer;
-  transition: filter var(--motion-fast) var(--ease-out);
-}
-.status-pill:hover { filter: brightness(0.97); }
-/* Text uses the -strong tokens, not the plain ones: raw primary/warning/
-   error on their own tint measures under AA (see plugins/vuetify.ts for the
-   ratios) — same fix as UsersView's avatar initials and pill-pending. */
-.pill-available { background: rgba(var(--v-theme-primary), 0.12); color: rgb(var(--v-theme-primary-strong)); }
-.pill-dispatched { background: rgba(var(--v-theme-warning), 0.16); color: rgb(var(--v-theme-warning-strong)); }
-.pill-maintenance { background: rgba(var(--v-theme-error), 0.16); color: rgb(var(--v-theme-error-strong)); }
-
-.empty-state {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 64px 16px; border-radius: 16px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stat-tile, .composition-bar .seg { transition: none; }
-  .stat-tile:hover { transform: none; }
-  .dot[data-live="true"] { animation: none; }
-}
-.row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
+.header-actions { gap: 8px; }
 </style>
