@@ -66,7 +66,8 @@ class AttachmentUploadField extends StatelessWidget {
                   Expanded(
                     child: Text(
                       hasFile ? fileName! : hint,
-                      style: AppText.body(size: 13, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
+                      style: AppText.body(
+                          size: 13, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
                       // A file name is cut short; the instruction is not, or
                       // the resident cannot read which file is being asked for.
                       maxLines: hasFile ? 1 : 3,
@@ -131,33 +132,46 @@ class _SafetyNoticeState extends State<SafetyNotice> {
 
   bool get filipino => widget.filipino;
 
+  /// Above a form the notice is a reminder, not the main event: amber, with a
+  /// bare icon instead of a badge so the title gets the width back and stops
+  /// breaking mid-word. The Services grid keeps the full red card.
+  bool get _quiet => widget.collapsible;
+  Color get _accent => _quiet ? AppColors.amber600 : AppColors.red600;
+  Color get _text => _quiet ? AppColors.ink : const Color(0xFF7A3527);
+
   @override
   Widget build(BuildContext context) {
     final f = filipino;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: _quiet ? const EdgeInsets.fromLTRB(14, 12, 10, 4) : const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.red50,
-        border: Border.all(color: const Color(0xFFF4D9D2)),
+        color: _quiet ? AppColors.amber50 : AppColors.red50,
+        border: Border.all(color: _quiet ? const Color(0xFFF1DDC0) : const Color(0xFFF4D9D2)),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const IconBadge(icon: Icons.warning_amber_rounded, bg: AppColors.surface, fg: AppColors.red600),
-          const SizedBox(width: 11),
+          if (_quiet)
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(Icons.info_outline_rounded, size: 20, color: _accent),
+            )
+          else
+            const IconBadge(icon: Icons.warning_amber_rounded, bg: AppColors.surface, fg: AppColors.red600),
+          SizedBox(width: _quiet ? 10 : 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   tr(f, 'services.notice_title'),
-                  style: AppText.display(size: 14, weight: FontWeight.w700, color: AppColors.red600),
+                  style: AppText.display(size: 14, weight: FontWeight.w700, color: _accent),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   tr(f, 'services.notice_body'),
-                  style: AppText.body(size: 13, color: const Color(0xFF7A3527), height: 1.5),
+                  style: AppText.body(size: 13, color: _text, height: 1.5),
                 ),
                 if (widget.collapsible)
                   InkWell(
@@ -170,12 +184,12 @@ class _SafetyNoticeState extends State<SafetyNotice> {
                           Expanded(
                             child: Text(
                               tr(f, _open ? 'notice.hide_hotlines' : 'notice.show_hotlines'),
-                              style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.red600),
+                              style: AppText.display(size: 13, weight: FontWeight.w700, color: _accent),
                             ),
                           ),
                           Icon(
                             _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                            color: AppColors.red600,
+                            color: _accent,
                           ),
                         ],
                       ),
@@ -214,8 +228,7 @@ class _SafetyNoticeState extends State<SafetyNotice> {
           children: [
             Text(
               hotline.labelFor(filipino: f),
-              style: AppText.display(
-                  size: 13, weight: FontWeight.w700, color: const Color(0xFF7A3527)),
+              style: AppText.display(size: 13, weight: FontWeight.w700, color: _text),
             ),
             for (final number in hotline.numbers) _hotlineNumberRow(number),
           ],
@@ -235,15 +248,12 @@ class _SafetyNoticeState extends State<SafetyNotice> {
             children: [
               Expanded(
                 child: Text(
-                  number.label == null
-                      ? number.number
-                      : '${number.label} · ${number.number}',
-                  style: AppText.display(
-                      size: 13.5, weight: FontWeight.w700, color: AppColors.red600),
+                  number.label == null ? number.number : '${number.label} · ${number.number}',
+                  style: AppText.display(size: 13.5, weight: FontWeight.w700, color: _accent),
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.call_rounded, size: 16, color: AppColors.red600),
+              Icon(Icons.call_rounded, size: 16, color: _accent),
             ],
           ),
         ),
