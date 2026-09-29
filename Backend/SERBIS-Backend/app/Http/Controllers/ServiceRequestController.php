@@ -315,12 +315,19 @@ class ServiceRequestController extends Controller
             // internal_notes is the operator-only scratch pad (see its migration) —
             // hidden here rather than on the model, since adminIndex() and this
             // same method's admin branch above both need it visible.
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'responders'])
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'responders', 'ambulanceBooking', 'conductionRequests'])
                 ->where('resident_id', $residentId)
+                ->orderByDesc('created_at')
+                ->orderByDesc('request_id')
                 ->get()
                 ->makeHidden('internal_notes');
 
-            $serviceRequests->each(fn (ServiceRequest $r) => $this->decorateResponders($r));
+            $serviceRequests->each(function (ServiceRequest $r) {
+                $this->decorateResponders($r);
+                $this->decorateResidentRow($r);
+                // Loaded only to compute the two fields above.
+                $r->makeHidden(['ambulanceBooking', 'conductionRequests']);
+            });
         }
 
         return response()->json($serviceRequests);
@@ -669,7 +676,11 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['relatives', 'ambulanceBooking']), 201);
+        $serviceRequest->load(['relatives', 'ambulanceBooking']);
+        $this->decorateResidentRow($serviceRequest);
+        $serviceRequest->makeHidden('conductionRequests');
+
+        return response()->json($serviceRequest, 201);
     }
 
     /**
@@ -1191,6 +1202,63 @@ class ServiceRequestController extends Controller
         ]));
     }
 
+    /**
+     * Why the resident may not cancel this request, or null when they may. The
+     * one rule behind both cancel() and the `can_cancel` flag the app draws its
+     * Cancel button from, so the two cannot disagree.
+     */
+    private function cancelRefusal(ServiceRequest $r): ?string
+    {
+        // Once a unit is Responding the cancellation is an operational decision,
+        // not a resident one — the crew is already moving. Booked joins Pending
+        // here: a booking that has not yet been approved into a live dispatch is
+        // still purely the resident's own plan to withdraw.
+        if (! in_array($r->status, ['Pending', 'Booked'], true)) {
+            return 'Only a pending or booked request can be cancelled.';
+        }
+
+        // A booking too close to its own start is no longer just "the resident
+        // changed their mind" — the office may already be staging for it. Only
+        // Booked requests carry a scheduled_at, so Pending is never touched by
+        // this check.
+        //
+        // Scoped to isFuture(): a scheduled_at already in the past is not "too
+        // near" to cancel, it has already happened. Without the guard, gte()
+        // stays true forever once the cutoff window passes, so a booking left
+        // unresolved past its own schedule could never be cancelled again.
+        $scheduledAt = $r->ambulanceBooking?->scheduled_at;
+
+        if ($scheduledAt
+            && $scheduledAt->isFuture()
+            && now()->gte($scheduledAt->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
+        ) {
+            return 'This booking is too close to its scheduled time to cancel. Call the office instead.';
+        }
+
+        // departed_office_at is the trip log's own first checkpoint — once it is
+        // set the crew has physically left, and the booking behind it is no
+        // longer the resident's to withdraw regardless of what tbl_service_request
+        // itself still says.
+        if ($r->conductionRequests->whereNotNull('departed_office_at')->isNotEmpty()) {
+            return 'This trip has already been dispatched and cannot be cancelled here.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Resident-facing fields the app cannot derive itself: whether Cancel is
+     * allowed right now, and why the latest trip never reached its destination
+     * (null for no trip, or one that arrived).
+     */
+    private function decorateResidentRow(ServiceRequest $r): void
+    {
+        $trip = $r->conductionRequests->first();
+
+        $r->setAttribute('can_cancel', $this->cancelRefusal($r) === null);
+        $r->setAttribute('no_arrival_reason', $trip?->no_arrival_reason);
+    }
+
     // Shared by validId() and sitePhoto() below — same ownership guard, same
     // 404-instead-of-403 so a non-owner's request cannot even be confirmed to
     // exist, same existence check against the disk. $column is always a
@@ -1305,44 +1373,8 @@ class ServiceRequestController extends Controller
             return $refusal;
         }
 
-        // Once a unit is Responding the cancellation is an operational decision,
-        // not a resident one — the crew is already moving. Booked joins Pending
-        // here: a booking that has not yet been approved into a live dispatch is
-        // still purely the resident's own plan to withdraw.
-        if (! in_array($serviceRequest->status, ['Pending', 'Booked'], true)) {
-            return response()->json([
-                'message' => 'Only a pending or booked request can be cancelled.',
-            ], 422);
-        }
-
-        // A booking too close to its own start is no longer just "the resident
-        // changed their mind" — the office may already be staging for it. Only
-        // Booked requests carry a scheduled_at, so Pending is never touched by
-        // this check.
-        //
-        // Scoped to isFuture(): a scheduled_at already in the past is not "too
-        // near" to cancel, it has already happened. Without the guard, gte()
-        // stays true forever once the cutoff window passes, so a booking left
-        // unresolved past its own schedule could never be cancelled again.
-        $scheduledAt = $serviceRequest->ambulanceBooking?->scheduled_at;
-
-        if ($scheduledAt
-            && $scheduledAt->isFuture()
-            && now()->gte($scheduledAt->copy()->subHours(self::CANCEL_CUTOFF_HOURS))
-        ) {
-            return response()->json([
-                'message' => 'This booking is too close to its scheduled time to cancel. Call the office instead.',
-            ], 422);
-        }
-
-        // departed_office_at is the trip log's own first checkpoint — once it is
-        // set the crew has physically left, and the booking behind it is no
-        // longer the resident's to withdraw regardless of what tbl_service_request
-        // itself still says.
-        if ($serviceRequest->conductionRequests()->whereNotNull('departed_office_at')->exists()) {
-            return response()->json([
-                'message' => 'This trip has already been dispatched and cannot be cancelled here.',
-            ], 422);
+        if ($reason = $this->cancelRefusal($serviceRequest)) {
+            return response()->json(['message' => $reason], 422);
         }
 
         DB::transaction(function () use ($serviceRequest) {
@@ -1355,7 +1387,7 @@ class ServiceRequestController extends Controller
             $serviceRequest->update(['status' => 'Cancelled']);
         });
 
-        return response()->json($serviceRequest);
+        return response()->json($serviceRequest->makeHidden('conductionRequests'));
     }
 
     /**
