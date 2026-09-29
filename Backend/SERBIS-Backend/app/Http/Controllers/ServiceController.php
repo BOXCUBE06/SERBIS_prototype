@@ -77,10 +77,22 @@ class ServiceController extends Controller
             return response()->json(['message' => 'Service not found'], 404);
         }
 
+        // Name and category are fixed once a service exists. The name is what
+        // push notifications and the admin lists print while the app shows its
+        // own translation by code, so a rename splits the two; the category
+        // switches dispatch, vehicle mapping and the app's "Approved" wording
+        // while the filing rules stay keyed on code. Resending the stored value
+        // is harmless and allowed.
+        $locked = fn (string $field, string $label) => function (string $attribute, mixed $value, \Closure $fail) use ($service, $field, $label): void {
+            if ($value !== $service->{$field}) {
+                $fail("The {$label} of an existing service cannot be changed.");
+            }
+        };
+
         $validated = $request->validate([
-            'service_name' => 'sometimes|required|string|max:255',
+            'service_name' => ['sometimes', 'required', 'string', 'max:255', $locked('service_name', 'name')],
             'description' => 'nullable|string|max:5000',
-            'category' => ['sometimes', 'required', Rule::in(Service::CATEGORIES)],
+            'category' => ['sometimes', 'required', Rule::in(Service::CATEGORIES), $locked('category', 'category')],
             'is_active' => 'sometimes|required|boolean',
         ]);
 

@@ -87,7 +87,7 @@ class ServiceCategoryTest extends TestCase
             ->assertOk()->assertJsonPath('data.0.category', 'infrastructure');
     }
 
-    public function test_the_office_can_set_the_category_when_adding_and_editing(): void
+    public function test_the_category_is_set_when_adding_and_locked_after(): void
     {
         $id = $this->actingAs($this->admin)->postJson('/api/services', [
             'service_name' => 'Flood Drill Kits',
@@ -95,11 +95,37 @@ class ServiceCategoryTest extends TestCase
         ])->assertStatus(201)->assertJsonPath('category', 'programs')->json('service_id');
 
         $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['category' => 'rescue'])
-            ->assertOk()->assertJsonPath('category', 'rescue');
+            ->assertStatus(422)->assertJsonValidationErrors(['category']);
 
-        // Renaming leaves the category alone: it is no longer read off the name.
-        $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['service_name' => 'Road Works'])
-            ->assertOk()->assertJsonPath('category', 'rescue');
+        // Resending the stored value is not a change.
+        $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['category' => 'programs'])
+            ->assertOk()->assertJsonPath('category', 'programs');
+
+        $this->assertSame('programs', Service::find($id)->category);
+    }
+
+    public function test_the_name_is_locked_after_adding(): void
+    {
+        $service = Service::create(['service_name' => 'Road Clearing', 'category' => 'infrastructure']);
+
+        $this->actingAs($this->admin)->putJson("/api/services/{$service->service_id}", ['service_name' => 'Road Works'])
+            ->assertStatus(422)->assertJsonValidationErrors(['service_name']);
+
+        $this->actingAs($this->admin)->putJson("/api/services/{$service->service_id}", ['service_name' => 'Road Clearing'])
+            ->assertOk();
+
+        $this->assertSame('Road Clearing', $service->fresh()->service_name);
+    }
+
+    public function test_the_description_can_still_be_edited(): void
+    {
+        $service = Service::create(['service_name' => 'Road Clearing', 'category' => 'infrastructure', 'description' => 'Old']);
+
+        $this->actingAs($this->admin)->putJson("/api/services/{$service->service_id}", ['description' => 'Fallen trees and debris'])
+            ->assertOk()->assertJsonPath('description', 'Fallen trees and debris');
+
+        $this->actingAs($this->admin)->putJson("/api/services/{$service->service_id}", ['description' => null])
+            ->assertOk()->assertJsonPath('description', null);
     }
 
     public function test_an_unknown_category_is_refused(): void

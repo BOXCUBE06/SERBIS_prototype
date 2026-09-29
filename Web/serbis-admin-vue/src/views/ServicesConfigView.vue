@@ -91,33 +91,16 @@
             {{ modal.error }}
           </v-alert>
 
-          <v-text-field
-            v-model="form.service_name"
-            label="Service name *"
-            placeholder="e.g. Flood Evacuation"
-            hint="What residents will see when they file a request"
-            persistent-hint
-            counter="255"
-            maxlength="255"
-            variant="outlined"
-            density="comfortable"
-            rounded="lg"
-            class="mb-4"
-            :error-messages="nameError"
-            @blur="touched.name = true"
-          ></v-text-field>
-
-          <v-select
-            v-model="form.category"
-            :items="categoryChoices"
-            label="Category *"
-            hint="Groups this service in the list. Programs are approved without dispatching a unit."
-            persistent-hint
-            variant="outlined"
-            density="comfortable"
-            rounded="lg"
-            class="mb-4"
-          ></v-select>
+          <!-- Fixed once a service exists (ServiceController::update refuses a
+               change): the app names services from its own translations, and
+               the category drives dispatch and vehicle mapping. -->
+          <dl class="service-facts mb-2">
+            <dt class="text-body-2 text-medium-emphasis">Service</dt>
+            <dd class="text-body-1 font-weight-bold text-high-emphasis">{{ form.service_name }}</dd>
+            <dt class="text-body-2 text-medium-emphasis">Category</dt>
+            <dd class="text-body-1 text-high-emphasis">{{ categories[form.category]?.label ?? form.category }}</dd>
+          </dl>
+          <p class="text-body-2 text-medium-emphasis mb-4">The name and category are fixed; only the description can be changed.</p>
 
           <v-textarea
             v-model="form.description"
@@ -199,7 +182,6 @@ const categories = {
 // the same fallback the API's column default uses.
 const categoryOf = (item) => categories[item.category] ?? categories.relief
 const categoryOptions = ['All', ...Object.values(categories).map((c) => c.label)]
-const categoryChoices = Object.values(categories).map((c) => ({ title: c.label, value: c.key }))
 
 const statusLabel = (item) => (item.is_active ? 'Active' : 'Disabled')
 
@@ -224,7 +206,6 @@ const apiError = ref('')
 
 const modal = ref({ show: false, loading: false, error: '', targetId: null, addedOn: '' })
 const form = ref({ service_name: '', description: '', category: 'relief' })
-const touched = ref({ name: false })
 const togglingId = ref(null)
 const disableDialog = ref({ show: false, item: null })
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -272,10 +253,6 @@ const toggleExtra = (item) => ({
   disabled: togglingId.value === idOf(item),
 })
 
-const nameError = computed(() =>
-  touched.value.name && !form.value.service_name.trim() ? 'Service name is required.' : '',
-)
-
 const fetchServices = async () => {
   apiError.value = ''
   try {
@@ -292,25 +269,16 @@ const fetchServices = async () => {
 
 const openEdit = (item) => {
   form.value = { service_name: item.service_name || '', description: item.description || '', category: item.category || 'relief' }
-  touched.value = { name: false }
   modal.value = { show: true, loading: false, error: '', targetId: idOf(item), addedOn: formatDate(item.created_at) }
 }
 
 const closeModal = () => { modal.value.show = false }
 
 const saveService = async () => {
-  touched.value.name = true
-  if (!form.value.service_name.trim()) {
-    modal.value.error = 'Service name is required.'
-    return
-  }
   modal.value.loading = true
   modal.value.error = ''
-  const payload = {
-    service_name: form.value.service_name.trim(),
-    description: form.value.description.trim() || null,
-    category: form.value.category,
-  }
+  // Description only: name and category are fixed once a service exists.
+  const payload = { description: form.value.description.trim() || null }
   try {
     const res = await fetch(`${API}/${modal.value.targetId}`, {
       method: 'PUT',
@@ -371,6 +339,15 @@ onMounted(fetchServices)
 
 <style scoped>
 .gap-3 { gap: 12px; }
+
+.service-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  align-items: baseline;
+}
+.service-facts dd { margin: 0; }
 
 /* Two lines inside the 48px compact row: the name, then the description
    clamped to one line with the full text on the cell's title. */
