@@ -407,16 +407,21 @@ class StatusBadge extends StatelessWidget {
   /// Overrides the wording, not the colours: a request that words its own
   /// status (an approved program says "Approved") passes it in.
   final String? label;
-  const StatusBadge(this.status, {super.key, this.filipino = false, this.label});
+
+  /// Colour overrides for a request whose status reads differently from its
+  /// enum (a trip that never arrived is amber, not Completed green).
+  final Color? bg;
+  final Color? fg;
+  const StatusBadge(this.status, {super.key, this.filipino = false, this.label, this.bg, this.fg});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: status.bg, borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(30)),
       child: Text(
         (label ?? status.labelFor(filipino)).toUpperCase(),
-        style: AppText.display(size: 10.5, weight: FontWeight.w700, color: status.fg, letterSpacing: .5),
+        style: AppText.display(size: 10.5, weight: FontWeight.w700, color: fg ?? status.fg, letterSpacing: .5),
       ),
     );
   }

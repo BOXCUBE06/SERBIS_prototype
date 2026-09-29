@@ -203,7 +203,7 @@ void main() {
       // resolved" is the failure this ordering exists to prevent.
       final advisory =
           tester.getTopLeft(find.text('Evacuate low-lying areas before 6 PM.'));
-      final request = tester.getTopLeft(find.textContaining('SR-7'));
+      final request = tester.getTopLeft(find.textContaining('TXN-000007'));
       expect(advisory.dy, lessThan(request.dy));
     });
 

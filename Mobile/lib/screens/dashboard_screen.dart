@@ -134,7 +134,13 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          StatusBadge(activeRequest.status, filipino: f, label: activeRequest.statusLabelFor(f)),
+                          StatusBadge(
+                            activeRequest.status,
+                            filipino: f,
+                            label: activeRequest.statusLabelFor(f),
+                            bg: activeRequest.statusBg,
+                            fg: activeRequest.statusFg,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 14),
@@ -331,7 +337,9 @@ class HomeScreen extends StatelessWidget {
     ];
   }
 
-  String _statusMessage(bool f, ServiceRequest request) => switch (request.status) {
+  String _statusMessage(bool f, ServiceRequest request) => request.isNotTransported
+      ? '${tr(f, 'status.not_transported')}: ${request.noArrivalReason!.trim()}'
+      : switch (request.status) {
         ReqStatus.review => tr(f, 'home.status.review'),
         ReqStatus.booked => tr(f, 'home.status.booked'),
         ReqStatus.scheduled => tr(f, request.isProgram ? 'home.status.approved' : 'home.status.scheduled'),

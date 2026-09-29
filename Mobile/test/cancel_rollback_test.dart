@@ -50,6 +50,9 @@ Map<String, dynamic> _row(int id, String status) => <String, dynamic>{
       'service_id': 1,
       'description': 'Flooded street',
       'status': status,
+      // What the server's cancelRefusal() answers for a row with no booking
+      // and no trip: only Pending and Booked may be withdrawn.
+      'can_cancel': status == 'Pending' || status == 'Booked',
       'created_at': '2026-08-01T05:04:00.000000Z',
       'updated_at': '2026-08-01T05:04:00.000000Z',
     };

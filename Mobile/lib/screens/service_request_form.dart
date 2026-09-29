@@ -31,6 +31,10 @@ class ServiceRequestForm extends StatefulWidget {
   /// The resident chose "View in Track" on the confirmation sheet.
   final VoidCallback onSubmitted;
 
+  /// The server refused the submit because this service was disabled. The
+  /// host closes the form; the refusal is already queued as a snackbar.
+  final VoidCallback? onServiceUnavailable;
+
   const ServiceRequestForm({
     super.key,
     required this.appState,
@@ -38,6 +42,7 @@ class ServiceRequestForm extends StatefulWidget {
     required this.service,
     required this.drafts,
     required this.onSubmitted,
+    this.onServiceUnavailable,
   });
 
   @override
@@ -240,7 +245,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
       // matched no record in tbl_service_request.
       refNo: '',
       status: ReqStatus.review,
-      cancellable: true,
+      // The server decides; its 201 carries can_cancel.
+      cancellable: false,
       metaLines: metaLines,
       // The server's created_at replaces this the moment the row comes back;
       // until then the timeline still has a real submission time to show.
@@ -301,6 +307,11 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     // Keep every entered value and the attached photo so Retry costs one tap,
     // and show nothing that could be read as "help is on the way".
     if (confirmed == null) {
+      final unavailable = widget.appState.unavailableServiceId;
+      if (unavailable != null && unavailable == service.id) {
+        widget.onServiceUnavailable?.call();
+        return;
+      }
       setState(() => _submitFailed = true);
       return;
     }

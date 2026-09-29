@@ -284,8 +284,8 @@ void main() {
       await _pumpSheet(tester, [_request(status: 'Responding')]);
 
       // The app's own vocabulary for a Responding row: `status.scheduled`.
-      expect(find.textContaining('Scheduled'), findsOneWidget);
-      expect(find.textContaining('SR-7'), findsOneWidget);
+      expect(find.textContaining('Responding'), findsOneWidget);
+      expect(find.textContaining('TXN-000007'), findsOneWidget);
       // A real timestamp, not the old fixed copy.
       expect(find.textContaining(':'), findsWidgets);
     });
@@ -305,8 +305,8 @@ void main() {
         ),
       ]);
 
-      final newer = tester.getTopLeft(find.textContaining('SR-2'));
-      final older = tester.getTopLeft(find.textContaining('SR-1'));
+      final newer = tester.getTopLeft(find.textContaining('TXN-000002'));
+      final older = tester.getTopLeft(find.textContaining('TXN-000001'));
       expect(newer.dy, lessThan(older.dy));
     });
 

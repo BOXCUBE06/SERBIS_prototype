@@ -223,6 +223,9 @@ class _RequestCard extends StatelessWidget {
     if (request.isOverdue) {
       return AppColors.red600;
     }
+    if (request.isNotTransported) {
+      return AppColors.amber600;
+    }
     if (request.status == ReqStatus.completed) {
       return AppColors.green700;
     }
@@ -272,7 +275,13 @@ class _RequestCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                StatusBadge(request.status, filipino: filipino, label: request.statusLabelFor(filipino)),
+                StatusBadge(
+                  request.status,
+                  filipino: filipino,
+                  label: request.statusLabelFor(filipino),
+                  bg: request.statusBg,
+                  fg: request.statusFg,
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -293,6 +302,26 @@ class _RequestCard extends StatelessWidget {
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
                 child: Text(request.note!, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6)),
+              ),
+            if (request.isNotTransported)
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                width: double.infinity,
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.amber600),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${tr(filipino, 'status.not_transported')}: ${request.noArrivalReason!.trim()}',
+                        style: AppText.body(size: 12, color: AppColors.amber600, height: 1.6),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             // A confirmed, still-upcoming booking — MDRRMO feedback,
             // 2026-09-18, the same prominent-box treatment the equipment
