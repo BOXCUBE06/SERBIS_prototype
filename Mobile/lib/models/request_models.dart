@@ -25,7 +25,7 @@ extension ReqStatusX on ReqStatus {
       return 'Booked';
     }
     if (this == ReqStatus.scheduled) {
-      return 'Scheduled';
+      return 'Responding';
     }
     if (this == ReqStatus.completed) {
       return 'Completed';
@@ -605,6 +605,10 @@ class ServiceRequest {
   /// hasn't staffed yet, or hasn't reached Booked/Responding, has none.
   final List<RequestResponder> responders;
 
+  /// Why the ambulance trip never reached its destination, from the trip
+  /// record. Null when there was no trip or it arrived.
+  final String? noArrivalReason;
+
   const ServiceRequest({
     this.id,
     this.serviceId,
@@ -622,6 +626,7 @@ class ServiceRequest {
     this.serviceCategory,
     this.scheduledAt,
     this.responders = const [],
+    this.noArrivalReason,
   });
 
   /// True once a Booked slot's own window has passed with nobody moving the
@@ -641,10 +646,24 @@ class ServiceRequest {
   /// server's Responding maps to [ReqStatus.scheduled] in this app.
   bool get isApprovedProgram => isProgram && status == ReqStatus.scheduled;
 
+  /// Resolved, but the ambulance never reached its destination. Shown in amber
+  /// with the reason rather than as a green Completed.
+  bool get isNotTransported =>
+      status == ReqStatus.completed &&
+      noArrivalReason != null &&
+      noArrivalReason!.trim().isNotEmpty;
+
   /// The status as the resident reads it. A program the office has approved
-  /// says "Approved"; everything else keeps [ReqStatus.labelFor].
-  String statusLabelFor(bool filipino) =>
-      isApprovedProgram ? tr(filipino, 'status.approved') : status.labelFor(filipino);
+  /// says "Approved", a trip that never arrived says "Not transported";
+  /// everything else keeps [ReqStatus.labelFor].
+  String statusLabelFor(bool filipino) {
+    if (isApprovedProgram) return tr(filipino, 'status.approved');
+    if (isNotTransported) return tr(filipino, 'status.not_transported');
+    return status.labelFor(filipino);
+  }
+
+  Color get statusBg => isNotTransported ? AppColors.amber50 : status.bg;
+  Color get statusFg => isNotTransported ? AppColors.amber600 : status.fg;
 
   bool get _hasServiceName => serviceName != null && serviceName!.isNotEmpty;
 
@@ -753,7 +772,7 @@ class ServiceRequest {
         return [
           submitted,
           TimelineStep(
-            tr(filipino, 'timeline.completed'),
+            tr(filipino, isNotTransported ? 'timeline.not_transported' : 'timeline.completed'),
             movedLabel,
             RequestStepState.done,
           ),
@@ -810,6 +829,7 @@ class ServiceRequest {
       updatedAt: updatedAt ?? this.updatedAt,
       scheduledAt: scheduledAt,
       responders: responders,
+      noArrivalReason: noArrivalReason,
     );
   }
 
@@ -844,12 +864,6 @@ class ServiceRequest {
     final statusText = (json['status'] as String? ?? 'pending').toLowerCase();
     final status = getStatusFromText(statusText);
 
-    // Booked counts as active: an approved booking that has not been dispatched
-    // is exactly the case a resident must still be able to withdraw.
-    final isActive = status == ReqStatus.review ||
-        status == ReqStatus.booked ||
-        status == ReqStatus.scheduled;
-
     return ServiceRequest(
       id: id,
       serviceId: serviceId,
@@ -862,11 +876,13 @@ class ServiceRequest {
       serviceName: serviceName,
       serviceCode: serviceCode,
       serviceCategory: serviceCategory,
-      refNo: id != null ? 'SR-$id' : '',
+      refNo: id != null ? txnRef(id) : '',
       status: status,
       metaLines: description == null ? [] : [description],
       note: note,
-      cancellable: isActive,
+      // The server's own verdict (status, cutoff window, departed trip), the
+      // same rule its cancel endpoint enforces. Absent means no button.
+      cancellable: json['can_cancel'] == true,
       // Laravel serialises timestamps as UTC ISO strings; without toLocal()
       // every timeline entry would read eight hours early in the Philippines.
       createdAt: _parseTimestamp(json['created_at']),
@@ -881,9 +897,13 @@ class ServiceRequest {
               .map(RequestResponder.fromJson)
               .toList() ??
           const [],
+      noArrivalReason: json['no_arrival_reason'] as String?,
     );
   }
 }
+
+/// The reference number as the admin panel prints it: `TXN-000123`.
+String txnRef(int id) => 'TXN-${id.toString().padLeft(6, '0')}';
 
 /// Everything needed to redraw a request card with no network, written to the
 /// device after each successful fetch. See `state/request_cache.dart`.
@@ -904,6 +924,7 @@ extension ServiceRequestCache on ServiceRequest {
         'service_code': serviceCode,
         'service_category': serviceCategory,
         'scheduled_at': scheduledAt?.toIso8601String(),
+        'no_arrival_reason': noArrivalReason,
       };
 
   /// Rebuilds a cached row, or returns null for an entry this version of the
@@ -926,7 +947,9 @@ extension ServiceRequestCache on ServiceRequest {
         (value) => value.name == json['type'],
         orElse: () => ServiceType.inquiry,
       ),
-      refNo: json['ref_no'] as String? ?? '',
+      // Rebuilt from the id rather than read back, so a row cached with the
+      // old `SR-` format shows the current one.
+      refNo: txnRef(id),
       status: ReqStatus.values.firstWhere(
         (value) => value.name == json['status'],
         orElse: () => ReqStatus.review,
@@ -948,6 +971,7 @@ extension ServiceRequestCache on ServiceRequest {
       // reads as null rather than throwing, so that row comes back as an
       // ordinary unscheduled request instead of failing to parse.
       scheduledAt: _parseTimestamp(json['scheduled_at']),
+      noArrivalReason: json['no_arrival_reason'] as String?,
     );
   }
 }

@@ -156,7 +156,7 @@ void main() {
       final restored = state.requests.single;
 
       expect(restored.status, ReqStatus.scheduled);
-      expect(restored.refNo, 'SR-9');
+      expect(restored.refNo, 'TXN-000009');
       expect(restored.createdAt, isNotNull);
       // Which means the timeline still works with no network.
       expect(restored.timelineFor(false), isNotEmpty);

@@ -1,5 +1,5 @@
 // An approved program (training, drill, certification) says "Approved" where
-// every other request says "Scheduled" / "MDRRMO is responding". Display only:
+// every other request says "Responding" / "MDRRMO is responding". Display only:
 // the status the server sent and the app's ReqStatus are untouched.
 
 import 'package:flutter/material.dart';
@@ -48,11 +48,11 @@ void main() {
   });
 
   group('every other request', () {
-    test('keeps "Scheduled" and "MDRRMO is responding"', () {
+    test('keeps "Responding" and "MDRRMO is responding"', () {
       final request = _request('Responding', category: 'infrastructure');
 
       expect(request.isProgram, isFalse);
-      expect(request.statusLabelFor(false), 'Scheduled');
+      expect(request.statusLabelFor(false), 'Responding');
       expect(
         request.timelineFor(false).map((s) => s.title),
         contains('MDRRMO is responding'),
@@ -60,7 +60,7 @@ void main() {
     });
 
     test('a server with no category column changes nothing', () {
-      expect(_request('Responding', category: null).statusLabelFor(false), 'Scheduled');
+      expect(_request('Responding', category: null).statusLabelFor(false), 'Responding');
     });
   });
 
@@ -87,7 +87,7 @@ void main() {
     test('a row cached before the category existed reads as an ordinary request', () {
       final json = _request('Responding').toCacheJson()..remove('service_category');
 
-      expect(ServiceRequestCache.fromCacheJson(json)?.statusLabelFor(false), 'Scheduled');
+      expect(ServiceRequestCache.fromCacheJson(json)?.statusLabelFor(false), 'Responding');
     });
 
     test('copyWith carries the category when the catalogue resolves the row', () {

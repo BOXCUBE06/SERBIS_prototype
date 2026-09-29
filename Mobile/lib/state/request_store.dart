@@ -797,6 +797,10 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Set when the last submit was refused because its service is no longer
+  /// accepting requests (a `service_id` validation error).
+  int? unavailableServiceId;
+
   /// Returns the server-confirmed row, or `null` if the request never reached
   /// MDRRMO. Callers must not announce success on a `null` — that is what let a
   /// 422 render a green confirmation sheet with a reference number.
@@ -822,6 +826,7 @@ class AppState extends ChangeNotifier {
     // request.scheduledAt, if any, rides along on `request` itself — the
     // optimistic row already carries it, and it is read off there below
     // rather than repeated as a separate parameter.
+    unavailableServiceId = null;
     requests.insert(0, request);
     notifyListeners();
 
@@ -882,6 +887,13 @@ class AppState extends ChangeNotifier {
       AppLog.error(_logArea, 'submit request', error: e,
           reason: 'rolled back, not filed');
       _fail(e);
+
+      // The office disabled this service while the form was open. Reload the
+      // catalogue so its tile goes away; the form checks this id and closes.
+      if (e is ApiException && e.fieldErrors.containsKey('service_id')) {
+        unavailableServiceId = request.serviceId;
+        await loadServices();
+      }
       return null;
     }
   }
@@ -903,11 +915,9 @@ class AppState extends ChangeNotifier {
     }
 
     final current = requests[index];
-    // A disapproved request is closed too: the MDRRMO already refused it, so
-    // there is nothing left for the resident to withdraw.
-    if (current.status == ReqStatus.cancelled ||
-        current.status == ReqStatus.completed ||
-        current.status == ReqStatus.disapproved) {
+    // The server's can_cancel, which already rules out closed requests,
+    // Responding, the cutoff window and a departed trip.
+    if (!current.cancellable) {
       return false;
     }
 

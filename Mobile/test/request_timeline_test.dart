@@ -23,6 +23,7 @@ Map<String, dynamic> _row(
       'service_id': 1,
       'description': 'Flooded street',
       'status': status,
+      'can_cancel': status == 'Pending' || status == 'Booked',
       'created_at': createdAt,
       'updated_at': updatedAt,
     };

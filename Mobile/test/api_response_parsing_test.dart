@@ -71,9 +71,47 @@ void main() {
       });
 
       expect(request.id, 42);
-      expect(request.refNo, 'SR-42');
+      expect(request.refNo, 'TXN-000042');
       expect(request.status, ReqStatus.scheduled);
-      expect(request.cancellable, isTrue);
+      // No can_cancel from the server means no Cancel button.
+      expect(request.cancellable, isFalse);
+    });
+
+    test('Cancel follows the server can_cancel, not the status', () {
+      ServiceRequest parse(String status, bool canCancel) => ServiceRequest.fromJson(<String, dynamic>{
+            'request_id': 7,
+            'status': status,
+            'can_cancel': canCancel,
+          });
+
+      expect(parse('Booked', true).cancellable, isTrue);
+      expect(parse('Booked', false).cancellable, isFalse,
+          reason: 'inside the cutoff window, or the trip already left');
+    });
+
+    test('a resolved trip that never arrived reads as Not transported', () {
+      final request = ServiceRequest.fromJson(<String, dynamic>{
+        'request_id': 8,
+        'status': 'Resolved',
+        'no_arrival_reason': 'Patient already taken by family',
+      });
+
+      expect(request.isNotTransported, isTrue);
+      expect(request.statusLabelFor(false), 'Not transported');
+      expect(request.statusLabelFor(true), 'Hindi naihatid');
+      expect(request.statusFg, isNot(ReqStatus.completed.fg));
+      expect(request.timelineFor(false).last.title, 'Not transported');
+
+      final arrived = ServiceRequest.fromJson(<String, dynamic>{'request_id': 9, 'status': 'Resolved'});
+      expect(arrived.isNotTransported, isFalse);
+      expect(arrived.statusLabelFor(false), 'Completed');
+    });
+
+    test('Responding reads as Responding', () {
+      final request = ServiceRequest.fromJson(<String, dynamic>{'request_id': 10, 'status': 'Responding'});
+
+      expect(request.statusLabelFor(false), 'Responding');
+      expect(request.statusLabelFor(true), 'Tumutugon');
     });
 
     test('leaves the id null when request_id is missing', () {

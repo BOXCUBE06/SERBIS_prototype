@@ -64,6 +64,8 @@ class ServiceFormPage extends StatelessWidget {
                         Navigator.of(context).maybePop();
                         onSubmitted();
                       },
+                      // The reloaded catalogue no longer has this service.
+                      onServiceUnavailable: () => Navigator.of(context).maybePop(),
                     ),
                   ],
                 ),
