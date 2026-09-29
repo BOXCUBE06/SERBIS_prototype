@@ -120,7 +120,7 @@
         <template v-if="loading" #body>
           <SkeletonRows :rows="itemsPerPage" :columns="headers.length" />
         </template>
-        <template v-for="slotName in forwardSlotNames" :key="slotName" v-slot:[slotName]="slotProps">
+        <template v-for="slotName in forwardSlotNames()" :key="slotName" v-slot:[slotName]="slotProps">
           <slot :name="slotName" v-bind="slotProps ?? {}" />
         </template>
       </v-data-table>
@@ -229,7 +229,10 @@ const emit = defineEmits([
 // `summary` down would collide with any same-named table slot.
 const OWN_SLOTS = new Set(['filters', 'actions', 'summary', 'before-table', 'content'])
 const slots = useSlots()
-const forwardSlotNames = computed(() => Object.keys(slots).filter((name) => !OWN_SLOTS.has(name)))
+// A plain function, not computed: `slots` is not reactive, so a computed would
+// freeze on the slots present at first render and drop any a caller adds later
+// (Service Vehicles' columns arrive with its data).
+const forwardSlotNames = () => Object.keys(slots).filter((name) => !OWN_SLOTS.has(name))
 
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
 // Compact lists hide the pager and page size while everything fits the smallest

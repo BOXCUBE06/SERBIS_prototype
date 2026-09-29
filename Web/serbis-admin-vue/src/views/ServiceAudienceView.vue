@@ -1,49 +1,55 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <v-row class="ma-0 w-100">
-      <v-col cols="12" class="pa-0 w-100">
+    <PageHeader title="Service Audience">
+      <template v-slot:subtitle>
+        Choose which account types can request each service. An unchecked service is hidden from that account type in the mobile app and refused if filed.
+      </template>
+    </PageHeader>
 
-        <PageHeader title="Service Audience" />
+    <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 w-100" density="compact" rounded="lg">
+      {{ apiError }}
+      <template v-slot:append>
+        <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" @click="load">Retry</v-btn>
+      </template>
+    </v-alert>
 
-        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg">
-          {{ apiError }}
-          <template v-slot:append>
-            <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" @click="load">Retry</v-btn>
-          </template>
-        </v-alert>
+    <div class="w-100">
+      <DataTablePage
+        compact
+        class="choice-grid"
+        :searchable="false"
+        :loading="initialLoad"
+        :headers="headers"
+        :items="rows"
+        item-value="code"
+        :items-per-page="50"
+        :items-per-page-options="[50]"
+        result-noun="services"
+        no-data-text="No services"
+      >
+        <template v-slot:item.name="{ item }">
+          <div class="choice-grid-name">
+            <span class="font-weight-bold" :class="item.is_active ? 'text-high-emphasis' : 'text-medium-emphasis'">{{ item.name }}</span>
+            <span v-if="!item.is_service" class="text-caption text-medium-emphasis ml-2">App feature</span>
+            <span v-else-if="!item.is_active" class="text-caption text-medium-emphasis ml-2">Switched off</span>
+          </div>
+        </template>
 
-        <v-card elevation="0" rounded="xl" class="checkbox-grid-card">
-          <v-table :key="initialLoad ? 'loading' : 'ready'" class="checkbox-grid table-fade">
-            <thead>
-              <tr>
-                <th scope="col" class="text-left">Service</th>
-                <th v-for="type in ACCOUNT_TYPE_ITEMS" :key="type.value" scope="col" class="checkbox-grid-check">
-                  {{ type.title }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <SkeletonRows v-if="initialLoad" :rows="6" :columns="ACCOUNT_TYPE_ITEMS.length + 1" />
-              <tr v-for="row in rows" :key="row.code" :data-code="row.code">
-                <th scope="row" class="text-left font-weight-bold checkbox-grid-service">
-                  <span :class="{ 'text-disabled': !row.is_active }">{{ row.name }}</span>
-                  <span v-if="!row.is_active" class="text-caption text-medium-emphasis ml-2">Switched off</span>
-                </th>
-                <td v-for="type in ACCOUNT_TYPE_ITEMS" :key="type.value" class="checkbox-grid-check">
-                  <v-checkbox-btn
-                    :model-value="row.account_types.includes(type.value)"
-                    :disabled="saving === row.code"
-                    :aria-label="`${type.title} may request ${row.name}`"
-                    color="primary"
-                    @update:model-value="(checked) => toggle(row, type.value, checked)"
-                  ></v-checkbox-btn>
-                </td>
-              </tr>
-            </tbody>
-          </v-table>
-        </v-card>
-      </v-col>
-    </v-row>
+        <template v-for="type in ACCOUNT_TYPE_ITEMS" :key="type.value" v-slot:[`item.${type.value}`]="{ item }">
+          <div class="d-flex justify-center">
+            <v-checkbox-btn
+              :model-value="item.account_types.includes(type.value)"
+              :disabled="saving === item.code"
+              :aria-label="`${type.title} may request ${item.name}`"
+              color="primary"
+              @update:model-value="(checked) => toggle(item, type.value, checked)"
+            ></v-checkbox-btn>
+          </div>
+        </template>
+
+        <template v-slot:summary>{{ summary }}</template>
+      </DataTablePage>
+    </div>
 
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3500" location="bottom right">
       {{ snackbar.text }}
@@ -52,23 +58,35 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ACCOUNT_TYPE_ITEMS } from '@/composables/accountType'
 import { authHeaders, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
-import '@/styles/checkbox-grid.css'
+import DataTablePage from '@/components/DataTablePage.vue'
 
 // One row per thing a resident can ask for, including the two that are not
 // services (Equipment Borrowing, Others). Ticking a box saves at once: there is
 // no Save button, because a half-saved grid is worse than a slow one.
+const headers = [
+  // Service takes 40%; the account types split the other 60% equally.
+  { title: 'Service', key: 'name', sortable: false, width: '40%' },
+  ...ACCOUNT_TYPE_ITEMS.map((t) => ({ title: t.title, key: t.value, sortable: false, align: 'center', width: `${60 / ACCOUNT_TYPE_ITEMS.length}%` })),
+]
+
 const rows = ref([])
 const initialLoad = ref(true)
 const apiError = ref('')
 // The code of the row whose save is in flight; its boxes are disabled meanwhile.
 const saving = ref(null)
 const { snackbar, notify } = useSnackbar()
+
+// Services and the two app features (Equipment Borrowing, Others) counted apart.
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+const summary = computed(() => {
+  const services = rows.value.filter((r) => r.is_service).length
+  return `${plural(services, 'service')} · ${plural(rows.value.length - services, 'app feature')}`
+})
 
 const load = async () => {
   apiError.value = ''
@@ -119,3 +137,20 @@ const toggle = async (row, type, checked) => {
 onMounted(load)
 </script>
 
+<style scoped>
+/* Rows here do nothing on click; only the boxes do. */
+.choice-grid.data-table-page :deep(tbody tr) { cursor: default; }
+.choice-grid.data-table-page.dtp-compact :deep(tbody tr:hover) { background: rgba(var(--v-theme-on-surface), 0.03); }
+/* Option headers and boxes centred over their column. */
+.choice-grid.data-table-page :deep(thead th:not(:first-child) .v-data-table-header__content) { justify-content: center; }
+.choice-grid.data-table-page :deep(tbody td:not(:first-child)) { text-align: center; }
+/* Vuetify's selection control grows to fill the cell (flex: 1 0 auto), which
+   parks the box at the cell's left edge; size it to the box so the wrapper
+   can centre it. */
+.choice-grid.data-table-page :deep(tbody td .v-selection-control) { flex: 0 0 auto; }
+.choice-grid-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
