@@ -379,6 +379,7 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
           onChanged: () => setState(() {}),
           appState: widget.appState,
           ambulanceDestinations: _ambulanceDestinations,
+          landmark: kind == ServiceFormKind.ambulance ? _drafts.landmark : null,
           filipino: f,
         ),
         FormSection(
@@ -413,12 +414,14 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
             ],
           ],
         ),
-        const SizedBox(height: 12),
-        AppTextField(
-          label: 'Landmark (optional)',
-          hint: 'e.g. beside the chapel',
-          controller: _drafts.landmark,
-        ),
+        if (kind != ServiceFormKind.ambulance) ...[
+          const SizedBox(height: 12),
+          AppTextField(
+            label: 'Landmark (optional)',
+            hint: 'e.g. beside the chapel',
+            controller: _drafts.landmark,
+          ),
+        ],
         if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
         const SizedBox(height: 6),
         AppButton(

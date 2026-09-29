@@ -31,6 +31,11 @@ class ServiceFormFields extends StatelessWidget {
   /// then offers only "Others", same as before this list existed.
   final List<String> ambulanceDestinations;
 
+  /// The pickup landmark, drawn under the ambulance's From/To. Lives on the
+  /// drafts (every form sends it), so it is passed in; the other forms still
+  /// get it at the bottom from the request form.
+  final TextEditingController? landmark;
+
   const ServiceFormFields({
     super.key,
     required this.data,
@@ -38,6 +43,7 @@ class ServiceFormFields extends StatelessWidget {
     required this.appState,
     required this.filipino,
     this.ambulanceDestinations = const [],
+    this.landmark,
   });
 
   @override
@@ -129,6 +135,12 @@ class ServiceFormFields extends StatelessWidget {
                     hint: 'e.g. Echague District Hospital',
                     controller: form.destination,
                   ),
+                if (landmark != null)
+                  AppTextField(
+                    label: 'Landmark (optional)',
+                    hint: 'e.g. beside the chapel',
+                    controller: landmark!,
+                  ),
               ],
             ),
             FormSection(
@@ -160,19 +172,21 @@ class ServiceFormFields extends StatelessWidget {
                         ),
                       ),
                       // Nudged down so it sits against the input rather than
-                      // the label above it.
-                      Padding(
-                        padding: const EdgeInsets.only(top: 22, left: 4),
-                        child: IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 20),
-                          color: AppColors.inkFaint,
-                          tooltip: 'Remove relative ${i + 1}',
-                          onPressed: () {
-                            form.removeRelative(i);
-                            onChanged();
-                          },
+                      // the label above it. Not on a lone row: removing the only
+                      // relative just blanks it, and the X narrowed the field.
+                      if (form.relatives.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 22, left: 4),
+                          child: IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            color: AppColors.inkFaint,
+                            tooltip: 'Remove relative ${i + 1}',
+                            onPressed: () {
+                              form.removeRelative(i);
+                              onChanged();
+                            },
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 if (form.relatives.length < AmbulanceFormData.maxRelatives)
@@ -190,8 +204,8 @@ class ServiceFormFields extends StatelessWidget {
                       ),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.green700,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.only(right: 8),
+                        minimumSize: const Size(0, 44),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
