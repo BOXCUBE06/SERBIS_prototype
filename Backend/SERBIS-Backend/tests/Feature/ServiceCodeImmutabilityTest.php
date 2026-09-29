@@ -60,7 +60,6 @@ class ServiceCodeImmutabilityTest extends TestCase
         Sanctum::actingAs($this->admin);
 
         $this->putJson('/api/services/'.$service->service_id, [
-            'service_name' => 'Street Clearing',
             'description' => 'Debris and obstacles',
             'code' => 'hijacked-code',
         ])->assertOk();
@@ -68,23 +67,26 @@ class ServiceCodeImmutabilityTest extends TestCase
         $service->refresh();
 
         $this->assertSame('road-clearing', $service->code, 'A code sent in the payload overwrote the stored one.');
-        $this->assertSame('Street Clearing', $service->service_name, 'The rename itself did not take effect.');
+        $this->assertSame('Debris and obstacles', $service->description, 'The update itself did not take effect.');
     }
 
-    public function test_renaming_a_service_without_sending_a_code_leaves_the_code_unchanged(): void
+    public function test_a_refused_rename_leaves_name_and_code_unchanged(): void
     {
         $service = Service::create(['service_name' => 'Road Clearing']);
 
         Sanctum::actingAs($this->admin);
 
+        // Names are locked after creation (ServiceController::update). The
+        // regression this still guards: a code re-derived on save would follow
+        // a new name and break every client that had stored 'road-clearing'.
         $this->putJson('/api/services/'.$service->service_id, [
             'service_name' => 'Street Clearing',
-        ])->assertOk();
+        ])->assertStatus(422);
 
-        // The real regression this guards: a code re-derived on save would
-        // follow the new name to 'street-clearing' and break every client that
-        // had stored 'road-clearing'. The slug runs at creation only.
-        $this->assertSame('road-clearing', $service->fresh()->code);
+        $service->refresh();
+
+        $this->assertSame('Road Clearing', $service->service_name);
+        $this->assertSame('road-clearing', $service->code);
     }
 
     public function test_creating_a_service_through_the_api_with_a_code_ignores_it(): void
