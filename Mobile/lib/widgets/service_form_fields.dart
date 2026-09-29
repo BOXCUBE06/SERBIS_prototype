@@ -53,19 +53,13 @@ class ServiceFormFields extends StatelessWidget {
                 // Off by default — see AmbulanceFormData.setPatientIsAccountHolder.
                 // Checking it fills the name below once; the field stays fully
                 // editable either way.
-                CheckboxListTile(
+                _CheckRow(
+                  label: 'Patient is myself',
                   value: form.patientIsAccountHolder,
                   onChanged: (checked) {
-                    form.setPatientIsAccountHolder(checked ?? false);
+                    form.setPatientIsAccountHolder(checked);
                     onChanged();
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text(
-                    'Patient is myself',
-                    style: TextStyle(fontSize: 14),
-                  ),
                 ),
                 AppTextField(
                   label: 'Patient name',
@@ -81,19 +75,13 @@ class ServiceFormFields extends StatelessWidget {
                 // Off by default — see AmbulanceFormData.setPatientAddressIsMyAddress.
                 // The patient may live elsewhere, so this is a confirmation,
                 // not an assumption.
-                CheckboxListTile(
+                _CheckRow(
+                  label: 'Same as my address',
                   value: form.patientAddressIsMyAddress,
                   onChanged: (checked) {
-                    form.setPatientAddressIsMyAddress(checked ?? false);
+                    form.setPatientAddressIsMyAddress(checked);
                     onChanged();
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text(
-                    'Same as my address',
-                    style: TextStyle(fontSize: 14),
-                  ),
                 ),
                 AppTextField(
                   label: 'Patient address',
@@ -113,19 +101,13 @@ class ServiceFormFields extends StatelessWidget {
                 // Separate from the patient-address checkbox above: the
                 // pickup point and the patient's address are often the same,
                 // but not always.
-                CheckboxListTile(
+                _CheckRow(
+                  label: 'Same as my address',
                   value: form.pickupIsMyAddress,
                   onChanged: (checked) {
-                    form.setPickupIsMyAddress(checked ?? false);
+                    form.setPickupIsMyAddress(checked);
                     onChanged();
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text(
-                    'Same as my address',
-                    style: TextStyle(fontSize: 14),
-                  ),
                 ),
                 AppTextField(
                   label: 'From',
@@ -246,19 +228,13 @@ class ServiceFormFields extends StatelessWidget {
                     // than the account holder's own address, so this is a
                     // confirmation, not an assumption.
                     if (field.key == 'address' && form.hasAddressField)
-                      CheckboxListTile(
+                      _CheckRow(
+                        label: 'Same as my address',
                         value: form.addressIsMyAddress,
                         onChanged: (checked) {
-                          form.setAddressIsMyAddress(checked ?? false);
+                          form.setAddressIsMyAddress(checked);
                           onChanged();
                         },
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: const Text(
-                          'Same as my address',
-                          style: TextStyle(fontSize: 14),
-                        ),
                       ),
                     if (field.isDate)
                       ProgramDateField(
@@ -318,5 +294,47 @@ class ServiceFormFields extends StatelessWidget {
           ],
         ),
     };
+  }
+}
+
+/// "Same as my address"-style shortcut. Was a [CheckboxListTile], whose own
+/// padding pushed the box ~12dp in from the field edge below it and left the
+/// label floating mid-row. The box here lines up with the inputs, and the whole
+/// row (44dp tall) is the tap target.
+class _CheckRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _CheckRow({required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: value,
+                  onChanged: (checked) => onChanged(checked ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(label, style: AppText.body(size: 14, color: AppColors.ink))),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
