@@ -751,8 +751,7 @@ class ApiService {
 
   /// Fetches a published material's bytes from its absolute `full_url`, which
   /// points at the public storage disk rather than at `/api`. The auth header
-  /// goes along anyway: it costs nothing on a public file and keeps working if
-  /// the route is ever moved behind Sanctum.
+  /// is sent only when that URL is on the API's own origin.
   ///
   /// A longer timeout than the JSON calls — this is a file over a rural
   /// connection, and 15 s would fail a download that was progressing fine.
@@ -760,8 +759,15 @@ class ApiService {
     http.Response response;
 
     try {
+      final uri = Uri.parse(url);
+      final api = Uri.parse(baseUrl);
+      // The token goes only to our own API. Materials are served from a
+      // storage host (Supabase, R2), which must never receive it.
+      final sameOrigin = uri.scheme == api.scheme &&
+          uri.host == api.host &&
+          uri.port == api.port;
       response = await http
-          .get(Uri.parse(url), headers: _headers)
+          .get(uri, headers: sameOrigin ? _headers : null)
           .timeout(const Duration(seconds: 60));
     } catch (error) {
       // The URL is not logged. It is a `full_url` off the public storage disk,
