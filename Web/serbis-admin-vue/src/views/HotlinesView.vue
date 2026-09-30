@@ -73,7 +73,7 @@
             </div>
             <div v-for="(n, i) in form.numbers" :key="i" class="d-flex align-start ga-2 mb-2">
               <v-text-field v-model="n.label" label="Carrier / line" placeholder="e.g. Globe" variant="outlined" density="compact" rounded="lg" class="flex-0-0" style="width: 150px" :error-messages="fieldErrors[`numbers.${i}.label`]"></v-text-field>
-              <v-text-field v-model="n.number" label="Number *" placeholder="0917-000-0000" :rules="[required]" variant="outlined" density="compact" rounded="lg" :error-messages="fieldErrors[`numbers.${i}.number`]"></v-text-field>
+              <v-text-field :model-value="n.number" @input="(e) => (n.number = e.target.value = phoneChars(e.target.value))" inputmode="tel" maxlength="20" label="Number *" placeholder="0917-000-0000" :rules="[required]" variant="outlined" density="compact" rounded="lg" :error-messages="fieldErrors[`numbers.${i}.number`]"></v-text-field>
               <!-- At least one number: the first row cannot be removed. -->
               <v-btn v-if="i > 0" icon="mdi-close" variant="text" size="small" class="mt-1" aria-label="Remove number" @click="form.numbers.splice(i, 1)"></v-btn>
             </div>
@@ -128,6 +128,9 @@ const moving = ref(false)
 const { snackbar, notify } = useSnackbar()
 
 const required = (v) => !!(v && String(v).trim()) || 'Required'
+// Letters are dropped as they are typed. Digits plus ( ) + - and spaces, the
+// same set EmergencyHotlineController accepts, so landlines like (078) 324-5410 still fit.
+const phoneChars = (v) => (v || '').replace(/[^0-9()+\- ]/g, '')
 
 const load = async () => {
   apiError.value = ''
