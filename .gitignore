@@ -27,3 +27,6 @@
 # Agent guidance for this repo. Local aid, not a deliverable -- kept out of
 # what the panel reviews.
 /CLAUDE.md
+
+# Office lock files (e.g. docs-paper/~$Manuscript.docx while Word has it open).
+~$*
