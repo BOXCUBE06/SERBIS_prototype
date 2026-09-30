@@ -295,7 +295,7 @@
                   clearable
                 >
                   <template v-slot:item="{ item, props }">
-                    <v-list-item v-bind="props" :title="item.raw.title" :subtitle="item.raw.position"></v-list-item>
+                    <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
                   </template>
                 </v-autocomplete>
                 <ResponderCombobox
@@ -559,7 +559,7 @@
                     clearable
                   >
                     <template v-slot:item="{ item, props }">
-                      <v-list-item v-bind="props" :title="item.raw.title" :subtitle="item.raw.position"></v-list-item>
+                      <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
                     </template>
                   </v-autocomplete>
                   <ResponderCombobox
@@ -652,6 +652,9 @@ const personnelGroups = [
   { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', min: 0, max: 2 },
   { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', min: 0, max: 2 },
 ]
+// An empty driver slot is null, not '' — v-autocomplete treats '' as a picked
+// value. The other two fields are free-text and keep ''.
+const blankPerson = (field) => (field === 'drivers' ? null : '')
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
 
@@ -934,7 +937,7 @@ const emptyCreateForm = () => ({
   // that needs more, and starting at two padded the common one-driver,
   // zero-passenger trip with a field nobody was going to fill (impeccable
   // polish, 2026-08-30).
-  drivers: [''], authorized_passengers: [''], patient_relatives: [''],
+  drivers: [null], authorized_passengers: [''], patient_relatives: [''],
 })
 const createDialog = ref({ open: false, form: emptyCreateForm(), conflict: null })
 const createForm = ref(null)
@@ -1083,7 +1086,7 @@ const printTrip = async (record) => {
   }
 }
 
-const addPerson = (field) => { createDialog.value.form[field].push('') }
+const addPerson = (field) => { createDialog.value.form[field].push(blankPerson(field)) }
 const removePerson = (field, idx) => { createDialog.value.form[field].splice(idx, 1) }
 
 const submitCreate = async () => {
@@ -1159,9 +1162,9 @@ const emptyTripLogForm = () => ({
   // All three PEOPLE_FIELDS roles — see ConductionRequestController::
   // tripLog(). A stub created by C5's bridge (openTripRecord below) always
   // starts with none of them.
-  drivers: [''], authorized_passengers: [''], patient_relatives: [''],
+  drivers: [null], authorized_passengers: [''], patient_relatives: [''],
 })
-const addTripPerson = (field) => { tripLog.value.form[field].push('') }
+const addTripPerson = (field) => { tripLog.value.form[field].push(blankPerson(field)) }
 const removeTripPerson = (field, idx) => { tripLog.value.form[field].splice(idx, 1) }
 const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
 
@@ -1198,7 +1201,7 @@ const openTripLog = (record) => {
       others: record.others || '',
       ...Object.fromEntries(personnelGroups.map(({ field, role }) => {
         const names = (record.people || []).filter(p => p.role === role).map(p => p.name)
-        return [field, names.length > 0 ? names : ['']]
+        return [field, names.length > 0 ? names : [blankPerson(field)]]
       })),
     },
   }
@@ -1240,14 +1243,14 @@ const fetchResponders = async () => {
 // Driver is a strict pick from Responders (MDRRMO feedback: a trip's driver
 // must be a real responder, not whatever was typed) — Ambulance Driver first,
 // then the rest, each labelled with its position.
-const AMBULANCE_DRIVER_POSITION = 'Ambulance Driver'
+const AMBULANCE_DRIVER_POSITION = 'ambulance driver' // compared lowercased; positions are typed free-form
 // title = value = the name, so the field shows just the name once picked;
 // position rides along only for the dropdown's #item subtitle (see the
 // template above and ResponderCombobox.vue).
 const driverBaseOptions = computed(() => [...responders.value]
   .sort((a, b) => {
-    const aFirst = a.position === AMBULANCE_DRIVER_POSITION
-    const bFirst = b.position === AMBULANCE_DRIVER_POSITION
+    const aFirst = (a.position || '').trim().toLowerCase() === AMBULANCE_DRIVER_POSITION
+    const bFirst = (b.position || '').trim().toLowerCase() === AMBULANCE_DRIVER_POSITION
     if (aFirst !== bFirst) return aFirst ? -1 : 1
     return a.name.localeCompare(b.name)
   })
