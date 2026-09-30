@@ -46,6 +46,8 @@ final class AdminSections
 
     public const RESPONDERS = 'responders';
 
+    public const HOTLINES = 'hotlines';
+
     /** Every section, in sidebar order. */
     public const ALL = [
         self::DASHBOARD,
@@ -65,6 +67,7 @@ final class AdminSections
         self::FILES,
         self::LOGS,
         self::RESPONDERS,
+        self::HOTLINES,
     ];
 
     /**
@@ -90,6 +93,7 @@ final class AdminSections
         self::FILES,
         self::LOGS,
         self::RESPONDERS,
+        self::HOTLINES,
     ];
 
     /**

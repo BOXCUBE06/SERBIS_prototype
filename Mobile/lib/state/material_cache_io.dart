@@ -191,7 +191,14 @@ class IoMaterialCache implements MaterialCache {
   /// name: it is editable in the admin panel, and a rename would orphan the old
   /// file while the index kept pointing at it.
   String _fileNameFor(InfoMaterial material) {
-    final extension = material.fileType.replaceAll(RegExp('[^a-z0-9]'), '');
+    // file_type can be empty on old rows; fall back to the stored file's own
+    // extension so the saved copy still opens in a viewer.
+    var type = material.fileType;
+    if (type.isEmpty) {
+      final name = Uri.tryParse(material.url)?.pathSegments.lastOrNull ?? '';
+      type = name.contains('.') ? name.split('.').last : '';
+    }
+    final extension = type.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
     return extension.isEmpty ? '${material.id}' : '${material.id}.$extension';
   }
 }

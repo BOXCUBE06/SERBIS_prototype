@@ -36,6 +36,9 @@ class LoginScreen extends StatefulWidget {
   final void Function(String phone) onForgotPassword;
   final String? infoMessage;
 
+  /// Opens the emergency hotlines list; null hides the link.
+  final VoidCallback? onOpenHotlines;
+
   const LoginScreen({
     super.key,
     required this.userStore,
@@ -45,6 +48,7 @@ class LoginScreen extends StatefulWidget {
     required this.onMfaRequired,
     required this.onForgotPassword,
     this.infoMessage,
+    this.onOpenHotlines,
   });
 
   @override
@@ -324,6 +328,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
+                    // Hotlines need no account: reachable before signing in.
+                    if (widget.onOpenHotlines != null)
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: widget.onOpenHotlines,
+                          icon: const Icon(Icons.call_rounded,
+                              size: 16, color: AppColors.red600),
+                          label: Text('Emergency hotlines',
+                              style: AppText.display(
+                                  size: 12.5,
+                                  weight: FontWeight.w700,
+                                  color: AppColors.red600)),
+                        ),
+                      ),
                   ],
                 ),
               ),
