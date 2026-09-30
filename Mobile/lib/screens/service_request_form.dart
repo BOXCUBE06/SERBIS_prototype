@@ -35,6 +35,9 @@ class ServiceRequestForm extends StatefulWidget {
   /// host closes the form; the refusal is already queued as a snackbar.
   final VoidCallback? onServiceUnavailable;
 
+  /// Opens the Library's hotlines, from the ambulance safety notice.
+  final VoidCallback? onOpenHotlines;
+
   const ServiceRequestForm({
     super.key,
     required this.appState,
@@ -43,6 +46,7 @@ class ServiceRequestForm extends StatefulWidget {
     required this.drafts,
     required this.onSubmitted,
     this.onServiceUnavailable,
+    this.onOpenHotlines,
   });
 
   @override
@@ -54,6 +58,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
   /// A local copy, for the reason the catalogue used to be one — `setState` is
   /// what makes the fetch visible on screen.
   List<String> _ambulanceDestinations = [];
+
+  /// Barangay names for the address dropdowns, copied locally for the same
+  /// reason as [_ambulanceDestinations].
+  List<String> _barangays = [];
 
   /// True after a submit that never reached the server. Drives a persistent
   /// error card with Retry — a snackbar alone auto-dismisses, and the previous
@@ -72,6 +80,7 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     super.initState();
     if (_service.formKind == ServiceFormKind.ambulance) {
       _loadAmbulanceDestinations();
+      _loadBarangays();
     }
   }
 
@@ -79,6 +88,12 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     await widget.appState.loadAmbulanceDestinations();
     if (!mounted) return;
     setState(() => _ambulanceDestinations = List.of(widget.appState.ambulanceDestinations));
+  }
+
+  Future<void> _loadBarangays() async {
+    await widget.appState.loadBarangayNames();
+    if (!mounted) return;
+    setState(() => _barangays = List.of(widget.appState.barangayNames));
   }
 
   ServiceType _typeForKind(ServiceFormKind kind) {
@@ -254,6 +269,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
       scheduledAt: scheduledAt,
     );
 
+    final sendsSitePhoto = service.formKind != ServiceFormKind.ambulance;
+
     setState(() => _submitting = true);
 
     ServiceRequest? confirmed;
@@ -270,8 +287,11 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         // what happens if `withData` ever stops holding. Sending the name
         // without the bytes would be a 422 on an upload the resident is not
         // required to make at all.
-        sitePhotoBytes: _drafts.sitePhoto?.bytes,
-        sitePhotoFileName: _drafts.sitePhoto?.bytes == null ? null : _drafts.sitePhoto?.name,
+        // Never for an ambulance, which has no site photo slot — the drafts
+        // are shared, so a photo picked on the road form could still be here.
+        sitePhotoBytes: sendsSitePhoto ? _drafts.sitePhoto?.bytes : null,
+        sitePhotoFileName:
+            sendsSitePhoto && _drafts.sitePhoto?.bytes != null ? _drafts.sitePhoto?.name : null,
         landmark: _drafts.landmark.text.trim().isEmpty ? null : _drafts.landmark.text.trim(),
         // Plumbed through three layers and sent by nothing until now. For an
         // unscheduled ambulance request the server still claims a unit
@@ -372,13 +392,14 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         if (kind == ServiceFormKind.ambulance)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: SafetyNotice(filipino: f, collapsible: true),
+            child: SafetyNotice(filipino: f, onViewHotlines: widget.onOpenHotlines),
           ),
         ServiceFormFields(
           data: _drafts.formFor(kind),
           onChanged: () => setState(() {}),
           appState: widget.appState,
           ambulanceDestinations: _ambulanceDestinations,
+          barangays: _barangays,
           landmark: kind == ServiceFormKind.ambulance ? _drafts.landmark : null,
           filipino: f,
         ),
@@ -404,13 +425,14 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
                 fileName: _drafts.validId?.name,
                 onTap: _pickValidId,
               ),
-              AttachmentUploadField(
-                label: 'Site photo (optional)',
-                hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
-                fileName: _drafts.sitePhoto?.name,
-                onTap: _pickSitePhoto,
-                onClear: () => setState(() => _drafts.sitePhoto = null),
-              ),
+              if (kind != ServiceFormKind.ambulance)
+                AttachmentUploadField(
+                  label: 'Site photo (optional)',
+                  hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
+                  fileName: _drafts.sitePhoto?.name,
+                  onTap: _pickSitePhoto,
+                  onClear: () => setState(() => _drafts.sitePhoto = null),
+                ),
             ],
           ],
         ),

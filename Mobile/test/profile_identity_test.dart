@@ -116,10 +116,10 @@ void main() {
     await tester.tap(find.text('Account details'));
     await tester.pumpAndSettle();
 
-    // First, middle, last, and the purok picker — and nothing for the barangay
-    // or the number, which moves through its own two-step flow.
-    expect(find.byType(TextField), findsNWidgets(3));
-    expect(find.byType(DropdownButton<String>), findsOneWidget);
+    // First, middle, last and street/purok — and nothing for the barangay or
+    // the number, which moves through its own two-step flow.
+    expect(find.byType(TextField), findsNWidgets(4));
+    expect(find.byType(DropdownButton<String>), findsNothing);
     expect(find.text('Save changes'), findsOneWidget);
 
     // The barangay is still shown, still read-only, and now says why.

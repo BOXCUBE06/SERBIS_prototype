@@ -375,8 +375,9 @@ IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
     case 'ambulance-medical-response':
       return (icon: Icons.local_hospital_rounded, bg: AppColors.red50, fg: AppColors.red600);
     case 'road-clearing':
-    case 'debris-removal':
       return (icon: Icons.construction_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
+    case 'debris-removal':
+      return (icon: Icons.delete_sweep_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
     case 'relief-goods-distribution':
       return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
     case 'animal-rescue':

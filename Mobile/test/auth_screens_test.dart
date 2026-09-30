@@ -32,7 +32,6 @@ import 'package:serbis/screens/auth/register_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/form_inputs.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
 // ---------------------------------------------------------------------------
@@ -279,10 +278,9 @@ Future<void> _fillValidRegistration(
   await tester.enterText(_field('Confirm password'), confirm ?? password);
 
   if (pickBarangay) {
-    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.tap(find.byType(DropdownMenu<String>));
     await tester.pumpAndSettle();
-    // `.last` is the entry in the open menu overlay; the closed button lays out
-    // its own copy of every item to size itself.
+    // `.last` is the entry in the open menu overlay.
     await tester.tap(find.text('San Fabian').last);
     await tester.pumpAndSettle();
   }
@@ -672,7 +670,7 @@ void main() {
       final api = await _pumpRegister(tester);
 
       expect(api.barangayCalls, 1);
-      expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+      expect(find.byType(DropdownMenu<String>), findsOneWidget);
       expect(find.text("Couldn't load barangays."), findsNothing);
     });
 
@@ -684,14 +682,14 @@ void main() {
       await _pumpRegister(tester, api: api);
 
       expect(find.text("Couldn't load barangays."), findsOneWidget);
-      expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+      expect(find.byType(DropdownMenu<String>), findsNothing);
 
       api.barangaysThrow = false;
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
 
       expect(api.barangayCalls, 2);
-      expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+      expect(find.byType(DropdownMenu<String>), findsOneWidget);
       expect(find.text("Couldn't load barangays."), findsNothing);
     });
 
@@ -762,7 +760,7 @@ void main() {
       await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'Pasada123');
       await tester.enterText(_field('Confirm password'), 'Pasada123');
-      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.tap(find.byType(DropdownMenu<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('San Fabian').last);
       await tester.pumpAndSettle();
@@ -785,7 +783,7 @@ void main() {
       await tester.enterText(_field('Mobile number'), '09171234567');
       await tester.enterText(_field('Password'), 'Pasada123');
       await tester.enterText(_field('Confirm password'), 'Pasada123');
-      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.tap(find.byType(DropdownMenu<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('San Fabian').last);
       await tester.pumpAndSettle();
@@ -812,9 +810,8 @@ void main() {
       _expectFieldError('Mobile number', 'Enter your mobile number');
       _expectFieldError('Password', 'Enter a password');
       _expectFieldError('Confirm password', 'Confirm your password');
-      // The picker is not an AuthTextField, so it is asserted on directly. Its
-      // hint reads the same as its validator message, hence two copies.
-      expect(find.text('Select your barangay'), findsNWidgets(2));
+      // The picker is not an AuthTextField, so it is asserted on directly.
+      expect(find.text('Select your barangay'), findsOneWidget);
       expect(api.registerCalls, 0);
     });
 
@@ -941,18 +938,7 @@ void main() {
       final api = await _pumpRegister(tester);
 
       await _fillValidRegistration(tester);
-      // A dropdown, not an AuthTextField like the fields above, so it is found
-      // by label rather than through `_field()`.
-      final purokPicker = find.descendant(
-        of: find.byWidgetPredicate(
-            (w) => w is AppDropdown<String> && w.label == 'Street / Purok (optional)'),
-        matching: find.byType(DropdownButton<String>),
-      );
-      await tester.ensureVisible(purokPicker);
-      await tester.tap(purokPicker);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Purok 3').last);
-      await tester.pumpAndSettle();
+      await tester.enterText(_field('Street / Purok (optional)'), 'Purok 3');
       await _agree(tester);
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();

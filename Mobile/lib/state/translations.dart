@@ -183,17 +183,19 @@ const Map<String, (String, String)> _strings = {
 
   // ---- Services ----
   'services.title': ('Service Request', 'Kahilingan sa Serbisyo'),
-  'services.grid_intro': (
-    'Choose the service you need. Each one opens its own form.',
-    'Piliin ang serbisyong kailangan mo. Bawat isa ay may sariling form.',
-  ),
+  // Category headings on the Services tab (tbl_services.category).
+  'services.category.infrastructure': ('Infrastructure', 'Imprastraktura'),
+  'services.category.rescue': ('Rescue', 'Pagsagip'),
+  'services.category.relief': ('Relief', 'Tulong'),
+  'services.category.programs': ('Programs', 'Mga Programa'),
+  'services.category.medical': ('Medical', 'Medikal'),
+  'services.category.other': ('Other requests', 'Iba pang kahilingan'),
   'services.notice_title': ('Non-life-threatening use only', 'Para sa hindi-banta-sa-buhay na sitwasyon lamang'),
   'services.notice_body': (
     'If you are experiencing a life-threatening emergency, contact authorities directly:',
     'Kung ikaw ay nasa banta-sa-buhay na emerhensiya, direktang tawagan ang mga awtoridad:',
   ),
-  'notice.show_hotlines': ('Show hotline numbers', 'Ipakita ang mga numero ng hotline'),
-  'notice.hide_hotlines': ('Hide hotline numbers', 'Itago ang mga numero ng hotline'),
+  'notice.view_hotlines': ('View emergency hotlines', 'Tingnan ang mga emergency hotline'),
   'services.choose_type': ('Choose a request type', 'Pumili ng Uri ng Kahilingan'),
   'services.form.ambulance': ('Ambulance Request', 'Kahilingan ng Ambulansya'),
   'services.form.transfer': ('Hospital Transfer Request', 'Kahilingan ng Paglilipat sa Ospital'),

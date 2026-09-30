@@ -228,3 +228,76 @@ class AppDropdown<T> extends StatelessWidget {
     );
   }
 }
+
+/// A dropdown you can type into: the list narrows to entries containing what
+/// is typed, ignoring case (so "cabugao" finds "Cabugao (Pob.)"). Framework
+/// [DropdownMenu], styled like [AppTextField].
+class AppSearchField extends StatelessWidget {
+  /// Null when the caller draws its own label.
+  final String? label;
+  final String hint;
+  final List<String> items;
+  final String? value;
+  final ValueChanged<String> onChanged;
+  final IconData? icon;
+
+  const AppSearchField({
+    super.key,
+    this.label,
+    required this.hint,
+    required this.items,
+    required this.value,
+    required this.onChanged,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (label != null) ...[
+            Text(label!, style: AppText.fieldLabel()),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+          DropdownMenu<String>(
+            // Rebuilt when the value changes from outside (e.g. "Same as my
+            // address"), since initialSelection is only read once.
+            key: ValueKey(value),
+            initialSelection: value,
+            expandedInsets: EdgeInsets.zero,
+            enableFilter: true,
+            requestFocusOnTap: true,
+            menuHeight: 280,
+            hintText: hint,
+            leadingIcon: icon == null ? null : Icon(icon, size: 18, color: AppColors.inkFaint),
+            textStyle: AppText.body(size: 14, color: AppColors.ink),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: AppColors.surface,
+              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              border: border,
+              enabledBorder: border,
+              focusedBorder: border.copyWith(
+                borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
+              ),
+            ),
+            dropdownMenuEntries: [
+              for (final item in items) DropdownMenuEntry(value: item, label: item),
+            ],
+            onSelected: (selected) {
+              if (selected != null) onChanged(selected);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}

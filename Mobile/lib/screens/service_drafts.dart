@@ -44,6 +44,8 @@ class ServiceDrafts {
                 contactNumber: user.phone,
                 accountName: user.fullName,
                 accountFullAddress: user.fullAddress,
+                accountBarangay: user.address,
+                accountStreet: user.streetAddress,
               ),
             ServiceFormKind.road => StructuredFormData.road(),
             ServiceFormKind.relief => StructuredFormData.relief(

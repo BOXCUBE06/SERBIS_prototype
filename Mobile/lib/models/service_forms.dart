@@ -114,7 +114,7 @@ class AmbulanceIntake {
       patientName: _text(form.patient),
       destination: _text(form.destination),
       patientAge: optional(form.age),
-      patientAddress: optional(form.patientAddress),
+      patientAddress: AmbulanceFormData.composeAddress(form.patientBarangay, form.patientAddress),
       patientContactNumber: optional(form.patientContact),
       pickupLocation: optional(form.pickup),
       conditionNotes: optional(form.diagnosis),
@@ -155,6 +155,8 @@ class AmbulanceFormData extends ServiceFormData {
     this.contactNumber = '',
     this.accountName = '',
     this.accountFullAddress = '',
+    this.accountBarangay = '',
+    this.accountStreet = '',
   }) {
     patientContact.text = contactNumber;
   }
@@ -173,6 +175,41 @@ class AmbulanceFormData extends ServiceFormData {
   /// [setPickupIsMyAddress] to copy from — never written to either field on
   /// its own.
   final String accountFullAddress;
+
+  /// The account's barangay name and purok/street, for "Same as my address"
+  /// to select and fill separately.
+  final String accountBarangay;
+  final String accountStreet;
+
+  /// The barangay dropdowns' free-text choice: the field below then holds the
+  /// whole address instead of a purok/street.
+  static const barangayOther = 'Other';
+
+  /// Patient's barangay: a name, [barangayOther], or null when none is picked yet.
+  String? patientBarangay;
+
+  /// "purok/street, barangay", or the field's text alone when no barangay is
+  /// picked or it is [barangayOther]. Null when there is nothing to send.
+  static String? composeAddress(String? barangay, TextEditingController field) {
+    final text = field.text.trim();
+    final parts = [
+      text,
+      if (barangay != null && barangay != barangayOther) barangay,
+    ].where((part) => part.isNotEmpty);
+    return parts.isEmpty ? null : parts.join(', ');
+  }
+
+  /// Fills [field] from the account and returns the barangay to select: the
+  /// account's own when [barangays] has it, else [barangayOther] with the full
+  /// address as free text.
+  String _fillMyAddress(TextEditingController field, List<String> barangays) {
+    if (barangays.contains(accountBarangay)) {
+      field.text = accountStreet;
+      return accountBarangay;
+    }
+    field.text = accountFullAddress;
+    return barangayOther;
+  }
 
   /// Whether the "Patient is myself" checkbox is ticked. Read by the screen
   /// to draw the checkbox's own state; setting [patient] happens in
@@ -197,10 +234,10 @@ class AmbulanceFormData extends ServiceFormData {
   /// Fills [patientAddress] from the account's full address when [value] is
   /// true. Same shape as [setPatientIsAccountHolder]: unchecking does not
   /// clear whatever is now in the field.
-  void setPatientAddressIsMyAddress(bool value) {
+  void setPatientAddressIsMyAddress(bool value, [List<String> barangays = const []]) {
     patientAddressIsMyAddress = value;
     if (value) {
-      patientAddress.text = accountFullAddress;
+      patientBarangay = _fillMyAddress(patientAddress, barangays);
     }
   }
 
@@ -210,10 +247,26 @@ class AmbulanceFormData extends ServiceFormData {
   /// someone at a different location must be able to say so independently.
   bool pickupIsMyAddress = false;
 
+  /// Selects [pickupOther] and fills the account's full address.
   void setPickupIsMyAddress(bool value) {
     pickupIsMyAddress = value;
     if (value) {
+      pickupChoice = pickupOther;
       pickup.text = accountFullAddress;
+    }
+  }
+
+  /// From's free-text choice, beside the hospital list To also uses.
+  static const pickupOther = 'Other';
+
+  /// From's selection: a hospital name or [pickupOther]. Same shape as
+  /// [destinationChoice]: picking a hospital copies it into [pickup].
+  String pickupChoice = pickupOther;
+
+  void setPickupChoice(String value) {
+    pickupChoice = value;
+    if (value != pickupOther) {
+      pickup.text = value;
     }
   }
 

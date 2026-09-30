@@ -31,10 +31,14 @@ class ServiceFormFields extends StatelessWidget {
   /// then offers only "Others", same as before this list existed.
   final List<String> ambulanceDestinations;
 
-  /// The pickup landmark, drawn under the ambulance's From/To. Lives on the
+  /// The pickup landmark, drawn directly under the ambulance's From. Lives on the
   /// drafts (every form sends it), so it is passed in; the other forms still
   /// get it at the bottom from the request form.
   final TextEditingController? landmark;
+
+  /// Barangay names for the patient address search. Empty leaves only
+  /// "Other" (free text).
+  final List<String> barangays;
 
   const ServiceFormFields({
     super.key,
@@ -44,6 +48,7 @@ class ServiceFormFields extends StatelessWidget {
     required this.filipino,
     this.ambulanceDestinations = const [],
     this.landmark,
+    this.barangays = const [],
   });
 
   @override
@@ -85,14 +90,15 @@ class ServiceFormFields extends StatelessWidget {
                   label: 'Same as my address',
                   value: form.patientAddressIsMyAddress,
                   onChanged: (checked) {
-                    form.setPatientAddressIsMyAddress(checked);
+                    form.setPatientAddressIsMyAddress(checked, barangays);
                     onChanged();
                   },
                 ),
-                AppTextField(
+                ..._addressFields(
                   label: 'Patient address',
-                  hint: 'Purok / street, barangay',
-                  controller: form.patientAddress,
+                  barangay: form.patientBarangay,
+                  onBarangay: (value) => form.patientBarangay = value,
+                  field: form.patientAddress,
                 ),
                 AppTextField.phone(
                   label: 'Contact number',
@@ -115,13 +121,32 @@ class ServiceFormFields extends StatelessWidget {
                     onChanged();
                   },
                 ),
-                AppTextField(
+                // Same list as To; "Other" is a free-text pickup location.
+                AppSearchField(
                   label: 'From',
-                  hint: 'e.g. Purok 3, Brgy. Malasin',
-                  controller: form.pickup,
+                  hint: 'Search or pick Other',
+                  value: form.pickupChoice,
+                  items: [...ambulanceDestinations, AmbulanceFormData.pickupOther],
+                  onChanged: (choice) {
+                    form.setPickupChoice(choice);
+                    onChanged();
+                  },
                 ),
-                AppDropdown<String>(
+                if (form.pickupChoice == AmbulanceFormData.pickupOther)
+                  AppTextField(
+                    label: 'Pickup location',
+                    hint: 'e.g. Purok 3, San Fabian',
+                    controller: form.pickup,
+                  ),
+                if (landmark != null)
+                  AppTextField(
+                    label: 'Landmark (optional)',
+                    hint: 'e.g. beside the chapel',
+                    controller: landmark!,
+                  ),
+                AppSearchField(
                   label: 'To',
+                  hint: 'Search or pick Others',
                   value: form.destinationChoice,
                   items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
                   onChanged: (choice) {
@@ -134,12 +159,6 @@ class ServiceFormFields extends StatelessWidget {
                     label: 'Destination',
                     hint: 'e.g. Echague District Hospital',
                     controller: form.destination,
-                  ),
-                if (landmark != null)
-                  AppTextField(
-                    label: 'Landmark (optional)',
-                    hint: 'e.g. beside the chapel',
-                    controller: landmark!,
                   ),
               ],
             ),
@@ -308,6 +327,32 @@ class ServiceFormFields extends StatelessWidget {
           ],
         ),
     };
+  }
+
+  /// Barangay search plus "Purok / street", or one free-text address field when
+  /// "Other" is picked.
+  List<Widget> _addressFields({
+    required String label,
+    required String? barangay,
+    required ValueChanged<String?> onBarangay,
+    required TextEditingController field,
+  }) {
+    final other = barangay == AmbulanceFormData.barangayOther;
+    return [
+      AppSearchField(
+        label: label,
+        hint: 'Search barangay',
+        value: barangay,
+        items: [...barangays, AmbulanceFormData.barangayOther],
+        onChanged: (value) {
+          onBarangay(value);
+          onChanged();
+        },
+      ),
+      other
+          ? AppTextField(label: 'Full address', hint: 'House no., street, barangay, town', controller: field)
+          : AppTextField(label: 'Purok / street', hint: 'e.g. Purok 3', controller: field),
+    ];
   }
 }
 

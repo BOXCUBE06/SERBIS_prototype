@@ -26,12 +26,17 @@ final AppState _appState = AppState(ApiService());
 /// else and cap at 11 — a word typed there would come back as one character
 /// and the check would prove nothing.
 Future<List<String>> _fillEveryField(WidgetTester tester) async {
-  final fields = find.byType(TextField);
+  // A search field's own text box only filters its list; it is not an answer.
+  final search = find
+      .descendant(of: find.byType(DropdownMenu<String>), matching: find.byType(TextField))
+      .evaluate()
+      .toSet();
+  final fields = find.byType(TextField).evaluate().where((e) => !search.contains(e)).toList();
   final typed = <String>[];
 
-  for (var i = 0; i < tester.widgetList(fields).length; i++) {
+  for (var i = 0; i < fields.length; i++) {
     final value = '0917000000$i';
-    await tester.enterText(fields.at(i), value);
+    await tester.enterText(find.byElementPredicate((e) => e == fields[i]), value);
     typed.add(value);
   }
 
@@ -768,5 +773,73 @@ void main() {
       expect(find.text('Relative 2'), findsNothing);
       expect(form.relativeNames, isEmpty);
     });
+  });
+
+  group('ambulance barangay address', () {
+    AmbulanceFormData form() => AmbulanceFormData(
+          accountFullAddress: 'Purok 3, San Fabian',
+          accountBarangay: 'San Fabian',
+          accountStreet: 'Purok 3',
+        );
+
+    test('same as my address selects the barangay and fills the street', () {
+      final f = form()..setPatientAddressIsMyAddress(true, ['San Fabian', 'San Miguel']);
+
+      expect(f.patientBarangay, 'San Fabian');
+      expect(f.patientAddress.text, 'Purok 3');
+      expect(AmbulanceIntake.from(f).patientAddress, 'Purok 3, San Fabian');
+    });
+
+    test('an unlisted barangay falls back to Other with the full address', () {
+      final f = form()..setPatientAddressIsMyAddress(true, ['San Miguel']);
+
+      expect(f.patientBarangay, AmbulanceFormData.barangayOther);
+      expect(f.patientAddress.text, 'Purok 3, San Fabian');
+      expect(AmbulanceIntake.from(f).patientAddress, 'Purok 3, San Fabian');
+    });
+
+    test('a barangay with no street sends the barangay alone', () {
+      final f = form()..patientBarangay = 'San Miguel';
+
+      expect(AmbulanceIntake.from(f).patientAddress, 'San Miguel');
+    });
+
+    test('From: same as my address picks Other with the full address', () {
+      final f = form()..setPickupIsMyAddress(true);
+
+      expect(f.pickupChoice, AmbulanceFormData.pickupOther);
+      expect(AmbulanceIntake.from(f).pickupLocation, 'Purok 3, San Fabian');
+    });
+
+    test('From: picking a hospital sends its name', () {
+      final f = form()..setPickupChoice('Echague District Hospital');
+
+      expect(AmbulanceIntake.from(f).pickupLocation, 'Echague District Hospital');
+    });
+  });
+
+  testWidgets('search field matches on contains, ignoring case', (tester) async {
+    String? picked;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: AppSearchField(
+          label: 'Barangay',
+          hint: 'Search barangay',
+          items: const ['Cabugao (Pob.)', 'San Fabian'],
+          value: null,
+          onChanged: (value) => picked = value,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'cabugao');
+    await tester.pumpAndSettle();
+
+    expect(find.text('San Fabian'), findsNothing);
+    await tester.tap(find.text('Cabugao (Pob.)').last);
+    await tester.pumpAndSettle();
+    expect(picked, 'Cabugao (Pob.)');
   });
 }
