@@ -424,6 +424,23 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
+    testWidgets('groups services under category headings in the office order, Others last',
+        (tester) async {
+      final api = FakeApi(services: [
+        {'service_id': 7, 'code': 'sandbagging', 'service_name': 'Sandbagging', 'category': 'rescue'},
+        {'service_id': 5, 'code': 'road-clearing', 'service_name': 'Road Clearing', 'category': 'infrastructure'},
+        {'service_id': 9, 'code': 'fire-watch', 'service_name': 'Fire Watch', 'category': 'fire'},
+      ]);
+      await _pumpGrid(tester, AppState(api));
+
+      double top(String text) => tester.getTopLeft(find.text(text)).dy;
+      expect(top('INFRASTRUCTURE'), lessThan(top('RESCUE')));
+      expect(top('RESCUE'), lessThan(top('FIRE')));
+      // An untranslated category shows as sent; "Others" has none and goes last.
+      expect(top('FIRE'), lessThan(top('OTHER REQUESTS')));
+      expect(top('Road Clearing'), lessThan(top('Sandbagging')));
+    });
+
     testWidgets('offers every service as a tile, the ambulance excepted', (tester) async {
       await _pumpGrid(tester, AppState(FakeApi()));
 

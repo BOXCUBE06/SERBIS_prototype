@@ -24,6 +24,9 @@ class AmbulanceScreen extends StatefulWidget {
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenProfile;
 
+  /// Opens the Library, where the emergency hotlines live.
+  final VoidCallback? onOpenLibrary;
+
   const AmbulanceScreen({
     super.key,
     required this.appState,
@@ -32,6 +35,7 @@ class AmbulanceScreen extends StatefulWidget {
     required this.onSubmitted,
     required this.onOpenNotifications,
     required this.onOpenProfile,
+    this.onOpenLibrary,
   });
 
   @override
@@ -120,6 +124,7 @@ class _AmbulanceScreenState extends State<AmbulanceScreen> {
                 service: ambulance,
                 drafts: widget.drafts,
                 onSubmitted: widget.onSubmitted,
+                onOpenHotlines: widget.onOpenLibrary,
               ),
             ),
           ],

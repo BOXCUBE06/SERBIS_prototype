@@ -119,10 +119,10 @@ class InventoryAuditLogTest extends TestCase
 
     public function test_adding_a_barangay_is_written_to_the_system_log(): void
     {
-        $this->postJson('/api/barangays', ['barangay_name' => 'San Fabian'])
+        $this->postJson('/api/barangays', ['barangay_name' => 'Test Barangay'])
             ->assertStatus(201);
 
-        $barangay = Barangay::where('barangay_name', 'San Fabian')->first();
+        $barangay = Barangay::where('barangay_name', 'Test Barangay')->first();
         $logs = $this->logsFor(Barangay::class, $barangay->barangay_id, 'created');
 
         $this->assertCount(1, $logs);

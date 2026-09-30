@@ -59,6 +59,10 @@ class AppState extends ChangeNotifier {
   /// [loadAmbulanceDestinations].
   final List<String> ambulanceDestinations = [];
 
+  /// Barangay names for the ambulance form's address dropdowns. See
+  /// [loadBarangayNames].
+  final List<String> barangayNames = [];
+
   static const String _borrowLogArea = 'borrowing';
 
   /// `GET /equipments` — the borrowing catalogue.
@@ -233,6 +237,19 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       AppLog.error(_logArea, 'load ambulance destinations', error: error,
           reason: 'destination dropdown falls back to Others only');
+    }
+  }
+
+  Future<void> loadBarangayNames() async {
+    try {
+      final rows = await _api.getBarangays();
+      barangayNames
+        ..clear()
+        ..addAll(rows.map((row) => (row['barangay_name'] ?? '').toString()).where((name) => name.isNotEmpty));
+      notifyListeners();
+    } catch (error) {
+      AppLog.error(_logArea, 'load barangays', error: error,
+          reason: 'address dropdowns fall back to Other only');
     }
   }
 

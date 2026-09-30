@@ -8,7 +8,7 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/purok_field.dart';
+import '../../widgets/form_inputs.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -296,7 +296,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // purok/street is exactly the detail a resident might not
                     // have memorized while filling this in — editable later
                     // from the profile either way (MDRRMO feedback, 2026-09-19).
-                    PurokField(controller: _streetCtrl),
+                    AuthTextField(
+                      label: 'Street / Purok (optional)',
+                      hint: 'e.g. Purok 3, Rizal St.',
+                      controller: _streetCtrl,
+                      prefixIcon: Icons.home_outlined,
+                    ),
 
                     AuthTextField(
                       label: 'Password',
@@ -489,57 +494,35 @@ class _BarangayField extends StatelessWidget {
               ),
             )
           else
-            DropdownButtonFormField<int>(
-              initialValue: value,
-              isExpanded: true,
-              icon: const Icon(Icons.expand_more_rounded,
-                  color: AppColors.inkFaint),
-              style: AppText.body(size: 13, color: AppColors.ink),
-              hint: Text('Select your barangay',
-                  style: AppText.body(size: 13, color: AppColors.inkFaint)),
-              validator: (v) => v == null ? 'Select your barangay' : null,
-              items: barangays
-                  .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
-                  .toList(),
-              onChanged: onChanged,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.location_on_outlined,
-                    size: 18, color: AppColors.inkFaint),
-                filled: true,
-                fillColor: AppColors.surface,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-                errorStyle: AppText.body(size: 11, color: AppColors.red600),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.line, width: 1.5),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.line, width: 1.5),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.green600, width: 1.5),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.red600, width: 1.5),
-                ),
-                focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: AppColors.red600, width: 1.5),
-                ),
+            // Typable: 64 barangays is too long to scroll. The FormField keeps
+            // the inline "Select your barangay" error the old dropdown had.
+            FormField<int>(
+              validator: (_) => value == null ? 'Select your barangay' : null,
+              builder: (state) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppSearchField(
+                    hint: 'Search your barangay',
+                    icon: Icons.location_on_outlined,
+                    value: _nameOf(value),
+                    items: [for (final b in barangays) b.name],
+                    onChanged: (name) => onChanged(barangays.firstWhere((b) => b.name == name).id),
+                  ),
+                  if (state.hasError)
+                    Text(state.errorText!, style: AppText.body(size: 11, color: AppColors.red600)),
+                ],
               ),
             ),
         ],
       ),
     );
+  }
+
+  String? _nameOf(int? id) {
+    for (final b in barangays) {
+      if (b.id == id) return b.name;
+    }
+    return null;
   }
 
   Widget _shell({required Widget child}) {

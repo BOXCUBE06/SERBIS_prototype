@@ -8,13 +8,12 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/motion.dart';
-import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 import 'service_form_page.dart';
 
-/// The Services tab: one large, labelled tile per service the account may
-/// file. Tapping a tile opens that service's form on a page of its own.
+/// The Services tab: one row per service the account may file, grouped under
+/// category headings. Tapping a row opens that service's form on its own page.
 ///
 /// The catalogue is already narrowed to this account's audience by the server
 /// (`appState.services`), and "Others" is added here when the audience allows
@@ -117,14 +116,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: SectionHeader(title: tr(f, 'services.title')),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
-              child: Text(
-                tr(f, 'services.grid_intro'),
-                style: AppText.body(
-                    size: 14, color: AppColors.inkMuted, height: 1.5),
-              ),
-            ),
             if (_loading && widget.appState.services.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 30),
@@ -159,22 +150,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
             else
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: _TileGrid(
-                  children: [
-                    for (final service in tiles)
-                      _ServiceTile(
-                        key: ValueKey('service-tile-${service.id}'),
-                        service: service,
-                        filipino: f,
-                        onTap: () => _open(service),
-                      ),
-                  ],
-                ),
+                child: _GroupedServices(services: tiles, filipino: f, onOpen: _open),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 110),
-              child: SafetyNotice(filipino: f),
-            ),
+            const SizedBox(height: 110),
           ],
         );
       },
@@ -182,101 +160,128 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 }
 
-/// Two tiles to a row, one on a narrow screen or at a large system text size,
-/// where two columns would leave each name a few letters per line.
-class _TileGrid extends StatelessWidget {
-  final List<Widget> children;
+/// Services grouped under their category heading, in the office's order.
+/// Unknown categories follow; "Others" (no category) comes last.
+class _GroupedServices extends StatelessWidget {
+  final List<ServiceCatalogItem> services;
+  final bool filipino;
+  final ValueChanged<ServiceCatalogItem> onOpen;
 
-  const _TileGrid({required this.children});
+  const _GroupedServices({required this.services, required this.filipino, required this.onOpen});
 
-  static const double _gap = 12;
+  static const _order = ['infrastructure', 'rescue', 'relief', 'programs'];
+
+  int _rank(String? category) {
+    if (category == null) return _order.length + 1;
+    final i = _order.indexOf(category);
+    return i < 0 ? _order.length : i;
+  }
+
+  /// A category added in the admin panel has no translation; show it as sent.
+  String _heading(String? category) {
+    final key = 'services.category.${category ?? 'other'}';
+    final text = tr(filipino, key);
+    return text == key ? category! : text;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final oneColumn = constraints.maxWidth < 280 ||
-            MediaQuery.textScalerOf(context).scale(14) > 20;
-        final columns = oneColumn ? 1 : 2;
+    final groups = <String?, List<ServiceCatalogItem>>{};
+    for (final service in services) {
+      groups.putIfAbsent(service.category, () => []).add(service);
+    }
+    final keys = groups.keys.toList()..sort((a, b) => _rank(a).compareTo(_rank(b)));
 
-        final rows = <Widget>[];
-        for (var i = 0; i < children.length; i += columns) {
-          final cells = <Widget>[];
-          for (var c = 0; c < columns; c++) {
-            if (c > 0) cells.add(const SizedBox(width: _gap));
-            cells.add(Expanded(
-                child: i + c < children.length
-                    ? children[i + c]
-                    : const SizedBox.shrink()));
-          }
-          if (rows.isNotEmpty) rows.add(const SizedBox(height: _gap));
-          // Equal heights within a row, so a two-line name and a three-line name
-          // sit as one row of tiles rather than a ragged pair.
-          rows.add(IntrinsicHeight(
-            child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: cells),
-          ));
-        }
-        return Column(children: rows);
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final key in keys) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
+            child: Text(
+              _heading(key).toUpperCase(),
+              style: AppText.display(size: 12.5, weight: FontWeight.w700, color: AppColors.green900, letterSpacing: 0.6),
+            ),
+          ),
+          for (final service in groups[key]!)
+            _ServiceRow(
+              key: ValueKey('service-tile-${service.id}'),
+              service: service,
+              filipino: filipino,
+              onTap: () => onOpen(service),
+            ),
+        ],
+      ],
     );
   }
 }
 
-class _ServiceTile extends StatelessWidget {
+/// One service: icon, name, its one-line description, and a chevron. Every
+/// icon shares one neutral tint; the heading above carries the grouping.
+class _ServiceRow extends StatelessWidget {
   final ServiceCatalogItem service;
   final bool filipino;
   final VoidCallback onTap;
 
-  const _ServiceTile(
-      {super.key,
-      required this.service,
-      required this.filipino,
-      required this.onTap});
+  const _ServiceRow({super.key, required this.service, required this.filipino, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final badge = badgeForServiceCode(service.code);
     final name = service.displayName(filipino);
+    final description = service.displayDescription(filipino);
 
-    return Semantics(
-      button: true,
-      label: name,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: PressableScale(
-        child: Material(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 124),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.line, width: 1.5),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconBadge(
-                      icon: badge.icon,
-                      bg: badge.bg,
-                      fg: badge.fg,
-                      size: 46,
-                      iconSize: 24,
-                      radius: 14),
-                  const SizedBox(height: 10),
-                  Text(
-                    name,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.display(size: 14.5, height: 1.25),
-                  ),
-                ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Semantics(
+        button: true,
+        label: name,
+        onTap: onTap,
+        excludeSemantics: true,
+        child: PressableScale(
+          child: Material(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 64),
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.line, width: 1.5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    IconBadge(
+                      icon: iconForServiceCode(service.code),
+                      bg: AppColors.grey50,
+                      fg: AppColors.ink,
+                      size: 40,
+                      iconSize: 22,
+                      radius: 12,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name, style: AppText.display(size: 14.5, height: 1.25)),
+                          if (description.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.35),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+                  ],
+                ),
               ),
             ),
           ),

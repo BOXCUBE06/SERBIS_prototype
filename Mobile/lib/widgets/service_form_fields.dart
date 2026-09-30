@@ -31,6 +31,15 @@ class ServiceFormFields extends StatelessWidget {
   /// then offers only "Others", same as before this list existed.
   final List<String> ambulanceDestinations;
 
+  /// The pickup landmark, drawn directly under the ambulance's From. Lives on the
+  /// drafts (every form sends it), so it is passed in; the other forms still
+  /// get it at the bottom from the request form.
+  final TextEditingController? landmark;
+
+  /// Barangay names for the patient address search. Empty leaves only
+  /// "Other" (free text).
+  final List<String> barangays;
+
   const ServiceFormFields({
     super.key,
     required this.data,
@@ -38,6 +47,8 @@ class ServiceFormFields extends StatelessWidget {
     required this.appState,
     required this.filipino,
     this.ambulanceDestinations = const [],
+    this.landmark,
+    this.barangays = const [],
   });
 
   @override
@@ -53,19 +64,13 @@ class ServiceFormFields extends StatelessWidget {
                 // Off by default — see AmbulanceFormData.setPatientIsAccountHolder.
                 // Checking it fills the name below once; the field stays fully
                 // editable either way.
-                CheckboxListTile(
+                _CheckRow(
+                  label: 'Patient is myself',
                   value: form.patientIsAccountHolder,
                   onChanged: (checked) {
-                    form.setPatientIsAccountHolder(checked ?? false);
+                    form.setPatientIsAccountHolder(checked);
                     onChanged();
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text(
-                    'Patient is myself',
-                    style: TextStyle(fontSize: 14),
-                  ),
                 ),
                 AppTextField(
                   label: 'Patient name',
@@ -81,24 +86,19 @@ class ServiceFormFields extends StatelessWidget {
                 // Off by default — see AmbulanceFormData.setPatientAddressIsMyAddress.
                 // The patient may live elsewhere, so this is a confirmation,
                 // not an assumption.
-                CheckboxListTile(
+                _CheckRow(
+                  label: 'Same as my address',
                   value: form.patientAddressIsMyAddress,
                   onChanged: (checked) {
-                    form.setPatientAddressIsMyAddress(checked ?? false);
+                    form.setPatientAddressIsMyAddress(checked, barangays);
                     onChanged();
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text(
-                    'Same as my address',
-                    style: TextStyle(fontSize: 14),
-                  ),
                 ),
-                AppTextField(
+                ..._addressFields(
                   label: 'Patient address',
-                  hint: 'Purok / street, barangay',
-                  controller: form.patientAddress,
+                  barangay: form.patientBarangay,
+                  onBarangay: (value) => form.patientBarangay = value,
+                  field: form.patientAddress,
                 ),
                 AppTextField.phone(
                   label: 'Contact number',
@@ -113,27 +113,40 @@ class ServiceFormFields extends StatelessWidget {
                 // Separate from the patient-address checkbox above: the
                 // pickup point and the patient's address are often the same,
                 // but not always.
-                CheckboxListTile(
+                _CheckRow(
+                  label: 'Same as my address',
                   value: form.pickupIsMyAddress,
                   onChanged: (checked) {
-                    form.setPickupIsMyAddress(checked ?? false);
+                    form.setPickupIsMyAddress(checked);
                     onChanged();
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: const Text(
-                    'Same as my address',
-                    style: TextStyle(fontSize: 14),
-                  ),
                 ),
-                AppTextField(
+                // Same list as To; "Other" is a free-text pickup location.
+                AppSearchField(
                   label: 'From',
-                  hint: 'e.g. Purok 3, Brgy. Malasin',
-                  controller: form.pickup,
+                  hint: 'Search or pick Other',
+                  value: form.pickupChoice,
+                  items: [...ambulanceDestinations, AmbulanceFormData.pickupOther],
+                  onChanged: (choice) {
+                    form.setPickupChoice(choice);
+                    onChanged();
+                  },
                 ),
-                AppDropdown<String>(
+                if (form.pickupChoice == AmbulanceFormData.pickupOther)
+                  AppTextField(
+                    label: 'Pickup location',
+                    hint: 'e.g. Purok 3, San Fabian',
+                    controller: form.pickup,
+                  ),
+                if (landmark != null)
+                  AppTextField(
+                    label: 'Landmark (optional)',
+                    hint: 'e.g. beside the chapel',
+                    controller: landmark!,
+                  ),
+                AppSearchField(
                   label: 'To',
+                  hint: 'Search or pick Others',
                   value: form.destinationChoice,
                   items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
                   onChanged: (choice) {
@@ -178,19 +191,21 @@ class ServiceFormFields extends StatelessWidget {
                         ),
                       ),
                       // Nudged down so it sits against the input rather than
-                      // the label above it.
-                      Padding(
-                        padding: const EdgeInsets.only(top: 22, left: 4),
-                        child: IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 20),
-                          color: AppColors.inkFaint,
-                          tooltip: 'Remove relative ${i + 1}',
-                          onPressed: () {
-                            form.removeRelative(i);
-                            onChanged();
-                          },
+                      // the label above it. Not on a lone row: removing the only
+                      // relative just blanks it, and the X narrowed the field.
+                      if (form.relatives.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 22, left: 4),
+                          child: IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            color: AppColors.inkFaint,
+                            tooltip: 'Remove relative ${i + 1}',
+                            onPressed: () {
+                              form.removeRelative(i);
+                              onChanged();
+                            },
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 if (form.relatives.length < AmbulanceFormData.maxRelatives)
@@ -208,8 +223,8 @@ class ServiceFormFields extends StatelessWidget {
                       ),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.green700,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.only(right: 8),
+                        minimumSize: const Size(0, 44),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
@@ -246,19 +261,13 @@ class ServiceFormFields extends StatelessWidget {
                     // than the account holder's own address, so this is a
                     // confirmation, not an assumption.
                     if (field.key == 'address' && form.hasAddressField)
-                      CheckboxListTile(
+                      _CheckRow(
+                        label: 'Same as my address',
                         value: form.addressIsMyAddress,
                         onChanged: (checked) {
-                          form.setAddressIsMyAddress(checked ?? false);
+                          form.setAddressIsMyAddress(checked);
                           onChanged();
                         },
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: const Text(
-                          'Same as my address',
-                          style: TextStyle(fontSize: 14),
-                        ),
                       ),
                     if (field.isDate)
                       ProgramDateField(
@@ -318,5 +327,73 @@ class ServiceFormFields extends StatelessWidget {
           ],
         ),
     };
+  }
+
+  /// Barangay search plus "Purok / street", or one free-text address field when
+  /// "Other" is picked.
+  List<Widget> _addressFields({
+    required String label,
+    required String? barangay,
+    required ValueChanged<String?> onBarangay,
+    required TextEditingController field,
+  }) {
+    final other = barangay == AmbulanceFormData.barangayOther;
+    return [
+      AppSearchField(
+        label: label,
+        hint: 'Search barangay',
+        value: barangay,
+        items: [...barangays, AmbulanceFormData.barangayOther],
+        onChanged: (value) {
+          onBarangay(value);
+          onChanged();
+        },
+      ),
+      other
+          ? AppTextField(label: 'Full address', hint: 'House no., street, barangay, town', controller: field)
+          : AppTextField(label: 'Purok / street', hint: 'e.g. Purok 3', controller: field),
+    ];
+  }
+}
+
+/// "Same as my address"-style shortcut. Was a [CheckboxListTile], whose own
+/// padding pushed the box ~12dp in from the field edge below it and left the
+/// label floating mid-row. The box here lines up with the inputs, and the whole
+/// row (44dp tall) is the tap target.
+class _CheckRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _CheckRow({required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: value,
+                  onChanged: (checked) => onChanged(checked ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(label, style: AppText.body(size: 14, color: AppColors.ink))),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

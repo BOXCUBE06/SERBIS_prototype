@@ -700,6 +700,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                   onSubmitted: () => _goTo(_trackTab),
                   onOpenNotifications: onOpenNotifications,
                   onOpenProfile: onOpenProfile,
+                  onOpenLibrary: _openLibraryPage,
                 ),
           deps: widget.user),
       slot(

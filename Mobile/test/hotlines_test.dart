@@ -3,10 +3,9 @@
 // and they had already drifted. Only the SOS sheet listed MDRRMO's second duty
 // line and the PNP/BFP mobiles; the other two silently showed less.
 //
-// The SOS sheet itself is gone now (removed app-wide). These tests assert the
-// remaining two surfaces render every number in `kHotlines` — re-hardcoding a
-// subset anywhere fails the surface that did it, which is the regression that
-// actually happened.
+// The SOS sheet is gone (removed app-wide) and the Services notice no longer
+// lists numbers: the Library is the one place. These tests assert it renders
+// every number in `kHotlines`, and that Services does not grow a copy again.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,46 +97,8 @@ void main() {
     }
   });
 
-  testWidgets('the Services safety notice gives every number its own row',
+  testWidgets('the Services tab shows no hotline numbers: they live in the Library',
       (tester) async {
-    await _pump(
-      tester,
-      ServicesScreen(
-        appState: AppState(_FakeApi()),
-        // This test is about the hotline notice, not the forms; the resident
-        // only has to exist.
-        user: const AppUser(
-          id: '1',
-          firstName: 'Test',
-          lastName: 'Resident',
-          email: 'test@example.com',
-          address: '',
-        ),
-        onSubmitted: () {},
-        onOpenNotifications: () {},
-        onOpenProfile: () {},
-      ),
-    );
-
-    // One organisation per line, one number per line under it. The notice used
-    // to join each contact onto a single `Label — n1 · n2 · n3` string, which
-    // wrapped into one red paragraph — the rescue hotline's four carrier lines
-    // ran together with the next office's number.
-    for (final hotline in kHotlines) {
-      expect(find.text(hotline.labelFor(filipino: false)), findsOneWidget);
-      for (final n in hotline.numbers) {
-        final text = n.label == null ? n.number : '${n.label} · ${n.number}';
-        expect(find.text(text), findsOneWidget, reason: '${hotline.label}: $text');
-      }
-    }
-  });
-
-  testWidgets('every number in the safety notice is its own tap target',
-      (tester) async {
-    // The notice tells a resident to call instead of filing a request, so a
-    // number printed under that instruction has to be dialable. Counted rather
-    // than sampled: a contact whose numbers were folded back onto one row
-    // would still pass a "there is an InkWell" check.
     await _pump(
       tester,
       ServicesScreen(
@@ -155,21 +116,10 @@ void main() {
       ),
     );
 
-    final expected = kHotlines.fold<int>(0, (sum, h) => sum + h.numbers.length);
-
     for (final hotline in kHotlines) {
       for (final n in hotline.numbers) {
-        final text = n.label == null ? n.number : '${n.label} · ${n.number}';
-        expect(
-          find.ancestor(of: find.text(text), matching: find.byType(InkWell)),
-          findsOneWidget,
-          reason: '${hotline.label}: $text is not tappable',
-        );
+        expect(find.textContaining(n.number), findsNothing, reason: '${hotline.label} is back on Services');
       }
     }
-
-    // The rescue hotline's four carrier lines are four separate targets, not
-    // one — a resident on Smart cannot dial the Globe line.
-    expect(expected, 9);
   });
 }

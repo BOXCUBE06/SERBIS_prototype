@@ -13,7 +13,6 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
-import '../widgets/purok_field.dart';
 import '../widgets/shared_widgets.dart';
 import 'change_phone_sheet.dart';
 import 'library/article_reader_screen.dart';
@@ -1151,9 +1150,10 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               errorText: _errors['last'],
               enabled: !_saving,
             ),
-            PurokField(
-              controller: _street,
+            AppTextField(
               label: _tr('profile.street_address'),
+              hint: 'e.g. Purok 3, Rizal St.',
+              controller: _street,
               enabled: !_saving,
             ),
             // The number is the login and where every code goes, so it is shown

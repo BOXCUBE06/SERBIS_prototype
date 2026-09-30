@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../data/hotlines.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import 'motion.dart';
 import 'shared_widgets.dart';
 
 /// An upload slot on the request form. The file itself is picked by the screen
@@ -66,7 +64,8 @@ class AttachmentUploadField extends StatelessWidget {
                   Expanded(
                     child: Text(
                       hasFile ? fileName! : hint,
-                      style: AppText.body(size: 13, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
+                      style: AppText.body(
+                          size: 13, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
                       // A file name is cut short; the instruction is not, or
                       // the resident cannot read which file is being asked for.
                       maxLines: hasFile ? 1 : 3,
@@ -96,72 +95,50 @@ class AttachmentUploadField extends StatelessWidget {
   }
 }
 
-/// "Non-life-threatening use only", with the hotlines to call instead. The
-/// numbers come from `data/hotlines.dart` — M28 removed the three disagreeing
-/// copies, of which one lived in this notice.
-///
-/// One organisation per line, and one number per line under it. This used to
-/// print each contact as `Label — n1 · n2 · n3 · n4` on a single `Text`, which
-/// wrapped into an unbroken red paragraph: the Echague Rescue Hotline alone is
-/// four carrier lines, so the block a resident had to read mid-emergency ran
-/// four wrapped lines with no boundary between one office's number and the
-/// next one's.
-///
-/// The numbers dial, the same as the Library card's — the notice tells a
-/// resident to call instead of filing, and printing an unreachable number
-/// under that instruction is the one thing it must not do. Each number is its
-/// own tap target for the reason the Library rows are: a resident on Smart
-/// cannot use the Globe line, so "call this contact" is not one action.
-class SafetyNotice extends StatefulWidget {
+/// "Non-life-threatening use only", above the ambulance form. The hotlines
+/// themselves live in one place, the Library; [onViewHotlines] links there.
+class SafetyNotice extends StatelessWidget {
   final bool filipino;
 
-  /// Folds the hotline numbers behind a "Show hotline numbers" row. Used above
-  /// a form, where the numbers are a reference and the form is what the
-  /// resident came for; the Services grid prints them in full.
-  final bool collapsible;
+  /// Opens the Library's hotline card. Null draws no link.
+  final VoidCallback? onViewHotlines;
 
-  const SafetyNotice({super.key, required this.filipino, this.collapsible = false});
-
-  @override
-  State<SafetyNotice> createState() => _SafetyNoticeState();
-}
-
-class _SafetyNoticeState extends State<SafetyNotice> {
-  late bool _open = !widget.collapsible;
-
-  bool get filipino => widget.filipino;
+  const SafetyNotice({super.key, required this.filipino, this.onViewHotlines});
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.fromLTRB(14, 12, 10, onViewHotlines == null ? 12 : 4),
       decoration: BoxDecoration(
-        color: AppColors.red50,
-        border: Border.all(color: const Color(0xFFF4D9D2)),
+        color: AppColors.amber50,
+        border: Border.all(color: const Color(0xFFF1DDC0)),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const IconBadge(icon: Icons.warning_amber_rounded, bg: AppColors.surface, fg: AppColors.red600),
-          const SizedBox(width: 11),
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline_rounded, size: 20, color: AppColors.amber600),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   tr(f, 'services.notice_title'),
-                  style: AppText.display(size: 14, weight: FontWeight.w700, color: AppColors.red600),
+                  style: AppText.display(size: 14, weight: FontWeight.w700, color: AppColors.amber600),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   tr(f, 'services.notice_body'),
-                  style: AppText.body(size: 13, color: const Color(0xFF7A3527), height: 1.5),
+                  style: AppText.body(size: 13, color: AppColors.ink, height: 1.5),
                 ),
-                if (widget.collapsible)
+                if (onViewHotlines != null)
                   InkWell(
-                    onTap: () => setState(() => _open = !_open),
+                    onTap: onViewHotlines,
                     borderRadius: BorderRadius.circular(8),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(minHeight: 44),
@@ -169,34 +146,15 @@ class _SafetyNoticeState extends State<SafetyNotice> {
                         children: [
                           Expanded(
                             child: Text(
-                              tr(f, _open ? 'notice.hide_hotlines' : 'notice.show_hotlines'),
-                              style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.red600),
+                              tr(f, 'notice.view_hotlines'),
+                              style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.amber600),
                             ),
                           ),
-                          Icon(
-                            _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                            color: AppColors.red600,
-                          ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.amber600),
                         ],
                       ),
                     ),
-                  )
-                else
-                  const SizedBox(height: 10),
-                AnimatedSize(
-                  duration: reduceMotion(context) ? Duration.zero : kMotionExit,
-                  curve: kEaseOut,
-                  alignment: Alignment.topCenter,
-                  child: _open
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.collapsible) const SizedBox(height: 4),
-                            for (final hotline in kHotlines) _hotlineBlock(hotline, f),
-                          ],
-                        )
-                      : const SizedBox(width: double.infinity),
-                ),
+                  ),
               ],
             ),
           ),
@@ -204,50 +162,6 @@ class _SafetyNoticeState extends State<SafetyNotice> {
       ),
     );
   }
-
-  /// The organisation once, then its numbers under it — never joined onto one
-  /// line, which is what turned five contacts into a paragraph.
-  Widget _hotlineBlock(Hotline hotline, bool f) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              hotline.labelFor(filipino: f),
-              style: AppText.display(
-                  size: 13, weight: FontWeight.w700, color: const Color(0xFF7A3527)),
-            ),
-            for (final number in hotline.numbers) _hotlineNumberRow(number),
-          ],
-        ),
-      );
-
-  /// `Landline · (078) 324-5410` where the contact has more than one carrier
-  /// reaching the same desk, the bare number where it does not — a resident
-  /// cannot pick between four unlabeled numbers, and every other contact's
-  /// numbers are interchangeable.
-  Widget _hotlineNumberRow(HotlineNumber number) => InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: () => callHotlineNumber(number.number),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  number.label == null
-                      ? number.number
-                      : '${number.label} · ${number.number}',
-                  style: AppText.display(
-                      size: 13.5, weight: FontWeight.w700, color: AppColors.red600),
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.call_rounded, size: 16, color: AppColors.red600),
-            ],
-          ),
-        ),
-      );
 }
 
 /// One service in the catalogue grid.

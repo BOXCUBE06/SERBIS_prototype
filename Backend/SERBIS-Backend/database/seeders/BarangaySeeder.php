@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\DB;
 class BarangaySeeder extends Seeder
 {
     /**
-     * The three barangays SERBIS covers. Confirmed by the project owner on
-     * 2026-08-23 as the real list for this deployment, not placeholders — which
-     * is why this seeder runs on production. It is the register screen's
-     * barangay picker, so what is here is the complete set of barangays anyone
-     * can sign up from.
+     * The three barangays SERBIS first covered (confirmed 2026-08-23). Sign-up
+     * has since opened to all 64 of Echague, which the
+     * 2026_09_30_090000_add_all_echague_barangays migration adds via
+     * BarangaySync, so on a migrated database this seeder finds the table
+     * populated and skips. Kept for the 3 ids older data and demos expect.
      *
      * Names are bare, with no "Brgy." prefix: the dashboard choropleth joins
      * these against GeoJSON feature names, which carry the bare name. A prefix
