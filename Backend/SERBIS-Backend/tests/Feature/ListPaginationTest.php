@@ -454,8 +454,8 @@ class ListPaginationTest extends TestCase
         $body = $this->getJson('/api/barangays')->assertOk()->json();
 
         $this->assertArrayNotHasKey('meta', $body);
-        // 30 created here plus San Fabian from setUp.
-        $this->assertCount(31, $this->itemsOf($body));
+        // Every row: the migrated Echague list, San Fabian from setUp, and the 30 here.
+        $this->assertCount(Barangay::count(), $this->itemsOf($body));
     }
 
     public function test_advisories_returns_every_blast_the_resident_received(): void

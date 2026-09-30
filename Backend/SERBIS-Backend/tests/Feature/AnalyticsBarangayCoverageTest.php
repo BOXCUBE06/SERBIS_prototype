@@ -83,7 +83,7 @@ class AnalyticsBarangayCoverageTest extends TestCase
 
     public function test_a_barangay_with_residents_but_no_requests_still_appears(): void
     {
-        $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
+        $barangay = Barangay::firstOrCreate(['barangay_name' => 'San Fabian']);
         $this->resident($barangay, '09171111111');
         $this->resident($barangay, '09172222222');
 
@@ -111,7 +111,7 @@ class AnalyticsBarangayCoverageTest extends TestCase
 
     public function test_requests_are_windowed_but_residents_are_not(): void
     {
-        $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
+        $barangay = Barangay::firstOrCreate(['barangay_name' => 'San Fabian']);
         $resident = $this->resident($barangay, '09171111111');
 
         // Filed outside the queried window.
@@ -126,7 +126,7 @@ class AnalyticsBarangayCoverageTest extends TestCase
 
     public function test_the_walk_in_row_and_totals_reconcile(): void
     {
-        $barangay = Barangay::create(['barangay_name' => 'San Fabian']);
+        $barangay = Barangay::firstOrCreate(['barangay_name' => 'San Fabian']);
         $resident = $this->resident($barangay, '09171111111');
 
         $this->requestAt($resident, now()->subDay()->toDateTimeString());

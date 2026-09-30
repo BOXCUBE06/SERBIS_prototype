@@ -11,6 +11,13 @@ class SyncBarangaysCommandTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** The add_all_echague_barangays migration has already synced; start these from an empty table. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('tbl_barangay')->delete();
+    }
+
     /** The three barangays production has today. @return list<int> their ids (auto-increment is not reset between tests on MySQL) */
     private function productionRows(): array
     {

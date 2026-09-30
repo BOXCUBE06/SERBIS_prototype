@@ -12,6 +12,13 @@ class EchagueBarangaySeederTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** The add_all_echague_barangays migration has already synced; start these from an empty table. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('tbl_barangay')->delete();
+    }
+
     public function test_seeds_all_64_barangays_with_unique_codes(): void
     {
         $this->seed(EchagueBarangaySeeder::class);
