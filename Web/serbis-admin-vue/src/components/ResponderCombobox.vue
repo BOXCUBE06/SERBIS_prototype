@@ -28,7 +28,7 @@
     @update:focused="focused = $event"
   >
     <template v-slot:item="{ item, props }">
-      <v-list-item v-bind="props" :title="item.raw.title" :subtitle="item.raw.position"></v-list-item>
+      <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
     </template>
   </v-combobox>
 </template>
