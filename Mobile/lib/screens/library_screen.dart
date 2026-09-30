@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../data/hotlines.dart';
 import '../data/safety_files.dart';
 import '../models/info_material.dart';
 import '../state/request_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
+import '../widgets/hotline_list.dart';
 import 'library/article_reader_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
@@ -28,12 +28,10 @@ class LibraryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final filipino = appState.language == AppLanguage.filipino;
 
-    // First Aid, Disaster Preparedness and the hotline card are all compiled
-    // into the app — nothing to refresh there. MDRRMO Documents
-    // (_PublishedMaterials) is the one section this screen ever fetches over
-    // the network, so that is the only thing a pull refetches.
+    // First Aid and Disaster Preparedness are compiled into the app. A pull
+    // refetches MDRRMO Documents (_PublishedMaterials) and the hotlines.
     return RefreshIndicator(
-      onRefresh: appState.loadMaterials,
+      onRefresh: () => Future.wait([appState.loadMaterials(), appState.loadHotlines()]),
       child: ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -65,13 +63,13 @@ class LibraryScreen extends StatelessWidget {
                         style: AppText.display(size: 14.5),
                       ),
                     ),
-                    // Hotlines are compiled into the app, so they are genuinely
-                    // available with no signal. Nothing to download.
+                    // Always on the device: the cached server list, or the
+                    // built-in one before the first fetch. Nothing to download.
                     OfflinePill(saved: true, filipino: filipino),
                   ],
                 ),
                 const SizedBox(height: 12),
-                for (final hotline in kHotlines) _hotlineRow(hotline),
+                HotlineList(hotlines: appState.hotlines, filipino: filipino),
               ],
             ),
           ),
@@ -116,51 +114,6 @@ class LibraryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 110),
       ],
-      ),
-    );
-  }
-
-  // Contact name once, then every number that reaches it as its own tappable
-  // row — a contact with several lines (the rescue hotline: landline, Globe,
-  // Smart, Sun) is not one action, it is "pick the one that reaches you and
-  // dial that one", so each number gets its own tap target and its own
-  // real `tel:` call rather than one row calling whichever was first.
-  Widget _hotlineRow(Hotline hotline) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(hotline.label,
-              style: AppText.display(size: 12.5, weight: FontWeight.w600)),
-          const SizedBox(height: 2),
-          for (final n in hotline.numbers) _hotlineNumberRow(n),
-        ],
-      ),
-    );
-  }
-
-  Widget _hotlineNumberRow(HotlineNumber n) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(6),
-      onTap: () => callHotlineNumber(n.number),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                n.label == null ? n.number : '${n.label} · ${n.number}',
-                style: AppText.display(
-                    size: 12.5,
-                    weight: FontWeight.w700,
-                    color: AppColors.green700),
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.call_rounded, size: 13, color: AppColors.green700),
-          ],
-        ),
       ),
     );
   }

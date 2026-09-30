@@ -717,6 +717,12 @@ class ApiService {
     return rows.map((row) => row.toString()).toList();
   }
 
+  /// Public on the backend: hotlines are shown and cached before login.
+  Future<List<Map<String, dynamic>>> getHotlines() async {
+    final data = await _get('/hotlines');
+    return listFrom(data);
+  }
+
   Future<List<Map<String, dynamic>>> getInfoMaterials() async {
     final data = await _get('/info-materials');
     return listFrom(data);

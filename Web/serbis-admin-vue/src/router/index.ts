@@ -23,6 +23,7 @@ const routes = [
   { path: '/services-config', component: () => import('../views/ServicesConfigView.vue'), meta: { section: 'services' } },
   { path: '/service-audience', component: () => import('../views/ServiceAudienceView.vue'), meta: { section: 'service_audience' } },
   { path: '/service-vehicles', component: () => import('../views/ServiceVehiclesView.vue'), meta: { section: 'service_vehicles' } },
+  { path: '/hotlines', component: () => import('../views/HotlinesView.vue'), meta: { section: 'hotlines' } },
   // `meta: { fixedHeight: true }` opts a route out of the shell's page
   // scrolling (App.vue). No route uses it now: the two that did held a split
   // pane, which became a modal, and inside the capped height their shared

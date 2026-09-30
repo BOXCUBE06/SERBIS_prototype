@@ -4,6 +4,7 @@ library serbis.main;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'data/hotlines.dart';
 import 'models/request_models.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -26,8 +27,10 @@ import 'state/app_log.dart';
 import 'state/push_messaging.dart';
 import 'state/request_store.dart';
 import 'state/account_store.dart';
+import 'state/hotline_cache.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_bottom_nav.dart';
+import 'widgets/hotline_list.dart';
 import 'widgets/motion.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
@@ -146,11 +149,24 @@ class _AuthGateState extends State<AuthGate> {
   /// is what's left. Opaque — held only to hand to VerifyLoginScreen.
   String? _pendingLoginChallengeId;
 
+  /// For the login screen's hotlines link: built-in list until the cache or a
+  /// fetch replaces it. The fetch also warms the cache the Library reads.
+  List<Hotline> _hotlines = kHotlines;
+
   @override
   void initState() {
     super.initState();
     _api.onUnauthorized = _onSessionExpired;
     _restoreSession();
+    _loadHotlines();
+  }
+
+  Future<void> _loadHotlines() async {
+    final cache = HotlineCache();
+    final cached = await cache.load();
+    if (cached != null && mounted) setState(() => _hotlines = cached);
+    final fresh = await cache.refresh(_api.getHotlines);
+    if (fresh != null && mounted) setState(() => _hotlines = fresh);
   }
 
   /// A stored token carries no profile with it, so it has to be exchanged for
@@ -326,6 +342,9 @@ class _AuthGateState extends State<AuthGate> {
           });
         },
         infoMessage: _loginInfoMessage,
+        onOpenHotlines: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => HotlinesPage(hotlines: _hotlines),
+        )),
       );
     }
 
@@ -477,6 +496,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     // Loads the offline index too, so Profile can report what is on the device
     // even if the Library tab is never opened this launch.
     _appState.loadMaterials();
+    // Cached list first, then the server; the built-in list until either lands.
+    _appState.loadHotlines();
   }
 
   @override

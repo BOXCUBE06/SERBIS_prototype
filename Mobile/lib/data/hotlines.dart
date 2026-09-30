@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../theme/app_theme.dart';
 
 /// One phone number for a contact, with an optional carrier/line label.
 ///
@@ -35,21 +33,45 @@ class Hotline {
   /// subset of what is reachable again.
   final List<HotlineNumber> numbers;
 
-  final IconData icon;
-  final Color iconBg;
-  final Color iconFg;
-
   const Hotline({
     required this.label,
     required this.labelFil,
     required this.numbers,
-    required this.icon,
-    required this.iconBg,
-    required this.iconFg,
   });
 
   String labelFor({required bool filipino}) => filipino ? labelFil : label;
 
+  /// One row of `GET /api/hotlines` or of the cache. Null when unusable (no
+  /// name, or no number to dial), so a bad row is skipped, not shown blank.
+  static Hotline? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final label = (json['label'] as String?)?.trim() ?? '';
+    final numbers = <HotlineNumber>[];
+    for (final n in (json['numbers'] as List?) ?? const []) {
+      if (n is! Map) continue;
+      final number = (n['number'] as String?)?.trim() ?? '';
+      final line = (n['label'] as String?)?.trim() ?? '';
+      if (number.isEmpty) continue;
+      numbers.add((label: line.isEmpty ? null : line, number: number));
+    }
+    if (label.isEmpty || numbers.isEmpty) return null;
+
+    final labelFil = (json['label_fil'] as String?)?.trim() ?? '';
+    return Hotline(
+      label: label,
+      labelFil: labelFil.isEmpty ? label : labelFil,
+      numbers: numbers,
+    );
+  }
+
+  /// Same shape as the API row, so the cache reads back through [fromJson].
+  Map<String, dynamic> toCacheJson() => {
+        'label': label,
+        'label_fil': labelFil,
+        'numbers': [
+          for (final n in numbers) {'label': n.label, 'number': n.number},
+        ],
+      };
 }
 
 /// Dials a hotline number directly. One number at a time — a contact with
@@ -61,11 +83,11 @@ Future<void> callHotlineNumber(String number) async {
 
 /// The emergency contacts shown on every surface that lists them.
 ///
-/// **These are compiled into the app**, which is deliberate — they must be
-/// readable with no signal — but it also means correcting a duty number needs a
-/// new release, and until it ships the app confidently displays a number nobody
-/// answers. M28's remaining half is a `GET /api/hotlines` cached through the
-/// offline layer, with this list as the fallback when the cache is empty.
+/// **The built-in fallback.** The live list comes from `GET /api/hotlines`
+/// (editable in the admin panel) and is cached by `HotlineCache`; this one is
+/// shown only until a first fetch succeeds, so a fresh install with no signal
+/// still has numbers to dial. Keep it in step with the seed migration
+/// (2026_09_30_100000_create_tbl_emergency_hotlines).
 const List<Hotline> kHotlines = [
   Hotline(
     label: 'Echague Rescue Hotline',
@@ -76,9 +98,6 @@ const List<Hotline> kHotlines = [
       (label: 'Smart', number: '0919-991-7115'),
       (label: 'Sun', number: '0933-868-2526'),
     ],
-    icon: Icons.local_hospital_outlined,
-    iconBg: AppColors.red50,
-    iconFg: AppColors.red600,
   ),
   Hotline(
     label: 'PDRRMO',
@@ -87,32 +106,20 @@ const List<Hotline> kHotlines = [
       (label: null, number: '(078) 323-0416'),
       (label: null, number: '0921-585-2341'),
     ],
-    icon: Icons.shield_outlined,
-    iconBg: AppColors.red50,
-    iconFg: AppColors.red600,
   ),
   Hotline(
     label: 'ISELCO I',
     labelFil: 'ISELCO I',
     numbers: [(label: null, number: '0955-698-1059')],
-    icon: Icons.bolt_outlined,
-    iconBg: AppColors.amber50,
-    iconFg: AppColors.amber600,
   ),
   Hotline(
     label: 'BFP',
     labelFil: 'BFP',
     numbers: [(label: null, number: '(02) 426-3812')],
-    icon: Icons.local_fire_department_outlined,
-    iconBg: AppColors.amber50,
-    iconFg: AppColors.amber600,
   ),
   Hotline(
     label: 'National Emergency',
     labelFil: 'Pambansang Emerhensiya',
     numbers: [(label: null, number: '911')],
-    icon: Icons.warning_amber_rounded,
-    iconBg: AppColors.red50,
-    iconFg: AppColors.red600,
   ),
 ];

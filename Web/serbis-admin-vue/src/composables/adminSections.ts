@@ -58,6 +58,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'services', to: '/services-config', title: 'Manage Services', icon: 'mdi-wrench-outline', group: 'configuration' },
   { key: 'service_audience', to: '/service-audience', title: 'Service Audience', icon: 'mdi-account-check-outline', group: 'configuration' },
   { key: 'service_vehicles', to: '/service-vehicles', title: 'Service Vehicles', icon: 'mdi-truck-outline', group: 'configuration' },
+  { key: 'hotlines', to: '/hotlines', title: 'Emergency Hotlines', icon: 'mdi-phone-alert-outline', group: 'configuration' },
 
   { key: 'staff', to: '/staff', title: 'Staff Accounts', icon: 'mdi-shield-account-outline', group: 'system', superAdminOnly: true },
   { key: 'logs', to: '/logs', title: 'Activity Logs', icon: 'mdi-history', group: 'system' },

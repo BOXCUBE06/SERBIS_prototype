@@ -2,6 +2,7 @@
 library serbis.state.app_state;
 
 import 'package:flutter/foundation.dart';
+import '../data/hotlines.dart';
 import '../models/advisory.dart';
 import '../models/borrow_models.dart';
 import '../models/info_material.dart';
@@ -11,6 +12,7 @@ import 'api_service.dart';
 import 'app_log.dart';
 import 'borrow_cache.dart';
 import 'file_opener.dart';
+import 'hotline_cache.dart';
 import 'material_cache.dart';
 import 'request_cache.dart';
 
@@ -116,6 +118,11 @@ class AppState extends ChangeNotifier {
 
   final FileOpener _fileOpener;
   final RequestCache _requestCache;
+  final HotlineCache _hotlineCache;
+
+  /// Cached server list, else the built-in one. Null until one is in hand.
+  List<Hotline>? _hotlines;
+  List<Hotline> get hotlines => _hotlines ?? kHotlines;
 
   AppState(
     this._api, {
@@ -123,11 +130,13 @@ class AppState extends ChangeNotifier {
     FileOpener? fileOpener,
     RequestCache? requestCache,
     BorrowCache? borrowCache,
+    HotlineCache? hotlineCache,
   })  : _materialCache =
             materialCache ?? MaterialCache(download: _api.downloadFile),
         _fileOpener = fileOpener ?? const FileOpener(),
         _requestCache = requestCache ?? RequestCache(),
-        _borrowCache = borrowCache ?? BorrowCache();
+        _borrowCache = borrowCache ?? BorrowCache(),
+        _hotlineCache = hotlineCache ?? HotlineCache();
 
   /// False on web, where there is nowhere to write. The download affordance is
   /// hidden entirely rather than offered and failing.
@@ -605,6 +614,22 @@ class AppState extends ChangeNotifier {
     }
 
     materialsLoading = false;
+    notifyListeners();
+  }
+
+  /// Cache first (instant, works offline), then the server. A failed or empty
+  /// fetch keeps whatever list is showing — an emergency number never goes
+  /// missing because the network did.
+  Future<void> loadHotlines() async {
+    final cached = await _hotlineCache.load();
+    if (cached != null && _hotlines == null) {
+      _hotlines = cached;
+      notifyListeners();
+    }
+
+    final fresh = await _hotlineCache.refresh(_api.getHotlines);
+    if (fresh == null) return;
+    _hotlines = fresh;
     notifyListeners();
   }
 

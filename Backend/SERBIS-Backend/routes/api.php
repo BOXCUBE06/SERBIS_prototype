@@ -8,6 +8,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\ConductionRequestController;
 use App\Http\Controllers\DeviceTokenController;
+use App\Http\Controllers\EmergencyHotlineController;
 use App\Http\Controllers\EquipmentBorrowingController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\ExportLogController;
@@ -67,6 +68,8 @@ Route::middleware('throttle:api')->group(function () {
     // before the resident has an account, and barangay_id is required to sign up.
     // The row is nothing but an id and a name, and the write routes stay admin-only.
     Route::get('barangays', [BarangayController::class, 'index']);
+    // Public too: the app shows hotlines before login and caches them offline.
+    Route::get('hotlines', [EmergencyHotlineController::class, 'index']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
@@ -298,6 +301,8 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // signed-in user above; only the writes are a section.
     Route::apiResource('barangays', BarangayController::class)->except(['index', 'show'])
         ->middleware('section:residents');
+    Route::apiResource('hotlines', EmergencyHotlineController::class)->except(['index', 'show'])
+        ->middleware('section:hotlines');
     Route::apiResource('equipments', EquipmentController::class)->except(['index', 'show'])
         ->middleware('section:inventory');
     Route::apiResource('services', ServiceController::class)->except(['index', 'show'])
