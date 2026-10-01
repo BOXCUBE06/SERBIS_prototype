@@ -160,7 +160,7 @@ class StaffPasswordResetTest extends TestCase
         $temporary = $this->reset($other)->json('temporary_password');
 
         $login = $this->postJson('/api/admin/login', [
-            'email_address' => 'other@serbis.com',
+            'username' => 'other',
             'password' => $temporary,
         ])->assertStatus(200)->assertJsonPath('user.must_change_password', true);
 
@@ -183,7 +183,7 @@ class StaffPasswordResetTest extends TestCase
         $other = $this->makeAdmin('other@serbis.com');
         $temporary = $this->reset($other)->json('temporary_password');
         $token = $this->postJson('/api/admin/login', [
-            'email_address' => 'other@serbis.com',
+            'username' => 'other',
             'password' => $temporary,
         ])->json('token');
 
@@ -204,7 +204,7 @@ class StaffPasswordResetTest extends TestCase
 
         // The temporary password is dead.
         $this->postJson('/api/admin/login', [
-            'email_address' => 'other@serbis.com',
+            'username' => 'other',
             'password' => $temporary,
         ])->assertStatus(401);
     }

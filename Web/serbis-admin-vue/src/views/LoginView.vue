@@ -72,13 +72,14 @@
   </span>
 </v-alert>
 
-            <label for="login-email" class="d-block text-body-2 text-white mb-2 font-weight-medium">Email</label>
+            <label for="login-username" class="d-block text-body-2 text-white mb-2 font-weight-medium">Username</label>
             <v-text-field
-              id="login-email"
-              v-model="credentials.email_address"
-              type="email"
-              inputmode="email"
-              placeholder="Example@serbis.com"
+              id="login-username"
+              v-model="credentials.username"
+              type="text"
+              placeholder="e.g. juan.delacruz"
+              autocapitalize="none"
+              spellcheck="false"
               variant="solo"
               bg-color="white"
               density="comfortable"
@@ -257,7 +258,7 @@ const errorMessage = ref('')
 const lockoutSeconds = ref(0)
 let lockoutTimer = null
 
-// The login route is throttled at 5/min per email+IP (AppServiceProvider).
+// The login route is throttled at 5/min per username+IP (AppServiceProvider).
 // Count the lockout down rather than leaving a dead button.
 const startLockout = (seconds) => {
   clearInterval(lockoutTimer)
@@ -274,7 +275,7 @@ const startLockout = (seconds) => {
 onUnmounted(() => clearInterval(lockoutTimer))
 
 const credentials = reactive({
-  email_address: '',
+  username: '',
   password: ''
 })
 
@@ -288,10 +289,10 @@ const enrollmentRequired = ref(false)
 const mfaError = ref('')
 const mfaLoading = ref(false)
 
-// The throttle bucket is keyed per email, so a lockout on one address says
-// nothing about another. Editing the email releases the button — a typo'd
-// address must not lock the account the user actually meant.
-watch(() => credentials.email_address, () => {
+// The throttle bucket is keyed per username, so a lockout on one says nothing
+// about another. Editing the username releases the button — a typo'd name
+// must not lock the account the user actually meant.
+watch(() => credentials.username, () => {
   if (lockoutSeconds.value > 0) {
     clearInterval(lockoutTimer)
     lockoutSeconds.value = 0
@@ -320,7 +321,7 @@ const handleLogin = async () => {
       // A temporary password gets no further than the page that replaces it.
       router.push(data.user?.must_change_password ? '/change-password' : '/')
     } else if (response.status === 401) {
-      errorMessage.value = 'Invalid email or password. Please try again.'
+      errorMessage.value = 'Invalid username or password. Please try again.'
     } else if (response.status === 403 && data.code === 'mfa_required') {
       // Password proven. No token yet — that only happens once handleMfaSubmit
       // succeeds — so nothing here needs the router guard's attention.

@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['first_name', 'last_name', 'role', 'status', 'email_address', 'password'])]
+#[Fillable(['first_name', 'last_name', 'username', 'role', 'status', 'email_address', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -40,6 +40,43 @@ class User extends Authenticatable
      * account that exists, holds the right password, and cannot sign in.
      * Deactivation is an action someone took; absence of it is not.
      */
+    /** What a staff username may contain: 3 to 30 of a-z, 0-9, dot and underscore. */
+    public const USERNAME_REGEX = '/^[a-z0-9._]{3,30}$/';
+
+    public const USERNAME_MESSAGE = 'Use 3 to 30 lowercase letters, digits, dots or underscores.';
+
+    /**
+     * Code that still creates staff from an email alone (older seeders, test
+     * fixtures) gets a username derived from it, the same way the migration
+     * backfilled existing accounts. The Staff Accounts screen always sends one.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (User $user) {
+            if (filled($user->username)) {
+                $user->username = strtolower($user->username);
+
+                return;
+            }
+
+            $local = strtolower(strstr((string) $user->email_address, '@', true) ?: (string) $user->email_address);
+            $base = substr(preg_replace('/[^a-z0-9._]/', '', $local), 0, 30);
+            $base = strlen($base) >= 3 ? $base : substr($base.'staff', 0, 30);
+
+            $candidate = $base;
+            for ($n = 2; static::where('username', $candidate)->exists(); $n++) {
+                $candidate = substr($base, 0, 30 - strlen("_{$n}"))."_{$n}";
+            }
+            $user->username = $candidate;
+        });
+    }
+
+    /** "Full Name (username)", how staff are named on records. */
+    public function displayName(): string
+    {
+        return trim("{$this->first_name} {$this->last_name}").($this->username ? " ({$this->username})" : '');
+    }
+
     public function isDeactivated(): bool
     {
         return strtolower((string) $this->status) === 'inactive';

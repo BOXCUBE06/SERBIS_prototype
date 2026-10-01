@@ -605,12 +605,21 @@ class AuthController extends Controller
     // Endpoint specifically for the Web Frontend
     public function adminLogin(Request $request)
     {
+        // Staff sign in with a username now. An old client still sending the
+        // email is told so rather than shown "wrong credentials".
+        if ($request->has('email_address') && ! $request->filled('username')) {
+            return response()->json([
+                'message' => 'Sign in with your username instead of your email.',
+                'errors' => ['username' => ['Sign in with your username instead of your email.']],
+            ], 422);
+        }
+
         $request->validate([
-            'email_address' => 'required|email',
+            'username' => 'required|string|max:30',
             'password' => 'required',
         ]);
 
-        $admin = User::where('email_address', $request->email_address)->first();
+        $admin = User::where('username', strtolower(trim($request->username)))->first();
 
         if (! $admin || ! Hash::check($request->password, $admin->password)) {
             return response()->json([

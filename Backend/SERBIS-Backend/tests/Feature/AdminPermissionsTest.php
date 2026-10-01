@@ -55,14 +55,14 @@ class AdminPermissionsTest extends TestCase
         $response = $this->postJson('/api/admins', [
             'first_name' => 'Grace',
             'last_name' => 'Reyes',
-            'email_address' => 'grace@serbis.com',
+            'username' => 'grace',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);
 
         $response->assertJsonPath('permissions', [])->assertJsonPath('is_super_admin', false);
 
-        $created = User::where('email_address', 'grace@serbis.com')->first();
+        $created = User::where('username', 'grace')->first();
         $this->assertSame([], $created->permissions);
         $this->assertSame([], $created->allowedSections());
     }
@@ -72,12 +72,12 @@ class AdminPermissionsTest extends TestCase
         $this->postJson('/api/admins', [
             'first_name' => 'Grace',
             'last_name' => 'Reyes',
-            'email_address' => 'grace@serbis.com',
+            'username' => 'grace',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);
 
-        $id = User::where('email_address', 'grace@serbis.com')->value('admin_id');
+        $id = User::where('username', 'grace')->value('admin_id');
 
         $this->assertSame(1, DB::table('tbl_system_logs')
             ->where('auditable_type', User::class)->where('auditable_id', $id)->count());
@@ -266,7 +266,7 @@ class AdminPermissionsTest extends TestCase
         $target = $this->makeSuperAdmin('target@test.local');
 
         foreach ([
-            ['update', 'PUT', ['first_name' => 'X', 'last_name' => 'Y', 'email_address' => 'target@test.local', 'password' => 'Newpass123', 'password_confirmation' => 'Newpass123']],
+            ['update', 'PUT', ['first_name' => 'X', 'last_name' => 'Y', 'username' => 'target', 'password' => 'Newpass123', 'password_confirmation' => 'Newpass123']],
             ['resetPassword', 'POST', []],
             ['reactivate', 'PATCH', []],
             ['destroy', 'DELETE', []],
@@ -320,7 +320,7 @@ class AdminPermissionsTest extends TestCase
     {
         $this->makeLimitedStaff([AdminSections::FILES], 'files@test.local');
 
-        $this->postJson('/api/admin/login', ['email_address' => 'files@test.local', 'password' => 'Password123'])
+        $this->postJson('/api/admin/login', ['username' => 'files', 'password' => 'Password123'])
             ->assertOk()
             ->assertJsonPath('sections', [AdminSections::FILES]);
     }

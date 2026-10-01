@@ -35,7 +35,7 @@ class SmsDeliveryController extends Controller
     public function index(): JsonResponse
     {
         $logs = SmsLog::query()
-            ->with(['sender:admin_id,first_name,last_name', 'barangay:barangay_id,barangay_name'])
+            ->with(['sender:admin_id,first_name,last_name,username', 'barangay:barangay_id,barangay_name'])
             ->withCount('queueIds')
             ->latest()
             ->orderByDesc('sms_log_id')
@@ -179,7 +179,7 @@ class SmsDeliveryController extends Controller
 
     private function answer(SmsLog $log, bool $checked, ?string $reason = null, ?string $message = null, ?int $notFound = null): JsonResponse
     {
-        $log->loadMissing(['sender:admin_id,first_name,last_name', 'barangay:barangay_id,barangay_name']);
+        $log->loadMissing(['sender:admin_id,first_name,last_name,username', 'barangay:barangay_id,barangay_name']);
         $log->loadCount('queueIds');
 
         return response()->json([
@@ -232,7 +232,7 @@ class SmsDeliveryController extends Controller
             'sms_log_id' => $log->getKey(),
             'created_at' => $log->created_at,
             'barangay' => $log->barangay?->barangay_name ?? 'Unknown barangay',
-            'sender' => $log->sender ? $log->sender->first_name.' '.$log->sender->last_name : 'Unknown sender',
+            'sender' => $log->sender ? $log->sender->displayName() : 'Unknown sender',
             'message' => $log->message_body,
             'status' => $log->status,
             'recipient_count' => array_sum($counts),

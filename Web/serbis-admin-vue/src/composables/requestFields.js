@@ -19,7 +19,12 @@ export const manilaDateTime = (v) => (v ? dateTimeFormat.format(new Date(v)) : '
 export const manilaDate = (v) => (v ? dateFormat.format(new Date(/^\d{4}-\d\d-\d\d$/.test(v) ? `${v}T00:00:00+08:00` : v)) : '')
 export const manilaDay = (v) => (v ? dayFormat.format(new Date(v)) : '')
 
-const adminName = (a) => (a ? `${a.first_name || ''} ${a.last_name || ''}`.trim() : '')
+// "Full Name (username)", the way staff are named on records.
+const adminName = (a) => {
+  if (!a) return ''
+  const name = `${a.first_name || ''} ${a.last_name || ''}`.trim()
+  return a.username ? `${name} (${a.username})` : name
+}
 const phone = (r) => displayPhone(r.resident?.phone_number) || r.walk_in_contact_number || ''
 const barangay = (r) => r.resident?.barangay?.barangay_name || (isWalkIn(r) ? 'Walk-in' : '')
 const peopleOf = (r, role) => (r.conduction_requests?.[0]?.people || r.people || []).filter((p) => p.role === role).map((p) => p.name).join(', ')

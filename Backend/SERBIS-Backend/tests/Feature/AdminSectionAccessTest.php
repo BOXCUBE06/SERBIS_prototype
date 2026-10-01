@@ -103,13 +103,13 @@ class AdminSectionAccessTest extends TestCase
             'first_name' => 'Hand',
             'last_name' => 'Inserted',
             'role' => 'Admin',
-            'email_address' => 'hand@serbis.com',
+            'username' => 'hand',
             'password' => Hash::make('Password123'),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $admin = User::where('email_address', 'hand@serbis.com')->first();
+        $admin = User::where('username', 'hand')->first();
 
         $this->assertFalse($admin->isSuperAdmin());
         $this->assertNull($admin->permissions);

@@ -57,9 +57,6 @@ class AdminController extends Controller
      * address actually changes: accounts made before this rule keep their
      * existing address and must still be savable.
      */
-    private const STAFF_EMAIL_REGEX = '/^[a-z0-9]+(\.[a-z0-9]+)*@serbis\.com$/';
-
-    private const STAFF_EMAIL_MESSAGE = 'Use lowercase letters, digits and dots only, ending in @serbis.com.';
 
     public function index()
     {
@@ -75,10 +72,10 @@ class AdminController extends Controller
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email_address' => ['required', 'email', 'max:255', 'regex:'.self::STAFF_EMAIL_REGEX, 'unique:tbl_user,email_address'],
+            'username' => ['required', 'string', 'regex:'.User::USERNAME_REGEX, 'unique:tbl_user,username'],
             'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ], [
-            'email_address.regex' => self::STAFF_EMAIL_MESSAGE,
+            'username.regex' => User::USERNAME_MESSAGE,
         ]);
 
         // Assigned key by key, and `role` is not among the rules. It is set
@@ -88,7 +85,7 @@ class AdminController extends Controller
         $admin = new User([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
-            'email_address' => $validated['email_address'],
+            'username' => $validated['username'],
             'password' => $validated['password'],
             'role' => 'Admin',
             'status' => 'Active',
@@ -130,31 +127,25 @@ class AdminController extends Controller
             return $refusal;
         }
 
-        $emailRules = [
-            'required',
-            'email',
-            'max:255',
-            Rule::unique('tbl_user', 'email_address')->ignore($admin->getKey(), 'admin_id'),
-        ];
-
-        if ((string) $request->input('email_address') !== (string) $admin->email_address) {
-            $emailRules[] = 'regex:'.self::STAFF_EMAIL_REGEX;
-        }
-
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email_address' => $emailRules,
+            'username' => [
+                'required',
+                'string',
+                'regex:'.User::USERNAME_REGEX,
+                Rule::unique('tbl_user', 'username')->ignore($admin->getKey(), 'admin_id'),
+            ],
             // Blank leaves the stored hash alone. Assigning null would lock the
             // account out of its own panel.
             'password' => ['nullable', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ], [
-            'email_address.regex' => self::STAFF_EMAIL_MESSAGE,
+            'username.regex' => User::USERNAME_MESSAGE,
         ]);
 
         $admin->first_name = $validated['first_name'];
         $admin->last_name = $validated['last_name'];
-        $admin->email_address = $validated['email_address'];
+        $admin->username = $validated['username'];
 
         $passwordChanged = ! empty($validated['password']);
 

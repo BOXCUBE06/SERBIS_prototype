@@ -90,7 +90,7 @@ class SmsHistoryTest extends TestCase
         $response = $this->actingAs($this->admin)->getJson('/api/logs/sms')->assertOk();
 
         $response->assertJsonPath('data.0.message', 'Evacuate low-lying areas immediately.')
-            ->assertJsonPath('data.0.user.name', 'MDRRMO Admin')
+            ->assertJsonPath('data.0.user.name', 'MDRRMO Admin (admin)')
             ->assertJsonPath('data.0.barangay', 'San Fabian')
             ->assertJsonPath('data.0.recipient_count', 2)
             ->assertJsonPath('data.0.status', 'Queued');

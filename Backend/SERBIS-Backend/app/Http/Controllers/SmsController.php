@@ -374,7 +374,7 @@ class SmsController extends Controller
     /** What the rotation form shows: who set the code and when, never the code or its hash. */
     public function blastCodeStatus(): JsonResponse
     {
-        $blastCode = SmsBlastCode::with('updatedByAdmin:admin_id,first_name,last_name')->first();
+        $blastCode = SmsBlastCode::with('updatedByAdmin:admin_id,first_name,last_name,username')->first();
 
         if (! $blastCode) {
             return response()->json(['configured' => false]);
@@ -383,7 +383,7 @@ class SmsController extends Controller
         return response()->json([
             'configured' => true,
             'updated_by' => $blastCode->updatedByAdmin
-                ? $blastCode->updatedByAdmin->first_name.' '.$blastCode->updatedByAdmin->last_name
+                ? $blastCode->updatedByAdmin->displayName()
                 : 'Unknown',
             'updated_at' => $blastCode->updated_at,
         ]);
@@ -439,7 +439,7 @@ class SmsController extends Controller
     {
         $query = SmsLog::query()
             ->with([
-                'sender:admin_id,first_name,last_name',
+                'sender:admin_id,first_name,last_name,username',
                 'barangay:barangay_id,barangay_name',
             ])
             ->withCount('recipients')
@@ -458,7 +458,7 @@ class SmsController extends Controller
             'user' => [
                 // A blast outlives its sender (tbl_user rows can be removed), so say so rather than show a blank.
                 'name' => $log->sender
-                    ? $log->sender->first_name.' '.$log->sender->last_name
+                    ? $log->sender->displayName()
                     : 'Unknown sender',
             ],
             'barangay' => $log->barangay?->barangay_name ?? 'Unknown barangay',
@@ -495,6 +495,7 @@ class SmsController extends Controller
                 ->orWhereHas('sender', function ($sender) use ($term) {
                     $sender->where('first_name', 'like', $term)
                         ->orWhere('last_name', 'like', $term)
+                        ->orWhere('username', 'like', $term)
                         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$term]);
                 });
         });

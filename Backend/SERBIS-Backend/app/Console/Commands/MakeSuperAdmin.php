@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  */
 class MakeSuperAdmin extends Command
 {
-    protected $signature = 'staff:make-super-admin {email : The staff account\'s sign-in address}';
+    protected $signature = 'staff:make-super-admin {username : The staff account\'s username}';
 
     protected $description = 'Make a staff account a super admin (opens Staff Accounts and lets it set everyone\'s access)';
 
@@ -38,10 +38,10 @@ class MakeSuperAdmin extends Command
             DB::getDatabaseName(),
         ));
 
-        $admin = User::where('email_address', trim((string) $this->argument('email')))->first();
+        $admin = User::where('username', strtolower(trim((string) $this->argument('username'))))->first();
 
         if (! $admin || ! $admin->isAdmin()) {
-            $this->error('No staff account with that address.');
+            $this->error('No staff account with that username.');
 
             return self::FAILURE;
         }
@@ -53,7 +53,7 @@ class MakeSuperAdmin extends Command
         }
 
         if ($admin->isSuperAdmin()) {
-            $this->info("{$admin->email_address} is already a super admin. Nothing changed.");
+            $this->info("{$admin->username} is already a super admin. Nothing changed.");
 
             return self::SUCCESS;
         }
@@ -61,7 +61,7 @@ class MakeSuperAdmin extends Command
         $admin->is_super_admin = true;
         $admin->save();
 
-        $this->info("{$admin->email_address} is now a super admin.");
+        $this->info("{$admin->username} is now a super admin.");
         $this->line('They can open Staff Accounts and set which sections each account may use.');
 
         return self::SUCCESS;

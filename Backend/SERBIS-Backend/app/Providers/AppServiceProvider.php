@@ -85,11 +85,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', function (Request $request) {
             // The account being attacked: a resident's phone number (in canonical
             // form, so "0917…" and "+63917…" share one bucket), or a staff
-            // member's email address on the admin login.
+            // member's username on the admin login.
             $phone = PhoneNumber::normalize((string) $request->input('phone_number'));
             $account = $phone !== ''
                 ? 'phone:'.$phone
-                : 'email:'.Str::lower((string) $request->input('email_address'));
+                : 'username:'.Str::lower(trim((string) $request->input('username')));
 
             return [
                 Limit::perMinute(5)->by($account.'|'.$request->ip()),

@@ -69,7 +69,7 @@
                     {{ item.last_name }}, {{ item.first_name }}
                     <span v-if="isSelf(item)" class="you-chip">you</span>
                   </div>
-                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.email_address }}</div>
+                  <div class="text-caption text-medium-emphasis text-truncate">{{ item.username }}</div>
                 </div>
               </div>
             </template>
@@ -189,22 +189,13 @@
               </v-col>
             </v-row>
 
-            <!-- Staff sign in with a made-up username on the office domain; no mail
-                 is ever sent to it. Only the name part is typed. An account made
-                 before this rule keeps its full address and shows it as-is. -->
+            <!-- Staff sign in with this. No email is collected. -->
             <v-text-field
-              v-if="!legacyEmail"
-              :model-value="form.email_address" label="Username *" placeholder="juan.delacruz" variant="outlined"
+              :model-value="form.username" label="Username *" placeholder="juan.delacruz" variant="outlined"
               density="comfortable" rounded="lg" autocomplete="off" class="mb-1"
-              suffix="@serbis.com" hint="Lowercase letters, digits and dots." persistent-hint
-              :rules="[requiredRule('Username'), usernameRule]" :error-messages="fieldErrors.email_address"
+              hint="3 to 30 lowercase letters, digits, dots or underscores." persistent-hint
+              :rules="[requiredRule('Username'), usernameRule]" :error-messages="fieldErrors.username"
               @update:model-value="onUsernameInput"
-            ></v-text-field>
-            <v-text-field
-              v-else
-              v-model="form.email_address" label="Email address *" type="email" variant="outlined"
-              density="comfortable" rounded="lg" autocomplete="off" class="mb-1"
-              :rules="[requiredRule('Email address')]" :error-messages="fieldErrors.email_address"
             ></v-text-field>
 
             <div class="text-caption text-medium-emphasis mb-3">
@@ -439,8 +430,8 @@ const myId = ref(null)
 const showPassword = ref(false)
 const liveMessage = ref('')
 
-const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null, legacyEmail: false })
-const form = ref({ first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' })
+const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null })
+const form = ref({ first_name: '', last_name: '', username: '', password: '', password_confirmation: '' })
 const closeDialog = ref({ show: false, item: null, loading: false })
 const resetDialog = ref({ show: false, item: null, loading: false })
 const tempDialog = ref({ show: false, name: '', password: '', copied: false })
@@ -458,20 +449,14 @@ const requiredRule = (label) => (v) =>
 const passwordRequiredRule = (v) =>
   modal.value.editing || (v && String(v).trim() !== '') || 'A password is required for a new account.'
 
-const EMAIL_SUFFIX = '@serbis.com'
-
-// Editing an account made before the @serbis.com rule: its address is kept and
-// shown in full. Everything else types just the name part.
-const legacyEmail = computed(() => modal.value.editing && !!modal.value.legacyEmail)
-
-// Same shape the server enforces: letters, digits and single dots between them.
+// Same rule the server enforces (User::USERNAME_REGEX).
 const usernameRule = (v) =>
-  /^[a-z0-9]+(?:\.[a-z0-9]+)*$/.test(String(v || '')) || 'Use lowercase letters, digits and single dots only.'
+  /^[a-z0-9._]{3,30}$/.test(String(v || '')) || 'Use 3 to 30 lowercase letters, digits, dots or underscores.'
 
-// Lowercases and drops anything the address cannot hold as it is typed. A pasted
-// full address loses everything from the @ on, so the suffix is never doubled.
+// Lowercases and drops anything a username cannot hold as it is typed. A pasted
+// email loses everything from the @ on.
 const onUsernameInput = (v) => {
-  form.value.email_address = String(v || '').toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9.]/g, '')
+  form.value.username = String(v || '').toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9._]/g, '')
 }
 
 const passwordConfirmRule = (v) =>
@@ -595,24 +580,23 @@ const fetchMe = async () => {
 }
 
 const openAdd = () => {
-  form.value = { first_name: '', last_name: '', email_address: '', password: '', password_confirmation: '' }
+  form.value = { first_name: '', last_name: '', username: '', password: '', password_confirmation: '' }
   showPassword.value = false
-  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null, legacyEmail: false }
+  modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
   clearFieldErrors()
   formRef.value?.resetValidation()
 }
 
 const openEdit = (item) => {
-  const legacy = !String(item.email_address).endsWith(EMAIL_SUFFIX)
   form.value = {
     first_name: item.first_name,
     last_name: item.last_name,
-    email_address: legacy ? item.email_address : item.email_address.slice(0, -EMAIL_SUFFIX.length),
+    username: item.username ?? '',
     password: '',
     password_confirmation: '',
   }
   showPassword.value = false
-  modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item), legacyEmail: legacy }
+  modal.value = { show: true, editing: true, loading: false, error: '', targetId: idOf(item) }
   clearFieldErrors()
   formRef.value?.resetValidation()
 }
@@ -633,9 +617,7 @@ const save = async () => {
   const payload = {
     first_name: form.value.first_name.trim(),
     last_name: form.value.last_name.trim(),
-    email_address: legacyEmail.value
-      ? form.value.email_address.trim()
-      : `${form.value.email_address.trim()}${EMAIL_SUFFIX}`,
+    username: form.value.username.trim(),
   }
   if (form.value.password) {
     payload.password = form.value.password
@@ -656,7 +638,7 @@ const save = async () => {
     modal.value.show = false
     announce(editing ? `${payload.first_name} ${payload.last_name} updated` : `${payload.first_name} ${payload.last_name} can now sign in`)
   } catch (error) {
-    // Left on the dialog, which stays open: a duplicate email is fixed in the
+    // Left on the dialog, which stays open: a duplicate username is fixed in the
     // field the message is about.
     modal.value.error = error.message
   } finally {
@@ -866,7 +848,7 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* Fixed layout keeps the four columns stable regardless of name/email
+/* Fixed layout keeps the four columns stable regardless of name/username
    length. Was `.elegant-table` — the exact class name UsersView's table
    carries, but Vue's scoped styles don't cross files, so it inherited
    none of that table's CSS (dark-green header, 76px rows) and did

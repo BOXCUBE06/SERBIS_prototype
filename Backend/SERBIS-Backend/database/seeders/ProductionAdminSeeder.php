@@ -25,6 +25,9 @@ class ProductionAdminSeeder extends Seeder
 {
     private const ADMIN_EMAIL = 'jilmarferrer29@gmail.com';
 
+    /** Staff sign in with this. Same name the username migration derives from the email above. */
+    private const ADMIN_USERNAME = 'jilmarferrer29';
+
     public function run(): void
     {
         $password = env('ADMIN_SEED_PASSWORD');
@@ -38,9 +41,9 @@ class ProductionAdminSeeder extends Seeder
             return;
         }
 
-        if (DB::table('tbl_user')->where('email_address', self::ADMIN_EMAIL)->exists()) {
+        if (DB::table('tbl_user')->where('username', self::ADMIN_USERNAME)->exists()) {
             $this->command?->info(
-                'ProductionAdminSeeder skipped: '.self::ADMIN_EMAIL.' already exists; password left untouched.'
+                'ProductionAdminSeeder skipped: '.self::ADMIN_USERNAME.' already exists; password left untouched.'
             );
 
             return;
@@ -56,12 +59,13 @@ class ProductionAdminSeeder extends Seeder
             'last_name' => 'Ferrer',
             'role' => 'Admin',
             'status' => 'Active',
+            'username' => self::ADMIN_USERNAME,
             'email_address' => self::ADMIN_EMAIL,
             'password' => Hash::make($password),
             'created_at' => $now,
             'updated_at' => $now,
         ]);
 
-        $this->command?->info('ProductionAdminSeeder: created '.self::ADMIN_EMAIL.'.');
+        $this->command?->info('ProductionAdminSeeder: created '.self::ADMIN_USERNAME.'.');
     }
 }

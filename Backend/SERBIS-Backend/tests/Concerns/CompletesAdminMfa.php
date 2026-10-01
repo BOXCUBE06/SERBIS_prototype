@@ -23,10 +23,10 @@ trait CompletesAdminMfa
      * password, a deactivated account), that response is returned instead so
      * the caller's own assertions about it still work.
      */
-    protected function loginAdmin(string $email, string $password): TestResponse
+    protected function loginAdmin(string $username, string $password): TestResponse
     {
         $first = $this->postJson('/api/admin/login', [
-            'email_address' => $email,
+            'username' => $username,
             'password' => $password,
         ]);
 
@@ -34,7 +34,7 @@ trait CompletesAdminMfa
             return $first;
         }
 
-        $admin = User::where('email_address', $email)->firstOrFail();
+        $admin = User::where('username', strtolower($username))->firstOrFail();
 
         return $this->postJson('/api/admin/login/verify', [
             'challenge_id' => $first->json('challenge_id'),

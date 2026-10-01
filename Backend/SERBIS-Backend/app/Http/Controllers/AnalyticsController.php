@@ -282,7 +282,7 @@ class AnalyticsController extends Controller
                 ->map(function ($log) {
                     return [
                         'time' => $log->created_at->format('h:i A'),
-                        'user' => $log->admin ? $log->admin->first_name : 'System', // Adjust based on your User model columns
+                        'user' => $log->admin ? $log->admin->displayName() : 'System', // Adjust based on your User model columns
                         'module' => class_basename($log->auditable_type), // Converts "App\Models\ServiceRequest" to "ServiceRequest"
                         'action' => $log->action_type,
                     ];

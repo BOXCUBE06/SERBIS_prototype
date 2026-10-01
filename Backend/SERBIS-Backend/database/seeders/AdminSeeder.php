@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Hash;
 
 class AdminSeeder extends Seeder
 {
-    private const ADMIN_EMAIL = 'admin@serbis.com';
+    private const ADMIN_USERNAME = 'admin';
 
     public function run(): void
     {
@@ -24,11 +24,11 @@ class AdminSeeder extends Seeder
             return;
         }
 
-        // email_address is unique, so a blind insert would abort the whole
-        // seed run on a populated database.
-        if (DB::table('tbl_user')->where('email_address', self::ADMIN_EMAIL)->exists()) {
+        // username is unique, so a blind insert would abort the whole seed run
+        // on a populated database.
+        if (DB::table('tbl_user')->where('username', self::ADMIN_USERNAME)->exists()) {
             $this->command?->info(
-                'AdminSeeder skipped: '.self::ADMIN_EMAIL.' already exists; password left untouched.'
+                'AdminSeeder skipped: '.self::ADMIN_USERNAME.' already exists; password left untouched.'
             );
 
             return;
@@ -40,12 +40,12 @@ class AdminSeeder extends Seeder
             'first_name' => 'SERBIS',
             'last_name' => 'Administrator',
             'role' => 'Admin',
-            'email_address' => self::ADMIN_EMAIL,
+            'username' => self::ADMIN_USERNAME,
             'password' => Hash::make('password123'),
             'created_at' => $now,
             'updated_at' => $now,
         ]);
 
-        $this->command?->info('AdminSeeder: created '.self::ADMIN_EMAIL.' with the default password.');
+        $this->command?->info('AdminSeeder: created '.self::ADMIN_USERNAME.' with the default password.');
     }
 }

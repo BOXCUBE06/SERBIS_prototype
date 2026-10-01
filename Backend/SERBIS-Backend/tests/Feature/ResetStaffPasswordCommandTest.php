@@ -33,8 +33,8 @@ class ResetStaffPasswordCommandTest extends TestCase
         $admin = $this->makeAdmin('admin@serbis.com');
         $admin->createToken('admin-token');
 
-        $this->artisan('staff:reset-password', ['email' => 'admin@serbis.com'])
-            ->expectsOutputToContain('Temporary password for admin@serbis.com')
+        $this->artisan('staff:reset-password', ['username' => 'admin'])
+            ->expectsOutputToContain('Temporary password for admin')
             ->assertExitCode(0);
 
         $admin->refresh();
@@ -47,22 +47,22 @@ class ResetStaffPasswordCommandTest extends TestCase
     {
         $this->makeAdmin('admin@serbis.com');
 
-        Artisan::call('staff:reset-password', ['email' => 'admin@serbis.com']);
+        Artisan::call('staff:reset-password', ['username' => 'admin']);
 
         // The line after the "Temporary password for ..." heading.
         $lines = array_values(array_filter(array_map('trim', explode('
 ', Artisan::output()))));
-        $heading = array_search('Temporary password for admin@serbis.com:', $lines, true);
+        $heading = array_search('Temporary password for admin:', $lines, true);
         $this->assertNotFalse($heading);
         $printed = $lines[$heading + 1];
 
         $this->postJson('/api/admin/login', [
-            'email_address' => 'admin@serbis.com',
+            'username' => 'admin',
             'password' => 'Password123',
         ])->assertStatus(401);
 
         $this->postJson('/api/admin/login', [
-            'email_address' => 'admin@serbis.com',
+            'username' => 'admin',
             'password' => $printed,
         ])->assertStatus(200)->assertJsonPath('user.must_change_password', true);
     }
@@ -71,8 +71,8 @@ class ResetStaffPasswordCommandTest extends TestCase
     {
         $admin = $this->makeAdmin('admin@serbis.com');
 
-        $this->artisan('staff:reset-password', ['email' => 'nobody@serbis.com'])
-            ->expectsOutputToContain('No staff account with that address.')
+        $this->artisan('staff:reset-password', ['username' => 'nobody'])
+            ->expectsOutputToContain('No staff account with that username.')
             ->assertExitCode(1);
 
         $this->assertFalse($admin->fresh()->must_change_password);
@@ -83,14 +83,14 @@ class ResetStaffPasswordCommandTest extends TestCase
     {
         $closed = $this->makeAdmin('closed@serbis.com', 'Inactive');
 
-        $this->artisan('staff:reset-password', ['email' => 'closed@serbis.com'])
+        $this->artisan('staff:reset-password', ['username' => 'closed'])
             ->expectsOutputToContain('deactivated')
             ->assertExitCode(1);
 
         $this->assertFalse($closed->fresh()->must_change_password);
         $this->assertSame('Inactive', $closed->fresh()->status);
 
-        $this->artisan('staff:reset-password', ['email' => 'closed@serbis.com', '--reactivate' => true])
+        $this->artisan('staff:reset-password', ['username' => 'closed', '--reactivate' => true])
             ->assertExitCode(0);
 
         $this->assertSame('Active', $closed->fresh()->status);
@@ -101,7 +101,7 @@ class ResetStaffPasswordCommandTest extends TestCase
     {
         $this->makeAdmin('admin@serbis.com');
 
-        $this->artisan('staff:reset-password', ['email' => 'admin@serbis.com'])->assertExitCode(0);
+        $this->artisan('staff:reset-password', ['username' => 'admin'])->assertExitCode(0);
 
         $logs = DB::table('tbl_system_logs')->get()->toJson();
         $this->assertStringNotContainsString('"password"', $logs);
