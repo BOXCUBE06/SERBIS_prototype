@@ -23,6 +23,9 @@ class AttachmentUploadField extends StatelessWidget {
   /// no other way back to "none", short of abandoning the form.
   final VoidCallback? onClear;
 
+  /// Only the clear button's tooltip reads it; the caller translates the rest.
+  final bool filipino;
+
   const AttachmentUploadField({
     super.key,
     required this.label,
@@ -30,6 +33,7 @@ class AttachmentUploadField extends StatelessWidget {
     required this.fileName,
     required this.onTap,
     this.onClear,
+    this.filipino = false,
   });
 
   @override
@@ -83,7 +87,7 @@ class AttachmentUploadField extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      tooltip: 'Remove $label',
+                      tooltip: trEn(filipino, 'Remove {label}').replaceAll('{label}', label),
                     ),
                 ],
               ),

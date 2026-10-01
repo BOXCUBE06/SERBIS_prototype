@@ -120,7 +120,7 @@ void main() {
     testWidgets('names an individual and their type', (tester) async {
       await _pumpHome(tester, AppUser.fromJson(_json(status: 'Active')));
 
-      expect(find.text('INDIVIDUAL'), findsOneWidget);
+      expect(find.text('HEAD OF THE FAMILY'), findsOneWidget);
       expect(find.text('Ian Uy'), findsOneWidget);
     });
 

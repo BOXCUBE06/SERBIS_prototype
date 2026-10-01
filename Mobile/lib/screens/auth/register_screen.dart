@@ -221,7 +221,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 8),
                     SegmentedButton<bool>(
                       segments: const [
-                        ButtonSegment(value: false, label: Text('Individual')),
+                        ButtonSegment(value: false, label: Text('Head of the Family')),
                         ButtonSegment(value: true, label: Text('Organization')),
                       ],
                       selected: {_organization},

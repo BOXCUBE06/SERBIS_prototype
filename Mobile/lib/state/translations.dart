@@ -30,7 +30,7 @@ const Map<String, (String, String)> _strings = {
   'status.scheduled': ('Responding', 'Tumutugon'),
   'status.not_transported': ('Not transported', 'Hindi naihatid'),
   'status.approved': ('Approved', 'Aprubado'),
-  'account.individual': ('Individual', 'Indibidwal'),
+  'account.individual': ('Head of the Family', 'Pinuno ng Pamilya'),
   'account.organization': ('Organization', 'Organisasyon'),
   'account.barangay': ('Barangay', 'Barangay'),
   'awaiting.title': ('Awaiting MDRRMO approval', 'Naghihintay ng pag-apruba ng MDRRMO'),
@@ -367,8 +367,8 @@ const Map<String, (String, String)> _strings = {
     'Ambulansya / Tugong Medikal',
   ),
   'service.ambulance-medical-response.desc': (
-    'Emergency medical response and ambulance services.',
-    'Pang-emerhensiyang tugong medikal at serbisyong ambulansya.',
+    'Ambulance transport for non-life-threatening medical needs.',
+    'Paghahatid ng ambulansya para sa mga pangangailangang medikal na hindi nagbabanta sa buhay.',
   ),
   'service.relief-goods-distribution.name': (
     'Relief Goods Distribution',
@@ -413,6 +413,19 @@ const Map<String, (String, String)> _strings = {
     'Something not covered by the services above.',
     'Isang bagay na hindi saklaw ng mga serbisyo sa itaas.',
   ),
+  // The programs. English matches tbl_services; the Filipino is new (2026-09-30).
+  'service.drrm-trainings-and-seminars.name': ('DRRM Trainings and Seminars', 'Mga Pagsasanay at Seminar sa DRRM'),
+  'service.drrm-trainings-and-seminars.desc': (
+    'Disaster risk reduction and management trainings and seminars (IEC) for barangays and organizations.',
+    'Mga pagsasanay at seminar (IEC) sa disaster risk reduction and management para sa mga barangay at organisasyon.',
+  ),
+  'service.simulation-drills-nsed.name': ('Simulation Drills / NSED', 'Mga Simulation Drill / NSED'),
+  'service.simulation-drills-nsed.desc': (
+    'Simulation drills, including the Nationwide Simultaneous Earthquake Drill (NSED), for barangays and organizations.',
+    'Mga simulation drill, kasama ang Nationwide Simultaneous Earthquake Drill (NSED), para sa mga barangay at organisasyon.',
+  ),
+  'service.mdrrmo-certification.name': ('MDRRMO Certification', 'Sertipikasyon ng MDRRMO'),
+  'service.mdrrmo-certification.desc': ('Certification issued by the MDRRMO.', 'Sertipikasyong inilalabas ng MDRRMO.'),
 };
 
 String tr(bool filipino, String key) {
@@ -439,3 +452,178 @@ String serviceDescriptionFor(bool filipino, String code, String fallback) {
   if (pair == null) return fallback;
   return filipino ? pair.$2 : pair.$1;
 }
+
+/// Filipino for an English UI string that has no key of its own: the form
+/// field labels, hints and choice options (which are also the English values
+/// sent to MDRRMO), and the Borrow tab. Keyed on the English text so the value
+/// sent to the server never changes with the language. Missing entries stay
+/// English. `{n}`, `{item}`, `{time}`, `{list}` and `{label}` are filled in by
+/// the caller.
+const Map<String, String> _filipinoOf = {
+  // Borrow tab
+  'Borrow Equipment': 'Manghiram ng Kagamitan',
+  'Available': 'Puwedeng hiramin',
+  'My Requests ({n})': 'Aking mga Kahilingan ({n})',
+  'Nothing available right now': 'Walang puwedeng hiramin sa ngayon',
+  'MDRRMO has no equipment listed for loan at the moment.':
+      'Walang kagamitang nakalista ang MDRRMO na puwedeng hiramin sa ngayon.',
+  'No borrow requests yet': 'Wala ka pang kahilingang manghiram',
+  'Items you request from the Available tab will show up here.':
+      'Lalabas dito ang mga kagamitang hiniling mo mula sa Puwedeng hiramin.',
+  'None available right now': 'Wala sa ngayon',
+  '{n} available': '{n} ang puwedeng hiramin',
+  'Borrow': 'Hiramin',
+  'Need something else?': 'May iba ka pang kailangan?',
+  'Ask for an item that is not on this list.': 'Humiling ng kagamitang wala sa listahang ito.',
+  'Request': 'Humiling',
+  'Sending...': 'Ipinapadala...',
+  'Filed': 'Naisumite',
+  'Filed {time}': 'Naisumite {time}',
+  'Handover photos': 'Mga larawan ng pag-abot',
+  'Released': 'Naibigay',
+  'Returned': 'Naibalik',
+  'Retry': 'Subukang muli',
+  'Tell MDRRMO what you need this for.': 'Sabihin sa MDRRMO kung para saan ito.',
+  'Name the item you need.': 'Isulat ang pangalan ng kagamitang kailangan mo.',
+  'Where should MDRRMO deliver it?': 'Saan ito ihahatid ng MDRRMO?',
+  'Something went wrong. Please try again.': 'May nangyaring mali. Pakisubukang muli.',
+  'Request another item': 'Humiling ng ibang kagamitan',
+  'MDRRMO will check whether they can lend this.': 'Titingnan ng MDRRMO kung maipapahiram nila ito.',
+  '{n} available to borrow': '{n} ang puwedeng hiramin',
+  'What do you need?': 'Ano ang kailangan mo?',
+  'e.g. Portable generator': 'hal. Portable generator',
+  'What do you need it for?': 'Para saan mo ito kailangan?',
+  'e.g. Barangay flood drill this weekend': 'hal. Flood drill ng barangay ngayong weekend',
+  'MDRRMO reviews this before approving the loan.': 'Susuriin ito ng MDRRMO bago aprubahan ang paghiram.',
+  'How will you get it?': 'Paano mo ito makukuha?',
+  'Pickup': 'Kukunin',
+  'Delivery': 'Ihahatid',
+  'Same as my address': 'Kapareho ng aking address',
+  'Delivery address': 'Address ng paghahatid',
+  'House number, street, barangay': 'Numero ng bahay, kalye, barangay',
+  'Request this item': 'Hilingin ang kagamitang ito',
+  'Request filed for {item}. MDRRMO will review it.':
+      'Naisumite ang kahilingan para sa {item}. Susuriin ito ng MDRRMO.',
+  // Borrowing statuses
+  'Pending review': 'Sinusuri',
+  'Approved — awaiting pickup': 'Aprubado — hinihintay kunin',
+  'Released to you': 'Naibigay na sa iyo',
+  'Not approved': 'Hindi inaprubahan',
+  'Cancelled by you': 'Kinansela mo',
+  // Due and schedule countdowns
+  '{n} day overdue': 'Lampas na ng {n} araw',
+  '{n} days overdue': 'Lampas na ng {n} araw',
+  'Due today': 'Ibalik ngayong araw',
+  'Due tomorrow': 'Ibalik bukas',
+  'Due in {n} days': 'Ibalik sa loob ng {n} araw',
+  'Scheduled today': 'Naka-iskedyul ngayong araw',
+  'Scheduled tomorrow': 'Naka-iskedyul bukas',
+  'Scheduled in {n} days': 'Naka-iskedyul sa loob ng {n} araw',
+  // Home and Services
+  'Wheelchairs, stretchers & more': 'Wheelchair, stretcher at iba pa',
+  "Couldn't load services. Check your connection and try again.":
+      'Hindi ma-load ang mga serbisyo. Tingnan ang iyong koneksyon at subukang muli.',
+  // Request form
+  'Please attach a photo of your valid ID before submitting.':
+      'Maglakip muna ng larawan ng iyong valid ID bago magsumite.',
+  'Please fill in {list}.': 'Pakipunan ang {list}.',
+  'the patient name': 'pangalan ng pasyente',
+  'where the ambulance should go': 'kung saan pupunta ang ambulansya',
+  'at least one relative going with the patient': 'kahit isang kamag-anak na sasama sa pasyente',
+  ' and ': ' at ',
+  'Please choose a preferred date.': 'Pumili ng nais na petsa.',
+  'Choose a date at least {n} days from today.': 'Pumili ng petsang hindi bababa sa {n} araw mula ngayon.',
+  'Please attach your request letter before submitting.':
+      'Maglakip muna ng iyong request letter bago magsumite.',
+  'Request letter (required)': 'Request letter (kailangan)',
+  'Supporting document (optional)': 'Karagdagang dokumento (opsyonal)',
+  'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)':
+      'Pindutin para mag-upload ng larawan o PDF (jpg/png/pdf, hanggang 4MB)',
+  'Valid ID (required)': 'Valid ID (kailangan)',
+  'Tap to upload a photo of a valid ID (jpg/png, max 2MB)':
+      'Pindutin para mag-upload ng larawan ng valid ID (jpg/png, hanggang 2MB)',
+  'Site photo (optional)': 'Larawan ng lugar (opsyonal)',
+  'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)':
+      'Pindutin para magdagdag ng larawan ng malapit na palatandaan (jpg/png, hanggang 4MB)',
+  'Landmark (optional)': 'Palatandaan (opsyonal)',
+  'e.g. beside the chapel': 'hal. katabi ng kapilya',
+  'Remove {label}': 'Alisin ang {label}',
+  // Ambulance form
+  'Patient is myself': 'Ako ang pasyente',
+  'Patient name': 'Pangalan ng pasyente',
+  'e.g. Maria Santos': 'hal. Maria Santos',
+  'Age': 'Edad',
+  'e.g. 62': 'hal. 62',
+  'Patient address': 'Address ng pasyente',
+  'Contact number': 'Numero ng telepono',
+  'From': 'Mula sa',
+  'Search or pick Other': 'Maghanap o piliin ang Iba pa',
+  'Pickup location': 'Lugar ng pagsundo',
+  'e.g. Purok 3, San Fabian': 'hal. Purok 3, San Fabian',
+  'To': 'Papunta sa',
+  'Search or pick Others': 'Maghanap o piliin ang Iba pa',
+  'Destination': 'Destinasyon',
+  'e.g. Echague District Hospital': 'hal. Echague District Hospital',
+  'Medical diagnosis': 'Medikal na diagnosis',
+  "Briefly describe the patient's condition": 'Ilarawan nang maikli ang kalagayan ng pasyente',
+  'Relative 1 (required)': 'Kamag-anak 1 (kailangan)',
+  'Relative {n}': 'Kamag-anak {n}',
+  'e.g. Juan Dela Cruz': 'hal. Juan Dela Cruz',
+  'Remove relative {n}': 'Alisin ang kamag-anak {n}',
+  'Add relative': 'Magdagdag ng kamag-anak',
+  'Search barangay': 'Maghanap ng barangay',
+  'Full address': 'Buong address',
+  'House no., street, barangay, town': 'Numero ng bahay, kalye, barangay, bayan',
+  'Purok / street': 'Purok / kalye',
+  'e.g. Purok 3': 'hal. Purok 3',
+  'Other': 'Iba pa',
+  'Others': 'Iba pa',
+  // Road, relief, generic and program forms
+  'Pickup or delivery': 'Kukunin o ihahatid',
+  'How should this reach you?': 'Paano ito makakarating sa iyo?',
+  'Purok / street, barangay': 'Purok / kalye, barangay',
+  'Location / road name': 'Lokasyon / pangalan ng daan',
+  'e.g. Brgy. Malasin – Provincial Road': 'hal. Brgy. Malasin – Provincial Road',
+  'Obstruction type': 'Uri ng harang',
+  'Fallen tree / branches': 'Natumbang puno / sanga',
+  'Flooding / silt': 'Baha / putik',
+  'Landslide debris': 'Debris ng landslide',
+  'Description': 'Paglalarawan',
+  "Describe the obstruction and how it's affecting access":
+      'Ilarawan ang harang at kung paano nito naaapektuhan ang pagdaan',
+  'Household head name': 'Pangalan ng pinuno ng pamilya',
+  'Address': 'Address',
+  'Household size': 'Bilang ng kasambahay',
+  'e.g. 5': 'hal. 5',
+  'Count everyone who regularly eats and sleeps in this household, including yourself.':
+      'Bilangin ang lahat ng regular na kumakain at natutulog sa bahay na ito, kasama ka.',
+  'Type of assistance needed': 'Uri ng tulong na kailangan',
+  'Food packs': 'Food packs',
+  'Hygiene kits': 'Hygiene kits',
+  'Drinking water': 'Inuming tubig',
+  'Temporary shelter materials': 'Materyales para sa pansamantalang tirahan',
+  'Preferred date': 'Nais na petsa',
+  'Location': 'Lokasyon',
+  'Venue, purok, barangay': 'Lugar, purok, barangay',
+  'Expected number of participants': 'Inaasahang bilang ng kalahok',
+  'e.g. 40': 'hal. 40',
+  'Training topic': 'Paksa ng pagsasanay',
+  'e.g. Basic life support, fire safety': 'hal. Basic life support, fire safety',
+  'Drill type': 'Uri ng drill',
+  'Earthquake (NSED)': 'Lindol (NSED)',
+  'Fire': 'Sunog',
+  'Flood': 'Baha',
+  'Certification type': 'Uri ng sertipikasyon',
+  'Which certificate do you need?': 'Anong sertipiko ang kailangan mo?',
+  'Purpose': 'Layunin',
+  'What is the certificate for?': 'Para saan ang sertipiko?',
+  'Details': 'Mga detalye',
+  'Describe what you need and where': 'Ilarawan kung ano ang kailangan mo at saan',
+  'Choose a date': 'Pumili ng petsa',
+  'not chosen': 'hindi pa napili',
+  'At least {n} days from today, so MDRRMO can plan.':
+      'Hindi bababa sa {n} araw mula ngayon, para makapaghanda ang MDRRMO.',
+};
+
+/// [english] in Filipino when [filipino] and a translation exists, else as is.
+String trEn(bool filipino, String english) => filipino ? (_filipinoOf[english] ?? english) : english;

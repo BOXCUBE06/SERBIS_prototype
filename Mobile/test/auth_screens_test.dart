@@ -727,12 +727,12 @@ void main() {
       expect(api.lastRegister!.containsKey('organization_name'), isFalse);
     });
 
-    testWidgets('offers Individual and Organization and nothing else', (tester) async {
+    testWidgets('offers Head of the Family and Organization and nothing else', (tester) async {
       await _pumpRegister(tester);
 
       final choice = find.byType(SegmentedButton<bool>);
 
-      expect(find.descendant(of: choice, matching: find.text('Individual')), findsOneWidget);
+      expect(find.descendant(of: choice, matching: find.text('Head of the Family')), findsOneWidget);
       expect(find.descendant(of: choice, matching: find.text('Organization')), findsOneWidget);
       expect(find.descendant(of: choice, matching: find.text('Barangay')), findsNothing);
     });

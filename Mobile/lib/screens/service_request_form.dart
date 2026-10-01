@@ -173,11 +173,12 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
 
     final service = _service;
     final attachments = _attachmentsFor(service.formKind);
+    final fil = widget.appState.language == AppLanguage.filipino;
 
     if (attachments == ServiceAttachments.standard &&
         (_drafts.validId == null || _drafts.validId!.bytes == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
+        SnackBar(content: Text(trEn(fil, 'Please attach a photo of your valid ID before submitting.'))),
       );
       return;
     }
@@ -197,16 +198,20 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     // confirms those by phone.
     if (form is AmbulanceFormData) {
       final missing = <String>[
-        if (form.patient.text.trim().isEmpty) 'the patient name',
-        if (form.destination.text.trim().isEmpty) 'where the ambulance should go',
-        if (form.relativeNames.isEmpty) 'at least one relative going with the patient',
+        if (form.patient.text.trim().isEmpty) trEn(fil, 'the patient name'),
+        if (form.destination.text.trim().isEmpty) trEn(fil, 'where the ambulance should go'),
+        if (form.relativeNames.isEmpty) trEn(fil, 'at least one relative going with the patient'),
       ];
 
       if (missing.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Please fill in ${missing.length > 1 ? '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}' : missing.single}.',
+              trEn(fil, 'Please fill in {list}.').replaceAll(
+                  '{list}',
+                  missing.length > 1
+                      ? '${missing.sublist(0, missing.length - 1).join(', ')}${trEn(fil, ' and ')}${missing.last}'
+                      : missing.single),
             ),
           ),
         );
@@ -226,8 +231,9 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         if (picked == null || picked.isBefore(earliest)) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(picked == null
-                ? 'Please choose a preferred date.'
-                : 'Choose a date at least ${dateField.minDaysAhead} days from today.')),
+                ? trEn(fil, 'Please choose a preferred date.')
+                : trEn(fil, 'Choose a date at least {n} days from today.')
+                    .replaceAll('{n}', '${dateField.minDaysAhead}'))),
           );
           return;
         }
@@ -236,7 +242,7 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
       if (form.spec.attachments == ServiceAttachments.letterRequired &&
           (_drafts.letter == null || _drafts.letter!.bytes == null)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please attach your request letter before submitting.')),
+          SnackBar(content: Text(trEn(fil, 'Please attach your request letter before submitting.'))),
         );
         return;
       }
@@ -409,9 +415,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
             if (attachments != ServiceAttachments.standard)
               AttachmentUploadField(
                 label: attachments == ServiceAttachments.letterRequired
-                    ? 'Request letter (required)'
-                    : 'Supporting document (optional)',
-                hint: 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)',
+                    ? trEn(f, 'Request letter (required)')
+                    : trEn(f, 'Supporting document (optional)'),
+                hint: trEn(f, 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)'),
+                filipino: f,
                 fileName: _drafts.letter?.name,
                 onTap: _pickLetter,
                 onClear: attachments == ServiceAttachments.letterOptional
@@ -420,15 +427,17 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
               )
             else ...[
               AttachmentUploadField(
-                label: 'Valid ID (required)',
-                hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
+                label: trEn(f, 'Valid ID (required)'),
+                hint: trEn(f, 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)'),
+                filipino: f,
                 fileName: _drafts.validId?.name,
                 onTap: _pickValidId,
               ),
               if (kind != ServiceFormKind.ambulance)
                 AttachmentUploadField(
-                  label: 'Site photo (optional)',
-                  hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
+                  label: trEn(f, 'Site photo (optional)'),
+                  hint: trEn(f, 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)'),
+                  filipino: f,
                   fileName: _drafts.sitePhoto?.name,
                   onTap: _pickSitePhoto,
                   onClear: () => setState(() => _drafts.sitePhoto = null),
@@ -439,8 +448,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         if (kind != ServiceFormKind.ambulance) ...[
           const SizedBox(height: 12),
           AppTextField(
-            label: 'Landmark (optional)',
-            hint: 'e.g. beside the chapel',
+            label: trEn(f, 'Landmark (optional)'),
+            hint: trEn(f, 'e.g. beside the chapel'),
             controller: _drafts.landmark,
           ),
         ],

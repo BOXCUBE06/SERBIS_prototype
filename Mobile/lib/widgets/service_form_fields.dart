@@ -65,7 +65,7 @@ class ServiceFormFields extends StatelessWidget {
                 // Checking it fills the name below once; the field stays fully
                 // editable either way.
                 _CheckRow(
-                  label: 'Patient is myself',
+                  label: trEn(f, 'Patient is myself'),
                   value: form.patientIsAccountHolder,
                   onChanged: (checked) {
                     form.setPatientIsAccountHolder(checked);
@@ -73,13 +73,13 @@ class ServiceFormFields extends StatelessWidget {
                   },
                 ),
                 AppTextField(
-                  label: 'Patient name',
-                  hint: 'e.g. Maria Santos',
+                  label: trEn(f, 'Patient name'),
+                  hint: trEn(f, 'e.g. Maria Santos'),
                   controller: form.patient,
                 ),
                 AppTextField(
-                  label: 'Age',
-                  hint: 'e.g. 62',
+                  label: trEn(f, 'Age'),
+                  hint: trEn(f, 'e.g. 62'),
                   keyboard: TextInputType.number,
                   controller: form.age,
                 ),
@@ -87,7 +87,7 @@ class ServiceFormFields extends StatelessWidget {
                 // The patient may live elsewhere, so this is a confirmation,
                 // not an assumption.
                 _CheckRow(
-                  label: 'Same as my address',
+                  label: trEn(f, 'Same as my address'),
                   value: form.patientAddressIsMyAddress,
                   onChanged: (checked) {
                     form.setPatientAddressIsMyAddress(checked, barangays);
@@ -95,13 +95,13 @@ class ServiceFormFields extends StatelessWidget {
                   },
                 ),
                 ..._addressFields(
-                  label: 'Patient address',
+                  label: trEn(f, 'Patient address'),
                   barangay: form.patientBarangay,
                   onBarangay: (value) => form.patientBarangay = value,
                   field: form.patientAddress,
                 ),
                 AppTextField.phone(
-                  label: 'Contact number',
+                  label: trEn(f, 'Contact number'),
                   controller: form.patientContact,
                 ),
               ],
@@ -114,7 +114,7 @@ class ServiceFormFields extends StatelessWidget {
                 // pickup point and the patient's address are often the same,
                 // but not always.
                 _CheckRow(
-                  label: 'Same as my address',
+                  label: trEn(f, 'Same as my address'),
                   value: form.pickupIsMyAddress,
                   onChanged: (checked) {
                     form.setPickupIsMyAddress(checked);
@@ -123,10 +123,11 @@ class ServiceFormFields extends StatelessWidget {
                 ),
                 // Same list as To; "Other" is a free-text pickup location.
                 AppSearchField(
-                  label: 'From',
-                  hint: 'Search or pick Other',
+                  label: trEn(f, 'From'),
+                  hint: trEn(f, 'Search or pick Other'),
                   value: form.pickupChoice,
                   items: [...ambulanceDestinations, AmbulanceFormData.pickupOther],
+                  itemLabel: (item) => trEn(f, item),
                   onChanged: (choice) {
                     form.setPickupChoice(choice);
                     onChanged();
@@ -134,21 +135,22 @@ class ServiceFormFields extends StatelessWidget {
                 ),
                 if (form.pickupChoice == AmbulanceFormData.pickupOther)
                   AppTextField(
-                    label: 'Pickup location',
-                    hint: 'e.g. Purok 3, San Fabian',
+                    label: trEn(f, 'Pickup location'),
+                    hint: trEn(f, 'e.g. Purok 3, San Fabian'),
                     controller: form.pickup,
                   ),
                 if (landmark != null)
                   AppTextField(
-                    label: 'Landmark (optional)',
-                    hint: 'e.g. beside the chapel',
+                    label: trEn(f, 'Landmark (optional)'),
+                    hint: trEn(f, 'e.g. beside the chapel'),
                     controller: landmark!,
                   ),
                 AppSearchField(
-                  label: 'To',
-                  hint: 'Search or pick Others',
+                  label: trEn(f, 'To'),
+                  hint: trEn(f, 'Search or pick Others'),
                   value: form.destinationChoice,
                   items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
+                  itemLabel: (item) => trEn(f, item),
                   onChanged: (choice) {
                     form.setDestinationChoice(choice);
                     onChanged();
@@ -156,8 +158,8 @@ class ServiceFormFields extends StatelessWidget {
                 ),
                 if (form.destinationChoice == AmbulanceFormData.destinationOthers)
                   AppTextField(
-                    label: 'Destination',
-                    hint: 'e.g. Echague District Hospital',
+                    label: trEn(f, 'Destination'),
+                    hint: trEn(f, 'e.g. Echague District Hospital'),
                     controller: form.destination,
                   ),
               ],
@@ -166,8 +168,8 @@ class ServiceFormFields extends StatelessWidget {
               label: tr(f, 'form_section.condition'),
               children: [
                 AppTextField(
-                  label: 'Medical diagnosis',
-                  hint: "Briefly describe the patient's condition",
+                  label: trEn(f, 'Medical diagnosis'),
+                  hint: trEn(f, "Briefly describe the patient's condition"),
                   lines: 3,
                   controller: form.diagnosis,
                 ),
@@ -185,8 +187,8 @@ class ServiceFormFields extends StatelessWidget {
                     children: [
                       Expanded(
                         child: AppTextField(
-                          label: i == 0 ? 'Relative 1 (required)' : 'Relative ${i + 1}',
-                          hint: 'e.g. Juan Dela Cruz',
+                          label: i == 0 ? trEn(f, 'Relative 1 (required)') : trEn(f, 'Relative {n}').replaceAll('{n}', '${i + 1}'),
+                          hint: trEn(f, 'e.g. Juan Dela Cruz'),
                           controller: form.relatives[i],
                         ),
                       ),
@@ -199,7 +201,7 @@ class ServiceFormFields extends StatelessWidget {
                           child: IconButton(
                             icon: const Icon(Icons.close_rounded, size: 20),
                             color: AppColors.inkFaint,
-                            tooltip: 'Remove relative ${i + 1}',
+                            tooltip: trEn(f, 'Remove relative {n}').replaceAll('{n}', '${i + 1}'),
                             onPressed: () {
                               form.removeRelative(i);
                               onChanged();
@@ -218,7 +220,7 @@ class ServiceFormFields extends StatelessWidget {
                       },
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: Text(
-                        'Add relative',
+                        trEn(f, 'Add relative'),
                         style: AppText.display(size: 12, weight: FontWeight.w600),
                       ),
                       style: TextButton.styleFrom(
@@ -262,7 +264,7 @@ class ServiceFormFields extends StatelessWidget {
                     // confirmation, not an assumption.
                     if (field.key == 'address' && form.hasAddressField)
                       _CheckRow(
-                        label: 'Same as my address',
+                        label: trEn(f, 'Same as my address'),
                         value: form.addressIsMyAddress,
                         onChanged: (checked) {
                           form.setAddressIsMyAddress(checked);
@@ -272,6 +274,7 @@ class ServiceFormFields extends StatelessWidget {
                     if (field.isDate)
                       ProgramDateField(
                         field: field,
+                        filipino: f,
                         value: form.date(field.key),
                         onPicked: (picked) {
                           form.setDate(field.key, picked);
@@ -280,8 +283,9 @@ class ServiceFormFields extends StatelessWidget {
                       )
                     else if (field.isChoice)
                       AppDropdown(
-                        label: field.label,
+                        label: trEn(f, field.label),
                         items: field.options,
+                        itemLabel: (option) => trEn(f, option),
                         value: form.choice(field.key),
                         onChanged: (v) {
                           form.select(field.key, v);
@@ -290,12 +294,12 @@ class ServiceFormFields extends StatelessWidget {
                       )
                     else
                       AppTextField(
-                        label: field.label,
-                        hint: field.hint,
+                        label: trEn(f, field.label),
+                        hint: trEn(f, field.hint),
                         lines: field.lines,
                         keyboard: field.keyboard,
                         controller: form.field(field.key),
-                        helpText: field.helpText,
+                        helpText: field.helpText == null ? null : trEn(f, field.helpText!),
                       ),
                   ],
                 ],
@@ -305,11 +309,12 @@ class ServiceFormFields extends StatelessWidget {
             // prose, so it lives outside the section loop above.
             if (form.offersFulfillment)
               FormSection(
-                label: 'Pickup or delivery',
+                label: trEn(f, 'Pickup or delivery'),
                 children: [
                   AppDropdown(
-                    label: 'How should this reach you?',
+                    label: trEn(f, 'How should this reach you?'),
                     items: const ['Pickup', 'Delivery'],
+                    itemLabel: (option) => trEn(f, option),
                     value: form.fulfillmentMethod,
                     onChanged: (v) {
                       form.fulfillmentMethod = v;
@@ -318,8 +323,8 @@ class ServiceFormFields extends StatelessWidget {
                   ),
                   if (form.fulfillmentMethod == 'Delivery')
                     AppTextField(
-                      label: 'Delivery address',
-                      hint: 'Purok / street, barangay',
+                      label: trEn(f, 'Delivery address'),
+                      hint: trEn(f, 'Purok / street, barangay'),
                       controller: form.deliveryAddress,
                     ),
                 ],
@@ -337,21 +342,23 @@ class ServiceFormFields extends StatelessWidget {
     required ValueChanged<String?> onBarangay,
     required TextEditingController field,
   }) {
+    final f = filipino;
     final other = barangay == AmbulanceFormData.barangayOther;
     return [
       AppSearchField(
         label: label,
-        hint: 'Search barangay',
+        hint: trEn(f, 'Search barangay'),
         value: barangay,
         items: [...barangays, AmbulanceFormData.barangayOther],
+        itemLabel: (item) => item == AmbulanceFormData.barangayOther ? trEn(f, item) : item,
         onChanged: (value) {
           onBarangay(value);
           onChanged();
         },
       ),
       other
-          ? AppTextField(label: 'Full address', hint: 'House no., street, barangay, town', controller: field)
-          : AppTextField(label: 'Purok / street', hint: 'e.g. Purok 3', controller: field),
+          ? AppTextField(label: trEn(f, 'Full address'), hint: trEn(f, 'House no., street, barangay, town'), controller: field)
+          : AppTextField(label: trEn(f, 'Purok / street'), hint: trEn(f, 'e.g. Purok 3'), controller: field),
     ];
   }
 }

@@ -174,7 +174,7 @@ class HomeScreen extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: AppButton(
-                                label: tr(f, 'common.cancel'),
+                                label: tr(f, 'common.cancel_request'),
                                 style: AppButtonStyle.outline,
                                 onPressed: () => showCancelDialog(
                                   context,
@@ -224,8 +224,8 @@ class HomeScreen extends StatelessWidget {
                       icon: Icons.inventory_2_outlined,
                       bg: AppColors.green50,
                       fg: AppColors.green700,
-                      title: 'Borrow Equipment',
-                      subtitle: 'Wheelchairs, stretchers & more',
+                      title: trEn(f, 'Borrow Equipment'),
+                      subtitle: trEn(f, 'Wheelchairs, stretchers & more'),
                       onTap: onOpenBorrow ??
                           () => Navigator.push(
                                 context,

@@ -114,6 +114,7 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _BorrowSheet(
+        filipino: widget.appState.language == AppLanguage.filipino,
         appState: widget.appState,
         user: widget.user,
         item: item,
@@ -129,7 +130,11 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       // Reads back what the resident typed on the uncatalogued path, since
       // there is no catalogue name to confirm the request against.
-      SnackBar(content: Text('Request filed for ${item?.name ?? filed.itemLabel}. MDRRMO will review it.')),
+      SnackBar(
+        content: Text(trEn(widget.appState.language == AppLanguage.filipino,
+                'Request filed for {item}. MDRRMO will review it.')
+            .replaceAll('{item}', item?.name ?? filed.itemLabel)),
+      ),
     );
   }
 
@@ -145,7 +150,7 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
               backgroundColor: AppColors.paper,
               elevation: 0,
               foregroundColor: AppColors.ink,
-              title: Text('Borrow Equipment', style: AppText.display(size: 17)),
+              title: Text(trEn(f, 'Borrow Equipment'), style: AppText.display(size: 17)),
             ),
       body: Column(
         children: [
@@ -165,8 +170,8 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
           Padding(
             padding: EdgeInsets.fromLTRB(22, widget.embedded ? 0 : 16, 22, 0),
             child: _SegmentedToggle(
-              leftLabel: 'Available',
-              rightLabel: 'My Requests (${_myRequests.length})',
+              leftLabel: trEn(f, 'Available'),
+              rightLabel: trEn(f, 'My Requests ({n})').replaceAll('{n}', '${_myRequests.length}'),
               rightSelected: _showMine,
               onChanged: (mine) => setState(() => _showMine = mine),
             ),
@@ -186,6 +191,7 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
 
     if (_equipmentError != null && _equipment.isEmpty) {
       return _ErrorState(
+        filipino: f,
         message: _equipmentError!,
         onRetry: () {
           setState(() => _loadingEquipment = true);
@@ -200,13 +206,13 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       return ListView(
         padding: const EdgeInsets.fromLTRB(22, 16, 22, 110),
         children: [
-          const _EmptyState(
+          _EmptyState(
             icon: Icons.inventory_2_outlined,
-            title: 'Nothing available right now',
-            body: 'MDRRMO has no equipment listed for loan at the moment.',
+            title: trEn(f, 'Nothing available right now'),
+            body: trEn(f, 'MDRRMO has no equipment listed for loan at the moment.'),
           ),
           const SizedBox(height: 12),
-          _OtherEquipmentCard(onTap: () => _openBorrowSheet(null)),
+          _OtherEquipmentCard(filipino: f, onTap: () => _openBorrowSheet(null)),
         ],
       );
     }
@@ -217,11 +223,12 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
         ..._equipment.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _EquipmentCard(
+                filipino: f,
                 item: item,
                 onBorrow: item.availableQuantity > 0 ? () => _openBorrowSheet(item) : null,
               ),
             )),
-        _OtherEquipmentCard(onTap: () => _openBorrowSheet(null)),
+        _OtherEquipmentCard(filipino: f, onTap: () => _openBorrowSheet(null)),
       ],
     );
   }
@@ -232,10 +239,10 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     }
 
     if (_myRequests.isEmpty) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Icons.assignment_outlined,
-        title: 'No borrow requests yet',
-        body: 'Items you request from the Available tab will show up here.',
+        title: trEn(f, 'No borrow requests yet'),
+        body: trEn(f, 'Items you request from the Available tab will show up here.'),
       );
     }
 
@@ -324,8 +331,9 @@ class _SegmentedToggle extends StatelessWidget {
 class _EquipmentCard extends StatelessWidget {
   final Equipment item;
   final VoidCallback? onBorrow;
+  final bool filipino;
 
-  const _EquipmentCard({required this.item, this.onBorrow});
+  const _EquipmentCard({required this.item, required this.filipino, this.onBorrow});
 
   @override
   Widget build(BuildContext context) {
@@ -343,7 +351,9 @@ class _EquipmentCard extends StatelessWidget {
                 Text(item.name, style: AppText.display(size: 14.5)),
                 const SizedBox(height: 2),
                 Text(
-                  out ? 'None available right now' : '${item.availableQuantity} available',
+                  out
+                      ? trEn(filipino, 'None available right now')
+                      : trEn(filipino, '{n} available').replaceAll('{n}', '${item.availableQuantity}'),
                   style: AppText.body(size: 12, color: out ? AppColors.red600 : AppColors.inkMuted),
                 ),
               ],
@@ -357,7 +367,7 @@ class _EquipmentCard extends StatelessWidget {
               side: const BorderSide(color: AppColors.green700),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Borrow'),
+            child: Text(trEn(filipino, 'Borrow')),
           ),
         ],
       ),
@@ -370,8 +380,9 @@ class _EquipmentCard extends StatelessWidget {
 /// `equipment_id` and an `other_equipment_text` unrepresentable.
 class _OtherEquipmentCard extends StatelessWidget {
   final VoidCallback onTap;
+  final bool filipino;
 
-  const _OtherEquipmentCard({required this.onTap});
+  const _OtherEquipmentCard({required this.onTap, required this.filipino});
 
   @override
   Widget build(BuildContext context) {
@@ -384,10 +395,10 @@ class _OtherEquipmentCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Need something else?', style: AppText.display(size: 14.5)),
+                Text(trEn(filipino, 'Need something else?'), style: AppText.display(size: 14.5)),
                 const SizedBox(height: 2),
                 Text(
-                  'Ask for an item that is not on this list.',
+                  trEn(filipino, 'Ask for an item that is not on this list.'),
                   style: AppText.body(size: 12, color: AppColors.inkMuted),
                 ),
               ],
@@ -401,7 +412,7 @@ class _OtherEquipmentCard extends StatelessWidget {
               side: const BorderSide(color: AppColors.green700),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Request'),
+            child: Text(trEn(filipino, 'Request')),
           ),
         ],
       ),
@@ -449,16 +460,17 @@ class _BorrowRequestCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       request.id == null
-                          ? 'Sending...'
+                          ? trEn(filipino, 'Sending...')
                           : request.createdAt == null
-                              ? 'Filed'
-                              : 'Filed ${formatTimelineTime(request.createdAt!, filipino)}',
+                              ? trEn(filipino, 'Filed')
+                              : trEn(filipino, 'Filed {time}')
+                                  .replaceAll('{time}', formatTimelineTime(request.createdAt!, filipino)),
                       style: AppText.body(size: 11.5, color: AppColors.inkMuted),
                     ),
                   ],
                 ),
               ),
-              _StatusChip(request.status),
+              _StatusChip(request.status, filipino),
             ],
           ),
           // Rows filed before `purpose` existed have none, and the card says
@@ -495,9 +507,11 @@ class _BorrowRequestCard extends StatelessWidget {
               // 2026-09-17. Same three-tier colouring the admin panel's own
               // countdown chip uses: red once overdue, amber inside the
               // 1-day reminder window, neutral otherwise.
-              final label = dueLabel(request.dueDate!);
-              final overdue = label.endsWith('overdue');
-              final urgent = label == 'Due today' || label == 'Due tomorrow';
+              final label = dueLabel(request.dueDate!, null, filipino);
+              // Classified off the English label, which does not change with the language.
+              final english = dueLabel(request.dueDate!);
+              final overdue = english.endsWith('overdue');
+              final urgent = english == 'Due today' || english == 'Due tomorrow';
               final bg = overdue ? AppColors.red50 : (urgent ? AppColors.amber50 : AppColors.grey50);
               final fg = overdue ? AppColors.red600 : (urgent ? AppColors.amber600 : AppColors.inkMuted);
               return Container(
@@ -525,6 +539,7 @@ class _BorrowRequestCard extends StatelessWidget {
               (request.hasReleasePhoto || request.hasReturnPhoto)) ...[
             const SizedBox(height: 12),
             _HandoverPhotos(
+              filipino: filipino,
               hasRelease: request.hasReleasePhoto,
               hasReturn: request.hasReturnPhoto,
               loadPhoto: loadPhoto,
@@ -556,8 +571,10 @@ class _HandoverPhotos extends StatelessWidget {
   final bool hasRelease;
   final bool hasReturn;
   final Future<List<int>?> Function(String stage) loadPhoto;
+  final bool filipino;
 
   const _HandoverPhotos({
+    required this.filipino,
     required this.hasRelease,
     required this.hasReturn,
     required this.loadPhoto,
@@ -569,7 +586,7 @@ class _HandoverPhotos extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Handover photos',
+          trEn(filipino, 'Handover photos'),
           style: AppText.display(size: 12, color: AppColors.inkMuted),
         ),
         const SizedBox(height: 8),
@@ -577,14 +594,14 @@ class _HandoverPhotos extends StatelessWidget {
           children: [
             if (hasRelease)
               _HandoverThumbnail(
-                label: 'Released',
+                label: trEn(filipino, 'Released'),
                 stage: 'release',
                 loadPhoto: loadPhoto,
               ),
             if (hasRelease && hasReturn) const SizedBox(width: 10),
             if (hasReturn)
               _HandoverThumbnail(
-                label: 'Returned',
+                label: trEn(filipino, 'Returned'),
                 stage: 'return',
                 loadPhoto: loadPhoto,
               ),
@@ -715,7 +732,8 @@ class _HandoverThumbnailState extends State<_HandoverThumbnail> {
 
 class _StatusChip extends StatelessWidget {
   final BorrowStatus status;
-  const _StatusChip(this.status);
+  final bool filipino;
+  const _StatusChip(this.status, this.filipino);
 
   @override
   Widget build(BuildContext context) {
@@ -723,7 +741,7 @@ class _StatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: status.bg, borderRadius: BorderRadius.circular(30)),
       child: Text(
-        status.label.toUpperCase(),
+        status.labelFor(filipino).toUpperCase(),
         style: AppText.display(size: 9.5, weight: FontWeight.w700, color: status.fg, letterSpacing: .4),
       ),
     );
@@ -760,8 +778,9 @@ class _EmptyState extends StatelessWidget {
 class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
+  final bool filipino;
 
-  const _ErrorState({required this.message, required this.onRetry});
+  const _ErrorState({required this.message, required this.onRetry, required this.filipino});
 
   @override
   Widget build(BuildContext context) {
@@ -775,7 +794,7 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(message, style: AppText.body(size: 12.5, color: AppColors.inkMuted), textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
+            TextButton(onPressed: onRetry, child: Text(trEn(filipino, 'Retry'))),
           ],
         ),
       ),
@@ -807,8 +826,10 @@ class _BorrowSheet extends StatefulWidget {
   /// Null for an item the catalogue does not list, which is when the sheet
   /// asks for its name instead of showing one.
   final Equipment? item;
+  final bool filipino;
 
   const _BorrowSheet({
+    required this.filipino,
     required this.appState,
     required this.user,
     required this.item,
@@ -851,6 +872,8 @@ class _BorrowSheetState extends State<_BorrowSheet> {
   String? _addressError;
 
   bool get _uncatalogued => widget.item == null;
+
+  String _t(String english) => trEn(widget.filipino, english);
 
   int get _maxQuantity => widget.item?.availableQuantity ?? _uncataloguedMaxQuantity;
 
@@ -897,9 +920,9 @@ class _BorrowSheetState extends State<_BorrowSheet> {
 
     if (purpose.isEmpty || missingItem || missingAddress) {
       setState(() {
-        _purposeError = purpose.isEmpty ? 'Tell MDRRMO what you need this for.' : null;
-        _otherItemError = missingItem ? 'Name the item you need.' : null;
-        _addressError = missingAddress ? 'Where should MDRRMO deliver it?' : null;
+        _purposeError = purpose.isEmpty ? _t('Tell MDRRMO what you need this for.') : null;
+        _otherItemError = missingItem ? _t('Name the item you need.') : null;
+        _addressError = missingAddress ? _t('Where should MDRRMO deliver it?') : null;
       });
       return;
     }
@@ -925,7 +948,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     if (result == null) {
       setState(() {
         _submitting = false;
-        _error = widget.appState.takeError() ?? 'Something went wrong. Please try again.';
+        _error = widget.appState.takeError() ?? _t('Something went wrong. Please try again.');
       });
       return;
     }
@@ -959,21 +982,21 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                 ),
               ),
               Text(
-                _uncatalogued ? 'Request another item' : widget.item!.name,
+                _uncatalogued ? _t('Request another item') : widget.item!.name,
                 style: AppText.display(size: 17),
               ),
               const SizedBox(height: 4),
               Text(
                 _uncatalogued
-                    ? 'MDRRMO will check whether they can lend this.'
-                    : '${widget.item!.availableQuantity} available to borrow',
+                    ? _t('MDRRMO will check whether they can lend this.')
+                    : _t('{n} available to borrow').replaceAll('{n}', '${widget.item!.availableQuantity}'),
                 style: AppText.body(size: 12.5, color: AppColors.inkMuted),
               ),
               if (_uncatalogued) ...[
                 const SizedBox(height: 16),
                 AppTextField(
-                  label: 'What do you need?',
-                  hint: 'e.g. Portable generator',
+                  label: _t('What do you need?'),
+                  hint: _t('e.g. Portable generator'),
                   controller: _otherItem,
                   maxLength: _otherItemMaxLength,
                   errorText: _otherItemError,
@@ -998,8 +1021,8 @@ class _BorrowSheetState extends State<_BorrowSheet> {
               ),
               const SizedBox(height: 20),
               AppTextField(
-                label: 'What do you need it for?',
-                hint: 'e.g. Barangay flood drill this weekend',
+                label: _t('What do you need it for?'),
+                hint: _t('e.g. Barangay flood drill this weekend'),
                 controller: _purpose,
                 lines: 3,
                 maxLength: _purposeMaxLength,
@@ -1007,15 +1030,15 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                 enabled: !_submitting,
               ),
               Text(
-                'MDRRMO reviews this before approving the loan.',
+                _t('MDRRMO reviews this before approving the loan.'),
                 style: AppText.body(size: 11.5, color: AppColors.inkMuted),
               ),
               const SizedBox(height: 20),
-              _FieldLabel('How will you get it?'),
+              _FieldLabel(_t('How will you get it?')),
               const SizedBox(height: 8),
               _SegmentedToggle(
-                leftLabel: 'Pickup',
-                rightLabel: 'Delivery',
+                leftLabel: _t('Pickup'),
+                rightLabel: _t('Delivery'),
                 rightSelected: _delivery,
                 enabled: !_submitting,
                 onChanged: (delivery) => setState(() {
@@ -1040,14 +1063,14 @@ class _BorrowSheetState extends State<_BorrowSheet> {
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  title: const Text(
-                    'Same as my address',
-                    style: TextStyle(fontSize: 14),
+                  title: Text(
+                    _t('Same as my address'),
+                    style: const TextStyle(fontSize: 14),
                   ),
                 ),
                 AppTextField(
-                  label: 'Delivery address',
-                  hint: 'House number, street, barangay',
+                  label: _t('Delivery address'),
+                  hint: _t('House number, street, barangay'),
                   controller: _address,
                   lines: 2,
                   maxLength: _addressMaxLength,
@@ -1066,7 +1089,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
               ],
               const SizedBox(height: 20),
               AppButton(
-                label: 'Request this item',
+                label: _t('Request this item'),
                 onPressed: _confirm,
                 loading: _submitting,
               ),

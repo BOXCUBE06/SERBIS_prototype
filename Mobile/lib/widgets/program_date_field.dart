@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/service_forms.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
 
 /// A calendar day for the MDRRMO programs, at least [ServiceFormField.minDaysAhead]
@@ -11,12 +12,14 @@ class ProgramDateField extends StatelessWidget {
   final ServiceFormField field;
   final DateTime? value;
   final ValueChanged<DateTime> onPicked;
+  final bool filipino;
 
   const ProgramDateField({
     super.key,
     required this.field,
     required this.value,
     required this.onPicked,
+    this.filipino = false,
   });
 
   Future<void> _pick(BuildContext context) async {
@@ -43,11 +46,11 @@ class ProgramDateField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(field.label, style: AppText.fieldLabel()),
+          Text(trEn(filipino, field.label), style: AppText.fieldLabel()),
           const SizedBox(height: AppSpacing.xs),
           Semantics(
             button: true,
-            label: '${field.label}, ${picked == null ? 'not chosen' : formatProgramDate(picked)}',
+            label: '${trEn(filipino, field.label)}, ${picked == null ? trEn(filipino, 'not chosen') : formatProgramDate(picked)}',
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: () => _pick(context),
@@ -64,7 +67,7 @@ class ProgramDateField extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        picked == null ? 'Choose a date' : formatProgramDate(picked),
+                        picked == null ? trEn(filipino, 'Choose a date') : formatProgramDate(picked),
                         style: AppText.body(
                           size: 13,
                           color: picked == null ? AppColors.inkFaint : AppColors.ink,
@@ -78,7 +81,8 @@ class ProgramDateField extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'At least ${field.minDaysAhead} days from today, so MDRRMO can plan.',
+            trEn(filipino, 'At least {n} days from today, so MDRRMO can plan.')
+                .replaceAll('{n}', '${field.minDaysAhead}'),
             style: AppText.body(size: 11, color: AppColors.inkMuted),
           ),
         ],

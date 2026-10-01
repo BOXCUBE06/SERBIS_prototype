@@ -28,7 +28,7 @@ export const requesterName = (item) =>
   item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
 
 // null for walk-ins: no account, so no type.
-const ACCOUNT_TYPE_LABELS = { head_of_family: 'Household', barangay: 'Barangay', organization: 'Org' }
+const ACCOUNT_TYPE_LABELS = { head_of_family: 'Head of the Family', barangay: 'Barangay', organization: 'Org' }
 export const requesterAccountType = (item) => ACCOUNT_TYPE_LABELS[item?.resident?.account_type] || null
 
 // Walk-ins store one free-text walk_in_name, so split on the last space.

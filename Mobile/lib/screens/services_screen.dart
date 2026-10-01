@@ -132,7 +132,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "Couldn't load services. Check your connection and try again.",
+                        trEn(f, "Couldn't load services. Check your connection and try again."),
                         style:
                             AppText.body(size: 13, color: AppColors.inkMuted),
                       ),
@@ -142,7 +142,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         setState(() => _loading = true);
                         _load();
                       },
-                      child: const Text('Retry'),
+                      child: Text(trEn(f, 'Retry')),
                     ),
                   ],
                 ),

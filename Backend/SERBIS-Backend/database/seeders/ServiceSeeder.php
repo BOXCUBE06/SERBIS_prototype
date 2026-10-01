@@ -45,7 +45,7 @@ class ServiceSeeder extends Seeder
         Schema::disableForeignKeyConstraints();
 
         $services = [
-            ['service_name' => 'Ambulance/Medical Response', 'category' => 'medical', 'description' => 'Emergency medical response and ambulance services.'],
+            ['service_name' => 'Ambulance/Medical Response', 'category' => 'medical', 'description' => 'Ambulance transport for non-life-threatening medical needs.'],
             ['service_name' => 'Relief Goods Distribution', 'category' => 'relief', 'description' => 'Distribution of essential relief goods during disasters.'],
             ['service_name' => 'Road Clearing', 'category' => 'infrastructure', 'description' => 'Clearing roads of debris and obstacles after natural calamities.'],
             ['service_name' => 'Power Line Repair', 'category' => 'infrastructure', 'description' => 'Emergency repair of downed power lines.'],

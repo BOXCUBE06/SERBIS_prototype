@@ -2,6 +2,7 @@
 library serbis.models.borrow;
 
 import 'package:flutter/material.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
 
 /// A row from `GET /api/equipments` — the catalogue a resident borrows from.
@@ -60,6 +61,9 @@ BorrowStatus borrowStatusFromText(String statusText) {
 }
 
 extension BorrowStatusX on BorrowStatus {
+  /// [label] in the resident's language.
+  String labelFor(bool filipino) => trEn(filipino, label);
+
   String get label {
     switch (this) {
       case BorrowStatus.pending:

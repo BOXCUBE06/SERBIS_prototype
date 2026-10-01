@@ -241,6 +241,9 @@ class AppSearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final IconData? icon;
 
+  /// How to show an item. The value itself is what [onChanged] reports.
+  final String Function(String)? itemLabel;
+
   const AppSearchField({
     super.key,
     this.label,
@@ -249,6 +252,7 @@ class AppSearchField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.icon,
+    this.itemLabel,
   });
 
   @override
@@ -290,7 +294,7 @@ class AppSearchField extends StatelessWidget {
               ),
             ),
             dropdownMenuEntries: [
-              for (final item in items) DropdownMenuEntry(value: item, label: item),
+              for (final item in items) DropdownMenuEntry(value: item, label: itemLabel?.call(item) ?? item),
             ],
             onSelected: (selected) {
               if (selected != null) onChanged(selected);

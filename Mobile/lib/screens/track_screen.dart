@@ -332,8 +332,9 @@ class _RequestCard extends StatelessWidget {
                 request.scheduledAt != null &&
                 !request.isOverdue)
               Builder(builder: (context) {
-                final countdown = scheduledCountdownLabel(request.scheduledAt!);
-                final urgent = countdown == 'Scheduled today';
+                final countdown = scheduledCountdownLabel(request.scheduledAt!, null, filipino);
+                // Classified off the English label, which does not change with the language.
+                final urgent = scheduledCountdownLabel(request.scheduledAt!) == 'Scheduled today';
                 final tint = urgent ? AppColors.amber600 : AppColors.blue600;
 
                 return Container(

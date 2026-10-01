@@ -495,18 +495,19 @@ String formatDueDate(DateTime at) {
 /// borrower and staff read the same urgency off the same date. Both
 /// midnights are taken locally, same as the panel's `dueDelta`. [now]
 /// defaults to the device clock and is injectable for tests.
-String dueLabel(DateTime due, [DateTime? now]) {
+String dueLabel(DateTime due, [DateTime? now, bool filipino = false]) {
   final today = now ?? DateTime.now();
   final todayMidnight = DateTime(today.year, today.month, today.day);
   final dueMidnight = DateTime(due.year, due.month, due.day);
   final delta = dueMidnight.difference(todayMidnight).inDays;
   if (delta < 0) {
     final overdueDays = -delta;
-    return '$overdueDays day${overdueDays == 1 ? '' : 's'} overdue';
+    return trEn(filipino, overdueDays == 1 ? '{n} day overdue' : '{n} days overdue')
+        .replaceAll('{n}', '$overdueDays');
   }
-  if (delta == 0) return 'Due today';
-  if (delta == 1) return 'Due tomorrow';
-  return 'Due in $delta days';
+  if (delta == 0) return trEn(filipino, 'Due today');
+  if (delta == 1) return trEn(filipino, 'Due tomorrow');
+  return trEn(filipino, 'Due in {n} days').replaceAll('{n}', '$delta');
 }
 
 /// Same tiering as [dueLabel] and the same reason it stays English rather
@@ -515,16 +516,16 @@ String dueLabel(DateTime due, [DateTime? now]) {
 /// time. Never called once a booking is already overdue: [ServiceRequest]'s
 /// own display logic gates this behind `!isOverdue`, which is the box that
 /// covers the past-due case with its own message.
-String scheduledCountdownLabel(DateTime scheduledAt, [DateTime? now]) {
+String scheduledCountdownLabel(DateTime scheduledAt, [DateTime? now, bool filipino = false]) {
   final today = now ?? DateTime.now();
   final todayMidnight = DateTime(today.year, today.month, today.day);
   final local = scheduledAt.toLocal();
   final schedMidnight = DateTime(local.year, local.month, local.day);
   final delta = schedMidnight.difference(todayMidnight).inDays;
 
-  if (delta <= 0) return 'Scheduled today';
-  if (delta == 1) return 'Scheduled tomorrow';
-  return 'Scheduled in $delta days';
+  if (delta <= 0) return trEn(filipino, 'Scheduled today');
+  if (delta == 1) return trEn(filipino, 'Scheduled tomorrow');
+  return trEn(filipino, 'Scheduled in {n} days').replaceAll('{n}', '$delta');
 }
 
 /// Who's handling the request — only ever present on a Booked/Responding row
