@@ -56,6 +56,7 @@ class AdminPermissionsTest extends TestCase
             'first_name' => 'Grace',
             'last_name' => 'Reyes',
             'username' => 'grace',
+            'phone_number' => '09171234567',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);
@@ -73,6 +74,7 @@ class AdminPermissionsTest extends TestCase
             'first_name' => 'Grace',
             'last_name' => 'Reyes',
             'username' => 'grace',
+            'phone_number' => '09171234567',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ])->assertStatus(201);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Support\AdminSections;
+use App\Support\PhoneNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -64,6 +65,8 @@ class AdminController extends Controller
         // Hidden on the model, so it cannot reach a client from here.
         return response()->json([
             'data' => User::orderBy('last_name')->orderBy('first_name')->get(),
+            // So the page can say how urgent a missing phone number is.
+            'admin_mfa_enabled' => (bool) config('serbis.admin_mfa_enabled'),
         ]);
     }
 
@@ -73,6 +76,8 @@ class AdminController extends Controller
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'username' => ['required', 'string', 'regex:'.User::USERNAME_REGEX, 'unique:tbl_user,username'],
+            // Where the sign-in code goes once ADMIN_MFA_ENABLED is on.
+            'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ], [
             'username.regex' => User::USERNAME_MESSAGE,
@@ -86,6 +91,7 @@ class AdminController extends Controller
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'username' => $validated['username'],
+            'phone_number' => PhoneNumber::normalize($validated['phone_number']),
             'password' => $validated['password'],
             'role' => 'Admin',
             'status' => 'Active',
@@ -136,6 +142,9 @@ class AdminController extends Controller
                 'regex:'.User::USERNAME_REGEX,
                 Rule::unique('tbl_user', 'username')->ignore($admin->getKey(), 'admin_id'),
             ],
+            // Checked only when sent, so an account made before staff had
+            // numbers can still be edited without one.
+            'phone_number' => ['sometimes', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             // Blank leaves the stored hash alone. Assigning null would lock the
             // account out of its own panel.
             'password' => ['nullable', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
@@ -146,6 +155,10 @@ class AdminController extends Controller
         $admin->first_name = $validated['first_name'];
         $admin->last_name = $validated['last_name'];
         $admin->username = $validated['username'];
+
+        if (array_key_exists('phone_number', $validated)) {
+            $admin->phone_number = PhoneNumber::normalize($validated['phone_number']);
+        }
 
         $passwordChanged = ! empty($validated['password']);
 

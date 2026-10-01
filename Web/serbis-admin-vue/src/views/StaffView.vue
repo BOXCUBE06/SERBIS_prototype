@@ -43,6 +43,23 @@
           </div>
         </v-alert>
 
+        <!-- Two-step sign-in texts a code to this number (ADMIN_MFA_ENABLED).
+             Listed by name so whoever turns it on knows who would be refused. -->
+        <v-alert
+          v-if="missingPhone.length > 0"
+          :type="mfaEnabled ? 'warning' : 'info'" variant="tonal" density="comfortable" rounded="lg" class="mb-6"
+          icon="mdi-cellphone-off"
+        >
+          <span v-if="mfaEnabled">
+            Two-step sign-in is on. These staff cannot sign in until a mobile number is added:
+          </span>
+          <span v-else>
+            Two-step sign-in is off. Before it is turned on, add a mobile number for:
+          </span>
+          <strong>{{ missingPhone.map(fullName).join(', ') }}</strong>.
+          Use “Edit” on each account.
+        </v-alert>
+
         <v-card elevation="0" rounded="xl" class="group-card">
           <v-data-table
             :key="initialLoad ? 'loading' : 'ready'"
@@ -72,6 +89,14 @@
                   <div class="text-caption text-medium-emphasis text-truncate">{{ item.username }}</div>
                 </div>
               </div>
+            </template>
+
+            <template #item.phone="{ item }">
+              <span v-if="item.phone_number" class="text-body-2">{{ localPhone(item.phone_number) }}</span>
+              <v-chip v-else color="warning" size="small" variant="outlined" class="font-weight-bold">
+                <v-icon start size="14" aria-hidden="true">mdi-cellphone-off</v-icon>
+                No phone
+              </v-chip>
             </template>
 
             <template #item.access="{ item }">
@@ -196,6 +221,16 @@
               hint="3 to 30 lowercase letters, digits, dots or underscores." persistent-hint
               :rules="[requiredRule('Username'), usernameRule]" :error-messages="fieldErrors.username"
               @update:model-value="onUsernameInput"
+            ></v-text-field>
+
+            <!-- Where the sign-in code is texted when two-step sign-in is on. -->
+            <v-text-field
+              v-model="form.phone_number"
+              :label="modal.editing ? 'Mobile number' : 'Mobile number *'"
+              placeholder="09171234567" variant="outlined" inputmode="tel"
+              density="comfortable" rounded="lg" autocomplete="off" class="mt-3 mb-1"
+              hint="Sign-in codes are texted here." persistent-hint
+              :rules="[phoneRule]" :error-messages="fieldErrors.phone_number"
             ></v-text-field>
 
             <div class="text-caption text-medium-emphasis mb-3">
@@ -431,7 +466,8 @@ const showPassword = ref(false)
 const liveMessage = ref('')
 
 const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null })
-const form = ref({ first_name: '', last_name: '', username: '', password: '', password_confirmation: '' })
+const form = ref({ first_name: '', last_name: '', username: '', phone_number: '', password: '', password_confirmation: '' })
+const mfaEnabled = ref(false)
 const closeDialog = ref({ show: false, item: null, loading: false })
 const resetDialog = ref({ show: false, item: null, loading: false })
 const tempDialog = ref({ show: false, name: '', password: '', copied: false })
@@ -459,6 +495,17 @@ const onUsernameInput = (v) => {
   form.value.username = String(v || '').toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9._]/g, '')
 }
 
+// Same shapes the server accepts (PhoneNumber::REGEX). Required on a new
+// account; on an edit, blank keeps whatever is stored.
+const phoneRule = (v) => {
+  const value = String(v || '').trim()
+  if (value === '') return modal.value.editing || 'Mobile number is required.'
+  return /^(09\d{9}|639\d{9}|\+639\d{9})$/.test(value) || 'Use a mobile number like 09171234567.'
+}
+
+// Stored as +639…; staff read and type 09….
+const localPhone = (p) => String(p || '').replace(/^\+63/, '0')
+
 const passwordConfirmRule = (v) =>
   String(v || '') === String(form.value.password || '') || 'The two passwords do not match.'
 
@@ -470,6 +517,7 @@ const clearFieldErrors = () => { fieldErrors.value = {} }
 const headers = [
   { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
   { title: 'Name', key: 'name', sortable: false, width: '40%' },
+  { title: 'Mobile', key: 'phone', sortable: false, width: '150px' },
   { title: 'Access', key: 'access', sortable: false, width: '190px' },
   { title: 'Status', key: 'status', sortable: false, width: '160px' },
   { title: '', key: 'actions', sortable: false, align: 'end', width: '420px' },
@@ -516,6 +564,9 @@ const initials = (item) => computeInitials(item)
 // status is a row someone inserted by hand, which is still the recovery path.
 const isClosed = (item) => String(item?.status ?? '').toLowerCase() === 'inactive'
 
+// Open accounts only: a closed one cannot sign in either way.
+const missingPhone = computed(() => admins.value.filter((a) => !a.phone_number && !isClosed(a)))
+
 const willChangePassword = computed(() => !!form.value.password || !!form.value.password_confirmation)
 
 const announce = async (text, color = 'success') => {
@@ -559,6 +610,7 @@ const fetchAdmins = async () => {
     if (!res.ok) throw new Error(messageFrom(data, 'Failed to load staff accounts'))
     const rows = data.data || data
     admins.value = Array.isArray(rows) ? rows : []
+    mfaEnabled.value = !!data.admin_mfa_enabled
   } catch (error) {
     apiError.value = error.message
   } finally {
@@ -580,7 +632,7 @@ const fetchMe = async () => {
 }
 
 const openAdd = () => {
-  form.value = { first_name: '', last_name: '', username: '', password: '', password_confirmation: '' }
+  form.value = { first_name: '', last_name: '', username: '', phone_number: '', password: '', password_confirmation: '' }
   showPassword.value = false
   modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
   clearFieldErrors()
@@ -592,6 +644,7 @@ const openEdit = (item) => {
     first_name: item.first_name,
     last_name: item.last_name,
     username: item.username ?? '',
+    phone_number: localPhone(item.phone_number),
     password: '',
     password_confirmation: '',
   }
@@ -619,6 +672,8 @@ const save = async () => {
     last_name: form.value.last_name.trim(),
     username: form.value.username.trim(),
   }
+  // Omitted when blank, so an edit leaves the stored number alone.
+  if (form.value.phone_number.trim()) payload.phone_number = form.value.phone_number.trim()
   if (form.value.password) {
     payload.password = form.value.password
     payload.password_confirmation = form.value.password_confirmation
