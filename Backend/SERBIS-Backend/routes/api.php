@@ -41,6 +41,7 @@ Route::middleware('throttle:api')->group(function () {
     // own 'mfa' limiter (keyed on challenge_id) rather than 'login' — see the
     // comment on RateLimiter::for('mfa', ...) in AppServiceProvider.
     Route::post('/admin/login/verify', [AuthController::class, 'adminLoginVerify'])->middleware('throttle:mfa');
+    Route::post('/admin/login/resend', [AuthController::class, 'adminResendLoginCode'])->middleware('throttle:mfa');
     Route::post('/resident/login/verify', [AuthController::class, 'residentLoginVerify'])->middleware('throttle:mfa');
     Route::post('/resident/login/resend', [AuthController::class, 'resendLoginCode'])->middleware('throttle:mfa');
     // Resident sign-up for the mobile app. Its own 'register' limiter: every

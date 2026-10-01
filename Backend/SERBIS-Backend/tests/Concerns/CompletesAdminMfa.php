@@ -4,24 +4,25 @@ namespace Tests\Concerns;
 
 use App\Models\User;
 use App\Services\Totp;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
- * Admin login is two requests now: password, then a TOTP code. Tests that
- * only care about "did the login succeed" would otherwise have to repeat the
- * challenge/secret plumbing every time — this gives them one call that
- * behaves like the old one-step /admin/login.
+ * Admin login is one request while ADMIN_MFA_ENABLED is off (the default) and
+ * two when it is on: password, then the code texted to the staff member. Tests
+ * that only care about "did the login succeed" call loginAdmin() either way.
+ *
+ * With the flag on, the caller must fake SkySMS (FakesSkySms): the code is read
+ * back off the faked outgoing text, since only its hash is stored.
  */
 trait CompletesAdminMfa
 {
     /**
-     * Performs both halves of admin login and returns the response from the
-     * verify step — the one that carries the token — so a caller asserts
-     * against it exactly as it would have against the old single-step login.
-     * If the first step doesn't return an mfa_required challenge (a wrong
-     * password, a deactivated account), that response is returned instead so
-     * the caller's own assertions about it still work.
+     * Performs both halves of admin login when a code is asked for and returns
+     * the response that carries the token. If the first step does not answer
+     * mfa_required (flag off, wrong password, deactivated account, no phone),
+     * that response is returned as-is so the caller's assertions still work.
      */
     protected function loginAdmin(string $username, string $password): TestResponse
     {
@@ -34,18 +35,26 @@ trait CompletesAdminMfa
             return $first;
         }
 
-        $admin = User::where('username', strtolower($username))->firstOrFail();
-
         return $this->postJson('/api/admin/login/verify', [
             'challenge_id' => $first->json('challenge_id'),
-            'code' => $this->currentAdminTotpCode($admin),
+            'code' => $this->lastAdminCodeTexted(),
         ]);
     }
 
+    protected function lastAdminCodeTexted(): string
+    {
+        $codes = Http::recorded()
+            ->map(fn ($pair) => preg_match('/[0-9]{6}/', $pair[0]['message'] ?? '', $m) ? $m[0] : null)
+            ->filter()
+            ->values()
+            ->all();
+
+        return (string) end($codes);
+    }
+
+    /** Dormant: the TOTP flow this served is switched off (see App\Services\Totp). */
     protected function currentAdminTotpCode(User $admin): string
     {
-        $secret = app(Totp::class)->secretFor($admin->admin_id);
-
-        return (new Google2FA)->getCurrentOtp($secret);
+        return (new Google2FA)->getCurrentOtp(app(Totp::class)->secretFor($admin->admin_id));
     }
 }

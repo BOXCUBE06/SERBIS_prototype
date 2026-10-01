@@ -141,6 +141,7 @@ every start regardless of which service triggered it.
 | `MAIL_FROM_NAME` | optional | no | fixed: `SERBIS` |
 | `SKYSMS_API_KEY` | **required** | **yes** | SkySMS dashboard — a hard deploy blocker, registration OTP has no other channel. Credits, not a subscription: an empty balance answers 402 and stops every send |
 | `SKYSMS_BASE_URL` | optional | no | fixed: `https://skysms.skyio.site/api/v1` |
+| `ADMIN_MFA_ENABLED` | optional | no | default `false`. `true` makes every staff sign-in username + password + a code texted to `tbl_user.phone_number` (each one a billed SMS). **Before setting it, every staff number must be set — every super admin included** — in Staff Accounts or with `php artisan staff:set-phone <username> <number>`; `php artisan staff:usernames --missing` must list nobody. A staff member without a number is refused with "Ask a super admin to add your mobile number"; a super admin without one can only be fixed from the server with `staff:set-phone` |
 | `FIREBASE_CREDENTIALS_BASE64` | **required for push** | **yes** | base64 of the downloaded service-account JSON — see the callout below |
 | `FIREBASE_CREDENTIALS` | set by the boot sequence, not by hand | no (the path, not the file) | written from the variable above — see below |
 | `SANCTUM_ADMIN_EXPIRATION` | optional | no | fixed: `480` |

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Concerns;
 
 use App\Models\Resident;
+use App\Models\User;
 use App\Services\Sms\SmsGateway;
 use App\Services\Sms\SmsResult;
 use Illuminate\Http\JsonResponse;
@@ -122,14 +123,16 @@ trait SendsResidentCodes
      * events unchanged (issuing a token isn't a model write, so
      * TracksHistory has nothing to hook here on its own).
      */
-    protected function logOtpBypassUse(Resident $resident): void
+    protected function logOtpBypassUse(Resident|User $account): void
     {
+        $isStaff = $account instanceof User;
+
         DB::table('tbl_system_logs')->insert([
-            'admin_id' => null,
-            'resident_id' => $resident->getKey(),
+            'admin_id' => $isStaff ? $account->getKey() : null,
+            'resident_id' => $isStaff ? null : $account->getKey(),
             'action_type' => 'otp_bypass_used',
-            'auditable_type' => Resident::class,
-            'auditable_id' => $resident->getKey(),
+            'auditable_type' => $account::class,
+            'auditable_id' => $account->getKey(),
             'old_values' => null,
             'new_values' => null,
             'ip_address' => request()->ip(),

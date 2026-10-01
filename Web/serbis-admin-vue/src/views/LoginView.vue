@@ -198,7 +198,8 @@
               </div>
             </template>
             <p v-else class="text-body-2 text-white mb-4">
-              Enter the 6-digit code from your authenticator app.
+              Enter the 6-digit code sent to <strong>{{ mfaSentTo }}</strong>.
+              <span v-if="mfaDeliveryUnknown"> The text may take a minute; use Resend if it does not arrive.</span>
             </p>
 
             <v-otp-input
@@ -221,6 +222,18 @@
               :disabled="mfaCode.length !== 6"
             >
               VERIFY
+            </v-btn>
+
+            <!-- Same 60-second wait the server enforces (resend_too_soon). -->
+            <v-btn
+              variant="text"
+              block
+              class="text-none text-white mt-2"
+              :loading="resendLoading"
+              :disabled="resendSeconds > 0"
+              @click="handleResend"
+            >
+              {{ resendSeconds > 0 ? `Resend code in ${resendSeconds}s` : 'Resend code' }}
             </v-btn>
 
             <v-btn
@@ -288,6 +301,31 @@ const qrCodeDataUri = ref('')
 const enrollmentRequired = ref(false)
 const mfaError = ref('')
 const mfaLoading = ref(false)
+const mfaSentTo = ref('')
+const mfaDeliveryUnknown = ref(false)
+const resendLoading = ref(false)
+const resendSeconds = ref(0)
+let resendTimer = null
+
+const startResendCountdown = (seconds) => {
+  clearInterval(resendTimer)
+  resendSeconds.value = Math.max(0, Number(seconds) || 0)
+  if (resendSeconds.value === 0) return
+  resendTimer = setInterval(() => {
+    resendSeconds.value--
+    if (resendSeconds.value <= 0) clearInterval(resendTimer)
+  }, 1000)
+}
+
+onUnmounted(() => clearInterval(resendTimer))
+
+// Shared by the first send and every resend: where the code went, how it went,
+// and how long until another may be asked for.
+const applyDelivery = (data) => {
+  mfaSentTo.value = data.sent_to_masked || `your number ending ${data.sent_to || ''}`
+  mfaDeliveryUnknown.value = data.delivery === 'unknown'
+  startResendCountdown(data.retry_after)
+}
 
 // The throttle bucket is keyed per username, so a lockout on one says nothing
 // about another. Editing the username releases the button — a typo'd name
@@ -330,9 +368,11 @@ const handleLogin = async () => {
       qrCodeDataUri.value = data.qr_code || ''
       mfaCode.value = ''
       mfaError.value = ''
+      applyDelivery(data)
       step.value = 'mfa'
     } else if (response.status === 403) {
-      // A deactivated account (audit #29). The server's own wording is shown
+      // A deactivated account (audit #29), or phone_missing ("Ask a super
+      // admin to add your mobile number") when two-step sign-in is on. The server's own wording is shown
       // rather than the generic fallback: the credentials were correct, so
       // "something went wrong" sends a former employee to chase a fault that
       // does not exist, and "invalid password" sends them to reset a password
@@ -351,6 +391,9 @@ const handleLogin = async () => {
       } else {
         errorMessage.value = data.message || 'Invalid input. Please check your details.'
       }
+    } else if (response.status === 503) {
+      // sms_unavailable: the code could not be texted.
+      errorMessage.value = data.message || 'We could not send the sign-in code. Try again in a minute.'
     } else {
       errorMessage.value = 'Something went wrong. Please try again later.'
     }
@@ -384,7 +427,7 @@ const handleMfaSubmit = async () => {
 
     if (response.ok) {
       setToken(data.token, rememberMe.value)
-      router.push('/')
+      router.push(data.user?.must_change_password ? '/change-password' : '/')
     } else if (response.status === 422 && data.code === 'mfa_challenge_expired') {
       // The 5-minute challenge is gone. Nothing left to verify against —
       // back to the password step rather than a code field that can never
@@ -406,6 +449,40 @@ const handleMfaSubmit = async () => {
     mfaError.value = 'Network error. Please check your connection.'
   } finally {
     mfaLoading.value = false
+  }
+}
+
+const handleResend = async () => {
+  resendLoading.value = true
+  mfaError.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE}/admin/login/resend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ challenge_id: mfaChallengeId.value })
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      applyDelivery(data)
+      mfaCode.value = ''
+    } else if (response.status === 422 && data.code === 'mfa_challenge_expired') {
+      step.value = 'password'
+      errorMessage.value = data.message || 'That login attempt expired. Please sign in again.'
+    } else if (response.status === 429 && data.code === 'resend_too_soon') {
+      startResendCountdown(data.retry_after)
+    } else {
+      mfaError.value = data.message || 'Could not send a new code. Please try again.'
+    }
+  } catch {
+    mfaError.value = 'Network error. Please check your connection.'
+  } finally {
+    resendLoading.value = false
   }
 }
 </script>
