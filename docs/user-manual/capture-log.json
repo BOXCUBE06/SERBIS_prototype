@@ -1,0 +1,171 @@
+[
+  {
+    "file": "01-login",
+    "ok": true
+  },
+  {
+    "file": "02-dashboard",
+    "route": "/",
+    "ok": true
+  },
+  {
+    "file": "03-analytics",
+    "route": "/analytics",
+    "ok": true
+  },
+  {
+    "file": "04-resident-requests",
+    "route": "/manage-requests",
+    "ok": true
+  },
+  {
+    "file": "05-resident-request-detail",
+    "route": "/manage-requests",
+    "ok": true
+  },
+  {
+    "file": "06-log-service-request",
+    "route": "/manage-requests",
+    "ok": true
+  },
+  {
+    "file": "07-ambulance-dispatch",
+    "route": "/conduction-requests",
+    "ok": true
+  },
+  {
+    "file": "08-ambulance-request-detail",
+    "route": "/conduction-requests",
+    "ok": true
+  },
+  {
+    "file": "09-ambulance-log-request",
+    "route": "/conduction-requests",
+    "ok": true
+  },
+  {
+    "file": "10-ambulance-trip-records",
+    "route": "/conduction-requests",
+    "ok": true
+  },
+  {
+    "file": "11-equipment-borrowing",
+    "route": "/borrowings",
+    "ok": true
+  },
+  {
+    "file": "12-borrowing-detail",
+    "route": "/borrowings",
+    "ok": true
+  },
+  {
+    "file": "13-vehicles",
+    "route": "/vehicles",
+    "ok": true
+  },
+  {
+    "file": "14-add-vehicle",
+    "route": "/vehicles",
+    "ok": true
+  },
+  {
+    "file": "15-responders",
+    "route": "/responders",
+    "ok": true
+  },
+  {
+    "file": "16-add-responder",
+    "route": "/responders",
+    "ok": true
+  },
+  {
+    "file": "17-resource-management",
+    "route": "/inventory",
+    "ok": true
+  },
+  {
+    "file": "18-add-equipment",
+    "route": "/inventory",
+    "ok": true
+  },
+  {
+    "file": "19-procurement-reference",
+    "route": "/procurement",
+    "ok": true
+  },
+  {
+    "file": "20-accounts",
+    "route": "/users",
+    "ok": true
+  },
+  {
+    "file": "21-account-detail",
+    "route": "/users",
+    "ok": true
+  },
+  {
+    "file": "22-add-account",
+    "route": "/users",
+    "ok": true
+  },
+  {
+    "file": "23-documents",
+    "route": "/files",
+    "ok": true
+  },
+  {
+    "file": "24-text-blast",
+    "route": "/sms",
+    "ok": true
+  },
+  {
+    "file": "25-text-blast-code",
+    "route": "/sms",
+    "ok": true
+  },
+  {
+    "file": "26-manage-services",
+    "route": "/services-config",
+    "ok": true
+  },
+  {
+    "file": "27-edit-service",
+    "route": "/services-config",
+    "ok": true
+  },
+  {
+    "file": "28-service-audience",
+    "route": "/service-audience",
+    "ok": true
+  },
+  {
+    "file": "29-service-vehicles",
+    "route": "/service-vehicles",
+    "ok": true
+  },
+  {
+    "file": "30-staff-accounts",
+    "route": "/staff",
+    "ok": true
+  },
+  {
+    "file": "31-add-staff-account",
+    "route": "/staff",
+    "ok": true
+  },
+  {
+    "file": "32-staff-access",
+    "route": "/staff",
+    "ok": true
+  },
+  {
+    "file": "33-activity-logs",
+    "route": "/logs",
+    "ok": true
+  },
+  {
+    "file": "34-sign-out",
+    "route": "/",
+    "ok": true
+  }
+]
