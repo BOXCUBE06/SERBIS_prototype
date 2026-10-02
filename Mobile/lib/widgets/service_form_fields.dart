@@ -58,129 +58,159 @@ class ServiceFormFields extends StatelessWidget {
       AmbulanceFormData form => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            FormSection(
-              label: tr(f, 'form_section.patient'),
+            NumberedCard(
+              number: 1,
+              title: tr(f, 'form_section.patient'),
               children: [
-                // Off by default — see AmbulanceFormData.setPatientIsAccountHolder.
-                // Checking it fills the name below once; the field stays fully
-                // editable either way.
-                _CheckRow(
-                  label: trEn(f, 'Patient is myself'),
-                  value: form.patientIsAccountHolder,
-                  onChanged: (checked) {
-                    form.setPatientIsAccountHolder(checked);
+                Text(trEn(f, 'Who needs the ambulance?'), style: AppText.fieldLabel()),
+                const SizedBox(height: AppSpacing.xs),
+                // Myself fills the name once; see setPatientIsAccountHolder.
+                SegmentedChoice(
+                  leftLabel: trEn(f, 'Myself'),
+                  rightLabel: trEn(f, 'Someone else'),
+                  rightSelected: !form.patientIsAccountHolder,
+                  onChanged: (someoneElse) {
+                    form.setPatientIsAccountHolder(!someoneElse);
                     onChanged();
                   },
                 ),
+                const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   label: trEn(f, 'Patient name'),
                   hint: trEn(f, 'e.g. Maria Santos'),
                   controller: form.patient,
+                  isRequired: true,
                 ),
-                AppTextField(
-                  label: trEn(f, 'Age'),
-                  hint: trEn(f, 'e.g. 62'),
-                  keyboard: TextInputType.number,
-                  controller: form.age,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 96,
+                      child: AppTextField(
+                        label: trEn(f, 'Age'),
+                        hint: trEn(f, 'e.g. 62'),
+                        keyboard: TextInputType.number,
+                        controller: form.age,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AppTextField.phone(
+                        label: trEn(f, 'Contact number'),
+                        controller: form.patientContact,
+                      ),
+                    ),
+                  ],
                 ),
-                // Off by default — see AmbulanceFormData.setPatientAddressIsMyAddress.
-                // The patient may live elsewhere, so this is a confirmation,
-                // not an assumption.
-                _CheckRow(
-                  label: trEn(f, 'Same as my address'),
+                SwitchRow(
+                  label: trEn(f, 'Lives at my address'),
+                  hint: trEn(f, 'Fills in barangay and purok for you'),
                   value: form.patientAddressIsMyAddress,
-                  onChanged: (checked) {
-                    form.setPatientAddressIsMyAddress(checked, barangays);
+                  onChanged: (on) {
+                    form.setPatientAddressIsMyAddress(on, barangays);
                     onChanged();
                   },
                 ),
+                const SizedBox(height: AppSpacing.sm),
                 ..._addressFields(
-                  label: trEn(f, 'Patient address'),
+                  label: trEn(f, 'Barangay'),
                   barangay: form.patientBarangay,
                   onBarangay: (value) => form.patientBarangay = value,
                   field: form.patientAddress,
                 ),
-                AppTextField.phone(
-                  label: trEn(f, 'Contact number'),
-                  controller: form.patientContact,
-                ),
               ],
             ),
-            FormSection(
-              label: tr(f, 'form_section.trip'),
+            NumberedCard(
+              number: 2,
+              title: tr(f, 'form_section.trip'),
               children: [
-                // Off by default — see AmbulanceFormData.setPickupIsMyAddress.
-                // Separate from the patient-address checkbox above: the
-                // pickup point and the patient's address are often the same,
-                // but not always.
-                _CheckRow(
-                  label: trEn(f, 'Same as my address'),
-                  value: form.pickupIsMyAddress,
-                  onChanged: (checked) {
-                    form.setPickupIsMyAddress(checked);
-                    onChanged();
-                  },
-                ),
-                // Same list as To; "Other" is a free-text pickup location.
-                AppSearchField(
-                  label: trEn(f, 'From'),
-                  hint: trEn(f, 'Search or pick Other'),
-                  value: form.pickupChoice,
-                  items: [...ambulanceDestinations, AmbulanceFormData.pickupOther],
-                  itemLabel: (item) => trEn(f, item),
-                  onChanged: (choice) {
-                    form.setPickupChoice(choice);
-                    onChanged();
-                  },
-                ),
-                if (form.pickupChoice == AmbulanceFormData.pickupOther)
-                  AppTextField(
-                    label: trEn(f, 'Pickup location'),
-                    hint: trEn(f, 'e.g. Purok 3, San Fabian'),
-                    controller: form.pickup,
+                _RouteStop(
+                  isDestination: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SwitchRow(
+                        label: trEn(f, 'Pick up at my address'),
+                        value: form.pickupIsMyAddress,
+                        onChanged: (on) {
+                          form.setPickupIsMyAddress(on);
+                          onChanged();
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppSearchField(
+                        label: trEn(f, 'Pick up from'),
+                        hint: trEn(f, 'Search or pick Other'),
+                        value: form.pickupChoice,
+                        items: [...ambulanceDestinations, AmbulanceFormData.pickupOther],
+                        itemLabel: (item) => trEn(f, item),
+                        onChanged: (choice) {
+                          form.setPickupChoice(choice);
+                          onChanged();
+                        },
+                      ),
+                      if (form.pickupChoice == AmbulanceFormData.pickupOther)
+                        AppTextField(
+                          label: trEn(f, 'Pickup location'),
+                          hint: trEn(f, 'e.g. Purok 3, San Fabian'),
+                          controller: form.pickup,
+                        ),
+                      if (landmark != null)
+                        AppTextField(
+                          label: trEn(f, 'Landmark (optional)'),
+                          hint: trEn(f, 'e.g. beside the chapel'),
+                          controller: landmark!,
+                          note: trEn(f, 'Helps the driver find you faster.'),
+                        ),
+                    ],
                   ),
-                if (landmark != null)
-                  AppTextField(
-                    label: trEn(f, 'Landmark (optional)'),
-                    hint: trEn(f, 'e.g. beside the chapel'),
-                    controller: landmark!,
-                  ),
-                AppSearchField(
-                  label: trEn(f, 'To'),
-                  hint: trEn(f, 'Search or pick Others'),
-                  value: form.destinationChoice,
-                  items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
-                  itemLabel: (item) => trEn(f, item),
-                  onChanged: (choice) {
-                    form.setDestinationChoice(choice);
-                    onChanged();
-                  },
                 ),
-                if (form.destinationChoice == AmbulanceFormData.destinationOthers)
-                  AppTextField(
-                    label: trEn(f, 'Destination'),
-                    hint: trEn(f, 'e.g. Echague District Hospital'),
-                    controller: form.destination,
+                _RouteStop(
+                  isDestination: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppSearchField(
+                        label: trEn(f, 'Take patient to'),
+                        hint: trEn(f, 'Search or pick Others'),
+                        value: form.destinationChoice,
+                        items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
+                        itemLabel: (item) => trEn(f, item),
+                        isRequired: true,
+                        onChanged: (choice) {
+                          form.setDestinationChoice(choice);
+                          onChanged();
+                        },
+                      ),
+                      if (form.destinationChoice == AmbulanceFormData.destinationOthers)
+                        AppTextField(
+                          label: trEn(f, 'Destination'),
+                          hint: trEn(f, 'e.g. Echague District Hospital'),
+                          controller: form.destination,
+                          isRequired: true,
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
-            FormSection(
-              label: tr(f, 'form_section.condition'),
+            NumberedCard(
+              number: 3,
+              title: tr(f, 'form_section.condition'),
               children: [
                 AppTextField(
                   label: trEn(f, 'Medical diagnosis'),
-                  hint: trEn(f, "Briefly describe the patient's condition"),
-                  lines: 3,
+                  hint: trEn(f, 'Symptoms, since when, and whether the patient can walk'),
+                  lines: 4,
                   controller: form.diagnosis,
+                  note: trEn(f, 'Plain words are fine.'),
                 ),
               ],
             ),
-            FormSection(
-              label: tr(f, 'form_section.relatives'),
+            NumberedCard(
+              number: 4,
+              title: trEn(f, 'Relatives going with the patient'),
               children: [
-                // Composed from the same AppTextField every other row uses —
-                // the repeater is layout around existing inputs, not a new
-                // shared component.
                 for (var i = 0; i < form.relatives.length; i++)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,9 +222,7 @@ class ServiceFormFields extends StatelessWidget {
                           controller: form.relatives[i],
                         ),
                       ),
-                      // Nudged down so it sits against the input rather than
-                      // the label above it. Not on a lone row: removing the only
-                      // relative just blanks it, and the X narrowed the field.
+                      // Not on a lone row: removing the only relative just blanks it.
                       if (form.relatives.length > 1)
                         Padding(
                           padding: const EdgeInsets.only(top: 22, left: 4),
@@ -211,9 +239,10 @@ class ServiceFormFields extends StatelessWidget {
                     ],
                   ),
                 if (form.relatives.length < AmbulanceFormData.maxRelatives)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
                       onPressed: () {
                         form.addRelative();
                         onChanged();
@@ -221,20 +250,20 @@ class ServiceFormFields extends StatelessWidget {
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: Text(
                         trEn(f, 'Add relative'),
-                        style: AppText.display(size: 12, weight: FontWeight.w600),
+                        style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600),
                       ),
-                      style: TextButton.styleFrom(
+                      style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.green700,
-                        padding: const EdgeInsets.only(right: 8),
-                        minimumSize: const Size(0, 44),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: const BorderSide(color: AppColors.green600, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                       ),
                     ),
                   ),
               ],
             ),
-            FormSection(
-              label: tr(f, 'ambulance_schedule.title'),
+            NumberedCard(
+              number: 5,
+              title: tr(f, 'ambulance_schedule.title'),
               children: [
                 AmbulanceScheduleField(
                   form: form,
@@ -380,7 +409,7 @@ class _CheckRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: InkWell(
         onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
           child: Row(
@@ -396,11 +425,51 @@ class _CheckRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Text(label, style: AppText.body(size: 14, color: AppColors.ink))),
+              Expanded(child: Text(label, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink))),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One stop on the trip card: a ring (pickup) or a pin (destination) beside
+/// its fields, with a rail from the pickup down to the destination.
+class _RouteStop extends StatelessWidget {
+  final bool isDestination;
+  final Widget child;
+
+  const _RouteStop({required this.isDestination, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Container(
+          margin: const EdgeInsets.only(left: 10),
+          padding: const EdgeInsets.only(left: 20),
+          decoration: isDestination
+              ? null
+              : const BoxDecoration(border: Border(left: BorderSide(color: AppColors.line, width: 2))),
+          child: child,
+        ),
+        Positioned(
+          left: isDestination ? 1 : 4,
+          top: isDestination ? 30 : 14,
+          child: isDestination
+              ? const Icon(Icons.location_on_rounded, size: 20, color: AppColors.red600)
+              : Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.green700, width: 3),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }

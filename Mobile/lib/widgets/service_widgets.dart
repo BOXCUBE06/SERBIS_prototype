@@ -48,14 +48,14 @@ class AttachmentUploadField extends StatelessWidget {
           const SizedBox(height: 6),
           InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
               decoration: BoxDecoration(
                 color: hasFile ? AppColors.green50 : AppColors.surface,
                 border: Border.all(color: hasFile ? AppColors.green700 : AppColors.line, width: 1.5),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Row(
                 children: [
@@ -69,7 +69,7 @@ class AttachmentUploadField extends StatelessWidget {
                     child: Text(
                       hasFile ? fileName! : hint,
                       style: AppText.body(
-                          size: 13, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
+                          size: AppTextSize.body, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
                       // A file name is cut short; the instruction is not, or
                       // the resident cannot read which file is being asked for.
                       maxLines: hasFile ? 1 : 3,
@@ -113,55 +113,65 @@ class SafetyNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final f = filipino;
     return Container(
-      padding: EdgeInsets.fromLTRB(14, 12, 10, onViewHotlines == null ? 12 : 4),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.amber50,
         border: Border.all(color: const Color(0xFFF1DDC0)),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
-            child: Icon(Icons.info_outline_rounded, size: 20, color: AppColors.amber600),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tr(f, 'services.notice_title'),
-                  style: AppText.display(size: 14, weight: FontWeight.w700, color: AppColors.amber600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tr(f, 'services.notice_body'),
-                  style: AppText.body(size: 13, color: AppColors.ink, height: 1.5),
-                ),
-                if (onViewHotlines != null)
-                  InkWell(
-                    onTap: onViewHotlines,
-                    borderRadius: BorderRadius.circular(8),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              tr(f, 'notice.view_hotlines'),
-                              style: AppText.display(size: 13, weight: FontWeight.w700, color: AppColors.amber600),
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.amber600),
-                        ],
-                      ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 22, color: AppColors.amber600),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr(f, 'services.notice_title'),
+                      style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w700, color: AppColors.amber600),
                     ),
-                  ),
-              ],
-            ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tr(f, 'services.notice_body'),
+                      style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          if (onViewHotlines != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Material(
+              color: AppColors.amber600,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: InkWell(
+                onTap: onViewHotlines,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: SizedBox(
+                  height: 44,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.call_rounded, size: 16, color: AppColors.surface),
+                      const SizedBox(width: AppSpacing.sm),
+                      Flexible(
+                        child: Text(
+                          tr(f, 'notice.view_hotlines'),
+                          style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.surface),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -189,13 +199,13 @@ class ServiceTypeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected ? AppColors.green50 : AppColors.surface,
           border: Border.all(color: selected ? AppColors.green700 : AppColors.line, width: 1.5),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,12 +217,12 @@ class ServiceTypeCard extends StatelessWidget {
               fg: selected ? AppColors.green700 : AppColors.inkMuted,
               size: 34,
               iconSize: 16,
-              radius: 10,
+              radius: AppRadius.sm,
             ),
             const SizedBox(height: 8),
             Text(
               title,
-              style: AppText.display(size: 12, weight: FontWeight.w600, height: 1.25),
+              style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, height: 1.25),
             ),
             if (subtitle.isNotEmpty) ...[
               const SizedBox(height: 2),
@@ -223,7 +233,7 @@ class ServiceTypeCard extends StatelessWidget {
               // being cut to the tile.
               Text(
                 subtitle,
-                style: AppText.body(size: 10.5, color: AppColors.inkMuted),
+                style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted),
               ),
             ],
           ],
@@ -250,7 +260,7 @@ class SubmitErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: AppColors.red50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +275,7 @@ class SubmitErrorCard extends StatelessWidget {
                   filipino
                       ? 'Hindi naipadala ang kahilingan. Nandito pa ang mga detalye mo — subukang muli.'
                       : "Your request wasn't sent. Your details are still here — tap Retry to send them again.",
-                  style: AppText.body(size: 12, color: AppColors.red600, height: 1.5),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.5),
                 ),
               ),
             ],
@@ -311,9 +321,9 @@ class ConfirmationSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(22, 32, 22, 28),
+      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 32, AppLayout.gutter, 28),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -325,12 +335,12 @@ class ConfirmationSheet extends StatelessWidget {
             child: const Icon(Icons.check_rounded, size: 26, color: AppColors.green700),
           ),
           const SizedBox(height: 14),
-          Text(tr(f, 'services.confirm.title'), style: AppText.display(size: 17)),
+          Text(tr(f, 'services.confirm.title'), style: AppText.display(size: AppTextSize.title)),
           const SizedBox(height: 6),
           Text(
             body,
             textAlign: TextAlign.center,
-            style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.6),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6),
           ),
           if (scheduled != null) ...[
             const SizedBox(height: 10),
@@ -338,13 +348,13 @@ class ConfirmationSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.green50,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Text(
                 '${tr(f, 'services.confirm.scheduled_for')} '
                 '${formatBookingConfirmationTime(scheduled, f)}',
                 textAlign: TextAlign.center,
-                style: AppText.display(size: 12.5, weight: FontWeight.w600, color: AppColors.green900),
+                style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: AppColors.green900),
               ),
             ),
           ],
@@ -392,4 +402,81 @@ class ServiceGrid extends StatelessWidget {
 
     return Column(children: rows);
   }
+}
+
+/// The valid-ID upload: a dashed-look drop zone with Take photo / Choose file.
+class IdUploadCard extends StatelessWidget {
+  final bool filipino;
+
+  /// Name of the attached file, or null when nothing is attached yet.
+  final String? fileName;
+  final VoidCallback onTakePhoto;
+  final VoidCallback onChooseFile;
+
+  const IdUploadCard({
+    super.key,
+    required this.filipino,
+    required this.fileName,
+    required this.onTakePhoto,
+    required this.onChooseFile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    final attached = fileName != null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: attached ? AppColors.green50 : AppColors.paper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: attached ? AppColors.green600 : AppColors.line, width: 1.5),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            attached ? Icons.check_circle_rounded : Icons.badge_outlined,
+            size: 28,
+            color: AppColors.green700,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            attached ? fileName! : trEn(f, 'Upload a photo of a valid ID'),
+            textAlign: TextAlign.center,
+            style: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w500),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            trEn(f, 'JPG or PNG, up to 2 MB'),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(child: _button(Icons.photo_camera_outlined, trEn(f, 'Take photo'), onTakePhoto)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: _button(Icons.folder_open_rounded, trEn(f, 'Choose file'), onChooseFile)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _button(IconData icon, String label, VoidCallback onTap) => SizedBox(
+        height: 44,
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon, size: 18),
+          label: Text(label, style: AppText.body(size: AppTextSize.body, weight: FontWeight.w500)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.ink,
+            backgroundColor: AppColors.surface,
+            side: const BorderSide(color: AppColors.line),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+          ),
+        ),
+      );
 }

@@ -113,7 +113,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ),
             const SizedBox(height: 22),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22),
+              padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
               child: SectionHeader(title: tr(f, 'services.title')),
             ),
             if (_loading && widget.appState.services.isEmpty)
@@ -124,7 +124,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             else if (loadFailed)
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: AppLayout.gutter, vertical: 12),
                 child: Row(
                   children: [
                     const Icon(Icons.wifi_off_rounded,
@@ -134,7 +134,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       child: Text(
                         trEn(f, "Couldn't load services. Check your connection and try again."),
                         style:
-                            AppText.body(size: 13, color: AppColors.inkMuted),
+                            AppText.body(size: AppTextSize.body, color: AppColors.inkMuted),
                       ),
                     ),
                     TextButton(
@@ -149,10 +149,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
               )
             else
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+                padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
                 child: _GroupedServices(services: tiles, filipino: f, onOpen: _open),
               ),
-            const SizedBox(height: 110),
+            const SizedBox(height: AppLayout.navClearance),
           ],
         );
       },
@@ -200,7 +200,7 @@ class _GroupedServices extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
             child: Text(
               _heading(key).toUpperCase(),
-              style: AppText.display(size: 12.5, weight: FontWeight.w700, color: AppColors.green900, letterSpacing: 0.6),
+              style: AppText.display(size: AppTextSize.small, weight: FontWeight.w700, color: AppColors.green900, letterSpacing: 0.6),
             ),
           ),
           for (final service in groups[key]!)
@@ -240,16 +240,16 @@ class _ServiceRow extends StatelessWidget {
         child: PressableScale(
           child: Material(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             child: InkWell(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               child: Container(
                 constraints: const BoxConstraints(minHeight: 64),
                 padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
                 decoration: BoxDecoration(
                   border: Border.all(color: AppColors.line, width: 1.5),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
                 child: Row(
                   children: [
@@ -259,21 +259,21 @@ class _ServiceRow extends StatelessWidget {
                       fg: AppColors.ink,
                       size: 40,
                       iconSize: 22,
-                      radius: 12,
+                      radius: AppRadius.md,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(name, style: AppText.display(size: 14.5, height: 1.25)),
+                          Text(name, style: AppText.display(size: AppTextSize.bodyLg, height: 1.25)),
                           if (description.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
                               description,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.35),
+                              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.35),
                             ),
                           ],
                         ],

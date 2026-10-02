@@ -222,12 +222,12 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
       decoration: BoxDecoration(
         color: AppColors.red50,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         text,
         key: const Key('change-phone-error'),
-        style: AppText.body(size: 12, color: AppColors.red600, height: 1.4),
+        style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.4),
       ),
     );
   }
@@ -236,11 +236,11 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_tr('phonechange.title'), style: AppText.display(size: 18)),
+        Text(_tr('phonechange.title'), style: AppText.display(size: AppTextSize.title)),
         const SizedBox(height: 8),
         Text(
           _tr('profile.phone_locked'),
-          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
         ),
         const SizedBox(height: 14),
         AppTextField.phone(
@@ -289,12 +289,12 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_tr('phonechange.code_title'), style: AppText.display(size: 18)),
+        Text(_tr('phonechange.code_title'), style: AppText.display(size: AppTextSize.title)),
         const SizedBox(height: 8),
         Text(
           '${_tr('phonechange.sent_to')} $ending. ${_tr('phonechange.enter_below')}',
           key: const Key('change-phone-sent-line'),
-          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
         ),
         const SizedBox(height: 14),
         AppTextField(
@@ -308,7 +308,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
           enabled: !_busy,
         ),
         if (_notice != null) ...[
-          Text(_notice!, style: const TextStyle(color: AppColors.green700)),
+          Text(_notice!, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.green700)),
           const SizedBox(height: 8),
         ],
         if (_delivery?.unknown == true)
@@ -317,7 +317,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
             child: Text(
               _tr('phonechange.unknown_hint'),
               key: const Key('delivery-unknown-hint'),
-              style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.4),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
             ),
           ),
         if (_formError != null) _banner(_formError!),
@@ -346,9 +346,9 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 28),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -361,7 +361,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: AppColors.line,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
               ),
             ),

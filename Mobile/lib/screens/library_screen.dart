@@ -43,11 +43,11 @@ class LibraryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: SectionHeader(title: filipino ? 'Aklatan ng Kaligtasan' : 'Safety Library'),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: AppCard(
             leftAccent: AppColors.red600,
             child: Column(
@@ -60,7 +60,7 @@ class LibraryScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         filipino ? 'Mga Hotline ng Emerhensiya' : 'Emergency Hotlines',
-                        style: AppText.display(size: 14.5),
+                        style: AppText.display(size: AppTextSize.bodyLg),
                       ),
                     ),
                     // Always on the device: the cached server list, or the
@@ -75,7 +75,7 @@ class LibraryScreen extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -87,7 +87,7 @@ class LibraryScreen extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -109,10 +109,10 @@ class LibraryScreen extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 0),
           child: _PublishedMaterials(appState: appState, filipino: filipino),
         ),
-        const SizedBox(height: 110),
+        const SizedBox(height: AppLayout.navClearance),
       ],
       ),
     );
@@ -148,13 +148,13 @@ class _LibItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => ArticleReaderScreen(article: article, filipino: filipino)),
           ),
@@ -168,9 +168,9 @@ class _LibItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
+                      Text(title, style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text('$subtitle · $pages', style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                      Text('$subtitle · $pages', style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
                     ],
                   ),
                 ),
@@ -328,13 +328,13 @@ class _MaterialRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           onTap: () => _open(context),
           child: Padding(
             padding: const EdgeInsets.all(13),
@@ -354,7 +354,7 @@ class _MaterialRow extends StatelessWidget {
                     children: [
                       Text(
                         material.title,
-                        style: AppText.display(size: 13, weight: FontWeight.w600),
+                        style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
                       Row(
@@ -362,7 +362,7 @@ class _MaterialRow extends StatelessWidget {
                           Flexible(
                             child: Text(
                               meta,
-                              style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                             ),
                           ),
                           // Only drawn when true. There is no "unverified"
@@ -384,7 +384,7 @@ class _MaterialRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           filipino ? 'Sinuri ni $who' : 'Verified by $who',
-                          style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                         ),
                       ],
                     ],
@@ -441,7 +441,7 @@ class _VerifiedBadge extends StatelessWidget {
           : (filipino ? 'Sinuri ni $who' : 'Verified by $who'),
       child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.pill)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -449,7 +449,7 @@ class _VerifiedBadge extends StatelessWidget {
           const SizedBox(width: 3),
           Text(
             filipino ? 'Beripikado' : 'Verified',
-            style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
+            style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
           ),
         ],
       ),
@@ -473,14 +473,14 @@ class _Notice extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               text,
-              style: AppText.body(size: 12, color: AppColors.inkMuted),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
             ),
           ),
           if (onRetry != null) ...[
@@ -490,7 +490,7 @@ class _Notice extends StatelessWidget {
               child: Text(
                 filipino ? 'Subukan muli' : 'Retry',
                 style: AppText.display(
-                  size: 12,
+                  size: AppTextSize.small,
                   weight: FontWeight.w700,
                   color: AppColors.green700,
                 ),

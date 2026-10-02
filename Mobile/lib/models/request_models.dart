@@ -57,43 +57,41 @@ extension ReqStatusX on ReqStatus {
 
   Color get bg {
     if (this == ReqStatus.review) {
-      return AppColors.blue50;
+      return AppStatus.info.bg;
     }
-    // The violet already in the palette on the animal-rescue badge. Booked has
-    // to be told apart from Scheduled at a glance -- they are adjacent states
-    // and amber is taken -- and the theme carries no sixth semantic hue.
+    // Violet: Booked must read apart from Scheduled, and amber is taken.
     if (this == ReqStatus.booked) {
-      return const Color(0xFFEDE7F6);
+      return AppStatus.booked.bg;
     }
     if (this == ReqStatus.scheduled) {
-      return AppColors.amber50;
+      return AppStatus.pending.bg;
     }
     if (this == ReqStatus.completed) {
-      return AppColors.green50;
+      return AppStatus.success.bg;
     }
     if (this == ReqStatus.disapproved) {
-      return AppColors.red50;
+      return AppStatus.danger.bg;
     }
-    return AppColors.grey50;
+    return AppStatus.neutral.bg;
   }
 
   Color get fg {
     if (this == ReqStatus.review) {
-      return AppColors.blue600;
+      return AppStatus.info.fg;
     }
     if (this == ReqStatus.booked) {
-      return const Color(0xFF6A1B9A);
+      return AppStatus.booked.fg;
     }
     if (this == ReqStatus.scheduled) {
-      return AppColors.amber600;
+      return AppStatus.pending.fg;
     }
     if (this == ReqStatus.completed) {
-      return AppColors.green700;
+      return AppStatus.success.fg;
     }
     if (this == ReqStatus.disapproved) {
-      return AppColors.red600;
+      return AppStatus.danger.fg;
     }
-    return AppColors.inkFaint;
+    return AppStatus.neutral.fg;
   }
 }
 

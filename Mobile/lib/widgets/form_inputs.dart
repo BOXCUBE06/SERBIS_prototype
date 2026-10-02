@@ -39,6 +39,12 @@ class AppTextField extends StatelessWidget {
   /// beyond their [hint].
   final String? helpText;
 
+  /// Draws a red asterisk after the label. Display only; callers validate.
+  final bool isRequired;
+
+  /// Small grey line under the input.
+  final String? note;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -53,6 +59,8 @@ class AppTextField extends StatelessWidget {
     this.obscure = false,
     this.suffixIcon,
     this.helpText,
+    this.isRequired = false,
+    this.note,
   });
 
   /// The phone field, spelled once instead of at each of the call sites that
@@ -101,6 +109,7 @@ class AppTextField extends StatelessWidget {
               // Flexible: at this size a long label wraps instead of pushing the
               // help icon off the edge of a 320dp screen.
               Flexible(child: Text(label, style: AppText.fieldLabel())),
+              if (isRequired) const RequiredMark(),
               if (helpText != null) ...[
                 const SizedBox(width: 4),
                 Tooltip(
@@ -122,47 +131,71 @@ class AppTextField extends StatelessWidget {
             inputFormatters: inputFormatters,
             enabled: enabled,
             obscureText: obscure,
-            style: AppText.body(size: 14),
+            style: AppText.body(size: AppTextSize.bodyLg),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+              hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
               errorText: errorText,
-              errorStyle: AppText.body(size: 11, color: AppColors.red600),
+              errorStyle: AppText.body(size: AppTextSize.caption, color: AppColors.red600),
               suffixIcon: suffixIcon,
               counterText: '',
+              // 48dp single-line fields.
+              constraints: lines == 1 ? const BoxConstraints(minHeight: 48) : null,
               filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              fillColor: AppColors.fieldFill,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
               disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
               ),
               errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
               focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
             ),
           ),
+          if (note != null) FieldNote(note!),
         ],
       ),
     );
   }
+}
+
+/// " *" after a required field's label.
+class RequiredMark extends StatelessWidget {
+  const RequiredMark({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(' *', style: AppText.fieldLabel().copyWith(color: AppColors.red600));
+}
+
+/// Small grey line under a field.
+class FieldNote extends StatelessWidget {
+  final String text;
+  const FieldNote(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.xs),
+        child: Text(text, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4)),
+      );
 }
 
 /// The app's labelled dropdown. Was `_Dropdown` in the services screen.
@@ -202,18 +235,18 @@ class AppDropdown<T> extends StatelessWidget {
           Text(label, style: AppText.fieldLabel()),
           const SizedBox(height: AppSpacing.xs),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.line, width: 1.5),
+              color: AppColors.fieldFill,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.fieldBorder),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<T>(
                 value: value,
                 isExpanded: true,
                 icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
-                style: AppText.body(size: 14, color: AppColors.ink),
+                style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink),
                 items: items
                     .map((i) => DropdownMenuItem<T>(value: i, child: Text(_label(i))))
                     .toList(),
@@ -244,6 +277,8 @@ class AppSearchField extends StatelessWidget {
   /// How to show an item. The value itself is what [onChanged] reports.
   final String Function(String)? itemLabel;
 
+  final bool isRequired;
+
   const AppSearchField({
     super.key,
     this.label,
@@ -253,13 +288,14 @@ class AppSearchField extends StatelessWidget {
     required this.onChanged,
     this.icon,
     this.itemLabel,
+    this.isRequired = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: const BorderSide(color: AppColors.fieldBorder),
     );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -267,7 +303,10 @@ class AppSearchField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (label != null) ...[
-            Text(label!, style: AppText.fieldLabel()),
+            Row(children: [
+              Flexible(child: Text(label!, style: AppText.fieldLabel())),
+              if (isRequired) const RequiredMark(),
+            ]),
             const SizedBox(height: AppSpacing.xs),
           ],
           DropdownMenu<String>(
@@ -281,12 +320,12 @@ class AppSearchField extends StatelessWidget {
             menuHeight: 280,
             hintText: hint,
             leadingIcon: icon == null ? null : Icon(icon, size: 18, color: AppColors.inkFaint),
-            textStyle: AppText.body(size: 14, color: AppColors.ink),
+            textStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink),
             inputDecorationTheme: InputDecorationTheme(
               filled: true,
-              fillColor: AppColors.surface,
-              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              fillColor: AppColors.fieldFill,
+              hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               border: border,
               enabledBorder: border,
               focusedBorder: border.copyWith(

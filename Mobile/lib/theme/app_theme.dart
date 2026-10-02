@@ -27,11 +27,107 @@ class AppColors {
   static const line = Color(0xFFE7E2D6);
   static const grey50 = Color(0xFFF1EFEA);
 
+  // Inputs: a warm off-white fill that never reads as disabled.
+  static const fieldFill = Color(0xFFFBFAF7);
+  static const fieldBorder = Color(0xFFD9D2C6);
+
+  /// Tonal button fill, and selected option card fill.
+  static const greenTonal = Color(0xFFE3F0E8);
+  static const greenSelected = Color(0xFFEEF6F1);
+
+  /// "In progress" notice row.
+  static const greenNotice = Color(0xFFE5F2EA);
+  static const greenNoticeBorder = Color(0xFFA9D3B8);
+
+  /// Low-stock text and dot.
+  static const amberInk = Color(0xFF8A4B0C);
+  static const amberDot = Color(0xFFD98A1E);
+
+  /// Dashed "ask for something else" card and its icon tile.
+  static const dashed = Color(0xFFBFB7A9);
+  static const sand = Color(0xFFECE6DC);
+
   static const headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [green900, green700, green600],
   );
+}
+
+/// Corner radii. Anything rounder than half its height reads as a pill.
+class AppRadius {
+  AppRadius._();
+
+  static const double sm = 10;
+  static const double md = 12;
+  static const double lg = 14;
+  /// List cards (Borrow catalogue).
+  static const double card = 16;
+  static const double xl = 20;
+  static const double xxl = 28;
+  static const double pill = 999;
+}
+
+class AppShadow {
+  AppShadow._();
+
+  /// The soft lift under [AppCard].
+  static final List<BoxShadow> card = [
+    BoxShadow(
+      color: AppColors.green900.withValues(alpha: .04),
+      blurRadius: 16,
+      offset: const Offset(0, 6),
+    ),
+  ];
+}
+
+/// Background/foreground pairs for status chips.
+class AppStatus {
+  AppStatus._();
+
+  static const info = (bg: AppColors.blue50, fg: AppColors.blue600);
+  static const pending = (bg: AppColors.amber50, fg: AppColors.amber600);
+  static const success = (bg: AppColors.green50, fg: AppColors.green700);
+  static const danger = (bg: AppColors.red50, fg: AppColors.red600);
+  static const neutral = (bg: AppColors.grey50, fg: AppColors.inkFaint);
+
+  static const booked = (bg: Color(0xFFEDE7F6), fg: Color(0xFF6A1B9A));
+}
+
+/// Screen-level layout distances, by role.
+class AppLayout {
+  AppLayout._();
+
+  /// Left/right screen margin.
+  static const double gutter = 22;
+
+  /// Bottom space so content scrolls clear of the bottom nav.
+  static const double navClearance = 110;
+
+  /// Snackbar lift above the bottom nav.
+  static const double snackBarClearance = 90;
+
+  /// Top padding under the status bar: [AppHeader].
+  static const double headerTop = 40;
+
+  /// Top padding: article reader header.
+  static const double readerHeaderTop = 48;
+
+  /// Top padding: full-page sub-screen header (offline materials).
+  static const double subpageHeaderTop = 56;
+}
+
+/// The seven type sizes. Pass to [AppText.display] / [AppText.body].
+class AppTextSize {
+  AppTextSize._();
+
+  static const double caption = 10.5;
+  static const double small = 12;
+  static const double body = 13;
+  static const double bodyLg = 14.5;
+  static const double title = 17;
+  static const double headline = 21;
+  static const double display = 28;
 }
 
 /// A 4-unit scale so spacing reads as a deliberate rhythm instead of one
@@ -90,7 +186,7 @@ class AppText {
   ];
 
   static TextStyle display({
-    double size = 20,
+    double size = AppTextSize.headline,
     FontWeight weight = FontWeight.w700,
     Color color = AppColors.ink,
     double? letterSpacing,
@@ -109,10 +205,10 @@ class AppText {
   /// that cannot be read at a glance is one a resident fills in wrong, and these
   /// screens are used outdoors, on small phones, by people of every age.
   static TextStyle fieldLabel() =>
-      display(size: 14.5, weight: FontWeight.w700, height: 1.3);
+      display(size: AppTextSize.bodyLg, weight: FontWeight.w700, height: 1.3);
 
   static TextStyle body({
-    double size = 13,
+    double size = AppTextSize.body,
     FontWeight weight = FontWeight.w400,
     Color color = AppColors.ink,
     double? height,
@@ -149,9 +245,9 @@ ThemeData buildAppTheme() {
       style: TextButton.styleFrom(disabledForegroundColor: AppColors.inkMuted),
     ),
     inputDecorationTheme: InputDecorationTheme(
-      labelStyle: AppText.body(size: 14.5, weight: FontWeight.w600, color: AppColors.ink),
-      floatingLabelStyle: AppText.body(size: 14.5, weight: FontWeight.w700, color: AppColors.green900),
-      hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+      labelStyle: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.ink),
+      floatingLabelStyle: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w700, color: AppColors.green900),
+      hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
     ),
   );
 }

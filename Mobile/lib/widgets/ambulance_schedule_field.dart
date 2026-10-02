@@ -164,11 +164,29 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ModeToggle(
-          leftLabel: tr(f, 'ambulance_schedule.asap'),
-          rightLabel: tr(f, 'ambulance_schedule.mode_scheduled'),
-          rightSelected: scheduled != null,
-          onChanged: _onModeChanged,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: OptionCard(
+                icon: Icons.bolt_rounded,
+                title: tr(f, 'ambulance_schedule.asap'),
+                hint: trEn(f, 'Next available unit'),
+                selected: scheduled == null,
+                onTap: () => _onModeChanged(false),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OptionCard(
+                icon: Icons.calendar_month_outlined,
+                title: tr(f, 'ambulance_schedule.mode_scheduled'),
+                hint: trEn(f, 'Pick a date and time'),
+                selected: scheduled != null,
+                onTap: () => _onModeChanged(true),
+              ),
+            ),
+          ],
         ),
         if (scheduled != null) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -177,7 +195,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
             decoration: BoxDecoration(
               color: AppColors.green50,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(color: AppColors.green600, width: 1.5),
             ),
             child: Row(
@@ -188,7 +206,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
                 Expanded(
                   child: Text(
                     formatBookingConfirmationTime(scheduled, f),
-                    style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.green900),
+                    style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.green900),
                   ),
                 ),
                 TextButton(
@@ -205,7 +223,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
               padding: const EdgeInsets.only(top: 4, left: 2),
               child: Text(
                 _leadTimeError!,
-                style: AppText.body(size: 11, color: AppColors.red600),
+                style: AppText.body(size: AppTextSize.caption, color: AppColors.red600),
               ),
             ),
           if (_checking)
@@ -221,7 +239,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
                   const SizedBox(width: 8),
                   Text(
                     tr(f, 'ambulance_schedule.checking'),
-                    style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                    style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                   ),
                 ],
               ),
@@ -246,7 +264,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
                             ? 'ambulance_schedule.some_free'
                             : 'ambulance_schedule.none_free',
                       ),
-                      style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                     ),
                   ),
                 ],
@@ -256,3 +274,4 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
     );
   }
 }
+

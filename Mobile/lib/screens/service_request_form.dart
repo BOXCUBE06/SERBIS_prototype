@@ -2,6 +2,7 @@ library serbis.screens.service_request_form;
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/request_models.dart';
 import '../models/service_forms.dart';
@@ -17,8 +18,11 @@ import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 
 /// One service's form, from its title to the Submit button, as a column with no
-/// scroll of its own: the host (a service page, or the Ambulance tab) supplies
-/// the header and the list it scrolls in.
+/// scroll of its own: the host (a service page) supplies the header and the
+/// list it scrolls in.
+///
+/// The ambulance is the exception: it fills its host, scrolls its own numbered
+/// cards and pins Submit above the bottom nav (the Ambulance tab).
 ///
 /// It owns the three jobs only a form can do: keep the resident's answers in
 /// [ServiceDrafts], check them, and submit.
@@ -130,6 +134,21 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     if (picked != null) {
       setState(() => _drafts.validId = picked);
     }
+  }
+
+  /// Camera capture for the valid ID. Downscaled so a phone photo stays under
+  /// the server's 2 MB cap.
+  Future<void> _takeValidIdPhoto() async {
+    final shot = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1600,
+      imageQuality: 80,
+    );
+    if (shot == null) return;
+    final bytes = await shot.readAsBytes();
+    final name = shot.name.contains('.') ? shot.name : '${shot.name}.jpg';
+    if (!mounted) return;
+    setState(() => _drafts.validId = fp.PlatformFile(name: name, size: bytes.length, bytes: bytes));
   }
 
   Future<void> _pickSitePhoto() async {
@@ -383,6 +402,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     final attachments = _attachmentsFor(kind);
     final description = service.displayDescription(f);
 
+    if (kind == ServiceFormKind.ambulance) return _buildAmbulance(f);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -392,13 +413,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
             padding: const EdgeInsets.only(bottom: 14),
             child: Text(
               description,
-              style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.5),
+              style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted, height: 1.5),
             ),
-          ),
-        if (kind == ServiceFormKind.ambulance)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: SafetyNotice(filipino: f, onViewHotlines: widget.onOpenHotlines),
           ),
         ServiceFormFields(
           data: _drafts.formFor(kind),
@@ -461,6 +477,137 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
           loading: _submitting,
         ),
       ],
+    );
+  }
+
+  /// Numbered cards in their own scroll, Submit pinned underneath.
+  Widget _buildAmbulance(bool f) {
+    final form = _drafts.formFor(ServiceFormKind.ambulance) as AmbulanceFormData;
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, AppSpacing.xl),
+            children: [
+              SafetyNotice(filipino: f, onViewHotlines: widget.onOpenHotlines),
+              const SizedBox(height: AppSpacing.lg),
+              _SectionProgress(form: form, hasValidId: _drafts.validId != null, filipino: f),
+              const SizedBox(height: AppSpacing.lg),
+              ServiceFormFields(
+                data: form,
+                onChanged: () => setState(() {}),
+                appState: widget.appState,
+                ambulanceDestinations: _ambulanceDestinations,
+                barangays: _barangays,
+                landmark: _drafts.landmark,
+                filipino: f,
+              ),
+              NumberedCard(
+                number: 6,
+                title: trEn(f, 'Valid ID'),
+                trailing: const RequiredMark(),
+                children: [
+                  IdUploadCard(
+                    filipino: f,
+                    fileName: _drafts.validId?.name,
+                    onTakePhoto: _takeValidIdPhoto,
+                    onChooseFile: _pickValidId,
+                  ),
+                ],
+              ),
+              if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
+            ],
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            AppLayout.gutter,
+            AppSpacing.md,
+            AppLayout.gutter,
+            // The bottom nav floats over the body (extendBody), so its height
+            // arrives here as padding.
+            AppSpacing.md + MediaQuery.paddingOf(context).bottom,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(top: BorderSide(color: AppColors.line)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppButton(
+                label: tr(f, 'common.submit_request'),
+                onPressed: _submit,
+                loading: _submitting,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                trEn(f, 'You can track this request in the Track tab.'),
+                textAlign: TextAlign.center,
+                style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// "6 short sections" with one segment per section, filled once answered.
+class _SectionProgress extends StatelessWidget {
+  final AmbulanceFormData form;
+  final bool hasValidId;
+  final bool filipino;
+
+  const _SectionProgress({required this.form, required this.hasValidId, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    return ListenableBuilder(
+      listenable: form.progressListenable,
+      builder: (context, _) {
+        final done = form.sectionsDone(hasValidId: hasValidId);
+        return Semantics(
+          label: trEn(f, '{n} of 6 sections answered').replaceAll('{n}', '${done.where((d) => d).length}'),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      trEn(f, '6 short sections'),
+                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+                    ),
+                  ),
+                  Text(' * ', style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
+                  Text(trEn(f, 'Required'), style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  for (var i = 0; i < done.length; i++) ...[
+                    if (i > 0) const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: done[i] ? AppColors.green700 : AppColors.line,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

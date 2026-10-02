@@ -256,7 +256,7 @@ void main() {
   });
 
   group('Borrow tab', () {
-    testWidgets('embedded, it carries the app header and a title, not a back-button bar', (tester) async {
+    testWidgets('embedded, it carries the green header and a title, not a back-button bar', (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -273,11 +273,11 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AppHeader), findsOneWidget);
+      expect(find.text('Free loans from Echague MDRRMO'), findsOneWidget);
       expect(find.byType(AppBar), findsNothing);
       expect(find.text('Borrow equipment'), findsOneWidget);
       expect(find.text('Available'), findsOneWidget);
-      expect(find.textContaining('My Requests'), findsOneWidget);
+      expect(find.text('My requests'), findsOneWidget);
     });
 
     testWidgets('pushed from elsewhere it keeps its app bar', (tester) async {

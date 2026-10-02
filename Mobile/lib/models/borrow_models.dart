@@ -84,36 +84,36 @@ extension BorrowStatusX on BorrowStatus {
   Color get bg {
     switch (this) {
       case BorrowStatus.pending:
-        return AppColors.amber50;
+        return AppStatus.pending.bg;
       case BorrowStatus.approved:
-        return AppColors.blue50;
+        return AppStatus.info.bg;
       case BorrowStatus.released:
-        return AppColors.blue50;
+        return AppStatus.info.bg;
       case BorrowStatus.returned:
-        return AppColors.green50;
+        return AppStatus.success.bg;
       case BorrowStatus.denied:
-        return AppColors.red50;
+        return AppStatus.danger.bg;
       // Neutral, not red: the resident withdrew this themselves, so it is not
       // a refusal and must not read like one beside a Denied row.
       case BorrowStatus.cancelled:
-        return AppColors.grey50;
+        return AppStatus.neutral.bg;
     }
   }
 
   Color get fg {
     switch (this) {
       case BorrowStatus.pending:
-        return AppColors.amber600;
+        return AppStatus.pending.fg;
       case BorrowStatus.approved:
-        return AppColors.blue600;
+        return AppStatus.info.fg;
       case BorrowStatus.released:
-        return AppColors.blue600;
+        return AppStatus.info.fg;
       case BorrowStatus.returned:
-        return AppColors.green700;
+        return AppStatus.success.fg;
       case BorrowStatus.denied:
-        return AppColors.red600;
+        return AppStatus.danger.fg;
       case BorrowStatus.cancelled:
-        return AppColors.inkMuted;
+        return AppStatus.neutral.fg;
     }
   }
 

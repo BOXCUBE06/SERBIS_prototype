@@ -43,18 +43,18 @@ class UnavailableTabScreen extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 IconBadge(icon: icon, bg: AppColors.green50, fg: AppColors.green700),
                 const SizedBox(height: 14),
-                Text(title, style: AppText.display(size: 17)),
+                Text(title, style: AppText.display(size: AppTextSize.title)),
                 const SizedBox(height: 6),
                 Text(
                   message,
-                  style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.5),
+                  style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted, height: 1.5),
                 ),
                 if (onRetry != null && retryLabel != null) ...[
                   const SizedBox(height: 16),
@@ -64,7 +64,7 @@ class UnavailableTabScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 110),
+        const SizedBox(height: AppLayout.navClearance),
       ],
     );
   }

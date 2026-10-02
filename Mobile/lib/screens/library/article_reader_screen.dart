@@ -29,10 +29,10 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(8, 48, 22, 24),
+            padding: const EdgeInsets.fromLTRB(8, AppLayout.readerHeaderTop, AppLayout.gutter, 24),
             decoration: const BoxDecoration(
               gradient: AppColors.headerGradient,
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
             ),
             child: Stack(
               clipBehavior: Clip.none,
@@ -43,7 +43,7 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                   child: Container(
                     width: 200,
                     height: 200,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(.05)),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .05)),
                   ),
                 ),
                 Column(
@@ -62,8 +62,8 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                               width: 38,
                               height: 38,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(.14),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.white.withValues(alpha: .14),
+                                borderRadius: BorderRadius.circular(AppRadius.md),
                               ),
                               alignment: Alignment.center,
                               child: Icon(article.icon, color: Colors.white, size: 19),
@@ -80,23 +80,23 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                       ],
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: 22, top: 10),
+                      padding: const EdgeInsets.only(left: AppLayout.gutter, top: 10),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             subtitle.toUpperCase(),
                             style: AppText.display(
-                              size: 10.5,
+                              size: AppTextSize.caption,
                               weight: FontWeight.w600,
-                              color: Colors.white.withOpacity(.9),
+                              color: Colors.white.withValues(alpha: .9),
                               letterSpacing: 2,
                             ),
                           ),
                           const SizedBox(height: 3),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 280),
-                            child: Text(title, style: AppText.display(size: 21, color: Colors.white)),
+                            child: Text(title, style: AppText.display(size: AppTextSize.headline, color: Colors.white)),
                           ),
                         ],
                       ),
@@ -107,10 +107,10 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 20, AppLayout.gutter, 0),
             child: Container(
               padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.lg)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -121,7 +121,7 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                       _filipino
                           ? 'Naka-save ang materyal na ito para mabasa kahit walang internet.'
                           : 'This material is saved for offline reading — you can open it anytime, even without an internet connection.',
-                      style: AppText.body(size: 11.5, color: AppColors.green900, height: 1.5),
+                      style: AppText.body(size: AppTextSize.small, color: AppColors.green900, height: 1.5),
                     ),
                   ),
                 ],
@@ -129,7 +129,7 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 32),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 18, AppLayout.gutter, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -153,9 +153,9 @@ class _LanguageToggle extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(.16)),
+        color: Colors.white.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -174,12 +174,12 @@ class _LanguageToggle extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
         decoration: BoxDecoration(
           color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Text(
           label,
           style: AppText.display(
-            size: 11,
+            size: AppTextSize.caption,
             weight: FontWeight.w700,
             color: active ? AppColors.green700 : Colors.white,
             letterSpacing: .5,
@@ -201,10 +201,10 @@ class _SectionBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(section.heading, style: AppText.display(size: 15, color: AppColors.green900)),
+          Text(section.heading, style: AppText.display(size: AppTextSize.bodyLg, color: AppColors.green900)),
           const SizedBox(height: 8),
           if (section.body != null)
-            Text(section.body!, style: AppText.body(size: 13, color: AppColors.ink, height: 1.7)),
+            Text(section.body!, style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.7)),
           if (section.bullets != null)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,7 +223,7 @@ class _SectionBlock extends StatelessWidget {
                               ),
                             ),
                             Expanded(
-                              child: Text(b, style: AppText.body(size: 13, color: AppColors.ink, height: 1.6)),
+                              child: Text(b, style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.6)),
                             ),
                           ],
                         ),

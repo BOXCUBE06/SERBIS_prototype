@@ -4,6 +4,7 @@ import '../models/request_models.dart';
 import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
+import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 import 'service_request_form.dart';
@@ -27,6 +28,9 @@ class AmbulanceScreen extends StatefulWidget {
   /// Opens the Library, where the emergency hotlines live.
   final VoidCallback? onOpenLibrary;
 
+  /// The app bar's back button (goes to Home).
+  final VoidCallback? onBack;
+
   const AmbulanceScreen({
     super.key,
     required this.appState,
@@ -36,6 +40,7 @@ class AmbulanceScreen extends StatefulWidget {
     required this.onOpenNotifications,
     required this.onOpenProfile,
     this.onOpenLibrary,
+    this.onBack,
   });
 
   @override
@@ -108,16 +113,11 @@ class _AmbulanceScreenState extends State<AmbulanceScreen> {
           );
         }
 
-        return ListView(
-          padding: EdgeInsets.zero,
+        // The form scrolls its own cards and pins Submit; this only adds the bar.
+        return Column(
           children: [
-            AppHeader(
-              onNotificationsTap: widget.onOpenNotifications,
-              onProfileTap: widget.onOpenProfile,
-              filipino: f,
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 110),
+            _CompactAppBar(filipino: f, onBack: widget.onBack),
+            Expanded(
               child: ServiceRequestForm(
                 appState: widget.appState,
                 user: widget.user,
@@ -130,6 +130,61 @@ class _AmbulanceScreenState extends State<AmbulanceScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Back button, title and subtitle on the brand gradient. Shorter than
+/// [AppHeader] so the form gets the screen.
+class _CompactAppBar extends StatelessWidget {
+  final bool filipino;
+  final VoidCallback? onBack;
+
+  const _CompactAppBar({required this.filipino, this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppLayout.readerHeaderTop, AppSpacing.lg, 18),
+      decoration: const BoxDecoration(
+        gradient: AppColors.headerGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
+      ),
+      child: Row(
+        children: [
+          if (onBack != null) ...[
+            Material(
+              color: Colors.white.withValues(alpha: .14),
+              shape: CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: .3))),
+              child: IconButton(
+                onPressed: onBack,
+                tooltip: trEn(f, 'Back'),
+                icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
+                constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  trEn(f, 'Request an ambulance'),
+                  style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: Colors.white),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  trEn(f, 'Non-emergency medical transport'),
+                  style: AppText.body(size: AppTextSize.small, color: Colors.white.withValues(alpha: .88)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -214,12 +214,12 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
               Text(
                 'Check your messages',
                 style:
-                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    AppText.display(size: AppTextSize.headline),
               ),
               const SizedBox(height: 12),
               Text(
                 '$_sentToLine Enter it below to finish signing in.',
-                style: const TextStyle(fontSize: 15, height: 1.5),
+                style: AppText.body(size: AppTextSize.bodyLg, height: 1.5),
               ),
               const SizedBox(height: 24),
               AppTextField(
@@ -236,7 +236,7 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _notice!,
-                  style: const TextStyle(color: AppColors.green700),
+                  style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.green700),
                 ),
               ],
               if (_deliveryUnknown) ...[
@@ -245,7 +245,7 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
                   "Didn't get a text? It can take a minute. If it hasn't come "
                   'when the timer ends, tap Send a new code.',
                   key: const Key('delivery-unknown-hint'),
-                  style: const TextStyle(color: AppColors.inkMuted, height: 1.4),
+                  style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted, height: 1.4),
                 ),
               ],
               const SizedBox(height: 24),

@@ -187,9 +187,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -201,11 +201,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: AppColors.line,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
               ),
             ),
-            Text(tr(filipino, 'profile.photo'), style: AppText.display(size: 18)),
+            Text(tr(filipino, 'profile.photo'), style: AppText.display(size: AppTextSize.title)),
             const SizedBox(height: 14),
             AppButton(
               label: tr(filipino, 'profile.photo_choose'),
@@ -251,11 +251,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 22),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: SectionHeader(title: tr(filipino, 'profile.title')),
         ),
         Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
+            padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
             child: AppCard(
               child: Column(
                 children: [
@@ -270,7 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Text(
                     _name.isEmpty ? tr(filipino, 'profile.value_missing') : _name,
                     style: AppText.display(
-                      size: 18,
+                      size: AppTextSize.title,
                       color: _name.isEmpty ? AppColors.inkMuted : AppColors.ink,
                     ),
                   ),
@@ -296,7 +296,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // there is no FCM and no firebase_messaging anywhere in the app — so it
         // stays deleted rather than coming back as a second fake control.
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -359,7 +359,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 110),
+        const SizedBox(height: AppLayout.navClearance),
       ],
     );
   }
@@ -375,7 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Text(
             missing ? tr(filipino, 'profile.value_missing') : text,
             style: AppText.body(
-              size: 12.5,
+              size: AppTextSize.small,
               color: missing ? AppColors.inkFaint : AppColors.inkMuted,
             ),
           ),
@@ -452,9 +452,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -464,24 +464,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 36,
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
               ),
             ),
             Text(
               f ? 'Pumili ng wika' : 'Choose language',
-              style: AppText.display(size: 18),
+              style: AppText.display(size: AppTextSize.title),
             ),
             const SizedBox(height: 4),
             Text(
               f
                   ? 'Ang mga materyal sa Safety Library ay ipapakita sa wikang ito.'
                   : 'Materials in the Safety Library will be shown in this language.',
-              style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
             ),
             const SizedBox(height: 10),
             ...options.map((o) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(o.label, style: AppText.display(size: 14, weight: FontWeight.w600)),
+                  title: Text(o.label, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
                   trailing: o == current ? const Icon(Icons.check_rounded, color: AppColors.green700) : null,
                   onTap: () => Navigator.pop(ctx, o),
                 )),
@@ -508,13 +508,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(f ? 'Mag-log out?' : 'Log out?', style: AppText.display(size: 16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+        title: Text(f ? 'Mag-log out?' : 'Log out?', style: AppText.display(size: AppTextSize.title)),
         content: Text(
           f
               ? 'Kailangan mong mag-log in muli para magsumite o subaybayan ang mga kahilingan.'
               : 'You will need to log in again to submit or track requests.',
-          style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
@@ -522,7 +522,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               f ? 'Manatili' : 'Stay logged in',
-              style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.inkMuted),
+              style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.inkMuted),
             ),
           ),
           TextButton(
@@ -530,7 +530,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: TextButton.styleFrom(backgroundColor: AppColors.red50, foregroundColor: AppColors.red600),
             child: Text(
               f ? 'Mag-log Out' : 'Log out',
-              style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.red600),
+              style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
             ),
           ),
         ],
@@ -610,10 +610,10 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(22, 56, 22, 20),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.subpageHeaderTop, AppLayout.gutter, 20),
             decoration: const BoxDecoration(
               gradient: AppColors.headerGradient,
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
             ),
             child: Row(
               children: [
@@ -624,13 +624,13 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                 const SizedBox(width: 4),
                 Text(
                   filipino ? 'Mga Offline na Materyal' : 'Offline Materials',
-                  style: AppText.display(size: 19, color: Colors.white),
+                  style: AppText.display(size: AppTextSize.headline, color: Colors.white),
                 ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 6),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 18, AppLayout.gutter, 6),
             child: SectionHeader(
               title: filipino
                   ? 'Mga Na-download na Dokumento'
@@ -638,20 +638,20 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
+            padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
             child: downloaded.isEmpty
                 ? Container(
                     padding: const EdgeInsets.all(13),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       border: Border.all(color: AppColors.line),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                     ),
                     child: Text(
                       filipino
                           ? 'Wala pang na-download. Buksan ang Aklatan at pindutin ang I-download.'
                           : 'Nothing downloaded yet. Open the Library and tap Download.',
-                      style: AppText.body(size: 12, color: AppColors.inkMuted),
+                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                     ),
                   )
                 : Column(
@@ -663,7 +663,7 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           border: Border.all(color: AppColors.line),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(13),
@@ -675,7 +675,7 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                                 fg: AppColors.green700,
                                 size: 36,
                                 iconSize: 17,
-                                radius: 10,
+                                radius: AppRadius.sm,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -684,7 +684,7 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                                   children: [
                                     Text(
                                       entry.title,
-                                      style: AppText.display(size: 13, weight: FontWeight.w600),
+                                      style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
@@ -692,7 +692,7 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                                         material.typeLabel,
                                         if (material.sizeLabel.isNotEmpty) material.sizeLabel,
                                       ].join(' · '),
-                                      style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                                     ),
                                   ],
                                 ),
@@ -714,13 +714,13 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                   ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 6),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 6),
             child: SectionHeader(
               title: filipino ? 'Kasama sa App' : 'Included in the App',
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 0, AppLayout.gutter, 22),
             child: Column(
               children: articleKeys.map((key) {
                 final article = libraryArticles[key]!;
@@ -732,13 +732,13 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     border: Border.all(color: AppColors.line),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                   child: Material(
                     color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => ArticleReaderScreen(article: article, filipino: filipino)),
                       ),
@@ -746,17 +746,17 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
                         padding: const EdgeInsets.all(13),
                         child: Row(
                           children: [
-                            IconBadge(icon: article.icon, bg: article.iconBg, fg: article.iconFg, size: 36, iconSize: 17, radius: 10),
+                            IconBadge(icon: article.icon, bg: article.iconBg, fg: article.iconFg, size: 36, iconSize: 17, radius: AppRadius.sm),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
+                                  Text(title, style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600)),
                                   const SizedBox(height: 2),
                                   Text(
                                     subtitle,
-                                    style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                                    style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                                   ),
                                 ],
                               ),
@@ -820,7 +820,7 @@ class _Avatar extends StatelessWidget {
                   border: Border.all(color: AppColors.surface, width: 3),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.green900.withOpacity(.06),
+                      color: AppColors.green900.withValues(alpha: .06),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -888,7 +888,7 @@ class _Avatar extends StatelessWidget {
 
     return Text(
       initials,
-      style: AppText.display(size: 28, color: AppColors.green700),
+      style: AppText.display(size: AppTextSize.display, color: AppColors.green700),
     );
   }
 }
@@ -921,28 +921,28 @@ class _SettingsRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           child: Padding(
             padding: const EdgeInsets.all(13),
             child: Row(
               children: [
-                IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 36, iconSize: 17, radius: 10),
+                IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 36, iconSize: 17, radius: AppRadius.sm),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: AppText.display(size: 13, weight: FontWeight.w600, color: titleColor ?? AppColors.ink)),
+                      Text(title, style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: titleColor ?? AppColors.ink)),
                       if (subtitle != null) ...[
                         const SizedBox(height: 1),
-                        Text(subtitle!, style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                        Text(subtitle!, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
                       ],
                     ],
                   ),
@@ -1109,9 +1109,9 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 28),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1124,11 +1124,11 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: AppColors.line,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
               ),
             ),
-            Text(_tr('profile.account_details'), style: AppText.display(size: 18)),
+            Text(_tr('profile.account_details'), style: AppText.display(size: AppTextSize.title)),
             const SizedBox(height: 14),
             AppTextField(
               label: _tr('profile.first_name'),
@@ -1173,7 +1173,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                   child: Text(
                     _tr('profile.phone_locked'),
                     style: AppText.body(
-                        size: 12, color: AppColors.inkMuted, height: 1.5),
+                        size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                   ),
                 ),
               ],
@@ -1200,7 +1200,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                   child: Text(
                     _tr('profile.barangay_locked'),
                     style: AppText.body(
-                        size: 12, color: AppColors.inkMuted, height: 1.5),
+                        size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                   ),
                 ),
               ],
@@ -1212,11 +1212,11 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
                 decoration: BoxDecoration(
                   color: AppColors.red50,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Text(
                   _formError!,
-                  style: AppText.body(size: 12, color: AppColors.red600, height: 1.4),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.4),
                 ),
               ),
             ],
@@ -1269,12 +1269,12 @@ class _ReadOnlyField extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.paper,
               border: Border.all(color: AppColors.line, width: 1.5),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Text(
               missing ? tr(filipino, 'profile.value_missing') : value,
               style: AppText.body(
-                size: 13,
+                size: AppTextSize.body,
                 color: missing ? AppColors.inkFaint : AppColors.ink,
               ),
             ),

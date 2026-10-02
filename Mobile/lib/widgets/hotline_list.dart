@@ -28,7 +28,7 @@ class HotlineList extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(hotline.labelFor(filipino: filipino),
-                    style: AppText.display(size: 12.5, weight: FontWeight.w600)),
+                    style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 for (final n in hotline.numbers) _numberRow(n),
               ],
@@ -40,7 +40,7 @@ class HotlineList extends StatelessWidget {
 
   Widget _numberRow(HotlineNumber n) {
     return InkWell(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: () => callHotlineNumber(n.number),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
@@ -50,7 +50,7 @@ class HotlineList extends StatelessWidget {
               child: Text(
                 n.label == null ? n.number : '${n.label} · ${n.number}',
                 style: AppText.display(
-                    size: 12.5,
+                    size: AppTextSize.small,
                     weight: FontWeight.w700,
                     color: AppColors.green700),
               ),
@@ -76,7 +76,7 @@ class HotlinesPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Emergency Hotlines')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
+        padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 12, AppLayout.gutter, 22),
         children: [HotlineList(hotlines: hotlines, filipino: false)],
       ),
     );

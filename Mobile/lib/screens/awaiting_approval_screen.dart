@@ -74,7 +74,7 @@ class _AwaitingApprovalScreenState extends State<AwaitingApprovalScreen> {
         ),
         const SizedBox(height: 22),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: AppCard(
             leftAccent: AppColors.amber600,
             child: Column(
@@ -86,22 +86,22 @@ class _AwaitingApprovalScreenState extends State<AwaitingApprovalScreen> {
                   fg: AppColors.amber600,
                 ),
                 const SizedBox(height: 14),
-                Text(tr(f, 'awaiting.title'), style: AppText.display(size: 17)),
+                Text(tr(f, 'awaiting.title'), style: AppText.display(size: AppTextSize.title)),
                 const SizedBox(height: 6),
                 Text(
                   widget.user.accountName,
-                  style: AppText.body(size: 13, color: AppColors.ink, height: 1.5),
+                  style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.5),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   tr(f, 'awaiting.body'),
-                  style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.6),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6),
                 ),
                 if (_result != null) ...[
                   const SizedBox(height: 12),
                   Text(
                     _result!,
-                    style: AppText.body(size: 12, color: AppColors.amber600, height: 1.5),
+                    style: AppText.body(size: AppTextSize.small, color: AppColors.amber600, height: 1.5),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -114,7 +114,7 @@ class _AwaitingApprovalScreenState extends State<AwaitingApprovalScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 110),
+        const SizedBox(height: AppLayout.navClearance),
       ],
     );
   }

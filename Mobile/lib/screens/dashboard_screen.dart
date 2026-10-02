@@ -55,14 +55,14 @@ class HomeScreen extends StatelessWidget {
         // ── Who is signed in ── the account type and name, so an organization
         // or a barangay hall sees at a glance which account this phone is on.
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: _AccountLine(user: user, filipino: f),
         ),
         const SizedBox(height: 14),
 
         // ── Active Service Request ──
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -89,11 +89,11 @@ class HomeScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(tr(f, 'home.no_active_title'), style: AppText.display(size: 14.5)),
+                                Text(tr(f, 'home.no_active_title'), style: AppText.display(size: AppTextSize.bodyLg)),
                                 const SizedBox(height: 2),
                                 Text(
                                   tr(f, 'home.no_active_desc'),
-                                  style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+                                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                                 ),
                               ],
                             ),
@@ -124,13 +124,13 @@ class HomeScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(activeRequest.displayTitle(f), style: AppText.display(size: 14.5)),
+                                Text(activeRequest.displayTitle(f), style: AppText.display(size: AppTextSize.bodyLg)),
                                 const SizedBox(height: 2),
                                 Text(
                                     activeRequest.refNo.isEmpty
                                         ? (f ? 'Naghihintay ng reference number' : 'Reference number pending')
                                         : 'Ref #${activeRequest.refNo}',
-                                    style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                                    style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
                               ],
                             ),
                           ),
@@ -151,7 +151,7 @@ class HomeScreen extends StatelessWidget {
                             children: [
                               const Icon(Icons.place_outlined, size: 14, color: AppColors.inkFaint),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(m, style: AppText.body(size: 12.5))),
+                              Expanded(child: Text(m, style: AppText.body(size: AppTextSize.small))),
                             ],
                           ),
                         ),
@@ -160,10 +160,10 @@ class HomeScreen extends StatelessWidget {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(11),
-                        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(AppRadius.sm)),
                         child: Text(
                           activeRequest.note ?? _statusMessage(f, activeRequest),
-                          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6),
+                          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -200,7 +200,7 @@ class HomeScreen extends StatelessWidget {
         // both tiles lead to requests it cannot file yet.
         if (!user.isAwaitingApproval)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -247,7 +247,7 @@ class HomeScreen extends StatelessWidget {
         // ── Safety guides ── the Library used to be a tab of its own; it is a
         // reference, opened when wanted, not somewhere a resident lives.
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: _SafetyGuidesCard(
             title: tr(f, 'home.safety_guides'),
             description: tr(f, 'home.safety_guides_desc'),
@@ -259,7 +259,7 @@ class HomeScreen extends StatelessWidget {
 
         // ── Announcements ──
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -277,7 +277,7 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 110),
+        const SizedBox(height: AppLayout.navClearance),
       ],
     );
 
@@ -366,24 +366,24 @@ class _AccountLine extends StatelessWidget {
       children: [
         Text(
           tr(f, user.accountTypeKey).toUpperCase(),
-          style: AppText.display(size: 10.5, weight: FontWeight.w700, color: AppColors.inkFaint, letterSpacing: .5),
+          style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.inkFaint, letterSpacing: .5),
         ),
         const SizedBox(height: 2),
-        Text(user.accountName, style: AppText.display(size: 16)),
+        Text(user.accountName, style: AppText.display(size: AppTextSize.title)),
         if (user.isOrganization && user.fullName.isNotEmpty)
           Text(
             user.fullName,
-            style: AppText.body(size: 12, color: AppColors.inkMuted),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
           ),
         if (user.isAwaitingApproval) ...[
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(11),
-            decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(AppRadius.sm)),
             child: Text(
               tr(f, 'awaiting.title'),
-              style: AppText.body(size: 12, color: AppColors.amber600, height: 1.5),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.amber600, height: 1.5),
             ),
           ),
         ],
@@ -413,16 +413,16 @@ class _SafetyGuidesCard extends StatelessWidget {
       excludeSemantics: true,
       child: Material(
         color: AppColors.green50,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           child: Container(
             constraints: const BoxConstraints(minHeight: 88),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: Border.all(color: AppColors.green600.withOpacity(.35)),
-              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.green600.withValues(alpha: .35)),
+              borderRadius: BorderRadius.circular(AppRadius.xl),
             ),
             child: Row(
               children: [
@@ -431,7 +431,7 @@ class _SafetyGuidesCard extends StatelessWidget {
                   height: 52,
                   decoration: BoxDecoration(
                     color: AppColors.green700,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                   alignment: Alignment.center,
                   child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 26),
@@ -441,11 +441,11 @@ class _SafetyGuidesCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
+                      Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.green900)),
                       const SizedBox(height: 3),
                       Text(
                         description,
-                        style: AppText.body(size: 13, color: AppColors.ink, height: 1.4),
+                        style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.4),
                       ),
                     ],
                   ),
@@ -484,13 +484,13 @@ class _QuickTypeCard extends StatelessWidget {
   Widget _card() {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.surface,
           border: Border.all(color: AppColors.line, width: 1.5),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -498,11 +498,11 @@ class _QuickTypeCard extends StatelessWidget {
             IconBadge(icon: icon, bg: bg, fg: fg),
             const SizedBox(height: 10),
             Text(title,
-                style: AppText.display(size: 12.5, weight: FontWeight.w600),
+                style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600),
                 maxLines: 2),
             const SizedBox(height: 2),
             Text(subtitle,
-                style: AppText.body(size: 11, color: AppColors.inkMuted)),
+                style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted)),
           ],
         ),
       ),
@@ -533,19 +533,19 @@ class _AnnouncementTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 36, iconSize: 17, radius: 10),
+          IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 36, iconSize: 17, radius: AppRadius.sm),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -553,11 +553,11 @@ class _AnnouncementTile extends StatelessWidget {
               children: [
                 // The NEW badge that used to sit here was hardcoded true, so it
                 // never came off. A flag that is always on is not information.
-                Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
+                Text(title, style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600)),
                 const SizedBox(height: 3),
-                Text(time, style: AppText.body(size: 11, color: AppColors.inkFaint)),
+                Text(time, style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint)),
                 const SizedBox(height: 4),
-                Text(desc, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5)),
+                Text(desc, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5)),
               ],
             ),
           ),
@@ -579,7 +579,7 @@ class _AnnouncementNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(text, style: AppText.body(size: 12, color: AppColors.inkMuted)),
+      child: Text(text, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
     );
   }
 }

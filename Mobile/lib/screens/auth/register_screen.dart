@@ -196,7 +196,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text('Create your account',
-                        style: AppText.display(size: 20)),
+                        style: AppText.display(size: AppTextSize.headline)),
                     const SizedBox(height: 4),
                     // The old copy promised "you will log in afterwards to
                     // verify your account". No verification step exists, and
@@ -211,7 +211,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           : 'One account per household, registered by the head of the family. '
                               'You can log in as soon as you have registered.',
                       style: AppText.body(
-                          size: 12.5, color: AppColors.inkMuted, height: 1.5),
+                          size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                     ),
                     const SizedBox(height: 16),
                     const ServicePurposeNote(),
@@ -317,7 +317,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         'Must be at least 8 characters with upper and lower '
                         'case letters and at least one number — e.g. Pasada123',
                         style: AppText.body(
-                            size: 11, color: AppColors.inkMuted, height: 1.5),
+                            size: AppTextSize.caption, color: AppColors.inkMuted, height: 1.5),
                       ),
                     ),
 
@@ -348,7 +348,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             Expanded(
                               child: Text(_formError!,
                                   style: AppText.body(
-                                      size: 12.5,
+                                      size: AppTextSize.small,
                                       color: AppColors.red600,
                                       height: 1.4)),
                             ),
@@ -359,7 +359,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 4),
                     InkWell(
                       onTap: () => setState(() => _agreed = !_agreed),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
@@ -384,7 +384,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 'Echague MDRRMO to process service requests '
                                 'and send announcements.',
                                 style: AppText.body(
-                                    size: 12,
+                                    size: AppTextSize.small,
                                     color: AppColors.inkMuted,
                                     height: 1.5),
                               ),
@@ -406,13 +406,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         Text('Already have an account?',
                             style: AppText.body(
-                                size: 12.5, color: AppColors.inkMuted)),
+                                size: AppTextSize.small, color: AppColors.inkMuted)),
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: widget.onGoToLogin,
                           child: Text('Log in',
                               style: AppText.display(
-                                  size: 12.5,
+                                  size: AppTextSize.small,
                                   weight: FontWeight.w700,
                                   color: AppColors.green700)),
                         ),
@@ -471,7 +471,7 @@ class _BarangayField extends StatelessWidget {
                   const SizedBox(width: 10),
                   Text('Loading barangays…',
                       style:
-                          AppText.body(size: 13, color: AppColors.inkFaint)),
+                          AppText.body(size: AppTextSize.body, color: AppColors.inkFaint)),
                 ],
               ),
             )
@@ -486,7 +486,7 @@ class _BarangayField extends StatelessWidget {
                     child: Text(
                       "Couldn't load barangays.",
                       style:
-                          AppText.body(size: 12.5, color: AppColors.inkMuted),
+                          AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                     ),
                   ),
                   TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -509,7 +509,7 @@ class _BarangayField extends StatelessWidget {
                     onChanged: (name) => onChanged(barangays.firstWhere((b) => b.name == name).id),
                   ),
                   if (state.hasError)
-                    Text(state.errorText!, style: AppText.body(size: 11, color: AppColors.red600)),
+                    Text(state.errorText!, style: AppText.body(size: AppTextSize.caption, color: AppColors.red600)),
                 ],
               ),
             ),
@@ -531,7 +531,7 @@ class _BarangayField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 13),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.line, width: 1.5),
       ),
       alignment: Alignment.centerLeft,
@@ -553,7 +553,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 14, 24, 28),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
       ),
       child: Stack(
         clipBehavior: Clip.none,
@@ -566,7 +566,7 @@ class _Header extends StatelessWidget {
               height: 160,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(.05),
+                color: Colors.white.withValues(alpha: .05),
               ),
             ),
           ),
@@ -585,10 +585,10 @@ class _Header extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.12),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                         border:
-                            Border.all(color: Colors.white.withOpacity(.14)),
+                            Border.all(color: Colors.white.withValues(alpha: .14)),
                       ),
                       alignment: Alignment.center,
                       child: const Icon(Icons.shield_outlined,
@@ -600,14 +600,14 @@ class _Header extends StatelessWidget {
                       children: [
                         Text('SERBIS',
                             style: AppText.display(
-                                size: 17,
+                                size: AppTextSize.title,
                                 color: Colors.white,
                                 letterSpacing: .5)),
                         Text('ECHAGUE MDRRMO',
                             style: AppText.display(
-                                size: 10,
+                                size: AppTextSize.caption,
                                 weight: FontWeight.w500,
-                                color: Colors.white.withOpacity(.9),
+                                color: Colors.white.withValues(alpha: .9),
                                 letterSpacing: 2)),
                       ],
                     ),

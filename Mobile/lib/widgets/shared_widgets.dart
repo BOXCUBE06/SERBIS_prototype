@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/advisory.dart';
+import '../models/borrow_models.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -31,10 +32,10 @@ class AppHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 40, 14, 20),
+      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.headerTop, 14, 20),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
       ),
       child: Stack(
         clipBehavior: Clip.none,
@@ -45,7 +46,7 @@ class AppHeader extends StatelessWidget {
             child: Container(
               width: 200,
               height: 200,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(.05)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .05)),
             ),
           ),
           Positioned(
@@ -56,14 +57,14 @@ class AppHeader extends StatelessWidget {
               height: 160,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(.08)),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
               ),
             ),
           ),
           Row(
             children: [
               if (onBack != null) ...[
-                _HeaderButton(
+                HeaderButton(
                   icon: Icons.arrow_back_rounded,
                   label: tr(filipino, 'nav.back'),
                   onTap: onBack!,
@@ -77,9 +78,9 @@ class AppHeader extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(.14)),
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: Colors.white.withValues(alpha: .14)),
                       ),
                       alignment: Alignment.center,
                       child: const Icon(Icons.shield_outlined, color: Colors.white, size: 19),
@@ -89,16 +90,16 @@ class AppHeader extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('SERBIS', style: AppText.display(size: 17, color: Colors.white, letterSpacing: .5)),
+                          Text('SERBIS', style: AppText.display(size: AppTextSize.title, color: Colors.white, letterSpacing: .5)),
                           const SizedBox(height: 2),
                           Text(
                             'ECHAGUE MDRRMO',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppText.display(
-                              size: 10,
+                              size: AppTextSize.caption,
                               weight: FontWeight.w500,
-                              color: Colors.white.withOpacity(.85),
+                              color: Colors.white.withValues(alpha: .85),
                               letterSpacing: 2,
                             ),
                           ),
@@ -114,13 +115,13 @@ class AppHeader extends StatelessWidget {
               // permanent indicator teaches residents to ignore the one that
               // will matter.
               if (onNotificationsTap != null)
-                _HeaderButton(
+                HeaderButton(
                   icon: Icons.notifications_outlined,
                   label: tr(filipino, 'nav.notifications'),
                   onTap: onNotificationsTap!,
                 ),
               if (onProfileTap != null)
-                _HeaderButton(
+                HeaderButton(
                   icon: Icons.person_outline_rounded,
                   label: tr(filipino, 'nav.profile'),
                   onTap: onProfileTap!,
@@ -135,12 +136,12 @@ class AppHeader extends StatelessWidget {
 
 /// A 36dp glass circle inside a 48dp touch target — the drawn size is what the
 /// header was designed around, the target is what a thumb needs.
-class _HeaderButton extends StatelessWidget {
+class HeaderButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _HeaderButton({required this.icon, required this.label, required this.onTap});
+  const HeaderButton({super.key, required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -161,8 +162,8 @@ class _HeaderButton extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(.10),
-                border: Border.all(color: Colors.white.withOpacity(.30)),
+                color: Colors.white.withValues(alpha: .10),
+                border: Border.all(color: Colors.white.withValues(alpha: .30)),
               ),
               alignment: Alignment.center,
               child: Icon(icon, size: 18, color: Colors.white),
@@ -231,7 +232,7 @@ class ServicePurposeNote extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.green50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,13 +240,13 @@ class ServicePurposeNote extends StatelessWidget {
           Text(
             _lead,
             style: AppText.body(
-                size: 12.5, color: AppColors.green900, height: 1.45),
+                size: AppTextSize.small, color: AppColors.green900, height: 1.45),
           ),
           const SizedBox(height: 3),
           Text(
             _leadEnglish,
             style: AppText.body(
-                size: 11.5, color: AppColors.inkMuted, height: 1.4),
+                size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
           ),
           const SizedBox(height: 10),
           for (final (icon, filipino, english) in _capabilities)
@@ -270,12 +271,12 @@ class ServicePurposeNote extends StatelessWidget {
                         Text(
                           filipino,
                           style: AppText.body(
-                              size: 12, color: AppColors.ink, height: 1.35),
+                              size: AppTextSize.small, color: AppColors.ink, height: 1.35),
                         ),
                         Text(
                           english,
                           style: AppText.body(
-                              size: 11, color: AppColors.inkFaint, height: 1.35),
+                              size: AppTextSize.caption, color: AppColors.inkFaint, height: 1.35),
                         ),
                       ],
                     ),
@@ -309,7 +310,7 @@ class SectionHeader extends StatelessWidget {
           // title's natural width and "Subaybayan ang Iyong mga Kahilingan"
           // overflowed by 22px at 360, striped banner and all.
           Flexible(
-            child: Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
+            child: Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.green900)),
           ),
           if (actionLabel != null) ...[
             const SizedBox(width: 12),
@@ -319,7 +320,7 @@ class SectionHeader extends StatelessWidget {
               onTap: onAction,
               child: Text(
                 actionLabel!,
-                style: AppText.display(size: 12, weight: FontWeight.w600, color: AppColors.green700),
+                style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: AppColors.green700),
               ),
             ),
           ],
@@ -345,15 +346,9 @@ class AppCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.green900.withOpacity(.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: AppShadow.card,
       ),
       child: leftAccent == null
           ? Padding(padding: padding, child: child)
@@ -361,7 +356,7 @@ class AppCard extends StatelessWidget {
               children: [
                 Container(width: 4, decoration: BoxDecoration(
                   color: leftAccent,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(AppRadius.xl)),
                 )),
                 Expanded(child: Padding(padding: padding, child: child)),
               ],
@@ -385,7 +380,7 @@ class IconBadge extends StatelessWidget {
     required this.fg,
     this.size = 38,
     this.iconSize = 18,
-    this.radius = 11,
+    this.radius = AppRadius.md,
   });
 
   @override
@@ -401,7 +396,8 @@ class IconBadge extends StatelessWidget {
 }
 
 class StatusBadge extends StatelessWidget {
-  final ReqStatus status;
+  /// Null for a borrow status, whose label and colours are resolved up front.
+  final ReqStatus? status;
   final bool filipino;
 
   /// Overrides the wording, not the colours: a request that words its own
@@ -412,16 +408,22 @@ class StatusBadge extends StatelessWidget {
   /// enum (a trip that never arrived is amber, not Completed green).
   final Color? bg;
   final Color? fg;
-  const StatusBadge(this.status, {super.key, this.filipino = false, this.label, this.bg, this.fg});
+  const StatusBadge(ReqStatus this.status, {super.key, this.filipino = false, this.label, this.bg, this.fg});
+
+  StatusBadge.borrow(BorrowStatus borrow, {super.key, this.filipino = false})
+      : status = null,
+        label = borrow.labelFor(filipino),
+        bg = borrow.bg,
+        fg = borrow.fg;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(color: bg ?? status!.bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
       child: Text(
-        (label ?? status.labelFor(filipino)).toUpperCase(),
-        style: AppText.display(size: 10.5, weight: FontWeight.w700, color: fg ?? status.fg, letterSpacing: .5),
+        (label ?? status!.labelFor(filipino)).toUpperCase(),
+        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: fg ?? status!.fg, letterSpacing: .5),
       ),
     );
   }
@@ -465,7 +467,7 @@ class OfflinePill extends StatelessWidget {
       onTap: loading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.xl)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -479,7 +481,7 @@ class OfflinePill extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               label,
-              style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
+              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
             ),
           ],
         ),
@@ -531,7 +533,7 @@ class AppButton extends StatelessWidget {
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: AppText.display(size: 13, weight: FontWeight.w600, color: fg),
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: fg),
                 ),
               ),
             ],
@@ -549,7 +551,7 @@ class AppButton extends StatelessWidget {
               backgroundColor: AppColors.green700,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               elevation: 0,
             ),
             child: child,
@@ -564,7 +566,7 @@ class AppButton extends StatelessWidget {
               foregroundColor: AppColors.ink,
               side: const BorderSide(color: AppColors.line),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
             child: child,
           ),
@@ -578,7 +580,7 @@ class AppButton extends StatelessWidget {
               backgroundColor: AppColors.red50,
               foregroundColor: AppColors.red600,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
             child: child,
           ),
@@ -635,10 +637,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
             validator: widget.validator,
             maxLength: widget.maxLength,
             inputFormatters: widget.inputFormatters,
-            style: AppText.body(size: 14),
+            style: AppText.body(size: AppTextSize.bodyLg),
             decoration: InputDecoration(
               hintText: widget.hint,
-              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+              hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
               counterText: '',
               prefixIcon: widget.prefixIcon != null
                   ? Icon(widget.prefixIcon, size: 18, color: AppColors.inkFaint)
@@ -656,25 +658,25 @@ class _AuthTextFieldState extends State<AuthTextField> {
               filled: true,
               fillColor: AppColors.surface,
               contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              errorStyle: AppText.body(size: 11, color: AppColors.red600),
+              errorStyle: AppText.body(size: AppTextSize.caption, color: AppColors.red600),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.line, width: 1.5),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.line, width: 1.5),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
               ),
               errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
               focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
             ),
@@ -769,16 +771,16 @@ class _CancelDialogState extends State<_CancelDialog> {
       canPop: !_busy,
       child: AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
         title: Text(
           f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
-          style: AppText.display(size: 16),
+          style: AppText.display(size: AppTextSize.title),
         ),
         content: Text(
           f
               ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
               : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
-          style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
@@ -787,7 +789,7 @@ class _CancelDialogState extends State<_CancelDialog> {
             child: Text(
               f ? 'Panatilihin' : 'Keep request',
               style: AppText.display(
-                size: 13,
+                size: AppTextSize.body,
                 weight: FontWeight.w600,
                 color: _busy ? AppColors.inkFaint : AppColors.inkMuted,
               ),
@@ -807,7 +809,7 @@ class _CancelDialogState extends State<_CancelDialog> {
                   )
                 : Text(
                     f ? 'Kanselahin' : 'Cancel request',
-                    style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.red600),
+                    style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
                   ),
           ),
         ],
@@ -826,11 +828,11 @@ void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool i
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
-      content: Text(message, style: AppText.display(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+      content: Text(message, style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: Colors.white)),
       backgroundColor: isError ? AppColors.red600 : AppColors.green900,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.fromLTRB(22, 0, 22, 90),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      margin: const EdgeInsets.fromLTRB(AppLayout.gutter, 0, AppLayout.gutter, AppLayout.snackBarClearance),
       // Failures need longer on screen than confirmations.
       duration: Duration(seconds: isError ? 4 : 2),
     ),
@@ -900,9 +902,9 @@ class NotificationsSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(22, 14, 22, 32),
+      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,13 +914,13 @@ class NotificationsSheet extends StatelessWidget {
               width: 36,
               height: 4,
               margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
             ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(filipino ? 'Mga Abiso' : 'Notifications', style: AppText.display(size: 18)),
+              Text(filipino ? 'Mga Abiso' : 'Notifications', style: AppText.display(size: AppTextSize.title)),
               IconButton(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.green700),
@@ -966,7 +968,7 @@ class NotificationsSheet extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.green50,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       border: Border.all(color: AppColors.green50),
                     ),
                     child: Column(
@@ -982,12 +984,12 @@ class NotificationsSheet extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(
                           tr(filipino, 'notif.empty_title'),
-                          style: AppText.display(size: 15, color: AppColors.green900),
+                          style: AppText.display(size: AppTextSize.bodyLg, color: AppColors.green900),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           tr(filipino, 'notif.empty_body'),
-                          style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
+                          style: AppText.body(size: AppTextSize.small, color: AppColors.green900, height: 1.6),
                         ),
                       ],
                     ),
@@ -1003,7 +1005,7 @@ class NotificationsSheet extends StatelessWidget {
           // it covers.
           Text(
             tr(filipino, 'notif.scope_note'),
-            style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
           ),
         ],
       ),
@@ -1022,7 +1024,7 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text.toUpperCase(),
-        style: AppText.display(size: 11, weight: FontWeight.w700, color: AppColors.inkMuted),
+        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.inkMuted),
       ),
     );
   }
@@ -1049,7 +1051,7 @@ class _AdvisoryNotice extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.lg)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1058,7 +1060,7 @@ class _AdvisoryNotice extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: AppText.body(size: 12, color: AppColors.ink, height: 1.5),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.ink, height: 1.5),
             ),
           ),
         ],
@@ -1085,7 +1087,7 @@ class _AdvisoryTile extends StatelessWidget {
         // Not colour alone: an advisory is marked by its own border and its
         // megaphone as well as its tint.
         border: Border.all(color: AppColors.red600, width: 1.2),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1096,7 +1098,7 @@ class _AdvisoryTile extends StatelessWidget {
             fg: AppColors.red600,
             size: 36,
             iconSize: 17,
-            radius: 10,
+            radius: AppRadius.sm,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1107,20 +1109,20 @@ class _AdvisoryTile extends StatelessWidget {
                   at == null
                       ? tr(filipino, 'notif.adv_date_unknown')
                       : formatTimelineTime(at, filipino),
-                  style: AppText.body(size: 11, color: AppColors.inkFaint),
+                  style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint),
                 ),
                 const SizedBox(height: 4),
                 // The agency's own words, unmodified and never truncated: the
                 // instruction a resident has to act on is often the last line.
                 Text(
                   advisory.message,
-                  style: AppText.body(size: 12.5, color: AppColors.ink, height: 1.5),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.ink, height: 1.5),
                 ),
                 if (advisory.barangay != null && advisory.barangay!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     advisory.barangay!,
-                    style: AppText.body(size: 11, color: AppColors.inkMuted),
+                    style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted),
                   ),
                 ],
               ],
@@ -1148,7 +1150,7 @@ class _RequestUpdateTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1159,7 +1161,7 @@ class _RequestUpdateTile extends StatelessWidget {
             fg: request.status.fg,
             size: 36,
             iconSize: 17,
-            radius: 10,
+            radius: AppRadius.sm,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1168,21 +1170,21 @@ class _RequestUpdateTile extends StatelessWidget {
               children: [
                 Text(
                   request.displayTitle(filipino),
-                  style: AppText.display(size: 13, weight: FontWeight.w600),
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   at == null
                       ? tr(filipino, 'timeline.time_unknown')
                       : formatTimelineTime(at, filipino),
-                  style: AppText.body(size: 11, color: AppColors.inkFaint),
+                  style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   request.refNo.isEmpty
                       ? request.statusLabelFor(filipino)
                       : '${request.statusLabelFor(filipino)} · ${request.refNo}',
-                  style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                 ),
               ],
             ),

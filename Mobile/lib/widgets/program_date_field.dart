@@ -52,13 +52,13 @@ class ProgramDateField extends StatelessWidget {
             button: true,
             label: '${trEn(filipino, field.label)}, ${picked == null ? trEn(filipino, 'not chosen') : formatProgramDate(picked)}',
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               onTap: () => _pick(context),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(color: AppColors.line, width: 1.5),
                 ),
                 child: Row(
@@ -69,7 +69,7 @@ class ProgramDateField extends StatelessWidget {
                       child: Text(
                         picked == null ? trEn(filipino, 'Choose a date') : formatProgramDate(picked),
                         style: AppText.body(
-                          size: 13,
+                          size: AppTextSize.body,
                           color: picked == null ? AppColors.inkFaint : AppColors.ink,
                         ),
                       ),
@@ -83,7 +83,7 @@ class ProgramDateField extends StatelessWidget {
           Text(
             trEn(filipino, 'At least {n} days from today, so MDRRMO can plan.')
                 .replaceAll('{n}', '${field.minDaysAhead}'),
-            style: AppText.body(size: 11, color: AppColors.inkMuted),
+            style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted),
           ),
         ],
       ),

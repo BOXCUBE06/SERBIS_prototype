@@ -226,7 +226,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: Text(
               _error!,
               key: const Key('forgot-error'),
-              style: AppText.body(size: 12.5, color: AppColors.red600, height: 1.4),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.4),
             ),
           ),
         ],
@@ -240,12 +240,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Forgot your password?', style: AppText.display(size: 21)),
+          Text('Forgot your password?', style: AppText.display(size: AppTextSize.headline)),
           const SizedBox(height: 8),
           Text(
             "Enter the mobile number you signed up with. We'll text you a code "
             'to set a new password.',
-            style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.5),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
           ),
           const SizedBox(height: 24),
           AuthTextField(
@@ -276,13 +276,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Check your messages', style: AppText.display(size: 21)),
+        Text('Check your messages', style: AppText.display(size: AppTextSize.headline)),
         const SizedBox(height: 8),
         Text(
           'If ${PhoneNumber.display(_phone)} has an account, we sent a 6-digit '
           "code by text message. Enter it below. It's good for 10 minutes.",
           key: const Key('forgot-sent-line'),
-          style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
         ),
         const SizedBox(height: 24),
         AppTextField(
@@ -297,13 +297,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         if (_notice != null) ...[
           const SizedBox(height: 8),
-          Text(_notice!, style: const TextStyle(color: AppColors.green700)),
+          Text(_notice!, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.green700)),
         ],
         const SizedBox(height: 8),
         Text(
           "Didn't get a text? Check the number, wait for the timer, then send "
           'a new code.',
-          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.4),
+          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
         ),
         const SizedBox(height: 20),
         AppButton(label: 'Verify', loading: _busy, onPressed: _busy ? null : _verifyCode),
@@ -336,11 +336,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Choose a new password', style: AppText.display(size: 21)),
+          Text('Choose a new password', style: AppText.display(size: AppTextSize.headline)),
           const SizedBox(height: 8),
           Text(
             'At least 8 characters, with upper and lower case letters and a number.',
-            style: AppText.body(size: 12.5, color: AppColors.inkMuted, height: 1.5),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
           ),
           const SizedBox(height: 24),
           AuthTextField(

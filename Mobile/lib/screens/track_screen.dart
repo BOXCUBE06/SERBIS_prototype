@@ -85,7 +85,7 @@ class _TrackScreenState extends State<TrackScreen> {
         ),
         const SizedBox(height: 22),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
           child: SectionHeader(title: tr(isFilipino, 'track.title')),
         ),
         // These rows came off the device, not the server. The dispatcher may
@@ -93,7 +93,7 @@ class _TrackScreenState extends State<TrackScreen> {
         // the difference between stale information and wrong information.
         if (hasRequests && widget.appState.requestsFromCache)
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 12, AppLayout.gutter, 0),
             child: StaleDataNote(
               filipino: isFilipino,
               lastUpdated: widget.appState.requestsFetchedAt,
@@ -101,7 +101,7 @@ class _TrackScreenState extends State<TrackScreen> {
           ),
         if (!hasRequests)
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 18, AppLayout.gutter, 0),
             child: AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,11 +119,11 @@ class _TrackScreenState extends State<TrackScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tr(isFilipino, 'track.empty_title'), style: AppText.display(size: 14.5)),
+                            Text(tr(isFilipino, 'track.empty_title'), style: AppText.display(size: AppTextSize.bodyLg)),
                             const SizedBox(height: 2),
                             Text(
                               tr(isFilipino, 'track.empty_desc'),
-                              style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+                              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                             ),
                           ],
                         ),
@@ -139,7 +139,7 @@ class _TrackScreenState extends State<TrackScreen> {
             height: 40,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
+              padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
               children: [
                 _filterChip('${tr(isFilipino, "track.filter.all")} (${requests.length})', null, isFilipino),
                 _filterChip(tr(isFilipino, 'status.review'), ReqStatus.review, isFilipino),
@@ -152,7 +152,7 @@ class _TrackScreenState extends State<TrackScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 18, AppLayout.gutter, 0),
             child: Column(
               children: filtered.map((request) => _RequestCard(
                 request: request,
@@ -164,7 +164,7 @@ class _TrackScreenState extends State<TrackScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 110),
+        const SizedBox(height: AppLayout.navClearance),
       ],
     );
 
@@ -185,14 +185,14 @@ class _TrackScreenState extends State<TrackScreen> {
         selected: active,
         onSelected: (_) => _changeFilter(status),
         labelStyle: AppText.display(
-          size: 12,
+          size: AppTextSize.small,
           weight: FontWeight.w600,
           color: active ? Colors.white : AppColors.inkMuted,
         ),
         backgroundColor: AppColors.surface,
         selectedColor: AppColors.green700,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
           side: BorderSide(color: active ? AppColors.green700 : AppColors.line, width: 1.5),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -236,7 +236,7 @@ class _RequestCard extends StatelessWidget {
       return AppColors.red600;
     }
     if (request.status == ReqStatus.booked) {
-      return const Color(0xFF6A1B9A);
+      return AppStatus.booked.fg;
     }
     if (request.status == ReqStatus.scheduled) {
       return AppColors.amber600;
@@ -264,13 +264,13 @@ class _RequestCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(request.displayTitle(filipino), style: AppText.display(size: 14.5)),
+                      Text(request.displayTitle(filipino), style: AppText.display(size: AppTextSize.bodyLg)),
                       const SizedBox(height: 2),
                       Text(
                         request.refNo.isEmpty
                             ? (filipino ? 'Naghihintay ng reference number' : 'Reference number pending')
                             : 'Ref #${request.refNo}',
-                        style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+                        style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                       ),
                     ],
                   ),
@@ -291,7 +291,7 @@ class _RequestCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.place_outlined, size: 14, color: AppColors.inkFaint),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(m, style: AppText.body(size: 12.5))),
+                      Expanded(child: Text(m, style: AppText.body(size: AppTextSize.small))),
                     ],
                   ),
                 )),
@@ -300,15 +300,15 @@ class _RequestCard extends StatelessWidget {
                 margin: const EdgeInsets.only(top: 6),
                 width: double.infinity,
                 padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
-                child: Text(request.note!, style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.6)),
+                decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                child: Text(request.note!, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6)),
               ),
             if (request.isNotTransported)
               Container(
                 margin: const EdgeInsets.only(top: 6),
                 width: double.infinity,
                 padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(AppRadius.sm)),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -317,7 +317,7 @@ class _RequestCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${tr(filipino, 'status.not_transported')}: ${request.noArrivalReason!.trim()}',
-                        style: AppText.body(size: 12, color: AppColors.amber600, height: 1.6),
+                        style: AppText.body(size: AppTextSize.small, color: AppColors.amber600, height: 1.6),
                       ),
                     ),
                   ],
@@ -343,7 +343,7 @@ class _RequestCard extends StatelessWidget {
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
                     color: urgent ? AppColors.amber50 : AppColors.blue50,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +353,7 @@ class _RequestCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           '$countdown · ${formatBookingConfirmationTime(request.scheduledAt!, filipino)}',
-                          style: AppText.body(size: 12, weight: FontWeight.w700, color: tint, height: 1.6),
+                          style: AppText.body(size: AppTextSize.small, weight: FontWeight.w700, color: tint, height: 1.6),
                         ),
                       ),
                     ],
@@ -365,7 +365,7 @@ class _RequestCard extends StatelessWidget {
                 margin: const EdgeInsets.only(top: 6),
                 width: double.infinity,
                 padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(AppRadius.sm)),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -374,7 +374,7 @@ class _RequestCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         tr(filipino, 'common.booking_overdue'),
-                        style: AppText.body(size: 12, color: AppColors.red600, height: 1.6),
+                        style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.6),
                       ),
                     ),
                   ],
@@ -384,7 +384,7 @@ class _RequestCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 tr(filipino, 'request.responders_heading'),
-                style: AppText.body(size: 11.5, weight: FontWeight.w700, color: AppColors.inkMuted),
+                style: AppText.body(size: AppTextSize.small, weight: FontWeight.w700, color: AppColors.inkMuted),
               ),
               const SizedBox(height: 6),
               ...request.responders.map((r) => _ResponderTile(responder: r)),
@@ -434,7 +434,7 @@ class _ResponderTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(AppRadius.sm)),
         child: Row(
           children: [
             CircleAvatar(
@@ -444,7 +444,7 @@ class _ResponderTile extends StatelessWidget {
               child: responder.photoUrl == null
                   ? Text(
                       responder.name.isEmpty ? '?' : responder.name[0].toUpperCase(),
-                      style: AppText.display(size: 14, color: AppColors.blue600),
+                      style: AppText.display(size: AppTextSize.bodyLg, color: AppColors.blue600),
                     )
                   : null,
             ),
@@ -453,8 +453,8 @@ class _ResponderTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(responder.name, style: AppText.display(size: 13)),
-                  Text(responder.position, style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
+                  Text(responder.name, style: AppText.display(size: AppTextSize.body)),
+                  Text(responder.position, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
                 ],
               ),
             ),
@@ -532,13 +532,13 @@ class _Timeline extends StatelessWidget {
                       Text(
                         step.title,
                         style: AppText.display(
-                          size: 13,
+                          size: AppTextSize.body,
                           weight: FontWeight.w600,
                           color: step.state == RequestStepState.pending ? AppColors.inkFaint : AppColors.ink,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(step.time, style: AppText.body(size: 11, color: AppColors.inkFaint)),
+                      Text(step.time, style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint)),
                     ],
                   ),
                 ),

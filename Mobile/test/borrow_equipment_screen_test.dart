@@ -139,6 +139,9 @@ Widget _host(AppState state) => MaterialApp(
       home: BorrowEquipmentScreen(appState: state, user: _resident),
     );
 
+/// Text fields inside the open borrow sheet, top to bottom.
+Finder _sheetFields() => find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField));
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -195,14 +198,12 @@ void main() {
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pumpAndSettle();
 
-      expect(find.text('None available right now'), findsOneWidget);
+      expect(find.text('Unavailable'), findsOneWidget);
       expect(find.text('2 available'), findsOneWidget);
 
       // Both cards draw a Borrow button; only the in-stock one is enabled.
-      // Matched by label rather than by type: the free-text card at the end of
-      // the list draws an OutlinedButton too, and it is not a Borrow button.
       final buttons = tester
-          .widgetList<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Borrow'))
+          .widgetList<TextButton>(find.widgetWithText(TextButton, 'Borrow'))
           .toList();
       expect(buttons, hasLength(2));
       expect(buttons.where((b) => b.onPressed == null), hasLength(1));
@@ -222,7 +223,7 @@ void main() {
     /// Every submit path below has to clear the required purpose field first,
     /// or it never reaches the API at all.
     Future<void> fillPurpose(WidgetTester tester, [String text = 'Barangay flood drill']) async {
-      await tester.enterText(find.byType(TextField), text);
+      await tester.enterText(_sheetFields().last, text);
       await tester.pump();
     }
 
@@ -230,12 +231,12 @@ void main() {
       final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
       await openSheet(tester, api);
 
-      await tester.tap(find.text('Request this item'));
+      await tester.tap(find.text('Send request'));
       await tester.pumpAndSettle();
 
       expect(api.submitCalls, 0, reason: 'nothing to review, so nothing to file');
       expect(find.text('Tell MDRRMO what you need this for.'), findsOneWidget);
-      expect(find.text('Request this item'), findsOneWidget);
+      expect(find.text('Send request'), findsOneWidget);
     });
 
     testWidgets('whitespace alone does not count as a purpose', (tester) async {
@@ -243,7 +244,7 @@ void main() {
       await openSheet(tester, api);
 
       await fillPurpose(tester, '   ');
-      await tester.tap(find.text('Request this item'));
+      await tester.tap(find.text('Send request'));
       await tester.pumpAndSettle();
 
       expect(api.submitCalls, 0);
@@ -254,7 +255,7 @@ void main() {
       final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
       await openSheet(tester, api);
 
-      await tester.tap(find.text('Request this item'));
+      await tester.tap(find.text('Send request'));
       await tester.pumpAndSettle();
       expect(find.text('Tell MDRRMO what you need this for.'), findsOneWidget);
 
@@ -271,17 +272,17 @@ void main() {
       expect(find.text('1'), findsOneWidget);
 
       // Below 1 is refused.
-      await tester.tap(find.byIcon(Icons.remove_rounded));
+      await tester.tap(find.byTooltip('Decrease quantity'));
       await tester.pump();
       expect(find.text('1'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.tap(find.byTooltip('Increase quantity'));
       await tester.pump();
       expect(find.text('2'), findsOneWidget);
 
       // Past the available quantity is refused too, so the client never
       // knowingly sends a request the stock check will reject.
-      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.tap(find.byTooltip('Increase quantity'));
       await tester.pump();
       expect(find.text('2'), findsOneWidget);
       expect(find.text('3'), findsNothing);
@@ -295,13 +296,13 @@ void main() {
       await openSheet(tester, api);
 
       await fillPurpose(tester);
-      await tester.tap(find.text('Request this item'));
+      await tester.tap(find.text('Send request'));
       await tester.pumpAndSettle();
 
       expect(api.submitCalls, 1);
       expect(find.text('Only 1 of this item are available to borrow.'), findsOneWidget);
       // Still on the sheet — closing it would read as a filed request.
-      expect(find.text('Request this item'), findsOneWidget);
+      expect(find.text('Send request'), findsOneWidget);
       expect(find.text('2 available to borrow'), findsOneWidget);
     });
 
@@ -310,10 +311,10 @@ void main() {
       final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
       await openSheet(tester, api);
 
-      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.tap(find.byTooltip('Increase quantity'));
       await tester.pump();
       await fillPurpose(tester, 'Evacuation centre setup');
-      await tester.tap(find.text('Request this item'));
+      await tester.tap(find.text('Send request'));
       await tester.pumpAndSettle();
 
       expect(api.submitCalls, 1);
@@ -322,7 +323,7 @@ void main() {
           reason: 'what MDRRMO decides on must reach the server too');
 
       // Sheet gone.
-      expect(find.text('Request this item'), findsNothing);
+      expect(find.text('Send request'), findsNothing);
       // Told the resident, by name, what happens next.
       expect(
         find.text('Request filed for Wheelchair. MDRRMO will review it.'),
@@ -330,7 +331,7 @@ void main() {
       );
       // And moved them to the tab the new request is actually on — it is
       // invisible on the Available tab it was filed from.
-      expect(find.text('My Requests (1)'), findsOneWidget);
+      expect(find.text('My requests'), findsOneWidget);
       expect(find.textContaining('Wheelchair × 2'), findsOneWidget);
     });
   });
@@ -341,7 +342,7 @@ void main() {
       await tester.pumpWidget(_host(AppState(_FakeApi(equipmentRows: []))));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('My Requests (0)'));
+      await tester.tap(find.text('My requests'));
       await tester.pumpAndSettle();
 
       expect(find.text('No borrow requests yet'), findsOneWidget);
@@ -364,8 +365,7 @@ void main() {
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pumpAndSettle();
 
-      expect(find.text('My Requests (1)'), findsOneWidget);
-      await tester.tap(find.text('My Requests (1)'));
+      await tester.tap(find.text('My requests'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Megaphone × 3'), findsOneWidget);
@@ -397,7 +397,7 @@ void main() {
     Future<void> openMine(WidgetTester tester, _FakeApi api) async {
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('My Requests (1)'));
+      await tester.tap(find.text('My requests'));
       await tester.pumpAndSettle();
     }
 
@@ -472,11 +472,11 @@ void main() {
     }
 
     Future<void> openSheet(WidgetTester tester, {bool other = false}) async {
-      await tapVisible(tester, find.text(other ? 'Request' : 'Borrow').first);
+      await tapVisible(tester, find.text(other ? 'Need something else?' : 'Borrow').first);
     }
 
     Future<void> submit(WidgetTester tester) async {
-      await tapVisible(tester, find.text('Request this item'));
+      await tapVisible(tester, find.text('Send request'));
     }
 
     Future<void> fill(WidgetTester tester, Finder field, String text) async {
@@ -492,7 +492,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await openSheet(tester);
-      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await fill(tester, _sheetFields().first, 'Flood drill');
       await submit(tester);
 
       expect(api.lastBody['equipment_id'], 1);
@@ -510,30 +510,28 @@ void main() {
       await tester.pumpAndSettle();
 
       await openSheet(tester);
-      expect(find.text('Delivery address'), findsNothing);
+      expect(find.text('Deliver to'), findsNothing);
 
       await tapVisible(tester, find.text('Delivery'));
-      expect(find.text('Delivery address'), findsOneWidget);
+      expect(find.text('Deliver to'), findsOneWidget);
 
       await tapVisible(tester, find.text('Pickup'));
-      expect(find.text('Delivery address'), findsNothing);
+      expect(find.text('Deliver to'), findsNothing);
     });
 
     testWidgets(
-        'checking "Same as my address" fills the delivery address from the account',
+        'choosing Delivery prefills the saved address',
         (tester) async {
       final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)]);
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pumpAndSettle();
 
       await openSheet(tester);
+      expect(find.widgetWithText(TextField, _resident.fullAddress), findsNothing);
+
       await tapVisible(tester, find.text('Delivery'));
 
-      expect(find.widgetWithText(TextField, _resident.address), findsNothing);
-
-      await tapVisible(tester, find.text('Same as my address'));
-
-      expect(find.widgetWithText(TextField, _resident.address), findsOneWidget);
+      expect(find.widgetWithText(TextField, _resident.fullAddress), findsOneWidget);
     });
 
     testWidgets('a Delivery with no address is refused before it is sent', (tester) async {
@@ -542,14 +540,15 @@ void main() {
       await tester.pumpAndSettle();
 
       await openSheet(tester);
-      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await fill(tester, _sheetFields().first, 'Flood drill');
       await tapVisible(tester, find.text('Delivery'));
+      await fill(tester, _sheetFields().last, '');
       await submit(tester);
 
       expect(find.text('Where should MDRRMO deliver it?'), findsOneWidget);
       expect(api.submitCalls, 0);
 
-      await fill(tester, find.byType(TextField).last, '12 Mabini St, San Fabian');
+      await fill(tester, _sheetFields().last, '12 Mabini St, San Fabian');
       await submit(tester);
 
       expect(api.submitCalls, 1);
@@ -563,9 +562,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await openSheet(tester);
-      await fill(tester, find.byType(TextField).first, 'Flood drill');
+      await fill(tester, _sheetFields().first, 'Flood drill');
       await tapVisible(tester, find.text('Delivery'));
-      await fill(tester, find.byType(TextField).last, '12 Mabini St');
+      await fill(tester, _sheetFields().last, '12 Mabini St');
       await tapVisible(tester, find.text('Pickup'));
       await submit(tester);
 
@@ -581,8 +580,8 @@ void main() {
       await openSheet(tester, other: true);
       expect(find.text('What do you need?'), findsOneWidget);
 
-      await fill(tester, find.byType(TextField).first, 'Portable generator');
-      await fill(tester, find.byType(TextField).at(1), 'Evacuation centre power');
+      await fill(tester, _sheetFields().first, 'Portable generator');
+      await fill(tester, _sheetFields().at(1), 'Evacuation centre power');
       await submit(tester);
 
       expect(api.lastBody['other_equipment_text'], 'Portable generator');
@@ -597,7 +596,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await openSheet(tester, other: true);
-      await fill(tester, find.byType(TextField).at(1), 'Evacuation centre power');
+      await fill(tester, _sheetFields().at(1), 'Evacuation centre power');
       await submit(tester);
 
       expect(find.text('Name the item you need.'), findsOneWidget);

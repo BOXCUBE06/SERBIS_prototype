@@ -337,6 +337,20 @@ class AmbulanceFormData extends ServiceFormData {
   /// [metaLines], never folded into prose.
   DateTime? scheduledAt;
 
+  /// Which of the six form sections hold an answer, for the progress bar:
+  /// patient, trip, condition, relatives, when (ASAP is an answer), valid ID.
+  List<bool> sectionsDone({required bool hasValidId}) => [
+        patient.text.trim().isNotEmpty,
+        destination.text.trim().isNotEmpty,
+        diagnosis.text.trim().isNotEmpty,
+        relativeNames.isNotEmpty,
+        true,
+        hasValidId,
+      ];
+
+  /// Fires when a field [sectionsDone] reads changes.
+  Listenable get progressListenable => Listenable.merge([patient, destination, diagnosis, ...relatives]);
+
   /// The relative names actually typed in, in order, blanks removed.
   List<String> get relativeNames => relatives
       .map((controller) => controller.text.trim())

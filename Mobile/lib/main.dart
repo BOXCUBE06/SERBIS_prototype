@@ -722,6 +722,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                   onOpenNotifications: onOpenNotifications,
                   onOpenProfile: onOpenProfile,
                   onOpenLibrary: _openLibraryPage,
+                  onBack: () => _goTo(_homeTab),
                 ),
           deps: widget.user),
       slot(

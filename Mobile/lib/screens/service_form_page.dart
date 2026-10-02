@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/request_models.dart';
 import '../state/account_store.dart';
 import '../state/request_store.dart';
+import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 import 'service_request_form.dart';
@@ -53,7 +54,7 @@ class ServiceFormPage extends StatelessWidget {
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 40),
+                  padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 40),
                   children: [
                     ServiceRequestForm(
                       appState: appState,

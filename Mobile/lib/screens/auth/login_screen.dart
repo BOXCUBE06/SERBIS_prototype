@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       'Welcome back',
-                      style: AppText.display(size: 21),
+                      style: AppText.display(size: AppTextSize.headline),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
@@ -181,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       'Log in to submit and track your service requests.',
                       textAlign: TextAlign.center,
                       style: AppText.body(
-                          size: 12.5, color: AppColors.inkMuted, height: 1.5),
+                          size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
                     ),
                     const SizedBox(height: 16),
                     const ServicePurposeNote(),
@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.green50,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(
                               child: Text(widget.infoMessage!,
                                   style: AppText.body(
-                                      size: 12.5,
+                                      size: AppTextSize.small,
                                       color: AppColors.green900,
                                       height: 1.5)),
                             ),
@@ -247,7 +247,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.red600.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                           border: Border.all(
                               color: AppColors.red600.withValues(alpha: 0.35)),
                         ),
@@ -260,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(
                               child: Text(_blockedMessage!,
                                   style: AppText.body(
-                                      size: 13,
+                                      size: AppTextSize.body,
                                       color: AppColors.red600,
                                       height: 1.45)),
                             ),
@@ -279,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(
                               child: Text(_formError!,
                                   style: AppText.body(
-                                      size: 12.5,
+                                      size: AppTextSize.small,
                                       color: AppColors.red600,
                                       height: 1.4)),
                             ),
@@ -294,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Text('Forgot password?',
                               style: AppText.display(
-                                  size: 12,
+                                  size: AppTextSize.small,
                                   weight: FontWeight.w600,
                                   color: AppColors.green700)),
                         ),
@@ -316,13 +316,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Text("Don't have an account?",
                             style: AppText.body(
-                                size: 12.5, color: AppColors.inkMuted)),
+                                size: AppTextSize.small, color: AppColors.inkMuted)),
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: widget.onGoToRegister,
                           child: Text('Register',
                               style: AppText.display(
-                                  size: 12.5,
+                                  size: AppTextSize.small,
                                   weight: FontWeight.w700,
                                   color: AppColors.green700)),
                         ),
@@ -337,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               size: 16, color: AppColors.red600),
                           label: Text('Emergency hotlines',
                               style: AppText.display(
-                                  size: 12.5,
+                                  size: AppTextSize.small,
                                   weight: FontWeight.w700,
                                   color: AppColors.red600)),
                         ),

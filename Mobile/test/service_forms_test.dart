@@ -597,7 +597,7 @@ void main() {
     });
 
     testWidgets(
-        'checking "Patient is myself" fills the name field on screen',
+        'choosing "Myself" fills the name field on screen',
         (tester) async {
       final form = AmbulanceFormData(accountName: 'Maria Santos');
       addTearDown(form.dispose);
@@ -618,7 +618,7 @@ void main() {
 
       expect(find.widgetWithText(TextField, 'Maria Santos'), findsNothing);
 
-      await tester.tap(find.text('Patient is myself'));
+      await tester.tap(find.text('Myself'));
       await tester.pump();
 
       expect(changes, 1);
@@ -626,7 +626,7 @@ void main() {
     });
 
     testWidgets(
-        'checking "Same as my address" fills patient address and pickup independently',
+        'the patient and pickup "my address" switches fill independently',
         (tester) async {
       final form = AmbulanceFormData(accountFullAddress: 'Purok 3, San Fabian');
       addTearDown(form.dispose);
@@ -644,12 +644,9 @@ void main() {
         ),
       ));
 
-      // Two checkboxes share the same label — one above Patient address, one
-      // above the trip's "From" field.
-      final sameAsMyAddress = find.text('Same as my address');
-      expect(sameAsMyAddress, findsNWidgets(2));
-
-      await tester.tap(sameAsMyAddress.first);
+      // One switch for the patient's address, a separate one for pickup.
+      expect(find.text('Pick up at my address'), findsOneWidget);
+      await tester.tap(find.text('Lives at my address'));
       await tester.pump();
 
       expect(find.widgetWithText(TextField, 'Purok 3, San Fabian'), findsOneWidget);
@@ -701,10 +698,10 @@ void main() {
       for (final label in const [
         'Patient name',
         'Age',
-        'Patient address',
+        'Barangay',
         'Contact number',
-        'From',
-        'To',
+        'Pick up from',
+        'Take patient to',
         'Medical diagnosis',
         'Relative 1 (required)',
       ]) {

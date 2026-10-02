@@ -309,6 +309,15 @@ Future<void> _pumpGrid(WidgetTester tester, AppState state) async {
 /// underneath. Getting this wrong produces tests that pass their own setup and
 /// then fail three assertions later for no visible reason.
 Future<void> _tapUpload(WidgetTester tester, String label) async {
+  // The Ambulance tab's ID upload is an IdUploadCard: "Choose file" is the
+  // file-picker path.
+  if (label == 'Valid ID (required)' && find.byType(IdUploadCard).evaluate().isNotEmpty) {
+    final choose = find.text('Choose file');
+    await tester.ensureVisible(choose);
+    await tester.tap(choose);
+    await tester.pumpAndSettle();
+    return;
+  }
   final field = find.ancestor(
     of: find.text(label),
     matching: find.byType(AttachmentUploadField),
@@ -535,7 +544,7 @@ void main() {
     testWidgets('the Ambulance tab opens straight onto the ambulance form', (tester) async {
       await _pump(tester, AppState(FakeApi()));
 
-      expect(find.text('Ambulance/Medical Response'), findsOneWidget);
+      expect(find.text('Request an ambulance'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
       // No list to pick from first.
       expect(find.text('Road Clearing'), findsNothing);
@@ -631,8 +640,7 @@ void main() {
       await _pump(tester, AppState(api));
 
       picker.result = _picked('id.jpg', withBytes: false);
-      await tester.tap(find.text('Valid ID (required)'));
-      await tester.pumpAndSettle();
+      await _tapUpload(tester, 'Valid ID (required)');
 
       await _submit(tester);
 
@@ -732,7 +740,8 @@ void main() {
       await _pump(tester, AppState(api));
 
       await _fillRequiredAmbulanceFields(tester);
-      await tester.tap(find.text('Same as my address').first);
+      await tester.ensureVisible(find.text('Lives at my address'));
+      await tester.tap(find.text('Lives at my address'));
       await tester.pump();
       await _attachValidId(tester);
       await _submit(tester);
