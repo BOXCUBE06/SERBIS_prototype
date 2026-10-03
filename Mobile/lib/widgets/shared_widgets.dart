@@ -1130,7 +1130,9 @@ class SheetFrame extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
       padding: EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
           child: scrollable ? SingleChildScrollView(child: body) : body,
@@ -1208,7 +1210,9 @@ class NotificationsSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
       padding: EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
           child: Column(

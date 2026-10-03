@@ -10,6 +10,7 @@ import 'package:serbis/models/advisory.dart';
 import 'package:serbis/models/request_models.dart';
 import 'package:serbis/theme/app_theme.dart';
 import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
+import 'package:serbis/widgets/service_widgets.dart' show ConfirmationSheet;
 import 'package:serbis/widgets/shared_widgets.dart';
 
 ServiceRequest _request(String status, {int id = 7, String? remarks}) => ServiceRequest.fromJson(<String, dynamic>{
@@ -101,6 +102,56 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  group('a modal sheet', () {
+    // A sheet that centres or expands its content fills the screen with blank
+    // white above it. The widget tests above pump each sheet as a Scaffold body,
+    // where the constraints are tight, so only a real modal route shows it.
+    Future<void> openModal(WidgetTester tester, Widget Function() sheet) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                backgroundColor: Colors.transparent,
+                isScrollControlled: true,
+                builder: (_) => sheet(),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the notifications sheet is as tall as its content, not the screen', (tester) async {
+      await openModal(tester, () => NotificationsSheet(requests: [_request('Pending')]));
+
+      expect(tester.getSize(find.byType(NotificationsSheet)).height, lessThan(844 * .8));
+    });
+
+    testWidgets('a framed sheet is as tall as its content, not the screen', (tester) async {
+      await openModal(
+        tester,
+        () => const SheetFrame(title: 'Choose language', child: Text('Only a line of content')),
+      );
+
+      expect(tester.getSize(find.byType(SheetFrame)).height, lessThan(844 * .5));
+    });
+
+    testWidgets('the confirmation sheet is as tall as its content, not the screen', (tester) async {
+      await openModal(tester, () => ConfirmationSheet(refNo: 'TXN-1', filipino: false, onViewTrack: () {}));
+
+      expect(tester.getSize(find.byType(ConfirmationSheet)).height, lessThan(844 * .6));
+    });
   });
 
   group('the cancel dialog', () {

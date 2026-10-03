@@ -338,7 +338,9 @@ class ConfirmationSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
       padding: EdgeInsets.fromLTRB(AppLayout.gutter, 24, AppLayout.gutter, 24 + MediaQuery.paddingOf(context).bottom),
-      child: Center(
+      child: Align(
+        alignment: Alignment.topCenter,
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
           child: Column(
