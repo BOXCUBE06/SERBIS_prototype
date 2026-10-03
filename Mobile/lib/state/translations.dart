@@ -31,6 +31,7 @@ const Map<String, (String, String)> _strings = {
   'account.individual': ('Head of the Family', 'Pinuno ng Pamilya'),
   'account.organization': ('Organization', 'Organisasyon'),
   'account.barangay': ('Barangay', 'Barangay'),
+  'awaiting.header': ('Your account', 'Iyong account'),
   'awaiting.title': ('Awaiting MDRRMO approval', 'Naghihintay ng pag-apruba ng MDRRMO'),
   'awaiting.body': (
     'MDRRMO checks every organization account before it can request services. '
@@ -105,6 +106,8 @@ const Map<String, (String, String)> _strings = {
   ),
   'borrow.title': ('Borrow equipment', 'Manghiram ng kagamitan'),
   'tab.retry': ('Try again', 'Subukang muli'),
+  'tab.unavailable_title': ('Not available', 'Hindi available'),
+  'tab.unavailable_subtitle': ('Not offered right now', 'Hindi iniaalok sa ngayon'),
   'home.safety_guides': ('Safety guides', 'Mga Gabay sa Kaligtasan'),
   'home.ann.empty': (
     'MDRRMO has not published anything yet.',

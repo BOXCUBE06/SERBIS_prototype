@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../state/account_store.dart' show AppUser;
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/borrow_request_widgets.dart' show StatusBox;
 import '../widgets/shared_widgets.dart';
 
 /// Shown in place of the service list to an organization that registered
@@ -67,54 +68,46 @@ class _AwaitingApprovalScreenState extends State<AwaitingApprovalScreen> {
       padding: EdgeInsets.zero,
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        AppHeader(
-          onNotificationsTap: widget.onOpenNotifications,
-          onProfileTap: widget.onOpenProfile,
+        TabHeaderBar(
+          title: tr(f, 'awaiting.header'),
+          subtitle: widget.user.accountName,
           filipino: f,
+          onNotifications: widget.onOpenNotifications,
+          onProfile: widget.onOpenProfile,
         ),
-        const SizedBox(height: 22),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
-          child: AppCard(
-            leftAccent: AppColors.amber600,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const IconBadge(
-                  icon: Icons.hourglass_top_rounded,
-                  bg: AppColors.amber50,
-                  fg: AppColors.amber600,
-                ),
-                const SizedBox(height: 14),
-                Text(tr(f, 'awaiting.title'), style: AppText.display(size: AppTextSize.title)),
-                const SizedBox(height: 6),
-                Text(
-                  widget.user.accountName,
-                  style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.5),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  tr(f, 'awaiting.body'),
-                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6),
-                ),
-                if (_result != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _result!,
-                    style: AppText.body(size: AppTextSize.small, color: AppColors.amber600, height: 1.5),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, AppLayout.navClearance),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  StatusBox(
+                    icon: Icons.hourglass_top_rounded,
+                    bg: AppColors.amber50,
+                    fg: AppColors.amberInk,
+                    title: tr(f, 'awaiting.title'),
+                    next: tr(f, 'awaiting.body'),
+                  ),
+                  if (_result != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      _result!,
+                      style: AppText.body(size: AppTextSize.body, color: AppColors.amberInk, height: 1.5),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
+                  AppButton(
+                    label: tr(f, 'awaiting.check'),
+                    onPressed: _checking ? null : _check,
+                    loading: _checking,
                   ),
                 ],
-                const SizedBox(height: 16),
-                AppButton(
-                  label: tr(f, 'awaiting.check'),
-                  onPressed: _checking ? null : _check,
-                  loading: _checking,
-                ),
-              ],
+              ),
             ),
           ),
         ),
-        const SizedBox(height: AppLayout.navClearance),
       ],
     );
   }

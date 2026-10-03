@@ -9,7 +9,9 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart';
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_layout.dart';
 import '../../widgets/form_inputs.dart';
+import '../../widgets/form_steps.dart';
 import '../../widgets/shared_widgets.dart';
 
 /// Getting a forgotten password back, by text: the number, then the code sent to
@@ -215,23 +217,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Widget _errorLine() {
     if (_error == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, size: 16, color: AppColors.red600),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _error!,
-              key: const Key('forgot-error'),
-              style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.4),
-            ),
-          ),
-        ],
-      ),
-    );
+    return InlineNotice(text: _error!, textKey: const Key('forgot-error'));
   }
 
   Widget _phoneStep() {
@@ -240,14 +226,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Forgot your password?', style: AppText.display(size: AppTextSize.headline)),
-          const SizedBox(height: 8),
           Text(
             "Enter the mobile number you signed up with. We'll text you a code "
             'to set a new password.',
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
+            style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.lg),
           AuthTextField(
             label: 'Mobile number',
             hint: '09XXXXXXXXX',
@@ -276,15 +260,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Check your messages', style: AppText.display(size: AppTextSize.headline)),
-        const SizedBox(height: 8),
         Text(
           'If ${PhoneNumber.display(_phone)} has an account, we sent a 6-digit '
           "code by text message. Enter it below. It's good for 10 minutes.",
           key: const Key('forgot-sent-line'),
-          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.lg),
         AppTextField(
           label: 'Verification code',
           hint: '123456',
@@ -295,27 +277,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           errorText: _error,
           enabled: !_busy,
         ),
-        if (_notice != null) ...[
-          const SizedBox(height: 8),
-          Text(_notice!, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.green700)),
-        ],
-        const SizedBox(height: 8),
+        if (_notice != null) InlineNotice(text: _notice!, tone: NoticeTone.success),
         Text(
           "Didn't get a text? Check the number, wait for the timer, then send "
           'a new code.',
-          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.4),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.lg),
         AppButton(label: 'Verify', loading: _busy, onPressed: _busy ? null : _verifyCode),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         Center(
-          child: TextButton(
+          child: AuthLink(
+            label: _resendIn > 0 ? 'Resend code in ${_resendIn}s' : 'Send a new code',
             onPressed: canResend ? _resend : null,
-            child: Text(_resendIn > 0 ? 'Resend code in ${_resendIn}s' : 'Send a new code'),
           ),
         ),
         Center(
-          child: TextButton(
+          child: AuthLink(
+            label: 'Use a different number',
             onPressed: _busy
                 ? null
                 : () => setState(() {
@@ -323,7 +302,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       _error = null;
                       _notice = null;
                     }),
-            child: const Text('Use a different number'),
           ),
         ),
       ],
@@ -336,13 +314,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Choose a new password', style: AppText.display(size: AppTextSize.headline)),
-          const SizedBox(height: 8),
           Text(
             'At least 8 characters, with upper and lower case letters and a number.',
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
+            style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.lg),
           AuthTextField(
             label: 'New password',
             hint: '',
@@ -357,14 +333,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             controller: _confirmCtrl,
             obscure: true,
             prefixIcon: Icons.lock_outline_rounded,
-            validator: (v) =>
-                (v ?? '') == _passCtrl.text ? null : 'The two passwords do not match',
+            validator: (v) => (v ?? '') == _passCtrl.text ? null : 'The two passwords do not match',
           ),
           _errorLine(),
-          AppButton(
-              label: 'Change password',
-              loading: _busy,
-              onPressed: _busy ? null : _setPassword),
+          AppButton(label: 'Change password', loading: _busy, onPressed: _busy ? null : _setPassword),
         ],
       ),
     );
@@ -372,35 +344,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const AppHeader(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  switch (_step) {
-                    _Step.phone => _phoneStep(),
-                    _Step.code => _codeStep(),
-                    _Step.password => _passwordStep(),
-                  },
-                  const SizedBox(height: 18),
-                  Center(
-                    child: TextButton(
-                      onPressed: _busy ? null : widget.onGoToLogin,
-                      child: const Text('Back to log in'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    final (String title, int number) = switch (_step) {
+      _Step.phone => ('Forgot your password?', 1),
+      _Step.code => ('Check your messages', 2),
+      _Step.password => ('Choose a new password', 3),
+    };
+
+    return AuthPage(
+      header: TabHeaderBar(
+        title: title,
+        subtitle: 'Step $number of 3',
+        filipino: false,
+        onBack: _busy ? null : widget.onGoToLogin,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FormStepProgress(step: number - 1, total: 3),
+          const SizedBox(height: AppSpacing.lg),
+          switch (_step) {
+            _Step.phone => _phoneStep(),
+            _Step.code => _codeStep(),
+            _Step.password => _passwordStep(),
+          },
+          const SizedBox(height: AppSpacing.md),
+          Center(child: AuthLink(label: 'Back to log in', onPressed: _busy ? null : widget.onGoToLogin)),
+        ],
       ),
     );
   }

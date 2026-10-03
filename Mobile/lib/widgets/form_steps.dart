@@ -17,6 +17,9 @@ class FormStepFooter extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onNext;
 
+  /// The last step's button, when "Submit request" is not what it does.
+  final String? submitLabel;
+
   const FormStepFooter({
     super.key,
     required this.step,
@@ -25,6 +28,7 @@ class FormStepFooter extends StatelessWidget {
     required this.submitting,
     required this.onBack,
     required this.onNext,
+    this.submitLabel,
   });
 
   @override
@@ -56,7 +60,7 @@ class FormStepFooter extends StatelessWidget {
                 flex: 2,
                 child: AppButton(
                   label: last
-                      ? tr(f, 'common.submit_request')
+                      ? (submitLabel ?? tr(f, 'common.submit_request'))
                       : trEn(f, 'Next: {step}').replaceAll('{step}', trEn(f, stepNames[step + 1])),
                   onPressed: onNext,
                   loading: submitting,

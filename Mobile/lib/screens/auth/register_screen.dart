@@ -8,7 +8,11 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/ambulance_steps.dart' show AmbulanceReviewCard;
+import '../../widgets/auth_layout.dart';
 import '../../widgets/form_inputs.dart';
+import '../../widgets/form_section.dart' show SegmentedChoice;
+import '../../widgets/form_steps.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -45,6 +49,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   /// third choice: a barangay hall's account is made by MDRRMO staff.
   bool    _organization = false;
   bool    _agreed     = false;
+  int     _step       = 0;
+  String? _agreeError;
   bool    _loading    = false;
   String? _formError;
 
@@ -124,15 +130,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  Future<void> _submit() async {
-    setState(() => _formError = null);
+  /// The three steps, in order. English keys, as everywhere before sign-in.
+  static const _steps = ['Who you are', 'Where you live', 'Password and review'];
 
-    final formValid = _formKey.currentState!.validate();
-    if (!_agreed) {
-      showAppSnackBar(
-          context, 'Please agree to the data privacy notice to continue.');
+  void _goTo(int step) => setState(() {
+        _step = step;
+        _formError = null;
+        _agreeError = null;
+      });
+
+  void _back() => _step == 0 ? widget.onGoToLogin() : _goTo(_step - 1);
+
+  /// Checks only the step that is showing; the last one submits.
+  void _next() {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_step == 1 && _barangayId == null) {
+      // Reachable when the barangay list could not load: no picker, no validator.
+      setState(() => _formError = 'Select your barangay.');
+      return;
     }
-    if (!formValid || !_agreed) return;
+
+    if (_step == _steps.length - 1) {
+      _submit();
+    } else {
+      _goTo(_step + 1);
+    }
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _formError = null;
+      _agreeError = _agreed ? null : 'Please agree to the data privacy notice to continue.';
+    });
+    if (!_agreed) return;
 
     final barangayId = _barangayId;
     if (barangayId == null) {
@@ -181,251 +212,252 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
+    return AuthPage(
+      header: TabHeaderBar(
+        title: 'Create your account',
+        subtitle: 'Step ${_step + 1} of ${_steps.length} · ${_steps[_step]}',
+        filipino: false,
+        onBack: _loading ? null : _back,
+      ),
+      footer: FormStepFooter(
+        step: _step,
+        stepNames: _steps,
+        filipino: false,
+        submitting: _loading,
+        submitLabel: 'Create account',
+        onBack: _back,
+        onNext: _next,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(onBack: widget.onGoToLogin),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Create your account',
-                        style: AppText.display(size: AppTextSize.headline)),
-                    const SizedBox(height: 4),
-                    // The old copy promised "you will log in afterwards to
-                    // verify your account". No verification step exists, and
-                    // none is being built -- the OTP columns it referred to
-                    // were dead schema and have been dropped. Telling a
-                    // resident to expect one leaves them waiting for a screen
-                    // that never comes.
-                    Text(
-                      _organization
-                          ? 'For a school, office or other group. MDRRMO checks an '
-                              'organization account before it can request services.'
-                          : 'One account per household, registered by the head of the family. '
-                              'You can log in as soon as you have registered.',
-                      style: AppText.body(
-                          size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
-                    ),
-                    const SizedBox(height: 16),
-                    const ServicePurposeNote(),
-                    const SizedBox(height: 22),
-
-                    Text('Registering as', style: AppText.fieldLabel()),
-                    const SizedBox(height: 8),
-                    SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('Head of the Family')),
-                        ButtonSegment(value: true, label: Text('Organization')),
-                      ],
-                      selected: {_organization},
-                      showSelectedIcon: false,
-                      onSelectionChanged: (choice) => setState(() => _organization = choice.first),
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (_organization)
-                      AuthTextField(
-                        label: 'Organization name',
-                        hint: 'e.g. Isabela State University',
-                        controller: _orgNameCtrl,
-                        prefixIcon: Icons.apartment_rounded,
-                        maxLength: 150,
-                        validator: (v) => (v ?? '').trim().isEmpty
-                            ? 'Enter the organization name'
-                            : null,
-                      ),
-
-                    AuthTextField(
-                      label: _organization ? 'Contact first name' : 'First name',
-                      hint: 'e.g. Juan',
-                      controller: _firstNameCtrl,
-                      prefixIcon: Icons.person_outline_rounded,
-                      validator: (v) => (v ?? '').trim().isEmpty
-                          ? (_organization ? 'Enter the contact person\'s first name' : 'Enter your first name')
-                          : null,
-                    ),
-
-                    AuthTextField(
-                      label: _organization ? 'Contact last name' : 'Last name',
-                      hint: 'e.g. Delacruz',
-                      controller: _lastNameCtrl,
-                      prefixIcon: Icons.person_outline_rounded,
-                      validator: (v) => (v ?? '').trim().isEmpty
-                          ? (_organization ? 'Enter the contact person\'s last name' : 'Enter your last name')
-                          : null,
-                    ),
-
-                    AuthTextField(
-                      label: 'Mobile number',
-                      hint: '09XXXXXXXXX',
-                      controller: _phoneCtrl,
-                      keyboard: TextInputType.phone,
-                      prefixIcon: Icons.phone_outlined,
-                      maxLength: PhoneNumber.maxLength,
-                      inputFormatters: [_phoneInput],
-                      validator: (v) {
-                        final val = (v ?? '').trim();
-                        if (val.isEmpty) return 'Enter your mobile number';
-                        // The server's own rule — see PhoneNumber. This field
-                        // used to accept anything vaguely numeric and hand the
-                        // resident a 422 they could not have predicted.
-                        if (!PhoneNumber.isValid(val)) {
-                          return 'Enter a valid mobile number';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    _BarangayField(
-                      barangays: _barangays,
-                      value: _barangayId,
-                      loading: _loadingBarangays,
-                      failed: _barangaysFailed,
-                      onRetry: _loadBarangays,
-                      onChanged: (id) => setState(() => _barangayId = id),
-                    ),
-
-                    // Optional. The barangay picker above is required, but the
-                    // purok/street is exactly the detail a resident might not
-                    // have memorized while filling this in — editable later
-                    // from the profile either way (MDRRMO feedback, 2026-09-19).
-                    AuthTextField(
-                      label: 'Street / Purok (optional)',
-                      hint: 'e.g. Purok 3, Rizal St.',
-                      controller: _streetCtrl,
-                      prefixIcon: Icons.home_outlined,
-                    ),
-
-                    AuthTextField(
-                      label: 'Password',
-                      hint: 'At least 8 characters',
-                      controller: _passwordCtrl,
-                      obscure: true,
-                      prefixIcon: Icons.lock_outline_rounded,
-                      validator: _validatePassword,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 13),
-                      child: Text(
-                        'Must be at least 8 characters with upper and lower '
-                        'case letters and at least one number — e.g. Pasada123',
-                        style: AppText.body(
-                            size: AppTextSize.caption, color: AppColors.inkMuted, height: 1.5),
-                      ),
-                    ),
-
-                    AuthTextField(
-                      label: 'Confirm password',
-                      hint: '',
-                      controller: _confirmCtrl,
-                      obscure: true,
-                      prefixIcon: Icons.lock_outline_rounded,
-                      validator: (v) {
-                        if ((v ?? '').isEmpty) return 'Confirm your password';
-                        if (v != _passwordCtrl.text) {
-                          return 'Passwords do not match';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    if (_formError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.error_outline_rounded,
-                                size: 16, color: AppColors.red600),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(_formError!,
-                                  style: AppText.body(
-                                      size: AppTextSize.small,
-                                      color: AppColors.red600,
-                                      height: 1.4)),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    const SizedBox(height: 4),
-                    InkWell(
-                      onTap: () => setState(() => _agreed = !_agreed),
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1),
-                              child: Icon(
-                                _agreed
-                                    ? Icons.check_box_rounded
-                                    : Icons.check_box_outline_blank_rounded,
-                                size: 19,
-                                color: _agreed
-                                    ? AppColors.green700
-                                    : AppColors.inkFaint,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'I agree that my information will be used by '
-                                'Echague MDRRMO to process service requests '
-                                'and send announcements.',
-                                style: AppText.body(
-                                    size: AppTextSize.small,
-                                    color: AppColors.inkMuted,
-                                    height: 1.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-                    AppButton(
-                        label: 'Create account',
-                        loading: _loading,
-                        onPressed: _submit),
-                    const SizedBox(height: 18),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Already have an account?',
-                            style: AppText.body(
-                                size: AppTextSize.small, color: AppColors.inkMuted)),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: widget.onGoToLogin,
-                          child: Text('Log in',
-                              style: AppText.display(
-                                  size: AppTextSize.small,
-                                  weight: FontWeight.w700,
-                                  color: AppColors.green700)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            FormStepProgress(step: _step, total: _steps.length),
+            const SizedBox(height: AppSpacing.lg),
+            ...switch (_step) {
+              0 => _whoYouAre(),
+              1 => _whereYouLive(),
+              _ => _passwordAndReview(),
+            },
+            if (_formError != null) InlineNotice(text: _formError!),
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _whoYouAre() => [
+        // The old copy promised "you will log in afterwards to verify your
+        // account". No verification step exists, and none is being built -- the
+        // OTP columns it referred to were dead schema and have been dropped.
+        // Telling a resident to expect one leaves them waiting for a screen that
+        // never comes.
+        Text(
+          _organization
+              ? 'For a school, office or other group. MDRRMO checks an '
+                  'organization account before it can request services.'
+              : 'One account per household, registered by the head of the family. '
+                  'You can log in as soon as you have registered.',
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const ServicePurposeNote(),
+        const SizedBox(height: AppSpacing.xl),
+        Text('Registering as', style: AppText.fieldLabel()),
+        const SizedBox(height: AppSpacing.xs),
+        SegmentedChoice(
+          leftLabel: 'Head of the Family',
+          rightLabel: 'Organization',
+          rightSelected: _organization,
+          onChanged: (organization) => setState(() => _organization = organization),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (_organization)
+          AuthTextField(
+            label: 'Organization name',
+            hint: 'e.g. Isabela State University',
+            controller: _orgNameCtrl,
+            prefixIcon: Icons.apartment_rounded,
+            maxLength: 150,
+            validator: (v) => (v ?? '').trim().isEmpty ? 'Enter the organization name' : null,
+          ),
+        AuthTextField(
+          label: _organization ? 'Contact first name' : 'First name',
+          hint: 'e.g. Juan',
+          controller: _firstNameCtrl,
+          prefixIcon: Icons.person_outline_rounded,
+          validator: (v) => (v ?? '').trim().isEmpty
+              ? (_organization ? 'Enter the contact person\'s first name' : 'Enter your first name')
+              : null,
+        ),
+        AuthTextField(
+          label: _organization ? 'Contact last name' : 'Last name',
+          hint: 'e.g. Delacruz',
+          controller: _lastNameCtrl,
+          prefixIcon: Icons.person_outline_rounded,
+          validator: (v) => (v ?? '').trim().isEmpty
+              ? (_organization ? 'Enter the contact person\'s last name' : 'Enter your last name')
+              : null,
+        ),
+        AuthTextField(
+          label: 'Mobile number',
+          hint: '09XXXXXXXXX',
+          controller: _phoneCtrl,
+          keyboard: TextInputType.phone,
+          prefixIcon: Icons.phone_outlined,
+          maxLength: PhoneNumber.maxLength,
+          inputFormatters: [_phoneInput],
+          validator: (v) {
+            final val = (v ?? '').trim();
+            if (val.isEmpty) return 'Enter your mobile number';
+            // The server's own rule — see PhoneNumber. This field used to accept
+            // anything vaguely numeric and hand the resident a 422 they could
+            // not have predicted.
+            if (!PhoneNumber.isValid(val)) {
+              return 'Enter a valid mobile number';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Already have an account?', style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted)),
+            AuthLink(label: 'Log in', onPressed: widget.onGoToLogin),
+          ],
+        ),
+      ];
+
+  List<Widget> _whereYouLive() => [
+        Text(
+          'Your barangay is where your requests are sent. The purok or street is optional.',
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _BarangayField(
+          barangays: _barangays,
+          value: _barangayId,
+          loading: _loadingBarangays,
+          failed: _barangaysFailed,
+          onRetry: _loadBarangays,
+          onChanged: (id) => setState(() => _barangayId = id),
+        ),
+        // Optional. The barangay picker above is required, but the purok/street
+        // is exactly the detail a resident might not have memorized while filling
+        // this in — editable later from the profile either way (MDRRMO feedback,
+        // 2026-09-19).
+        AuthTextField(
+          label: 'Street / Purok (optional)',
+          hint: 'e.g. Purok 3, Rizal St.',
+          controller: _streetCtrl,
+          prefixIcon: Icons.home_outlined,
+        ),
+      ];
+
+  List<Widget> _passwordAndReview() {
+    String or(String value) => value.trim().isEmpty ? 'Not given' : value.trim();
+    String? barangayName;
+    for (final b in _barangays) {
+      if (b.id == _barangayId) barangayName = b.name;
+    }
+
+    return [
+      AuthTextField(
+        label: 'Password',
+        hint: 'At least 8 characters',
+        controller: _passwordCtrl,
+        obscure: true,
+        prefixIcon: Icons.lock_outline_rounded,
+        validator: _validatePassword,
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+        child: Text(
+          'Must be at least 8 characters with upper and lower '
+          'case letters and at least one number — e.g. Pasada123',
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
+        ),
+      ),
+      AuthTextField(
+        label: 'Confirm password',
+        hint: '',
+        controller: _confirmCtrl,
+        obscure: true,
+        prefixIcon: Icons.lock_outline_rounded,
+        validator: (v) {
+          if ((v ?? '').isEmpty) return 'Confirm your password';
+          if (v != _passwordCtrl.text) {
+            return 'Passwords do not match';
+          }
+          return null;
+        },
+      ),
+      const SizedBox(height: AppSpacing.md),
+      AmbulanceReviewCard(
+        title: _steps[0],
+        filipino: false,
+        onEdit: () => _goTo(0),
+        rows: [
+          ('Registering as', _organization ? 'Organization' : 'Head of the Family'),
+          if (_organization) ('Organization name', or(_orgNameCtrl.text)),
+          (_organization ? 'Contact name' : 'Name', or('${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}')),
+          ('Mobile number', or(_phoneCtrl.text)),
+        ],
+      ),
+      AmbulanceReviewCard(
+        title: _steps[1],
+        filipino: false,
+        onEdit: () => _goTo(1),
+        rows: [
+          ('Barangay', or(barangayName ?? '')),
+          ('Street / Purok', or(_streetCtrl.text)),
+        ],
+      ),
+      InkWell(
+        onTap: () => setState(() {
+          _agreed = !_agreed;
+          _agreeError = null;
+        }),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(
+                    _agreed ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                    size: 26,
+                    color: _agreed ? AppColors.green700 : AppColors.inkMuted,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'I agree that my information will be used by '
+                    'Echague MDRRMO to process service requests '
+                    'and send announcements.',
+                    style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      if (_agreeError != null)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Text(_agreeError!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
+        ),
+      const SizedBox(height: AppSpacing.md),
+    ];
   }
 }
 
@@ -452,26 +484,24 @@ class _BarangayField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Barangay',
-              style: AppText.fieldLabel()),
-          const SizedBox(height: 6),
+          Text('Barangay', style: AppText.fieldLabel()),
+          const SizedBox(height: AppSpacing.xs),
           if (loading)
             _shell(
               child: Row(
                 children: [
                   const SizedBox(
-                    width: 14,
-                    height: 14,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   const SizedBox(width: 10),
                   Text('Loading barangays…',
-                      style:
-                          AppText.body(size: AppTextSize.body, color: AppColors.inkFaint)),
+                      style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted)),
                 ],
               ),
             )
@@ -479,17 +509,19 @@ class _BarangayField extends StatelessWidget {
             _shell(
               child: Row(
                 children: [
-                  const Icon(Icons.wifi_off_rounded,
-                      size: 16, color: AppColors.inkFaint),
+                  const Icon(Icons.wifi_off_rounded, size: 20, color: AppColors.inkMuted),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       "Couldn't load barangays.",
-                      style:
-                          AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+                      style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted),
                     ),
                   ),
-                  TextButton(onPressed: onRetry, child: const Text('Retry')),
+                  TextButton(
+                    onPressed: onRetry,
+                    style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
+                    child: Text('Retry', style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.green700)),
+                  ),
                 ],
               ),
             )
@@ -509,7 +541,7 @@ class _BarangayField extends StatelessWidget {
                     onChanged: (name) => onChanged(barangays.firstWhere((b) => b.name == name).id),
                   ),
                   if (state.hasError)
-                    Text(state.errorText!, style: AppText.body(size: AppTextSize.caption, color: AppColors.red600)),
+                    Text(state.errorText!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
                 ],
               ),
             ),
@@ -527,97 +559,15 @@ class _BarangayField extends StatelessWidget {
 
   Widget _shell({required Widget child}) {
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 13),
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.line, width: 1.5),
+        color: AppColors.fieldFill,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.fieldBorder),
       ),
       alignment: Alignment.centerLeft,
       child: child,
-    );
-  }
-}
-
-/// Compact gradient header with a back arrow — reused from the old
-/// register screen.
-class _Header extends StatelessWidget {
-  final VoidCallback onBack;
-  const _Header({required this.onBack});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 14, 24, 28),
-      decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            right: -50,
-            top: -70,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: .05),
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              IconButton(
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 12, top: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .12),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border:
-                            Border.all(color: Colors.white.withValues(alpha: .14)),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.shield_outlined,
-                          color: Colors.white, size: 19),
-                    ),
-                    const SizedBox(width: 11),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('SERBIS',
-                            style: AppText.display(
-                                size: AppTextSize.title,
-                                color: Colors.white,
-                                letterSpacing: .5)),
-                        Text('ECHAGUE MDRRMO',
-                            style: AppText.display(
-                                size: AppTextSize.caption,
-                                weight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: .9),
-                                letterSpacing: 2)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

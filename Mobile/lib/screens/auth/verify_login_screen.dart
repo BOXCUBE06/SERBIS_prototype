@@ -9,7 +9,9 @@ import '../../state/api_service.dart';
 import '../../state/account_store.dart';
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_layout.dart';
 import '../../widgets/form_inputs.dart';
+import '../../widgets/shared_widgets.dart' show AppButton, TabHeaderBar;
 
 /// Second half of resident login: the code the server sent on the
 /// `mfa_required` refusal comes back here.
@@ -202,86 +204,51 @@ class _VerifyLoginScreenState extends State<VerifyLoginScreen> {
   Widget build(BuildContext context) {
     final canResend = _resendIn <= 0 && !_resending && !_submitting;
 
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              Text(
-                'Check your messages',
-                style:
-                    AppText.display(size: AppTextSize.headline),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '$_sentToLine Enter it below to finish signing in.',
-                style: AppText.body(size: AppTextSize.bodyLg, height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              AppTextField(
-                label: 'Verification code',
-                hint: '123456',
-                controller: _codeController,
-                keyboard: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                errorText: _error,
-                enabled: !_submitting,
-              ),
-              if (_notice != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _notice!,
-                  style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.green700),
-                ),
-              ],
-              if (_deliveryUnknown) ...[
-                const SizedBox(height: 8),
-                Text(
-                  "Didn't get a text? It can take a minute. If it hasn't come "
-                  'when the timer ends, tap Send a new code.',
-                  key: const Key('delivery-unknown-hint'),
-                  style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted, height: 1.4),
-                ),
-              ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: _submitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Verify'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: TextButton(
-                  onPressed: canResend ? _resend : null,
-                  child: Text(
-                    _resendIn > 0
-                        ? 'Resend code in ${_resendIn}s'
-                        : 'Send a new code',
-                  ),
-                ),
-              ),
-              Center(
-                child: TextButton(
-                  onPressed: _submitting ? null : widget.onGoToLogin,
-                  child: const Text('Back to log in'),
-                ),
-              ),
-            ],
+    return AuthPage(
+      header: const TabHeaderBar(
+        title: 'Check your messages',
+        subtitle: 'Finish signing in',
+        filipino: false,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$_sentToLine Enter it below to finish signing in.',
+            style: AppText.body(size: AppTextSize.bodyLg, height: 1.5),
           ),
-        ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            label: 'Verification code',
+            hint: '123456',
+            controller: _codeController,
+            keyboard: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            errorText: _error,
+            enabled: !_submitting,
+          ),
+          if (_notice != null) InlineNotice(text: _notice!, tone: NoticeTone.success),
+          if (_deliveryUnknown)
+            const InlineNotice(
+              text: "Didn't get a text? It can take a minute. If it hasn't come "
+                  'when the timer ends, tap Send a new code.',
+              tone: NoticeTone.warning,
+              textKey: Key('delivery-unknown-hint'),
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(label: 'Verify', loading: _submitting, onPressed: _submitting ? null : _submit),
+          const SizedBox(height: AppSpacing.md),
+          Center(
+            child: AuthLink(
+              label: _resendIn > 0 ? 'Resend code in ${_resendIn}s' : 'Send a new code',
+              onPressed: canResend ? _resend : null,
+            ),
+          ),
+          Center(
+            child: AuthLink(label: 'Back to log in', onPressed: _submitting ? null : widget.onGoToLogin),
+          ),
+        ],
       ),
     );
   }
