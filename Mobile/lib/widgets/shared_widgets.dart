@@ -4,6 +4,7 @@ import '../models/advisory.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'borrow_request_widgets.dart' show StatusBox, serviceStatusBox;
 
 class AppHeader extends StatelessWidget {
   final VoidCallback? onNotificationsTap;
@@ -851,6 +852,109 @@ class _AuthTextFieldState extends State<AuthTextField> {
 /// has to read naturally without one rather than printing a bare `#`.
 String _refSuffix(String refNo) => refNo.isEmpty ? '' : ' #$refNo';
 
+/// The app's confirm-or-keep dialog: a question, one line on what happens, and
+/// two 48dp actions. While [busy] the confirm button keeps its label and gains
+/// a spinner, so the resident still reads what they tapped.
+class ConfirmDialog extends StatelessWidget {
+  final String title;
+  final String body;
+  final String keepLabel;
+  final String confirmLabel;
+  final bool busy;
+  final VoidCallback? onKeep;
+  final VoidCallback? onConfirm;
+
+  const ConfirmDialog({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.keepLabel,
+    required this.confirmLabel,
+    this.busy = false,
+    this.onKeep,
+    this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+      title: Semantics(
+        header: true,
+        child: Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.sectionInk)),
+      ),
+      content: Text(body, style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5)),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      // Two long Filipino labels stack rather than overflow on a narrow phone.
+      actionsOverflowDirection: VerticalDirection.down,
+      actions: [
+        TextButton(
+          onPressed: onKeep,
+          style: TextButton.styleFrom(minimumSize: const Size(88, 48)),
+          child: Text(
+            keepLabel,
+            style: AppText.display(
+              size: AppTextSize.body,
+              weight: FontWeight.w600,
+              color: onKeep == null ? AppColors.inkFaint : AppColors.inkMuted,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: onConfirm,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(88, 48),
+            backgroundColor: AppColors.red50,
+            foregroundColor: AppColors.red600,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (busy) ...[
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.red600),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Text(
+                  confirmLabel,
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Asks [title] and resolves to true only when the resident confirms.
+Future<bool> showConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required String keepLabel,
+  required String confirmLabel,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => ConfirmDialog(
+      title: title,
+      body: body,
+      keepLabel: keepLabel,
+      confirmLabel: confirmLabel,
+      onKeep: () => Navigator.pop(ctx, false),
+      onConfirm: () => Navigator.pop(ctx, true),
+    ),
+  );
+  return confirmed == true;
+}
+
 /// [onConfirmed] must resolve to `true` only once the server has accepted the
 /// cancellation. The success message waits for it — the previous version fired
 /// the "has been cancelled" snackbar the instant the button was tapped, before
@@ -929,50 +1033,16 @@ class _CancelDialogState extends State<_CancelDialog> {
     final f = widget.filipino;
     return PopScope(
       canPop: !_busy,
-      child: AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
-        title: Text(
-          f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
-          style: AppText.display(size: AppTextSize.title),
-        ),
-        content: Text(
-          f
-              ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
-              : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
-          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: _busy ? null : () => Navigator.pop(context),
-            child: Text(
-              f ? 'Panatilihin' : 'Keep request',
-              style: AppText.display(
-                size: AppTextSize.body,
-                weight: FontWeight.w600,
-                color: _busy ? AppColors.inkFaint : AppColors.inkMuted,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: _busy ? null : _confirm,
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.red50,
-              foregroundColor: AppColors.red600,
-            ),
-            child: _busy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.red600),
-                  )
-                : Text(
-                    f ? 'Kanselahin' : 'Cancel request',
-                    style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
-                  ),
-          ),
-        ],
+      child: ConfirmDialog(
+        title: f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
+        body: f
+            ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
+            : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
+        keepLabel: f ? 'Panatilihin' : 'Keep request',
+        confirmLabel: f ? 'Kanselahin' : 'Cancel request',
+        busy: _busy,
+        onKeep: _busy ? null : () => Navigator.pop(context),
+        onConfirm: _busy ? null : _confirm,
       ),
     );
   }
@@ -1059,115 +1129,109 @@ class NotificationsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final f = filipino;
     return Container(
+      width: double.infinity,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(filipino ? 'Mga Abiso' : 'Notifications', style: AppText.display(size: AppTextSize.title)),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.green700),
-                style: IconButton.styleFrom(backgroundColor: AppColors.green50, padding: const EdgeInsets.all(6)),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        f ? 'Mga abiso' : 'Notifications',
+                        style: AppText.display(size: AppTextSize.headline, color: AppColors.sectionInk),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: tr(f, 'common.close'),
+                    icon: const Icon(Icons.close_rounded, size: 22, color: AppColors.green700),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.green50,
+                      minimumSize: const Size(44, 44),
+                      fixedSize: const Size(44, 44),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Bounded so a resident with a long history gets a scrollable sheet
+              // instead of one that runs off the screen. Both sections share the
+              // one scroll view — two independently scrolling lists in a sheet is
+              // how the advisory section ends up a 40-pixel window.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * .6),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    _SectionLabel(text: tr(f, 'notif.advisories')),
+                    if (advisoriesError != null)
+                      // Never "no advisories" on a failed fetch. The wording says
+                      // outright that silence here is not an all-clear.
+                      StatusBox(
+                        icon: Icons.wifi_off_rounded,
+                        bg: AppColors.red50,
+                        fg: AppColors.red600,
+                        title: tr(f, 'notif.adv_failed_title'),
+                        next: tr(f, 'notif.adv_failed'),
+                      )
+                    else if (advisories.isEmpty)
+                      StatusBox(
+                        icon: Icons.campaign_outlined,
+                        bg: AppColors.green50,
+                        fg: AppColors.green700,
+                        title: tr(f, 'notif.adv_none_title'),
+                        next: tr(f, 'notif.adv_none'),
+                      )
+                    else
+                      for (final advisory in advisories) _AdvisoryTile(advisory: advisory, filipino: f),
+                    const SizedBox(height: AppSpacing.lg),
+                    _SectionLabel(text: tr(f, 'notif.your_requests')),
+                    if (requests.isEmpty)
+                      StatusBox(
+                        icon: Icons.notifications_none_rounded,
+                        bg: AppColors.green50,
+                        fg: AppColors.green700,
+                        title: tr(f, 'notif.empty_title'),
+                        next: tr(f, 'notif.empty_body'),
+                      )
+                    else
+                      for (final request in _ordered) _RequestUpdateTile(request: request, filipino: f),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              // Says what this list is and is not, so nobody reads it as more than
+              // it covers.
+              Text(
+                tr(f, 'notif.scope_note'),
+                style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          // Bounded so a resident with a long history gets a scrollable sheet
-          // instead of one that runs off the screen. Both sections share the
-          // one scroll view — two independently scrolling lists in a sheet is
-          // how the advisory section ends up a 40-pixel window.
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * .6,
-            ),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                _SectionLabel(text: tr(filipino, 'notif.advisories')),
-                if (advisoriesError != null)
-                  // Never "no advisories" on a failed fetch. The wording says
-                  // outright that silence here is not an all-clear.
-                  _AdvisoryNotice(
-                    text: tr(filipino, 'notif.adv_failed'),
-                    icon: Icons.wifi_off_rounded,
-                    bg: AppColors.red50,
-                    fg: AppColors.red600,
-                  )
-                else if (advisories.isEmpty)
-                  _AdvisoryNotice(
-                    text: tr(filipino, 'notif.adv_none'),
-                    icon: Icons.campaign_outlined,
-                    bg: AppColors.green50,
-                    fg: AppColors.green700,
-                  )
-                else
-                  for (final advisory in advisories)
-                    _AdvisoryTile(advisory: advisory, filipino: filipino),
-                const SizedBox(height: 14),
-                _SectionLabel(text: tr(filipino, 'notif.your_requests')),
-                if (requests.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.green50,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.green50),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.green700),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          tr(filipino, 'notif.empty_title'),
-                          style: AppText.display(size: AppTextSize.bodyLg, color: AppColors.green900),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          tr(filipino, 'notif.empty_body'),
-                          style: AppText.body(size: AppTextSize.small, color: AppColors.green900, height: 1.6),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  for (final request in _ordered)
-                    _RequestUpdateTile(request: request, filipino: filipino),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Says what this list is and is not, so nobody reads it as more than
-          // it covers.
-          Text(
-            tr(filipino, 'notif.scope_note'),
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1181,54 +1245,17 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text.toUpperCase(),
-        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.inkMuted),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Semantics(
+        header: true,
+        child: Text(text, style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk)),
       ),
     );
   }
 }
 
-/// The "none sent" and "could not load" states. Same shape, different colour
-/// and wording, so neither can be mistaken for the other at a glance.
-class _AdvisoryNotice extends StatelessWidget {
-  final String text;
-  final IconData icon;
-  final Color bg;
-  final Color fg;
-
-  const _AdvisoryNotice({
-    required this.text,
-    required this.icon,
-    required this.bg,
-    required this.fg,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.lg)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: fg),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: AppText.body(size: AppTextSize.small, color: AppColors.ink, height: 1.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+/// One advisory the agency texted this resident: marked by its own border and
+/// megaphone as well as its tint, never by colour alone.
 class _AdvisoryTile extends StatelessWidget {
   final Advisory advisory;
   final bool filipino;
@@ -1240,49 +1267,38 @@ class _AdvisoryTile extends StatelessWidget {
     final at = advisory.sentAt;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.red50,
-        // Not colour alone: an advisory is marked by its own border and its
-        // megaphone as well as its tint.
         border: Border.all(color: AppColors.red600, width: 1.2),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const IconBadge(
-            icon: Icons.campaign_rounded,
-            bg: AppColors.surface,
-            fg: AppColors.red600,
-            size: 36,
-            iconSize: 17,
-            radius: AppRadius.sm,
-          ),
-          const SizedBox(width: 12),
+          const Icon(Icons.campaign_rounded, size: 24, color: AppColors.red600),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  at == null
-                      ? tr(filipino, 'notif.adv_date_unknown')
-                      : formatTimelineTime(at, filipino),
-                  style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint),
+                  at == null ? tr(filipino, 'notif.adv_date_unknown') : formatTimelineTime(at, filipino),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                 ),
                 const SizedBox(height: 4),
                 // The agency's own words, unmodified and never truncated: the
                 // instruction a resident has to act on is often the last line.
                 Text(
                   advisory.message,
-                  style: AppText.body(size: AppTextSize.small, color: AppColors.ink, height: 1.5),
+                  style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.5),
                 ),
                 if (advisory.barangay != null && advisory.barangay!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     advisory.barangay!,
-                    style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted),
+                    style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                   ),
                 ],
               ],
@@ -1294,6 +1310,8 @@ class _AdvisoryTile extends StatelessWidget {
   }
 }
 
+/// One of the resident's own requests: title, when it last moved, and the
+/// plain-language status box Track uses.
 class _RequestUpdateTile extends StatelessWidget {
   final ServiceRequest request;
   final bool filipino;
@@ -1305,50 +1323,27 @@ class _RequestUpdateTile extends StatelessWidget {
     final at = request.updatedAt ?? request.createdAt;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.cardBorder),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconBadge(
-            icon: request.displayIcon,
-            bg: request.status.bg,
-            fg: request.status.fg,
-            size: 36,
-            iconSize: 17,
-            radius: AppRadius.sm,
+          Text(request.displayTitle(filipino), style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(
+            [
+              if (request.refNo.isNotEmpty) request.refNo,
+              at == null ? tr(filipino, 'timeline.time_unknown') : formatTimelineTime(at, filipino),
+            ].join(' · '),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  request.displayTitle(filipino),
-                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  at == null
-                      ? tr(filipino, 'timeline.time_unknown')
-                      : formatTimelineTime(at, filipino),
-                  style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  request.refNo.isEmpty
-                      ? request.statusLabelFor(filipino)
-                      : '${request.statusLabelFor(filipino)} · ${request.refNo}',
-                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: AppSpacing.sm),
+          serviceStatusBox(request, filipino),
         ],
       ),
     );

@@ -679,37 +679,14 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
   Future<void> _exit() async {
     if (_ambulanceForm.isDirty || _drafts.landmark.text.trim().isNotEmpty) {
       final f = widget.appState.language == AppLanguage.filipino;
-      final discard = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
-          title: Text(trEn(f, 'Discard this request?'), style: AppText.display(size: AppTextSize.title)),
-          content: Text(
-            trEn(f, 'What you entered will be cleared.'),
-            style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(
-                trEn(f, 'Keep editing'),
-                style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.inkMuted),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: TextButton.styleFrom(backgroundColor: AppColors.red50, foregroundColor: AppColors.red600),
-              child: Text(
-                trEn(f, 'Discard'),
-                style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
-              ),
-            ),
-          ],
-        ),
+      final discard = await showConfirmDialog(
+        context,
+        title: trEn(f, 'Discard this request?'),
+        body: trEn(f, 'What you entered will be cleared.'),
+        keepLabel: trEn(f, 'Keep editing'),
+        confirmLabel: trEn(f, 'Discard'),
       );
-      if (discard != true || !mounted) return;
+      if (!discard || !mounted) return;
       _drafts.discardAmbulance();
       setState(() {
         _step = 0;

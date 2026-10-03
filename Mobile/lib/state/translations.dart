@@ -145,7 +145,7 @@ const Map<String, (String, String)> _strings = {
     'MDRRMO advisories sent to you, and updates about your own requests.',
     'Mga abiso ng MDRRMO na ipinadala sa iyo, at mga update sa sarili mong kahilingan.',
   ),
-  'notif.advisories': ('MDRRMO advisories', 'Mga Abiso ng MDRRMO'),
+  'notif.advisories': ('MDRRMO advisories', 'Mga abiso ng MDRRMO'),
   'notif.your_requests': ('Your requests', 'Iyong mga kahilingan'),
   'notif.adv_none': (
     'No advisories have been sent to you.',
@@ -155,6 +155,8 @@ const Map<String, (String, String)> _strings = {
     "Couldn't load advisories. This does not mean none were sent — check with your barangay.",
     'Hindi ma-load ang mga abiso. Hindi ito nangangahulugang wala — magtanong sa inyong barangay.',
   ),
+  'notif.adv_none_title': ('No advisories', 'Walang abiso'),
+  'notif.adv_failed_title': ("Couldn't load advisories", 'Hindi ma-load ang mga abiso'),
   'notif.adv_date_unknown': ('Date not recorded', 'Walang naitalang petsa'),
 
   // ---- Services ----

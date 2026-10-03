@@ -283,8 +283,8 @@ void main() {
         (tester) async {
       await _pumpSheet(tester, [_request(status: 'Responding')]);
 
-      // The app's own vocabulary for a Responding row: `status.scheduled`.
-      expect(find.textContaining('Responding'), findsOneWidget);
+      // The plain-language status box for a Responding row, not the badge word.
+      expect(find.text('MDRRMO is responding'), findsOneWidget);
       expect(find.textContaining('TXN-000007'), findsOneWidget);
       // A real timestamp, not the old fixed copy.
       expect(find.textContaining(':'), findsWidgets);

@@ -239,7 +239,7 @@ void main() {
       await _pumpSheet(tester, filipino: true);
 
       expect(find.text('Wala pang abisong ipinadala sa iyo.'), findsOneWidget);
-      expect(find.text('MGA ABISO NG MDRRMO'), findsOneWidget);
+      expect(find.text('Mga abiso ng MDRRMO'), findsOneWidget);
     });
   });
 }

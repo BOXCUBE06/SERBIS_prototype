@@ -174,82 +174,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Icon, plain-language title and one line on what happens next, in the colours
-/// the Borrow "My requests" boxes use.
-StatusBox _statusBox(ServiceRequest r, bool f) {
-  final reason = r.note?.trim() ?? '';
-  final (IconData icon, Color bg, Color fg, String title, String next) = switch (r.status) {
-    ReqStatus.review => (
-        Icons.hourglass_top_rounded,
-        AppColors.amber50,
-        AppColors.amberInk,
-        tr(f, 'track.box.review.title'),
-        tr(f, 'track.box.review.next'),
-      ),
-    ReqStatus.booked when r.isOverdue => (
-        Icons.warning_amber_rounded,
-        AppColors.red50,
-        AppColors.red600,
-        tr(f, 'track.box.overdue.title'),
-        tr(f, 'common.booking_overdue'),
-      ),
-    ReqStatus.booked => (
-        Icons.event_available_rounded,
-        AppColors.green50,
-        AppColors.green700,
-        tr(f, 'track.box.booked.title'),
-        r.scheduledAt == null
-            ? tr(f, 'track.box.booked.next')
-            : tr(f, 'track.box.booked.next_dated').replaceAll('{date}', formatBookingConfirmationTime(r.scheduledAt!, f)),
-      ),
-    ReqStatus.scheduled when r.isProgram => (
-        Icons.check_circle_rounded,
-        AppColors.green50,
-        AppColors.green700,
-        tr(f, 'status.approved'),
-        tr(f, 'track.box.approved.next'),
-      ),
-    ReqStatus.scheduled => (
-        Icons.directions_run_rounded,
-        AppColors.green50,
-        AppColors.green700,
-        tr(f, 'timeline.responding'),
-        tr(f, 'track.box.responding.next'),
-      ),
-    ReqStatus.completed when r.isNotTransported => (
-        Icons.info_outline_rounded,
-        AppColors.amber50,
-        AppColors.amberInk,
-        tr(f, 'status.not_transported'),
-        r.noArrivalReason!.trim(),
-      ),
-    ReqStatus.completed => (
-        Icons.task_alt_rounded,
-        AppColors.green50,
-        AppColors.green700,
-        tr(f, 'status.completed'),
-        tr(f, 'track.box.completed.next'),
-      ),
-    ReqStatus.cancelled => (
-        Icons.cancel_outlined,
-        AppColors.grey50,
-        AppColors.inkMuted,
-        tr(f, 'status.cancelled'),
-        tr(f, 'track.box.cancelled.next'),
-      ),
-    ReqStatus.disapproved => (
-        Icons.block_rounded,
-        AppColors.red50,
-        AppColors.red600,
-        tr(f, 'status.disapproved'),
-        reason.isEmpty
-            ? tr(f, 'track.box.disapproved.next')
-            : tr(f, 'track.box.reason').replaceAll('{reason}', reason),
-      ),
-  };
-  return StatusBox(icon: icon, bg: bg, fg: fg, title: title, next: next);
-}
-
 class _RequestCard extends StatelessWidget {
   final ServiceRequest request;
   final bool filipino;
@@ -285,7 +209,7 @@ class _RequestCard extends StatelessWidget {
             style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
           ),
           const SizedBox(height: AppSpacing.md),
-          _statusBox(r, f),
+          serviceStatusBox(r, f),
           if (r.createdAt != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
