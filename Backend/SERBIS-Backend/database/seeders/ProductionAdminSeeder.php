@@ -16,7 +16,10 @@ use Illuminate\Support\Facades\Hash;
  * from the environment and refuses to run without it, so nothing that could log
  * anyone in is ever committed to the repository.
  *
- * Idempotent on the email. A second run leaves the existing password alone
+ * Idempotent on the email or the username: either one present means the
+ * account exists (the username is editable in Staff Accounts, the email column
+ * is unique, so checking one alone can crash the boot on a duplicate insert).
+ * A second run leaves the existing password alone
  * rather than resetting it to whatever the env var happens to hold — after the
  * admin has changed their password in the panel, a redeploy must not put the
  * old one back.
@@ -41,9 +44,14 @@ class ProductionAdminSeeder extends Seeder
             return;
         }
 
-        if (DB::table('tbl_user')->where('username', self::ADMIN_USERNAME)->exists()) {
+        $exists = DB::table('tbl_user')
+            ->where('username', self::ADMIN_USERNAME)
+            ->orWhere('email_address', self::ADMIN_EMAIL)
+            ->exists();
+
+        if ($exists) {
             $this->command?->info(
-                'ProductionAdminSeeder skipped: '.self::ADMIN_USERNAME.' already exists; password left untouched.'
+                'ProductionAdminSeeder skipped: the admin account already exists; password left untouched.'
             );
 
             return;

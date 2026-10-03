@@ -14,23 +14,35 @@ return new class extends Migration
      * backfilled from the part of its email before the @, made to fit the
      * username rule and de-duplicated. The email column stays, nullable, so
      * nothing that still reads it breaks.
+     *
+     * Re-runnable: MySQL commits each DDL statement, so a boot that died half
+     * way must not crash-loop on "Duplicate column" when migrate runs again.
      */
     public function up(): void
     {
-        Schema::table('tbl_user', function (Blueprint $table) {
-            $table->string('username', 30)->nullable()->unique()->after('last_name');
-        });
+        if (! Schema::hasColumn('tbl_user', 'username')) {
+            Schema::table('tbl_user', function (Blueprint $table) {
+                $table->string('username', 30)->nullable()->after('last_name');
+            });
+        }
 
-        $taken = [];
+        if (! Schema::hasIndex('tbl_user', 'tbl_user_username_unique')) {
+            Schema::table('tbl_user', function (Blueprint $table) {
+                $table->unique('username');
+            });
+        }
 
-        foreach (DB::table('tbl_user')->orderBy('admin_id')->get(['admin_id', 'email_address']) as $row) {
+        $taken = array_fill_keys(DB::table('tbl_user')->whereNotNull('username')->pluck('username')->all(), true);
+
+        foreach (DB::table('tbl_user')->whereNull('username')->orderBy('admin_id')->get(['admin_id', 'email_address']) as $row) {
             $username = self::uniqueUsername(self::usernameFrom((string) $row->email_address, $row->admin_id), $taken);
             $taken[$username] = true;
 
             DB::table('tbl_user')->where('admin_id', $row->admin_id)->update(['username' => $username]);
 
-            // So whoever runs the deploy can tell each staff member their new login.
-            $line = "Staff #{$row->admin_id}: {$row->email_address} -> {$username}";
+            // So whoever runs the deploy can tell each staff member their new
+            // login. No email: this lands in the host's deploy log.
+            $line = "Staff #{$row->admin_id} -> {$username}";
             Log::info($line);
             if (! app()->runningUnitTests()) {
                 fwrite(STDOUT, "  {$line}\n");
