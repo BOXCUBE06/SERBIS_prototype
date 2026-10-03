@@ -44,11 +44,14 @@ class BorrowEquipmentScreen extends StatefulWidget {
   });
 
   @override
-  State<BorrowEquipmentScreen> createState() => _BorrowEquipmentScreenState();
+  State<BorrowEquipmentScreen> createState() => BorrowEquipmentScreenState();
 }
 
-class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
+class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
   bool _showMine = false;
+
+  /// Switches to My requests. Home's and Track's loan rows land here.
+  void showMyRequests() => setState(() => _showMine = true);
 
   List<Equipment> _equipment = [];
   bool _loadingEquipment = true;
@@ -170,7 +173,7 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
         color: AppColors.green700,
         // Pull-to-refresh belongs to the resident's own requests only.
         notificationPredicate: (n) => _showMine && n.depth == 0,
-        edgeOffset: widget.embedded ? _BorrowHeader.minHeight + _TabsHeader.height : _TabsHeader.height,
+        edgeOffset: widget.embedded ? TabHeader.minHeight + _TabsHeader.height : _TabsHeader.height,
         onRefresh: _loadMine,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -178,7 +181,9 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
             if (widget.embedded)
               SliverPersistentHeader(
                 pinned: true,
-                delegate: _BorrowHeader(
+                delegate: TabHeader(
+                  title: trEn(f, 'Borrow equipment'),
+                  subtitle: trEn(f, 'Free loans from Echague MDRRMO'),
                   filipino: f,
                   onNotifications: widget.onOpenNotifications,
                   onProfile: widget.onOpenProfile,
@@ -345,88 +350,6 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
         ],
       ])),
     ];
-  }
-}
-
-/// Green header: "Borrow equipment" over its subtitle, bell and profile on the
-/// right. Shrinks to a one-line bar as the list scrolls.
-class _BorrowHeader extends SliverPersistentHeaderDelegate {
-  static const maxHeight = 128.0;
-  static const minHeight = 96.0;
-
-  final bool filipino;
-  final VoidCallback? onNotifications;
-  final VoidCallback? onProfile;
-
-  const _BorrowHeader({required this.filipino, this.onNotifications, this.onProfile});
-
-  @override
-  double get maxExtent => maxHeight;
-
-  @override
-  double get minExtent => minHeight;
-
-  @override
-  bool shouldRebuild(_BorrowHeader old) => old.filipino != filipino;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    final f = filipino;
-    // 0 fully open, 1 fully collapsed.
-    final t = (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0);
-    return Container(
-      padding: EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.headerTop, 14, 20 - 12 * t),
-      decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    trEn(f, 'Borrow equipment'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.display(
-                      size: AppTextSize.headline - (AppTextSize.headline - AppTextSize.title) * t,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                ClipRect(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    heightFactor: 1 - t,
-                    child: Opacity(
-                      opacity: 1 - t,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          trEn(f, 'Free loans from Echague MDRRMO'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.body(size: AppTextSize.small, color: Colors.white.withValues(alpha: .85)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onNotifications != null)
-            HeaderButton(icon: Icons.notifications_outlined, label: tr(f, 'nav.notifications'), onTap: onNotifications!),
-          if (onProfile != null)
-            HeaderButton(icon: Icons.person_outline_rounded, label: tr(f, 'nav.profile'), onTap: onProfile!),
-        ],
-      ),
-    );
   }
 }
 

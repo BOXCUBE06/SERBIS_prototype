@@ -473,6 +473,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
 
   /// The ambulance flow, so Android back can step it back instead of leaving.
   final _ambulanceForm = GlobalKey<ServiceRequestFormState>();
+  final _borrowScreen = GlobalKey<BorrowEquipmentScreenState>();
 
   /// The Ambulance tab is showing its flow (not a loading or unavailable
   /// screen), which takes the whole screen: no bottom nav.
@@ -770,6 +771,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           );
         }
         return BorrowEquipmentScreen(
+          key: _borrowScreen,
           appState: _appState,
           user: widget.user,
           embedded: true,
