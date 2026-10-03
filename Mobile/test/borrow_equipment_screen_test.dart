@@ -332,7 +332,8 @@ void main() {
       // And moved them to the tab the new request is actually on — it is
       // invisible on the Available tab it was filed from.
       expect(find.text('My requests'), findsOneWidget);
-      expect(find.textContaining('Wheelchair × 2'), findsOneWidget);
+      expect(find.text('Wheelchair'), findsWidgets);
+      expect(find.text('Quantity: 2'), findsOneWidget);
     });
   });
 
@@ -368,8 +369,92 @@ void main() {
       await tester.tap(find.text('My requests'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Megaphone × 3'), findsOneWidget);
+      expect(find.text('Megaphone'), findsOneWidget);
+      expect(find.text('Quantity: 3'), findsOneWidget);
       expect(find.text('No borrow requests yet'), findsNothing);
+    });
+
+    Map<String, dynamic> row(int id, String status, {String? method, String? reason, int equipmentId = 1}) => {
+          'borrow_id': id,
+          'equipment_id': equipmentId,
+          'quantity': 1,
+          'status': status,
+          'fulfillment_method': method,
+          'denial_reason': reason,
+          'created_at': DateTime(2026, 9, 30, 1, 11).toIso8601String(),
+          'released_at': status == 'Released' ? DateTime(2026, 10, 1, 9).toIso8601String() : null,
+          'updated_at': DateTime(2026, 10, 1, 14, 5).toIso8601String(),
+          'equipment': <String, dynamic>{'item_name': 'Item $id'},
+        };
+
+    Future<void> openMine(WidgetTester tester, List<Map<String, dynamic>> rows) async {
+      tester.view.physicalSize = const Size(1080, 9000);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_host(AppState(_FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)],
+        borrowRows: rows,
+      ))));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('My requests'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('splits open requests from past ones', (tester) async {
+      await openMine(tester, [row(1, 'Pending'), row(2, 'Returned'), row(3, 'Cancelled')]);
+
+      expect(find.text('In progress'), findsOneWidget);
+      expect(find.text('Past requests'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Item 1')).dy < tester.getTopLeft(find.text('Past requests')).dy,
+        isTrue,
+        reason: 'the pending request sits above the Past heading',
+      );
+    });
+
+    testWidgets('an approved pickup shows the status box, steps and both actions', (tester) async {
+      await openMine(tester, [row(1, 'Approved', method: 'Pickup')]);
+
+      expect(find.text('Approved — ready to pick up'), findsOneWidget);
+      expect(find.text('Request sent'), findsOneWidget);
+      expect(find.text('Wed, Sep 30, 1:11 AM'), findsOneWidget, reason: 'done steps carry their time');
+      expect(find.text('Ready to pick up'), findsOneWidget);
+      expect(find.text('Call MDRRMO'), findsOneWidget);
+      expect(find.text('Cancel request'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel request'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget, reason: 'cancelling asks first');
+    });
+
+    testWidgets('a released delivery reads Delivered and can no longer be cancelled', (tester) async {
+      await openMine(tester, [row(1, 'Released', method: 'Delivery')]);
+
+      expect(find.text('Delivered to you'), findsOneWidget);
+      expect(find.text('Delivered'), findsOneWidget);
+      expect(find.text("Return it to MDRRMO when you're done."), findsOneWidget);
+      expect(find.text('Cancel request'), findsNothing);
+    });
+
+    testWidgets('a denied request shows MDRRMO\'s reason and no steps', (tester) async {
+      await openMine(tester, [row(1, 'Denied', reason: 'Out of stock')]);
+
+      expect(find.text('Not approved'), findsOneWidget);
+      expect(find.text("MDRRMO's reason: Out of stock"), findsOneWidget);
+      expect(find.text('Request sent'), findsNothing);
+      expect(find.text('Cancel request'), findsNothing);
+    });
+
+    testWidgets('a cancelled request offers Borrow again only while the item exists', (tester) async {
+      await openMine(tester, [row(1, 'Cancelled'), row(2, 'Cancelled', equipmentId: 99)]);
+
+      expect(find.text('Cancelled'), findsNWidgets(2));
+      expect(find.text('You cancelled this on Thu, Oct 1, 2:05 PM.'), findsNWidgets(2));
+      expect(find.text('Borrow again'), findsOneWidget, reason: 'item 99 is not in the catalogue');
+
+      await tester.tap(find.text('Borrow again'));
+      await tester.pumpAndSettle();
+      expect(find.text('Send request'), findsOneWidget, reason: "opens that item's borrow sheet");
     });
   });
 

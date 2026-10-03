@@ -146,7 +146,8 @@ class ServiceRequestVehicleGuardTest extends TestCase
 
     public function test_a_unit_already_dispatched_elsewhere_is_rejected(): void
     {
-        $this->unit->update(['status' => 'Dispatched']);
+        // Busy means another Responding request holds the unit (VehicleDispatch).
+        $this->ambulanceRequest(['status' => 'Responding', 'vehicle_id' => $this->unit->vehicle_id]);
 
         $request = $this->ambulanceRequest();
         $this->assignResponder($request);
@@ -155,8 +156,7 @@ class ServiceRequestVehicleGuardTest extends TestCase
             'status' => 'Responding',
             'vehicle_id' => $this->unit->vehicle_id,
         ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('vehicle_id');
+            ->assertStatus(409);
 
         $this->assertNull($request->fresh()->vehicle_id);
     }

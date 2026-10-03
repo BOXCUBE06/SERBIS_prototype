@@ -835,7 +835,6 @@ class ApiService {
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
-    String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
@@ -884,9 +883,6 @@ class ApiService {
       request.fields['description'] = description;
     }
 
-    if (requiredVehicleType != null && requiredVehicleType.isNotEmpty) {
-      request.fields['required_vehicle_type'] = requiredVehicleType;
-    }
     if (landmark != null && landmark.isNotEmpty) {
       request.fields['landmark'] = landmark;
     }
@@ -961,7 +957,6 @@ class ApiService {
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
-    String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
@@ -978,7 +973,6 @@ class ApiService {
       description: description,
       validIdFileBytes: validIdFileBytes,
       validIdFileName: validIdFileName,
-      requiredVehicleType: requiredVehicleType,
       sitePhotoBytes: sitePhotoBytes,
       sitePhotoFileName: sitePhotoFileName,
       landmark: landmark,

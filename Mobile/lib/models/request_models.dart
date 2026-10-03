@@ -477,6 +477,18 @@ String formatBookingConfirmationTime(DateTime at, bool filipino) {
       '$hour12:$minute $period';
 }
 
+const _weekdayAbbrev = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// A progress step's time: "Tue, Sep 30, 1:11 AM". English, like the others.
+String formatStepTime(DateTime at) {
+  final local = at.toLocal();
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  return '${_weekdayAbbrev[local.weekday - 1]}, ${_monthAbbrev[local.month - 1]} ${local.day}, '
+      '$hour12:$minute $period';
+}
+
 /// Renders a calendar day with no clock: "Sep 12, 2026".
 ///
 /// A loan's due date is a day, not an instant, so [formatBookingConfirmationTime]

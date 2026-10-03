@@ -168,7 +168,6 @@ class FakeApi extends ApiService {
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
-    String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
@@ -230,6 +229,7 @@ Future<void> _pump(
   VoidCallback? onSubmitted,
   AppUser? user,
   ServiceDrafts? drafts,
+  VoidCallback? onExit,
 }) async {
   // A tall phone. The default 800x600 surface clips this screen badly enough
   // that the submit button never builds, which would make it unfindable for a
@@ -263,6 +263,7 @@ Future<void> _pump(
               onSubmitted: onSubmitted ?? () {},
               onOpenNotifications: () {},
               onOpenProfile: () {},
+              onBack: onExit,
             )
           : ServicesScreen(
               appState: state,
@@ -337,26 +338,39 @@ Finder _patientNameField() {
   return find.descendant(of: field, matching: find.byType(TextField));
 }
 
-/// Fills the two fields the ambulance form refuses to submit without, and
-/// nothing else — the other seven are optional by design, so a test that only
-/// needs a submit to go through should not have to fill them.
+/// Types [value] into the [AppTextField] labelled [label].
+Future<void> _type(WidgetTester tester, String label, String value) async {
+  final field = find.descendant(
+    of: find.byWidgetPredicate((w) => w is AppTextField && w.label == label),
+    matching: find.byType(TextField),
+  );
+  await tester.ensureVisible(field);
+  await tester.enterText(field, value);
+  await tester.pump();
+}
+
+/// Taps the ambulance footer's "Next: …" button.
+Future<void> _next(WidgetTester tester) async {
+  final next = find.ancestor(of: find.textContaining('Next: '), matching: find.byType(AppButton));
+  await tester.ensureVisible(next);
+  await tester.tap(next);
+  await tester.pumpAndSettle();
+}
+
+/// Fills the three fields the ambulance flow requires, and nothing else, one
+/// step at a time, stopping on step 4 (Schedule & ID). [onPatientStep] runs
+/// while step 1 is showing.
 ///
 /// Mirrors the server's own required set for this service
-/// (ServiceRequestController::store): patient_name and destination.
-Future<void> _fillRequiredAmbulanceFields(WidgetTester tester) async {
-  for (final entry in const {
-    'Patient name': 'Maria Santos',
-    'Destination': 'Echague District Hospital',
-    'Relative 1 (required)': 'Lalaine Ferrer',
-  }.entries) {
-    final field = find.descendant(
-      of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
-      matching: find.byType(TextField),
-    );
-    await tester.ensureVisible(field);
-    await tester.enterText(field, entry.value);
-  }
-  await tester.pump();
+/// (ServiceRequestController::store): patient_name, destination, a relative.
+Future<void> _fillRequiredAmbulanceFields(WidgetTester tester, {Future<void> Function()? onPatientStep}) async {
+  await _type(tester, 'Patient name', 'Maria Santos');
+  await onPatientStep?.call();
+  await _next(tester);
+  await _type(tester, 'Destination name', 'Echague District Hospital');
+  await _next(tester);
+  await _type(tester, 'Relative 1', 'Lalaine Ferrer');
+  await _next(tester);
 }
 
 /// Attaches a valid ID through the real picker path, which is also what covers
@@ -386,6 +400,8 @@ Future<void> _goBack(WidgetTester tester) async {
 }
 
 Future<void> _submit(WidgetTester tester) async {
+  // The ambulance flow submits from its Review step.
+  if (find.text('Next: Review').evaluate().isNotEmpty) await _next(tester);
   await tester.ensureVisible(find.widgetWithText(AppButton, 'Submit request'));
   await tester.tap(find.widgetWithText(AppButton, 'Submit request'));
   await tester.pumpAndSettle();
@@ -545,9 +561,56 @@ void main() {
       await _pump(tester, AppState(FakeApi()));
 
       expect(find.text('Request an ambulance'), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+      expect(find.text('Step 1 of 5 · Patient'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Next: Trip'), findsOneWidget);
+      // No Back on the first step, and no Submit before the last.
+      expect(find.widgetWithText(AppButton, 'Back'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
       // No list to pick from first.
       expect(find.text('Road Clearing'), findsNothing);
+    });
+
+    testWidgets('Edit on Review and Back move between steps, keeping answers', (tester) async {
+      await _pump(tester, AppState(FakeApi()));
+
+      await _fillRequiredAmbulanceFields(tester);
+      await _attachValidId(tester);
+      await _next(tester);
+      expect(find.text('Step 5 of 5 · Review'), findsOneWidget);
+      expect(find.text('Maria Santos'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+
+      // The first card's Edit goes back to Patient.
+      await tester.tap(find.text('Edit').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Step 1 of 5 · Patient'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Maria Santos'), findsOneWidget);
+
+      await _next(tester);
+      await tester.tap(find.widgetWithText(AppButton, 'Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 1 of 5 · Patient'), findsOneWidget);
+    });
+
+    testWidgets('closing with answers entered asks first, then clears them', (tester) async {
+      var exits = 0;
+      await _pump(tester, AppState(FakeApi()), onExit: () => exits++);
+      await _type(tester, 'Patient name', 'Maria Santos');
+
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard this request?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(exits, 0);
+      expect(find.widgetWithText(TextField, 'Maria Santos'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      expect(exits, 1);
+      expect(tester.widget<TextField>(_patientNameField()).controller!.text, isEmpty);
     });
 
     testWidgets('the patient name starts empty, not the signed-in resident',
@@ -622,12 +685,11 @@ void main() {
       final api = FakeApi();
       await _pump(tester, AppState(api));
 
-      await _submit(tester);
+      await _fillRequiredAmbulanceFields(tester);
+      await _next(tester);
 
-      expect(
-        find.text('Please attach a photo of your valid ID before submitting.'),
-        findsOneWidget,
-      );
+      expect(find.text('Attach a photo of a valid ID.'), findsOneWidget);
+      expect(find.text('Step 4 of 5 · Schedule & ID'), findsOneWidget);
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 
@@ -638,16 +700,14 @@ void main() {
       // required — better to refuse locally and say why.
       final api = FakeApi();
       await _pump(tester, AppState(api));
+      await _fillRequiredAmbulanceFields(tester);
 
       picker.result = _picked('id.jpg', withBytes: false);
       await _tapUpload(tester, 'Valid ID (required)');
 
-      await _submit(tester);
+      await _next(tester);
 
-      expect(
-        find.text('Please attach a photo of your valid ID before submitting.'),
-        findsOneWidget,
-      );
+      expect(find.text('Attach a photo of a valid ID.'), findsOneWidget);
       expect(api.submitCount, 0);
     });
 
@@ -676,10 +736,10 @@ void main() {
       final api = FakeApi();
       await _pump(tester, AppState(api));
 
-      await _attachValidId(tester);
-      await _submit(tester);
+      await _next(tester);
 
-      expect(find.textContaining('the patient name'), findsOneWidget);
+      expect(find.text('Enter the patient name.'), findsOneWidget);
+      expect(find.text('Step 1 of 5 · Patient'), findsOneWidget, reason: 'Next must not advance');
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 
@@ -691,21 +751,14 @@ void main() {
       final api = FakeApi();
       await _pump(tester, AppState(api));
 
-      for (final entry in const {
-        'Patient name': 'Maria Santos',
-        'Destination': 'Echague District Hospital',
-      }.entries) {
-        final field = find.descendant(
-          of: find.byWidgetPredicate((w) => w is AppTextField && w.label == entry.key),
-          matching: find.byType(TextField),
-        );
-        await tester.ensureVisible(field);
-        await tester.enterText(field, entry.value);
-      }
-      await _attachValidId(tester);
-      await _submit(tester);
+      await _type(tester, 'Patient name', 'Maria Santos');
+      await _next(tester);
+      await _type(tester, 'Destination name', 'Echague District Hospital');
+      await _next(tester);
+      await _next(tester);
 
-      expect(find.textContaining('at least one relative'), findsOneWidget);
+      expect(find.text('Name at least one relative going with the patient.'), findsOneWidget);
+      expect(find.text('Step 3 of 5 · Condition'), findsOneWidget);
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 
@@ -739,10 +792,11 @@ void main() {
       final api = FakeApi();
       await _pump(tester, AppState(api));
 
-      await _fillRequiredAmbulanceFields(tester);
-      await tester.ensureVisible(find.text('Lives at my address'));
-      await tester.tap(find.text('Lives at my address'));
-      await tester.pump();
+      await _fillRequiredAmbulanceFields(tester, onPatientStep: () async {
+        await tester.ensureVisible(find.text('Lives at my address'));
+        await tester.tap(find.text('Lives at my address'));
+        await tester.pump();
+      });
       await _attachValidId(tester);
       await _submit(tester);
 
@@ -794,6 +848,7 @@ void main() {
         (tester) async {
       final api = FakeApi();
       await _pump(tester, AppState(api));
+      await _fillRequiredAmbulanceFields(tester);
 
       await _attachValidId(tester, name: 'first.jpg');
       expect(find.text('first.jpg'), findsOneWidget);

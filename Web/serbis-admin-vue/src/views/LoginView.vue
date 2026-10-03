@@ -405,7 +405,9 @@ const handleLogin = async () => {
 }
 
 const handleMfaSubmit = async () => {
-  if (mfaCode.value.length !== 6) return
+  // @finish and the form submit (Enter / VERIFY) can both fire for one code;
+  // the second call would hit an already-used challenge and 422.
+  if (mfaLoading.value || mfaCode.value.length !== 6) return
 
   mfaLoading.value = true
   mfaError.value = ''

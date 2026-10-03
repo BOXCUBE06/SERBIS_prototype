@@ -1,9 +1,7 @@
 
 library serbis.models.borrow;
 
-import 'package:flutter/material.dart';
 import '../state/translations.dart';
-import '../theme/app_theme.dart';
 
 /// A row from `GET /api/equipments` — the catalogue a resident borrows from.
 /// Read-only here: writing stock belongs to the admin panel.
@@ -81,42 +79,6 @@ extension BorrowStatusX on BorrowStatus {
     }
   }
 
-  Color get bg {
-    switch (this) {
-      case BorrowStatus.pending:
-        return AppStatus.pending.bg;
-      case BorrowStatus.approved:
-        return AppStatus.info.bg;
-      case BorrowStatus.released:
-        return AppStatus.info.bg;
-      case BorrowStatus.returned:
-        return AppStatus.success.bg;
-      case BorrowStatus.denied:
-        return AppStatus.danger.bg;
-      // Neutral, not red: the resident withdrew this themselves, so it is not
-      // a refusal and must not read like one beside a Denied row.
-      case BorrowStatus.cancelled:
-        return AppStatus.neutral.bg;
-    }
-  }
-
-  Color get fg {
-    switch (this) {
-      case BorrowStatus.pending:
-        return AppStatus.pending.fg;
-      case BorrowStatus.approved:
-        return AppStatus.info.fg;
-      case BorrowStatus.released:
-        return AppStatus.info.fg;
-      case BorrowStatus.returned:
-        return AppStatus.success.fg;
-      case BorrowStatus.denied:
-        return AppStatus.danger.fg;
-      case BorrowStatus.cancelled:
-        return AppStatus.neutral.fg;
-    }
-  }
-
   bool get isTerminal =>
       this == BorrowStatus.returned ||
       this == BorrowStatus.denied ||
@@ -160,6 +122,12 @@ class BorrowRequest {
   final DateTime? releasedAt;
   final DateTime? returnedAt;
 
+  /// `Pickup` or `Delivery`; null on rows filed before the column existed.
+  final String? fulfillmentMethod;
+
+  /// Last change on the row. A cancelled row's last change is the cancel.
+  final DateTime? updatedAt;
+
   /// The item's name at the moment this row was built. Resolved against the
   /// catalogue the same way `ServiceRequest.serviceName` is: `POST`'s 201
   /// returns the row unloaded, with no `equipment` relation embedded, so a
@@ -193,6 +161,8 @@ class BorrowRequest {
     this.createdAt,
     this.releasedAt,
     this.returnedAt,
+    this.fulfillmentMethod,
+    this.updatedAt,
     this.equipmentName,
     this.hasReleasePhoto = false,
     this.hasReturnPhoto = false,
@@ -205,6 +175,7 @@ class BorrowRequest {
     DateTime? dueDate,
     DateTime? releasedAt,
     DateTime? returnedAt,
+    DateTime? updatedAt,
     String? equipmentName,
   }) {
     return BorrowRequest(
@@ -219,6 +190,8 @@ class BorrowRequest {
       createdAt: createdAt,
       releasedAt: releasedAt ?? this.releasedAt,
       returnedAt: returnedAt ?? this.returnedAt,
+      fulfillmentMethod: fulfillmentMethod,
+      updatedAt: updatedAt ?? this.updatedAt,
       equipmentName: equipmentName ?? this.equipmentName,
       hasReleasePhoto: hasReleasePhoto,
       hasReturnPhoto: hasReturnPhoto,
@@ -257,6 +230,8 @@ class BorrowRequest {
       createdAt: _parseInstant(json['created_at']),
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
+      fulfillmentMethod: json['fulfillment_method'] as String?,
+      updatedAt: _parseInstant(json['updated_at']),
       equipmentName: equipmentName,
       hasReleasePhoto: json['has_release_photo'] == true,
       hasReturnPhoto: json['has_return_photo'] == true,
@@ -283,6 +258,8 @@ extension BorrowRequestCache on BorrowRequest {
         'created_at': createdAt?.toIso8601String(),
         'released_at': releasedAt?.toIso8601String(),
         'returned_at': returnedAt?.toIso8601String(),
+        'fulfillment_method': fulfillmentMethod,
+        'updated_at': updatedAt?.toIso8601String(),
         'equipment_name': equipmentName,
         'has_release_photo': hasReleasePhoto,
         'has_return_photo': hasReturnPhoto,
@@ -312,6 +289,8 @@ extension BorrowRequestCache on BorrowRequest {
       createdAt: _parseInstant(json['created_at']),
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
+      fulfillmentMethod: json['fulfillment_method'] as String?,
+      updatedAt: _parseInstant(json['updated_at']),
       equipmentName: json['equipment_name'] as String?,
       hasReleasePhoto: json['has_release_photo'] == true,
       hasReturnPhoto: json['has_return_photo'] == true,

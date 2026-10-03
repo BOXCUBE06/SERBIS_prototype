@@ -90,7 +90,7 @@ class AppBottomNav extends StatelessWidget {
                                   duration: duration,
                                   curve: kEaseOut,
                                   style: AppText.display(
-                                    size: AppTextSize.small,
+                                    size: AppTextSize.body,
                                     weight: active ? FontWeight.w700 : FontWeight.w500,
                                     color: active ? AppColors.green700 : AppColors.inkMuted,
                                   ),

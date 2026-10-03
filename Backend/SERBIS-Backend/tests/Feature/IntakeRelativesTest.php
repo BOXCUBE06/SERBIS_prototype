@@ -281,6 +281,14 @@ class IntakeRelativesTest extends TestCase
 
     // ---- path 2: a manually filed trip -----------------------------------
 
+    /** A booking is dispatched only once approved with a unit (VehicleDispatch). */
+    private function approve(ServiceRequest $request): void
+    {
+        $this->actingAs($this->admin)->patchJson("/api/service-requests/{$request->getKey()}/approve", [
+            'vehicle_id' => $this->vehicle->vehicle_id,
+        ])->assertOk();
+    }
+
     public function test_relatives_reach_a_manually_filed_trip(): void
     {
         $this->actingAs($this->admin)->postJson('/api/admin/service-requests', $this->walkInPayload([
@@ -290,6 +298,7 @@ class IntakeRelativesTest extends TestCase
 
         $request = ServiceRequest::first();
         $this->assertSame('Booked', $request->status);
+        $this->approve($request);
 
         $this->actingAs($this->admin)->postJson('/api/conduction-requests', [
             'service_request_id' => $request->getKey(),
@@ -318,6 +327,7 @@ class IntakeRelativesTest extends TestCase
         ]))->assertStatus(201);
 
         $request = ServiceRequest::first();
+        $this->approve($request);
 
         $this->actingAs($this->admin)->postJson('/api/conduction-requests', [
             'service_request_id' => $request->getKey(),

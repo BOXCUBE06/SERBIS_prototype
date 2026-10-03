@@ -11,6 +11,7 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/ambulance_steps.dart';
 import '../widgets/form_section.dart';
 import '../widgets/service_form_fields.dart';
 import '../widgets/service_widgets.dart';
@@ -21,8 +22,9 @@ import 'service_drafts.dart';
 /// scroll of its own: the host (a service page) supplies the header and the
 /// list it scrolls in.
 ///
-/// The ambulance is the exception: it fills its host, scrolls its own numbered
-/// cards and pins Submit above the bottom nav (the Ambulance tab).
+/// The ambulance is the exception: it fills its host (the Ambulance tab) as a
+/// five-step flow with its own header and footer, and submits from the last
+/// step. The shell routes Android back to [ServiceRequestFormState.handleBack].
 ///
 /// It owns the three jobs only a form can do: keep the resident's answers in
 /// [ServiceDrafts], check them, and submit.
@@ -42,6 +44,9 @@ class ServiceRequestForm extends StatefulWidget {
   /// Opens the Library's hotlines, from the ambulance safety notice.
   final VoidCallback? onOpenHotlines;
 
+  /// The ambulance flow was closed (X, or back on step 1).
+  final VoidCallback? onExit;
+
   const ServiceRequestForm({
     super.key,
     required this.appState,
@@ -51,13 +56,14 @@ class ServiceRequestForm extends StatefulWidget {
     required this.onSubmitted,
     this.onServiceUnavailable,
     this.onOpenHotlines,
+    this.onExit,
   });
 
   @override
-  State<ServiceRequestForm> createState() => _ServiceRequestFormState();
+  State<ServiceRequestForm> createState() => ServiceRequestFormState();
 }
 
-class _ServiceRequestFormState extends State<ServiceRequestForm> {
+class ServiceRequestFormState extends State<ServiceRequestForm> {
   /// The ambulance form's destination dropdown (MDRRMO feedback, 2026-09-19).
   /// A local copy, for the reason the catalogue used to be one — `setState` is
   /// what makes the fetch visible on screen.
@@ -132,7 +138,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
   Future<void> _pickValidId() async {
     final picked = await _pickImage();
     if (picked != null) {
-      setState(() => _drafts.validId = picked);
+      setState(() {
+        _drafts.validId = picked;
+        _errors = const {};
+      });
     }
   }
 
@@ -148,7 +157,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     final bytes = await shot.readAsBytes();
     final name = shot.name.contains('.') ? shot.name : '${shot.name}.jpg';
     if (!mounted) return;
-    setState(() => _drafts.validId = fp.PlatformFile(name: name, size: bytes.length, bytes: bytes));
+    setState(() {
+      _drafts.validId = fp.PlatformFile(name: name, size: bytes.length, bytes: bytes);
+      _errors = const {};
+    });
   }
 
   Future<void> _pickSitePhoto() async {
@@ -209,34 +221,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     // the account, where `phone_number` is required at registration and NOT
     // NULL, so there is nothing left to be blank.
 
-    // The same three the server requires for an ambulance request, and only
-    // those — refused here so the resident is told which field is missing
-    // instead of reading a 422 the app would surface as a generic failure.
-    // Everything else on this form is optional on purpose: a resident may not
-    // have the address or the diagnosis to hand, and admin verification
-    // confirms those by phone.
-    if (form is AmbulanceFormData) {
-      final missing = <String>[
-        if (form.patient.text.trim().isEmpty) trEn(fil, 'the patient name'),
-        if (form.destination.text.trim().isEmpty) trEn(fil, 'where the ambulance should go'),
-        if (form.relativeNames.isEmpty) trEn(fil, 'at least one relative going with the patient'),
-      ];
-
-      if (missing.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              trEn(fil, 'Please fill in {list}.').replaceAll(
-                  '{list}',
-                  missing.length > 1
-                      ? '${missing.sublist(0, missing.length - 1).join(', ')}${trEn(fil, ' and ')}${missing.last}'
-                      : missing.single),
-            ),
-          ),
-        );
-        return;
-      }
-    }
+    // The ambulance's required fields (the three the server requires) are
+    // checked step by step in _stepErrors, before Submit can be reached.
 
     // The programs are booked for a day and need the office's lead time, so the
     // date and the letter are checked here; the server checks them again.
@@ -318,12 +304,6 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         sitePhotoFileName:
             sendsSitePhoto && _drafts.sitePhoto?.bytes != null ? _drafts.sitePhoto?.name : null,
         landmark: _drafts.landmark.text.trim().isEmpty ? null : _drafts.landmark.text.trim(),
-        // Plumbed through three layers and sent by nothing until now. For an
-        // unscheduled ambulance request the server still claims a unit
-        // immediately, same as before; a scheduled one ignores this
-        // entirely and re-checks availability under a lock at approval
-        // instead — sending it here is harmless either way.
-        requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
         // Relief goods only (StructuredFormData.offersFulfillment) — pickup/
         // delivery beyond equipment borrowing, MDRRMO feedback, 2026-09-18.
         fulfillmentMethod: form is StructuredFormData && form.offersFulfillment
@@ -371,6 +351,11 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
       _drafts.sitePhoto = null;
       _drafts.letter = null;
       _drafts.landmark.clear();
+      // Filed: the next ambulance request starts on a blank step 1.
+      if (service.formKind == ServiceFormKind.ambulance) {
+        _drafts.discardAmbulance();
+        _step = 0;
+      }
     });
 
     // A mutable local is not promoted inside a closure, and the sheet's builder
@@ -417,12 +402,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
             ),
           ),
         ServiceFormFields(
-          data: _drafts.formFor(kind),
+          data: _drafts.formFor(kind) as StructuredFormData,
           onChanged: () => setState(() {}),
-          appState: widget.appState,
-          ambulanceDestinations: _ambulanceDestinations,
-          barangays: _barangays,
-          landmark: kind == ServiceFormKind.ambulance ? _drafts.landmark : null,
           filipino: f,
         ),
         FormSection(
@@ -449,26 +430,23 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
                 fileName: _drafts.validId?.name,
                 onTap: _pickValidId,
               ),
-              if (kind != ServiceFormKind.ambulance)
-                AttachmentUploadField(
-                  label: trEn(f, 'Site photo (optional)'),
-                  hint: trEn(f, 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)'),
-                  filipino: f,
-                  fileName: _drafts.sitePhoto?.name,
-                  onTap: _pickSitePhoto,
-                  onClear: () => setState(() => _drafts.sitePhoto = null),
-                ),
+              AttachmentUploadField(
+                label: trEn(f, 'Site photo (optional)'),
+                hint: trEn(f, 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)'),
+                filipino: f,
+                fileName: _drafts.sitePhoto?.name,
+                onTap: _pickSitePhoto,
+                onClear: () => setState(() => _drafts.sitePhoto = null),
+              ),
             ],
           ],
         ),
-        if (kind != ServiceFormKind.ambulance) ...[
-          const SizedBox(height: 12),
-          AppTextField(
-            label: trEn(f, 'Landmark (optional)'),
-            hint: trEn(f, 'e.g. beside the chapel'),
-            controller: _drafts.landmark,
-          ),
-        ],
+        const SizedBox(height: 12),
+        AppTextField(
+          label: trEn(f, 'Landmark (optional)'),
+          hint: trEn(f, 'e.g. beside the chapel'),
+          controller: _drafts.landmark,
+        ),
         if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
         const SizedBox(height: 6),
         AppButton(
@@ -480,134 +458,144 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     );
   }
 
-  /// Numbered cards in their own scroll, Submit pinned underneath.
+
+  /// Ambulance only: which of the five steps is showing, and the inline
+  /// errors the last Next found on it.
+  int _step = 0;
+  Map<String, String> _errors = const {};
+
+  AmbulanceFormData get _ambulanceForm => _drafts.formFor(ServiceFormKind.ambulance) as AmbulanceFormData;
+
+  void _goToStep(int step) => setState(() {
+        _step = step;
+        _errors = const {};
+      });
+
+  /// Checks only the showing step. Same three fields the server requires,
+  /// plus the valid ID.
+  Map<String, String> _stepErrors(bool f) {
+    final form = _ambulanceForm;
+    return switch (_step) {
+      0 when form.patient.text.trim().isEmpty => {'patient': trEn(f, 'Enter the patient name.')},
+      1 when form.destination.text.trim().isEmpty => {'destination': trEn(f, 'Enter where the ambulance should go.')},
+      2 when form.relativeNames.isEmpty => {
+          'relative': trEn(f, 'Name at least one relative going with the patient.')
+        },
+      3 when _drafts.validId?.bytes == null => {'validId': trEn(f, 'Attach a photo of a valid ID.')},
+      _ => const {},
+    };
+  }
+
+  void _next(bool f) {
+    final errors = _stepErrors(f);
+    if (errors.isNotEmpty) {
+      setState(() => _errors = errors);
+      return;
+    }
+    if (_step == ambulanceStepNames.length - 1) {
+      _submit();
+    } else {
+      _goToStep(_step + 1);
+    }
+  }
+
+  /// Android back (routed here by the shell) and the footer's Back.
+  void handleBack() => _step > 0 ? _goToStep(_step - 1) : _exit();
+
+  /// X, or back on step 1: ask before discarding anything entered, then leave.
+  Future<void> _exit() async {
+    if (_ambulanceForm.isDirty || _drafts.landmark.text.trim().isNotEmpty) {
+      final f = widget.appState.language == AppLanguage.filipino;
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+          title: Text(trEn(f, 'Discard this request?'), style: AppText.display(size: AppTextSize.title)),
+          content: Text(
+            trEn(f, 'What you entered will be cleared.'),
+            style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                trEn(f, 'Keep editing'),
+                style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.inkMuted),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(backgroundColor: AppColors.red50, foregroundColor: AppColors.red600),
+              child: Text(
+                trEn(f, 'Discard'),
+                style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+      _drafts.discardAmbulance();
+      setState(() {
+        _step = 0;
+        _errors = const {};
+        _submitFailed = false;
+      });
+    }
+    widget.onExit?.call();
+  }
+
+  /// Header, the showing step (scrolls on its own), footer.
   Widget _buildAmbulance(bool f) {
-    final form = _drafts.formFor(ServiceFormKind.ambulance) as AmbulanceFormData;
     return Column(
       children: [
+        AmbulanceStepHeader(step: _step, filipino: f, onClose: _exit),
         Expanded(
           child: ListView(
+            // A new key per step, so each step opens at its top.
+            key: ValueKey(_step),
             padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, AppSpacing.xl),
             children: [
-              SafetyNotice(filipino: f, onViewHotlines: widget.onOpenHotlines),
-              const SizedBox(height: AppSpacing.lg),
-              _SectionProgress(form: form, hasValidId: _drafts.validId != null, filipino: f),
-              const SizedBox(height: AppSpacing.lg),
-              ServiceFormFields(
-                data: form,
-                onChanged: () => setState(() {}),
-                appState: widget.appState,
-                ambulanceDestinations: _ambulanceDestinations,
-                barangays: _barangays,
-                landmark: _drafts.landmark,
-                filipino: f,
-              ),
-              NumberedCard(
-                number: 6,
-                title: trEn(f, 'Valid ID'),
-                trailing: const RequiredMark(),
-                children: [
-                  IdUploadCard(
-                    filipino: f,
-                    fileName: _drafts.validId?.name,
-                    onTakePhoto: _takeValidIdPhoto,
-                    onChooseFile: _pickValidId,
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: Column(
+                    children: [
+                      AmbulanceStepFields(
+                        step: _step,
+                        form: _ambulanceForm,
+                        appState: widget.appState,
+                        filipino: f,
+                        onChanged: () => setState(() {}),
+                        destinations: _ambulanceDestinations,
+                        barangays: _barangays,
+                        landmark: _drafts.landmark,
+                        errors: _errors,
+                        validIdName: _drafts.validId?.name,
+                        onTakePhoto: _takeValidIdPhoto,
+                        onChooseFile: _pickValidId,
+                        onOpenHotlines: widget.onOpenHotlines,
+                        onEdit: _goToStep,
+                      ),
+                      if (_submitFailed && _step == ambulanceStepNames.length - 1)
+                        SubmitErrorCard(filipino: f, onRetry: _submit),
+                    ],
                   ),
-                ],
+                ),
               ),
-              if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
             ],
           ),
         ),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            AppLayout.gutter,
-            AppSpacing.md,
-            AppLayout.gutter,
-            // The bottom nav floats over the body (extendBody), so its height
-            // arrives here as padding.
-            AppSpacing.md + MediaQuery.paddingOf(context).bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            border: Border(top: BorderSide(color: AppColors.line)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppButton(
-                label: tr(f, 'common.submit_request'),
-                onPressed: _submit,
-                loading: _submitting,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                trEn(f, 'You can track this request in the Track tab.'),
-                textAlign: TextAlign.center,
-                style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
-              ),
-            ],
-          ),
+        AmbulanceStepFooter(
+          step: _step,
+          filipino: f,
+          submitting: _submitting,
+          onBack: handleBack,
+          onNext: () => _next(f),
         ),
       ],
-    );
-  }
-}
-
-/// "6 short sections" with one segment per section, filled once answered.
-class _SectionProgress extends StatelessWidget {
-  final AmbulanceFormData form;
-  final bool hasValidId;
-  final bool filipino;
-
-  const _SectionProgress({required this.form, required this.hasValidId, required this.filipino});
-
-  @override
-  Widget build(BuildContext context) {
-    final f = filipino;
-    return ListenableBuilder(
-      listenable: form.progressListenable,
-      builder: (context, _) {
-        final done = form.sectionsDone(hasValidId: hasValidId);
-        return Semantics(
-          label: trEn(f, '{n} of 6 sections answered').replaceAll('{n}', '${done.where((d) => d).length}'),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      trEn(f, '6 short sections'),
-                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
-                    ),
-                  ),
-                  Text(' * ', style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
-                  Text(trEn(f, 'Required'), style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  for (var i = 0; i < done.length; i++) ...[
-                    if (i > 0) const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: done[i] ? AppColors.green700 : AppColors.line,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

@@ -18,6 +18,7 @@ import 'screens/ambulance_screen.dart';
 import 'screens/awaiting_approval_screen.dart';
 import 'screens/borrow_equipment_screen.dart';
 import 'screens/service_drafts.dart';
+import 'screens/service_request_form.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'screens/unavailable_tab_screen.dart';
@@ -470,6 +471,16 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   /// leaving a form page (or the Ambulance tab) and coming back loses nothing.
   late final ServiceDrafts _drafts = ServiceDrafts(widget.user);
 
+  /// The ambulance flow, so Android back can step it back instead of leaving.
+  final _ambulanceForm = GlobalKey<ServiceRequestFormState>();
+
+  /// The Ambulance tab is showing its flow (not a loading or unavailable
+  /// screen), which takes the whole screen: no bottom nav.
+  bool get _ambulanceFlowShowing =>
+      _index == _ambulanceTab &&
+      !widget.user.isAwaitingApproval &&
+      _appState.services.any((s) => s.formKind == ServiceFormKind.ambulance);
+
   Timer? _poll;
   bool _foreground = true;
   bool _showingOffline = false;
@@ -715,6 +726,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           (_) => widget.user.isAwaitingApproval
               ? awaitingApproval()
               : AmbulanceScreen(
+                  formKey: _ambulanceForm,
                   appState: _appState,
                   user: widget.user,
                   drafts: _drafts,
@@ -771,11 +783,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     // Back from any other tab returns to Home before it leaves the app, as the
     // Material navigation guidance asks. A page pushed above the tabs (Profile,
     // a service form) takes the back press first, so this only sees it when the
-    // tabs are showing.
+    // tabs are showing. The ambulance flow steps back first.
     return PopScope(
       canPop: _index == _homeTab,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goTo(_homeTab);
+        if (didPop) return;
+        final flow = _index == _ambulanceTab ? _ambulanceForm.currentState : null;
+        flow != null ? flow.handleBack() : _goTo(_homeTab);
       },
       child: Scaffold(
         extendBody: true,
@@ -800,11 +814,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         // the labels are words.
         bottomNavigationBar: ListenableBuilder(
           listenable: _appState,
-          builder: (_, __) => AppBottomNav(
-            index: _index,
-            onTap: _goTo,
-            filipino: _appState.language == AppLanguage.filipino,
-          ),
+          builder: (_, __) => _ambulanceFlowShowing
+              ? const SizedBox.shrink()
+              : AppBottomNav(
+                  index: _index,
+                  onTap: _goTo,
+                  filipino: _appState.language == AppLanguage.filipino,
+                ),
         ),
       ),
     );

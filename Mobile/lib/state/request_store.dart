@@ -435,6 +435,7 @@ class AppState extends ChangeNotifier {
       status: BorrowStatus.pending,
       createdAt: DateTime.now(),
       equipmentName: item?.name,
+      fulfillmentMethod: fulfillmentMethod,
     ));
 
     borrowRequests.insert(0, optimistic);
@@ -499,7 +500,7 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
-    borrowRequests[index] = current.copyWith(status: BorrowStatus.cancelled);
+    borrowRequests[index] = current.copyWith(status: BorrowStatus.cancelled, updatedAt: DateTime.now());
     notifyListeners();
 
     try {
@@ -850,7 +851,6 @@ class AppState extends ChangeNotifier {
     ServiceRequest request, {
     required List<int> validIdFileBytes,
     required String validIdFileName,
-    String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
@@ -892,7 +892,6 @@ class AppState extends ChangeNotifier {
         description: request.description!,
         validIdFileBytes: validIdFileBytes,
         validIdFileName: validIdFileName,
-        requiredVehicleType: requiredVehicleType,
         sitePhotoBytes: sitePhotoBytes,
         sitePhotoFileName: sitePhotoFileName,
         landmark: landmark,

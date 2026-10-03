@@ -32,7 +32,6 @@ class _RecordingApi extends ApiService {
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
-    String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,

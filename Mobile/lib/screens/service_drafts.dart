@@ -60,6 +60,15 @@ class ServiceDrafts {
               StructuredFormData.certification(contactNumber: user.phone),
           });
 
+  /// Drops the ambulance answers and landmark; the next [formFor] starts fresh.
+  /// The valid ID stays, as after a submit. The old form is disposed after the
+  /// frame, once no field on screen still holds its controllers.
+  void discardAmbulance() {
+    final old = _forms.remove(ServiceFormKind.ambulance);
+    landmark.clear();
+    if (old != null) WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+  }
+
   void dispose() {
     for (final form in _forms.values) {
       form.dispose();

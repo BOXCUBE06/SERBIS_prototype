@@ -13,7 +13,6 @@ import 'package:serbis/state/request_store.dart';
 /// site_photo_test.dart.
 class _RecordingApi extends ApiService {
   DateTime? scheduledAt;
-  String? requiredVehicleType;
   AmbulanceIntake? intake;
   Object? error;
 
@@ -31,7 +30,6 @@ class _RecordingApi extends ApiService {
     required String description,
     required List<int> validIdFileBytes,
     required String validIdFileName,
-    String? requiredVehicleType,
     List<int>? sitePhotoBytes,
     String? sitePhotoFileName,
     String? landmark,
@@ -44,7 +42,6 @@ class _RecordingApi extends ApiService {
     String? letterFileName,
   }) async {
     this.scheduledAt = scheduledAt;
-    this.requiredVehicleType = requiredVehicleType;
     this.intake = intake;
 
     if (error != null) {
@@ -310,20 +307,6 @@ void main() {
 
       expect(confirmed, isNotNull);
       expect(api.scheduledAt, picked);
-    });
-
-    test('sends required_vehicle_type only when the caller asks for it', () async {
-      final api = _RecordingApi();
-      final state = AppState(api);
-
-      await state.addRequest(
-        _draft(),
-        validIdFileBytes: _idBytes,
-        validIdFileName: 'id.jpg',
-        requiredVehicleType: 'Ambulance',
-      );
-
-      expect(api.requiredVehicleType, 'Ambulance');
     });
 
     test('an unscheduled request still sends nothing extra', () async {

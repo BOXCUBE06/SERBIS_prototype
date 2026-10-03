@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AmbulanceBooking;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\Service;
@@ -98,6 +99,8 @@ class ConductionRequestTest extends TestCase
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
         ]);
+        // Approved: VehicleDispatch refuses an unapproved booking.
+        AmbulanceBooking::create(['request_id' => $booking->request_id, 'scheduled_at' => now()->addDay(), 'approved_at' => now()]);
 
         $response = $this->postJson('/api/conduction-requests', $this->payload([
             'service_request_id' => $booking->request_id,
@@ -187,6 +190,8 @@ class ConductionRequestTest extends TestCase
             'description' => 'Scheduled hospital transfer',
             'status' => 'Booked',
         ]);
+        // Approved: VehicleDispatch refuses an unapproved booking.
+        AmbulanceBooking::create(['request_id' => $booking->request_id, 'scheduled_at' => now()->addDay(), 'approved_at' => now()]);
 
         $this->postJson('/api/conduction-requests', $this->payload([
             'service_request_id' => $booking->request_id,
@@ -293,9 +298,9 @@ class ConductionRequestTest extends TestCase
             'vehicle_id' => $vehicle->vehicle_id,
         ]));
 
-        $response->assertStatus(409);
-        $this->assertSame('Echague District Hospital', $response->json('conflict.destination'));
-        $this->assertSame($inProgress->conduction_request_id, $response->json('conflict.conduction_request_id'));
+        // The message names the trip the unit is out on.
+        $response->assertStatus(409)
+            ->assertJsonPath('message', "AMB-01 is already out on trip #{$inProgress->conduction_request_id}.");
         $this->assertSame(1, ConductionRequest::count());
     }
 
@@ -329,7 +334,7 @@ class ConductionRequestTest extends TestCase
         ]))->assertStatus(201);
     }
 
-    public function test_a_reason_overrides_the_conflict_and_is_recorded(): void
+    public function test_a_reason_no_longer_overrides_the_conflict(): void
     {
         $vehicle = Vehicle::create([
             'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
@@ -339,17 +344,12 @@ class ConductionRequestTest extends TestCase
             'departed_office_at' => '2026-08-31 08:00:00',
         ]));
 
-        $response = $this->postJson('/api/conduction-requests', $this->payload([
+        $this->postJson('/api/conduction-requests', $this->payload([
             'vehicle_id' => $vehicle->vehicle_id,
             'override_reason' => 'Second patient, unit reassigned mid-trip on dispatcher instruction.',
-        ]));
+        ]))->assertStatus(409);
 
-        $response->assertStatus(201);
-        $this->assertSame(2, ConductionRequest::count());
-        $this->assertSame(
-            'Second patient, unit reassigned mid-trip on dispatcher instruction.',
-            ConductionRequest::latest('conduction_request_id')->first()->vehicle_override_reason,
-        );
+        $this->assertSame(1, ConductionRequest::count());
     }
 
     public function test_an_override_reason_is_not_stored_when_there_was_no_conflict(): void
@@ -364,38 +364,6 @@ class ConductionRequestTest extends TestCase
         ]))->assertStatus(201);
 
         $this->assertNull(ConductionRequest::first()->vehicle_override_reason);
-    }
-
-    public function test_the_conflict_is_logged_to_the_audit_trail(): void
-    {
-        $admin = User::create([
-            'first_name' => 'MDRRMO', 'last_name' => 'Admin', 'email_address' => 'admin2@test.local',
-            'password' => Hash::make('Password123'), 'role' => 'Admin', 'status' => 'Active',
-        ]);
-        Sanctum::actingAs($admin);
-
-        $vehicle = Vehicle::create([
-            'unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'specification' => 'Type I', 'status' => 'Available',
-        ]);
-        ConductionRequest::create($this->payload([
-            'vehicle_id' => $vehicle->vehicle_id,
-            'departed_office_at' => '2026-08-31 08:00:00',
-        ]));
-
-        $this->postJson('/api/conduction-requests', $this->payload([
-            'vehicle_id' => $vehicle->vehicle_id,
-            'override_reason' => 'Dispatcher-approved reassignment.',
-        ]))->assertStatus(201);
-
-        $newest = ConductionRequest::latest('conduction_request_id')->first();
-        $log = DB::table('tbl_system_logs')
-            ->where('auditable_type', ConductionRequest::class)
-            ->where('auditable_id', $newest->conduction_request_id)
-            ->where('action_type', 'created')
-            ->first();
-
-        $this->assertNotNull($log);
-        $this->assertStringContainsString('Dispatcher-approved reassignment.', $log->new_values);
     }
 
     /**

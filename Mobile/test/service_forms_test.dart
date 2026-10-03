@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/service_forms.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
+import 'package:serbis/widgets/ambulance_steps.dart';
 import 'package:serbis/widgets/form_inputs.dart';
 import 'package:serbis/widgets/service_form_fields.dart';
 
@@ -44,17 +45,35 @@ Future<List<String>> _fillEveryField(WidgetTester tester) async {
   return typed;
 }
 
+final _landmark = TextEditingController();
+
+/// The ambulance's four input steps stacked, so a test sees every field at once.
+Widget _formFields(ServiceFormData data, VoidCallback onChanged) => switch (data) {
+      AmbulanceFormData form => Column(children: [
+          for (var step = 0; step < 4; step++)
+            AmbulanceStepFields(
+              step: step,
+              form: form,
+              appState: _appState,
+              filipino: false,
+              onChanged: onChanged,
+              destinations: const [],
+              barangays: const [],
+              landmark: _landmark,
+              errors: const {},
+              validIdName: null,
+              onTakePhoto: () {},
+              onChooseFile: () {},
+              onEdit: (_) {},
+            ),
+        ]),
+      StructuredFormData form => ServiceFormFields(data: form, onChanged: onChanged, filipino: false),
+    };
+
 Future<void> _pump(WidgetTester tester, ServiceFormData data) async {
   await tester.pumpWidget(MaterialApp(
     home: Scaffold(
-      body: SingleChildScrollView(
-        child: ServiceFormFields(
-          data: data,
-          onChanged: () {},
-          appState: _appState,
-          filipino: false,
-        ),
-      ),
+      body: SingleChildScrollView(child: _formFields(data, () {})),
     ),
   ));
 }
@@ -73,13 +92,16 @@ void main() {
       //
       // This count is the guard that catches a field rendered but never read,
       // so it moves deliberately and never to make a run go green.
-      expect(typed.length, 8);
+      // Nine with the Trip step's landmark, which is sent as its own field
+      // (`landmark`), not in the description.
+      expect(typed.length, 9);
+      expect(typed, contains(_landmark.text));
 
       final description = form
           .metaLines(serviceName: 'Ambulance', submittedLabel: 'Today, 9:00 AM')
           .join('\n');
 
-      for (final value in typed) {
+      for (final value in typed.where((v) => v != _landmark.text)) {
         expect(description, contains(value),
             reason: 'a field the resident filled in was dropped: $value');
       }
@@ -526,12 +548,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: ServiceFormFields(
-            data: form,
-            onChanged: () => changes++,
-            appState: _appState,
-            filipino: false,
-          ),
+          body: _formFields(form, () => changes++),
         ),
       ));
 
@@ -606,12 +623,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: ServiceFormFields(
-              data: form,
-              onChanged: () => changes++,
-              appState: _appState,
-              filipino: false,
-            ),
+            child: _formFields(form, () => changes++),
           ),
         ),
       ));
@@ -634,12 +646,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: ServiceFormFields(
-              data: form,
-              onChanged: () {},
-              appState: _appState,
-              filipino: false,
-            ),
+            child: _formFields(form, () {}),
           ),
         ),
       ));
@@ -703,7 +710,7 @@ void main() {
         'Pick up from',
         'Take patient to',
         'Medical diagnosis',
-        'Relative 1 (required)',
+        'Relative 1',
       ]) {
         expect(find.text(label), findsOneWidget,
             reason: '$label is missing from the ambulance form');
@@ -730,27 +737,22 @@ void main() {
         home: Scaffold(
           body: StatefulBuilder(
             builder: (context, setState) => SingleChildScrollView(
-              child: ServiceFormFields(
-                data: form,
-                onChanged: () => setState(() {}),
-                appState: _appState,
-                filipino: false,
-              ),
+              child: _formFields(form, () => setState(() {})),
             ),
           ),
         ),
       ));
 
-      expect(find.text('Relative 1 (required)'), findsOneWidget);
+      expect(find.text('Relative 1'), findsOneWidget);
       expect(find.text('Relative 2'), findsNothing);
 
-      await tester.ensureVisible(find.text('Add relative'));
-      await tester.tap(find.text('Add relative'));
+      await tester.ensureVisible(find.text('Add another relative'));
+      await tester.tap(find.text('Add another relative'));
       await tester.pumpAndSettle();
       expect(find.text('Relative 2'), findsOneWidget);
 
       // Cap of two reached: the button that would add a third row is gone.
-      expect(find.text('Add relative'), findsNothing);
+      expect(find.text('Add another relative'), findsNothing);
 
       await tester.enterText(
         find.descendant(

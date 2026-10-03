@@ -299,8 +299,9 @@ class ServiceRequestDispatchTest extends TestCase
             'status' => 'Responding',
             'vehicle_id' => $this->vehicle->vehicle_id,
         ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('vehicle_id');
+            // Busy (VehicleDispatch): the winner's Responding request holds it.
+            ->assertStatus(409)
+            ->assertJsonPath('message', "{$this->vehicle->unit_identifier} is already responding to request #{$winner->getKey()}.");
 
         $this->assertNull($loser->fresh()->vehicle_id);
         $this->assertSame('Pending', $loser->fresh()->status);

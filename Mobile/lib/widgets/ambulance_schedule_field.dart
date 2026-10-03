@@ -146,7 +146,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
   /// never a mystery the way the old box-that-changes-shape was. Picking
   /// "Scheduled" opens the picker immediately rather than requiring a second
   /// tap; cancelling it at any step leaves [form.scheduledAt] null, which the
-  /// toggle reads straight off — so it snaps back to "As soon as possible" on
+  /// toggle reads straight off — so it snaps back to "Now, when available" on
   /// its own, with nothing extra to reset here.
   void _onModeChanged(bool wantsScheduled) {
     if (wantsScheduled) {
@@ -171,7 +171,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
               child: OptionCard(
                 icon: Icons.bolt_rounded,
                 title: tr(f, 'ambulance_schedule.asap'),
-                hint: trEn(f, 'Next available unit'),
+                hint: trEn(f, 'MDRRMO will confirm the unit and time'),
                 selected: scheduled == null,
                 onTap: () => _onModeChanged(false),
               ),

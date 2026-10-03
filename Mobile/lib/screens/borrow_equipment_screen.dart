@@ -3,13 +3,15 @@ library serbis.screens.borrow_equipment;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../data/hotlines.dart' show callHotlineNumber;
 import '../models/borrow_models.dart';
-import '../models/request_models.dart' show dueLabel, formatTimelineTime;
+import '../models/request_models.dart' show formatStepTime;
 import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/borrow_request_widgets.dart';
 import '../widgets/form_section.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/shared_widgets.dart';
@@ -307,21 +309,40 @@ class _BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
       ];
     }
 
+    final active = _myRequests.where((r) => !r.status.isTerminal).toList();
+    final past = _myRequests.where((r) => r.status.isTerminal).toList();
+    final phone = mdrrmoNumber(widget.appState.hotlines);
+
+    Widget card(BorrowRequest r) {
+      // Borrow again only while the item is still in the catalogue.
+      final item = _equipment.where((e) => e.id == r.equipmentId).firstOrNull;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+        child: _BorrowRequestCard(
+          request: r,
+          filipino: f,
+          onCancel: () => widget.appState.cancelBorrowRequest(r.id),
+          loadPhoto: (stage) => widget.appState.borrowPhoto(r.id!, stage),
+          onCall: phone == null ? null : () => callHotlineNumber(phone),
+          onBorrowAgain: item == null ? null : () => _openBorrowSheet(item),
+        ),
+      );
+    }
+
     return [
       _pad(SliverList.list(children: [
         const SizedBox(height: AppSpacing.lg),
         if (widget.appState.borrowRequestsFromCache)
           StaleDataNote(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
-        for (final r in _myRequests)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: _BorrowRequestCard(
-              request: r,
-              filipino: f,
-              onCancel: () => widget.appState.cancelBorrowRequest(r.id),
-              loadPhoto: (stage) => widget.appState.borrowPhoto(r.id!, stage),
-            ),
-          ),
+        if (active.isNotEmpty) ...[
+          _SectionTitle(trEn(f, 'In progress')),
+          for (final r in active) card(r),
+        ],
+        if (past.isNotEmpty) ...[
+          if (active.isNotEmpty) const SizedBox(height: AppSpacing.md),
+          _SectionTitle(trEn(f, 'Past requests')),
+          for (final r in past) card(r),
+        ],
       ])),
     ];
   }
@@ -411,7 +432,8 @@ class _BorrowHeader extends SliverPersistentHeaderDelegate {
 
 /// The Available / My requests tabs, pinned under the header.
 class _TabsHeader extends SliverPersistentHeaderDelegate {
-  static const height = 64.0;
+  // 12 + 4 outer padding, 4 + 4 track padding, 48 tab.
+  static const height = 72.0;
 
   final String availableLabel;
   final String mineLabel;
@@ -473,7 +495,7 @@ class _TabsHeader extends SliverPersistentHeaderDelegate {
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          height: 44,
+          height: 48,
           decoration: BoxDecoration(
             color: active ? AppColors.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -489,7 +511,7 @@ class _TabsHeader extends SliverPersistentHeaderDelegate {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: AppText.display(
-                    size: AppTextSize.body,
+                    size: 16,
                     weight: FontWeight.w600,
                     color: active ? AppColors.ink : AppColors.inkMuted,
                   ),
@@ -776,6 +798,18 @@ class _DashedBorder extends CustomPainter {
   bool shouldRepaint(_DashedBorder old) => old.radius != radius;
 }
 
+/// "In progress" / "Past requests" heading on My requests.
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: Text(text, style: AppText.display(size: 18, weight: FontWeight.w700, color: AppColors.green900)),
+      );
+}
+
 class _BorrowRequestCard extends StatelessWidget {
   final BorrowRequest request;
   final bool filipino;
@@ -788,17 +822,28 @@ class _BorrowRequestCard extends StatelessWidget {
   /// called for a stage the row says exists.
   final Future<List<int>?> Function(String stage) loadPhoto;
 
+  /// Dials MDRRMO; null hides the button (no number in the hotline list).
+  final VoidCallback? onCall;
+
+  /// Opens this item's borrow sheet; null when it is no longer in the catalogue.
+  final VoidCallback? onBorrowAgain;
+
   const _BorrowRequestCard({
     required this.request,
     required this.filipino,
     required this.onCancel,
     required this.loadPhoto,
+    this.onCall,
+    this.onBorrowAgain,
   });
 
   @override
   Widget build(BuildContext context) {
+    final f = filipino;
+    final r = request;
+    final past = r.status.isTerminal;
+    final cancelled = r.status == BorrowStatus.cancelled;
     return AppCard(
-      leftAccent: request.status.fg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -809,110 +854,76 @@ class _BorrowRequestCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${request.itemLabel} × ${request.quantity}',
-                      style: AppText.display(size: AppTextSize.bodyLg),
-                    ),
+                    Text(r.itemLabel, style: AppText.display(size: 20, weight: FontWeight.w600)),
                     const SizedBox(height: 2),
                     Text(
-                      request.id == null
-                          ? trEn(filipino, 'Sending...')
-                          : request.createdAt == null
-                              ? trEn(filipino, 'Filed')
-                              : trEn(filipino, 'Filed {time}')
-                                  .replaceAll('{time}', formatTimelineTime(request.createdAt!, filipino)),
-                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+                      trEn(f, 'Quantity: {n}').replaceAll('{n}', '${r.quantity}'),
+                      style: AppText.body(size: 15, color: AppColors.inkMuted),
                     ),
                   ],
                 ),
               ),
-              StatusBadge.borrow(request.status, filipino: filipino),
+              if (cancelled) CancelledChip(filipino: f),
             ],
           ),
           // Rows filed before `purpose` existed have none, and the card says
-          // nothing rather than showing an empty quote.
-          if (request.purpose != null && request.purpose!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.notes_rounded, size: 14, color: AppColors.inkFaint),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    request.purpose!,
-                    style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.45),
-                  ),
-                ),
-              ],
+          // nothing rather than showing an empty line.
+          if (r.purpose != null && r.purpose!.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(text: '${trEn(f, 'Reason:')} ', style: const TextStyle(fontWeight: FontWeight.w600)),
+                TextSpan(text: r.purpose!),
+              ]),
+              style: AppText.body(size: 15, color: AppColors.ink, height: 1.45),
             ),
           ],
-          if (request.status == BorrowStatus.denied && request.denialReason != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(color: AppColors.red50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child: Text(request.denialReason!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600, height: 1.5)),
-            ),
-          ],
-          if (request.dueDate != null && !request.status.isTerminal) ...[
-            const SizedBox(height: 10),
-            Builder(builder: (context) {
-              // Prominent, not a small caption line — MDRRMO feedback,
-              // 2026-09-17. Same three-tier colouring the admin panel's own
-              // countdown chip uses: red once overdue, amber inside the
-              // 1-day reminder window, neutral otherwise.
-              final label = dueLabel(request.dueDate!, null, filipino);
-              // Classified off the English label, which does not change with the language.
-              final english = dueLabel(request.dueDate!);
-              final overdue = english.endsWith('overdue');
-              final urgent = english == 'Due today' || english == 'Due tomorrow';
-              final bg = overdue ? AppColors.red50 : (urgent ? AppColors.amber50 : AppColors.grey50);
-              final fg = overdue ? AppColors.red600 : (urgent ? AppColors.amber600 : AppColors.inkMuted);
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                child: Row(
-                  children: [
-                    Icon(Icons.event_outlined, size: 16, color: fg),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: AppText.body(size: AppTextSize.body, weight: FontWeight.w700, color: fg),
-                    ),
-                  ],
-                ),
-              );
-            }),
+          const SizedBox(height: AppSpacing.md),
+          if (cancelled)
+            Text(
+              r.updatedAt == null
+                  ? trEn(f, 'You cancelled this request.')
+                  : trEn(f, 'You cancelled this on {date}.').replaceAll('{date}', formatStepTime(r.updatedAt!)),
+              style: AppText.body(size: 15, color: AppColors.inkMuted),
+            )
+          else
+            BorrowStatusBox(request: r, filipino: f),
+          if (!past) ...[
+            const SizedBox(height: AppSpacing.lg),
+            r.id == null
+                ? Text(trEn(f, 'Sending...'), style: AppText.body(size: 15, color: AppColors.inkMuted))
+                : BorrowProgressSteps(request: r, filipino: f),
           ],
           // Staff photograph the item at the counter; the resident only reads
-          // it back. A row with neither photo draws nothing at all — most
-          // loans have none, and an empty "Handover photos" heading would read
-          // as something missing rather than something never taken.
-          if (request.id != null &&
-              (request.hasReleasePhoto || request.hasReturnPhoto)) ...[
+          // it back. A row with neither photo draws nothing at all.
+          if (r.id != null && (r.hasReleasePhoto || r.hasReturnPhoto)) ...[
             const SizedBox(height: 12),
             _HandoverPhotos(
-              filipino: filipino,
-              hasRelease: request.hasReleasePhoto,
-              hasReturn: request.hasReturnPhoto,
+              filipino: f,
+              hasRelease: r.hasReleasePhoto,
+              hasReturn: r.hasReturnPhoto,
               loadPhoto: loadPhoto,
             ),
           ],
-          // An id-less row is still in flight, so MDRRMO has nothing to cancel
-          // yet — the button waits rather than offering an action the store
-          // would have to refuse. The backend re-checks the status either way.
-          if (request.id != null && request.status.isCancellable) ...[
-            const SizedBox(height: 12),
-            AppButton(
-              label: tr(filipino, 'common.cancel_request'),
-              style: AppButtonStyle.ghostRed,
-              // No ref number on a borrowing — the dialog drops the suffix and
-              // reads "Cancel request?" on its own.
-              onPressed: () => showCancelDialog(context, '', onCancel, filipino: filipino),
+          if (!past && onCall != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            BorrowCardButton(label: trEn(f, 'Call MDRRMO'), icon: Icons.call_rounded, primary: true, onPressed: onCall!),
+          ],
+          // Pending and Approved only, matching the server's CANCELLABLE_FROM.
+          // An id-less row is still in flight, so there is nothing to cancel yet.
+          if (r.id != null && r.status.isCancellable) ...[
+            const SizedBox(height: AppSpacing.sm),
+            BorrowCardButton(
+              label: tr(f, 'common.cancel_request'),
+              icon: Icons.close_rounded,
+              textColor: AppColors.red600,
+              // No ref number on a borrowing — the dialog reads "Cancel request?".
+              onPressed: () => showCancelDialog(context, '', onCancel, filipino: f),
             ),
+          ],
+          if (past && onBorrowAgain != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            BorrowCardButton(label: trEn(f, 'Borrow again'), icon: Icons.replay_rounded, onPressed: onBorrowAgain!),
           ],
         ],
       ),

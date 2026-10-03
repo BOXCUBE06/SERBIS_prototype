@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/advisory.dart';
-import '../models/borrow_models.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -396,8 +395,7 @@ class IconBadge extends StatelessWidget {
 }
 
 class StatusBadge extends StatelessWidget {
-  /// Null for a borrow status, whose label and colours are resolved up front.
-  final ReqStatus? status;
+  final ReqStatus status;
   final bool filipino;
 
   /// Overrides the wording, not the colours: a request that words its own
@@ -408,22 +406,16 @@ class StatusBadge extends StatelessWidget {
   /// enum (a trip that never arrived is amber, not Completed green).
   final Color? bg;
   final Color? fg;
-  const StatusBadge(ReqStatus this.status, {super.key, this.filipino = false, this.label, this.bg, this.fg});
-
-  StatusBadge.borrow(BorrowStatus borrow, {super.key, this.filipino = false})
-      : status = null,
-        label = borrow.labelFor(filipino),
-        bg = borrow.bg,
-        fg = borrow.fg;
+  const StatusBadge(this.status, {super.key, this.filipino = false, this.label, this.bg, this.fg});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg ?? status!.bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
+      decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
       child: Text(
-        (label ?? status!.labelFor(filipino)).toUpperCase(),
-        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: fg ?? status!.fg, letterSpacing: .5),
+        (label ?? status.labelFor(filipino)).toUpperCase(),
+        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: fg ?? status.fg, letterSpacing: .5),
       ),
     );
   }

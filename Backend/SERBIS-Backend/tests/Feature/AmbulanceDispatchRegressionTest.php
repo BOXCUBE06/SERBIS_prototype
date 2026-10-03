@@ -232,7 +232,7 @@ class AmbulanceDispatchRegressionTest extends TestCase
         $this->assertNoUnexplainedDoubleBooking();
     }
 
-    public function test_a_deliberate_reassignment_with_a_reason_does_not_trip_the_invariant(): void
+    public function test_a_reason_no_longer_lets_a_second_trip_take_a_unit_mid_trip(): void
     {
         $firstResident = $this->resident('Ana', '09174444444');
         $first = ServiceRequest::create([
@@ -257,20 +257,11 @@ class AmbulanceDispatchRegressionTest extends TestCase
             'drivers' => ['Test Driver'],
             'override_reason' => 'Dispatcher-approved reassignment, second patient higher acuity.',
         ]);
-        $secondResponse->assertStatus(201);
+        // The override bypass is gone: a unit already on a trip is refused.
+        $secondResponse->assertStatus(409);
 
-        // "Open" means departed with no return — store() does not accept
-        // checkpoint fields, so the second trip needs its own departure
-        // recorded before it counts as concurrent with the first.
-        $this->patchJson("/api/conduction-requests/{$secondResponse->json('conduction_request_id')}/trip-log", [
-            'departed_office_at' => '2026-08-31 08:10:00',
-        ])->assertOk();
-
-        // Two open trips on the same unit — legitimate here, because one
-        // carries the reason. assertNoUnexplainedDoubleBooking() passing on
-        // this fixture is the actual assertion this test makes.
         $this->assertSame(
-            2,
+            1,
             ConductionRequest::where('vehicle_id', $this->vehicleA->vehicle_id)
                 ->whereNotNull('departed_office_at')->whereNull('returned_office_at')->count(),
         );
