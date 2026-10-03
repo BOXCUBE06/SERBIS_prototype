@@ -14,6 +14,7 @@ import 'borrow_cache.dart';
 import 'file_opener.dart';
 import 'hotline_cache.dart';
 import 'material_cache.dart';
+import 'notifications_seen.dart';
 import 'request_cache.dart';
 
 enum AppLanguage { english, filipino }
@@ -119,6 +120,12 @@ class AppState extends ChangeNotifier {
   final FileOpener _fileOpener;
   final RequestCache _requestCache;
   final HotlineCache _hotlineCache;
+  final NotificationsSeen _notificationsSeen;
+
+  /// Null until [loadNotificationsSeen] has read the device, so the dot does
+  /// not flash on before the stored time is known.
+  DateTime? _notificationsSeenAt;
+  bool _notificationsSeenLoaded = false;
 
   /// Cached server list, else the built-in one. Null until one is in hand.
   List<Hotline>? _hotlines;
@@ -131,7 +138,9 @@ class AppState extends ChangeNotifier {
     RequestCache? requestCache,
     BorrowCache? borrowCache,
     HotlineCache? hotlineCache,
-  })  : _materialCache =
+    NotificationsSeen? notificationsSeen,
+  })  : _notificationsSeen = notificationsSeen ?? NotificationsSeen(),
+        _materialCache =
             materialCache ?? MaterialCache(download: _api.downloadFile),
         _fileOpener = fileOpener ?? const FileOpener(),
         _requestCache = requestCache ?? RequestCache(),
@@ -541,6 +550,36 @@ class AppState extends ChangeNotifier {
   /// A failure **keeps whatever was already loaded**. Clearing the list would
   /// turn a lost signal into "no advisories", and this list is read to find out
   /// whether a warning was issued.
+  Future<void> loadNotificationsSeen() async {
+    var seen = await _notificationsSeen.load();
+    // First launch: nothing has been "missed" yet, so history must not light
+    // the dot. Only what moves from now on does.
+    if (seen == null) {
+      seen = DateTime.now();
+      _notificationsSeen.save(seen);
+    }
+    _notificationsSeenAt = seen;
+    _notificationsSeenLoaded = true;
+    notifyListeners();
+  }
+
+  /// A request or an advisory moved since the sheet was last opened. What the
+  /// sheet lists is what counts, so nothing else can light the dot.
+  bool get hasUnreadNotifications {
+    if (!_notificationsSeenLoaded) return false;
+    final seen = _notificationsSeenAt;
+    bool fresh(DateTime? at) => at != null && (seen == null || at.isAfter(seen));
+    return requests.any((r) => fresh(r.updatedAt ?? r.createdAt)) ||
+        advisories.any((a) => fresh(a.sentAt));
+  }
+
+  void markNotificationsSeen() {
+    _notificationsSeenAt = DateTime.now();
+    _notificationsSeenLoaded = true;
+    _notificationsSeen.save(_notificationsSeenAt!);
+    notifyListeners();
+  }
+
   Future<void> loadAdvisories() async {
     advisoriesLoading = true;
     notifyListeners();

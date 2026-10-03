@@ -140,7 +140,11 @@ class HeaderButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const HeaderButton({super.key, required this.icon, required this.label, required this.onTap});
+  /// Small amber dot on the circle: something new behind this button. The
+  /// caller decides from real state; [label] should say so too.
+  final bool dot;
+
+  const HeaderButton({super.key, required this.icon, required this.label, required this.onTap, this.dot = false});
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +169,27 @@ class HeaderButton extends StatelessWidget {
                 border: Border.all(color: Colors.white.withValues(alpha: .30)),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 18, color: Colors.white),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, size: 18, color: Colors.white),
+                  if (dot)
+                    Positioned(
+                      key: const ValueKey('header-button-dot'),
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.amberDot,
+                          border: Border.all(color: AppColors.green700, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -174,6 +198,95 @@ class HeaderButton extends StatelessWidget {
   }
 }
 
+/// The green header of the Borrow and Services tabs: a title with a one-line
+/// subtitle that folds away as the list scrolls, plus bell and profile.
+class TabHeader extends SliverPersistentHeaderDelegate {
+  static const maxHeight = 128.0;
+  static const minHeight = 96.0;
+
+  final String title;
+  final String subtitle;
+  final bool filipino;
+  final VoidCallback? onNotifications;
+  final VoidCallback? onProfile;
+
+  const TabHeader({
+    required this.title,
+    required this.subtitle,
+    required this.filipino,
+    this.onNotifications,
+    this.onProfile,
+  });
+
+  @override
+  double get maxExtent => maxHeight;
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  bool shouldRebuild(TabHeader old) => old.title != title || old.subtitle != subtitle || old.filipino != filipino;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final f = filipino;
+    // 0 fully open, 1 fully collapsed.
+    final t = (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0);
+    return Container(
+      padding: EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.headerTop, 14, 20 - 12 * t),
+      decoration: const BoxDecoration(
+        gradient: AppColors.headerGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.display(
+                      size: AppTextSize.headline - (AppTextSize.headline - AppTextSize.title) * t,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                ClipRect(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    heightFactor: 1 - t,
+                    child: Opacity(
+                      opacity: 1 - t,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.body(size: AppTextSize.small, color: Colors.white.withValues(alpha: .85)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onNotifications != null)
+            HeaderButton(icon: Icons.notifications_outlined, label: tr(f, 'nav.notifications'), onTap: onNotifications!),
+          if (onProfile != null)
+            HeaderButton(icon: Icons.person_outline_rounded, label: tr(f, 'nav.profile'), onTap: onProfile!),
+        ],
+      ),
+    );
+  }
+}
 
 /// What SERBIS is, on the two screens where the reader does not know yet.
 ///

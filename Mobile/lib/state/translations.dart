@@ -4,8 +4,6 @@ const Map<String, (String, String)> _strings = {
   'common.submit_request': ('Submit request', 'Isumite ang Kahilingan'),
   'common.view_details': ('View details', 'Tingnan ang Detalye'),
   'common.view_all': ('View all', 'Tingnan Lahat'),
-  'common.view_timeline': ('View timeline', 'Tingnan ang Timeline'),
-  'common.hide_timeline': ('Hide timeline', 'Itago ang Timeline'),
   'common.cancel_request': ('Cancel request', 'Kanselahin ang Kahilingan'),
   'common.calling': ('Calling', 'Tumatawag sa'),
   'common.close': ('Close', 'Isara'),
@@ -56,23 +54,35 @@ const Map<String, (String, String)> _strings = {
   'type.ambulance.subtitle': ('Patient transport', 'Paghahatid ng pasyente'),
   'type.transfer.title': ('Hospital Transfer', 'Paglilipat sa Ospital'),
   'type.transfer.subtitle': ('Incl. dialysis patients', 'Kasama ang mga dialysis patient'),
-  'type.road.title': ('Road Clearing', 'Paglinis ng Daan'),
+  'type.road.title': ('Road clearing', 'Paglinis ng daan'),
   'type.road.subtitle': ('Debris, fallen trees', 'Debris, natumbang puno'),
   'type.relief.title': ('Relief Goods', 'Tulong / Relief Goods'),
   'type.relief.subtitle': ('Assistance request', 'Kahilingan ng tulong'),
   'type.inquiry.title': ('Information Inquiry', 'Katanungan / Impormasyon'),
   'type.inquiry.subtitle': ('General question to MDRRMO', 'Pangkalahatang tanong sa MDRRMO'),
 
-  'home.active_request': ('Active Service Request', 'Aktibong Kahilingan'),
-  'home.no_active_title': ('No active requests', 'Walang aktibong kahilingan'),
-  'home.no_active_desc': (
-    'Submit a service request and track its status here.',
-    'Magsumite ng kahilingan sa serbisyo at subaybayan dito ang status.',
-  ),
-  'home.submit_a_request': ('Submit a request', 'Magsumite ng Kahilingan'),
-  'home.need_help_now': ('Need help now?', 'Kailangan ng tulong ngayon?'),
   'home.announcements': ('Announcements', 'Mga Abiso'),
-  'home.info_center': ('Info center', 'Sentro ng Impormasyon'),
+  'home.brand': ('SERBIS · ECHAGUE MDRRMO', 'SERBIS · ECHAGUE MDRRMO'),
+  'home.greet.morning': ('Good morning,', 'Magandang umaga,'),
+  'home.greet.afternoon': ('Good afternoon,', 'Magandang hapon,'),
+  'home.greet.evening': ('Good evening,', 'Magandang gabi,'),
+  'home.emergency': ('Emergency?', 'May emergency?'),
+  'home.emergency.call': ('Call the hotline', 'Tumawag sa hotline'),
+  'home.your_requests': ('Your requests', 'Iyong mga kahilingan'),
+  'home.see_all': ('See all', 'Tingnan lahat'),
+  'home.more_one': ('+1 more request', '+1 pang kahilingan'),
+  'home.more_many': ('+{n} more requests', '+{n} pang kahilingan'),
+  'home.req.waiting': ('Waiting for review', 'Naghihintay ng pagsusuri'),
+  'home.req.ambulance_to': ('Ambulance to {place}', 'Ambulansya papuntang {place}'),
+  'home.services': ('Services', 'Mga Serbisyo'),
+  'track.loans': ('Borrowed items', 'Mga hiniram na gamit'),
+  'home.tile.transport': ('Patient transport', 'Paghatid ng pasyente'),
+  'home.tile.transport_desc': ('Ambulance for check-ups and transfers', 'Ambulansya para sa check-up at paglipat'),
+  'home.tile.borrow_desc': ('Wheelchairs, beds and more', 'Wheelchair, kama at iba pa'),
+  'home.tile.guides_desc': ('First aid and disaster preparedness', 'Pangunang lunas at paghahanda sa sakuna'),
+  'home.tile.all': ('All services', 'Lahat ng serbisyo'),
+  'home.tile.all_desc': ('See everything MDRRMO offers', 'Tingnan ang lahat ng alok ng MDRRMO'),
+  'nav.notifications_new': ('Notifications, new updates', 'Mga abiso, may bago'),
   'nav.home': ('Home', 'Home'),
   'nav.ambulance': ('Ambulance', 'Ambulansya'),
   'nav.services': ('Services', 'Serbisyo'),
@@ -96,10 +106,6 @@ const Map<String, (String, String)> _strings = {
   'borrow.title': ('Borrow equipment', 'Manghiram ng kagamitan'),
   'tab.retry': ('Try again', 'Subukang muli'),
   'home.safety_guides': ('Safety guides', 'Mga Gabay sa Kaligtasan'),
-  'home.safety_guides_desc': (
-    'First aid, disaster preparedness and hotline numbers.',
-    'Pangunang lunas, paghahanda sa sakuna at mga numero ng hotline.',
-  ),
   'home.ann.empty': (
     'MDRRMO has not published anything yet.',
     'Wala pang nailalathalang materyal ang MDRRMO.',
@@ -150,39 +156,13 @@ const Map<String, (String, String)> _strings = {
     'Hindi ma-load ang mga abiso. Hindi ito nangangahulugang wala — magtanong sa inyong barangay.',
   ),
   'notif.adv_date_unknown': ('Date not recorded', 'Walang naitalang petsa'),
-  'home.status.review': (
-    'Your request has been forwarded to MDRRMO for review. '
-        "You'll be notified once it's processed.",
-    'Ang iyong kahilingan ay ipinasa na sa MDRRMO para sa pagsusuri. '
-        'Aabisuhan ka kapag ito ay naproseso.',
-  ),
-  'home.status.booked': (
-    'Your request is booked. '
-        'You will be notified before the schedule.',
-    'Nakabook na ang iyong kahilingan. '
-        'Aabisuhan ka bago ang iskedyul.',
-  ),
-  'home.status.scheduled': (
-    'MDRRMO is responding to your request. '
-        "You'll be notified of any updates.",
-    'Tumutugon na ang MDRRMO sa iyong kahilingan. '
-        'Aabisuhan ka kung may update.',
-  ),
-  'home.status.approved': (
-    'MDRRMO has approved your request. '
-        "You'll be notified of any updates.",
-    'Inaprubahan na ng MDRRMO ang iyong kahilingan. '
-        'Aabisuhan ka kung may update.',
-  ),
-  'home.status.completed': ('This request has been completed.', 'Natapos na ang kahilingang ito.'),
-  'home.status.cancelled': ('This request has been cancelled.', 'Nakansela na ang kahilingang ito.'),
-  'home.status.disapproved': (
-    'MDRRMO did not approve this request.',
-    'Hindi inaprubahan ng MDRRMO ang kahilingang ito.',
-  ),
 
   // ---- Services ----
-  'services.title': ('Service Request', 'Kahilingan sa Serbisyo'),
+  'services.title': ('Services', 'Mga Serbisyo'),
+  'services.subtitle': ('Request help from Echague MDRRMO', 'Humingi ng tulong sa Echague MDRRMO'),
+  'services.search': ('Search services', 'Maghanap ng serbisyo'),
+  'services.search_clear': ('Clear search', 'Burahin ang hinahanap'),
+  'services.no_match': ('No services match "{q}".', 'Walang serbisyong tugma sa "{q}".'),
   // Category headings on the Services tab (tbl_services.category).
   'services.category.infrastructure': ('Infrastructure', 'Imprastraktura'),
   'services.category.rescue': ('Rescue', 'Pagsagip'),
@@ -247,15 +227,37 @@ const Map<String, (String, String)> _strings = {
     'Maaaring walang libreng ambulansya sa oras na iyon. Maaari ka pa ring magsumite — kukumpirmahin ito ng MDRRMO.',
   ),
 
-  'track.title': ('Track Your Requests', 'Subaybayan ang Iyong mga Kahilingan'),
-  'track.empty_title': ('No requests yet', 'Walang kahilingan pa'),
-  'track.empty_desc': (
-    'Requests you submit from the Services tab will appear here, '
-        'with their status and a timeline you can follow.',
-    'Lalabas dito ang mga kahilingang isusumite mo mula sa Services tab, '
-        'kasama ang status at timeline na maaari mong subaybayan.',
+  'track.title': ('Track', 'Subaybay'),
+  'track.subtitle': ('Your requests and borrowed items', 'Ang iyong mga kahilingan at hiniram na gamit'),
+  'track.in_progress': ('In progress', 'Kasalukuyan'),
+  'track.past': ('Past', 'Nakaraan'),
+  'track.show_older': ('Show older requests', 'Ipakita ang mas lumang kahilingan'),
+  'track.empty': ('You have no requests yet.', 'Wala ka pang kahilingan.'),
+  'track.browse': ('Browse services', 'Tingnan ang mga serbisyo'),
+  'track.call': ('Call MDRRMO', 'Tawagan ang MDRRMO'),
+  'track.ref_pending': ('Reference number pending', 'Naghihintay ng reference number'),
+  'track.filed': ('Filed {date}', 'Isinumite noong {date}'),
+  'track.box.review.title': ('Waiting for MDRRMO', 'Naghihintay sa MDRRMO'),
+  'track.box.review.next': (
+    'MDRRMO will review your request and update it here.',
+    'Susuriin ng MDRRMO ang iyong kahilingan at ia-update ito rito.',
   ),
-  'track.filter.all': ('All', 'Lahat'),
+  'track.box.booked.title': ('Booked', 'Nakabook na'),
+  'track.box.booked.next': ('MDRRMO has confirmed your request.', 'Kinumpirma na ng MDRRMO ang iyong kahilingan.'),
+  'track.box.booked.next_dated': ('Scheduled for {date}.', 'Naka-iskedyul sa {date}.'),
+  'track.box.overdue.title': ('Scheduled time has passed', 'Lumipas na ang naka-iskedyul na oras'),
+  'track.box.responding.next': (
+    'Help is on the way. Call MDRRMO if anything changes.',
+    'Papunta na ang tulong. Tawagan ang MDRRMO kung may magbago.',
+  ),
+  'track.box.approved.next': (
+    'MDRRMO approved your request and will contact you with details.',
+    'Inaprubahan ng MDRRMO ang iyong kahilingan at makikipag-ugnayan sa iyo.',
+  ),
+  'track.box.completed.next': ('This request is done.', 'Tapos na ang kahilingang ito.'),
+  'track.box.cancelled.next': ('You cancelled this request.', 'Kinansela mo ang kahilingang ito.'),
+  'track.box.disapproved.next': ('MDRRMO could not approve this request.', 'Hindi naaprubahan ng MDRRMO ang kahilingang ito.'),
+  'track.box.reason': ("MDRRMO's reason: {reason}", 'Dahilan ng MDRRMO: {reason}'),
 
   'library.title': ('Safety Library', 'Aklatan ng Kaligtasan'),
   'library.hotlines': ('Emergency Hotlines', 'Mga Hotline ng Emerhensiya'),
@@ -363,16 +365,16 @@ const Map<String, (String, String)> _strings = {
   // The Tagalog below is the wording reviewed and confirmed by the project
   // owner on 2026-07-26, carried over unchanged.
   'service.ambulance-medical-response.name': (
-    'Ambulance/Medical Response',
-    'Ambulansya / Tugong Medikal',
+    'Ambulance/medical response',
+    'Ambulansya / tugong medikal',
   ),
   'service.ambulance-medical-response.desc': (
     'Ambulance transport for non-life-threatening medical needs.',
     'Paghahatid ng ambulansya para sa mga pangangailangang medikal na hindi nagbabanta sa buhay.',
   ),
   'service.relief-goods-distribution.name': (
-    'Relief Goods Distribution',
-    'Pamamahagi ng Relief Goods',
+    'Relief goods distribution',
+    'Pamamahagi ng relief goods',
   ),
   'service.relief-goods-distribution.desc': (
     'Distribution of essential relief goods during disasters.',
@@ -380,30 +382,30 @@ const Map<String, (String, String)> _strings = {
   ),
   // Same wording as `type.road.title` above, deliberately: the label must not
   // change spelling depending on which screen shows it.
-  'service.road-clearing.name': ('Road Clearing', 'Paglinis ng Daan'),
+  'service.road-clearing.name': ('Road clearing', 'Paglinis ng daan'),
   'service.road-clearing.desc': (
     'Clearing roads of debris and obstacles after natural calamities.',
     'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.',
   ),
   'service.power-line-repair.name': (
-    'Power Line Repair',
-    'Pagkumpuni ng Linya ng Kuryente',
+    'Power line repair',
+    'Pagkumpuni ng linya ng kuryente',
   ),
   'service.power-line-repair.desc': (
     'Emergency repair of downed power lines.',
     'Pang-emerhensiyang pagkumpuni ng mga bumagsak na linya ng kuryente.',
   ),
-  'service.debris-removal.name': ('Debris Removal', 'Pag-aalis ng Debris'),
+  'service.debris-removal.name': ('Debris removal', 'Pag-aalis ng debris'),
   'service.debris-removal.desc': (
     'Removal of hazardous debris from public areas.',
     'Pag-aalis ng mapanganib na debris sa mga pampublikong lugar.',
   ),
-  'service.animal-rescue.name': ('Animal Rescue', 'Pagsagip sa Hayop'),
+  'service.animal-rescue.name': ('Animal rescue', 'Pagsagip sa hayop'),
   'service.animal-rescue.desc': (
     'Rescue operations for stranded or injured animals.',
     'Pagsagip sa mga naipit o nasugatang hayop.',
   ),
-  'service.sandbagging.name': ('Sandbagging', 'Paglalagay ng Sandbags'),
+  'service.sandbagging.name': ('Sandbagging', 'Paglalagay ng sandbags'),
   'service.sandbagging.desc': (
     'Provision and placement of sandbags for flood prevention.',
     'Paglalaan at paglalagay ng sandbags upang maiwasan ang baha.',
@@ -414,17 +416,17 @@ const Map<String, (String, String)> _strings = {
     'Isang bagay na hindi saklaw ng mga serbisyo sa itaas.',
   ),
   // The programs. English matches tbl_services; the Filipino is new (2026-09-30).
-  'service.drrm-trainings-and-seminars.name': ('DRRM Trainings and Seminars', 'Mga Pagsasanay at Seminar sa DRRM'),
+  'service.drrm-trainings-and-seminars.name': ('DRRM trainings and seminars', 'Mga pagsasanay at seminar sa DRRM'),
   'service.drrm-trainings-and-seminars.desc': (
     'Disaster risk reduction and management trainings and seminars (IEC) for barangays and organizations.',
     'Mga pagsasanay at seminar (IEC) sa disaster risk reduction and management para sa mga barangay at organisasyon.',
   ),
-  'service.simulation-drills-nsed.name': ('Simulation Drills / NSED', 'Mga Simulation Drill / NSED'),
+  'service.simulation-drills-nsed.name': ('Simulation drills / NSED', 'Mga simulation drill / NSED'),
   'service.simulation-drills-nsed.desc': (
     'Simulation drills, including the Nationwide Simultaneous Earthquake Drill (NSED), for barangays and organizations.',
     'Mga simulation drill, kasama ang Nationwide Simultaneous Earthquake Drill (NSED), para sa mga barangay at organisasyon.',
   ),
-  'service.mdrrmo-certification.name': ('MDRRMO Certification', 'Sertipikasyon ng MDRRMO'),
+  'service.mdrrmo-certification.name': ('MDRRMO certification', 'Sertipikasyon ng MDRRMO'),
   'service.mdrrmo-certification.desc': ('Certification issued by the MDRRMO.', 'Sertipikasyong inilalabas ng MDRRMO.'),
 };
 

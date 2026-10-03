@@ -44,6 +44,11 @@ class AppColors {
   static const amberDot = Color(0xFFD98A1E);
 
   /// Dashed "ask for something else" card and its icon tile.
+  // List cards and section headings of the redesigned tabs.
+  static const cardBorder = Color(0xFFE6E0D6);
+  static const cardDivider = Color(0xFFEEE8DE);
+  static const sectionInk = Color(0xFF1E3D2F);
+
   static const dashed = Color(0xFFBFB7A9);
   static const sand = Color(0xFFECE6DC);
 

@@ -85,6 +85,29 @@ class BorrowStatusBox extends StatelessWidget {
         ),
     };
 
+    return StatusBox(icon: icon, bg: bg, fg: fg, title: title, next: next);
+  }
+}
+
+/// The box itself, shared with Track so a service request reads like a loan.
+class StatusBox extends StatelessWidget {
+  final IconData icon;
+  final Color bg;
+  final Color fg;
+  final String title;
+  final String next;
+
+  const StatusBox({
+    super.key,
+    required this.icon,
+    required this.bg,
+    required this.fg,
+    required this.title,
+    required this.next,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -144,10 +167,10 @@ class BorrowProgressSteps extends StatelessWidget {
     return Column(
       children: [
         for (var i = 0; i < steps.length; i++)
-          _Step(
+          ProgressStep(
             label: steps[i].$1,
-            time: i < current ? steps[i].$2 : null,
-            state: i < current ? _StepState.done : (i == current ? _StepState.current : _StepState.future),
+            detail: i < current && steps[i].$2 != null ? formatStepTime(steps[i].$2!) : null,
+            state: i < current ? ProgressStepState.done : (i == current ? ProgressStepState.current : ProgressStepState.future),
             last: i == steps.length - 1,
           ),
       ],
@@ -155,19 +178,20 @@ class BorrowProgressSteps extends StatelessWidget {
   }
 }
 
-enum _StepState { done, current, future }
+enum ProgressStepState { done, current, future }
 
-class _Step extends StatelessWidget {
+/// One row of a vertical progress list; Track draws its requests with it too.
+class ProgressStep extends StatelessWidget {
   final String label;
-  final DateTime? time;
-  final _StepState state;
+  final String? detail;
+  final ProgressStepState state;
   final bool last;
 
-  const _Step({required this.label, required this.time, required this.state, required this.last});
+  const ProgressStep({super.key, required this.label, required this.detail, required this.state, required this.last});
 
   @override
   Widget build(BuildContext context) {
-    final done = state == _StepState.done;
+    final done = state == ProgressStepState.done;
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -185,7 +209,7 @@ class _Step extends StatelessWidget {
                     border: done
                         ? null
                         : Border.all(
-                            color: state == _StepState.current ? AppColors.amberDot : AppColors.fieldBorder,
+                            color: state == ProgressStepState.current ? AppColors.amberDot : AppColors.fieldBorder,
                             width: 3,
                           ),
                   ),
@@ -209,12 +233,11 @@ class _Step extends StatelessWidget {
                     label,
                     style: AppText.body(
                       size: _bodySize,
-                      weight: state == _StepState.future ? FontWeight.w400 : FontWeight.w600,
-                      color: state == _StepState.future ? AppColors.inkMuted : AppColors.ink,
+                      weight: state == ProgressStepState.future ? FontWeight.w400 : FontWeight.w600,
+                      color: state == ProgressStepState.future ? AppColors.inkMuted : AppColors.ink,
                     ),
                   ),
-                  if (time != null)
-                    Text(formatStepTime(time!), style: AppText.body(size: _bodySize, color: AppColors.inkMuted)),
+                  if (detail != null) Text(detail!, style: AppText.body(size: _bodySize, color: AppColors.inkMuted)),
                 ],
               ),
             ),

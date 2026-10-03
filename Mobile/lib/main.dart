@@ -509,6 +509,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     _appState.loadMaterials();
     // Cached list first, then the server; the built-in list until either lands.
     _appState.loadHotlines();
+    // The bell's dot compares against when the sheet was last opened.
+    _appState.loadNotificationsSeen();
   }
 
   @override
@@ -667,15 +669,19 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     ));
   }
 
-  void _openNotifications() => NotificationsSheet.show(
-        context,
-        filipino: _appState.language == AppLanguage.filipino,
-        // A copy: the sheet must not hold the store's mutable list, which a
-        // poll landing behind the sheet would mutate underneath it (M30).
-        requests: [..._appState.requests],
-        advisories: [..._appState.advisories],
-        advisoriesError: _appState.advisoriesError,
-      );
+  void _openNotifications() {
+    NotificationsSheet.show(
+      context,
+      filipino: _appState.language == AppLanguage.filipino,
+      // A copy: the sheet must not hold the store's mutable list, which a
+      // poll landing behind the sheet would mutate underneath it (M30).
+      requests: [..._appState.requests],
+      advisories: [..._appState.advisories],
+      advisoriesError: _appState.advisoriesError,
+    );
+    // Opening the sheet is what reads it: the dot goes off now.
+    _appState.markNotificationsSeen();
+  }
 
   @override
   Widget build(BuildContext context) {
