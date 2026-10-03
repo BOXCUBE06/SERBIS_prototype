@@ -799,6 +799,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                 appState: _appState,
                 onOpenNotifications: onOpenNotifications,
                 onOpenProfile: onOpenProfile,
+                onOpenMyLoans: _openMyLoans,
+                onBrowseServices: () => _goTo(_servicesTab),
               )),
     ];
 

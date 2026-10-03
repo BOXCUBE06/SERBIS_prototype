@@ -164,11 +164,10 @@ void main() {
     expect(steps.last.time, isNot('Time not recorded'));
   });
 
-  testWidgets('a server-loaded card still offers its timeline', (tester) async {
+  testWidgets('a server-loaded open card shows its steps', (tester) async {
     // The model half above is worth nothing if the card keeps hiding the block.
     // This is the regression as a resident met it: relaunch the app, and the
-    // request loaded from GET /service-requests had no timeline button at all.
-    // Restoring the old `if (request.timeline.isNotEmpty)` guard fails here.
+    // request loaded from GET /service-requests had no timeline at all.
     final state = AppState(_FakeApi(rows: [_row('Pending')]));
     await state.loadRequests();
 
@@ -179,14 +178,11 @@ void main() {
           appState: state,
           onOpenNotifications: () {},
           onOpenProfile: () {},
+          onOpenMyLoans: () {},
+          onBrowseServices: () {},
         ),
       ),
     ));
-
-    expect(find.text('View timeline'), findsOneWidget);
-
-    await tester.tap(find.text('View timeline'));
-    await tester.pumpAndSettle();
 
     expect(find.text('Request submitted'), findsOneWidget);
     expect(find.text('Under review by MDRRMO'), findsOneWidget);
