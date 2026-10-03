@@ -198,23 +198,20 @@ class FieldNote extends StatelessWidget {
       );
 }
 
-/// The app's labelled dropdown. Was `_Dropdown` in the services screen.
-/// Generic over the value so a dropdown can carry the object it selects rather
-/// than its label. The service picker needs that: two services could be given
-/// the same name in the admin panel, and a `List<String>` would make them the
-/// same option. Existing `List<String>` call sites infer `T = String` and are
-/// unchanged.
-class AppDropdown<T> extends StatelessWidget {
+/// A short list of answers drawn open, one 48dp row each, instead of a popup
+/// menu: every option is visible without a tap and the chosen one is marked by
+/// more than colour. For the long lists (barangays, hospitals) use
+/// [AppSearchField].
+class AppChoiceList extends StatelessWidget {
   final String label;
-  final List<T> items;
-  final T value;
-  final ValueChanged<T> onChanged;
+  final List<String> items;
+  final String value;
+  final ValueChanged<String> onChanged;
 
-  /// How to print an item. Defaults to `toString()`, which is what the
-  /// `List<String>` callers were already relying on.
-  final String Function(T)? itemLabel;
+  /// How to print an item; the value itself is what [onChanged] reports.
+  final String Function(String)? itemLabel;
 
-  const AppDropdown({
+  const AppChoiceList({
     super.key,
     required this.label,
     required this.items,
@@ -222,8 +219,6 @@ class AppDropdown<T> extends StatelessWidget {
     required this.onChanged,
     this.itemLabel,
   });
-
-  String _label(T item) => itemLabel?.call(item) ?? '$item';
 
   @override
   Widget build(BuildContext context) {
@@ -234,29 +229,61 @@ class AppDropdown<T> extends StatelessWidget {
         children: [
           Text(label, style: AppText.fieldLabel()),
           const SizedBox(height: AppSpacing.xs),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: AppColors.fieldFill,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.fieldBorder),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _row(item, item == value),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<T>(
-                value: value,
-                isExpanded: true,
-                icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
-                style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink),
-                items: items
-                    .map((i) => DropdownMenuItem<T>(value: i, child: Text(_label(i))))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) onChanged(v);
-                },
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String item, bool selected) {
+    return Semantics(
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      button: true,
+      child: Material(
+        color: selected ? AppColors.greenSelected : AppColors.fieldFill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: BorderSide(
+            color: selected ? AppColors.green700 : AppColors.fieldBorder,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: InkWell(
+          onTap: () => onChanged(item),
+          canRequestFocus: false,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                    size: 22,
+                    color: selected ? AppColors.green700 : AppColors.inkFaint,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      itemLabel?.call(item) ?? item,
+                      style: AppText.body(
+                        size: AppTextSize.bodyLg,
+                        weight: selected ? FontWeight.w600 : FontWeight.w400,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

@@ -8,8 +8,8 @@ import '../theme/app_theme.dart';
 import 'ambulance_schedule_field.dart';
 import 'form_inputs.dart';
 import 'form_section.dart';
+import 'form_steps.dart';
 import 'service_widgets.dart';
-import 'shared_widgets.dart';
 
 /// The ambulance flow's five step names, in order. English keys for [trEn].
 const ambulanceStepNames = ['Patient', 'Trip', 'Condition', 'Schedule & ID', 'Review'];
@@ -118,46 +118,14 @@ class AmbulanceStepFooter extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final f = filipino;
-    final last = step == ambulanceStepNames.length - 1;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        AppLayout.gutter,
-        AppSpacing.md,
-        AppLayout.gutter,
-        AppSpacing.md + MediaQuery.paddingOf(context).bottom,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.line)),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Row(
-            children: [
-              if (step > 0) ...[
-                Expanded(child: AppButton(label: trEn(f, 'Back'), style: AppButtonStyle.outline, onPressed: onBack)),
-                const SizedBox(width: AppSpacing.sm),
-              ],
-              Expanded(
-                flex: 2,
-                child: AppButton(
-                  label: last
-                      ? tr(f, 'common.submit_request')
-                      : trEn(f, 'Next: {step}').replaceAll('{step}', trEn(f, ambulanceStepNames[step + 1])),
-                  onPressed: onNext,
-                  loading: submitting,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => FormStepFooter(
+        step: step,
+        stepNames: ambulanceStepNames,
+        filipino: filipino,
+        submitting: submitting,
+        onBack: onBack,
+        onNext: onNext,
+      );
 }
 
 /// One step's answers on the Review step, with Edit jumping back to it.

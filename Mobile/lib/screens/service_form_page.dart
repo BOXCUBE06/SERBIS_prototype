@@ -3,16 +3,13 @@ import 'package:flutter/material.dart';
 import '../models/request_models.dart';
 import '../state/account_store.dart';
 import '../state/request_store.dart';
-import '../theme/app_theme.dart';
-import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 import 'service_request_form.dart';
 
 /// One service's form on a page of its own, opened from the Services grid. The
-/// header's back arrow returns to the grid and stays pinned while the form
-/// scrolls; the answers stay in [drafts], so going back and forth costs the
-/// resident nothing.
-class ServiceFormPage extends StatelessWidget {
+/// form draws its own title header, step bar and pinned footer; the answers stay
+/// in [drafts], so going back and forth costs the resident nothing.
+class ServiceFormPage extends StatefulWidget {
   final AppState appState;
   final AppUser user;
   final ServiceCatalogItem service;
@@ -31,49 +28,53 @@ class ServiceFormPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      // Listening, so a language change made elsewhere relabels the form and a
-      // catalogue refetched in the background swaps in the translated name.
-      body: ListenableBuilder(
-        listenable: appState,
-        builder: (context, _) {
-          final f = appState.language == AppLanguage.filipino;
-          // Re-resolved by id: `service` was captured when the tile was tapped
-          // and goes stale the moment the catalogue reloads in another language.
-          final current = appState.services.where((s) => s.id == service.id).firstOrNull ?? service;
+  State<ServiceFormPage> createState() => _ServiceFormPageState();
+}
 
-          // The header sits outside the list, so the back arrow stays under the
-          // thumb however far down a long form the resident has scrolled.
-          return Column(
-            children: [
-              AppHeader(
-                onNotificationsTap: onOpenNotifications,
-                onBack: () => Navigator.of(context).maybePop(),
-                filipino: f,
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 40),
-                  children: [
-                    ServiceRequestForm(
-                      appState: appState,
-                      user: user,
-                      service: current,
-                      drafts: drafts,
-                      onSubmitted: () {
-                        Navigator.of(context).maybePop();
-                        onSubmitted();
-                      },
-                      // The reloaded catalogue no longer has this service.
-                      onServiceUnavailable: () => Navigator.of(context).maybePop(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+class _ServiceFormPageState extends State<ServiceFormPage> {
+  final _form = GlobalKey<ServiceRequestFormState>();
+
+  @override
+  Widget build(BuildContext context) {
+    // Back steps through a stepped form before it leaves the page.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final form = _form.currentState;
+        if (form != null && form.canStepBack) {
+          form.handleBack();
+        } else {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        // Listening, so a language change made elsewhere relabels the form and a
+        // catalogue refetched in the background swaps in the translated name.
+        body: ListenableBuilder(
+          listenable: widget.appState,
+          builder: (context, _) {
+            // Re-resolved by id: `service` was captured when the tile was tapped
+            // and goes stale the moment the catalogue reloads in another language.
+            final current = widget.appState.services.where((s) => s.id == widget.service.id).firstOrNull ?? widget.service;
+
+            return ServiceRequestForm(
+              key: _form,
+              appState: widget.appState,
+              user: widget.user,
+              service: current,
+              drafts: widget.drafts,
+              onSubmitted: () {
+                Navigator.of(context).pop();
+                widget.onSubmitted();
+              },
+              onExit: () => Navigator.of(context).pop(),
+              onOpenNotifications: widget.onOpenNotifications,
+              // The reloaded catalogue no longer has this service.
+              onServiceUnavailable: () => Navigator.of(context).pop(),
+            );
+          },
+        ),
       ),
     );
   }

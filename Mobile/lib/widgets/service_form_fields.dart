@@ -21,11 +21,33 @@ class ServiceFormFields extends StatelessWidget {
   final VoidCallback onChanged;
   final bool filipino;
 
+  /// Draws only this section of the spec, for a form split into steps. Null
+  /// draws them all.
+  final int? sectionIndex;
+
+  /// Whether the pickup/delivery group (relief only) follows the sections.
+  final bool fulfillment;
+
+  /// Inline errors by field key; only `preferred_date` is read here.
+  final Map<String, String> errors;
+
+  /// Lets the form scroll the date field into view when it has an error.
+  final Key? dateKey;
+
+  /// Whether each section carries its own small heading. A step that already
+  /// has a numbered title leaves them off.
+  final bool labels;
+
   const ServiceFormFields({
     super.key,
     required this.data,
     required this.onChanged,
     required this.filipino,
+    this.sectionIndex,
+    this.fulfillment = true,
+    this.errors = const {},
+    this.dateKey,
+    this.labels = true,
   });
 
   @override
@@ -39,9 +61,10 @@ class ServiceFormFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final section in form.spec.sections)
-          FormSection(
-            label: tr(f, section.labelKey),
+        for (final (index, section) in form.spec.sections.indexed)
+          if (sectionIndex == null || sectionIndex == index)
+          _Group(
+            label: labels ? tr(f, section.labelKey) : null,
             children: [
               for (final field in section.fields) ...[
                 // Off by default — see StructuredFormData.setAddressIsMyAddress.
@@ -59,7 +82,9 @@ class ServiceFormFields extends StatelessWidget {
                   ),
                 if (field.isDate)
                   ProgramDateField(
+                    key: dateKey,
                     field: field,
+                    errorText: errors[field.key],
                     filipino: f,
                     value: form.date(field.key),
                     onPicked: (picked) {
@@ -68,7 +93,7 @@ class ServiceFormFields extends StatelessWidget {
                     },
                   )
                 else if (field.isChoice)
-                  AppDropdown(
+                  AppChoiceList(
                     label: trEn(f, field.label),
                     items: field.options,
                     itemLabel: (option) => trEn(f, option),
@@ -93,11 +118,11 @@ class ServiceFormFields extends StatelessWidget {
         // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
         // 2026-09-18) — a real field on the request, not spec-driven
         // prose, so it lives outside the section loop above.
-        if (form.offersFulfillment)
-          FormSection(
-            label: trEn(f, 'Pickup or delivery'),
+        if (fulfillment && form.offersFulfillment)
+          _Group(
+            label: labels ? trEn(f, 'Pickup or delivery') : null,
             children: [
-              AppDropdown(
+              AppChoiceList(
                 label: trEn(f, 'How should this reach you?'),
                 items: const ['Pickup', 'Delivery'],
                 itemLabel: (option) => trEn(f, option),
@@ -118,6 +143,18 @@ class ServiceFormFields extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A section with its heading, or just its fields when the step supplies one.
+class _Group extends StatelessWidget {
+  final String? label;
+  final List<Widget> children;
+
+  const _Group({required this.label, required this.children});
+
+  @override
+  Widget build(BuildContext context) =>
+      label == null ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: children) : FormSection(label: label!, children: children);
 }
 
 /// "Same as my address"-style shortcut. Was a [CheckboxListTile], whose own

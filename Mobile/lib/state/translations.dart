@@ -194,15 +194,15 @@ const Map<String, (String, String)> _strings = {
   // Group headings inside the four request forms, so related fields read as
   // one group instead of a flat, identically-spaced list of inputs.
   'form_section.patient': ('Patient', 'Pasyente'),
-  'form_section.trip': ('Trip details', 'Detalye ng Byahe'),
+  'form_section.trip': ('Trip details', 'Detalye ng byahe'),
   'form_section.condition': ('Condition', 'Kondisyon'),
   'form_section.relatives': ('Patient / Relatives', 'Pasyente / Kamag-anak'),
   'form_section.location': ('Location', 'Lokasyon'),
   'form_section.description': ('Description', 'Paglalarawan'),
   'form_section.household': ('Household', 'Sambahayan'),
-  'form_section.assistance': ('Assistance needed', 'Kailangang Tulong'),
+  'form_section.assistance': ('Assistance needed', 'Kailangang tulong'),
   'form_section.details': ('Details', 'Detalye'),
-  'form_section.attachments': ('Attachments', 'Mga Kalakip'),
+  'form_section.attachments': ('Attachments', 'Mga kalakip'),
   'form_section.event': ('Event', 'Kaganapan'),
   'form_section.certification': ('Certification', 'Sertipikasyon'),
 
@@ -574,6 +574,9 @@ const Map<String, String> _filipinoOf = {
   'Condition': 'Kondisyon',
   'Schedule & ID': 'Iskedyul at ID',
   'Review': 'Suriin',
+  'Household': 'Sambahayan',
+  'Assistance and delivery': 'Tulong at paghahatid',
+  'ID and review': 'ID at pagsusuri',
   'Next: {step}': 'Susunod: {step}',
   'Edit': 'I-edit',
   'Not given': 'Hindi ibinigay',

@@ -14,12 +14,16 @@ class ProgramDateField extends StatelessWidget {
   final ValueChanged<DateTime> onPicked;
   final bool filipino;
 
+  /// Shown under the picker, which then draws a red border.
+  final String? errorText;
+
   const ProgramDateField({
     super.key,
     required this.field,
     required this.value,
     required this.onPicked,
     this.filipino = false,
+    this.errorText,
   });
 
   Future<void> _pick(BuildContext context) async {
@@ -59,7 +63,7 @@ class ProgramDateField extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(color: AppColors.line, width: 1.5),
+                  border: Border.all(color: errorText == null ? AppColors.line : AppColors.red600, width: 1.5),
                 ),
                 child: Row(
                   children: [
@@ -79,6 +83,10 @@ class ProgramDateField extends StatelessWidget {
               ),
             ),
           ),
+          if (errorText != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(errorText!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
+          ],
           const SizedBox(height: AppSpacing.xs),
           Text(
             trEn(filipino, 'At least {n} days from today, so MDRRMO can plan.')

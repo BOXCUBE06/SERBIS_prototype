@@ -158,14 +158,21 @@ void main() {
       expect(road.offersFulfillment, isFalse);
       expect(generic.offersFulfillment, isFalse);
 
-      await _pump(tester, relief);
+      // Rebuilds on change, as the form page does: the address field shows
+      // only once the form has been redrawn with Delivery chosen.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StatefulBuilder(builder: (context, setState) => _formFields(relief, () => setState(() {}))),
+          ),
+        ),
+      ));
       expect(find.text('How should this reach you?'), findsOneWidget);
       // Defaults to Pickup, so the address field starts hidden.
       expect(find.text('Delivery address'), findsNothing);
 
-      await tester.tap(find.text('How should this reach you?'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delivery').last);
+      await tester.ensureVisible(find.text('Delivery'));
+      await tester.tap(find.text('Delivery'));
       await tester.pumpAndSettle();
 
       expect(relief.fulfillmentMethod, 'Delivery');
@@ -540,7 +547,7 @@ void main() {
   });
 
   group('the form widget', () {
-    testWidgets('a dropdown change lands on the model and is reported',
+    testWidgets('picking a choice lands on the model and is reported',
         (tester) async {
       final form = StructuredFormData.road();
       addTearDown(form.dispose);
@@ -552,13 +559,13 @@ void main() {
         ),
       ));
 
-      await tester.tap(find.byType(DropdownButton<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Landslide debris').last);
+      // Every option is on screen already: no menu to open first.
+      expect(find.byType(DropdownButton<String>), findsNothing);
+      await tester.tap(find.text('Landslide debris'));
       await tester.pumpAndSettle();
 
       expect(form.choice('obstruction'), 'Landslide debris');
-      // Without the callback the screen never rebuilds and the dropdown reads
+      // Without the callback the screen never rebuilds and the list reads
       // as though nothing was picked.
       expect(changes, 1);
       expect(

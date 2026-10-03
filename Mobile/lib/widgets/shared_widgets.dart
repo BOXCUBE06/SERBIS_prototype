@@ -198,8 +198,9 @@ class HeaderButton extends StatelessWidget {
   }
 }
 
-/// The green header of the Borrow and Services tabs: a title with a one-line
-/// subtitle that folds away as the list scrolls, plus bell and profile.
+/// The green header of the tab screens: a title with a one-line subtitle that
+/// folds away as the list scrolls, plus bell and profile. A page opened from a
+/// tab passes [onBack] for a back arrow ahead of the title.
 class TabHeader extends SliverPersistentHeaderDelegate {
   static const maxHeight = 128.0;
   static const minHeight = 96.0;
@@ -209,6 +210,7 @@ class TabHeader extends SliverPersistentHeaderDelegate {
   final bool filipino;
   final VoidCallback? onNotifications;
   final VoidCallback? onProfile;
+  final VoidCallback? onBack;
 
   const TabHeader({
     required this.title,
@@ -216,6 +218,7 @@ class TabHeader extends SliverPersistentHeaderDelegate {
     required this.filipino,
     this.onNotifications,
     this.onProfile,
+    this.onBack,
   });
 
   @override
@@ -229,17 +232,56 @@ class TabHeader extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return TabHeaderBar(
+      title: title,
+      subtitle: subtitle,
+      filipino: filipino,
+      onNotifications: onNotifications,
+      onProfile: onProfile,
+      onBack: onBack,
+      // 0 fully open, 1 fully collapsed.
+      collapse: (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0),
+    );
+  }
+}
+
+/// [TabHeader] as a plain widget, for a screen that is a column rather than a
+/// scrolling list (a form with a pinned footer). [collapse] is the delegate's
+/// scroll fold, 0 open to 1 folded; a column leaves it at 0.
+class TabHeaderBar extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool filipino;
+  final VoidCallback? onNotifications;
+  final VoidCallback? onProfile;
+  final VoidCallback? onBack;
+  final double collapse;
+
+  const TabHeaderBar({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.filipino,
+    this.onNotifications,
+    this.onProfile,
+    this.onBack,
+    this.collapse = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final f = filipino;
-    // 0 fully open, 1 fully collapsed.
-    final t = (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0);
+    final t = collapse;
     return Container(
-      padding: EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.headerTop, 14, 20 - 12 * t),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(onBack == null ? AppLayout.gutter : 8, AppLayout.headerTop, 14, 20 - 12 * t),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
       ),
       child: Row(
         children: [
+          if (onBack != null) HeaderButton(icon: Icons.arrow_back_rounded, label: tr(f, 'nav.back'), onTap: onBack!),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'borrow_request_widgets.dart' show StatusBox;
 import 'shared_widgets.dart';
 
 /// An upload slot on the request form. The file itself is picked by the screen
@@ -26,6 +27,9 @@ class AttachmentUploadField extends StatelessWidget {
   /// Only the clear button's tooltip reads it; the caller translates the rest.
   final bool filipino;
 
+  /// Shown under the slot, which then draws a red border.
+  final String? errorText;
+
   const AttachmentUploadField({
     super.key,
     required this.label,
@@ -34,6 +38,7 @@ class AttachmentUploadField extends StatelessWidget {
     required this.onTap,
     this.onClear,
     this.filipino = false,
+    this.errorText,
   });
 
   @override
@@ -54,7 +59,10 @@ class AttachmentUploadField extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
               decoration: BoxDecoration(
                 color: hasFile ? AppColors.green50 : AppColors.surface,
-                border: Border.all(color: hasFile ? AppColors.green700 : AppColors.line, width: 1.5),
+                border: Border.all(
+                  color: errorText != null ? AppColors.red600 : (hasFile ? AppColors.green700 : AppColors.line),
+                  width: 1.5,
+                ),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Row(
@@ -93,6 +101,11 @@ class AttachmentUploadField extends StatelessWidget {
               ),
             ),
           ),
+          if (errorText != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs, left: 2),
+              child: Text(errorText!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
+            ),
         ],
       ),
     );
@@ -319,48 +332,41 @@ class ConfirmationSheet extends StatelessWidget {
     final body = tr(f, 'services.confirm.body').replaceAll('{ref}', refNo);
     final scheduled = scheduledAt;
     return Container(
+      width: double.infinity,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 32, AppLayout.gutter, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(color: AppColors.green50, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: const Icon(Icons.check_rounded, size: 26, color: AppColors.green700),
-          ),
-          const SizedBox(height: 14),
-          Text(tr(f, 'services.confirm.title'), style: AppText.display(size: AppTextSize.title)),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6),
-          ),
-          if (scheduled != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.green50,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+      padding: EdgeInsets.fromLTRB(AppLayout.gutter, 24, AppLayout.gutter, 24 + MediaQuery.paddingOf(context).bottom),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              StatusBox(
+                icon: Icons.check_circle_rounded,
+                bg: AppColors.green50,
+                fg: AppColors.green700,
+                title: tr(f, 'services.confirm.title'),
+                next: body,
               ),
-              child: Text(
-                '${tr(f, 'services.confirm.scheduled_for')} '
-                '${formatBookingConfirmationTime(scheduled, f)}',
-                textAlign: TextAlign.center,
-                style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: AppColors.green900),
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          AppButton(label: tr(f, 'services.confirm.view_track'), onPressed: onViewTrack),
-        ],
+              if (scheduled != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                StatusBox(
+                  icon: Icons.event_available_rounded,
+                  bg: AppColors.green50,
+                  fg: AppColors.green700,
+                  title: tr(f, 'services.confirm.scheduled_for'),
+                  next: formatBookingConfirmationTime(scheduled, f),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(label: tr(f, 'services.confirm.view_track'), onPressed: onViewTrack),
+            ],
+          ),
+        ),
       ),
     );
   }

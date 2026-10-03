@@ -21,13 +21,11 @@ class FormSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: AppText.display(
-              size: AppTextSize.small,
-              weight: FontWeight.w700,
-              color: AppColors.green900,
-              letterSpacing: 0.6,
+          Semantics(
+            header: true,
+            child: Text(
+              label,
+              style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
