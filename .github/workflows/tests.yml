@@ -39,7 +39,7 @@ jobs:
           # Pinned rather than "latest stable": a Flutter upgrade should break
           # the build in a commit that says so, not in whichever unrelated
           # change happens to run first that morning.
-          flutter-version: 3.35.1
+          flutter-version: 3.47.6
           channel: stable
           cache: true
 
