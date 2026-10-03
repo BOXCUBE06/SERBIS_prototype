@@ -340,12 +340,12 @@ class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
         if (widget.appState.borrowRequestsFromCache)
           StaleDataNote(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
         if (active.isNotEmpty) ...[
-          _SectionTitle(trEn(f, 'In progress')),
+          SectionHeader(title: trEn(f, 'In progress')),
           for (final r in active) card(r),
         ],
         if (past.isNotEmpty) ...[
           if (active.isNotEmpty) const SizedBox(height: AppSpacing.md),
-          _SectionTitle(trEn(f, 'Past requests')),
+          SectionHeader(title: trEn(f, 'Past requests')),
           for (final r in past) card(r),
         ],
       ])),
@@ -719,18 +719,6 @@ class _DashedBorder extends CustomPainter {
 
   @override
   bool shouldRepaint(_DashedBorder old) => old.radius != radius;
-}
-
-/// "In progress" / "Past requests" heading on My requests.
-class _SectionTitle extends StatelessWidget {
-  final String text;
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(text, style: AppText.display(size: 18, weight: FontWeight.w700, color: AppColors.green900)),
-      );
 }
 
 class _BorrowRequestCard extends StatelessWidget {

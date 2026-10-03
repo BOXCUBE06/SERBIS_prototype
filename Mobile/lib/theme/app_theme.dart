@@ -126,10 +126,10 @@ class AppLayout {
 class AppTextSize {
   AppTextSize._();
 
-  static const double caption = 10.5;
-  static const double small = 12;
-  static const double body = 13;
-  static const double bodyLg = 14.5;
+  static const double caption = 13;
+  static const double small = 14;
+  static const double body = 15;
+  static const double bodyLg = 16;
   static const double title = 17;
   static const double headline = 21;
   static const double display = 28;

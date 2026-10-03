@@ -112,19 +112,19 @@ class _TrackScreenState extends State<TrackScreen> {
                       ],
                       if (empty) _EmptyState(filipino: f, onBrowse: widget.onBrowseServices),
                       if (active.isNotEmpty) ...[
-                        _SectionTitle(tr(f, 'track.in_progress')),
+                        SectionHeader(title: tr(f, 'track.in_progress')),
                         for (final r in active) card(r),
                       ],
                       // Open loans, so everything Home's "See all (N)" counts is listed here.
                       if (loans.isNotEmpty) ...[
-                        _SectionTitle(tr(f, 'track.loans')),
+                        SectionHeader(title: tr(f, 'track.loans')),
                         SummaryCard(children: [
                           for (final loan in loans) RequestSummaryRow(request: loan, onTap: widget.onOpenMyLoans),
                         ]),
                         const SizedBox(height: AppSpacing.lg),
                       ],
                       if (past.isNotEmpty) ...[
-                        _SectionTitle(tr(f, 'track.past')),
+                        SectionHeader(title: tr(f, 'track.past')),
                         for (final r in shownPast) card(r),
                         if (!_showAllPast && past.length > _pastShown)
                           BorrowCardButton(
@@ -143,17 +143,6 @@ class _TrackScreenState extends State<TrackScreen> {
       ),
     );
   }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String text;
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(text, style: AppText.display(size: 17, weight: FontWeight.w700, color: AppColors.green900)),
-      );
 }
 
 class _EmptyState extends StatelessWidget {
@@ -293,7 +282,7 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             r.refNo.isEmpty ? tr(f, 'track.ref_pending') : r.refNo,
-            style: AppText.body(size: 14, color: AppColors.inkMuted),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
           ),
           const SizedBox(height: AppSpacing.md),
           _statusBox(r, f),

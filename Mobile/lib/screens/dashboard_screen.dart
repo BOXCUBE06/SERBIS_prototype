@@ -100,8 +100,7 @@ class HomeScreen extends StatelessWidget {
                 _RequestsSection(requests: active, filipino: f, onSeeAll: onOpenTrack, onOpenBorrow: onOpenMyLoans ?? () => _openBorrow(context)),
               ],
               const SizedBox(height: 20),
-              _SectionTitle(tr(f, 'home.services')),
-              const SizedBox(height: 10),
+              SectionHeader(title: tr(f, 'home.services')),
               _TileGrid(tiles: [
                 if (!user.isAwaitingApproval)
                   _Tile(
@@ -133,13 +132,7 @@ class HomeScreen extends StatelessWidget {
                   ),
               ]),
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(child: _SectionTitle(tr(f, 'home.announcements'))),
-                  _SeeAll(label: tr(f, 'home.see_all'), onTap: onOpenLibrary),
-                ],
-              ),
-              const SizedBox(height: 6),
+              SectionHeader(title: tr(f, 'home.announcements'), actionLabel: tr(f, 'home.see_all'), onAction: onOpenLibrary),
               ..._announcements(f),
             ],
           ),
@@ -256,7 +249,7 @@ class _HomeHeader extends StatelessWidget {
                   tr(f, 'home.brand'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppText.display(size: 13, weight: FontWeight.w600, color: Colors.white.withValues(alpha: .92), letterSpacing: 1.5),
+                  style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w600, color: Colors.white.withValues(alpha: .92), letterSpacing: 1.5),
                 ),
               ),
               HeaderButton(
@@ -363,13 +356,11 @@ class _RequestsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: _SectionTitle(tr(f, 'home.your_requests'))),
-            _SeeAll(label: '${tr(f, 'home.see_all')} (${requests.length})', onTap: onSeeAll),
-          ],
+        SectionHeader(
+          title: tr(f, 'home.your_requests'),
+          actionLabel: '${tr(f, 'home.see_all')} (${requests.length})',
+          onAction: onSeeAll,
         ),
-        const SizedBox(height: 6),
         SummaryCard(children: [
           for (final r in requests.take(2)) RequestSummaryRow(request: r, onTap: r.isBorrow ? onOpenBorrow : onSeeAll),
           if (more > 0)
@@ -454,7 +445,7 @@ class _Tile extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.3)),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: AppText.body(size: 13.5, color: AppColors.inkMuted, height: 1.35)),
+                  Text(subtitle, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.35)),
                 ],
               ),
             ),
@@ -482,7 +473,7 @@ class _AnnouncementRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(date, style: AppText.body(size: 13, color: AppColors.inkMuted)),
+            Text(date, style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted)),
             const SizedBox(height: 4),
             Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.35)),
             if (body.isNotEmpty) ...[
@@ -497,36 +488,6 @@ class _AnnouncementRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String text;
-
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) =>
-      Text(text, style: AppText.display(size: 18, weight: FontWeight.w600, color: AppColors.sectionInk));
-}
-
-class _SeeAll extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _SeeAll({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onTap,
-      style: TextButton.styleFrom(
-        minimumSize: const Size(44, 44),
-        foregroundColor: AppColors.green700,
-        textStyle: AppText.display(size: 15, weight: FontWeight.w600),
-      ),
-      child: Text(label),
     );
   }
 }

@@ -412,28 +412,38 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Flexible, not Expanded: a short title still sits next to its action
           // instead of being pushed apart. Without it the Row demanded the
           // title's natural width and "Subaybayan ang Iyong mga Kahilingan"
           // overflowed by 22px at 360, striped banner and all.
           Flexible(
-            child: Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.green900)),
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk),
+              ),
+            ),
           ),
           if (actionLabel != null) ...[
             const SizedBox(width: 12),
             // The action is the smaller target and must stay tappable, so it
             // keeps its width and the title wraps around it.
-            GestureDetector(
-              onTap: onAction,
-              child: Text(
-                actionLabel!,
-                style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: AppColors.green700),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                // Tighter than the default 12: the Filipino "Tingnan lahat (5)"
+                // overflowed this row by 3px at 320dp.
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                foregroundColor: AppColors.green700,
+                textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
               ),
+              child: Text(actionLabel!),
             ),
           ],
         ],
@@ -655,6 +665,7 @@ class AppButton extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.green700,
               foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               elevation: 0,
@@ -670,6 +681,7 @@ class AppButton extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.ink,
               side: const BorderSide(color: AppColors.line),
+              minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
@@ -684,6 +696,7 @@ class AppButton extends StatelessWidget {
             style: TextButton.styleFrom(
               backgroundColor: AppColors.red50,
               foregroundColor: AppColors.red600,
+              minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
@@ -763,7 +776,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
               filled: true,
               fillColor: AppColors.surface,
               contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              errorStyle: AppText.body(size: AppTextSize.caption, color: AppColors.red600),
+              errorStyle: AppText.body(size: AppTextSize.small, color: AppColors.red600),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.line, width: 1.5),

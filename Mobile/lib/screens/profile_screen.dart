@@ -633,8 +633,8 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
             padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 18, AppLayout.gutter, 6),
             child: SectionHeader(
               title: filipino
-                  ? 'Mga Na-download na Dokumento'
-                  : 'Downloaded Documents',
+                  ? 'Mga na-download na dokumento'
+                  : 'Downloaded documents',
             ),
           ),
           Padding(
@@ -716,7 +716,7 @@ class _OfflineMaterialsPageState extends State<_OfflineMaterialsPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 22, AppLayout.gutter, 6),
             child: SectionHeader(
-              title: filipino ? 'Kasama sa App' : 'Included in the App',
+              title: filipino ? 'Kasama sa app' : 'Included in the app',
             ),
           ),
           Padding(

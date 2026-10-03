@@ -268,7 +268,7 @@ const Map<String, (String, String)> _strings = {
   'library.fire': ('Fire (BFP)', 'Bumbero (BFP)'),
   'library.national_emergency': ('National Emergency', 'Pambansang Emerhensiya'),
 
-  'profile.title': ('My Profile', 'Aking Profile'),
+  'profile.title': ('My profile', 'Aking profile'),
   'profile.photo': ('Profile photo', 'Larawan sa Profile'),
   'profile.photo_change': ('Change profile photo', 'Palitan ang larawan sa profile'),
   'profile.photo_choose': ('Choose a photo', 'Pumili ng larawan'),

@@ -119,7 +119,7 @@ class RequestSummaryRow extends StatelessWidget {
                           Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
                           const SizedBox(width: 6),
                           Flexible(
-                            child: Text(request.status, style: AppText.display(size: 13.5, weight: FontWeight.w500, color: fg)),
+                            child: Text(request.status, style: AppText.display(size: AppTextSize.small, weight: FontWeight.w500, color: fg)),
                           ),
                         ],
                       ),

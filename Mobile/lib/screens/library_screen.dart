@@ -44,7 +44,7 @@ class LibraryScreen extends StatelessWidget {
         const SizedBox(height: 22),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
-          child: SectionHeader(title: filipino ? 'Aklatan ng Kaligtasan' : 'Safety Library'),
+          child: SectionHeader(title: filipino ? 'Aklatan ng kaligtasan' : 'Safety library'),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
@@ -79,7 +79,7 @@ class LibraryScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SectionHeader(title: filipino ? 'Pangunahing Lunas (First Aid)' : 'Basic First Aid'),
+              SectionHeader(title: filipino ? 'Pangunahing lunas (First Aid)' : 'Basic first aid'),
               _LibItem(articleKey: 'cpr', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
               _LibItem(articleKey: 'burns', pages: filipino ? '3 pahina' : '3 pages', filipino: filipino),
               _LibItem(articleKey: 'wound_care', pages: filipino ? '2 pahina' : '2 pages', filipino: filipino),
@@ -91,7 +91,7 @@ class LibraryScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SectionHeader(title: filipino ? 'Paghahanda sa Sakuna' : 'Disaster Preparedness'),
+              SectionHeader(title: filipino ? 'Paghahanda sa sakuna' : 'Disaster preparedness'),
               _LibItem(articleKey: 'before', pages: filipino ? '5 pahina' : '5 pages', filipino: filipino),
               _LibItem(articleKey: 'during', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
               _LibItem(articleKey: 'after', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
@@ -205,7 +205,7 @@ class _PublishedMaterials extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: filipino ? 'Mga Dokumento ng MDRRMO' : 'MDRRMO Documents',
+          title: filipino ? 'Mga dokumento ng MDRRMO' : 'MDRRMO documents',
         ),
         if (appState.materialsLoading && materials.isEmpty)
           const Padding(

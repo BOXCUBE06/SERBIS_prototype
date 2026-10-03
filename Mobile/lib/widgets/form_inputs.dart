@@ -136,7 +136,7 @@ class AppTextField extends StatelessWidget {
               hintText: hint,
               hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
               errorText: errorText,
-              errorStyle: AppText.body(size: AppTextSize.caption, color: AppColors.red600),
+              errorStyle: AppText.body(size: AppTextSize.small, color: AppColors.red600),
               suffixIcon: suffixIcon,
               counterText: '',
               // 48dp single-line fields.

@@ -349,7 +349,7 @@ class _ServiceRow extends StatelessWidget {
                           description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.4),
+                          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
                         ),
                       ],
                     ],

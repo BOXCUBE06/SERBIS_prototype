@@ -82,11 +82,11 @@ class AttachmentUploadField extends StatelessWidget {
                     // the file browser.
                     IconButton(
                       onPressed: onClear,
-                      icon: const Icon(Icons.close_rounded, size: 18),
+                      icon: const Icon(Icons.close_rounded, size: 20),
                       color: AppColors.inkMuted,
                       visualDensity: VisualDensity.compact,
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                       tooltip: trEn(filipino, 'Remove {label}').replaceAll('{label}', label),
                     ),
                 ],

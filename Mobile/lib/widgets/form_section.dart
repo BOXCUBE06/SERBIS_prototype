@@ -202,7 +202,7 @@ class SegmentedChoice extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          height: 40,
+          constraints: const BoxConstraints(minHeight: 48),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? AppColors.surface : Colors.transparent,

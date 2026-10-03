@@ -765,6 +765,8 @@ void main() {
       await tester.tap(find.text('San Fabian').last);
       await tester.pumpAndSettle();
       await _agree(tester);
+      await tester.ensureVisible(find.text('Create account'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
 
@@ -788,6 +790,8 @@ void main() {
       await tester.tap(find.text('San Fabian').last);
       await tester.pumpAndSettle();
       await _agree(tester);
+      await tester.ensureVisible(find.text('Create account'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
 
