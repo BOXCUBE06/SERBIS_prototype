@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../data/safety_files.dart';
+import '../../state/translations.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/borrow_request_widgets.dart' show StatusBox;
+import '../../widgets/shared_widgets.dart' show HeaderButton;
 
 class ArticleReaderScreen extends StatefulWidget {
   final LibraryArticle article;
@@ -18,9 +21,10 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
   @override
   Widget build(BuildContext context) {
     final article = widget.article;
-    final title = article.titleFor(filipino: _filipino);
-    final subtitle = article.subtitleFor(filipino: _filipino);
-    final sections = article.sectionsFor(filipino: _filipino);
+    final f = _filipino;
+    final title = article.titleFor(filipino: f);
+    final subtitle = article.subtitleFor(filipino: f);
+    final sections = article.sectionsFor(filipino: f);
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -29,73 +33,50 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(8, AppLayout.readerHeaderTop, AppLayout.gutter, 24),
+            padding: const EdgeInsets.fromLTRB(8, AppLayout.headerTop, 14, 20),
             decoration: const BoxDecoration(
               gradient: AppColors.headerGradient,
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
             ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  right: -60,
-                  top: -90,
-                  child: Container(
-                    width: 200,
-                    height: 200,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .05)),
-                  ),
-                ),
-                Column(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                            ),
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: .14),
-                                borderRadius: BorderRadius.circular(AppRadius.md),
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(article.icon, color: Colors.white, size: 19),
-                            ),
-                          ],
+                        HeaderButton(
+                          icon: Icons.arrow_back_rounded,
+                          label: tr(f, 'nav.back'),
+                          onTap: () => Navigator.pop(context),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: _LanguageToggle(
-                            filipino: _filipino,
-                            onChanged: (v) => setState(() => _filipino = v),
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .14),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
+                          alignment: Alignment.center,
+                          child: Icon(article.icon, color: Colors.white, size: 20),
                         ),
+                        const Spacer(),
+                        _LanguageToggle(filipino: f, onChanged: (v) => setState(() => _filipino = v)),
                       ],
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: AppLayout.gutter, top: 10),
+                      padding: const EdgeInsets.fromLTRB(AppLayout.gutter - 8, 8, 0, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            subtitle.toUpperCase(),
-                            style: AppText.display(
-                              size: AppTextSize.caption,
-                              weight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: .9),
-                              letterSpacing: 2,
-                            ),
+                            subtitle,
+                            style: AppText.body(size: AppTextSize.small, color: Colors.white.withValues(alpha: .88)),
                           ),
-                          const SizedBox(height: 3),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
+                          const SizedBox(height: 2),
+                          Semantics(
+                            header: true,
                             child: Text(title, style: AppText.display(size: AppTextSize.headline, color: Colors.white)),
                           ),
                         ],
@@ -103,38 +84,31 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 20, AppLayout.gutter, 0),
-            child: Container(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.lg)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.wifi_off_rounded, size: 17, color: AppColors.green700),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _filipino
-                          ? 'Naka-save ang materyal na ito para mabasa kahit walang internet.'
-                          : 'This material is saved for offline reading — you can open it anytime, even without an internet connection.',
-                      style: AppText.body(size: AppTextSize.small, color: AppColors.green900, height: 1.5),
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 18, AppLayout.gutter, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final section in sections) _SectionBlock(section: section),
-              ],
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StatusBox(
+                      icon: Icons.wifi_off_rounded,
+                      bg: AppColors.green50,
+                      fg: AppColors.green700,
+                      title: tr(f, 'article.offline_title'),
+                      next: f
+                          ? 'Naka-save ang materyal na ito para mabasa kahit walang internet.'
+                          : 'This material is saved for offline reading — you can open it anytime, even without an internet connection.',
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    for (final section in sections) _SectionBlock(section: section),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -142,6 +116,8 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
     );
   }
 }
+
+/// EN / FIL, two 44dp targets in one pill on the header.
 class _LanguageToggle extends StatelessWidget {
   final bool filipino;
   final ValueChanged<bool> onChanged;
@@ -151,38 +127,47 @@ class _LanguageToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: Colors.white.withValues(alpha: .16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment('EN', !filipino, () => onChanged(false)),
-          _segment('FIL', filipino, () => onChanged(true)),
+          _segment('EN', 'English', !filipino, () => onChanged(false)),
+          _segment('FIL', 'Filipino', filipino, () => onChanged(true)),
         ],
       ),
     );
   }
 
-  Widget _segment(String label, bool active, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        child: Text(
-          label,
-          style: AppText.display(
-            size: AppTextSize.caption,
-            weight: FontWeight.w700,
-            color: active ? AppColors.green700 : Colors.white,
-            letterSpacing: .5,
+  Widget _segment(String label, String name, bool active, VoidCallback onTap) {
+    return Semantics(
+      button: true,
+      selected: active,
+      label: name,
+      excludeSemantics: true,
+      child: Material(
+        color: active ? Colors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 52, minHeight: 44),
+            child: Center(
+              child: Text(
+                label,
+                style: AppText.display(
+                  size: AppTextSize.small,
+                  weight: FontWeight.w700,
+                  color: active ? AppColors.green700 : Colors.white,
+                  letterSpacing: .5,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -197,25 +182,31 @@ class _SectionBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(section.heading, style: AppText.display(size: AppTextSize.bodyLg, color: AppColors.green900)),
-          const SizedBox(height: 8),
+          Semantics(
+            header: true,
+            child: Text(
+              section.heading,
+              style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           if (section.body != null)
-            Text(section.body!, style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.7)),
+            Text(section.body!, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink, height: 1.6)),
           if (section.bullets != null)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: section.bullets!
                   .map((b) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(top: 6, right: 10),
+                              padding: const EdgeInsets.only(top: 9, right: 12),
                               child: Container(
                                 width: 6,
                                 height: 6,
@@ -223,7 +214,7 @@ class _SectionBlock extends StatelessWidget {
                               ),
                             ),
                             Expanded(
-                              child: Text(b, style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.6)),
+                              child: Text(b, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink, height: 1.6)),
                             ),
                           ],
                         ),

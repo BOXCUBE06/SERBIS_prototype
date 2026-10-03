@@ -450,7 +450,11 @@ class SectionHeader extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction});
+  /// A small status after the title, e.g. the "Saved" pill. Ignored when an
+  /// [actionLabel] is set.
+  final Widget? trailing;
+
+  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -488,6 +492,9 @@ class SectionHeader extends StatelessWidget {
               ),
               child: Text(actionLabel!),
             ),
+          ] else if (trailing != null) ...[
+            const SizedBox(width: 12),
+            trailing!,
           ],
         ],
       ),
@@ -621,28 +628,40 @@ class OfflinePill extends StatelessWidget {
       label = filipino ? 'I-download' : 'Download';
     }
 
-    return GestureDetector(
-      onTap: loading ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.xl)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            loading
-                ? const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
-                  )
-                : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 12, color: AppColors.green700),
-            const SizedBox(width: 4),
-            Text(
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.xl)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          loading
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
+                )
+              : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 14, color: AppColors.green700),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+
+    // Only a pill that does something needs the 44dp reach.
+    if (onTap == null) return pill;
+    return InkWell(
+      onTap: loading ? null : onTap,
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: Center(widthFactor: 1, child: pill),
       ),
     );
   }
