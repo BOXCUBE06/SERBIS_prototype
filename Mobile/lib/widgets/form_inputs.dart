@@ -203,7 +203,8 @@ class FieldNote extends StatelessWidget {
 /// more than colour. For the long lists (barangays, hospitals) use
 /// [AppSearchField].
 class AppChoiceList extends StatelessWidget {
-  final String label;
+  /// Null when the surrounding sheet already says what is being chosen.
+  final String? label;
   final List<String> items;
   final String value;
   final ValueChanged<String> onChanged;
@@ -213,7 +214,7 @@ class AppChoiceList extends StatelessWidget {
 
   const AppChoiceList({
     super.key,
-    required this.label,
+    this.label,
     required this.items,
     required this.value,
     required this.onChanged,
@@ -227,8 +228,10 @@ class AppChoiceList extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.fieldLabel()),
-          const SizedBox(height: AppSpacing.xs),
+          if (label != null) ...[
+            Text(label!, style: AppText.fieldLabel()),
+            const SizedBox(height: AppSpacing.xs),
+          ],
           for (final item in items)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),

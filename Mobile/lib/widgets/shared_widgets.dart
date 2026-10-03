@@ -1088,6 +1088,58 @@ void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool i
   );
 }
 
+/// The frame every bottom sheet shares: rounded top, a grab handle, a heading, a
+/// 600dp column and the bottom safe area. [scrollable] wraps the content in a
+/// scroll view, for a sheet that holds a form.
+class SheetFrame extends StatelessWidget {
+  final String? title;
+  final Widget child;
+  final bool scrollable;
+
+  const SheetFrame({super.key, this.title, required this.child, this.scrollable = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
+          ),
+        ),
+        if (title != null) ...[
+          Semantics(
+            header: true,
+            child: Text(title!, style: AppText.display(size: AppTextSize.headline, color: AppColors.sectionInk)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        child,
+      ],
+    );
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
+      ),
+      padding: EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: scrollable ? SingleChildScrollView(child: body) : body,
+        ),
+      ),
+    );
+  }
+}
+
 /// The bell sheet.
 ///
 /// It used to hold one hardcoded welcome message and nothing else, so a

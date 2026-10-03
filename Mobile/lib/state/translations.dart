@@ -273,13 +273,15 @@ const Map<String, (String, String)> _strings = {
   'library.national_emergency': ('National Emergency', 'Pambansang Emerhensiya'),
 
   'profile.title': ('My profile', 'Aking profile'),
-  'profile.photo': ('Profile photo', 'Larawan sa Profile'),
+  'profile.subtitle': ('Your account and settings', 'Ang iyong account at mga setting'),
+  'profile.offline_subtitle': ('Available without internet', 'Magagamit kahit walang internet'),
+  'profile.photo': ('Profile photo', 'Larawan sa profile'),
   'profile.photo_change': ('Change profile photo', 'Palitan ang larawan sa profile'),
   'profile.photo_choose': ('Choose a photo', 'Pumili ng larawan'),
   'profile.photo_remove': ('Remove photo', 'Alisin ang larawan'),
   // The sheet is read-only until a resident-scoped PATCH exists on the backend,
   // so the button no longer promises an update it cannot perform.
-  'profile.account_details': ('Account details', 'Mga Detalye ng Account'),
+  'profile.account_details': ('Account details', 'Mga detalye ng account'),
   'profile.barangay': ('Barangay', 'Barangay'),
   // The barangay stays read-only: it is the field every service request is
   // dispatched on, so moving is an MDRRMO operation, not a self-service edit.
@@ -288,11 +290,11 @@ const Map<String, (String, String)> _strings = {
     'Makipag-ugnayan sa MDRRMO para palitan ang iyong barangay — ito ang batayan ng pagpapadala sa iyong mga kahilingan.',
   ),
   'profile.first_name': ('First name', 'Pangalan'),
-  'profile.middle_name_optional': ('Middle name (optional)', 'Gitnang Pangalan (opsyonal)'),
+  'profile.middle_name_optional': ('Middle name (optional)', 'Gitnang pangalan (opsyonal)'),
   'profile.last_name': ('Last name', 'Apelyido'),
   'profile.street_address': ('Street / Purok (optional)', 'Kalye / Purok (opsyonal)'),
   'profile.phone': ('Mobile number', 'Numero ng Telepono'),
-  'profile.save': ('Save changes', 'I-save ang Pagbabago'),
+  'profile.save': ('Save changes', 'I-save ang pagbabago'),
   'profile.saved': ('Profile updated.', 'Na-update ang profile.'),
   'profile.no_changes': ('Nothing to save.', 'Walang isasave.'),
   'profile.required': ('Required', 'Kailangan'),
@@ -355,9 +357,9 @@ const Map<String, (String, String)> _strings = {
     'Off — you will not receive any MDRRMO text blast.',
     'Naka-off — hindi ka makakatanggap ng kahit anong text blast ng MDRRMO.',
   ),
-  'profile.offline_materials': ('Offline materials', 'Mga Offline na Materyal'),
+  'profile.offline_materials': ('Offline materials', 'Mga offline na materyal'),
   'profile.offline_materials_desc': ('{n} saved · {size} used', '{n} naka-save · {size} ang nagamit'),
-  'profile.logout': ('Log out', 'Mag-log Out'),
+  'profile.logout': ('Log out', 'Mag-log out'),
   'profile.offline_title': ('Offline Materials', 'Mga Offline na Materyal'),
 
   // The service catalogue, keyed on `tbl_services.code`. These used to come

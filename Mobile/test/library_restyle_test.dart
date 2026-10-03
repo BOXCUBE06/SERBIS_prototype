@@ -203,7 +203,7 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         theme: buildAppTheme(),
-        home: HotlinesPage(hotlines: kHotlines),
+        home: const HotlinesPage(hotlines: kHotlines),
       ));
 
       expect(find.byType(TabHeaderBar), findsOneWidget);
