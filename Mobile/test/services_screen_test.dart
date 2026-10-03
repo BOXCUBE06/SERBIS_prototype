@@ -459,18 +459,18 @@ void main() {
       await _pumpGrid(tester, AppState(api));
 
       double top(String text) => tester.getTopLeft(find.text(text)).dy;
-      expect(top('INFRASTRUCTURE'), lessThan(top('RESCUE')));
-      expect(top('RESCUE'), lessThan(top('FIRE')));
-      // An untranslated category shows as sent; "Others" has none and goes last.
-      expect(top('FIRE'), lessThan(top('OTHER REQUESTS')));
-      expect(top('Road Clearing'), lessThan(top('Sandbagging')));
+      expect(top('Infrastructure'), lessThan(top('Rescue')));
+      expect(top('Rescue'), lessThan(top('Fire')));
+      // An untranslated category shows its code in sentence case; "Others" has none and goes last.
+      expect(top('Fire'), lessThan(top('Other requests')));
+      expect(top('Road clearing'), lessThan(top('Sandbagging')));
     });
 
     testWidgets('offers every service as a tile, the ambulance excepted', (tester) async {
       await _pumpGrid(tester, AppState(FakeApi()));
 
       expect(find.text('Flood Evacuation'), findsOneWidget);
-      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Road clearing'), findsOneWidget);
       // "Others" is appended by the screen: it has no catalogue row.
       expect(find.text('Others'), findsOneWidget);
       // The ambulance has its own tab, so it is not offered a second time here.
@@ -481,7 +481,7 @@ void main() {
       final api = FakeApi()..serviceAudience = (equipmentBorrowing: true, others: false);
       await _pumpGrid(tester, AppState(api));
 
-      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Road clearing'), findsOneWidget);
       expect(find.text('Others'), findsNothing);
     });
 
@@ -510,33 +510,33 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Couldn't load services"), findsNothing);
-      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Road clearing'), findsOneWidget);
     });
   });
 
   group('opening a service', () {
     testWidgets('a tile opens that service on a page of its own', (tester) async {
-      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing');
+      await _pump(tester, AppState(FakeApi()), open: 'Road clearing');
 
       // The form's own heading, with the grid no longer the visible route.
-      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Road clearing'), findsOneWidget);
       expect(find.text('Flood Evacuation'), findsNothing);
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
     });
 
     testWidgets('the back arrow returns to the grid', (tester) async {
-      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing');
+      await _pump(tester, AppState(FakeApi()), open: 'Road clearing');
 
       await _goBack(tester);
 
       expect(find.text('Flood Evacuation'), findsOneWidget);
-      expect(find.text('Road Clearing'), findsOneWidget);
+      expect(find.text('Road clearing'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
     });
 
     testWidgets('the back arrow stays pinned while a long form scrolls', (tester) async {
-      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing');
+      await _pump(tester, AppState(FakeApi()), open: 'Road clearing');
 
       // Down to a phone, so the form is longer than the screen and scrolls.
       tester.view.physicalSize = const Size(1080, 1600);
@@ -567,7 +567,7 @@ void main() {
       expect(find.widgetWithText(AppButton, 'Back'), findsNothing);
       expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
       // No list to pick from first.
-      expect(find.text('Road Clearing'), findsNothing);
+      expect(find.text('Road clearing'), findsNothing);
     });
 
     testWidgets('Edit on Review and Back move between steps, keeping answers', (tester) async {
@@ -647,7 +647,7 @@ void main() {
       final drafts = ServiceDrafts(_testUser);
       addTearDown(drafts.dispose);
 
-      await _pump(tester, AppState(FakeApi()), open: 'Road Clearing', drafts: drafts);
+      await _pump(tester, AppState(FakeApi()), open: 'Road clearing', drafts: drafts);
       await _attachValidId(tester, name: 'id.jpg');
       await _goBack(tester);
 
@@ -822,7 +822,7 @@ void main() {
     testWidgets('a non-ambulance request still sends a description and no intake',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -835,7 +835,7 @@ void main() {
     testWidgets('a road request carries no contact line at all', (tester) async {
       // The road form asks about a place, not about the reporter.
       final api = FakeApi();
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -869,7 +869,7 @@ void main() {
       // sheet on this path, so a resident whose request never reached MDRRMO
       // was told help was coming.
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -881,7 +881,7 @@ void main() {
     testWidgets('keeps the attached ID and site photo so Retry costs one tap',
         (tester) async {
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester, name: 'id.jpg');
       await _attachSitePhoto(tester, name: 'scene.jpg');
@@ -894,7 +894,7 @@ void main() {
 
     testWidgets('the error card clears once a retry succeeds', (tester) async {
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -913,7 +913,7 @@ void main() {
     testWidgets('opens the confirmation sheet carrying the server reference',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -928,7 +928,7 @@ void main() {
       // and keeping it would file the last emergency's photo with the next
       // request.
       final api = FakeApi();
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester, name: 'id.jpg');
       await _attachSitePhoto(tester, name: 'scene.jpg');
@@ -945,7 +945,7 @@ void main() {
     testWidgets('the site photo is sent when attached and omitted when not',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -958,7 +958,7 @@ void main() {
     testWidgets('clearing the site photo removes it before submitting',
         (tester) async {
       final api = FakeApi();
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _attachSitePhoto(tester, name: 'scene.jpg');
@@ -980,7 +980,7 @@ void main() {
       var submitted = false;
       final api = FakeApi();
       await _pump(tester, AppState(api),
-          open: 'Road Clearing', onSubmitted: () => submitted = true);
+          open: 'Road clearing', onSubmitted: () => submitted = true);
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -1006,7 +1006,7 @@ void main() {
       // path that stays live — the card is rendered whenever `_submitFailed`
       // is true, and a retry in flight does not clear that flag.
       final api = FakeApi(submitThrows: true);
-      await _pump(tester, AppState(api), open: 'Road Clearing');
+      await _pump(tester, AppState(api), open: 'Road clearing');
 
       await _attachValidId(tester);
       await _submit(tester);
@@ -1033,6 +1033,61 @@ void main() {
 
       expect(api.submitCount, 2,
           reason: 'the retry counts once; the second tap must be swallowed');
+    });
+  });
+
+  group('the restyled tab', () {
+    testWidgets('the header names the tab; the old "Service Request" heading is gone', (tester) async {
+      await _pumpGrid(tester, AppState(FakeApi()));
+
+      expect(find.text('Services'), findsOneWidget);
+      expect(find.text('Request help from Echague MDRRMO'), findsOneWidget);
+      expect(find.text('Service Request'), findsNothing);
+    });
+
+    testWidgets('search filters by name', (tester) async {
+      await _pumpGrid(tester, AppState(FakeApi()));
+
+      await tester.enterText(find.byType(TextField), 'ROAD');
+      await tester.pump();
+
+      expect(find.text('Road clearing'), findsOneWidget);
+      expect(find.text('Flood Evacuation'), findsNothing);
+      expect(find.text('Others'), findsNothing);
+    });
+
+    testWidgets('search filters by description', (tester) async {
+      await _pumpGrid(tester, AppState(FakeApi()));
+
+      // Only Road clearing's description mentions debris.
+      await tester.enterText(find.byType(TextField), 'debris');
+      await tester.pump();
+
+      expect(find.text('Road clearing'), findsOneWidget);
+      expect(find.text('Flood Evacuation'), findsNothing);
+    });
+
+    testWidgets('no match shows one muted line', (tester) async {
+      await _pumpGrid(tester, AppState(FakeApi()));
+
+      await tester.enterText(find.byType(TextField), 'zzz');
+      await tester.pump();
+
+      expect(find.text('No services match "zzz".'), findsOneWidget);
+      expect(find.text('Road clearing'), findsNothing);
+    });
+
+    testWidgets('fits a 320px phone in Filipino without overflow', (tester) async {
+      final state = AppState(FakeApi());
+      await _pumpGrid(tester, state);
+      tester.view.physicalSize = const Size(320, 2400);
+      tester.view.devicePixelRatio = 1;
+      state.setLanguage(AppLanguage.filipino);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Paglinis ng daan'), findsOneWidget);
+      expect(find.text('Maghanap ng serbisyo'), findsOneWidget);
     });
   });
 }
