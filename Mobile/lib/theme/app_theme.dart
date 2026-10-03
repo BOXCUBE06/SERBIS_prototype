@@ -230,6 +230,10 @@ class AppText {
 ThemeData buildAppTheme() {
   final base = ThemeData(useMaterial3: true);
   return base.copyWith(
+    // Material's default is adaptive: compact on desktop and web, which takes 8dp
+    // off every button's minimum height. The 48dp and 44dp targets this app
+    // promises have to hold in a browser as well.
+    visualDensity: VisualDensity.standard,
     scaffoldBackgroundColor: AppColors.paper,
     // Replaces GoogleFonts.interTextTheme, which did the same thing over the
     // network (and Inter itself, replaced by Plus Jakarta Sans). `apply` keeps Material's own sizes and only swaps the family.

@@ -64,7 +64,7 @@ class ServiceFormFields extends StatelessWidget {
         for (final (index, section) in form.spec.sections.indexed)
           if (sectionIndex == null || sectionIndex == index)
           _Group(
-            label: labels ? tr(f, section.labelKey) : null,
+            label: labels && !_repeatsItsField(f, section) ? tr(f, section.labelKey) : null,
             children: [
               for (final field in section.fields) ...[
                 // Off by default — see StructuredFormData.setAddressIsMyAddress.
@@ -144,6 +144,13 @@ class ServiceFormFields extends StatelessWidget {
     );
   }
 }
+
+/// A one-field section whose heading is the field's own label ("Description" over
+/// "Description"): the heading adds nothing.
+bool _repeatsItsField(bool filipino, ServiceFormSection section) =>
+    section.fields.length == 1 &&
+    !section.fields.first.isChoice &&
+    trEn(filipino, section.fields.first.label) == tr(filipino, section.labelKey);
 
 /// A section with its heading, or just its fields when the step supplies one.
 class _Group extends StatelessWidget {

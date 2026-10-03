@@ -179,7 +179,7 @@ class AmbulanceReviewCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: 104,
+                    width: 124,
                     child: Text(label, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
                   ),
                   Expanded(child: Text(value, style: AppText.body(size: AppTextSize.body))),

@@ -265,12 +265,12 @@ const Map<String, (String, String)> _strings = {
   'track.box.reason': ("MDRRMO's reason: {reason}", 'Dahilan ng MDRRMO: {reason}'),
 
   'library.title': ('Safety library', 'Aklatan ng kaligtasan'),
-  'library.subtitle': ('First aid, preparedness and hotlines', 'Pangunang lunas, paghahanda at mga hotline'),
+  'library.subtitle': ('First aid, preparedness and hotlines', 'Pangunang lunas at paghahanda'),
   'library.hotlines': ('Emergency hotlines', 'Mga hotline ng emerhensiya'),
   'library.first_aid': ('Basic first aid', 'Pangunahing lunas (First Aid)'),
   'library.preparedness': ('Disaster preparedness', 'Paghahanda sa sakuna'),
   'library.documents': ('MDRRMO documents', 'Mga dokumento ng MDRRMO'),
-  'article.offline_title': ('Available offline', 'Available kahit offline'),
+  'article.offline_title': ('Available offline', 'Magagamit kahit offline'),
   'library.police': ('Police (PNP)', 'Pulis (PNP)'),
   'library.fire': ('Fire (BFP)', 'Bumbero (BFP)'),
   'library.national_emergency': ('National Emergency', 'Pambansang Emerhensiya'),
@@ -346,7 +346,7 @@ const Map<String, (String, String)> _strings = {
   // Shown in place of a value the server did not send. Never a plausible-looking
   // placeholder: the barangay here is what an emergency request is dispatched on.
   'profile.value_missing': ('Not on file', 'Wala sa talaan'),
-  'profile.account_settings': ('Account settings', 'Mga Setting ng Account'),
+  'profile.account_settings': ('Account settings', 'Mga setting ng account'),
   'profile.language': ('Language', 'Wika'),
   'profile.sms_alerts': ('MDRRMO text alerts', 'Mga text alert ng MDRRMO'),
   // Blunt on purpose, in both directions. The switch controls one thing:
@@ -628,8 +628,8 @@ const Map<String, String> _filipinoOf = {
   'Count everyone who regularly eats and sleeps in this household, including yourself.':
       'Bilangin ang lahat ng regular na kumakain at natutulog sa bahay na ito, kasama ka.',
   'Type of assistance needed': 'Uri ng tulong na kailangan',
-  'Food packs': 'Food packs',
-  'Hygiene kits': 'Hygiene kits',
+  'Food packs': 'Mga food pack',
+  'Hygiene kits': 'Mga hygiene kit',
   'Drinking water': 'Inuming tubig',
   'Temporary shelter materials': 'Materyales para sa pansamantalang tirahan',
   'Preferred date': 'Nais na petsa',
