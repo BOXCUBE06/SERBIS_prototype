@@ -1028,20 +1028,4 @@ class AppState extends ChangeNotifier {
       return false;
     }
   }
-
-  ServiceRequest? get activeRequest {
-    if (requests.isEmpty) {
-      return null;
-    }
-
-    for (final item in requests) {
-      if (item.status == ReqStatus.review ||
-          item.status == ReqStatus.booked ||
-          item.status == ReqStatus.scheduled) {
-        return item;
-      }
-    }
-
-    return requests.first;
-  }
 }

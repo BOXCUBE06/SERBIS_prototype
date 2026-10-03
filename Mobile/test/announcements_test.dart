@@ -58,7 +58,7 @@ Future<AppState> _pumpHome(
   String? error,
   bool fromCache = false,
 }) async {
-  // Tall, so the announcements below the Safety guides card are built: the
+  // Tall, so the announcements below the Services tiles are built: the
   // list only builds what is on screen.
   tester.view.physicalSize = const Size(1080, 3600);
   tester.view.devicePixelRatio = 3;

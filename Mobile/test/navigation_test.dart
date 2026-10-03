@@ -221,25 +221,24 @@ void main() {
       ));
     }
 
-    testWidgets('a large Safety guides card opens the Library', (tester) async {
+    testWidgets('the Safety guides tile opens the Library', (tester) async {
       var opened = 0;
       await pumpHome(tester, onOpenLibrary: () => opened++);
 
-      expect(find.text('Safety guides'), findsOneWidget);
       expect(find.textContaining('First aid'), findsOneWidget);
 
-      final card = find.ancestor(of: find.text('Safety guides'), matching: find.byType(InkWell)).first;
-      expect(tester.getSize(card).height, greaterThanOrEqualTo(88));
+      final tile = find.ancestor(of: find.text('Safety guides'), matching: find.byType(InkWell)).first;
+      expect(tester.getSize(tile).height, greaterThanOrEqualTo(132));
 
       await tester.tap(find.text('Safety guides'));
       expect(opened, 1);
     });
 
-    testWidgets('the ambulance shortcut hands its type to the shell', (tester) async {
+    testWidgets('the patient transport tile hands the ambulance type to the shell', (tester) async {
       final seen = <ServiceType>[];
       await pumpHome(tester, onOpenService: seen.add);
 
-      await tester.tap(find.text(ServiceType.ambulance.titleFor(false)));
+      await tester.tap(find.text('Patient transport'));
       expect(seen, [ServiceType.ambulance]);
     });
 
@@ -247,7 +246,7 @@ void main() {
       var opened = 0;
       await pumpHome(tester, onOpenBorrow: () => opened++);
 
-      await tester.tap(find.text('Borrow Equipment'));
+      await tester.tap(find.text('Borrow equipment'));
       await tester.pump();
 
       expect(opened, 1);

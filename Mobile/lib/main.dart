@@ -510,6 +510,12 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     _appState.loadMaterials();
     // Cached list first, then the server; the built-in list until either lands.
     _appState.loadHotlines();
+    // Home's "Your requests" lists open loans too, so they cannot wait for a
+    // visit to the Borrow tab.
+    if (!widget.user.isAwaitingApproval && _appState.borrowingAllowed) {
+      _appState.hydrateBorrowRequests();
+      _appState.loadBorrowRequests(silent: true);
+    }
     // The bell's dot compares against when the sheet was last opened.
     _appState.loadNotificationsSeen();
   }
@@ -621,6 +627,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     });
   }
 
+  /// A loan's row on Home or Track: the Borrow tab, on My requests. After the
+  /// frame, because a tab never opened before is only built on it.
+  void _openMyLoans() {
+    _goTo(_borrowTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _borrowScreen.currentState?.showMyRequests());
+  }
+
   void _openProfilePage() {
     if (_profileOpen) return;
     _profileOpen = true;
@@ -726,6 +739,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                 onOpenServices: () => _goTo(_servicesTab),
                 onOpenService: _openService,
                 onOpenBorrow: () => _goTo(_borrowTab),
+                onOpenMyLoans: _openMyLoans,
               ),
           deps: widget.user),
       slot(

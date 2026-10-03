@@ -74,7 +74,7 @@ void main() {
     );
 
     expect(find.text('Register'), findsOneWidget);
-    expect(find.text('Need help now?'), findsNothing);
+    expect(find.text('Patient transport'), findsNothing);
   });
 
   testWidgets(
@@ -87,7 +87,7 @@ void main() {
       _FakeApi(meError: const ApiException('Cannot connect to server.')),
     );
 
-    expect(find.text('Need help now?'), findsOneWidget);
+    expect(find.text('Patient transport'), findsOneWidget);
     expect(find.text('Register'), findsNothing);
   });
 
@@ -103,7 +103,7 @@ void main() {
     );
 
     expect(find.text('Register'), findsOneWidget);
-    expect(find.text('Need help now?'), findsNothing);
+    expect(find.text('Patient transport'), findsNothing);
   });
 
   testWidgets('a real server error (not a connection failure) shows login too',
@@ -118,7 +118,7 @@ void main() {
     );
 
     expect(find.text('Register'), findsOneWidget);
-    expect(find.text('Need help now?'), findsNothing);
+    expect(find.text('Patient transport'), findsNothing);
   });
 
   testWidgets('a successful restore caches the profile for next time',
@@ -127,7 +127,7 @@ void main() {
 
     await _pump(tester, _FakeApi());
 
-    expect(find.text('Need help now?'), findsOneWidget);
+    expect(find.text('Patient transport'), findsOneWidget);
     final cached = await UserCache().load();
     expect(cached, isNotNull);
     expect(cached!.fullName, 'Maria Santos');

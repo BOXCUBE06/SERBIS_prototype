@@ -621,6 +621,10 @@ class ServiceRequest {
   /// record. Null when there was no trip or it arrived.
   final String? noArrivalReason;
 
+  /// The ambulance booking's destination; the API sends it flat on every row
+  /// (null for anything that is not a booking). Home titles a trip with it.
+  final String? destination;
+
   const ServiceRequest({
     this.id,
     this.serviceId,
@@ -639,6 +643,7 @@ class ServiceRequest {
     this.scheduledAt,
     this.responders = const [],
     this.noArrivalReason,
+    this.destination,
   });
 
   /// True once a Booked slot's own window has passed with nobody moving the
@@ -842,6 +847,7 @@ class ServiceRequest {
       scheduledAt: scheduledAt,
       responders: responders,
       noArrivalReason: noArrivalReason,
+      destination: destination,
     );
   }
 
@@ -910,6 +916,7 @@ class ServiceRequest {
               .toList() ??
           const [],
       noArrivalReason: json['no_arrival_reason'] as String?,
+      destination: json['destination'] as String?,
     );
   }
 }
@@ -937,6 +944,7 @@ extension ServiceRequestCache on ServiceRequest {
         'service_category': serviceCategory,
         'scheduled_at': scheduledAt?.toIso8601String(),
         'no_arrival_reason': noArrivalReason,
+        'destination': destination,
       };
 
   /// Rebuilds a cached row, or returns null for an entry this version of the
@@ -984,6 +992,7 @@ extension ServiceRequestCache on ServiceRequest {
       // ordinary unscheduled request instead of failing to parse.
       scheduledAt: _parseTimestamp(json['scheduled_at']),
       noArrivalReason: json['no_arrival_reason'] as String?,
+      destination: json['destination'] as String?,
     );
   }
 }

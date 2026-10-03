@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
+import '../data/hotlines.dart';
 import '../models/request_models.dart';
 import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/borrow_request_widgets.dart' show mdrrmoNumber;
 import '../widgets/motion.dart';
+import '../widgets/request_summary.dart';
 import '../widgets/shared_widgets.dart';
 import 'borrow_equipment_screen.dart';
+
+/// Home's side margin, from the redesign (Home2 on the design canvas).
+const double _gutter = 16;
+
+/// The red-tinted border of the emergency bar; no theme token is this light.
+const Color _emergencyBorder = Color(0xFFF0C9C3);
 
 class HomeScreen extends StatelessWidget {
   final AppState appState;
 
   /// Threaded through to [BorrowEquipmentScreen] for its delivery-address
-  /// "Same as my address" checkbox — nothing else on this screen reads it.
+  /// "Same as my address" checkbox, and read for the greeting.
   final AppUser user;
   final VoidCallback onOpenTrack;
   final VoidCallback onOpenLibrary;
@@ -25,6 +34,10 @@ class HomeScreen extends StatelessWidget {
   /// instead, which is what a host with no Borrow tab wants.
   final VoidCallback? onOpenBorrow;
 
+  /// Opens Borrow → My requests, for a loan's row. Left out, it opens Borrow
+  /// the way [onOpenBorrow] does.
+  final VoidCallback? onOpenMyLoans;
+
   const HomeScreen({
     super.key,
     required this.appState,
@@ -36,12 +49,22 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenServices,
     required this.onOpenService,
     this.onOpenBorrow,
+    this.onOpenMyLoans,
   });
+
+  void _openBorrow(BuildContext context) {
+    if (onOpenBorrow != null) return onOpenBorrow!();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BorrowEquipmentScreen(appState: appState, user: user)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final f = appState.language == AppLanguage.filipino;
-    final activeRequest = appState.activeRequest;
+    final hotline = mdrrmoNumber(appState.hotlines);
+    final active = openSummaries(appState, f);
 
     final list = ListView(
       padding: EdgeInsets.zero,
@@ -49,230 +72,74 @@ class HomeScreen extends StatelessWidget {
       // controller and losing `primary`.
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        AppHeader(onNotificationsTap: onOpenNotifications, onProfileTap: onOpenProfile, filipino: f),
-        const SizedBox(height: 14),
-
-        // ── Who is signed in ── the account type and name, so an organization
-        // or a barangay hall sees at a glance which account this phone is on.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
-          child: _AccountLine(user: user, filipino: f),
+        _HomeHeader(
+          user: user,
+          filipino: f,
+          unread: appState.hasUnreadNotifications,
+          onNotificationsTap: onOpenNotifications,
+          onProfileTap: onOpenProfile,
         ),
-        const SizedBox(height: 14),
-
-        // ── Active Service Request ──
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
+          padding: const EdgeInsets.fromLTRB(_gutter, 16, _gutter, 0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SectionHeader(
-                title: tr(f, 'home.active_request'),
-                actionLabel: activeRequest == null ? null : tr(f, 'common.view_all'),
-                onAction: onOpenTrack,
-              ),
-              if (activeRequest == null)
-                AppCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const IconBadge(
-                            icon: Icons.assignment_outlined,
-                            bg: AppColors.green50,
-                            fg: AppColors.green700,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(tr(f, 'home.no_active_title'), style: AppText.display(size: AppTextSize.bodyLg)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  tr(f, 'home.no_active_desc'),
-                                  style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      AppButton(label: tr(f, 'home.submit_a_request'), onPressed: onOpenServices),
-                    ],
-                  ),
-                )
-              else
-                AppCard(
-                  leftAccent: AppColors.blue600,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          IconBadge(
-                            icon: activeRequest.displayIcon,
-                            bg: activeRequest.displayBg,
-                            fg: activeRequest.displayFg,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(activeRequest.displayTitle(f), style: AppText.display(size: AppTextSize.bodyLg)),
-                                const SizedBox(height: 2),
-                                Text(
-                                    activeRequest.refNo.isEmpty
-                                        ? (f ? 'Naghihintay ng reference number' : 'Reference number pending')
-                                        : 'Ref #${activeRequest.refNo}',
-                                    style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
-                              ],
-                            ),
-                          ),
-                          StatusBadge(
-                            activeRequest.status,
-                            filipino: f,
-                            label: activeRequest.statusLabelFor(f),
-                            bg: activeRequest.statusBg,
-                            fg: activeRequest.statusFg,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      ...activeRequest.metaLines.map(
-                        (m) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.place_outlined, size: 14, color: AppColors.inkFaint),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(m, style: AppText.body(size: AppTextSize.small))),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(11),
-                        decoration: BoxDecoration(color: AppColors.paper, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                        child: Text(
-                          activeRequest.note ?? _statusMessage(f, activeRequest),
-                          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.6),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(child: AppButton(label: tr(f, 'common.view_details'), onPressed: onOpenTrack)),
-                          if (activeRequest.cancellable) ...[
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: AppButton(
-                                label: tr(f, 'common.cancel_request'),
-                                style: AppButtonStyle.outline,
-                                onPressed: () => showCancelDialog(
-                                  context,
-                                  activeRequest.refNo,
-                                  () => appState.cancelRequest(activeRequest.id),
-                                  filipino: f,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
+              if (hotline != null) _EmergencyBar(filipino: f, onTap: () => callHotlineNumber(hotline)),
+              // An organization MDRRMO has not activated yet cannot file
+              // anything; it is told why instead of offered the tiles.
+              if (user.isAwaitingApproval) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(AppRadius.md)),
+                  child: Text(tr(f, 'awaiting.title'), style: AppText.body(size: 15, color: AppColors.amberInk, height: 1.4)),
                 ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 22),
-
-        // ── Need help now ── withheld from an organization still awaiting approval:
-        // both tiles lead to requests it cannot file yet.
-        if (!user.isAwaitingApproval)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: tr(f, 'home.need_help_now')),
+              ],
+              if (active.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _RequestsSection(requests: active, filipino: f, onSeeAll: onOpenTrack, onOpenBorrow: onOpenMyLoans ?? () => _openBorrow(context)),
+              ],
+              const SizedBox(height: 20),
+              _SectionTitle(tr(f, 'home.services')),
+              const SizedBox(height: 10),
+              _TileGrid(tiles: [
+                if (!user.isAwaitingApproval)
+                  _Tile(
+                    icon: Icons.airport_shuttle_outlined,
+                    title: tr(f, 'home.tile.transport'),
+                    subtitle: tr(f, 'home.tile.transport_desc'),
+                    onTap: () => onOpenService(ServiceType.ambulance),
+                  ),
+                if (!user.isAwaitingApproval && appState.borrowingAllowed)
+                  _Tile(
+                    icon: Icons.inventory_2_outlined,
+                    title: tr(f, 'borrow.title'),
+                    subtitle: tr(f, 'home.tile.borrow_desc'),
+                    onTap: () => _openBorrow(context),
+                  ),
+                // The Library: a reference, opened when wanted.
+                _Tile(
+                  icon: Icons.menu_book_outlined,
+                  title: tr(f, 'home.safety_guides'),
+                  subtitle: tr(f, 'home.tile.guides_desc'),
+                  onTap: onOpenLibrary,
+                ),
+                if (!user.isAwaitingApproval)
+                  _Tile(
+                    icon: Icons.grid_view_outlined,
+                    title: tr(f, 'home.tile.all'),
+                    subtitle: tr(f, 'home.tile.all_desc'),
+                    onTap: onOpenServices,
+                  ),
+              ]),
+              const SizedBox(height: 20),
               Row(
                 children: [
-                  Expanded(
-                    child: _QuickTypeCard(
-                      icon: ServiceType.ambulance.icon,
-                      bg: ServiceType.ambulance.bg,
-                      fg: ServiceType.ambulance.fg,
-                      title: ServiceType.ambulance.titleFor(f),
-                      subtitle: ServiceType.ambulance.subtitleFor(f),
-                      onTap: () => onOpenService(ServiceType.ambulance),
-                    ),
-                  ),
-                  if (appState.borrowingAllowed) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _QuickTypeCard(
-                      icon: Icons.inventory_2_outlined,
-                      bg: AppColors.green50,
-                      fg: AppColors.green700,
-                      title: trEn(f, 'Borrow Equipment'),
-                      subtitle: trEn(f, 'Wheelchairs, stretchers & more'),
-                      onTap: onOpenBorrow ??
-                          () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => BorrowEquipmentScreen(
-                                        appState: appState, user: user)),
-                              ),
-                    ),
-                  ),
-                  ],
+                  Expanded(child: _SectionTitle(tr(f, 'home.announcements'))),
+                  _SeeAll(label: tr(f, 'home.see_all'), onTap: onOpenLibrary),
                 ],
               ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 22),
-
-        // ── Safety guides ── the Library used to be a tab of its own; it is a
-        // reference, opened when wanted, not somewhere a resident lives.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
-          child: _SafetyGuidesCard(
-            title: tr(f, 'home.safety_guides'),
-            description: tr(f, 'home.safety_guides_desc'),
-            onTap: onOpenLibrary,
-          ),
-        ),
-
-        const SizedBox(height: 22),
-
-        // ── Announcements ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppLayout.gutter),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(
-                title: tr(f, 'home.announcements'),
-                actionLabel: tr(f, 'home.info_center'),
-                onAction: onOpenLibrary,
-              ),
-              // What MDRRMO has actually published, newest first. This section
-              // used to be two fixed tiles with invented timestamps ("Today ·
-              // 8:12 AM") and one permanently flagged NEW, so a resident who
-              // opened the app during a flood read a weather advisory written
-              // months earlier in a translation file.
+              const SizedBox(height: 6),
               ..._announcements(f),
             ],
           ),
@@ -283,26 +150,24 @@ class HomeScreen extends StatelessWidget {
 
     return RefreshIndicator(
       color: AppColors.green700,
-      onRefresh: () => appState.loadRequests(),
-      child: list,
+      onRefresh: () => Future.wait([
+        appState.loadRequests(),
+        if (!user.isAwaitingApproval && appState.borrowingAllowed) appState.loadBorrowRequests(),
+      ]),
+      // Phone-width on a tablet, the web build or a desktop window.
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: list),
+      ),
     );
   }
 
-  /// The two most recent published materials, or an honest line about why
-  /// there are none. Home shows a short list; the Library shows all of them,
-  /// which is what the section header's action opens.
+  /// The two most recent published materials, or one muted line about why
+  /// there are none. The Library shows all of them.
   List<Widget> _announcements(bool f) {
     if (appState.materials.isEmpty) {
-      if (appState.materialsLoading) {
-        return const [SizedBox.shrink()];
-      }
-      return [
-        _AnnouncementNote(
-          text: appState.materialsError == null
-              ? tr(f, 'home.ann.empty')
-              : tr(f, 'home.ann.failed'),
-        ),
-      ];
+      if (appState.materialsLoading) return const [];
+      return [_MutedLine(appState.materialsError == null ? tr(f, 'home.ann.empty') : tr(f, 'home.ann.failed'))];
     }
 
     // The server sends them newest-first, but the offline index is ordered by
@@ -318,140 +183,159 @@ class HomeScreen extends StatelessWidget {
       });
 
     return [
-      for (final material in latest.take(2))
-        _AnnouncementTile(
-          icon: material.icon,
-          iconBg: AppColors.green50,
-          iconFg: AppColors.green700,
-          title: material.title,
-          time: material.publishedAt == null
-              ? tr(f, 'home.ann.no_date')
-              : formatTimelineTime(material.publishedAt!, f),
-          desc: [material.typeLabel, material.sizeLabel]
-              .where((part) => part.isNotEmpty)
-              .join(' · '),
-          onTap: onOpenLibrary,
-        ),
-      if (appState.materialsFromCache)
-        _AnnouncementNote(text: tr(f, 'home.ann.offline')),
+      SummaryCard(children: [
+        for (final material in latest.take(2))
+          _AnnouncementRow(
+            date: material.publishedAt == null
+                ? tr(f, 'home.ann.no_date')
+                : formatTimelineTime(material.publishedAt!, f),
+            title: material.title,
+            // Materials carry no body text; what they are is the next best line.
+            body: [material.typeLabel, material.sizeLabel].where((part) => part.isNotEmpty).join(' · '),
+            onTap: onOpenLibrary,
+          ),
+      ]),
+      if (appState.materialsFromCache) ...[
+        const SizedBox(height: 8),
+        _MutedLine(tr(f, 'home.ann.offline')),
+      ],
     ];
   }
-
-  String _statusMessage(bool f, ServiceRequest request) => request.isNotTransported
-      ? '${tr(f, 'status.not_transported')}: ${request.noArrivalReason!.trim()}'
-      : switch (request.status) {
-        ReqStatus.review => tr(f, 'home.status.review'),
-        ReqStatus.booked => tr(f, 'home.status.booked'),
-        ReqStatus.scheduled => tr(f, request.isProgram ? 'home.status.approved' : 'home.status.scheduled'),
-        ReqStatus.completed => tr(f, 'home.status.completed'),
-        ReqStatus.cancelled => tr(f, 'home.status.cancelled'),
-        ReqStatus.disapproved => tr(f, 'home.status.disapproved'),
-      };
 }
 
-/// The account type and name at the top of the home screen. An organization
-/// waiting for MDRRMO also gets the reason it cannot request anything yet.
-class _AccountLine extends StatelessWidget {
+String _greetingKey(DateTime now) => now.hour < 12
+    ? 'home.greet.morning'
+    : now.hour < 18
+        ? 'home.greet.afternoon'
+        : 'home.greet.evening';
+
+class _HomeHeader extends StatelessWidget {
   final AppUser user;
   final bool filipino;
+  final bool unread;
+  final VoidCallback onNotificationsTap;
+  final VoidCallback onProfileTap;
 
-  const _AccountLine({required this.user, required this.filipino});
+  const _HomeHeader({
+    required this.user,
+    required this.filipino,
+    required this.unread,
+    required this.onNotificationsTap,
+    required this.onProfileTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
+    final white = Colors.white.withValues(alpha: .88);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          tr(f, user.accountTypeKey).toUpperCase(),
-          style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.inkFaint, letterSpacing: .5),
-        ),
-        const SizedBox(height: 2),
-        Text(user.accountName, style: AppText.display(size: AppTextSize.title)),
-        if (user.isOrganization && user.fullName.isNotEmpty)
-          Text(
-            user.fullName,
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(_gutter, AppLayout.headerTop, 8, 22),
+      decoration: const BoxDecoration(
+        gradient: AppColors.headerGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withValues(alpha: .22)),
+                ),
+                child: const Icon(Icons.shield_outlined, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  tr(f, 'home.brand'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.display(size: 13, weight: FontWeight.w600, color: Colors.white.withValues(alpha: .92), letterSpacing: 1.5),
+                ),
+              ),
+              HeaderButton(
+                icon: Icons.notifications_outlined,
+                label: tr(f, unread ? 'nav.notifications_new' : 'nav.notifications'),
+                dot: unread,
+                onTap: onNotificationsTap,
+              ),
+              HeaderButton(icon: Icons.person_outline_rounded, label: tr(f, 'nav.profile'), onTap: onProfileTap),
+            ],
           ),
-        if (user.isAwaitingApproval) ...[
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(11),
-            decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-            child: Text(
-              tr(f, 'awaiting.title'),
-              style: AppText.body(size: AppTextSize.small, color: AppColors.amber600, height: 1.5),
+          const SizedBox(height: 14),
+          Text(tr(f, _greetingKey(DateTime.now())), style: AppText.body(size: 15, color: white)),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(right: _gutter - 8),
+            child: Text(user.accountName, style: AppText.display(size: 24, weight: FontWeight.w600, color: Colors.white)),
+          ),
+          // A barangay hall or an organization also sees which kind of account
+          // this phone is on, and who the contact person is.
+          if (user.isOrganization || user.isBarangay)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                [tr(f, user.accountTypeKey), if (user.isOrganization && user.fullName.isNotEmpty) user.fullName].join(' · '),
+                style: AppText.body(size: 15, color: white),
+              ),
             ),
-          ),
         ],
-      ],
+      ),
     );
   }
 }
 
-/// The way into the Library: first aid, disaster preparedness and hotlines.
-/// Large and labelled in words, so it reads as a place to go rather than as
-/// one more piece of information on the page.
-class _SafetyGuidesCard extends StatelessWidget {
-  final String title;
-  final String description;
+/// Small, separate and always reachable; hidden when no MDRRMO number is known.
+class _EmergencyBar extends StatelessWidget {
+  final bool filipino;
   final VoidCallback onTap;
 
-  const _SafetyGuidesCard({required this.title, required this.description, required this.onTap});
+  const _EmergencyBar({required this.filipino, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => PressableScale(child: _card());
-
-  Widget _card() {
-    return Semantics(
-      button: true,
-      label: title,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: Material(
-        color: AppColors.green50,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 88),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.green600.withValues(alpha: .35)),
-              borderRadius: BorderRadius.circular(AppRadius.xl),
-            ),
+  Widget build(BuildContext context) {
+    final f = filipino;
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: _emergencyBorder),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: AppColors.green700,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 26),
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(color: AppColors.red50, shape: BoxShape.circle),
+                  child: const Icon(Icons.phone_outlined, size: 18, color: AppColors.red600),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.green900)),
-                      const SizedBox(height: 3),
-                      Text(
-                        description,
-                        style: AppText.body(size: AppTextSize.body, color: AppColors.ink, height: 1.4),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: '${tr(f, 'home.emergency')} '),
+                      TextSpan(
+                        text: tr(f, 'home.emergency.call'),
+                        style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.red600),
                       ),
-                    ],
+                    ]),
+                    style: AppText.body(size: 15, height: 1.35),
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.green700, size: 26),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.ink),
               ],
             ),
           ),
@@ -461,48 +345,155 @@ class _SafetyGuidesCard extends StatelessWidget {
   }
 }
 
-class _QuickTypeCard extends StatelessWidget {
+class _RequestsSection extends StatelessWidget {
+  final List<RequestSummary> requests;
+  final bool filipino;
+  final VoidCallback onSeeAll;
+
+  /// A loan row opens Borrow → My requests.
+  final VoidCallback onOpenBorrow;
+
+  const _RequestsSection({required this.requests, required this.filipino, required this.onSeeAll, required this.onOpenBorrow});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    final more = requests.length - 2;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _SectionTitle(tr(f, 'home.your_requests'))),
+            _SeeAll(label: '${tr(f, 'home.see_all')} (${requests.length})', onTap: onSeeAll),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SummaryCard(children: [
+          for (final r in requests.take(2)) RequestSummaryRow(request: r, onTap: r.isBorrow ? onOpenBorrow : onSeeAll),
+          if (more > 0)
+            InkWell(
+              onTap: onSeeAll,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Center(
+                  child: Text(
+                    more == 1 ? tr(f, 'home.more_one') : tr(f, 'home.more_many').replaceAll('{n}', '$more'),
+                    style: AppText.display(size: 15, weight: FontWeight.w500, color: AppColors.green700),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      ],
+    );
+  }
+}
+
+/// Two tiles a row; an odd one out keeps its half width.
+class _TileGrid extends StatelessWidget {
+  final List<_Tile> tiles;
+
+  const _TileGrid({required this.tiles});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < tiles.length; i += 2)
+          Padding(
+            padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: tiles[i]),
+                  const SizedBox(width: 12),
+                  Expanded(child: i + 1 < tiles.length ? tiles[i + 1] : const SizedBox.shrink()),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
   final IconData icon;
-  final Color bg;
-  final Color fg;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
-  const _QuickTypeCard({
-    required this.icon,
-    required this.bg,
-    required this.fg,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+  const _Tile({required this.icon, required this.title, required this.subtitle, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => PressableScale(child: _card());
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(18);
+    return PressableScale(
+      child: Material(
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: radius, side: const BorderSide(color: AppColors.cardBorder)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 132),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(color: AppColors.greenTonal, borderRadius: BorderRadius.circular(12)),
+                    child: Icon(icon, size: 22, color: AppColors.green700),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.3)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: AppText.body(size: 13.5, color: AppColors.inkMuted, height: 1.35)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-  Widget _card() {
+class _AnnouncementRow extends StatelessWidget {
+  final String date;
+  final String title;
+  final String body;
+  final VoidCallback onTap;
+
+  const _AnnouncementRow({required this.date, required this.title, required this.body, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          border: Border.all(color: AppColors.line, width: 1.5),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconBadge(icon: icon, bg: bg, fg: fg),
-            const SizedBox(height: 10),
-            Text(title,
-                style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600),
-                maxLines: 2),
-            const SizedBox(height: 2),
-            Text(subtitle,
-                style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted)),
+            Text(date, style: AppText.body(size: 13, color: AppColors.inkMuted)),
+            const SizedBox(height: 4),
+            Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.35)),
+            if (body.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.body(size: 15, color: AppColors.inkMuted, height: 1.45),
+              ),
+            ],
           ],
         ),
       ),
@@ -510,76 +501,41 @@ class _QuickTypeCard extends StatelessWidget {
   }
 }
 
-class _AnnouncementTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconBg;
-  final Color iconFg;
-  final String title;
-  final String time;
-  final String desc;
-  final VoidCallback? onTap;
+class _SectionTitle extends StatelessWidget {
+  final String text;
 
-  const _AnnouncementTile({
-    required this.icon,
-    required this.iconBg,
-    required this.iconFg,
-    required this.title,
-    required this.time,
-    required this.desc,
-    this.onTap,
-  });
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: AppText.display(size: 18, weight: FontWeight.w600, color: AppColors.sectionInk));
+}
+
+class _SeeAll extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SeeAll({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        foregroundColor: AppColors.green700,
+        textStyle: AppText.display(size: 15, weight: FontWeight.w600),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 36, iconSize: 17, radius: AppRadius.sm),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // The NEW badge that used to sit here was hardcoded true, so it
-                // never came off. A flag that is always on is not information.
-                Text(title, style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600)),
-                const SizedBox(height: 3),
-                Text(time, style: AppText.body(size: AppTextSize.caption, color: AppColors.inkFaint)),
-                const SizedBox(height: 4),
-                Text(desc, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5)),
-              ],
-            ),
-          ),
-        ],
-      ),
-      ),
+      child: Text(label),
     );
   }
 }
 
-/// A one-line explanation in place of, or under, the announcement tiles: no
-/// materials published yet, the fetch failed, or these are saved copies.
-class _AnnouncementNote extends StatelessWidget {
+class _MutedLine extends StatelessWidget {
   final String text;
 
-  const _AnnouncementNote({required this.text});
+  const _MutedLine(this.text);
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(text, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
-    );
-  }
+  Widget build(BuildContext context) => Text(text, style: AppText.body(size: 15, color: AppColors.inkMuted));
 }
