@@ -36,7 +36,7 @@
             <v-btn size="x-small" variant="outlined" color="primary" class="text-none" @click="prefs.columns = defaultColumns(type)">Defaults</v-btn>
           </div>
         </div>
-        <v-row dense class="mb-2">
+        <v-row density="compact" class="mb-2">
           <v-col v-for="x in fields" :key="x.key" cols="12" sm="6">
             <v-checkbox v-model="prefs.columns" :value="x.key" :label="x.label" density="compact" hide-details></v-checkbox>
           </v-col>

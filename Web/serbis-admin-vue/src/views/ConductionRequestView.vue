@@ -180,7 +180,7 @@
             ></v-autocomplete>
 
             <h3 class="section-title">Patient</h3>
-            <v-row dense>
+            <v-row density="compact">
               <v-col cols="12" sm="8">
                 <v-text-field v-model="createDialog.form.patient_name" label="Patient name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
@@ -199,7 +199,7 @@
             </v-row>
 
             <h3 class="section-title">Trip</h3>
-            <v-row dense>
+            <v-row density="compact">
               <v-col cols="12" sm="6">
                 <v-text-field v-model="createDialog.form.origin" label="From:" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
               </v-col>
@@ -448,7 +448,7 @@
                    checkpoint has a Now button so a time is one click while the
                    crew is on the radio. -->
               <h3 class="section-title">Departure</h3>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col v-for="[field, label] in checkpointFields(['departed_office_at'])" :key="field" cols="12">
                   <div class="d-flex align-center gap-2">
                     <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
@@ -461,7 +461,7 @@
               </v-row>
 
               <h3 class="section-title">Destination</h3>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col cols="12">
                   <!-- Ticking clears both destination checkpoints (the server refuses
                        them beside a reason) and asks for the reason instead. -->
@@ -492,7 +492,7 @@
               </v-row>
 
               <h3 class="section-title">Return</h3>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col v-for="[field, label] in checkpointFields(['returned_office_at'])" :key="field" cols="12">
                   <div class="d-flex align-center gap-2">
                     <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>

@@ -535,7 +535,7 @@
           ></v-autocomplete>
 
           <template v-else>
-            <v-row dense>
+            <v-row density="compact">
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_first_name"

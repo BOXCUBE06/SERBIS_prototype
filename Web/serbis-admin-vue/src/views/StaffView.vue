@@ -499,7 +499,7 @@ const onUsernameInput = (v) => {
 const phoneRule = (v) => {
   const value = String(v || '').trim()
   if (value === '') return modal.value.editing || 'Mobile number is required.'
-  return /^(09\d{9}|639\d{9}|\+639\d{9})$/.test(value) || 'Use a mobile number like 09171234567.'
+  return /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(value) || 'Use a mobile number like 09171234567.'
 }
 
 // Stored as +639…; staff read and type 09….
