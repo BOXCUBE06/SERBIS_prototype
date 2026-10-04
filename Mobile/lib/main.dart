@@ -475,6 +475,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   final _ambulanceForm = GlobalKey<ServiceRequestFormState>();
   final _borrowScreen = GlobalKey<BorrowEquipmentScreenState>();
 
+  /// The request Track should scroll to; Track clears it once there.
+  final _trackFocus = ValueNotifier<int?>(null);
+
   /// The Ambulance tab is showing its flow (not a loading or unavailable
   /// screen), which takes the whole screen: no bottom nav.
   bool get _ambulanceFlowShowing =>
@@ -536,6 +539,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _appState.removeListener(_onAppStateChanged);
     _user.dispose();
+    _trackFocus.dispose();
     _drafts.dispose();
     super.dispose();
   }
@@ -683,6 +687,16 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     ));
   }
 
+  /// A row in the bell sheet: the Track tab, scrolled to that request. The
+  /// sheet may have been opened from a page above the tabs (Profile, Library),
+  /// so those pages close first.
+  void _openRequest(ServiceRequest request) {
+    final shell = ModalRoute.of(context);
+    Navigator.of(context).popUntil((route) => route == shell);
+    _goTo(_trackTab);
+    _trackFocus.value = request.id;
+  }
+
   void _openNotifications() {
     NotificationsSheet.show(
       context,
@@ -692,6 +706,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
       requests: [..._appState.requests],
       advisories: [..._appState.advisories],
       advisoriesError: _appState.advisoriesError,
+      // Before the mark below, or nothing would ever be "New".
+      seenAt: _appState.notificationsSeenAt,
+      onOpenRequest: _openRequest,
     );
     // Opening the sheet is what reads it: the dot goes off now.
     _appState.markNotificationsSeen();
@@ -801,6 +818,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                 onOpenProfile: onOpenProfile,
                 onOpenMyLoans: _openMyLoans,
                 onBrowseServices: () => _goTo(_servicesTab),
+                focusRequest: _trackFocus,
               )),
     ];
 

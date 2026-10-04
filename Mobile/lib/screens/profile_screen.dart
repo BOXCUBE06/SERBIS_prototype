@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
+import '../data/hotlines.dart';
 import '../data/safety_files.dart';
 import '../state/account_store.dart';
 import '../state/api_service.dart';
@@ -12,6 +13,8 @@ import '../state/material_cache.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/barangay_field.dart';
+import '../widgets/borrow_request_widgets.dart' show mdrrmoNumber;
 import '../widgets/form_inputs.dart';
 import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
@@ -224,6 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final filipino = widget.appState.language == AppLanguage.filipino;
+    final mdrrmo = mdrrmoNumber(widget.appState.hotlines);
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
@@ -270,18 +274,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _name.isEmpty ? tr(filipino, 'profile.value_missing') : _name,
                             textAlign: TextAlign.center,
                             style: AppText.display(
-                              size: AppTextSize.headline,
-                              weight: FontWeight.w600,
+                              size: AppTextSize.cardName,
                               color: _name.isEmpty ? AppColors.inkMuted : AppColors.ink,
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.sm),
-                          _detailRow(Icons.phone_outlined, widget.user.phoneDisplay, filipino),
-                          const SizedBox(height: 4),
-                          _detailRow(Icons.place_outlined, _address, filipino),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            _contactLine(filipino),
+                            textAlign: TextAlign.center,
+                            style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted),
+                          ),
                           const SizedBox(height: AppSpacing.lg),
                           AppButton(
-                            label: tr(filipino, 'profile.account_details'),
+                            label: tr(filipino, 'profile.edit_details'),
                             style: AppButtonStyle.outline,
                             onPressed: () => _showAccountDetails(context, filipino),
                           ),
@@ -298,29 +303,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // is no FCM and no firebase_messaging anywhere in the app — so
                     // it stays deleted rather than coming back as a second fake
                     // control.
-                    SectionHeader(title: tr(filipino, 'profile.account_settings')),
+                    SectionHeader(title: tr(filipino, 'profile.settings')),
                     SummaryCard(children: [
-                      _SettingsRow(
-                        icon: Icons.sms_outlined,
-                        title: tr(filipino, 'profile.sms_alerts'),
-                        subtitle: tr(
-                          filipino,
-                          widget.user.smsOptIn ? 'profile.sms_alerts_on' : 'profile.sms_alerts_off',
-                        ),
-                        // The row is tappable as well as the switch: the switch
-                        // is a small target and the row is already the app's tap
-                        // surface for everything else in this list.
-                        onTap: _smsBusy ? null : () => _setSmsOptIn(!widget.user.smsOptIn),
-                        trailing: _smsBusy
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Switch(
-                                value: widget.user.smsOptIn,
-                                onChanged: _setSmsOptIn,
-                              ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SettingsRow(
+                            icon: Icons.sms_outlined,
+                            title: tr(filipino, 'profile.sms_alerts'),
+                            subtitle: tr(
+                              filipino,
+                              widget.user.smsOptIn ? 'profile.sms_alerts_on' : 'profile.sms_alerts_off',
+                            ),
+                            // The row is tappable as well as the switch: the switch
+                            // is a small target and the row is already the app's tap
+                            // surface for everything else in this list.
+                            onTap: _smsBusy ? null : () => _setSmsOptIn(!widget.user.smsOptIn),
+                            trailing: _smsBusy
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : _AlertsSwitch(value: widget.user.smsOptIn, onChanged: _setSmsOptIn),
+                          ),
+                          if (!widget.user.smsOptIn)
+                            _OffNote(text: tr(filipino, 'profile.sms_alerts_off_note')),
+                        ],
                       ),
                       _SettingsRow(
                         icon: Icons.language_outlined,
@@ -345,15 +354,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       ),
-                      _SettingsRow(
-                        icon: Icons.logout_rounded,
-                        title: tr(filipino, 'profile.logout'),
-                        titleColor: AppColors.red600,
-                        iconBg: AppColors.red50,
-                        iconFg: AppColors.red600,
-                        onTap: () => _confirmLogout(context),
-                      ),
+                      // Hidden rather than dead when the hotline list has no
+                      // MDRRMO entry to dial.
+                      if (mdrrmo != null)
+                        _SettingsRow(
+                          icon: Icons.call_outlined,
+                          title: tr(filipino, 'profile.contact_mdrrmo'),
+                          subtitle: tr(filipino, 'profile.contact_mdrrmo_desc'),
+                          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
+                          onTap: () => callHotlineNumber(mdrrmo),
+                        ),
                     ]),
+                    const SizedBox(height: AppSpacing.xl),
+                    // Out of the list so it is never tapped on the way to a setting.
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _confirmLogout(context),
+                        icon: const Icon(Icons.logout_rounded, size: 20),
+                        label: Text(
+                          tr(filipino, 'profile.logout'),
+                          style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.red600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.red600,
+                          backgroundColor: AppColors.surface,
+                          side: const BorderSide(color: AppColors.redBorder, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -364,24 +394,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _detailRow(IconData icon, String text, bool filipino) {
-    final missing = text.isEmpty;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: 18, color: AppColors.inkMuted),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            missing ? tr(filipino, 'profile.value_missing') : text,
-            style: AppText.body(
-              size: AppTextSize.body,
-              color: missing ? AppColors.inkFaint : AppColors.inkMuted,
-            ),
-          ),
-        ),
-      ],
-    );
+  /// "0917… · San Fabian". A missing half says so rather than vanishing: the
+  /// barangay is what requests are dispatched on. Both missing is one mark.
+  String _contactLine(bool filipino) {
+    final missing = tr(filipino, 'profile.value_missing');
+    final phone = widget.user.phoneDisplay;
+    if (phone.isEmpty && _address.isEmpty) return missing;
+    return '${phone.isEmpty ? missing : phone} · ${_address.isEmpty ? missing : _address}';
   }
 
   /// The resident's own contact details, editable since `PATCH /me` shipped.
@@ -811,9 +830,6 @@ class _SettingsRow extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
-  final Color? titleColor;
-  final Color iconBg;
-  final Color iconFg;
   final VoidCallback? onTap;
 
   const _SettingsRow({
@@ -821,9 +837,6 @@ class _SettingsRow extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.trailing,
-    this.titleColor,
-    this.iconBg = AppColors.green50,
-    this.iconFg = AppColors.green700,
     this.onTap,
   });
 
@@ -837,20 +850,13 @@ class _SettingsRow extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              IconBadge(icon: icon, bg: iconBg, fg: iconFg, size: 44, iconSize: 20),
+              IconBadge(icon: icon, bg: AppColors.green50, fg: AppColors.green700, size: 44, iconSize: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: AppText.display(
-                        size: AppTextSize.bodyLg,
-                        weight: FontWeight.w600,
-                        color: titleColor ?? AppColors.ink,
-                      ),
-                    ),
+                    Text(title, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(subtitle!, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
@@ -867,9 +873,75 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-/// The editable half of "Account details".
+/// The text-alerts switch with both states drawn as controls. Material's off
+/// state is a pale outline on white that reads as disabled; this one keeps a
+/// dark outline and thumb so Off still looks like something to tap.
+class _AlertsSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _AlertsSwitch({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetStateProperty<Color> pick(Color on, Color off) =>
+        WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? on : off);
+
+    return Switch(
+      value: value,
+      onChanged: onChanged,
+      thumbColor: pick(AppColors.surface, AppColors.inkMuted),
+      trackColor: pick(AppColors.green700, AppColors.surface),
+      trackOutlineColor: pick(AppColors.green700, AppColors.inkMuted),
+      trackOutlineWidth: const WidgetStatePropertyAll(2),
+    );
+  }
+}
+
+/// Under an Off switch: what turning alerts off costs, in amber.
+class _OffNote extends StatelessWidget {
+  final String text;
+
+  const _OffNote({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.amber50,
+        border: Border.all(color: AppColors.amberBorder),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.amberInk),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: AppText.body(size: AppTextSize.body, color: AppColors.amberInk, height: 1.45)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Keeps a sheet's content to the 600dp column the screens use.
+Widget _capped(Widget child) => Align(
+      alignment: Alignment.topCenter,
+      heightFactor: 1,
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: child),
+    );
+
+/// "Edit my details": the editable name, barangay and street, the number shown
+/// locked, and Save pinned under a scrolling body.
 ///
-/// Its own widget rather than a `StatefulBuilder` inside the sheet: it owns five
+/// Its own widget rather than a `StatefulBuilder` inside the sheet: it owns four
 /// controllers, per-field errors and an in-flight flag, and a sheet that rebuilt
 /// from the parent would drop what was being typed.
 class _EditDetailsSheet extends StatefulWidget {
@@ -877,7 +949,7 @@ class _EditDetailsSheet extends StatefulWidget {
   final UserStore userStore;
   final bool filipino;
 
-  /// Read-only, shown for context. Not editable here or on the endpoint.
+  /// The barangay's name on file, for the confirm dialog and the locked row.
   final String barangay;
   final ValueChanged<AppUser> onSaved;
 
@@ -906,6 +978,47 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   final Map<String, String> _errors = {};
   String? _formError;
   bool _saving = false;
+
+  late int? _barangayId = widget.user.barangayId;
+  List<BarangayOption> _barangays = [];
+  bool _loadingBarangays = false;
+  bool _barangaysFailed = false;
+
+  /// A barangay hall or organization is tied to its barangay; the server
+  /// refuses the change for them, so they get the locked row instead.
+  bool get _canMove => !widget.user.isBarangay && !widget.user.isOrganization;
+
+  @override
+  void initState() {
+    super.initState();
+    // Save enables the moment something differs from what is on file.
+    for (final c in [_first, _middle, _last, _street]) {
+      c.addListener(() => setState(() {}));
+    }
+    if (_canMove) _loadBarangays();
+  }
+
+  Future<void> _loadBarangays() async {
+    setState(() {
+      _loadingBarangays = true;
+      _barangaysFailed = false;
+    });
+    try {
+      final list = await widget.userStore.barangays();
+      if (mounted) setState(() => _barangays = list);
+    } catch (_) {
+      if (mounted) setState(() => _barangaysFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingBarangays = false);
+    }
+  }
+
+  String _barangayName(int? id) {
+    for (final b in _barangays) {
+      if (b.id == id) return b.name;
+    }
+    return '';
+  }
 
   @override
   void dispose() {
@@ -937,9 +1050,9 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   }
 
   /// Only what actually changed is sent. PATCH leaves an absent key alone.
-  Map<String, String?> _changes() {
-    final changed = <String, String?>{};
-    void diff(String key, String current, String original) {
+  Map<String, Object?> _changes() {
+    final changed = <String, Object?>{};
+    void diff(String key, Object? current, Object? original) {
       if (current != original) changed[key] = current;
     }
 
@@ -947,8 +1060,24 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     diff('middle', _middle.text.trim(), widget.user.middleName);
     diff('last', _last.text.trim(), widget.user.lastName);
     diff('street', _street.text.trim(), widget.user.streetAddress);
+    if (_barangayId != null) diff('barangay', _barangayId, widget.user.barangayId);
 
     return changed;
+  }
+
+  /// Moving changes where new requests and texts go, so it is confirmed first.
+  Future<bool> _confirmMove() {
+    final missing = _tr('profile.value_missing');
+    return showConfirmDialog(
+      context,
+      title: _tr('profile.barangay_confirm_title'),
+      body: _tr('profile.barangay_confirm_body')
+          .replaceAll('{old}', widget.barangay.isEmpty ? missing : widget.barangay)
+          .replaceAll('{new}', _barangayName(_barangayId)),
+      keepLabel: _tr('profile.barangay_confirm_keep'),
+      confirmLabel: _tr('profile.barangay_confirm_go'),
+      destructive: false,
+    );
   }
 
   Future<void> _save() async {
@@ -956,10 +1085,9 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     if (!_validate()) return;
 
     final changes = _changes();
-    if (changes.isEmpty) {
-      setState(() => _formError = _tr('profile.no_changes'));
-      return;
-    }
+    if (changes.isEmpty) return;
+    if (changes.containsKey('barangay') && !await _confirmMove()) return;
+    if (!mounted) return;
 
     setState(() {
       _saving = true;
@@ -968,10 +1096,11 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 
     try {
       final updated = await widget.userStore.updateProfile(
-        firstName: changes['first'],
-        middleName: changes['middle'],
-        lastName: changes['last'],
-        streetAddress: changes['street'],
+        firstName: changes['first'] as String?,
+        middleName: changes['middle'] as String?,
+        lastName: changes['last'] as String?,
+        streetAddress: changes['street'] as String?,
+        barangayId: changes['barangay'] as int?,
       );
 
       if (!mounted) return;
@@ -1016,160 +1145,196 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SheetFrame(
-      title: _tr('profile.account_details'),
-      scrollable: true,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppTextField(
-            label: _tr('profile.first_name'),
-            hint: 'e.g. Juan',
-            controller: _first,
-            errorText: _errors['first'],
-            enabled: !_saving,
-          ),
-          AppTextField(
-            label: _tr('profile.middle_name_optional'),
-            hint: 'e.g. Reyes',
-            controller: _middle,
-            enabled: !_saving,
-          ),
-          AppTextField(
-            label: _tr('profile.last_name'),
-            hint: 'e.g. Delacruz',
-            controller: _last,
-            errorText: _errors['last'],
-            enabled: !_saving,
-          ),
-          AppTextField(
-            label: _tr('profile.street_address'),
-            hint: 'e.g. Purok 3, Rizal St.',
-            controller: _street,
-            enabled: !_saving,
-          ),
-          // The number is the login and where every code goes, so it is shown
-          // here and moved by its own two-step flow, not edited inline.
-          _ReadOnlyField(
-            label: _tr('profile.phone'),
-            value: widget.user.phoneDisplay,
-            filipino: widget.filipino,
-          ),
-          _LockedNote(icon: Icons.shield_outlined, text: _tr('profile.phone_locked')),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: _tr('phonechange.button'),
-            style: AppButtonStyle.outline,
-            onPressed: _saving ? null : _changePhone,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _ReadOnlyField(
-            label: _tr('profile.barangay'),
-            value: widget.barangay,
-            filipino: widget.filipino,
-          ),
-          _LockedNote(icon: Icons.lock_outline_rounded, text: _tr('profile.barangay_locked')),
-          if (_formError != null) ...[
-            const SizedBox(height: AppSpacing.lg),
+    final dirty = _changes().isNotEmpty;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .9),
+      child: Container(
+        width: double.infinity,
+        clipBehavior: Clip.antiAlias,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.red50,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: Text(
-                _formError!,
-                style: AppText.body(size: AppTextSize.body, color: AppColors.red600, height: 1.4),
+              padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 12, AppLayout.gutter, 12),
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.cardDivider))),
+              child: _capped(SheetHeader(title: _tr('profile.edit_details'), filipino: widget.filipino)),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, AppSpacing.lg),
+                child: _capped(Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _GroupLabel(text: _tr('profile.group_name')),
+                    AppTextField(
+                      label: _tr('profile.first_name'),
+                      hint: 'e.g. Juan',
+                      controller: _first,
+                      errorText: _errors['first'],
+                      enabled: !_saving,
+                    ),
+                    AppTextField(
+                      label: _tr('profile.middle_name_optional'),
+                      hint: 'e.g. Reyes',
+                      controller: _middle,
+                      enabled: !_saving,
+                    ),
+                    AppTextField(
+                      label: _tr('profile.last_name'),
+                      hint: 'e.g. Delacruz',
+                      controller: _last,
+                      errorText: _errors['last'],
+                      enabled: !_saving,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _GroupLabel(text: _tr('profile.group_contact')),
+                    // The number is the login and where every code goes, so it is
+                    // shown here and moved by its own two-step flow, not edited
+                    // inline.
+                    _LockedRow(
+                      label: _tr('profile.phone'),
+                      value: widget.user.phoneDisplay,
+                      filipino: widget.filipino,
+                      action: TextButton(
+                        onPressed: _saving ? null : _changePhone,
+                        style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
+                        child: Text(
+                          _tr('profile.phone_change_link'),
+                          semanticsLabel: _tr('phonechange.button'),
+                          style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.green700),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _GroupLabel(text: _tr('profile.group_address')),
+                    if (_canMove)
+                      BarangayField(
+                        barangays: _barangays,
+                        value: _barangayId,
+                        loading: _loadingBarangays,
+                        failed: _barangaysFailed,
+                        onRetry: _loadBarangays,
+                        onChanged: (id) => setState(() => _barangayId = id),
+                        filipino: widget.filipino,
+                        enabled: !_saving,
+                      )
+                    else ...[
+                      _LockedRow(
+                        label: _tr('barangay.label'),
+                        value: widget.barangay,
+                        filipino: widget.filipino,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+                    AppTextField(
+                      label: _tr('profile.street_address'),
+                      hint: 'e.g. Purok 3, Rizal St.',
+                      controller: _street,
+                      enabled: !_saving,
+                    ),
+                    if (_formError != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.red50,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                        child: Text(
+                          _formError!,
+                          style: AppText.body(size: AppTextSize.body, color: AppColors.red600, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ],
+                )),
               ),
             ),
+            // Pinned, so Save is in reach however far the form is scrolled.
+            Container(
+              padding: EdgeInsets.fromLTRB(AppLayout.gutter, 12, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.cardDivider))),
+              child: _capped(AppButton(
+                label: _tr('profile.save'),
+                loading: _saving,
+                onPressed: _saving || !dirty ? null : _save,
+              )),
+            ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          AppButton(
-            label: _tr('profile.save'),
-            loading: _saving,
-            onPressed: _saving ? null : _save,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: _tr('common.cancel'),
-            style: AppButtonStyle.outline,
-            onPressed: _saving ? null : () => Navigator.pop(context),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// Why a field is read-only, under it, with the lock that says so.
-class _LockedNote extends StatelessWidget {
-  final IconData icon;
+class _GroupLabel extends StatelessWidget {
   final String text;
 
-  const _LockedNote({required this.icon, required this.text});
+  const _GroupLabel({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 18, color: AppColors.inkMuted),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(text, style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5)),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Semantics(
+        header: true,
+        child: Text(text, style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk)),
+      ),
     );
   }
 }
 
-/// A value the resident can see but not change. Kept visually distinct from an
-/// editable field — paper fill, no focus colour — so "locked" reads before the
-/// explanation under it does.
-class _ReadOnlyField extends StatelessWidget {
+/// A value the resident can see but not change here: text with a lock, not an
+/// input box, so it never looks editable. [action] sits at the end (Change).
+class _LockedRow extends StatelessWidget {
   final String label;
   final String value;
   final bool filipino;
+  final Widget? action;
 
-  const _ReadOnlyField({
+  const _LockedRow({
     required this.label,
     required this.value,
     required this.filipino,
+    this.action,
   });
 
   @override
   Widget build(BuildContext context) {
     final missing = value.isEmpty;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.cardDivider))),
+      child: Row(
         children: [
-          Text(label, style: AppText.fieldLabel()),
-          const SizedBox(height: AppSpacing.xs),
-          Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 48),
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.paper,
-              border: Border.all(color: AppColors.line, width: 1.5),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Text(
-              missing ? tr(filipino, 'profile.value_missing') : value,
-              style: AppText.body(
-                size: AppTextSize.bodyLg,
-                color: missing ? AppColors.inkFaint : AppColors.ink,
-              ),
+          const Icon(Icons.lock_outline_rounded, size: 20, color: AppColors.inkMuted),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                const SizedBox(height: 2),
+                Text(
+                  missing ? tr(filipino, 'profile.value_missing') : value,
+                  style: AppText.display(
+                    size: AppTextSize.bodyLg,
+                    weight: FontWeight.w600,
+                    color: missing ? AppColors.inkFaint : AppColors.ink,
+                  ),
+                ),
+              ],
             ),
           ),
+          if (action != null) action!,
         ],
       ),
     );

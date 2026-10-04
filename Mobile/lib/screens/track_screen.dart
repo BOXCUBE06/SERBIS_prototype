@@ -23,6 +23,10 @@ class TrackScreen extends StatefulWidget {
   /// Opens the Services tab, from the empty state.
   final VoidCallback onBrowseServices;
 
+  /// A request id to scroll to (a row tapped in the bell sheet). Cleared once
+  /// taken, so tapping the same row again still lands.
+  final ValueNotifier<int?>? focusRequest;
+
   const TrackScreen({
     super.key,
     required this.appState,
@@ -30,6 +34,7 @@ class TrackScreen extends StatefulWidget {
     required this.onOpenProfile,
     required this.onOpenMyLoans,
     required this.onBrowseServices,
+    this.focusRequest,
   });
 
   @override
@@ -38,6 +43,53 @@ class TrackScreen extends StatefulWidget {
 
 class _TrackScreenState extends State<TrackScreen> {
   bool _showAllPast = false;
+  final Map<int, GlobalKey> _cardKeys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusRequest?.addListener(_focus);
+    _focus();
+  }
+
+  @override
+  void didUpdateWidget(TrackScreen old) {
+    super.didUpdateWidget(old);
+    if (old.focusRequest != widget.focusRequest) {
+      old.focusRequest?.removeListener(_focus);
+      widget.focusRequest?.addListener(_focus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusRequest?.removeListener(_focus);
+    super.dispose();
+  }
+
+  /// Scrolls to the focused card after the frame that shows this tab. A card
+  /// folded under "Show older requests" is unfolded first, then scrolled to.
+  void _focus() {
+    final id = widget.focusRequest?.value;
+    if (id == null) return;
+    widget.focusRequest!.value = null;
+
+    bool reveal() {
+      final target = _cardKeys[id]?.currentContext;
+      if (target == null) return false;
+      // Below the pinned header rather than under it.
+      Scrollable.ensureVisible(target, alignment: .2, duration: const Duration(milliseconds: 300));
+      return true;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || reveal() || _showAllPast) return;
+      setState(() => _showAllPast = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) reveal();
+      });
+    });
+  }
 
   /// Newest first; a row with no date sinks.
   List<ServiceRequest> _newestFirst(Iterable<ServiceRequest> rows) {
@@ -56,6 +108,7 @@ class _TrackScreenState extends State<TrackScreen> {
     final phone = mdrrmoNumber(widget.appState.hotlines);
 
     Widget card(ServiceRequest r) => Padding(
+          key: r.id == null ? null : _cardKeys.putIfAbsent(r.id!, GlobalKey.new),
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: _RequestCard(
             request: r,

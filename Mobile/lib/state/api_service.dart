@@ -575,10 +575,10 @@ class ApiService {
   }
 
   /// Resident-scoped profile edit. Only the fields the backend accepts are
-  /// sent — the name, purok/street and `sms_opt_in`; the phone number moves through the two-step code flow below, and `barangay_id`, `status`,
-  /// `photo` and `password` are refused there and have no business being
-  /// offered here — the barangay in particular is what every service request is
-  /// dispatched on.
+  /// sent — the name, purok/street, `sms_opt_in` and `barangay_id` (Head of the
+  /// Family accounts only; a request keeps the barangay it was filed under).
+  /// The phone number moves through the two-step code flow below; `status`,
+  /// `photo` and `password` are refused there.
   ///
   /// Fields are omitted when null rather than sent empty, because the endpoint
   /// is a PATCH: an absent key leaves the column alone, while an empty string
@@ -590,6 +590,7 @@ class ApiService {
     String? lastName,
     String? streetAddress,
     bool? smsOptIn,
+    int? barangayId,
   }) async {
     final data = await _patch(
       '/me',
@@ -599,6 +600,7 @@ class ApiService {
         lastName: lastName,
         streetAddress: streetAddress,
         smsOptIn: smsOptIn,
+        barangayId: barangayId,
       ),
     );
     return (data['user'] as Map<String, dynamic>?) ?? {};
@@ -618,6 +620,7 @@ class ApiService {
     String? lastName,
     String? streetAddress,
     bool? smsOptIn,
+    int? barangayId,
   }) {
     return <String, dynamic>{
       if (firstName != null) 'first_name': firstName,
@@ -634,6 +637,7 @@ class ApiService {
       // else here would make the value that goes out differ in type from the
       // value that comes back.
       if (smsOptIn != null) 'sms_opt_in': smsOptIn,
+      if (barangayId != null) 'barangay_id': barangayId,
     };
   }
 

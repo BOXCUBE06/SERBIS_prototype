@@ -14,6 +14,12 @@ class AppColors {
   static const red600 = Color(0xFFB03B27);
   static const red50 = Color(0xFFFBEAE6);
 
+  /// Outline of a red action drawn on white (Log out).
+  static const redBorder = Color(0xFFE2B4AD);
+
+  /// Outline of an amber note on [amber50].
+  static const amberBorder = Color(0xFFF0D2A8);
+
   static const blue600 = Color(0xFF2D6CA8);
   static const blue50 = Color(0xFFE7F0F8);
 
@@ -133,6 +139,9 @@ class AppTextSize {
   static const double title = 17;
   static const double headline = 21;
   static const double display = 28;
+
+  /// The resident's name on the profile card.
+  static const double cardName = 20;
 }
 
 /// A 4-unit scale so spacing reads as a deliberate rhythm instead of one

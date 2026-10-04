@@ -97,7 +97,8 @@ Future<void> _pumpSheet(
   await tester.pumpWidget(MaterialApp(
     theme: buildAppTheme(),
     home: Scaffold(
-      body: NotificationsSheet(requests: requests, filipino: filipino),
+      // The fixtures are dated July 2026; keep them inside the 30-day window.
+      body: NotificationsSheet(requests: requests, filipino: filipino, now: DateTime.utc(2026, 7, 31)),
     ),
   ));
 }
@@ -275,7 +276,7 @@ void main() {
         (tester) async {
       await _pumpSheet(tester, const []);
 
-      expect(find.text('No updates yet'), findsOneWidget);
+      expect(find.text('No updates on your requests in the last 30 days.'), findsOneWidget);
       expect(find.textContaining('glad to have you'), findsNothing);
     });
 
@@ -283,7 +284,7 @@ void main() {
         (tester) async {
       await _pumpSheet(tester, [_request(status: 'Responding')]);
 
-      // The plain-language status box for a Responding row, not the badge word.
+      // The plain-language status for a Responding row, not the badge word.
       expect(find.text('MDRRMO is responding'), findsOneWidget);
       expect(find.textContaining('TXN-000007'), findsOneWidget);
       // A real timestamp, not the old fixed copy.
@@ -311,14 +312,12 @@ void main() {
     });
 
     testWidgets('says what it covers', (tester) async {
-      // The note used to end "MDRRMO advisories are not sent here yet". They
-      // are now — see advisories_test.dart — so the note says so instead of
-      // disclaiming a feed that exists.
+      // The window, and where the reminders this list does not hold go.
       await _pumpSheet(tester, [_request(status: 'Pending')]);
 
       expect(
         find.text(
-          'MDRRMO advisories sent to you, and updates about your own requests.',
+          'Requests from the last 30 days. Reminders like equipment due dates come as phone notifications.',
         ),
         findsOneWidget,
       );
@@ -327,7 +326,7 @@ void main() {
     testWidgets('is translated', (tester) async {
       await _pumpSheet(tester, const [], filipino: true);
 
-      expect(find.text('Wala pang update'), findsOneWidget);
+      expect(find.text('Walang update sa iyong mga kahilingan sa nakaraang 30 araw.'), findsOneWidget);
     });
   });
 }

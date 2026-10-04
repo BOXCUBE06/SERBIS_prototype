@@ -10,6 +10,7 @@ import 'package:serbis/models/advisory.dart';
 import 'package:serbis/models/request_models.dart';
 import 'package:serbis/theme/app_theme.dart';
 import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
+import 'package:serbis/widgets/request_summary.dart' show SummaryCard;
 import 'package:serbis/widgets/service_widgets.dart' show ConfirmationSheet;
 import 'package:serbis/widgets/shared_widgets.dart';
 
@@ -35,28 +36,35 @@ Future<void> _pumpSheet(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(
     theme: buildAppTheme(),
-    home: Scaffold(body: NotificationsSheet(requests: requests, advisories: advisories, filipino: filipino)),
+    home: Scaffold(
+      body: NotificationsSheet(
+        requests: requests,
+        advisories: advisories,
+        filipino: filipino,
+        // The fixtures are dated August 2026; keep them inside the 30-day window.
+        now: DateTime.utc(2026, 8, 10),
+      ),
+    ),
   ));
 }
 
 void main() {
   group('the notifications sheet', () {
-    testWidgets('draws each request with a status box, not a badge', (tester) async {
+    testWidgets('draws each request with a one-line status pill in Track\'s words', (tester) async {
       await _pumpSheet(tester, requests: [_request('Pending', id: 1), _request('Resolved', id: 2)]);
 
-      // Two request boxes, plus the "no advisories" box above them.
-      expect(find.byType(StatusBox), findsNWidgets(3));
+      // Compact rows: no full status boxes, and no "no advisories" box either.
+      expect(find.byType(StatusBox), findsNothing);
       expect(find.byType(StatusBadge), findsNothing);
       expect(find.text('Waiting for MDRRMO'), findsOneWidget);
       expect(find.text('Completed'), findsOneWidget);
       expect(find.text('Road clearing'), findsNWidgets(2));
     });
 
-    testWidgets('a disapproved request says why in the box', (tester) async {
+    testWidgets('a disapproved request says so in its pill', (tester) async {
       await _pumpSheet(tester, requests: [_request('Disapproved', remarks: 'Outside our service area.')]);
 
       expect(find.text('Not approved'), findsOneWidget);
-      expect(find.textContaining('Outside our service area.'), findsOneWidget);
     });
 
     testWidgets('the close button is a 44dp target', (tester) async {
@@ -72,14 +80,14 @@ void main() {
       await _pumpSheet(tester, requests: [_request('Pending')]);
 
       expect(find.text('MDRRMO advisories'), findsOneWidget);
-      expect(find.text('Your requests'), findsOneWidget);
+      expect(find.text('New'), findsOneWidget);
       expect(find.text('MDRRMO ADVISORIES'), findsNothing);
     });
 
     testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
       await _pumpSheet(tester, requests: [_request('Pending')], size: const Size(1400, 1000));
 
-      expect(tester.getSize(find.byType(StatusBox).last).width, lessThanOrEqualTo(600));
+      expect(tester.getSize(find.byType(SummaryCard)).width, lessThanOrEqualTo(600));
     });
 
     testWidgets('an advisory is read in 15px or larger', (tester) async {

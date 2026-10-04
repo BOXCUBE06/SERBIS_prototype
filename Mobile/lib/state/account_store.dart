@@ -25,6 +25,10 @@ class AppUser {
   final String phone;
   final String address;
 
+  /// `tbl_residents.barangay_id`, null when the payload has none. Editable by a
+  /// Head of the Family through `PATCH /me`.
+  final int? barangayId;
+
   /// Purok/street — `tbl_residents.street_address`, added because the
   /// barangay relation alone is not enough for a dispatcher to find a
   /// household (MDRRMO feedback, 2026-09-19). Optional, and editable through
@@ -62,6 +66,7 @@ class AppUser {
     this.email = '',
     this.phone = '',
     required this.address,
+    this.barangayId,
     this.streetAddress = '',
     this.hasPhoto = false,
     this.smsOptIn = true,
@@ -138,6 +143,7 @@ class AppUser {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       address: address,
+      barangayId: barangayId,
       streetAddress: streetAddress ?? this.streetAddress,
       hasPhoto: hasPhoto ?? this.hasPhoto,
       smsOptIn: smsOptIn ?? this.smsOptIn,
@@ -162,6 +168,7 @@ class AppUser {
       email: json['email_address'] as String? ?? '',
       phone: json['phone_number'] as String? ?? '',
       address: barangayName ?? '',
+      barangayId: (json['barangay_id'] as num?)?.toInt(),
       streetAddress: json['street_address'] as String? ?? '',
       hasPhoto: json['has_photo'] == true,
       // Absent falls back to true, matching the column's own default. Reading a
@@ -304,6 +311,7 @@ class UserStore {
     String? lastName,
     String? streetAddress,
     bool? smsOptIn,
+    int? barangayId,
   }) async {
     final json = await _api.updateProfile(
       firstName: firstName,
@@ -311,6 +319,7 @@ class UserStore {
       lastName: lastName,
       streetAddress: streetAddress,
       smsOptIn: smsOptIn,
+      barangayId: barangayId,
     );
     return _remember(json);
   }

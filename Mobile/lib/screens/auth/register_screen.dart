@@ -10,7 +10,7 @@ import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ambulance_steps.dart' show AmbulanceReviewCard;
 import '../../widgets/auth_layout.dart';
-import '../../widgets/form_inputs.dart';
+import '../../widgets/barangay_field.dart';
 import '../../widgets/form_section.dart' show SegmentedChoice;
 import '../../widgets/form_steps.dart';
 import '../../widgets/shared_widgets.dart';
@@ -337,7 +337,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
         ),
         const SizedBox(height: AppSpacing.lg),
-        _BarangayField(
+        BarangayField(
           barangays: _barangays,
           value: _barangayId,
           loading: _loadingBarangays,
@@ -458,116 +458,5 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       const SizedBox(height: AppSpacing.md),
     ];
-  }
-}
-
-/// Barangay picker for the register form, styled to match [AuthTextField].
-/// Sign-up is impossible without it, so a failed fetch gets its own retry
-/// rather than a silently empty list.
-class _BarangayField extends StatelessWidget {
-  final List<BarangayOption> barangays;
-  final int? value;
-  final bool loading;
-  final bool failed;
-  final VoidCallback onRetry;
-  final ValueChanged<int?> onChanged;
-
-  const _BarangayField({
-    required this.barangays,
-    required this.value,
-    required this.loading,
-    required this.failed,
-    required this.onRetry,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Barangay', style: AppText.fieldLabel()),
-          const SizedBox(height: AppSpacing.xs),
-          if (loading)
-            _shell(
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 10),
-                  Text('Loading barangays…',
-                      style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted)),
-                ],
-              ),
-            )
-          else if (failed)
-            _shell(
-              child: Row(
-                children: [
-                  const Icon(Icons.wifi_off_rounded, size: 20, color: AppColors.inkMuted),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Couldn't load barangays.",
-                      style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: onRetry,
-                    style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
-                    child: Text('Retry', style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.green700)),
-                  ),
-                ],
-              ),
-            )
-          else
-            // Typable: 64 barangays is too long to scroll. The FormField keeps
-            // the inline "Select your barangay" error the old dropdown had.
-            FormField<int>(
-              validator: (_) => value == null ? 'Select your barangay' : null,
-              builder: (state) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppSearchField(
-                    hint: 'Search your barangay',
-                    icon: Icons.location_on_outlined,
-                    value: _nameOf(value),
-                    items: [for (final b in barangays) b.name],
-                    onChanged: (name) => onChanged(barangays.firstWhere((b) => b.name == name).id),
-                  ),
-                  if (state.hasError)
-                    Text(state.errorText!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String? _nameOf(int? id) {
-    for (final b in barangays) {
-      if (b.id == id) return b.name;
-    }
-    return null;
-  }
-
-  Widget _shell({required Widget child}) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.fieldBorder),
-      ),
-      alignment: Alignment.centerLeft,
-      child: child,
-    );
   }
 }

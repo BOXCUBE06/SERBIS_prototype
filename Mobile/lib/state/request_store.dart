@@ -573,6 +573,10 @@ class AppState extends ChangeNotifier {
         advisories.any((a) => fresh(a.sentAt));
   }
 
+  /// When the sheet was last opened. Read before [markNotificationsSeen] to
+  /// split the sheet into "New" and "Earlier".
+  DateTime? get notificationsSeenAt => _notificationsSeenAt;
+
   void markNotificationsSeen() {
     _notificationsSeenAt = DateTime.now();
     _notificationsSeenLoaded = true;

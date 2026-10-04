@@ -21,6 +21,12 @@ class _Api extends ApiService {
 
   @override
   Future<List<int>?> fetchProfilePhoto(String residentId) async => null;
+
+  @override
+  Future<List<Map<String, dynamic>>> getBarangays() async => [
+        {'barangay_id': 1, 'barangay_name': 'San Fabian'},
+        {'barangay_id': 2, 'barangay_name': 'San Miguel'},
+      ];
 }
 
 const _resident = AppUser(
@@ -83,16 +89,28 @@ void main() {
     testWidgets('every settings row is at least 72dp tall', (tester) async {
       await _pump(tester);
 
-      for (final title in ['MDRRMO text alerts', 'Language', 'Offline materials', 'Log out']) {
+      for (final title in ['MDRRMO text alerts', 'Language', 'Offline materials', 'Contact MDRRMO']) {
         final row = find.ancestor(of: find.text(title), matching: find.byType(InkWell)).first;
         expect(tester.getSize(row).height, greaterThanOrEqualTo(72), reason: title);
       }
     });
 
-    testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
+    testWidgets('log out is its own 52dp button below the list, not a row in it', (tester) async {
+      await _pump(tester);
+
+      final button = find.ancestor(of: find.text('Log out'), matching: find.byType(OutlinedButton));
+      expect(tester.getSize(button).height, 52);
+      expect(find.descendant(of: find.byType(SummaryCard), matching: find.text('Log out')), findsNothing);
+      expect(tester.getTopLeft(button).dy, greaterThan(tester.getBottomLeft(find.byType(SummaryCard)).dy));
+    });
+
+    testWidgets('keeps its content to 600dp on a wide screen, header included', (tester) async {
       await _pump(tester, size: const Size(1400, 2000));
 
-      expect(tester.getSize(find.byType(SummaryCard)).width, lessThanOrEqualTo(600));
+      final card = find.byType(SummaryCard);
+      expect(tester.getSize(card).width, lessThanOrEqualTo(600));
+      // The header's title lines up with the cards instead of the screen edge.
+      expect(tester.getTopLeft(find.text('My profile')).dx, greaterThanOrEqualTo(tester.getTopLeft(card).dx));
     });
 
     for (final width in [320.0, 390.0]) {
@@ -153,15 +171,21 @@ void main() {
       expect(events, ['logout']);
     });
 
-    testWidgets('account details is one framed sheet with four inputs and the locked fields noted', (tester) async {
+    testWidgets('edit my details has a close button, its inputs and the number locked as text', (tester) async {
       await _pump(tester);
 
-      await tester.tap(find.text('Account details'));
+      await tester.tap(find.text('Edit my details'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(SheetFrame), findsOneWidget);
-      expect(find.byType(TextField), findsNWidgets(4));
+      expect(find.byType(SheetHeader), findsOneWidget);
+      expect(find.text('Cancel'), findsNothing);
+      // First, middle, last, the barangay search and street/purok.
+      expect(find.byType(TextField), findsNWidgets(5));
       expect(find.text('Barangay'), findsOneWidget);
+      expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+      for (final group in ['Name', 'Contact', 'Address']) {
+        expect(find.text(group), findsOneWidget, reason: group);
+      }
       for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
         expect(field.style!.fontSize, greaterThanOrEqualTo(16));
       }

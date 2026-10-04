@@ -139,17 +139,23 @@ const Map<String, (String, String)> _strings = {
   ),
 
   // ---- Notifications ----
-  'notif.empty_title': ('No updates yet', 'Wala pang update'),
-  'notif.empty_body': (
-    'Updates about your service requests appear here once you have submitted one.',
-    'Lilitaw dito ang mga update tungkol sa iyong mga kahilingan sa serbisyo kapag nagsumite ka na.',
+  'notif.subtitle': (
+    'Advisories and updates on your requests',
+    'Mga abiso at update sa iyong mga kahilingan',
   ),
   'notif.scope_note': (
-    'MDRRMO advisories sent to you, and updates about your own requests.',
-    'Mga abiso ng MDRRMO na ipinadala sa iyo, at mga update sa sarili mong kahilingan.',
+    'Requests from the last 30 days. Reminders like equipment due dates come as phone notifications.',
+    'Mga kahilingan sa nakaraang 30 araw. Ang mga paalala, gaya ng petsa ng pagbalik ng kagamitan, ay dumarating bilang notification sa telepono.',
   ),
   'notif.advisories': ('MDRRMO advisories', 'Mga abiso ng MDRRMO'),
   'notif.your_requests': ('Your requests', 'Iyong mga kahilingan'),
+  'notif.new': ('New', 'Bago'),
+  'notif.earlier': ('Earlier', 'Nakaraan'),
+  'notif.unread': ('Not yet seen', 'Hindi pa nakikita'),
+  'notif.requests_none': (
+    'No updates on your requests in the last 30 days.',
+    'Walang update sa iyong mga kahilingan sa nakaraang 30 araw.',
+  ),
   'notif.adv_none': (
     'No advisories have been sent to you.',
     'Wala pang abisong ipinadala sa iyo.',
@@ -158,7 +164,6 @@ const Map<String, (String, String)> _strings = {
     "Couldn't load advisories. This does not mean none were sent — check with your barangay.",
     'Hindi ma-load ang mga abiso. Hindi ito nangangahulugang wala — magtanong sa inyong barangay.',
   ),
-  'notif.adv_none_title': ('No advisories', 'Walang abiso'),
   'notif.adv_failed_title': ("Couldn't load advisories", 'Hindi ma-load ang mga abiso'),
   'notif.adv_date_unknown': ('Date not recorded', 'Walang naitalang petsa'),
 
@@ -282,24 +287,35 @@ const Map<String, (String, String)> _strings = {
   'profile.photo_change': ('Change profile photo', 'Palitan ang larawan sa profile'),
   'profile.photo_choose': ('Choose a photo', 'Pumili ng larawan'),
   'profile.photo_remove': ('Remove photo', 'Alisin ang larawan'),
-  // The sheet is read-only until a resident-scoped PATCH exists on the backend,
-  // so the button no longer promises an update it cannot perform.
-  'profile.account_details': ('Account details', 'Mga detalye ng account'),
-  'profile.barangay': ('Barangay', 'Barangay'),
-  // The barangay stays read-only: it is the field every service request is
-  // dispatched on, so moving is an MDRRMO operation, not a self-service edit.
-  'profile.barangay_locked': (
-    'Contact MDRRMO to change your barangay — it is what your requests are dispatched on.',
-    'Makipag-ugnayan sa MDRRMO para palitan ang iyong barangay — ito ang batayan ng pagpapadala sa iyong mga kahilingan.',
+  'profile.edit_details': ('Edit my details', 'I-edit ang aking detalye'),
+  'profile.group_name': ('Name', 'Pangalan'),
+  'profile.group_contact': ('Contact', 'Contact'),
+  'profile.group_address': ('Address', 'Address'),
+  'profile.phone_change_link': ('Change', 'Palitan'),
+  // Moving changes where new requests and texts go, never the old requests,
+  // so the dialog says both halves.
+  'profile.barangay_confirm_title': ('Change your barangay?', 'Palitan ang iyong barangay?'),
+  'profile.barangay_confirm_body': (
+    'Requests you already filed stay with {old}. New requests and MDRRMO texts go to {new}.',
+    'Mananatili sa {old} ang mga kahilingang naisumite mo na. Mapupunta sa {new} ang mga bagong kahilingan at text ng MDRRMO.',
   ),
+  'profile.barangay_confirm_keep': ('Go back', 'Bumalik'),
+  'profile.barangay_confirm_go': ('Change barangay', 'Palitan ang barangay'),
+  'barangay.label': ('Barangay', 'Barangay'),
+  'barangay.loading': ('Loading barangays…', 'Nilo-load ang mga barangay…'),
+  'barangay.failed': ("Couldn't load barangays.", 'Hindi ma-load ang mga barangay.'),
+  'barangay.retry': ('Retry', 'Subukan muli'),
+  'barangay.search': ('Search your barangay', 'Hanapin ang iyong barangay'),
+  'barangay.required': ('Select your barangay', 'Piliin ang iyong barangay'),
+  'profile.contact_mdrrmo': ('Contact MDRRMO', 'Tawagan ang MDRRMO'),
+  'profile.contact_mdrrmo_desc': ('Call for help with your account', 'Tumawag para sa tulong sa iyong account'),
   'profile.first_name': ('First name', 'Pangalan'),
   'profile.middle_name_optional': ('Middle name (optional)', 'Gitnang pangalan (opsyonal)'),
   'profile.last_name': ('Last name', 'Apelyido'),
-  'profile.street_address': ('Street / Purok (optional)', 'Kalye / Purok (opsyonal)'),
+  'profile.street_address': ('Street / purok (optional)', 'Kalye / purok (opsyonal)'),
   'profile.phone': ('Mobile number', 'Numero ng Telepono'),
   'profile.save': ('Save changes', 'I-save ang pagbabago'),
   'profile.saved': ('Profile updated.', 'Na-update ang profile.'),
-  'profile.no_changes': ('Nothing to save.', 'Walang isasave.'),
   'profile.required': ('Required', 'Kailangan'),
   'profile.password_current': ('Current password', 'Kasalukuyang password'),
   'profile.password_required': (
@@ -346,19 +362,17 @@ const Map<String, (String, String)> _strings = {
   // Shown in place of a value the server did not send. Never a plausible-looking
   // placeholder: the barangay here is what an emergency request is dispatched on.
   'profile.value_missing': ('Not on file', 'Wala sa talaan'),
-  'profile.account_settings': ('Account settings', 'Mga setting ng account'),
+  'profile.settings': ('Settings', 'Mga setting'),
   'profile.language': ('Language', 'Wika'),
   'profile.sms_alerts': ('MDRRMO text alerts', 'Mga text alert ng MDRRMO'),
-  // Blunt on purpose, in both directions. The switch controls one thing:
-  // whether SmsController's recipient query includes this number. There is no
-  // category of blast that ignores it, so the copy must not imply one.
-  'profile.sms_alerts_on': (
-    'On — MDRRMO text blasts are sent to your number.',
-    'Naka-on — ipinapadala sa numero mo ang mga text blast ng MDRRMO.',
-  ),
-  'profile.sms_alerts_off': (
-    'Off — you will not receive any MDRRMO text blast.',
-    'Naka-off — hindi ka makakatanggap ng kahit anong text blast ng MDRRMO.',
+  // The switch controls one thing: whether SmsController's recipient query
+  // includes this number. The word restates the switch, so it is not read by
+  // colour alone; the note under an Off switch says what that costs.
+  'profile.sms_alerts_on': ('On', 'Naka-on'),
+  'profile.sms_alerts_off': ('Off', 'Naka-off'),
+  'profile.sms_alerts_off_note': (
+    "You won't get flood or evacuation texts from MDRRMO.",
+    'Hindi ka makakatanggap ng text tungkol sa baha o paglikas mula sa MDRRMO.',
   ),
   'profile.offline_materials': ('Offline materials', 'Mga offline na materyal'),
   'profile.offline_materials_desc': ('{n} saved · {size} used', '{n} naka-save · {size} ang nagamit'),
