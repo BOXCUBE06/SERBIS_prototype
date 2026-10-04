@@ -58,8 +58,7 @@ class ResidentProfileUpdateTest extends TestCase
     }
 
     /**
-     * Unlike barangay_id, this is exactly the kind of self-correctable detail
-     * a profile edit exists for (MDRRMO feedback, 2026-09-19) — no password
+     * A self-correctable detail (MDRRMO feedback, 2026-09-19) — no password
      * required, since it changes nothing about where a login code is sent.
      */
     public function test_a_resident_can_set_and_change_their_street_address(): void
@@ -79,13 +78,43 @@ class ResidentProfileUpdateTest extends TestCase
         $this->assertSame('Purok 7, near the covered court', $this->resident->street_address);
     }
 
-    public function test_barangay_status_role_and_photo_cannot_be_set_by_the_resident(): void
+    public function test_a_head_of_the_family_can_move_to_another_barangay(): void
+    {
+        $this->actingAs($this->resident)->patchJson('/api/me', [
+            'barangay_id' => $this->elsewhere->barangay_id,
+        ])->assertOk()->assertJsonPath('user.barangay.barangay_name', 'San Miguel');
+
+        $this->assertSame($this->elsewhere->barangay_id, $this->resident->refresh()->barangay_id);
+    }
+
+    public function test_an_unknown_barangay_is_refused(): void
+    {
+        $this->actingAs($this->resident)->patchJson('/api/me', [
+            'barangay_id' => 999999,
+        ])->assertStatus(422)->assertJsonValidationErrors('barangay_id');
+
+        $this->assertSame($this->home->barangay_id, $this->resident->refresh()->barangay_id);
+    }
+
+    public function test_barangay_and_organization_accounts_cannot_move_themselves(): void
+    {
+        foreach ([Resident::TYPE_BARANGAY, Resident::TYPE_ORGANIZATION] as $type) {
+            $this->resident->forceFill(['account_type' => $type])->save();
+
+            $this->actingAs($this->resident)->patchJson('/api/me', [
+                'barangay_id' => $this->elsewhere->barangay_id,
+            ])->assertStatus(422)->assertJsonValidationErrors('barangay_id');
+
+            $this->assertSame($this->home->barangay_id, $this->resident->refresh()->barangay_id, $type);
+        }
+    }
+
+    public function test_status_role_photo_and_password_cannot_be_set_by_the_resident(): void
     {
         $originalPassword = $this->resident->password;
 
         $this->actingAs($this->resident)->patchJson('/api/me', [
             'first_name' => 'Maria',
-            'barangay_id' => $this->elsewhere->barangay_id,
             'status' => 'Active',
             'role' => 'admin',
             'photo' => 'https://evil.example.com/tracker.png',
@@ -94,9 +123,6 @@ class ResidentProfileUpdateTest extends TestCase
 
         $this->resident->refresh();
 
-        // barangay_id is the field every request is dispatched on: a resident who
-        // could move themselves could redirect their own dispatch.
-        $this->assertSame($this->home->barangay_id, $this->resident->barangay_id);
         // Inactive is what registration writes; only an admin activates.
         $this->assertSame('Inactive', $this->resident->status);
         $this->assertNull($this->resident->photo);

@@ -80,8 +80,8 @@ Route::middleware('throttle:api')->group(function () {
         // limiter, per the 'sms-blast' note in AppServiceProvider.
         Route::post('/admin/change-password', [AuthController::class, 'adminChangePassword'])
             ->middleware('throttle:password-change');
-        // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
-        // see the controller for why each one is excluded.
+        // Resident-scoped profile edit. barangay_id is accepted for Head of the
+        // Family accounts only; status and role never — see the controller.
         Route::patch('/me', [AuthController::class, 'updateMe']);
         // Moving the phone number, which is the login: the current password and
         // a code texted to the NEW number, in two steps. Limited per resident —

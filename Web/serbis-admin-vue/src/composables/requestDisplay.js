@@ -47,8 +47,13 @@ export const requesterInitials = (item) => {
 
 export const requesterPhone = (item) => displayPhone(item?.resident?.phone_number) || item?.walk_in_contact_number || 'N/A'
 
+// The barangay the request was filed under; the resident's current one only
+// for a response that predates the column. A resident can move since.
+export const requestBarangayName = (item) =>
+  item?.barangay?.barangay_name || item?.resident?.barangay?.barangay_name || ''
+
 export const requesterBarangay = (item) => {
-  if (item?.resident) {return item.resident.barangay?.barangay_name || 'Unknown Barangay'}
+  if (item?.resident) {return requestBarangayName(item) || 'Unknown Barangay'}
   return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
 }
 

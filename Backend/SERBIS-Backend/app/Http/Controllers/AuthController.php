@@ -546,22 +546,29 @@ class AuthController extends Controller
             'first_name' => 'sometimes|required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'sometimes|required|string|max:255',
-            // Purok/street. Unlike barangay_id below, this is exactly the kind
-            // of self-correctable detail a profile edit is for — MDRRMO
-            // dispatches on the barangay relation, not on this string.
+            // Purok/street: a self-correctable detail nothing is grouped on.
             'street_address' => 'sometimes|nullable|string|max:255',
             // The resident's own notification preference. Writable here — unlike
             // the columns below — because it decides only what this account
             // receives, and there is nobody else who should be deciding it.
             'sms_opt_in' => 'sometimes|required|boolean',
+            // A household that moved. Each request keeps the barangay it was
+            // filed under (tbl_service_request.barangay_id), so this only
+            // changes where new requests and SMS blasts go.
+            'barangay_id' => 'sometimes|required|integer|exists:tbl_barangay,barangay_id',
         ]);
+
+        // A barangay hall or organization is tied to its barangay (one hall
+        // account per barangay), so only MDRRMO moves those.
+        if (array_key_exists('barangay_id', $validated) && ! $user->isHeadOfFamily()) {
+            throw ValidationException::withMessages([
+                'barangay_id' => 'Only a Head of the Family account can change its barangay here. Please contact MDRRMO.',
+            ]);
+        }
 
         // Assigned key by key, never a splat of $validated. Columns absent from
         // the rules above and that must stay that way:
         //
-        //   barangay_id  every service request is dispatched on it, so a resident
-        //                who could move themselves could redirect their own
-        //                dispatch. Changing barangay is an MDRRMO operation.
         //   status       an Inactive account could otherwise activate itself and
         //                opt an unverified number into billed SMS.
         //   photo        it is a storage path now, not a value anyone types.
@@ -569,7 +576,7 @@ class AuthController extends Controller
         //   password     a change needs the current password, which is a separate
         //                endpoint, not a field on a profile PATCH.
         //   phone_number the login; see the note above.
-        foreach (['first_name', 'middle_name', 'last_name', 'street_address'] as $field) {
+        foreach (['first_name', 'middle_name', 'last_name', 'street_address', 'barangay_id'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }

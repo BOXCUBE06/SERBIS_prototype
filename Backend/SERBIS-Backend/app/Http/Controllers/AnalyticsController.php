@@ -98,11 +98,12 @@ class AnalyticsController extends Controller
             ->selectRaw('barangay_id, COUNT(*) as total')
             ->pluck('total', 'barangay_id');
 
+        // By the barangay each request was filed under (walk-ins have none).
         $pending = DB::table('tbl_service_request')
-            ->join('tbl_residents', 'tbl_service_request.resident_id', '=', 'tbl_residents.resident_id')
-            ->where('tbl_service_request.status', 'Pending')
-            ->groupBy('tbl_residents.barangay_id')
-            ->selectRaw('tbl_residents.barangay_id as barangay_id, COUNT(*) as total')
+            ->whereNotNull('barangay_id')
+            ->where('status', 'Pending')
+            ->groupBy('barangay_id')
+            ->selectRaw('barangay_id, COUNT(*) as total')
             ->pluck('total', 'barangay_id');
 
         $rows = DB::table('tbl_barangay')
@@ -236,15 +237,15 @@ class AnalyticsController extends Controller
             }
 
             // 2. Fetch Recent Service Requests
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service'])
+            $serviceRequests = ServiceRequest::with(['resident', 'barangay', 'service'])
                 ->latest()
                 ->take(5)
                 ->get()
                 ->map(function ($req) {
                     return [
                         'resident' => $req->resident ? $req->resident->first_name.' '.$req->resident->last_name : 'Unknown',
-                        // Fetch the barangay name through the nested relationship
-                        'barangay' => ($req->resident && $req->resident->barangay) ? $req->resident->barangay->barangay_name : 'Unknown Barangay',
+                        // The barangay the request was filed under, not where the resident lives now.
+                        'barangay' => $req->barangay?->barangay_name ?? 'Unknown Barangay',
                         // Null only for an "Others" request now that service_id is
                         // nullable (MDRRMO feedback, 2026-09-17) — 'Other', not
                         // 'Unknown', since this is an intentional resident choice.

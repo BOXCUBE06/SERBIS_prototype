@@ -289,7 +289,7 @@ class ServiceRequestController extends Controller
         // conductionRequests.people: C5's bridge — the Bookings queue's
         // Responding row needs its linked trip record (and who is driving
         // it) without a second round trip per row.
-        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin:admin_id,first_name,last_name,username', 'vehicle', 'conductionRequests.people', 'responders'])
+        $query = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'admin:admin_id,first_name,last_name,username', 'vehicle', 'conductionRequests.people', 'responders'])
             ->latest();
 
         // Only the rows the admin's sections cover: Resident Requests and
@@ -308,7 +308,7 @@ class ServiceRequestController extends Controller
 
         if ($user instanceof User && $user->isAdmin()) {
             // Added 'resident.barangay'
-            $query = ServiceRequest::with(['resident.barangay', 'service', 'admin:admin_id,first_name,last_name,username']);
+            $query = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'admin:admin_id,first_name,last_name,username']);
             $serviceRequests = $this->limitToSections($query, $user)->get();
         } else {
             $residentId = $user->getKey();
@@ -317,7 +317,7 @@ class ServiceRequestController extends Controller
             // internal_notes is the operator-only scratch pad (see its migration) —
             // hidden here rather than on the model, since adminIndex() and this
             // same method's admin branch above both need it visible.
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'responders', 'ambulanceBooking', 'conductionRequests'])
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'responders', 'ambulanceBooking', 'conductionRequests'])
                 ->where('resident_id', $residentId)
                 ->orderByDesc('created_at')
                 ->orderByDesc('request_id')
@@ -1104,7 +1104,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
+        return response()->json($serviceRequest->load(['resident.barangay', 'barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
     }
 
     public function show(Request $request, $id)
@@ -1112,7 +1112,7 @@ class ServiceRequestController extends Controller
         $user = $request->user();
 
         // Added 'resident.barangay'
-        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin:admin_id,first_name,last_name,username']);
+        $query = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'admin:admin_id,first_name,last_name,username']);
 
         // Scopes to the caller for a resident, and refuses anything that is not
         // active staff. This used to be a bare `instanceof Resident` check with

@@ -7,7 +7,7 @@
 // columns. Reference numbers (Transaction No., Trip No.) are on by default;
 // internal foreign-key ids are `off` until someone ticks them.
 import { displayPhone } from '@/composables/phoneNumber'
-import { isWalkIn, requesterName, transactionNo, borrowingTransactionNo, tripNo } from '@/composables/requestDisplay'
+import { isWalkIn, requesterName, requestBarangayName, transactionNo, borrowingTransactionNo, tripNo } from '@/composables/requestDisplay'
 
 const TZ = 'Asia/Manila'
 const dateTimeFormat = new Intl.DateTimeFormat('en-PH', { timeZone: TZ, dateStyle: 'medium', timeStyle: 'short' })
@@ -26,7 +26,7 @@ const adminName = (a) => {
   return a.username ? `${name} (${a.username})` : name
 }
 const phone = (r) => displayPhone(r.resident?.phone_number) || r.walk_in_contact_number || ''
-const barangay = (r) => r.resident?.barangay?.barangay_name || (isWalkIn(r) ? 'Walk-in' : '')
+const barangay = (r) => requestBarangayName(r) || (isWalkIn(r) ? 'Walk-in' : '')
 const peopleOf = (r, role) => (r.conduction_requests?.[0]?.people || r.people || []).filter((p) => p.role === role).map((p) => p.name).join(', ')
 
 // group: id | core | time | actor

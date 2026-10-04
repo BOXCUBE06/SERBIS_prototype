@@ -82,9 +82,18 @@ class BarangayRequestCounts
      */
     private static function countByBarangay(string $table, ?CarbonInterface $since, ?CarbonInterface $until)
     {
-        return DB::table($table)
-            ->leftJoin('tbl_residents', "{$table}.resident_id", '=', 'tbl_residents.resident_id')
-            ->leftJoin('tbl_barangay', 'tbl_residents.barangay_id', '=', 'tbl_barangay.barangay_id')
+        $query = DB::table($table);
+
+        // A service request carries the barangay it was filed under. A loan
+        // still follows the resident's current barangay (accepted mismatch).
+        if ($table === 'tbl_service_request') {
+            $query->leftJoin('tbl_barangay', "{$table}.barangay_id", '=', 'tbl_barangay.barangay_id');
+        } else {
+            $query->leftJoin('tbl_residents', "{$table}.resident_id", '=', 'tbl_residents.resident_id')
+                ->leftJoin('tbl_barangay', 'tbl_residents.barangay_id', '=', 'tbl_barangay.barangay_id');
+        }
+
+        return $query
             ->when($since, fn ($q) => $q->where("{$table}.created_at", '>=', $since))
             ->when($until, fn ($q) => $q->where("{$table}.created_at", '<', $until))
             ->groupBy('tbl_barangay.barangay_name')

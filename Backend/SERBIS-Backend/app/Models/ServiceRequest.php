@@ -84,6 +84,21 @@ class ServiceRequest extends Model
      */
     protected static function booted(): void
     {
+        // The filing account's barangay, frozen on the request so a resident
+        // who later moves (PATCH /me) does not take past requests along.
+        // Re-taken only when staff reassign the request to another account.
+        static::creating(function (ServiceRequest $request): void {
+            if ($request->barangay_id === null && $request->resident_id !== null) {
+                $request->barangay_id = $request->resident()->value('barangay_id');
+            }
+        });
+
+        static::updating(function (ServiceRequest $request): void {
+            if ($request->isDirty('resident_id')) {
+                $request->barangay_id = $request->resident()->value('barangay_id');
+            }
+        });
+
         static::updating(function (ServiceRequest $request): void {
             if (! $request->isDirty('status')) {
                 return;
@@ -192,6 +207,12 @@ class ServiceRequest extends Model
     public function resident(): BelongsTo
     {
         return $this->belongsTo(Resident::class, 'resident_id', 'resident_id');
+    }
+
+    /** The barangay the request was filed under; null for a walk-in. */
+    public function barangay(): BelongsTo
+    {
+        return $this->belongsTo(Barangay::class, 'barangay_id', 'barangay_id');
     }
 
     public function service(): BelongsTo

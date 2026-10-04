@@ -210,6 +210,7 @@ class AnalyticsReportEndpointTest extends TestCase
         foreach ([1, 1, 1, 100] as $i => $days) {
             $request = $this->requestAt('2026-09-01 00:00:00');
             DB::table('tbl_service_request')->where('request_id', $request->request_id)->update([
+                'status' => 'Resolved',
                 'resolved_at' => now()->parse('2026-09-01 00:00:00')->addDays($days)->toDateTimeString(),
             ]);
         }
@@ -218,6 +219,28 @@ class AnalyticsReportEndpointTest extends TestCase
 
         $this->assertSame(4, $turnaround['resolution']['n']);
         $this->assertEqualsWithDelta(1, $turnaround['resolution']['medianDays'], 0.01);
+    }
+
+    /**
+     * A cancellation or a refusal also stamps resolved_at, but is not a
+     * resolution: it stays out of the median and n, and stays in the histogram.
+     */
+    public function test_the_resolution_median_counts_only_resolved_requests(): void
+    {
+        foreach (['Resolved' => 2, 'Cancelled' => 0.1, 'Disapproved' => 0.1] as $status => $days) {
+            $request = $this->requestAt('2026-09-01 00:00:00');
+            DB::table('tbl_service_request')->where('request_id', $request->request_id)->update([
+                'status' => $status,
+                'resolved_at' => now()->parse('2026-09-01 00:00:00')->addMinutes((int) ($days * 1440))->toDateTimeString(),
+            ]);
+        }
+
+        $turnaround = $this->report($this->wholeOf('2026-09-01', '2026-09-30'))['turnaround'];
+
+        $this->assertSame(1, $turnaround['resolution']['n']);
+        $this->assertEqualsWithDelta(2, $turnaround['resolution']['medianDays'], 0.01);
+        $this->assertSame(3, array_sum($turnaround['histogram']['data']));
+        $this->assertSame(3, $turnaround['coverage']['withResolution']);
     }
 
     public function test_aging_counts_only_open_requests(): void

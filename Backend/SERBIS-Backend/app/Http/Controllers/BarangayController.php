@@ -64,13 +64,21 @@ class BarangayController extends Controller
     {
         $barangay = Barangay::findOrFail($id);
 
-        // Both keys onto a barangay are RESTRICT, so an unchecked delete of one
+        // Every key onto a barangay is RESTRICT, so an unchecked delete of one
         // in use was an uncaught 500. Same guard as ServiceController::destroy().
         $residentCount = DB::table('tbl_residents')->where('barangay_id', $id)->count();
 
         if ($residentCount > 0) {
             return response()->json([
                 'message' => "Cannot delete — {$residentCount} resident(s) still reference this barangay.",
+            ], 422);
+        }
+
+        $requestCount = DB::table('tbl_service_request')->where('barangay_id', $id)->count();
+
+        if ($requestCount > 0) {
+            return response()->json([
+                'message' => "Cannot delete — {$requestCount} service request(s) were filed under this barangay.",
             ], 422);
         }
 
