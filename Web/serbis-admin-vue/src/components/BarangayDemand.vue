@@ -3,8 +3,8 @@
 
   Where requests come from, in one place: the map and the ranked
   residents-vs-requests table share one card and one date range. The table's
-  counts are the report's own (service requests and equipment loans together,
-  see BarangayRequestCounts); the map's figures are live, from
+  counts are the report's own (service requests and equipment loans in separate
+  columns, see BarangayRequestCounts); the map's figures are live, from
   GET /admin/analytics/barangays.
 
   The map is a plain SVG of Echague, projected once with d3-geo: no basemap, no
@@ -78,10 +78,11 @@
               <th class="text-left" scope="col">Barangay</th>
               <th class="text-right" scope="col">Residents</th>
               <th class="text-right" scope="col">Requests</th>
+              <th class="text-right" scope="col">Loans</th>
             </tr>
           </thead>
           <tbody>
-            <SkeletonRows v-if="loading" :rows="8" :columns="3" />
+            <SkeletonRows v-if="loading" :rows="8" :columns="4" />
             <tr v-for="row in ranked" :key="row.name">
               <td>{{ row.name }}</td>
               <td class="text-right" :class="{ 'text-medium-emphasis': row.residents === 0 }">{{ row.residents }}</td>
@@ -89,18 +90,21 @@
                 <span :class="{ 'text-medium-emphasis': row.requests === 0 }">{{ row.requests }}</span>
                 <div class="bar-track"><div class="bar-fill" :style="{ width: row.percent + '%' }"></div></div>
               </td>
+              <td class="text-right" :class="{ 'text-medium-emphasis': row.loans === 0 }">{{ row.loans }}</td>
             </tr>
             <tr v-if="walkIn > 0">
               <td class="text-medium-emphasis">Walk-in (no barangay)</td>
               <td class="text-right text-medium-emphasis">—</td>
               <td class="text-right">{{ walkIn }}</td>
+              <td class="text-right text-medium-emphasis">—</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="text-caption text-medium-emphasis mt-3" :style="{ visibility: loading ? 'hidden' : undefined }">
         {{ totalResidents.toLocaleString() }} registered {{ totalResidents === 1 ? 'resident' : 'residents' }}
-        &bull; {{ totalRequests.toLocaleString() }} requests + loans in this range
+        &bull; {{ totalRequests.toLocaleString() }} {{ totalRequests === 1 ? 'request' : 'requests' }}
+        &bull; {{ totalLoans.toLocaleString() }} {{ totalLoans === 1 ? 'loan' : 'loans' }} in this range
       </div>
     </v-col>
   </v-row>
@@ -121,6 +125,7 @@ const props = defineProps({
   walkIn: { type: Number, default: 0 },
   totalResidents: { type: Number, default: 0 },
   totalRequests: { type: Number, default: 0 },
+  totalLoans: { type: Number, default: 0 },
   // The map needs no placeholder: the boundaries are bundled, so it draws as a
   // neutral silhouette until the figures land and the fills fade in.
   loading: { type: Boolean, default: false },

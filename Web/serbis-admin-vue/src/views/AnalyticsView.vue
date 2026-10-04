@@ -276,6 +276,7 @@
             :walk-in="barangayCoverage.walkIn"
             :total-residents="barangayCoverage.totalResidents"
             :total-requests="barangayCoverage.totalRequests"
+            :total-loans="barangayCoverage.totalLoans"
           />
         </AnalyticsSection>
       </v-col>
@@ -671,7 +672,7 @@ const loans = computed(() => report.value?.loans ?? {
 })
 const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
-  barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
+  barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0, totalLoans: 0,
 })
 
 const turnaround = computed(() => report.value?.turnaround ?? { resolution: { medianDays: null, n: 0 } })
@@ -762,14 +763,14 @@ const finding = computed(() => {
     }
   }
 
-  // Barangays. These counts include equipment loans, as the map does.
+  // Barangays. Service requests only; loans have their own column.
   const rows = barangayCoverage.value.barangays
   const place = top(rows.map(b => b.requests))
   if (!place) return null
   const active = rows.filter(b => b.requests > 0).length
   return {
     icon: 'mdi-map-marker-radius-outline',
-    lead: `${rows[place.index].name} files the most: ${place.value} of ${barangayCoverage.value.totalRequests} requests and loans (${pct(place.value, barangayCoverage.value.totalRequests)}%).`,
+    lead: `${rows[place.index].name} files the most: ${place.value} of ${barangayCoverage.value.totalRequests} requests (${pct(place.value, barangayCoverage.value.totalRequests)}%).`,
     detail: [
       `${active} of ${rows.length} barangays filed at least one.`,
       barangayCoverage.value.walkIn > 0 && `${count(barangayCoverage.value.walkIn, 'walk-in')} carry no barangay.`,

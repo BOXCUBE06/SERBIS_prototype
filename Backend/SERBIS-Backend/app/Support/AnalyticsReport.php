@@ -684,31 +684,28 @@ class AnalyticsReport
     }
 
     /**
-     * Section 9 — barangay: residents vs requests.
+     * Section 9 — barangay: residents, requests and loans.
      *
      * Built from the full barangay roster outward, the same shape as
      * equipmentUtilization(): a query that starts at the requests and groups
      * by barangay can only ever list a barangay that has at least one, which
      * is exactly what hides "accounts but no requests" and "neither" — the
-     * two facts this section exists to surface.
+     * two facts this section exists to surface. Rows are matched to counts by
+     * barangay id, never by name.
      *
-     * Request counts reuse BarangayRequestCounts, the same helper the
-     * dashboard and totals() use, so this cannot disagree with the rest of
-     * the page about how many requests a barangay has. That helper counts
-     * service requests and equipment loans together and does not take a
-     * service filter, so neither does this section; resident counts are not
-     * date-windowed at all — an account does not expire, and windowing it
+     * Requests are service requests only, narrowed by the page's barangay and
+     * service filters, so the rows plus walkIn add up to totals.serviceRequests.
+     * Loans are a separate column: they follow the barangay filter, and carry
+     * no service, so a service filter leaves none. Resident counts are not
+     * date-windowed or filtered — an account does not expire, and windowing it
      * would make a barangay's own resident count depend on which quarter is
      * selected.
-     *
-     * No barangay filter either: filtering the one section whose whole
-     * purpose is the cross-barangay comparison down to a single barangay
-     * would defeat it.
      */
     private function barangayResidentsVsRequests(): array
     {
-        $counts = BarangayRequestCounts::forWindow($this->from, $this->to);
-        $placedByName = collect($counts['barangays'])->keyBy('name');
+        $counts = BarangayRequestCounts::forWindow($this->from, $this->to, $this->barangayId, $this->serviceId);
+        $requestsById = array_column($counts['barangays'], 'requests', 'id');
+        $loansById = $this->serviceId ? [] : BarangayRequestCounts::loansByBarangay($this->from, $this->to, $this->barangayId);
 
         $residentCounts = DB::table('tbl_residents')
             ->where('account_type', 'head_of_family')
@@ -724,7 +721,8 @@ class AnalyticsReport
             ->map(fn ($b) => [
                 'name' => $b->barangay_name,
                 'residents' => (int) ($residentCounts[$b->barangay_id] ?? 0),
-                'requests' => (int) ($placedByName[$b->barangay_name]['requests'] ?? 0),
+                'requests' => (int) ($requestsById[$b->barangay_id] ?? 0),
+                'loans' => (int) ($loansById[$b->barangay_id] ?? 0),
             ]);
 
         return [
@@ -732,6 +730,7 @@ class AnalyticsReport
             'walkIn' => $counts['walkIn'],
             'totalResidents' => (int) $residentCounts->sum(),
             'totalRequests' => $counts['total'],
+            'totalLoans' => array_sum($loansById),
         ];
     }
 
