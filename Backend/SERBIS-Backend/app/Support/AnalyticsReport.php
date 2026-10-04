@@ -18,12 +18,13 @@ use Illuminate\Support\Facades\DB;
  *    stored values is eight hours out, which moves the 08:00-17:00 working
  *    day onto 00:00-09:00 and throws anything before 08:00 onto the previous
  *    weekday.
- * 2. **Portable SQL.** The aggregate uses CAST(x AS DATE) and
- *    EXTRACT(HOUR FROM x), which MySQL and Postgres both accept. DAYOFWEEK()
+ * 2. **Portable SQL, one exception.** The weekday grid uses CAST(x AS DATE)
+ *    and EXTRACT(HOUR FROM x), which MySQL and Postgres both accept. DAYOFWEEK()
  *    is MySQL-only and EXTRACT(DOW ...) is Postgres-only, so the weekday is
  *    derived in PHP from the bucket's date instead. Manila is a whole number
  *    of hours from UTC and has never observed DST, so shifting a (date, hour)
- *    bucket by the offset is exact rather than approximate.
+ *    bucket by the offset is exact rather than approximate. The month rollup
+ *    shifts in SQL with DATE_FORMAT, which is MySQL-only (production's engine).
  * 3. **Nulls are excluded and counted.** Turnaround reads columns that are
  *    only partly backfilled, so every figure carries its own sample size.
  * 4. **Median, not mean.** At these volumes one request left open for a month
@@ -39,6 +40,9 @@ class AnalyticsReport
      * could drift.
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
+
+    /** Manila's fixed offset from UTC (no DST), for the SQL month shift. */
+    private const OFFICE_UTC_OFFSET_HOURS = 8;
 
     public const PRESETS = ['month', 'quarter', 'year', 'custom'];
 
@@ -227,16 +231,26 @@ class AnalyticsReport
         };
     }
 
+    /** Manila calendar month ('YYYY-MM') of a UTC column, computed in SQL. */
+    private static function manilaMonth(string $column): string
+    {
+        return "DATE_FORMAT({$column} + INTERVAL ".self::OFFICE_UTC_OFFSET_HOURS." HOUR, '%Y-%m')";
+    }
+
     /**
      * Section 2 — volume by month, split by service. Stacked bar: months are
-     * ordered discrete buckets and the segments sum to a real total.
+     * ordered discrete buckets and the segments sum to a real total. A request
+     * with no service (an "Others" request) is its own segment, not dropped.
      */
     private function volumeByMonth(): array
     {
+        $month = self::manilaMonth('tbl_service_request.created_at');
+        $label = "COALESCE(tbl_services.service_name, 'Others')";
+
         $rows = $this->scoped()
-            ->join('tbl_services', 'tbl_service_request.service_id', '=', 'tbl_services.service_id')
-            ->groupByRaw('CAST(tbl_service_request.created_at AS DATE), tbl_services.service_name')
-            ->selectRaw('CAST(tbl_service_request.created_at AS DATE) as bucket_date, tbl_services.service_name as label, COUNT(*) as total')
+            ->leftJoin('tbl_services', 'tbl_service_request.service_id', '=', 'tbl_services.service_id')
+            ->groupByRaw("{$month}, {$label}")
+            ->selectRaw("{$month} as month, {$label} as label, COUNT(*) as total")
             ->get();
 
         return $this->stackByMonth($rows);
@@ -248,21 +262,23 @@ class AnalyticsReport
      */
     private function outcomeByMonth(): array
     {
+        $month = self::manilaMonth('tbl_service_request.created_at');
+
         $rows = $this->scoped()
-            ->groupByRaw('CAST(tbl_service_request.created_at AS DATE), tbl_service_request.status')
-            ->selectRaw('CAST(tbl_service_request.created_at AS DATE) as bucket_date, tbl_service_request.status as label, COUNT(*) as total')
+            ->groupByRaw("{$month}, tbl_service_request.status")
+            ->selectRaw("{$month} as month, tbl_service_request.status as label, COUNT(*) as total")
             ->get();
 
         return $this->stackByMonth($rows);
     }
 
     /**
-     * Rolls day buckets up into Manila months.
+     * Stacks rows of (month, label, total) into one series per label.
      *
-     * The rollup happens here rather than in SQL because the month a row
-     * belongs to depends on the timezone — a request filed at 07:00 Manila on
-     * the 1st is stored as 23:00 UTC on the previous day, and in December that
-     * is also the previous year.
+     * The month is already the Manila one: it is shifted in SQL before it is
+     * grouped, because a request filed at 07:00 Manila on the 1st is stored as
+     * 23:00 UTC on the previous day (the previous year, in December), and a
+     * UTC date bucket cannot be moved into the right month afterwards.
      */
     private function stackByMonth($rows): array
     {
@@ -270,11 +286,7 @@ class AnalyticsReport
         $labels = [];
 
         foreach ($rows as $row) {
-            $month = CarbonImmutable::parse($row->bucket_date, 'UTC')
-                ->timezone(self::OFFICE_TIMEZONE)
-                ->format('Y-m');
-
-            $months[$month][$row->label] = ($months[$month][$row->label] ?? 0) + (int) $row->total;
+            $months[$row->month][$row->label] = ($months[$row->month][$row->label] ?? 0) + (int) $row->total;
             $labels[$row->label] = true;
         }
 
@@ -290,8 +302,10 @@ class AnalyticsReport
             ];
         }
 
+        // Day pinned to 01: 'Y-m' alone would borrow today's day and roll Feb
+        // over to March when the report is read on the 29th-31st.
         $monthLabels = array_map(
-            fn ($key) => CarbonImmutable::createFromFormat('Y-m', $key, self::OFFICE_TIMEZONE)->format('M Y'),
+            fn ($key) => CarbonImmutable::createFromFormat('Y-m-d', $key.'-01', self::OFFICE_TIMEZONE)->format('M Y'),
             array_keys($months)
         );
 
@@ -727,9 +741,12 @@ class AnalyticsReport
      */
     private function appAdoptionByMonth(): array
     {
+        $month = self::manilaMonth('tbl_service_request.created_at');
+        $origin = "CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END";
+
         $rows = $this->scoped()
-            ->groupByRaw("CAST(tbl_service_request.created_at AS DATE), CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END")
-            ->selectRaw("CAST(tbl_service_request.created_at AS DATE) as bucket_date, CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END as label, COUNT(*) as total")
+            ->groupByRaw("{$month}, {$origin}")
+            ->selectRaw("{$month} as month, {$origin} as label, COUNT(*) as total")
             ->get();
 
         return $this->stackByMonth($rows);
