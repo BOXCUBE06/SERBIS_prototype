@@ -17,6 +17,18 @@
     <v-menu location="bottom end">
       <template v-slot:activator="{ props: menu }">
         <v-btn
+          v-if="icon"
+          v-bind="menu"
+          icon="mdi-printer-outline"
+          color="primary-strong"
+          variant="outlined"
+          size="36"
+          rounded="lg"
+          aria-label="Print or export"
+          :loading="busy"
+        ></v-btn>
+        <v-btn
+          v-else
           v-bind="menu"
           color="primary"
           variant="outlined"
@@ -73,6 +85,8 @@ const props = defineProps({
   showSelection: { type: Boolean, default: false },
   plain: { type: Boolean, default: false },
   height: { type: [Number, String], default: 40 },
+  // A 36px icon-only button, for a drawer header.
+  icon: { type: Boolean, default: false },
 })
 
 const busy = ref(false)

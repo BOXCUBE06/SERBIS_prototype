@@ -60,7 +60,8 @@ class AdminAccountTest extends TestCase
         return array_merge([
             'first_name' => 'Grace',
             'last_name' => 'Reyes',
-            'email_address' => 'grace@serbis.com',
+            'username' => 'grace',
+            'phone_number' => '09171234567',
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ], $overrides);
@@ -71,11 +72,11 @@ class AdminAccountTest extends TestCase
         $response = $this->postJson('/api/admins', $this->payload());
 
         $response->assertStatus(201)
-            ->assertJsonPath('email_address', 'grace@serbis.com')
+            ->assertJsonPath('username', 'grace')
             // The whole point of the feature: the account can sign in.
             ->assertJsonPath('role', 'Admin');
 
-        $created = User::where('email_address', 'grace@serbis.com')->first();
+        $created = User::where('username', 'grace')->first();
         $this->assertNotNull($created);
         $this->assertTrue(Hash::check('Password123', $created->password));
 
@@ -89,7 +90,7 @@ class AdminAccountTest extends TestCase
 
         // Creating a row that cannot authenticate would pass every assertion
         // above and still leave the office locked out of the account it made.
-        $this->loginAdmin('grace@serbis.com', 'Password123')
+        $this->loginAdmin('grace', 'Password123')
             ->assertStatus(200)->assertJsonStructure(['token']);
     }
 
@@ -101,7 +102,7 @@ class AdminAccountTest extends TestCase
             ->assertStatus(201)
             ->assertJsonPath('role', 'Admin');
 
-        $this->assertSame('Admin', User::where('email_address', 'grace@serbis.com')->first()->role);
+        $this->assertSame('Admin', User::where('username', 'grace')->first()->role);
     }
 
     public function test_a_weak_or_unconfirmed_password_is_refused(): void
@@ -117,51 +118,52 @@ class AdminAccountTest extends TestCase
         $this->assertSame(1, User::count());
     }
 
-    public function test_a_duplicate_email_is_refused(): void
+    public function test_a_duplicate_username_is_refused(): void
     {
-        $this->postJson('/api/admins', $this->payload(['email_address' => 'admin@test.local']))
+        $this->postJson('/api/admins', $this->payload(['username' => 'admin']))
             ->assertStatus(422)
-            ->assertJsonValidationErrors('email_address');
+            ->assertJsonValidationErrors('username');
     }
 
-    public function test_a_new_staff_address_must_be_a_serbis_com_username(): void
+    public function test_a_username_must_follow_the_rule(): void
     {
-        foreach (['grace@test.local', 'grace@gmail.com', 'Grace@serbis.com', 'gr ace@serbis.com', 'grace_r@serbis.com', '.grace@serbis.com', 'grace..r@serbis.com', 'grace@serbis.com.evil.com', 'grace@sub.serbis.com'] as $bad) {
-            $this->postJson('/api/admins', $this->payload(['email_address' => $bad]))
+        foreach (['gr', 'Grace', 'gr ace', 'grace-r', 'grace@serbis.com', str_repeat('a', 31), ''] as $bad) {
+            $this->postJson('/api/admins', $this->payload(['username' => $bad]))
                 ->assertStatus(422)
-                ->assertJsonValidationErrors('email_address');
+                ->assertJsonValidationErrors('username');
         }
 
         $this->assertSame(1, User::count());
 
-        $this->postJson('/api/admins', $this->payload(['email_address' => 'grace.r2@serbis.com']))
+        $this->postJson('/api/admins', $this->payload(['username' => 'grace.r_2']))
             ->assertStatus(201);
     }
 
-    public function test_an_existing_staff_address_outside_the_domain_can_still_be_saved(): void
+    public function test_an_email_is_no_longer_needed_or_kept(): void
     {
-        // Accounts made before the rule keep their address. Editing the name
-        // resubmits it unchanged and must not be refused for it.
-        $legacy = $this->makeAdmin('someone@echague.gov.ph');
+        $this->postJson('/api/admins', $this->payload(['email_address' => 'grace@serbis.com']))
+            ->assertStatus(201);
 
-        $this->putJson("/api/admins/{$legacy->admin_id}", [
-            'first_name' => 'Renamed',
-            'last_name' => 'Person',
-            'email_address' => 'someone@echague.gov.ph',
-        ])->assertStatus(200);
+        $this->assertNull(User::where('username', 'grace')->value('email_address'));
+    }
 
-        // Moving it is a change, and lands on the new rule.
-        $this->putJson("/api/admins/{$legacy->admin_id}", [
-            'first_name' => 'Renamed',
-            'last_name' => 'Person',
-            'email_address' => 'someone@gmail.com',
-        ])->assertStatus(422)->assertJsonValidationErrors('email_address');
+    public function test_a_username_can_be_changed_and_signs_in_afterwards(): void
+    {
+        $other = $this->makeAdmin('other@test.local');
 
-        $this->putJson("/api/admins/{$legacy->admin_id}", [
-            'first_name' => 'Renamed',
-            'last_name' => 'Person',
-            'email_address' => 'someone@serbis.com',
-        ])->assertStatus(200);
+        $this->putJson("/api/admins/{$other->admin_id}", [
+            'first_name' => 'MDRRMO',
+            'last_name' => 'Admin',
+            'username' => 'admin',
+        ])->assertStatus(422)->assertJsonValidationErrors('username');
+
+        $this->putJson("/api/admins/{$other->admin_id}", [
+            'first_name' => 'MDRRMO',
+            'last_name' => 'Admin',
+            'username' => 'renamed.user',
+        ])->assertStatus(200)->assertJsonPath('username', 'renamed.user');
+
+        $this->loginAdmin('renamed.user', 'Password123')->assertStatus(200);
     }
 
     public function test_an_admin_can_be_renamed_without_touching_the_password(): void
@@ -171,7 +173,7 @@ class AdminAccountTest extends TestCase
         $this->putJson("/api/admins/{$other->admin_id}", [
             'first_name' => 'Renamed',
             'last_name' => 'Person',
-            'email_address' => 'other@test.local',
+            'username' => 'other',
         ])->assertStatus(200)->assertJsonPath('first_name', 'Renamed');
 
         // An omitted password must leave the hash alone; assigning null locks
@@ -188,7 +190,7 @@ class AdminAccountTest extends TestCase
         $this->putJson("/api/admins/{$other->admin_id}", [
             'first_name' => 'MDRRMO',
             'last_name' => 'Admin',
-            'email_address' => 'other@test.local',
+            'username' => 'other',
             'password' => 'Newpassword123',
             'password_confirmation' => 'Newpassword123',
         ])->assertStatus(200);
@@ -213,7 +215,7 @@ class AdminAccountTest extends TestCase
             ->putJson("/api/admins/{$this->admin->admin_id}", [
                 'first_name' => 'MDRRMO',
                 'last_name' => 'Admin',
-                'email_address' => 'admin@test.local',
+                'username' => 'admin',
                 'password' => 'Newpassword123',
                 'password_confirmation' => 'Newpassword123',
             ])->assertStatus(200);
@@ -268,7 +270,7 @@ class AdminAccountTest extends TestCase
         // What a typo looks like: created minutes ago, nothing recorded against
         // it, no reason to keep the row.
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
-        $typo = User::where('email_address', 'grace@serbis.com')->first();
+        $typo = User::where('username', 'grace')->first();
 
         $this->deleteJson("/api/admins/{$typo->admin_id}")
             ->assertStatus(200)
@@ -339,7 +341,7 @@ class AdminAccountTest extends TestCase
 
         // The point of closing the account.
         $this->postJson('/api/admin/login', [
-            'email_address' => 'other@test.local',
+            'username' => 'other',
             'password' => 'Password123',
         ])->assertStatus(403);
 
@@ -359,14 +361,14 @@ class AdminAccountTest extends TestCase
 
         // An employee back from leave keeps their name on the work they did,
         // instead of needing a second account.
-        $this->loginAdmin('other@test.local', 'Password123')->assertStatus(200);
+        $this->loginAdmin('other', 'Password123')->assertStatus(200);
     }
 
     public function test_a_missing_admin_is_a_404_not_a_500(): void
     {
         $this->getJson('/api/admins/9999')->assertStatus(404);
         $this->putJson('/api/admins/9999', [
-            'first_name' => 'A', 'last_name' => 'B', 'email_address' => 'x@test.local',
+            'first_name' => 'A', 'last_name' => 'B', 'username' => 'xuser',
         ])->assertStatus(404);
         $this->deleteJson('/api/admins/9999')->assertStatus(404);
     }
@@ -409,7 +411,7 @@ class AdminAccountTest extends TestCase
     {
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
 
-        $created = User::where('email_address', 'grace@serbis.com')->first();
+        $created = User::where('username', 'grace')->first();
 
         $log = DB::table('tbl_system_logs')
             ->where('auditable_type', User::class)

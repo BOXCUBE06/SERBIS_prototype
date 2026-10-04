@@ -46,6 +46,17 @@ class ServiceRequestSeeder extends Seeder
             return;
         }
 
+        // The first ten residents that exist, with the barangay each lives in: a request
+        // carries the barangay it was filed under, and a raw insert skips the model hook
+        // that would set it.
+        $residents = DB::table('tbl_residents')->orderBy('resident_id')->limit(10)->pluck('barangay_id', 'resident_id')->all();
+
+        if ($residents === []) {
+            $this->command?->warn('ServiceRequestSeeder skipped: no residents exist -- seed residents first.');
+
+            return;
+        }
+
         $statuses = ['Pending', 'Responding', 'Resolved'];
         $records = [];
 
@@ -53,8 +64,11 @@ class ServiceRequestSeeder extends Seeder
             $status = $statuses[array_rand($statuses)];
             $randomDate = Carbon::now()->subDays(rand(0, 30))->subHours(rand(0, 23));
 
+            $residentId = array_rand($residents);
+
             $records[] = [
-                'resident_id' => rand(1, 10), // Assumes you have at least 10 residents seeded
+                'resident_id' => $residentId,
+                'barangay_id' => $residents[$residentId],
                 'service_id' => $serviceIds[array_rand($serviceIds)],
                 'vehicle_id' => null,
                 'processed_by' => null,

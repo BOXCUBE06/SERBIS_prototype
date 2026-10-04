@@ -5,15 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\ServiceRequest;
+use App\Services\VehicleDispatch;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class ConductionRequestController extends Controller
 {
+    public function __construct(private readonly VehicleDispatch $dispatch) {}
+
     /**
      * Personnel roles the paper form has a section for, in form order. Keyed
      * by the request field the create form sends an array of names under.
@@ -157,17 +159,11 @@ class ConductionRequestController extends Controller
             'authorized_passengers.*' => 'nullable|string|max:255',
             'patient_relatives' => 'nullable|array|max:'.self::MAX_PATIENT_RELATIVES,
             'patient_relatives.*' => 'nullable|string|max:255',
-
-            // Only meaningful, and only ever stored, when filing over an
-            // actual conflict below — see the double-booking guard.
-            'override_reason' => 'nullable|string|max:500',
         ], [
             'vehicle_id.exists' => 'That unit is not an Ambulance.',
         ]);
 
-        // A hard block, unlike the vehicle conflict below: a booking maps to
-        // at most one trip, full stop, so there is no override_reason for
-        // this one — the ServiceRequestQueue "Dispatch" button used to stay
+        // A booking maps to at most one trip — the ServiceRequestQueue "Dispatch" button used to stay
         // clickable after the trip it dispatched was already filed, and a
         // second click filed a second trip against the same booking with
         // nothing to stop it. The Booked→Responding flip in this same method
@@ -197,39 +193,12 @@ class ConductionRequestController extends Controller
             }
         }
 
-        // A soft block, not a hard one: a unit already out on a trip is
-        // exactly the kind of thing a genuine emergency sometimes has to
-        // reassign anyway (see the plan's own reasoning — a system that
-        // makes that impossible gets worked around outside the system).
-        // "Open" matches ConductionRequest::getTripStatusAttribute()'s own
-        // 'In transit' definition, not a new one: departed, not yet back.
-        $conflict = ! empty($validated['vehicle_id'])
-            ? ConductionRequest::where('vehicle_id', $validated['vehicle_id'])
-                ->whereNotNull('departed_office_at')
-                ->whereNull('returned_office_at')
-                ->first()
-            : null;
+        $serviceRequest = empty($validated['service_request_id'])
+            ? null
+            : ServiceRequest::find($validated['service_request_id']);
 
-        if ($conflict && empty($validated['override_reason'])) {
-            return response()->json([
-                'message' => 'This unit is already on a trip.',
-                'conflict' => [
-                    'conduction_request_id' => $conflict->conduction_request_id,
-                    'destination' => $conflict->destination,
-                ],
-            ], 409);
-        }
-
-        // Recorded only when it was actually filed over a conflict — an
-        // override_reason sent with no conflict present (or none sent at
-        // all) leaves this null rather than storing noise.
-        $overrideReason = $conflict ? $validated['override_reason'] : null;
-
-        $conductionRequest = DB::transaction(function () use ($validated, $overrideReason) {
-            $conductionRequest = ConductionRequest::create([
-                ...Arr::except($validated, ['override_reason']),
-                'vehicle_override_reason' => $overrideReason,
-            ]);
+        $createTrip = function (array $attributes) use ($validated): ConductionRequest {
+            $conductionRequest = ConductionRequest::create($attributes);
 
             foreach (self::PEOPLE_FIELDS as $field => $role) {
                 $position = 0;
@@ -251,43 +220,27 @@ class ConductionRequestController extends Controller
                 }
             }
 
-            // Mirrors the guard ServiceRequestController::update() uses
-            // around createConductionStub for the instant path: only ever
-            // Booked → Responding, never any other status. That is the one
-            // state the create dialog can ever hand this a linked booking
-            // in — linkableBookings on the Vue side (and the duplicate
-            // guard above) already ensure nothing reaches here twice, so
-            // this is belt-and-suspenders, not the only thing stopping a
-            // double transition. Before this, the manual "Dispatch" path
-            // filed the trip but left the booking sitting at Booked
-            // forever — which is also why "Mark as Resolved" (gated on
-            // status === 'Responding') was unreachable for a manually
-            // dispatched booking.
-            if (! empty($validated['service_request_id'])) {
-                $serviceRequest = ServiceRequest::find($validated['service_request_id']);
-
-                if ($serviceRequest) {
-                    // The other half of the dispatch bridge's relative copy.
-                    // ServiceRequestController::createConductionStub() does
-                    // this for the automatic Booked → Responding flip; this
-                    // is the manually filed trip against the same booking,
-                    // and it owns the same obligation. Shared method, not a
-                    // second copy of the loop — the two-path split is what
-                    // docs/dispatch-audit.md flagged as the drift hazard.
-                    //
-                    // Runs regardless of status, unlike the flip below: a
-                    // trip filed against a booking already moved out of
-                    // Booked still needs the relatives it was filed for.
-                    ServiceRequestController::copyRelativesToTrip($serviceRequest, $conductionRequest);
-
-                    if ($serviceRequest->status === 'Booked') {
-                        $serviceRequest->update(['status' => 'Responding']);
-                    }
-                }
-            }
-
             return $conductionRequest;
-        });
+        };
+
+        $conductionRequest = $serviceRequest
+            // Booked → Responding through the shared dispatch: unit locked and
+            // checked, marked Dispatched, the trip runs on the booking's own
+            // unit (any vehicle_id in the input is ignored), resident pushed.
+            ? $this->dispatch->dispatch($serviceRequest, $serviceRequest->vehicle_id, true, function (ServiceRequest $r) use ($createTrip, $validated) {
+                $trip = $createTrip([...$validated, 'vehicle_id' => $r->vehicle_id]);
+                ServiceRequestController::copyRelativesToTrip($r, $trip);
+
+                return $trip;
+            })
+            // An unlinked (walk-in) trip: same busy check (409), no override.
+            : DB::transaction(function () use ($createTrip, $validated) {
+                if (! empty($validated['vehicle_id'])) {
+                    $this->dispatch->lockFree($validated['vehicle_id']);
+                }
+
+                return $createTrip($validated);
+            });
 
         return response()->json($conductionRequest->fresh('people'), 201);
     }
@@ -501,36 +454,49 @@ class ConductionRequestController extends Controller
             }
         }
 
-        // Replaces the role wholesale rather than diffing — same approach
-        // store() takes for all three roles at creation. Each role is only
-        // ever touched when its own field is actually sent, matching the
-        // 'sometimes' semantics the rest of this endpoint uses: a call that
-        // reports a checkpoint but says nothing about passengers must not
-        // wipe passengers already on record.
-        foreach (self::PEOPLE_FIELDS as $field => $role) {
-            if (! array_key_exists($field, $validated)) {
-                continue;
+        // First departure of a no-booking trip: the unit must be free (same
+        // busy check as dispatch), checked under its row lock.
+        $firstDeparture = ! $conductionRequest->service_request_id
+            && $conductionRequest->vehicle_id
+            && $conductionRequest->departed_office_at === null
+            && ($validated['departed_office_at'] ?? null) !== null;
+
+        DB::transaction(function () use ($conductionRequest, $validated, $firstDeparture) {
+            if ($firstDeparture) {
+                $this->dispatch->lockFree($conductionRequest->vehicle_id, exceptTripId: $conductionRequest->getKey());
             }
 
-            $conductionRequest->people()->where('role', $role)->delete();
-
-            $position = 0;
-            foreach ($validated[$field] as $name) {
-                $name = trim((string) $name);
-                if ($name === '') {
+            // Replaces the role wholesale rather than diffing — same approach
+            // store() takes for all three roles at creation. Each role is only
+            // ever touched when its own field is actually sent, matching the
+            // 'sometimes' semantics the rest of this endpoint uses: a call that
+            // reports a checkpoint but says nothing about passengers must not
+            // wipe passengers already on record.
+            foreach (self::PEOPLE_FIELDS as $field => $role) {
+                if (! array_key_exists($field, $validated)) {
                     continue;
                 }
 
-                ConductionRequestPerson::create([
-                    'conduction_request_id' => $conductionRequest->conduction_request_id,
-                    'role' => $role,
-                    'name' => $name,
-                    'position' => $position++,
-                ]);
-            }
-        }
+                $conductionRequest->people()->where('role', $role)->delete();
 
-        $conductionRequest->update($validated);
+                $position = 0;
+                foreach ($validated[$field] as $name) {
+                    $name = trim((string) $name);
+                    if ($name === '') {
+                        continue;
+                    }
+
+                    ConductionRequestPerson::create([
+                        'conduction_request_id' => $conductionRequest->conduction_request_id,
+                        'role' => $role,
+                        'name' => $name,
+                        'position' => $position++,
+                    ]);
+                }
+            }
+
+            $conductionRequest->update($validated);
+        });
 
         return response()->json($conductionRequest->fresh('people'));
     }

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../data/safety_files.dart';
 import '../models/info_material.dart';
 import '../state/request_store.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/shared_widgets.dart';
 import '../widgets/hotline_list.dart';
+import '../widgets/request_summary.dart' show SummaryCard;
+import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
@@ -27,93 +29,82 @@ class LibraryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final filipino = appState.language == AppLanguage.filipino;
+    final f = filipino;
 
     // First Aid and Disaster Preparedness are compiled into the app. A pull
     // refetches MDRRMO Documents (_PublishedMaterials) and the hotlines.
     return RefreshIndicator(
+      color: AppColors.green700,
+      edgeOffset: TabHeader.minHeight,
       onRefresh: () => Future.wait([appState.loadMaterials(), appState.loadHotlines()]),
-      child: ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        AppHeader(
-          onNotificationsTap: onOpenNotifications,
-          onProfileTap: onBack == null ? onOpenProfile : null,
-          onBack: onBack,
-          filipino: filipino,
-        ),
-        const SizedBox(height: 22),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: SectionHeader(title: filipino ? 'Aklatan ng Kaligtasan' : 'Safety Library'),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: AppCard(
-            leftAccent: AppColors.red600,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const IconBadge(icon: Icons.call_rounded, bg: AppColors.red50, fg: AppColors.red600),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        filipino ? 'Mga Hotline ng Emerhensiya' : 'Emergency Hotlines',
-                        style: AppText.display(size: 14.5),
-                      ),
-                    ),
-                    // Always on the device: the cached server list, or the
-                    // built-in one before the first fetch. Nothing to download.
-                    OfflinePill(saved: true, filipino: filipino),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                HotlineList(hotlines: appState.hotlines, filipino: filipino),
-              ],
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: TabHeader(
+              title: tr(f, 'library.title'),
+              subtitle: tr(f, 'library.subtitle'),
+              filipino: f,
+              onNotifications: onOpenNotifications,
+              onProfile: onBack == null ? onOpenProfile : null,
+              onBack: onBack,
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: filipino ? 'Pangunahing Lunas (First Aid)' : 'Basic First Aid'),
-              _LibItem(articleKey: 'cpr', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
-              _LibItem(articleKey: 'burns', pages: filipino ? '3 pahina' : '3 pages', filipino: filipino),
-              _LibItem(articleKey: 'wound_care', pages: filipino ? '2 pahina' : '2 pages', filipino: filipino),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeader(title: filipino ? 'Paghahanda sa Sakuna' : 'Disaster Preparedness'),
-              _LibItem(articleKey: 'before', pages: filipino ? '5 pahina' : '5 pages', filipino: filipino),
-              _LibItem(articleKey: 'during', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
-              _LibItem(articleKey: 'after', pages: filipino ? '4 na pahina' : '4 pages', filipino: filipino),
-              _LibItem(
-                articleKey: 'drrm_plan',
-                pages: filipino ? 'Buod · 4 bahagi' : 'Summary · 4 sections',
-                filipino: filipino,
+          SliverToBoxAdapter(
+            // Phone-width on a tablet, the web build or a desktop window.
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Always on the device: the cached server list, or the
+                      // built-in one before the first fetch. Nothing to download.
+                      SectionHeader(
+                        title: tr(f, 'library.hotlines'),
+                        trailing: OfflinePill(saved: true, filipino: f),
+                      ),
+                      SummaryCard(children: [HotlineList(hotlines: appState.hotlines, filipino: f)]),
+                      const SizedBox(height: AppSpacing.xl),
+                      SectionHeader(title: tr(f, 'library.first_aid'), trailing: OfflinePill(saved: true, filipino: f)),
+                      SummaryCard(children: [
+                        _LibItem(articleKey: 'cpr', pages: f ? '4 na pahina' : '4 pages', filipino: f),
+                        _LibItem(articleKey: 'burns', pages: f ? '3 pahina' : '3 pages', filipino: f),
+                        _LibItem(articleKey: 'wound_care', pages: f ? '2 pahina' : '2 pages', filipino: f),
+                      ]),
+                      const SizedBox(height: AppSpacing.xl),
+                      SectionHeader(
+                        title: tr(f, 'library.preparedness'),
+                        trailing: OfflinePill(saved: true, filipino: f),
+                      ),
+                      SummaryCard(children: [
+                        _LibItem(articleKey: 'before', pages: f ? '5 pahina' : '5 pages', filipino: f),
+                        _LibItem(articleKey: 'during', pages: f ? '4 na pahina' : '4 pages', filipino: f),
+                        _LibItem(articleKey: 'after', pages: f ? '4 na pahina' : '4 pages', filipino: f),
+                        _LibItem(
+                          articleKey: 'drrm_plan',
+                          pages: f ? 'Buod · 4 bahagi' : 'Summary · 4 sections',
+                          filipino: f,
+                        ),
+                        _LibItem(
+                          articleKey: 'evacuation_map',
+                          pages: f ? 'Buod · 4 bahagi' : 'Summary · 4 sections',
+                          filipino: f,
+                        ),
+                      ]),
+                      const SizedBox(height: AppSpacing.xl),
+                      _PublishedMaterials(appState: appState, filipino: f),
+                    ],
+                  ),
+                ),
               ),
-              _LibItem(
-                articleKey: 'evacuation_map',
-                pages: filipino ? 'Buod · 4 bahagi' : 'Summary · 4 sections',
-                filipino: filipino,
-              ),
-            ],
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: _PublishedMaterials(appState: appState, filipino: filipino),
-        ),
-        const SizedBox(height: 110),
-      ],
+        ],
       ),
     );
   }
@@ -122,10 +113,10 @@ class LibraryScreen extends StatelessWidget {
 /// A tappable library item — opens the corresponding [LibraryArticle] in
 /// the [ArticleReaderScreen], in the selected language.
 ///
-/// Its pill is always "Saved" and never tappable: these articles are compiled
-/// into the app, so they are readable with no signal and there is nothing to
-/// download. The old per-row `saved:` literals said otherwise for four of the
-/// eight rows, which was simply wrong.
+/// Its section is marked "Saved" once, in the heading: these articles are
+/// compiled into the app, so they are readable with no signal and there is
+/// nothing to download. The old per-row `saved:` literals said otherwise for
+/// four of the eight rows, which was simply wrong.
 class _LibItem extends StatelessWidget {
   final String articleKey;
   final String pages;
@@ -143,43 +134,31 @@ class _LibItem extends StatelessWidget {
     final title = article.titleFor(filipino: filipino);
     final subtitle = article.subtitleFor(filipino: filipino);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ArticleReaderScreen(article: article, filipino: filipino)),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => ArticleReaderScreen(article: article, filipino: filipino)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(13),
-            child: Row(
-              children: [
-                IconBadge(icon: article.icon, bg: article.iconBg, fg: article.iconFg, size: 40, iconSize: 19),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: AppText.display(size: 13, weight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text('$subtitle · $pages', style: AppText.body(size: 11.5, color: AppColors.inkMuted)),
-                    ],
-                  ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 72),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              IconBadge(icon: article.icon, bg: article.iconBg, fg: article.iconFg, size: 44, iconSize: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text('$subtitle · $pages', style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                OfflinePill(saved: true, filipino: filipino),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.inkFaint),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
+            ],
           ),
         ),
       ),
@@ -202,18 +181,16 @@ class _PublishedMaterials extends StatelessWidget {
     final materials = appState.materials;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionHeader(
-          title: filipino ? 'Mga Dokumento ng MDRRMO' : 'MDRRMO Documents',
-        ),
+        SectionHeader(title: tr(filipino, 'library.documents')),
         if (appState.materialsLoading && materials.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 18),
             child: Center(
               child: SizedBox(
-                width: 20,
-                height: 20,
+                width: 24,
+                height: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
@@ -231,19 +208,24 @@ class _PublishedMaterials extends StatelessWidget {
           )
         else ...[
           if (appState.materialsFromCache)
-            _Notice(
-              text: filipino
-                  ? 'Naka-save na kopya ang ipinapakita. Hindi maabot ang server.'
-                  : 'Showing your saved copies. The server could not be reached.',
-              onRetry: () => appState.loadMaterials(),
-              filipino: filipino,
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: _Notice(
+                text: filipino
+                    ? 'Naka-save na kopya ang ipinapakita. Hindi maabot ang server.'
+                    : 'Showing your saved copies. The server could not be reached.',
+                onRetry: () => appState.loadMaterials(),
+                filipino: filipino,
+              ),
             ),
-          for (final material in materials)
-            _MaterialRow(
-              material: material,
-              appState: appState,
-              filipino: filipino,
-            ),
+          SummaryCard(children: [
+            for (final material in materials)
+              _MaterialRow(
+                material: material,
+                appState: appState,
+                filipino: filipino,
+              ),
+          ]),
         ],
       ],
     );
@@ -323,92 +305,73 @@ class _MaterialRow extends StatelessWidget {
       if (material.sizeLabel.isNotEmpty) material.sizeLabel,
     ].join(' · ');
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _open(context),
-          child: Padding(
-            padding: const EdgeInsets.all(13),
-            child: Row(
-              children: [
-                IconBadge(
-                  icon: material.icon,
-                  bg: AppColors.green50,
-                  fg: AppColors.green700,
-                  size: 40,
-                  iconSize: 19,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        material.title,
-                        style: AppText.display(size: 13, weight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              meta,
-                              style: AppText.body(size: 11.5, color: AppColors.inkMuted),
-                            ),
+    return InkWell(
+      onTap: () => _open(context),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 72),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              IconBadge(
+                icon: material.icon,
+                bg: AppColors.green50,
+                fg: AppColors.green700,
+                size: 44,
+                iconSize: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      material.title,
+                      style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(meta, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                        // Only drawn when true. There is no "unverified"
+                        // badge: absence is not a warning about the file, it
+                        // is MDRRMO not having got to it yet.
+                        if (material.verified)
+                          _VerifiedBadge(
+                            filipino: filipino,
+                            byName: material.verifiedByName,
+                            byRole: material.verifiedByRole,
                           ),
-                          // Only drawn when true. There is no "unverified"
-                          // badge: absence is not a warning about the file, it
-                          // is MDRRMO not having got to it yet.
-                          if (material.verified) ...[
-                            const SizedBox(width: 6),
-                            _VerifiedBadge(
-                              filipino: filipino,
-                              byName: material.verifiedByName,
-                              byRole: material.verifiedByRole,
-                            ),
-                          ],
-                        ],
-                      ),
-                      // Named on the row, not only in the badge's tooltip, which
-                      // a touch screen shows on a long-press nobody knows to do.
-                      if (material.verifierLabel case final who?) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          filipino ? 'Sinuri ni $who' : 'Verified by $who',
-                          style: AppText.body(size: 11.5, color: AppColors.inkMuted),
-                        ),
+                        // Web has nowhere to write, so it gets no download
+                        // affordance at all rather than a button that can only
+                        // fail.
+                        if (appState.canSaveOffline)
+                          OfflinePill(
+                            saved: saved,
+                            loading: saving,
+                            filipino: filipino,
+                            onTap: saved ? null : () => _save(context),
+                          ),
                       ],
+                    ),
+                    // Named on the row, not only in the badge's tooltip, which
+                    // a touch screen shows on a long-press nobody knows to do.
+                    if (material.verifierLabel case final who?) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        filipino ? 'Sinuri ni $who' : 'Verified by $who',
+                        style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                // Web has nowhere to write, so it gets no download affordance at
-                // all rather than a button that can only fail.
-                if (appState.canSaveOffline) ...[
-                  OfflinePill(
-                    saved: saved,
-                    loading: saving,
-                    filipino: filipino,
-                    onTap: saved ? null : () => _save(context),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: AppColors.inkFaint,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
+            ],
           ),
         ),
       ),
@@ -440,19 +403,19 @@ class _VerifiedBadge extends StatelessWidget {
           ? (filipino ? 'Sinuri ng MDRRMO' : 'Checked by MDRRMO')
           : (filipino ? 'Sinuri ni $who' : 'Verified by $who'),
       child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(30)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.verified_rounded, size: 11, color: AppColors.green700),
-          const SizedBox(width: 3),
-          Text(
-            filipino ? 'Beripikado' : 'Verified',
-            style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
-          ),
-        ],
-      ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.pill)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.verified_rounded, size: 14, color: AppColors.green700),
+            const SizedBox(width: 4),
+            Text(
+              filipino ? 'Beripikado' : 'Verified',
+              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -467,38 +430,28 @@ class _Notice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              text,
-              style: AppText.body(size: 12, color: AppColors.inkMuted),
+    return SummaryCard(children: [
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(text, style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.4)),
             ),
-          ),
-          if (onRetry != null) ...[
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: onRetry,
-              child: Text(
-                filipino ? 'Subukan muli' : 'Retry',
-                style: AppText.display(
-                  size: 12,
-                  weight: FontWeight.w700,
-                  color: AppColors.green700,
+            if (onRetry != null) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(minimumSize: const Size(64, 48), foregroundColor: AppColors.green700),
+                child: Text(
+                  filipino ? 'Subukan muli' : 'Retry',
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.green700),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
-    );
+    ]);
   }
 }

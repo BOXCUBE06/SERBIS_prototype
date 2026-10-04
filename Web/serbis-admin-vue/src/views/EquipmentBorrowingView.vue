@@ -3,23 +3,22 @@
        content box is 100vh minus its 12px padding top and bottom, so a
        viewport-tall child always overshoots it and adds a scroll for nothing. -->
   <v-container fluid class="fill-height align-start bg-background">
-    <PageHeader
-      title="Equipment Borrowing"
+    <PageHeader title="Equipment Borrowing" class="w-100 mb-5">
+      <template #subtitle>{{ subtitle }}</template>
+      <template #actions>
+        <ExportMenu type="borrowing" :rows="activeTab === 'board' ? activeItems : historyItems" :selected-ids="selectedIds" show-selection />
+      </template>
+    </PageHeader>
+
+    <SegmentedTabs
+      v-model="activeTab"
+      switch-style
+      :items="[{ value: 'board', label: 'Active pipeline', count: activeItems.length }, { value: 'history', label: 'History', count: historyItems.length }]"
+      class="mb-5"
     />
 
-    <v-tabs v-model="activeTab" color="primary" class="page-tabs border-b">
-      <v-tab value="board" class="text-none font-weight-bold">
-        Active pipeline
-        <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ activeItems.length }}</v-chip>
-      </v-tab>
-      <v-tab value="history" class="text-none font-weight-bold">
-        History
-        <v-chip size="x-small" variant="tonal" class="ml-2 font-weight-bold">{{ historyItems.length }}</v-chip>
-      </v-tab>
-    </v-tabs>
-
     <!-- An action that failed used to leave no trace once the snackbar timed
-         out, 3.5 seconds later. It is the same error the modal has always
+         out, 3.5 seconds later. It is the same error the drawer has always
          shown in place; the page simply had nowhere to put it. -->
     <v-alert
       v-if="apiError && !modal.isOpen"
@@ -58,14 +57,17 @@
          table on this page now uses. -->
     <DataTablePage
       v-else-if="activeTab === 'board'"
+      compact
+      filter-bar
       :loading="initialLoad"
       :refreshing="reloading"
       v-model:search="search"
-      search-placeholder="Transaction No., resident, item or purpose"
+      search-placeholder="Search transaction no., resident or item"
       :tabs="activeStatusTabs"
       :status="statusFilter"
       @update:status="statusFilter = $event"
       :headers="activeHeaders"
+      :sort-hint="SORT_CAPTION"
       :items="activeItems"
       item-value="borrow_id"
       :row-props="rowProps"
@@ -83,37 +85,24 @@
       @clear-all="clearAllFilters"
       @click:row="(_event, { item }) => openDetail(item)"
     >
-      <template v-slot:summary>{{ resultSummary }}</template>
-
-      <template v-slot:actions>
-        <ExportMenu type="borrowing" :rows="activeItems" :selected-ids="selectedIds" show-selection />
+      <template v-if="selected.length > 0" v-slot:before-table>
+        <BulkSelectionBar
+          :selected="selected.length"
+          :actionable="pendingSelected.length"
+          action-label="Deny"
+          :loading="loading"
+          @clear="selected = []"
+          @action="requestBulkDeny"
+        />
       </template>
 
       <template v-slot:item.borrow_id="{ item }">
-        <span class="text-truncate d-block mono">{{ borrowingTransactionNo(item.borrow_id) }}</span>
+        <span class="mono txn">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
 
       <template v-slot:filters>
-        <v-select
-          v-model="itemFilter"
-          :items="itemOptions"
-          label="Equipment"
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="filter-field"
-        ></v-select>
-        <v-select
-          v-model="barangayFilter"
-          :items="barangayOptions"
-          label="Barangay"
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="filter-field"
-        ></v-select>
+        <v-select v-model="itemFilter" :items="itemOptions" prefix="Equipment" aria-label="Equipment" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+        <v-select v-model="barangayFilter" :items="barangayOptions" prefix="Barangay" aria-label="Barangay" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
       </template>
 
       <template v-slot:item.resident="{ item }">
@@ -122,7 +111,7 @@
 
       <template v-slot:item.barangay="{ item }">
         <span class="text-body-2 text-medium-emphasis cell-truncate">
-          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+          {{ item.resident?.barangay?.barangay_name || NOT_RECORDED }}
         </span>
       </template>
 
@@ -130,15 +119,15 @@
         <div class="min-w-0">
           <v-tooltip :text="itemName(item)" location="top">
             <template v-slot:activator="{ props }">
-              <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
+              <div v-bind="props" class="text-body-2 font-weight-bold text-high-emphasis cell-truncate">
                 {{ itemName(item) }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
               </div>
             </template>
           </v-tooltip>
           <!-- One secondary line — rows are a fixed height. A stock shortfall
                outranks the uncatalogued note, which outranks the purpose. -->
-          <div v-if="shortStock(item)" class="text-caption font-weight-bold cell-truncate" style="color: rgb(var(--v-theme-error-strong));">
-            Only {{ item.equipment?.available_quantity ?? 0 }} in stock
+          <div v-if="shortStock(item)" class="text-caption font-weight-bold text-warning-strong cell-truncate">
+            Low stock: only {{ item.equipment?.available_quantity ?? 0 }} available
           </div>
           <div v-else-if="isUncatalogued(item)" class="text-caption text-medium-emphasis font-italic cell-truncate">
             Not in the inventory
@@ -151,22 +140,12 @@
         </div>
       </template>
 
+      <!-- The pill, then one plain line: the due countdown and how long it has been in this stage. -->
       <template v-slot:item.status="{ item }">
-        <StatusPill small :status="item.status" :icon="statusIcon(item.status)" />
-      </template>
-
-      <template v-slot:item.timeline="{ item }">
-        <!-- A chip, not plain text — the due countdown MDRRMO asked to be
-             made prominent (feedback, 2026-09-17), same weight as the
-             status chip in the column beside it. -->
-        <template v-if="dueLabel(item)">
-          <v-chip
-            size="small" variant="flat" class="font-weight-bold"
-            :color="isOverdue(item) ? 'error' : ['Due today', 'Due tomorrow'].includes(dueLabel(item)) ? 'warning' : undefined"
-          >{{ dueLabel(item) }}</v-chip>
-          <div class="text-caption text-medium-emphasis mt-1">{{ agingLabel(item) }}</div>
-        </template>
-        <div v-else class="text-body-2 text-high-emphasis">{{ agingLabel(item) }}</div>
+        <div class="d-flex flex-column align-start ga-1">
+          <StatusPill small :status="item.status" :icon="statusIcon(item.status)" />
+          <span class="text-caption" :class="dueClass(item)">{{ timelineLine(item) }}</span>
+        </div>
       </template>
 
       <template v-slot:item.actions="{ item }">
@@ -210,10 +189,12 @@
          pipeline glance. -->
     <DataTablePage
       v-else
+      compact
+      filter-bar
       :loading="initialLoad"
       :refreshing="reloading"
       v-model:search="search"
-      search-placeholder="Transaction No., resident, item or purpose"
+      search-placeholder="Search transaction no., resident or item"
       :tabs="historyStatusTabs"
       :status="outcomeFilter"
       @update:status="outcomeFilter = $event"
@@ -235,37 +216,24 @@
       @clear-all="clearAllFilters"
       @click:row="(_event, { item }) => openDetail(item)"
     >
-      <template v-slot:summary>{{ resultSummary }}</template>
-
-      <template v-slot:actions>
-        <ExportMenu type="borrowing" :rows="historyItems" :selected-ids="selectedIds" show-selection />
+      <template v-if="selected.length > 0" v-slot:before-table>
+        <BulkSelectionBar
+          :selected="selected.length"
+          :actionable="pendingSelected.length"
+          action-label="Deny"
+          :loading="loading"
+          @clear="selected = []"
+          @action="requestBulkDeny"
+        />
       </template>
 
       <template v-slot:item.borrow_id="{ item }">
-        <span class="text-truncate d-block mono">{{ borrowingTransactionNo(item.borrow_id) }}</span>
+        <span class="mono txn">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
 
       <template v-slot:filters>
-        <v-select
-          v-model="itemFilter"
-          :items="itemOptions"
-          label="Equipment"
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="filter-field"
-        ></v-select>
-        <v-select
-          v-model="barangayFilter"
-          :items="barangayOptions"
-          label="Barangay"
-          variant="outlined"
-          density="compact"
-          hide-details
-          rounded="lg"
-          class="filter-field"
-        ></v-select>
+        <v-select v-model="itemFilter" :items="itemOptions" prefix="Equipment" aria-label="Equipment" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+        <v-select v-model="barangayFilter" :items="barangayOptions" prefix="Barangay" aria-label="Barangay" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
       </template>
 
       <template v-slot:item.status="{ item }">
@@ -277,8 +245,8 @@
       </template>
 
       <template v-slot:item.barangay="{ item }">
-        <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || 'N/A'">
-          {{ item.resident?.barangay?.barangay_name || 'N/A' }}
+        <span class="cell-truncate" :title="item.resident?.barangay?.barangay_name || NOT_RECORDED">
+          {{ item.resident?.barangay?.barangay_name || NOT_RECORDED }}
         </span>
       </template>
 
@@ -294,309 +262,242 @@
       </template>
     </DataTablePage>
 
-    <!-- Detail modal (full record + fallback actions) -->
-    <!-- Not persistent: this reads a record. The one input on it, the handover
-         photo picker, uploads on pick, so there is no unsaved state to lose. -->
-    <v-dialog v-model="modal.isOpen" max-width="min(820px, 95vw)" transition="dialog-fade-transition">
-      <v-card rounded="lg" elevation="4" class="d-flex flex-column detail-modal-card borrow-detail">
-        <DetailDialogHeader
-          :name="[selectedRecord?.resident?.first_name, selectedRecord?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family'"
-          :initials="initials(selectedRecord?.resident)"
-          :secondary="selectedRecord?.resident?.barangay?.barangay_name"
-          @close="closeModal"
-        >
-          <template v-slot:status>
-            <StatusPill :status="selectedRecord?.status" :icon="statusIcon(selectedRecord?.status)" />
-          </template>
-          <template v-slot:actions><ExportMenu v-if="selectedRecord" type="borrowing" :row="selectedRecord" /></template>
-        </DetailDialogHeader>
-        <v-divider></v-divider>
+    <!-- Detail drawer (full record + fallback actions). Persistent: it holds
+         the photo pickers, so a stray click on the scrim must not close it
+         mid-upload. Leave with the close button. -->
+    <DetailDrawer
+      :model-value="modal.isOpen"
+      @update:model-value="(v) => { if (!v) requestClose() }"
+      eyebrow="Equipment request"
+      :name="drawerName"
+      :initials="initials(selectedRecord?.resident)"
+      :secondary="drawerSecondary"
+      :status-text="drawerStatus.text"
+      :status-text-class="drawerStatus.class"
+    >
+      <template #status>
+        <StatusPill v-if="selectedRecord" :status="selectedRecord.status" />
+      </template>
+      <template #actions>
+        <ExportMenu v-if="selectedRecord" icon type="borrowing" :row="selectedRecord" />
+      </template>
 
-        <v-card-text class="px-8 py-6 overflow-y-auto flex-grow-1">
-              <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
+      <template v-if="selectedRecord">
+        <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact">{{ apiError }}</v-alert>
 
-              <template v-if="selectedRecord?.status === 'Denied'">
-                <h3 class="sect-label text-error">Reason for Denial</h3>
-                <v-card variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface">
-                  <div class="text-body-1 text-high-emphasis">{{ selectedRecord?.denial_reason || 'No reason was recorded.' }}</div>
-                  <div v-if="selectedRecord?.denial_reason_code === 'Unavailable'" class="text-caption text-medium-emphasis mt-2">
-                    Marked as "not available" — the resident is texted and pushed automatically once this item is back in stock.
-                  </div>
-                </v-card>
-              </template>
+        <section class="detail-section">
+          <h3 class="sect-label">Request</h3>
+          <dl class="kv">
+            <dt>Transaction</dt><dd class="mono">{{ borrowingTransactionNo(selectedRecord.borrow_id) }}</dd>
+            <dt>Requested on</dt><dd>{{ fmtDateTime(selectedRecord.created_at) }}</dd>
+            <template v-if="selectedRecord.due_date">
+              <dt>Due back</dt><dd :class="{ 'text-error font-weight-bold': isOverdue(selectedRecord) }">{{ fmtDate(selectedRecord.due_date) }}</dd>
+            </template>
+            <template v-if="selectedRecord.released_at">
+              <dt>Released on</dt><dd>{{ fmtDateTime(selectedRecord.released_at) }}</dd>
+            </template>
+            <template v-if="selectedRecord.returned_at">
+              <dt>Returned on</dt><dd>{{ fmtDateTime(selectedRecord.returned_at) }}</dd>
+            </template>
+            <!-- The account holder stays the contact either way — the
+                 request was filed from their account and resident_id is
+                 required. Borrowing For says who the item is FOR, which
+                 separates an institutional loan from a personal one. -->
+            <dt>Phone</dt>
+            <dd>
+              <a v-if="drawerPhone" :href="`tel:${drawerPhone}`" class="phone-link">{{ drawerPhone }}</a>
+              <span v-else class="text-medium-emphasis">{{ NOT_RECORDED }}</span>
+            </dd>
+            <dt>Borrowing for</dt>
+            <dd :class="unnamedOrganization(selectedRecord) ? 'text-error font-italic' : ''">
+              {{ borrowingForLabel(selectedRecord) }}
+              <span v-if="isOrganization(selectedRecord)" class="text-medium-emphasis">(Organization)</span>
+            </dd>
+          </dl>
+        </section>
 
-              <!-- Info, not error: the office refused nothing here. Saying
-                   stock was untouched out loud because the obvious guess is
-                   that a cancelled request handed something back — it did
-                   not, since nothing is deducted before Released. -->
-              <v-alert
-                v-else-if="selectedRecord?.status === 'Cancelled'"
-                type="info" variant="tonal" class="mb-4" density="compact"
-                :title="'Withdrawn by the resident'"
-              >The resident cancelled this request from the mobile app before the item was released. No stock was reserved or returned.</v-alert>
-
-              <v-alert
-                v-else-if="isOverdue(selectedRecord)"
-                type="error" variant="tonal" class="mb-6 text-body-2" density="compact"
-              >{{ dueLabel(selectedRecord) }} — due back on {{ fmtDate(selectedRecord?.due_date) }}, not yet returned.</v-alert>
-
-              <!-- Not overdue yet, but still a live loan with a due date —
-                   the countdown MDRRMO asked to be made prominent (feedback,
-                   2026-09-17), not just the small field further down. Amber
-                   inside the 1-day reminder window (matches
-                   SendReturnDueReminders' own window), blue otherwise. -->
-              <v-alert
-                v-else-if="selectedRecord?.due_date && !terminalStatuses.has(selectedRecord.status)"
-                :type="['Due today', 'Due tomorrow'].includes(dueLabel(selectedRecord)) ? 'warning' : 'info'"
-                variant="tonal" class="mb-6 text-body-2" density="compact"
-              >{{ dueLabel(selectedRecord) }} — due back on {{ fmtDate(selectedRecord?.due_date) }}.</v-alert>
-
-              <div class="detail-cols">
-                <section class="detail-section">
-                  <h3 class="sect-label">Request</h3>
-                  <dl class="kv">
-                    <dt>Transaction</dt><dd class="mono">{{ borrowingTransactionNo(selectedRecord?.borrow_id) }}</dd>
-                    <dt>Requested on</dt><dd>{{ fmtDateTime(selectedRecord?.created_at) }}</dd>
-                    <template v-if="selectedRecord?.due_date">
-                      <dt>Due back on</dt><dd :class="{ 'text-error': isOverdue(selectedRecord) }">{{ fmtDate(selectedRecord?.due_date) }}</dd>
-                    </template>
-                    <template v-if="selectedRecord?.released_at">
-                      <dt>Released on</dt><dd class="text-primary">{{ fmtDateTime(selectedRecord?.released_at) }}</dd>
-                    </template>
-                    <template v-if="selectedRecord?.returned_at">
-                      <dt>Returned on</dt><dd class="text-success">{{ fmtDateTime(selectedRecord?.returned_at) }}</dd>
-                    </template>
-                  </dl>
-                </section>
-
-                <section class="detail-section">
-                  <h3 class="sect-label">Borrower</h3>
-                  <!-- The account holder stays the contact either way — the
-                       request was filed from their account and resident_id is
-                       required. Borrowing For says who the item is FOR, which
-                       separates an institutional loan from a personal one. -->
-                  <dl class="kv">
-                    <dt>Phone</dt><dd>{{ displayPhone(selectedRecord?.resident?.phone_number) || 'N/A' }}</dd>
-                    <dt>Borrowing for</dt>
-                    <dd :class="unnamedOrganization(selectedRecord) ? 'text-error font-italic' : ''">
-                      {{ borrowingForLabel(selectedRecord) }}
-                      <div v-if="isOrganization(selectedRecord)" class="text-caption text-medium-emphasis">Organization</div>
-                    </dd>
-                  </dl>
-                </section>
+        <section class="detail-section">
+          <h3 class="sect-label">Equipment</h3>
+          <div class="assign-box">
+            <div class="assign-row">
+              <div class="text-body-1 font-weight-bold">
+                {{ itemName(selectedRecord) }} <span class="font-weight-regular text-medium-emphasis">&times;{{ selectedRecord.quantity }}</span>
               </div>
-
-              <h3 class="sect-label">Equipment Requested</h3>
-              <div class="d-flex align-baseline flex-wrap gap-3 mb-8">
-                <span class="text-body-1 font-weight-bold text-high-emphasis">{{ itemName(selectedRecord) }}</span>
-                <span class="text-body-1 text-medium-emphasis">&times;{{ selectedRecord?.quantity }}</span>
-                <!-- An uncatalogued item has no stock row to quote, and the
-                     backend refuses to release one until staff add it to the
-                     inventory and attach it. Saying so here is what makes
-                     that 422 predictable instead of a surprise at the point
-                     of release. -->
-                <span v-if="isUncatalogued(selectedRecord)" class="text-body-2 text-warning">
-                  Not in the inventory — add this item to the equipment list and attach it before releasing.
-                </span>
-                <span v-else class="text-body-2 text-medium-emphasis">
-                  Stock available:
-                  <span class="font-weight-bold" :class="selectedRecord?.equipment?.available_quantity > 0 ? 'text-primary' : 'text-error'">
-                    {{ selectedRecord?.equipment?.available_quantity }}
-                  </span>
-                </span>
+              <!-- An uncatalogued item has no stock row to quote, and the
+                   backend refuses to release one until staff add it to the
+                   inventory and attach it. Saying so here is what makes
+                   that 422 predictable instead of a surprise at the point
+                   of release. -->
+              <div v-if="isUncatalogued(selectedRecord)" class="text-body-2 text-warning-strong text-right">
+                Not in the inventory. Add it to the equipment list and attach it before releasing.
               </div>
-
-              <h3 class="sect-label">Purpose</h3>
-              <!-- Requests filed before the field existed have no purpose, and
-                   an empty line reads as a resident who left it blank. -->
-              <div
-                class="text-body-1 mb-8"
-                :class="selectedRecord?.purpose ? 'text-high-emphasis' : 'text-medium-emphasis font-italic'"
-                style="white-space: pre-wrap;"
-              >{{ selectedRecord?.purpose || 'No purpose was recorded — this request predates the field.' }}</div>
-
-              <h3 class="sect-label">Handover</h3>
-              <div class="d-flex align-center gap-2 mb-1">
-                <v-icon
-                  size="18"
-                  :color="isDelivery(selectedRecord) ? 'primary' : 'medium-emphasis'"
-                >{{ isDelivery(selectedRecord) ? 'mdi-truck-outline' : 'mdi-storefront-outline' }}</v-icon>
-                <span class="text-body-1 text-high-emphasis">
-                  {{ isDelivery(selectedRecord) ? 'Deliver to the borrower' : 'Collect from the MDRRMO office' }}
-                </span>
+              <div v-else class="text-body-2 text-right" :class="lowStock ? 'text-warning-strong font-weight-bold' : 'text-medium-emphasis'">
+                Stock available: {{ selectedRecord.equipment?.available_quantity ?? NOT_RECORDED }}
               </div>
-              <!-- Only a delivery has an address, and a delivery without one
-                   is a run nobody can make — so this says so rather than
-                   rendering an empty line. -->
-              <div
-                v-if="isDelivery(selectedRecord)"
-                class="text-body-2"
-                :class="selectedRecord?.delivery_address ? 'text-medium-emphasis' : 'text-error font-italic'"
-                style="white-space: pre-wrap;"
-              >{{ selectedRecord?.delivery_address || 'No address was recorded — ask the borrower before dispatching.' }}</div>
-              <div class="mb-8"></div>
+            </div>
+          </div>
+        </section>
 
-              <!-- Only shown once something has changed hands. Before that the
-                   backend refuses the upload, so offering it would be a button
-                   that always fails. -->
-              <template v-if="photoStages(selectedRecord).length > 0">
-                <h3 class="sect-label">Condition Photos</h3>
-                <v-row class="mb-6">
-                  <v-col
-                    v-for="stage in photoStages(selectedRecord)"
-                    :key="stage"
-                    cols="12"
-                    sm="6"
-                  >
-                    <v-card variant="outlined" border class="pa-4 rounded-lg subtle-surface h-100">
-                      <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
-                        {{ stage === 'release' ? 'At release' : 'At return' }}
-                      </div>
+        <section class="detail-section">
+          <h3 class="sect-label">Purpose</h3>
+          <!-- Requests filed before the field existed have no purpose, and
+               an empty line reads as a resident who left it blank. -->
+          <div class="description-box" :class="{ 'text-medium-emphasis font-italic': !selectedRecord.purpose }" style="white-space: pre-wrap;">{{ selectedRecord.purpose || 'No purpose was recorded. This request predates the field.' }}</div>
+        </section>
 
-                      <v-img
-                        v-if="photoState(stage).url"
-                        :src="photoState(stage).url"
-                        :alt="`Condition of ${itemName(selectedRecord)} at ${stage}`"
-                        height="160"
-                        cover
-                        class="rounded mb-3"
-                      ></v-img>
+        <section class="detail-section">
+          <h3 class="sect-label">Handover</h3>
+          <div class="d-flex align-center gap-2 mb-1">
+            <v-icon size="18" :color="isDelivery(selectedRecord) ? 'primary' : 'medium-emphasis'">{{ isDelivery(selectedRecord) ? 'mdi-truck-outline' : 'mdi-storefront-outline' }}</v-icon>
+            <span class="text-body-1">{{ isDelivery(selectedRecord) ? 'Deliver to the borrower' : 'Collect from the MDRRMO office' }}</span>
+          </div>
+          <!-- Only a delivery has an address, and a delivery without one
+               is a run nobody can make — so this says so rather than
+               rendering an empty line. -->
+          <div
+            v-if="isDelivery(selectedRecord)"
+            class="text-body-2"
+            :class="selectedRecord.delivery_address ? 'text-medium-emphasis' : 'text-error font-italic'"
+            style="white-space: pre-wrap;"
+          >{{ selectedRecord.delivery_address || 'No address was recorded. Ask the borrower before dispatching.' }}</div>
+        </section>
 
-                      <v-skeleton-loader
-                        v-else-if="photoState(stage).loading"
-                        type="image"
-                        height="160"
-                        class="mb-3"
-                      ></v-skeleton-loader>
-
-                      <v-alert
-                        v-else-if="photoState(stage).error"
-                        type="error"
-                        variant="tonal"
-                        density="compact"
-                        class="mb-3"
-                      >{{ photoState(stage).error }}</v-alert>
-
-                      <div v-else class="text-body-2 text-medium-emphasis font-italic mb-3">
-                        No photo was taken.
-                      </div>
-
-                      <!-- Uploads on pick rather than holding the file for a
-                           later submit: there is nothing else on this card to
-                           submit it with. -->
-                      <v-file-input
-                        :label="photoState(stage).url ? 'Replace photo' : 'Add photo'"
-                        accept="image/jpeg,image/png"
-                        density="compact"
-                        variant="outlined"
-                        hide-details
-                        prepend-icon=""
-                        prepend-inner-icon="mdi-camera-outline"
-                        :loading="photoUploading === stage"
-                        :disabled="!!photoUploading"
-                        @update:model-value="(picked) => uploadHandoverPhoto(selectedRecord, stage, Array.isArray(picked) ? picked[0] : picked)"
-                      ></v-file-input>
-
-                      <!-- Only while the record is still in the stage this
-                           photo belongs to. Past that the server refuses
-                           (PHOTO_STAGES.removable_in), so drawing the button
-                           would be offering an action that always fails —
-                           replacing is what is left. -->
-                      <v-btn
-                        v-if="canRemovePhoto(selectedRecord, stage)"
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        rounded="lg"
-                        class="text-none mt-2"
-                        :loading="photoRemoving === stage"
-                        :disabled="!!photoUploading || !!photoRemoving"
-                        @click="askRemovePhoto(stage)"
-                      >
-                        <v-icon start size="18">mdi-delete-outline</v-icon> Remove photo
-                      </v-btn>
-                    </v-card>
-                  </v-col>
-                </v-row>
-              </template>
-
-              <!-- Optional, like the photo it accompanies — a row with
-                   neither the flag nor a note draws nothing at all, same
-                   reasoning as the photos above. -->
-              <v-card
-                v-if="selectedRecord?.return_condition || selectedRecord?.return_condition_note"
-                variant="outlined" border class="pa-4 mb-6 rounded-lg subtle-surface"
-              >
-                <div class="d-flex align-center justify-space-between mb-2">
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Condition at return</div>
-                  <v-chip
-                    v-if="selectedRecord?.return_condition"
-                    size="small" variant="flat" class="font-weight-bold"
-                    :color="selectedRecord.return_condition === 'Bad' ? 'error' : 'success'"
-                  >{{ selectedRecord.return_condition }}</v-chip>
+        <!-- Only shown once something has changed hands. Before that the
+             backend refuses the upload, so offering it would be a button
+             that always fails. -->
+        <section v-if="photoStages(selectedRecord).length > 0" class="detail-section">
+          <h3 class="sect-label">Condition photos</h3>
+          <v-row>
+            <v-col v-for="stage in photoStages(selectedRecord)" :key="stage" cols="12" sm="6">
+              <div class="photo-card h-100">
+                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
+                  {{ stage === 'release' ? 'At release' : 'At return' }}
                 </div>
-                <div
-                  v-if="selectedRecord?.return_condition_note"
-                  class="text-body-2 text-high-emphasis"
-                  style="white-space: pre-wrap;"
-                >{{ selectedRecord.return_condition_note }}</div>
-              </v-card>
 
-              <!-- Display only — see borrowerHistory's own comment. Nothing
-                   here narrows what the operator can do; it is context for a
-                   decision they make themselves. -->
-              <v-card
-                v-if="borrowerHistory.length > 0"
-                variant="flat" class="pa-3 mb-6 rounded-lg subtle-surface"
-              >
-                <div class="text-caption text-medium-emphasis mb-2">
-                  Past returns ({{ borrowerHistory.length }})
-                </div>
-                <div
-                  v-for="past in borrowerHistory" :key="past.borrow_id"
-                  class="d-flex align-start gap-3 mb-3"
+                <v-img
+                  v-if="photoState(stage).url"
+                  :src="photoState(stage).url"
+                  :alt="`Condition of ${itemName(selectedRecord)} at ${stage}`"
+                  height="160"
+                  cover
+                  class="rounded mb-3"
+                ></v-img>
+
+                <v-skeleton-loader v-else-if="photoState(stage).loading" type="image" height="160" class="mb-3"></v-skeleton-loader>
+
+                <v-alert v-else-if="photoState(stage).error" type="error" variant="tonal" density="compact" class="mb-3">{{ photoState(stage).error }}</v-alert>
+
+                <div v-else class="text-body-2 text-medium-emphasis font-italic mb-3">No photo was taken.</div>
+
+                <!-- Uploads on pick rather than holding the file for a
+                     later submit: there is nothing else on this card to
+                     submit it with. -->
+                <v-file-input
+                  :label="photoState(stage).url ? 'Replace photo' : 'Add photo'"
+                  accept="image/jpeg,image/png"
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  prepend-icon=""
+                  prepend-inner-icon="mdi-camera-outline"
+                  :loading="photoUploading === stage"
+                  :disabled="!!photoUploading"
+                  @update:model-value="(picked) => uploadHandoverPhoto(selectedRecord, stage, Array.isArray(picked) ? picked[0] : picked)"
+                ></v-file-input>
+
+                <!-- Only while the record is still in the stage this
+                     photo belongs to. Past that the server refuses
+                     (PHOTO_STAGES.removable_in), so drawing the button
+                     would be offering an action that always fails —
+                     replacing is what is left. -->
+                <v-btn
+                  v-if="canRemovePhoto(selectedRecord, stage)"
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  rounded="lg"
+                  class="text-none mt-2"
+                  :loading="photoRemoving === stage"
+                  :disabled="!!photoUploading || !!photoRemoving"
+                  @click="askRemovePhoto(stage)"
                 >
-                  <div class="flex-grow-1 min-width-0">
-                    <div class="d-flex align-center gap-2 mb-1">
-                      <v-chip
-                        v-if="past.return_condition"
-                        size="x-small" variant="flat" class="font-weight-bold"
-                        :color="past.return_condition === 'Bad' ? 'error' : 'success'"
-                      >{{ past.return_condition }}</v-chip>
-                      <span class="text-caption text-medium-emphasis">
-                        {{ past.equipment?.item_name || past.other_equipment_text }} · {{ fmtDate(past.returned_at || past.created_at) }}
-                      </span>
-                    </div>
-                    <div
-                      v-if="past.return_condition_note"
-                      class="text-body-2 text-high-emphasis"
-                      style="white-space: pre-wrap;"
-                    >{{ past.return_condition_note }}</div>
-                  </div>
-                </div>
-              </v-card>
+                  <v-icon start size="18">mdi-delete-outline</v-icon> Remove photo
+                </v-btn>
+              </div>
+            </v-col>
+          </v-row>
+        </section>
 
-        </v-card-text>
+        <!-- Optional, like the photo it accompanies — a row with neither the
+             flag nor a note draws nothing at all, same reasoning as above. -->
+        <section v-if="selectedRecord.return_condition || selectedRecord.return_condition_note" class="detail-section">
+          <h3 class="sect-label">Condition at return</h3>
+          <div class="assign-box">
+            <div class="assign-row">
+              <span class="text-body-1" style="white-space: pre-wrap;">{{ selectedRecord.return_condition_note || NOT_RECORDED }}</span>
+              <v-chip
+                v-if="selectedRecord.return_condition"
+                size="small" variant="tonal" class="font-weight-bold flex-shrink-0"
+                :color="selectedRecord.return_condition === 'Bad' ? 'error' : 'success'"
+              >{{ selectedRecord.return_condition }}</v-chip>
+            </div>
+          </div>
+        </section>
 
-        <!-- Terminal-list check, not the two words it used to name: a
-             Cancelled record matches none of the branches inside, so the old
-             version rendered this footer empty. -->
-        <div
-          v-if="selectedRecord && !terminalStatuses.has(selectedRecord.status)"
-          class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4"
-        >
-          <!-- Default-size buttons, right-aligned. -->
-          <v-spacer></v-spacer>
-          <template v-if="selectedRecord.status === 'Pending'">
-            <v-btn color="error" variant="outlined" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny Request</v-btn>
-            <v-btn color="primary" variant="flat" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve Request</v-btn>
-          </template>
-          <v-btn v-else-if="selectedRecord.status === 'Approved'" color="primary" variant="flat" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Mark as Released to Resident</v-btn>
-          <v-btn v-else-if="selectedRecord.status === 'Released'" color="success" variant="flat" class="text-none font-weight-bold" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm Items Returned</v-btn>
-        </div>
+        <!-- Display only — see borrowerHistory's own comment. Nothing
+             here narrows what the operator can do; it is context for a
+             decision they make themselves. -->
+        <section v-if="borrowerHistory.length > 0" class="detail-section">
+          <h3 class="sect-label">Borrower history ({{ borrowerHistory.length }})</h3>
+          <div class="history-box">
+            <div v-for="past in borrowerHistory" :key="past.borrow_id" class="py-2">
+              <div class="d-flex align-center ga-2">
+                <v-chip
+                  v-if="past.return_condition"
+                  size="x-small" variant="tonal" class="font-weight-bold"
+                  :color="past.return_condition === 'Bad' ? 'error' : 'success'"
+                >{{ past.return_condition }}</v-chip>
+                <span class="text-body-2 font-weight-bold">{{ past.equipment?.item_name || past.other_equipment_text }}</span>
+                <span class="text-caption text-medium-emphasis">{{ fmtDate(past.returned_at || past.created_at) }}</span>
+              </div>
+              <div v-if="past.return_condition_note" class="text-body-2 text-medium-emphasis mt-1" style="white-space: pre-wrap;">{{ past.return_condition_note }}</div>
+            </div>
+          </div>
+        </section>
 
-      </v-card>
-    </v-dialog>
+        <!-- Denied: only when staff gave a reason. Cancelled: info, not an
+             error — the office refused nothing, and no stock moved because
+             nothing is deducted before Released. -->
+        <section v-if="selectedRecord.status === 'Denied' && selectedRecord.denial_reason" class="detail-section">
+          <h3 class="sect-label">Outcome</h3>
+          <dl class="kv"><dt>Reason</dt><dd>{{ selectedRecord.denial_reason }}</dd></dl>
+          <div v-if="selectedRecord.denial_reason_code === 'Unavailable'" class="text-body-2 text-medium-emphasis mt-2">
+            Marked as "not available". The Head of the Family is texted and pushed automatically once this item is back in stock.
+          </div>
+        </section>
+        <section v-else-if="selectedRecord.status === 'Cancelled'" class="detail-section">
+          <h3 class="sect-label">Outcome</h3>
+          <dl class="kv"><dt>Cancelled by</dt><dd>The resident, from the mobile app</dd></dl>
+          <div class="text-body-2 text-medium-emphasis mt-2">Withdrawn before release. No stock was reserved or returned.</div>
+        </section>
+      </template>
+
+      <!-- Closed records have no action; the terminal check, not the two
+           words it used to name, so a Cancelled one does not draw an empty bar. -->
+      <template v-if="selectedRecord?.status === 'Pending'" #footer>
+        <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Denied')">Deny request</v-btn>
+        <v-spacer></v-spacer>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Approved')">Approve request</v-btn>
+      </template>
+      <template v-else-if="selectedRecord?.status === 'Approved'" #footer>
+        <v-spacer></v-spacer>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Released')">Release to resident</v-btn>
+      </template>
+      <template v-else-if="selectedRecord?.status === 'Released'" #footer>
+        <v-spacer></v-spacer>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="requestAction(selectedRecord, 'Returned')">Confirm items returned</v-btn>
+      </template>
+    </DetailDrawer>
 
     <!-- One dialog for the three transitions that need something from the
          operator before they fire. -->
@@ -746,20 +647,24 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { initials as computeInitials } from '@/composables/adminUi'
+import { initials as computeInitials, pluralize } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
-import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
+import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
+import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
 import { borrowingTransactionNo } from '@/composables/requestDisplay'
+import { pendingOf } from '@/composables/useReasonActions'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -774,6 +679,7 @@ const columns = BORROWING_STATUSES
 const ALL_ITEMS = 'All items'
 const ALL_BARANGAYS = 'All barangays'
 const ALL_STATUS = 'All'
+const NOT_RECORDED = 'Not recorded'
 const ALL_OUTCOMES = 'All'
 
 // Module-level state, not this component's: ProcurementReferenceView reads the
@@ -812,6 +718,10 @@ const selectedRecord = ref(null)
 // ExportMenu takes them as a Set.
 const selected = ref([])
 const selectedIds = computed(() => new Set(selected.value))
+// A bulk deny acts on the Pending rows only; the rest of a selection is skipped.
+const pendingSelected = computed(() => pendingOf(borrowings.value, selectedIds.value, (b) => b.borrow_id))
+// A different tab or status segment is a different list; ticks do not carry over.
+watch([activeTab, statusFilter, outcomeFilter], () => { selected.value = [] })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const emptyAction = () => ({
@@ -825,6 +735,7 @@ const emptyAction = () => ({
   condition: 'Good',
   conditionNote: '',
   error: '',
+  bulk: false,
 })
 const actionDialog = ref(emptyAction())
 
@@ -851,17 +762,16 @@ const personSecondary = (b) => displayPhone(b.resident?.phone_number) || b.resid
 // The selection column is Vuetify's own (`selectable` on DataTablePage), so it
 // is not listed here. Actions is a fixed column wide enough for Deny + Approve.
 const activeHeaders = [
-  { title: 'Transaction No.', key: 'borrow_id', width: '11%' },
+  { title: 'Txn no.', key: 'borrow_id', width: '11%' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
-  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '12%' },
-  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '20%' },
-  { title: 'Status', key: 'status', width: '12%' },
-  { title: 'Timeline', key: 'timeline', value: 'due_date', width: '12%' },
+  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '13%' },
+  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '21%' },
+  { title: 'Status', key: 'status', width: '18%' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '232px' },
 ]
 
 const historyHeaders = [
-  { title: 'Transaction No.', key: 'borrow_id', width: '13%' },
+  { title: 'Txn no.', key: 'borrow_id', width: '13%' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '15%' },
   { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '22%' },
@@ -991,24 +901,17 @@ const historyStatusTabs = computed(() => {
   ]
 })
 
-const totalActive = computed(
-  () => borrowings.value.filter((b) => !terminalStatuses.has(b.status)).length,
-)
-const totalHistory = computed(
-  () => borrowings.value.filter((b) => terminalStatuses.has(b.status)).length,
-)
 
-// Counts the tab actually showing, against that tab's unfiltered total. Says
-// "of" only when something is being hidden, so the line is not a permanent
-// accusation that a filter is on.
-const resultSummary = computed(() => {
-  const history = activeTab.value === 'history'
-  const total = history ? totalHistory.value : totalActive.value
-  const shown = history ? historyItems.value.length : activeItems.value.length
-  const noun = history ? 'completed' : 'active'
-  if (shown === total) return `${total} ${noun} request${total === 1 ? '' : 's'}`
-  return `Showing ${shown} of ${total} ${noun} requests`
+// The page header's line, per tab.
+const subtitle = computed(() => {
+  if (activeTab.value === 'history') return `${pluralize(borrowings.value.filter((b) => terminalStatuses.has(b.status)).length, 'completed request')}, newest first`
+  const pending = borrowings.value.filter((b) => b.status === 'Pending').length
+  const overdue = borrowings.value.filter((b) => isOverdue(b)).length
+  return `${pending} pending${overdue ? ` · ${overdue} overdue` : ''}`
 })
+
+// What activeItems sorts by: overdue, then stage, then oldest-waiting.
+const SORT_CAPTION = 'Sorted by: overdue on top, then status, then oldest'
 
 // Search's own chip is DataTablePage's job (it already owns that prop); this
 // only covers the two selects plus whichever tab is active on the current
@@ -1178,9 +1081,58 @@ const agingLabel = (item) => {
   const released = item.status === 'Released'
   const anchor = (released && item.released_at) || item.created_at
   const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86_400_000)
-  if (days <= 0) return released ? 'Out today' : 'Today'
-  return `${days}d ${released ? 'out' : 'waiting'}`
+  if (days <= 0) return released ? 'Out today' : 'Filed today'
+  return `${pluralize(days, 'day')} ${released ? 'out' : 'waiting'}`
 }
+
+// One plain line under the status pill: the due countdown, then the age.
+const timelineLine = (item) => [dueLabel(item), agingLabel(item)].filter(Boolean).join(' · ')
+
+// Red once overdue, amber inside the 1-day reminder window (matches
+// SendReturnDueReminders' own window), quiet otherwise.
+const dueClass = (item) => {
+  if (isOverdue(item)) return 'text-error font-weight-bold'
+  return ['Due today', 'Due tomorrow'].includes(dueLabel(item)) ? 'text-warning-strong' : 'text-medium-emphasis'
+}
+
+// ---- the drawer's header
+const drawerName = computed(() => [selectedRecord.value?.resident?.first_name, selectedRecord.value?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family')
+const drawerSecondary = computed(() => {
+  const barangay = selectedRecord.value?.resident?.barangay?.barangay_name
+  return barangay ? `Head of the Family · ${barangay}` : 'Head of the Family'
+})
+const drawerPhone = computed(() => displayPhone(selectedRecord.value?.resident?.phone_number))
+// Short of stock matters while the loan is still to be decided or handed over.
+const lowStock = computed(() => ['Pending', 'Approved'].includes(selectedRecord.value?.status) && shortStock(selectedRecord.value))
+
+// The one line under the status pill in the drawer.
+const drawerStatus = computed(() => {
+  const r = selectedRecord.value
+  if (!r) return { text: '', class: null }
+  const days = (from, to = Date.now()) => Math.max(0, Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000))
+  switch (r.status) {
+    case 'Pending':
+      return { text: `Waiting ${pluralize(days(r.created_at), 'day')}`, class: null }
+    case 'Approved':
+      return { text: `Approved · filed ${pluralize(days(r.created_at), 'day')} ago`, class: null }
+    case 'Released':
+      return r.due_date
+        ? { text: `${dueLabel(r)} · due back ${fmtDate(r.due_date)}`, class: dueClass(r) }
+        : { text: agingLabel(r), class: null }
+    case 'Returned': {
+      // due_date is a calendar day; compare against the local day it came back.
+      const due = parseDay(r.due_date)
+      const back = r.returned_at ? new Date(r.returned_at) : null
+      if (back) back.setHours(0, 0, 0, 0)
+      const late = due && back ? Math.round((back - due) / 86_400_000) : 0
+      return { text: `Returned ${fmtDate(r.returned_at)}${late > 0 ? ` · ${pluralize(late, 'day')} late` : ''}`, class: null }
+    }
+    case 'Cancelled':
+      return { text: 'Withdrawn by the resident', class: null }
+    default:
+      return { text: '', class: null }
+  }
+})
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -1200,23 +1152,14 @@ const fetchData = () => load()
 // Failures here are non-fatal to the page — the filters just fall back to
 // showing only "All items"/"All barangays" until they load, same as any
 // other list this app fetches for a picker rather than for primary content.
+const { get } = useCachedFetch()
+
 const fetchMasterLists = async () => {
-  try {
-    const [equipRes, barangayRes] = await Promise.all([
-      fetch(`${API_BASE}/equipments`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/barangays`, { headers: getHeaders() }),
-    ])
-    if (equipRes.ok) {
-      const data = await equipRes.json()
-      equipmentMaster.value = data.data || data
-    }
-    if (barangayRes.ok) {
-      const data = await barangayRes.json()
-      barangayMaster.value = data.data || data
-    }
-  } catch (error) {
-    console.error('Failed to fetch equipment/barangay master lists:', error)
-  }
+  const take = (target) => (data) => { target.value = data.data || data }
+  await Promise.all([
+    get('/equipments', { ttl: REFERENCE_TTL_MS, onData: take(equipmentMaster) }),
+    get('/barangays', { ttl: REFERENCE_TTL_MS, onData: take(barangayMaster) }),
+  ].map((request) => request.catch((error) => console.error('Failed to fetch equipment/barangay master lists:', error))))
 }
 
 const openDetail = (item) => {
@@ -1247,6 +1190,7 @@ const onRowKeydown = (event, item) => {
 }
 
 const rowProps = ({ item }) => ({
+  class: selectedRecord.value?.borrow_id === item.borrow_id ? 'row-selected' : '',
   tabindex: 0,
   'aria-label': `Open details for ${item.resident?.last_name}, ${item.resident?.first_name}`,
   onKeydown: (e) => onRowKeydown(e, item),
@@ -1351,6 +1295,7 @@ const confirmRemovePhoto = async () => {
     }
 
     const updated = await res.json()
+    invalidate('/borrowings')
 
     // Same in-place patch the upload does, so the card redraws without closing
     // the panel: clear the cached blob's record id or the loader would keep
@@ -1397,6 +1342,7 @@ const uploadHandoverPhoto = async (record, stage, file) => {
       throw new Error(errData.message || 'Failed to upload the photo')
     }
     const updated = await res.json()
+    invalidate('/borrowings')
     // Patch the open record in place so the photo appears without closing the
     // panel, then force a re-fetch of the blob by clearing the cached id.
     if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
@@ -1413,6 +1359,16 @@ const uploadHandoverPhoto = async (record, stage, file) => {
   } finally {
     photoUploading.value = ''
   }
+}
+
+// A click on the scrim, Escape and the header's close button all land here, as on
+// the other pages' drawers. The drawer holds no typed-in form (due date, reason and
+// return condition live in the action dialog), so the only thing a close could lose
+// is work in flight: it stays open while a photo or a status change is being saved.
+// There is no "Discard changes?" confirm in the app to ask with.
+const requestClose = () => {
+  if (photoUploading.value || photoRemoving.value || loading.value) return
+  closeModal()
 }
 
 const closeModal = () => {
@@ -1462,13 +1418,27 @@ const requestAction = (record, newStatus) => {
   actionDialog.value = next
 }
 
+const requestBulkDeny = () => {
+  actionDialog.value = { ...emptyAction(), open: true, mode: 'deny', status: 'Denied', bulk: true }
+}
+
 const actionCopy = computed(() => {
   const record = actionDialog.value.record
   const who = `${record?.resident?.first_name || ''} ${record?.resident?.last_name || ''}`.trim() || 'this resident'
   const what = record?.equipment?.item_name || record?.other_equipment_text || 'the equipment'
   switch (actionDialog.value.mode) {
-    case 'deny':
+    case 'deny': {
+      if (actionDialog.value.bulk) {
+        const n = pendingSelected.value.length
+        const skipped = selectedIds.value.size - n
+        return {
+          title: `Deny ${pluralize(n, 'request')}`,
+          body: `Every pending request in the selection is denied with this same reason.${skipped ? ` ${skipped} other${skipped === 1 ? '' : 's'} in the selection ${skipped === 1 ? 'is' : 'are'} not pending and will be skipped.` : ''}`,
+          confirm: 'Deny all',
+        }
+      }
       return { title: 'Deny this request', body: `${who} asked for ${what}.`, confirm: 'Deny request' }
+    }
     case 'due':
       return {
         title: actionDialog.value.status === 'Approved' ? 'Approve this request' : 'Release to resident',
@@ -1504,6 +1474,7 @@ const confirmAction = () => {
     actionDialog.value.error = 'Say what condition it came back in — every return needs a note.'
     return
   }
+  if (actionDialog.value.bulk) return bulkDeny(reason.trim(), denialReasonCode)
   const extra = {}
   if (mode === 'due') extra.due_date = dueDate
   if (mode === 'deny') {
@@ -1515,6 +1486,34 @@ const confirmAction = () => {
     extra.return_condition_note = conditionNote.trim()
   }
   return updateStatus(record, status, extra)
+}
+
+// No bulk endpoint: the single-request deny, once per Pending row in the selection.
+const bulkDeny = async (reason, denialReasonCode) => {
+  loading.value = true
+  apiError.value = ''
+  try {
+    await Promise.all(pendingSelected.value.map(async (b) => {
+      const res = await fetch(`${API_BASE}/borrowings/${b.borrow_id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: 'Denied', denial_reason: reason, denial_reason_code: denialReasonCode }),
+      })
+      if (!res.ok) throw new Error('Failed to update one or more requests')
+    }))
+    selected.value = []
+    invalidate('/borrowings')
+    invalidate('/equipments')
+    await fetchData()
+    notify('Requests denied')
+    actionDialog.value.open = false
+  } catch (error) {
+    apiError.value = error.message
+    actionDialog.value.error = error.message
+    notify(error.message, 'error')
+  } finally {
+    loading.value = false
+  }
 }
 
 const updateStatus = async (record, newStatus, extra = {}) => {
@@ -1535,6 +1534,8 @@ const updateStatus = async (record, newStatus, extra = {}) => {
       const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
       throw new Error(firstError || errData.message || 'Failed to update status')
     }
+    invalidate('/borrowings')
+    invalidate('/equipments')
     await fetchData()
     notify(`Request marked ${newStatus}`)
     actionDialog.value.open = false
@@ -1567,21 +1568,6 @@ onMounted(async () => {
 .gap-4 { gap: 16px; }
 .min-w-0 { min-width: 0; }
 
-/* Vertical rhythm for the page's bands. They used to run mb-6, mb-4, mb-4,
-   mb-4, mb-4, mb-5 from the heading down -- one value repeated four times,
-   with a 20px that is not tellable from a 16px. Everything therefore read as
-   an equal sibling of everything else, and nothing marked where the controls
-   stopped and the data began.
-
-   Two intervals now. 8px holds the two halves of the filter block together --
-   the selects and the chips showing what those selects did are one thought
-   split across two rows. 28px is the region break. The status strip sits 16px
-   above the table because it counts the rows in it; it is a caption for that
-   table, not a band of its own. The header's own gap is mb-6 (24px) now,
-   the same as every other page's header-to-content gap, not a third
-   page-local value. */
-.page-tabs { margin-bottom: 24px; }
-
 /* DataTablePage's own .dtp-table rule already sets table-layout: fixed and
    the header/row styling; this only adds the page-specific min-width floor
    (720px was load-bearing: without it a fixed table's width:100% lets a
@@ -1591,13 +1577,27 @@ onMounted(async () => {
 .borrow-table :deep(.dtp-table td) { white-space: nowrap; }
 .action-btn { min-width: 104px; }
 
-/* Borrowing's detail dialog: roomier than the shared body system, with a
-   label column wide enough for "Borrowing for" so both grids align. */
-.borrow-detail .detail-section { margin-bottom: 32px; }
-.borrow-detail .kv { gap: 10px 16px; }
-@media (min-width: 720px) {
-  .borrow-detail .detail-cols .kv { grid-template-columns: 120px 1fr; }
+.borrow-table :deep(tbody tr.row-selected) { background-color: rgba(var(--v-theme-primary), 0.08); }
+
+/* Drawer body: the same boxes as the other request drawers. */
+.description-box {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  font-size: 15px;
+  line-height: 22px;
 }
+.phone-link { color: rgb(var(--v-theme-primary-strong)); font-weight: 600; text-decoration: none; }
+.assign-box { border: 1px solid rgba(var(--v-theme-on-surface), 0.14); border-radius: 12px; }
+.assign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.photo-card { padding: 14px; border: 1px dashed rgba(var(--v-theme-on-surface), 0.25); border-radius: 12px; }
+.history-box { padding: 6px 16px; border-radius: 12px; background: rgba(var(--v-theme-on-surface), 0.04); }
 .cell-truncate {
   display: block;
   overflow: hidden;

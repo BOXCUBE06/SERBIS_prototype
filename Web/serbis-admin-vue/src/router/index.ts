@@ -50,14 +50,14 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to) => {
   // getToken() returns null on an expired token and clears it, so an expired
   // session is bounced to /login on the next navigation.
   const token = getToken()
   const isAuthRoute = to.path === '/login'
 
-  if (!token && !isAuthRoute) return next('/login')
-  if (token && isAuthRoute) return next('/')
+  if (!token && !isAuthRoute) return '/login'
+  if (token && isAuthRoute) return '/'
 
   const section = to.meta.section as string | undefined
 
@@ -68,11 +68,9 @@ router.beforeEach(async (to, from, next) => {
       // The first page they may open, or the explanation if there is none.
       // Never the page they were refused, which would loop.
       const fallback = firstAllowedPath()
-      return next(fallback && fallback !== to.path ? fallback : '/no-access')
+      return fallback && fallback !== to.path ? fallback : '/no-access'
     }
   }
-
-  next()
 })
 
 export default router

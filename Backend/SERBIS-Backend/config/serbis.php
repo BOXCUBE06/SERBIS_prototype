@@ -56,4 +56,22 @@ return [
 
     'sms_fake' => env('SERBIS_SMS_FAKE', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin two-step sign-in
+    |--------------------------------------------------------------------------
+    |
+    | When true, staff sign in with username + password and then a code texted
+    | to tbl_user.phone_number — the same code, expiry, attempt cap and resend
+    | cooldown residents get. Off by default: login stays username + password.
+    |
+    | Set every staff number first, every super admin included (Staff
+    | Accounts, or `php artisan staff:set-phone <username> <number>`). A staff
+    | member with no number is refused with "Ask a super admin to add your
+    | mobile number"; `php artisan staff:usernames --missing` lists them.
+    |
+    */
+
+    'admin_mfa_enabled' => (bool) env('ADMIN_MFA_ENABLED', false),
+
 ];

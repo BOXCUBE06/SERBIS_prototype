@@ -8,13 +8,13 @@ export function useAppTheme() {
   const init = () => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved === 'light' || saved === 'dark') {
-      theme.global.name.value = saved
+      theme.change(saved)
     }
   }
 
   const toggle = () => {
     const next = theme.global.name.value === 'dark' ? 'light' : 'dark'
-    theme.global.name.value = next
+    theme.change(next)
     localStorage.setItem(STORAGE_KEY, next)
   }
 

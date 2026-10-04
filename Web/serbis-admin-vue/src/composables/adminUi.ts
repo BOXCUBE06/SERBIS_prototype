@@ -71,6 +71,11 @@ export function initials(person: NamedPerson | null | undefined): string {
   return `${first}${last}`.toUpperCase()
 }
 
+/** "1 unit", "2 units": the count with a regular -s plural. */
+export function pluralize(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`
+}
+
 /**
  * Date only. Returns an em dash rather than "Invalid Date" for a null or
  * unparseable value, because these land directly in table cells.

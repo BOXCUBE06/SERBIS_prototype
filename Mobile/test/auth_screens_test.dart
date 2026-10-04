@@ -27,11 +27,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:serbis/screens/auth/forgot_password_screen.dart';
 import 'package:serbis/screens/auth/login_screen.dart';
 import 'package:serbis/screens/auth/register_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/theme/app_theme.dart';
+import 'package:serbis/widgets/auth_layout.dart';
+import 'package:serbis/widgets/form_section.dart' show SegmentedChoice;
+import 'package:serbis/widgets/form_steps.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
 // ---------------------------------------------------------------------------
@@ -262,35 +266,82 @@ Future<_FakeAuthApi> _pumpRegister(
   return fake;
 }
 
-/// Fills every field on the register form with values the client accepts, so
-/// each test only has to break the one thing it is about.
+/// Taps the footer's "Next: …" button. The last step's button is "Create
+/// account", see [_create].
+Future<void> _next(WidgetTester tester) async {
+  final next = find.ancestor(of: find.textContaining('Next: '), matching: find.byType(AppButton));
+  await tester.ensureVisible(next);
+  await tester.pumpAndSettle();
+  await tester.tap(next);
+  await tester.pumpAndSettle();
+}
+
+/// Taps "Create account", the last step's button.
+Future<void> _create(WidgetTester tester) async {
+  final create = find.widgetWithText(AppButton, 'Create account');
+  await tester.ensureVisible(create);
+  await tester.pumpAndSettle();
+  await tester.tap(create);
+  await tester.pumpAndSettle();
+}
+
+/// Step 1, Who you are. An organization also gets a name.
+Future<void> _fillWhoYouAre(
+  WidgetTester tester, {
+  String phone = '09171234567',
+  bool organization = false,
+}) async {
+  if (organization) {
+    await tester.tap(find.text('Organization'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_field('Organization name'), 'Isabela State University');
+  }
+  await tester.enterText(_field(organization ? 'Contact first name' : 'First name'), 'Juan');
+  await tester.enterText(_field(organization ? 'Contact last name' : 'Last name'), 'Delacruz');
+  await tester.enterText(_field('Mobile number'), phone);
+}
+
+/// Step 2, Where you live: the barangay, picked from the open menu.
+Future<void> _pickBarangay(WidgetTester tester) async {
+  await tester.tap(find.byType(DropdownMenu<String>));
+  await tester.pumpAndSettle();
+  // `.last` is the entry in the open menu overlay.
+  await tester.tap(find.text('San Fabian').last);
+  await tester.pumpAndSettle();
+}
+
+/// Walks all three steps with values the client accepts, stopping on the last
+/// one with the password typed, so each test only has to break the one thing it
+/// is about.
 Future<void> _fillValidRegistration(
   WidgetTester tester, {
   String phone = '09171234567',
   String password = 'Pasada123',
   String? confirm,
-  bool pickBarangay = true,
+  String? street,
+  bool organization = false,
 }) async {
-  await tester.enterText(_field('First name'), 'Juan');
-  await tester.enterText(_field('Last name'), 'Delacruz');
-  await tester.enterText(_field('Mobile number'), phone);
+  await _fillWhoYouAre(tester, phone: phone, organization: organization);
+  await _next(tester);
+
+  await _pickBarangay(tester);
+  if (street != null) {
+    await tester.enterText(_field('Street / Purok (optional)'), street);
+  }
+  await _next(tester);
+
   await tester.enterText(_field('Password'), password);
   await tester.enterText(_field('Confirm password'), confirm ?? password);
-
-  if (pickBarangay) {
-    await tester.tap(find.byType(DropdownMenu<String>));
-    await tester.pumpAndSettle();
-    // `.last` is the entry in the open menu overlay.
-    await tester.tap(find.text('San Fabian').last);
-    await tester.pumpAndSettle();
-  }
 }
 
 /// Ticks the data-privacy consent. Identified by the icon rather than the
 /// sentence, which is long enough to get reworded without anyone touching the
 /// behaviour.
 Future<void> _agree(WidgetTester tester) async {
-  await tester.tap(find.byIcon(Icons.check_box_outline_blank_rounded));
+  final box = find.byIcon(Icons.check_box_outline_blank_rounded);
+  await tester.ensureVisible(box);
+  await tester.pumpAndSettle();
+  await tester.tap(box);
   await tester.pumpAndSettle();
 }
 
@@ -665,9 +716,93 @@ void main() {
   // Register
   // -------------------------------------------------------------------------
 
+  group('the register steps', () {
+    testWidgets('are Who you are, Where you live, Password and review, under the shared header', (tester) async {
+      await _pumpRegister(tester);
+
+      expect(find.byType(TabHeaderBar), findsOneWidget);
+      expect(find.text('Create your account'), findsOneWidget);
+      expect(find.text('Step 1 of 3 · Who you are'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Next: Where you live'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Back'), findsNothing);
+
+      await _fillWhoYouAre(tester);
+      await _next(tester);
+      expect(find.text('Step 2 of 3 · Where you live'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Next: Password and review'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Back'), findsOneWidget);
+
+      await _pickBarangay(tester);
+      await _next(tester);
+      expect(find.text('Step 3 of 3 · Password and review'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Create account'), findsOneWidget);
+    });
+
+    testWidgets('Back and the header arrow step back, and leave from the first step', (tester) async {
+      var left = 0;
+      await _pumpRegister(tester, onGoToLogin: () => left++);
+      await _fillWhoYouAre(tester);
+      await _next(tester);
+
+      await tester.tap(find.widgetWithText(AppButton, 'Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Step 1 of 3 · Who you are'), findsOneWidget);
+      // What was typed is still there.
+      expect(find.widgetWithText(TextField, 'Juan'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+      expect(left, 1);
+    });
+
+    testWidgets('the last step reviews the first two, each with Edit back to its step', (tester) async {
+      await _pumpRegister(tester);
+      await _fillValidRegistration(tester, street: 'Purok 3');
+
+      expect(find.text('Juan Delacruz'), findsOneWidget);
+      expect(find.text('09171234567'), findsOneWidget);
+      expect(find.text('San Fabian'), findsOneWidget);
+      expect(find.text('Purok 3'), findsOneWidget);
+      expect(find.text('Head of the Family'), findsOneWidget);
+
+      await tester.tap(find.text('Edit').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Step 2 of 3 · Where you live'), findsOneWidget);
+    });
+
+    testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
+      await _pumpRegister(tester);
+      tester.view.physicalSize = const Size(1400, 1800);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpAndSettle();
+
+      expect(tester.getSize(find.byType(AuthTextField).first).width, lessThanOrEqualTo(600));
+    });
+
+    for (final width in [320.0, 390.0]) {
+      testWidgets('every step fits ${width.toInt()}px without overflow', (tester) async {
+        await _pumpRegister(tester);
+        tester.view.physicalSize = Size(width, 2400);
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        await _fillWhoYouAre(tester);
+        await _next(tester);
+        expect(tester.takeException(), isNull);
+
+        await _pickBarangay(tester);
+        await _next(tester);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
+
   group('the barangay picker', () {
     testWidgets('loads its options on open', (tester) async {
       final api = await _pumpRegister(tester);
+      await _fillWhoYouAre(tester);
+      await _next(tester);
 
       expect(api.barangayCalls, 1);
       expect(find.byType(DropdownMenu<String>), findsOneWidget);
@@ -680,6 +815,8 @@ void main() {
       // registration outright — the highest-stakes silent failure in the app.
       final api = _FakeAuthApi()..barangaysThrow = true;
       await _pumpRegister(tester, api: api);
+      await _fillWhoYouAre(tester);
+      await _next(tester);
 
       expect(find.text("Couldn't load barangays."), findsOneWidget);
       expect(find.byType(DropdownMenu<String>), findsNothing);
@@ -693,21 +830,20 @@ void main() {
       expect(find.text("Couldn't load barangays."), findsNothing);
     });
 
-    testWidgets('refuses a submit that has no barangay to send',
+    testWidgets('will not leave the step with no barangay to send',
         (tester) async {
-      // Reachable only on the failed-fetch path: with the dropdown rendered its
+      // Reachable only on the failed-fetch path: with the picker rendered its
       // own validator answers first. Without it there is no validator at all,
       // so this guard is the only thing standing between the resident and a 422
       // on a required FK.
       final api = _FakeAuthApi()..barangaysThrow = true;
       await _pumpRegister(tester, api: api);
-
-      await _fillValidRegistration(tester, pickBarangay: false);
-      await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _fillWhoYouAre(tester);
+      await _next(tester);
+      await _next(tester);
 
       expect(find.text('Select your barangay.'), findsOneWidget);
+      expect(find.text('Step 2 of 3 · Where you live'), findsOneWidget);
       expect(api.registerCalls, 0);
     });
   });
@@ -720,19 +856,18 @@ void main() {
 
       await _fillValidRegistration(tester);
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(api.lastRegister!['account_type'], 'head_of_family');
       expect(api.lastRegister!.containsKey('organization_name'), isFalse);
     });
 
-    testWidgets('offers Individual and Organization and nothing else', (tester) async {
+    testWidgets('offers Head of the Family and Organization and nothing else', (tester) async {
       await _pumpRegister(tester);
 
-      final choice = find.byType(SegmentedButton<bool>);
+      final choice = find.byType(SegmentedChoice);
 
-      expect(find.descendant(of: choice, matching: find.text('Individual')), findsOneWidget);
+      expect(find.descendant(of: choice, matching: find.text('Head of the Family')), findsOneWidget);
       expect(find.descendant(of: choice, matching: find.text('Organization')), findsOneWidget);
       expect(find.descendant(of: choice, matching: find.text('Barangay')), findsNothing);
     });
@@ -750,7 +885,7 @@ void main() {
       expect(find.text('First name'), findsNothing);
     });
 
-    testWidgets('an organization with no name is refused before it is sent', (tester) async {
+    testWidgets('an organization with no name is refused before it moves on', (tester) async {
       final api = await _pumpRegister(tester);
 
       await tester.tap(find.text('Organization'));
@@ -758,60 +893,47 @@ void main() {
       await tester.enterText(_field('Contact first name'), 'Ian');
       await tester.enterText(_field('Contact last name'), 'Uy');
       await tester.enterText(_field('Mobile number'), '09171234567');
-      await tester.enterText(_field('Password'), 'Pasada123');
-      await tester.enterText(_field('Confirm password'), 'Pasada123');
-      await tester.tap(find.byType(DropdownMenu<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('San Fabian').last);
-      await tester.pumpAndSettle();
-      await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _next(tester);
 
       expect(find.text('Enter the organization name'), findsOneWidget);
+      expect(find.text('Step 1 of 3 · Who you are'), findsOneWidget);
       expect(api.registerCalls, 0);
     });
 
     testWidgets('a filled organization form sends organization and its name', (tester) async {
       final api = await _pumpRegister(tester);
 
-      await tester.tap(find.text('Organization'));
-      await tester.pumpAndSettle();
-      await tester.enterText(_field('Organization name'), 'Isabela State University');
-      await tester.enterText(_field('Contact first name'), 'Ian');
-      await tester.enterText(_field('Contact last name'), 'Uy');
-      await tester.enterText(_field('Mobile number'), '09171234567');
-      await tester.enterText(_field('Password'), 'Pasada123');
-      await tester.enterText(_field('Confirm password'), 'Pasada123');
-      await tester.tap(find.byType(DropdownMenu<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('San Fabian').last);
-      await tester.pumpAndSettle();
+      await _fillValidRegistration(tester, organization: true);
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(api.registerCalls, 1);
       expect(api.lastRegister!['account_type'], 'organization');
       expect(api.lastRegister!['organization_name'], 'Isabela State University');
-      expect(api.lastRegister!['first_name'], 'Ian');
+      expect(api.lastRegister!['first_name'], 'Juan');
     });
   });
 
   group('register validation', () {
-    testWidgets('refuses an empty form field by field', (tester) async {
+    testWidgets('refuses an empty step field by field', (tester) async {
       final api = await _pumpRegister(tester);
 
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
-
+      await _next(tester);
       _expectFieldError('First name', 'Enter your first name');
       _expectFieldError('Last name', 'Enter your last name');
       _expectFieldError('Mobile number', 'Enter your mobile number');
-      _expectFieldError('Password', 'Enter a password');
-      _expectFieldError('Confirm password', 'Confirm your password');
+
+      await _fillWhoYouAre(tester);
+      await _next(tester);
+      await _next(tester);
       // The picker is not an AuthTextField, so it is asserted on directly.
       expect(find.text('Select your barangay'), findsOneWidget);
+
+      await _pickBarangay(tester);
+      await _next(tester);
+      await _create(tester);
+      _expectFieldError('Password', 'Enter a password');
+      _expectFieldError('Confirm password', 'Confirm your password');
       expect(api.registerCalls, 0);
     });
 
@@ -838,8 +960,7 @@ void main() {
 
         await _fillValidRegistration(tester, password: password);
         await _agree(tester);
-        await tester.tap(find.text('Create account'));
-        await tester.pumpAndSettle();
+        await _create(tester);
 
         _expectFieldError('Password', message);
         expect(api.registerCalls, 0, reason: '"$password" reached the server');
@@ -854,8 +975,7 @@ void main() {
 
       await _fillValidRegistration(tester, password: 'Pasada12');
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(api.registerCalls, 1);
     });
@@ -869,8 +989,7 @@ void main() {
         confirm: 'Pasada124',
       );
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(find.text('Passwords do not match'), findsOneWidget);
       expect(api.registerCalls, 0);
@@ -879,16 +998,15 @@ void main() {
     testWidgets('refuses a mobile number that is not one', (tester) async {
       final api = await _pumpRegister(tester);
 
-      await _fillValidRegistration(tester, phone: '0917');
-      await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _fillWhoYouAre(tester, phone: '0917');
+      await _next(tester);
 
       expect(find.text('Enter a valid mobile number'), findsOneWidget);
+      expect(find.text('Step 1 of 3 · Who you are'), findsOneWidget);
       expect(api.registerCalls, 0);
     });
 
-    testWidgets('refuses to register anyone who has not agreed',
+    testWidgets('refuses to register anyone who has not agreed, under the checkbox',
         (tester) async {
       // Consent is not a form field, so `validate()` cannot speak for it — an
       // untested guard here means a resident's data leaves the device without
@@ -896,12 +1014,12 @@ void main() {
       final api = await _pumpRegister(tester);
 
       await _fillValidRegistration(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(
           find.text('Please agree to the data privacy notice to continue.'),
           findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
       expect(api.registerCalls, 0);
     });
   });
@@ -917,8 +1035,7 @@ void main() {
 
       await _fillValidRegistration(tester);
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(succeeded, isTrue);
       expect(api.lastRegister, {
@@ -937,11 +1054,9 @@ void main() {
         (tester) async {
       final api = await _pumpRegister(tester);
 
-      await _fillValidRegistration(tester);
-      await tester.enterText(_field('Street / Purok (optional)'), 'Purok 3');
+      await _fillValidRegistration(tester, street: 'Purok 3');
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(api.registerCalls, 1);
       expect(api.lastRegister!['street_address'], 'Purok 3');
@@ -950,6 +1065,7 @@ void main() {
     testWidgets('ticking the consent box is visible, not just recorded',
         (tester) async {
       await _pumpRegister(tester);
+      await _fillValidRegistration(tester);
 
       expect(find.byIcon(Icons.check_box_rounded), findsNothing);
       await _agree(tester);
@@ -975,8 +1091,7 @@ void main() {
 
       await _fillValidRegistration(tester);
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(find.text('That number is already registered to an account.'),
           findsOneWidget);
@@ -999,8 +1114,7 @@ void main() {
 
       await _fillValidRegistration(tester);
       await _agree(tester);
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
+      await _create(tester);
 
       expect(find.text('Cannot connect to server. Check your connection.'),
           findsOneWidget);
@@ -1016,6 +1130,49 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(asked, isTrue);
+    });
+  });
+
+  group('the other sign-in screens', () {
+    testWidgets('login keeps its links and buttons at 48dp and its column at 600dp', (tester) async {
+      await _pumpLogin(tester);
+
+      for (final label in ['Forgot password?', 'Register']) {
+        final button = find.ancestor(of: find.text(label), matching: find.byType(TextButton));
+        expect(tester.getSize(button).height, greaterThanOrEqualTo(48), reason: label);
+      }
+      expect(tester.getSize(find.byType(AuthTextField).first).width, lessThanOrEqualTo(600));
+    });
+
+    testWidgets('a closed account is a red notice, not a bare line, and logging in is off', (tester) async {
+      final api = _FakeAuthApi()..loginError = const ApiException('Contact the MDRRMO office.', statusCode: 403, code: 'account_deactivated');
+      await _pumpLogin(tester, api: api);
+
+      await tester.enterText(_field('Mobile number'), '09171234567');
+      await tester.enterText(_field('Password'), 'Pasada123');
+      await tester.tap(find.widgetWithText(AppButton, 'Log in'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InlineNotice), findsOneWidget);
+      expect(find.text('Contact the MDRRMO office.'), findsOneWidget);
+      expect(tester.widget<AppButton>(find.widgetWithText(AppButton, 'Log in')).onPressed, isNull);
+    });
+
+    testWidgets('forgot password shows which of its three steps it is on', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: ForgotPasswordScreen(
+          userStore: UserStore(_FakeAuthApi()),
+          initialPhone: '',
+          onGoToLogin: () {},
+          onReset: (_) {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Forgot your password?'), findsOneWidget);
+      expect(find.text('Step 1 of 3'), findsOneWidget);
+      expect(find.byType(FormStepProgress), findsOneWidget);
     });
   });
 }

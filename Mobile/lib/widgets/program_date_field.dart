@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/service_forms.dart';
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
 
 /// A calendar day for the MDRRMO programs, at least [ServiceFormField.minDaysAhead]
@@ -11,12 +12,18 @@ class ProgramDateField extends StatelessWidget {
   final ServiceFormField field;
   final DateTime? value;
   final ValueChanged<DateTime> onPicked;
+  final bool filipino;
+
+  /// Shown under the picker, which then draws a red border.
+  final String? errorText;
 
   const ProgramDateField({
     super.key,
     required this.field,
     required this.value,
     required this.onPicked,
+    this.filipino = false,
+    this.errorText,
   });
 
   Future<void> _pick(BuildContext context) async {
@@ -43,20 +50,20 @@ class ProgramDateField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(field.label, style: AppText.fieldLabel()),
+          Text(trEn(filipino, field.label), style: AppText.fieldLabel()),
           const SizedBox(height: AppSpacing.xs),
           Semantics(
             button: true,
-            label: '${field.label}, ${picked == null ? 'not chosen' : formatProgramDate(picked)}',
+            label: '${trEn(filipino, field.label)}, ${picked == null ? trEn(filipino, 'not chosen') : formatProgramDate(picked)}',
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               onTap: () => _pick(context),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.line, width: 1.5),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: errorText == null ? AppColors.line : AppColors.red600, width: 1.5),
                 ),
                 child: Row(
                   children: [
@@ -64,9 +71,9 @@ class ProgramDateField extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        picked == null ? 'Choose a date' : formatProgramDate(picked),
+                        picked == null ? trEn(filipino, 'Choose a date') : formatProgramDate(picked),
                         style: AppText.body(
-                          size: 13,
+                          size: AppTextSize.body,
                           color: picked == null ? AppColors.inkFaint : AppColors.ink,
                         ),
                       ),
@@ -76,10 +83,15 @@ class ProgramDateField extends StatelessWidget {
               ),
             ),
           ),
+          if (errorText != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(errorText!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
+          ],
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'At least ${field.minDaysAhead} days from today, so MDRRMO can plan.',
-            style: AppText.body(size: 11, color: AppColors.inkMuted),
+            trEn(filipino, 'At least {n} days from today, so MDRRMO can plan.')
+                .replaceAll('{n}', '${field.minDaysAhead}'),
+            style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted),
           ),
         ],
       ),

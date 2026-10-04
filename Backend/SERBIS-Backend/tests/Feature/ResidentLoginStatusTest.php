@@ -212,7 +212,7 @@ class ResidentLoginStatusTest extends TestCase
         ]);
 
         $this->postJson('/api/admin/login', [
-            'email_address' => $admin->email_address,
+            'username' => $admin->username,
             'password' => 'password123',
         ])->assertForbidden();
     }

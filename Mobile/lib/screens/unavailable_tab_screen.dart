@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/borrow_request_widgets.dart' show StatusBox;
 import '../widgets/shared_widgets.dart';
 
 /// What a dedicated tab shows when the account's audience does not include the
@@ -36,35 +38,37 @@ class UnavailableTabScreen extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        AppHeader(
-          onNotificationsTap: onOpenNotifications,
-          onProfileTap: onOpenProfile,
+        TabHeaderBar(
+          title: title,
+          subtitle: tr(filipino, 'tab.unavailable_subtitle'),
           filipino: filipino,
+          onNotifications: onOpenNotifications,
+          onProfile: onOpenProfile,
         ),
-        const SizedBox(height: 22),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconBadge(icon: icon, bg: AppColors.green50, fg: AppColors.green700),
-                const SizedBox(height: 14),
-                Text(title, style: AppText.display(size: 17)),
-                const SizedBox(height: 6),
-                Text(
-                  message,
-                  style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.5),
-                ),
-                if (onRetry != null && retryLabel != null) ...[
-                  const SizedBox(height: 16),
-                  AppButton(label: retryLabel!, onPressed: onRetry),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, AppLayout.navClearance),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  StatusBox(
+                    icon: icon,
+                    bg: AppColors.grey50,
+                    fg: AppColors.inkMuted,
+                    title: tr(filipino, 'tab.unavailable_title'),
+                    next: message,
+                  ),
+                  if (onRetry != null && retryLabel != null) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    AppButton(label: retryLabel!, onPressed: onRetry),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 110),
       ],
     );
   }

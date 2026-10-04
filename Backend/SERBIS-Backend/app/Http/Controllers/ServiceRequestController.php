@@ -15,6 +15,7 @@ use App\Models\ServiceVehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AmbulanceAvailability;
+use App\Services\VehicleDispatch;
 use App\Services\Fcm;
 use App\Support\AdminSections;
 use App\Support\PhoneNumber;
@@ -37,6 +38,7 @@ class ServiceRequestController extends Controller
     public function __construct(
         private readonly AmbulanceAvailability $availability,
         private readonly Fcm $fcm,
+        private readonly VehicleDispatch $dispatch,
     ) {}
 
     /**
@@ -287,7 +289,7 @@ class ServiceRequestController extends Controller
         // conductionRequests.people: C5's bridge — the Bookings queue's
         // Responding row needs its linked trip record (and who is driving
         // it) without a second round trip per row.
-        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'vehicle', 'conductionRequests.people', 'responders'])
+        $query = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'admin:admin_id,first_name,last_name,username', 'vehicle', 'conductionRequests.people', 'responders'])
             ->latest();
 
         // Only the rows the admin's sections cover: Resident Requests and
@@ -306,7 +308,7 @@ class ServiceRequestController extends Controller
 
         if ($user instanceof User && $user->isAdmin()) {
             // Added 'resident.barangay'
-            $query = ServiceRequest::with(['resident.barangay', 'service', 'admin']);
+            $query = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'admin:admin_id,first_name,last_name,username']);
             $serviceRequests = $this->limitToSections($query, $user)->get();
         } else {
             $residentId = $user->getKey();
@@ -315,7 +317,7 @@ class ServiceRequestController extends Controller
             // internal_notes is the operator-only scratch pad (see its migration) —
             // hidden here rather than on the model, since adminIndex() and this
             // same method's admin branch above both need it visible.
-            $serviceRequests = ServiceRequest::with(['resident.barangay', 'service', 'admin', 'responders', 'ambulanceBooking', 'conductionRequests'])
+            $serviceRequests = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'responders', 'ambulanceBooking', 'conductionRequests'])
                 ->where('resident_id', $residentId)
                 ->orderByDesc('created_at')
                 ->orderByDesc('request_id')
@@ -398,7 +400,6 @@ class ServiceRequestController extends Controller
             // / delivery_address pair.
             'fulfillment_method' => 'sometimes|in:Pickup,Delivery',
             'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
-            'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
@@ -558,32 +559,13 @@ class ServiceRequestController extends Controller
         // write, so a rollback does not undo it. Every path out of here that does
         // not create a row must therefore delete the file by hand, or a failed
         // submit leaves a government ID photo on disk that nothing points at and
-        // nothing ever cleans up. The no-vehicle path below is not an edge case:
-        // it fires whenever the fleet is busy, which is exactly when people file.
+        // nothing ever cleans up.
         try {
             $serviceRequest = DB::transaction(function () use ($request, $validated, $serviceId, $filePath, $sitePhotoPath, $letterPath, $isScheduledProgram, $scheduledAt, $description, $isAmbulance) {
-                $vehicle = null;
-                $vehicleId = null;
-
-                // A scheduled booking never claims a unit here, even if a caller
-                // somehow also sent required_vehicle_type: which ambulance goes
-                // out is a staffing decision made at approval (phase 5), not
-                // something this endpoint locks in before anyone on duty has
-                // seen the booking. required_vehicle_type's own immediate-claim
-                // path below is therefore for the unscheduled, "as soon as you
-                // can" case only — unchanged from before this feature existed.
-                if (! $scheduledAt && ! empty($validated['required_vehicle_type'])) {
-                    $vehicle = Vehicle::where('type', $validated['required_vehicle_type'])
-                        ->where('status', 'Available')
-                        ->lockForUpdate()
-                        ->first();
-
-                    if (! $vehicle) {
-                        return false;
-                    }
-                    $vehicleId = $vehicle->vehicle_id;
-                }
-
+                // A resident's request never claims a unit, scheduled or not:
+                // which ambulance goes out is MDRRMO's call, made when staff
+                // review the request. Walk-ins (adminStore) are staff-filed and
+                // may still claim one.
                 if ($scheduledAt) {
                     // Locks every Ambulance unit before the availability check
                     // runs, and before it — not just around it — so the check's
@@ -626,13 +608,10 @@ class ServiceRequestController extends Controller
                     'delivery_address' => $fulfillmentMethod === 'Delivery' ? ($validated['delivery_address'] ?? null) : null,
                     // A scheduled booking is approved capacity, not a request
                     // waiting on staff triage — 'Pending' would queue it next to
-                    // a report nobody has looked at yet. scheduled_end and
-                    // vehicle_id both stay null regardless of the check above
-                    // finding a free unit: which one actually goes out, and the
-                    // real end of its booking, are set at approval.
+                    // a report nobody has looked at yet. vehicle_id stays null
+                    // (set by staff), as does scheduled_end (set at approval).
                     'status' => $scheduledAt ? 'Booked' : 'Pending',
                     'processed_by' => null,
-                    'vehicle_id' => $vehicleId,
                 ]);
 
                 // Ambulance-only, same as adminStore()'s row: nothing reads
@@ -654,10 +633,6 @@ class ServiceRequestController extends Controller
 
                 $this->storeRelatives($newServiceRequest, $validated['patient_relatives'] ?? []);
 
-                if ($vehicle) {
-                    $vehicle->update(['status' => 'Dispatched']);
-                }
-
                 return $newServiceRequest;
             });
         } catch (\Throwable $e) {
@@ -666,14 +641,6 @@ class ServiceRequestController extends Controller
             $this->discardUpload($letterPath);
 
             throw $e;
-        }
-
-        if ($serviceRequest === false) {
-            $this->discardUpload($filePath);
-            $this->discardUpload($sitePhotoPath);
-            $this->discardUpload($letterPath);
-
-            return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
 
         $serviceRequest->load(['relatives', 'ambulanceBooking']);
@@ -1137,7 +1104,7 @@ class ServiceRequestController extends Controller
             return response()->json(['message' => 'We wish to comply but as of the moment no vehicle is available.'], 422);
         }
 
-        return response()->json($serviceRequest->load(['resident.barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
+        return response()->json($serviceRequest->load(['resident.barangay', 'barangay', 'service', 'relatives', 'ambulanceBooking']), 201);
     }
 
     public function show(Request $request, $id)
@@ -1145,7 +1112,7 @@ class ServiceRequestController extends Controller
         $user = $request->user();
 
         // Added 'resident.barangay'
-        $query = ServiceRequest::with(['resident.barangay', 'service', 'admin']);
+        $query = ServiceRequest::with(['resident.barangay', 'barangay', 'service', 'admin:admin_id,first_name,last_name,username']);
 
         // Scopes to the caller for a resident, and refuses anything that is not
         // active staff. This used to be a bare `instanceof Resident` check with
@@ -1169,7 +1136,7 @@ class ServiceRequestController extends Controller
         // Same reasoning as index()'s resident branch: internal_notes is for
         // staff only, and this route serves the same model to both audiences.
         if ($user instanceof Resident) {
-            $serviceRequest->makeHidden('internal_notes');
+            $serviceRequest->makeHidden(['internal_notes', 'admin']);
             $serviceRequest->load('responders');
             $this->decorateResponders($serviceRequest);
         }
@@ -1427,30 +1394,10 @@ class ServiceRequestController extends Controller
             $this->releaseVehicle($currentVehicleId);
         }
 
-        if ($incomingVehicleId) {
-            $vehicle = Vehicle::where('vehicle_id', $incomingVehicleId)
-                ->lockForUpdate()
-                ->first();
-
-            // Only Available is promoted. A unit already Dispatched to this same
-            // request stays as it is — every PUT re-sends the current vehicle_id
-            // (see the docblock above), so this is the common case, not an edge
-            // one, and must stay a silent no-op. A unit under Maintenance no
-            // longer reaches here at all: update() rejects it before the
-            // transaction opens (ServiceRequestVehicleGuardTest).
-            if ($vehicle && $vehicle->status === 'Available') {
-                $vehicle->update(['status' => 'Dispatched']);
-            } elseif ($vehicle && $vehicle->status === 'Dispatched' && $incomingVehicleId !== $currentVehicleId) {
-                // A genuinely new claim (a fresh assignment or a swap) on a unit
-                // that lost the Available race to another admin since the
-                // picker last fetched it. Abort loudly rather than writing a
-                // vehicle_id the fleet never actually promoted: the surrounding
-                // DB::transaction (update(), above) rolls the whole request
-                // update back with it, so nothing partial lands.
-                throw ValidationException::withMessages([
-                    'vehicle_id' => $vehicle->unit_identifier.' is no longer available — pick another unit.',
-                ]);
-            }
+        // A new claim (fresh assignment or swap) is checked for busy under the
+        // lock, from requests and trips; re-sending the unit already held is a no-op.
+        if ($incomingVehicleId && $incomingVehicleId !== $currentVehicleId) {
+            $this->dispatch->lockFree($incomingVehicleId, $serviceRequest->getKey())->update(['status' => 'Dispatched']);
         }
     }
 
@@ -1471,7 +1418,7 @@ class ServiceRequestController extends Controller
     }
 
     /** Shown as the notification's title on every push this controller sends — see Fcm::notifyResident(). */
-    private const PUSH_TITLE = 'SERBIS';
+    public const PUSH_TITLE = 'SERBIS';
 
     /**
      * The FCM data payload every push this controller sends carries — string
@@ -1480,7 +1427,7 @@ class ServiceRequestController extends Controller
      * notification identify which request it was about instead of only
      * showing prose.
      */
-    private function pushData(ServiceRequest $serviceRequest): array
+    public static function pushData(ServiceRequest $serviceRequest): array
     {
         return [
             'request_id' => (string) $serviceRequest->request_id,
@@ -1526,7 +1473,7 @@ class ServiceRequestController extends Controller
      * Responding after approve() has already run separately — see the push
      * block in update() for why that is a second push, not a duplicate).
      */
-    private function respondingPushBody(ServiceRequest $serviceRequest): string
+    public static function respondingPushBody(ServiceRequest $serviceRequest): string
     {
         $names = $serviceRequest->responders->pluck('name')->implode(', ');
         $crew = $names !== '' ? ' Responder(s): '.$names.'.' : '';
@@ -1636,22 +1583,10 @@ class ServiceRequestController extends Controller
             }
         }
 
-        // Second-order guard, ambulance only: Booked -> Responding is legal
-        // by the matrix above — the non-ambulance instant-approval path and
-        // the manual "Dispatch" button both need it — but for an ambulance
-        // booking specifically it must still have gone through approve()
-        // first. approve() re-checks unit availability under a lock this
-        // method never takes, stamps approved_at, and sends the approval
-        // SMS; reaching Responding straight from Booked skipped all three.
-        if ($isAmbulanceRequest
-            && $serviceRequest->status === 'Booked'
-            && ($validated['status'] ?? null) === 'Responding'
-            && ! $serviceRequest->ambulanceBooking?->approved_at
-        ) {
-            throw ValidationException::withMessages([
-                'status' => 'This booking must be approved before it can be dispatched.',
-            ]);
-        }
+        // Any request going Responding goes through VehicleDispatch, which owns
+        // the vehicle, approved_at and busy checks.
+        $dispatching = ($validated['status'] ?? null) === 'Responding'
+            && $serviceRequest->status !== 'Responding';
 
         // The bridge's other half (docs/dispatch-audit.md finding 1): the
         // instant path could always reach Resolved with zero rows in
@@ -1784,23 +1719,36 @@ class ServiceRequestController extends Controller
                 ]);
             }
 
-            if ($incomingVehicle->status !== 'Available') {
-                throw ValidationException::withMessages([
-                    'vehicle_id' => $incomingVehicle->unit_identifier.' is no longer available — pick another unit.',
-                ]);
-            }
+            // Busy is checked under the lock by VehicleDispatch::lockFree(), from
+            // requests and trips rather than the status flag.
         }
 
         // Captured before update() overwrites status/vehicle_id — see the push block below.
         $oldStatus = $serviceRequest->status;
         $oldVehicleId = $serviceRequest->vehicle_id;
 
-        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest, $oldStatus) {
-            $this->syncFleet($serviceRequest, $validated);
+        DB::transaction(function () use ($serviceRequest, $validated, $isAmbulanceRequest, $oldStatus, $dispatching) {
+            if ($dispatching) {
+                // Sets status + vehicle, marks the unit Dispatched, files the
+                // trip stub (ambulance only), pushes.
+                $this->dispatch->dispatch(
+                    $serviceRequest,
+                    $validated['vehicle_id'] ?? $serviceRequest->vehicle_id,
+                    $isAmbulanceRequest,
+                    $isAmbulanceRequest
+                        ? fn (ServiceRequest $r) => $r->conductionRequests()->first() ?? $this->createConductionStub($r)
+                        : null,
+                );
+            } else {
+                $this->syncFleet($serviceRequest, $validated);
+            }
 
             $bookingFields = Arr::only($validated, self::BOOKING_FIELDS);
 
-            $serviceRequest->update(Arr::except($validated, self::BOOKING_FIELDS));
+            $serviceRequest->update(Arr::except(
+                $validated,
+                $dispatching ? [...self::BOOKING_FIELDS, 'status', 'vehicle_id'] : self::BOOKING_FIELDS,
+            ));
 
             // Same invariant as store()/adminStore(): only an ambulance
             // request ever gets a booking row. A non-ambulance request
@@ -1820,18 +1768,6 @@ class ServiceRequestController extends Controller
                 }
             }
 
-            // The bridge itself: this is the one place the instant path ever
-            // transitions to Responding, so it is the one place that can
-            // guarantee a linked trip record exists from here on. Guarded on
-            // conductionRequests()->exists() so re-approving (a vehicle swap,
-            // say) never creates a second one next to a trip already in
-            // progress.
-            if ($isAmbulanceRequest
-                && ($validated['status'] ?? null) === 'Responding'
-                && ! $serviceRequest->conductionRequests()->exists()
-            ) {
-                $this->createConductionStub($serviceRequest);
-            }
         });
 
         // Fires on the transition itself, regardless of which endpoint or
@@ -1852,22 +1788,23 @@ class ServiceRequestController extends Controller
         $newStatus = $validated['status'] ?? $oldStatus;
 
         if ($newStatus !== $oldStatus) {
-            $pushBody = match ($newStatus) {
+            // VehicleDispatch already sent the Responding push.
+            $pushBody = $dispatching ? null : match ($newStatus) {
                 'Booked' => $this->bookedPushBody($serviceRequest),
-                'Responding' => $this->respondingPushBody($serviceRequest),
+                'Responding' => self::respondingPushBody($serviceRequest),
                 'Disapproved' => $this->rejectionPushBody($serviceRequest, (string) $validated['remarks']),
                 default => null,
             };
 
             if ($pushBody !== null) {
-                $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $pushBody, $this->pushData($serviceRequest));
+                $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $pushBody, self::pushData($serviceRequest));
             }
         } elseif ($isAmbulanceRequest && $oldStatus === 'Booked' && $serviceRequest->vehicle_id !== $oldVehicleId) {
             // Status didn't move — this is a plain reassignment (the unit
             // pulled for an emergency, staff pick another one) rather than a
             // dispatch, approval or rejection, so none of the branches above
             // fire for it.
-            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->unitReassignedPushBody($serviceRequest), $this->pushData($serviceRequest));
+            $this->fcm->notifyResident($serviceRequest->resident_id, self::PUSH_TITLE, $this->unitReassignedPushBody($serviceRequest), self::pushData($serviceRequest));
         }
 
         return response()->json($serviceRequest->fresh(['vehicle', 'conductionRequests.people']));
@@ -1901,7 +1838,7 @@ class ServiceRequestController extends Controller
      * more, so the trip's own plate_no is free text again — typed on the trip
      * form when someone knows it, left null when nobody does.
      */
-    private function createConductionStub(ServiceRequest $serviceRequest): void
+    private function createConductionStub(ServiceRequest $serviceRequest): ConductionRequest
     {
         $serviceRequest->loadMissing(['resident', 'vehicle']);
 
@@ -1946,6 +1883,8 @@ class ServiceRequestController extends Controller
         // and until relatives were collected at intake there was nowhere for
         // them to have come from.
         self::copyRelativesToTrip($serviceRequest, $trip);
+
+        return $trip;
     }
 
     /**
@@ -2060,13 +1999,13 @@ class ServiceRequestController extends Controller
         $fresh = $serviceRequest->fresh(['vehicle']);
 
         if (! $wasAlreadyApproved) {
-            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->approvalPushBody($fresh), $this->pushData($fresh));
+            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->approvalPushBody($fresh), self::pushData($fresh));
         } elseif ($oldVehicleId !== $fresh->vehicle_id) {
             // A re-approval that only swapped the unit — e.g. the assigned
             // one got pulled for an emergency and staff reassigned this
             // booking. Worth its own push even though the full "approved"
             // one above is suppressed on every re-approval.
-            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->unitReassignedPushBody($fresh), $this->pushData($fresh));
+            $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->unitReassignedPushBody($fresh), self::pushData($fresh));
         }
 
         return response()->json($fresh);
@@ -2152,7 +2091,7 @@ class ServiceRequestController extends Controller
 
         $fresh = $serviceRequest->fresh(['vehicle']);
 
-        $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']), $this->pushData($fresh));
+        $this->fcm->notifyResident($fresh->resident_id, self::PUSH_TITLE, $this->reschedulePushBody($fresh, (string) $validated['remarks']), self::pushData($fresh));
 
         return response()->json($fresh);
     }

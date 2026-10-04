@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serbis/models/borrow_models.dart';
 import 'package:serbis/models/request_models.dart';
 import 'package:serbis/theme/app_theme.dart';
 
@@ -70,9 +69,16 @@ void main() {
         expect(_ratio(status.fg, status.bg), greaterThanOrEqualTo(4.5));
       });
     }
-    for (final status in BorrowStatus.values) {
-      test('borrow status ${status.name}', () {
-        expect(_ratio(status.fg, status.bg), greaterThanOrEqualTo(4.5));
+    // The borrow status box: title colour, and the ink "what next" line, on each fill.
+    for (final (name, fg, bg) in const [
+      ('pending', AppColors.amberInk, AppColors.amber50),
+      ('approved', AppColors.green700, AppColors.green50),
+      ('cancelled', AppColors.inkMuted, AppColors.grey50),
+      ('denied', AppColors.red600, AppColors.red50),
+    ]) {
+      test('borrow status box $name', () {
+        expect(_ratio(fg, bg), greaterThanOrEqualTo(4.5));
+        expect(_ratio(AppColors.ink, bg), greaterThanOrEqualTo(4.5));
       });
     }
   });

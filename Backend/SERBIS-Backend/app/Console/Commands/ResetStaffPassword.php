@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  */
 class ResetStaffPassword extends Command
 {
-    protected $signature = 'staff:reset-password {email : The staff account\'s sign-in address} {--reactivate : Also reopen the account if it is deactivated}';
+    protected $signature = 'staff:reset-password {username : The staff account\'s username} {--reactivate : Also reopen the account if it is deactivated}';
 
     protected $description = 'Set a temporary password on a staff account (last resort when no admin can sign in)';
 
@@ -35,10 +35,10 @@ class ResetStaffPassword extends Command
             DB::getDatabaseName(),
         ));
 
-        $admin = User::where('email_address', trim((string) $this->argument('email')))->first();
+        $admin = User::where('username', strtolower(trim((string) $this->argument('username'))))->first();
 
         if (! $admin) {
-            $this->error('No staff account with that address.');
+            $this->error('No staff account with that username.');
 
             return self::FAILURE;
         }
@@ -61,7 +61,7 @@ class ResetStaffPassword extends Command
         $admin->tokens()->delete();
 
         $this->newLine();
-        $this->info("Temporary password for {$admin->email_address}:");
+        $this->info("Temporary password for {$admin->username}:");
         $this->line($temporary);
         $this->newLine();
         $this->line('Shown once. They must set their own password at the next sign-in.');

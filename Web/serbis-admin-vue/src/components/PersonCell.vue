@@ -10,14 +10,15 @@
 -->
 <template>
   <div class="person-cell d-flex align-center min-width-0">
-    <!-- `icon` swaps the initials avatar for a neutral icon tile (a vehicle, an
-         item), so the same cell serves things that are not people. -->
-    <div v-if="icon" class="icon-tile mr-2 flex-shrink-0" :class="{ 'icon-tile--tinted': tinted }" :style="{ width: `${size}px`, height: `${size}px` }">
-      <v-icon :size="Math.round(Number(size) * 0.55)" :class="tinted ? 'text-primary-strong' : 'text-medium-emphasis'">{{ icon }}</v-icon>
+    <!-- `icon` or `square` swaps the round avatar for a rounded-square tile (a
+         vehicle, an item): an icon, or the initials as a short text mark. -->
+    <div v-if="icon || square" class="icon-tile mr-2 flex-shrink-0" :class="{ 'icon-tile--tinted': tinted }" :style="{ width: `${size}px`, height: `${size}px` }">
+      <v-icon v-if="icon" :size="Math.round(Number(size) * 0.55)" :class="tinted ? 'text-primary-strong' : 'text-medium-emphasis'">{{ icon }}</v-icon>
+      <span v-else class="icon-tile__mark" :class="tinted ? 'text-primary-strong' : 'text-medium-emphasis'">{{ initials }}</span>
     </div>
     <v-avatar v-else color="primary" variant="tonal" :size="size" class="mr-2 flex-shrink-0">
       <v-img v-if="photo" :src="photo" :alt="name" cover></v-img>
-      <span v-else class="font-weight-bold text-caption">{{ initials }}</span>
+      <span v-else class="font-weight-bold text-caption" :class="{ 'text-primary-strong': tinted }">{{ initials }}</span>
     </v-avatar>
     <div class="min-width-0">
       <div class="d-flex align-center">
@@ -40,9 +41,11 @@ withDefaults(
     photo?: string | null
     /** Icon tile in the brand tint instead of neutral (one tone, never per type). */
     tinted?: boolean
+    /** Rounded-square tile showing `initials` as a text mark, no icon. */
+    square?: boolean
     size?: number | string
   }>(),
-  { size: 32, secondary: null, initials: '', icon: null, photo: null, tinted: false },
+  { size: 32, secondary: null, initials: '', icon: null, photo: null, tinted: false, square: false },
 )
 </script>
 
@@ -55,5 +58,6 @@ withDefaults(
   border-radius: 10px;
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
-.icon-tile--tinted { background: rgba(var(--v-theme-primary), 0.1); }
+.icon-tile--tinted { background: rgba(var(--v-theme-primary), 0.12); }
+.icon-tile__mark { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
 </style>

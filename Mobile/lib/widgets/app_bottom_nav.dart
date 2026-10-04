@@ -53,7 +53,7 @@ class AppBottomNav extends StatelessWidget {
                     excludeSemantics: true,
                     child: InkWell(
                       onTap: () => onTap(i),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 56),
                         child: Column(
@@ -72,7 +72,7 @@ class AppBottomNav extends StatelessWidget {
                               height: 28,
                               decoration: BoxDecoration(
                                 color: active ? AppColors.green50 : Colors.transparent,
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(AppRadius.lg),
                               ),
                               alignment: Alignment.center,
                               child: Icon(
@@ -90,7 +90,7 @@ class AppBottomNav extends StatelessWidget {
                                   duration: duration,
                                   curve: kEaseOut,
                                   style: AppText.display(
-                                    size: 11.5,
+                                    size: AppTextSize.body,
                                     weight: active ? FontWeight.w700 : FontWeight.w500,
                                     color: active ? AppColors.green700 : AppColors.inkMuted,
                                   ),

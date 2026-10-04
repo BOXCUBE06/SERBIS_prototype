@@ -1,359 +1,167 @@
 import 'package:flutter/material.dart';
 
 import '../models/service_forms.dart';
-import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import 'ambulance_schedule_field.dart';
 import 'form_inputs.dart';
 import 'form_section.dart';
 import 'program_date_field.dart';
 
-/// Renders whichever of the four guided forms the resident picked.
+/// Renders the road, relief, generic and program forms. The ambulance has its
+/// own stepped flow (ambulance_steps.dart).
 ///
-/// Each branch reads the same typed object the submit path reads, so a field
+/// Each field reads the same typed object the submit path reads, so a field
 /// on screen and a field in the description cannot drift apart the way they
 /// did while both sides went through a map of string keys.
 ///
 /// [onChanged] fires when a dropdown moves: the value lives on [data], and the
 /// screen has to rebuild to show it.
 class ServiceFormFields extends StatelessWidget {
-  final ServiceFormData data;
+  final StructuredFormData data;
   final VoidCallback onChanged;
-
-  /// Only read by the ambulance branch, for [AmbulanceScheduleField]'s
-  /// availability check — the other three forms have no use for either.
-  final AppState appState;
   final bool filipino;
 
-  /// The seeded destination list for [AmbulanceFormData.destinationChoice]
-  /// (MDRRMO feedback, 2026-09-19). Empty is a valid state — the dropdown
-  /// then offers only "Others", same as before this list existed.
-  final List<String> ambulanceDestinations;
+  /// Draws only this section of the spec, for a form split into steps. Null
+  /// draws them all.
+  final int? sectionIndex;
 
-  /// The pickup landmark, drawn directly under the ambulance's From. Lives on the
-  /// drafts (every form sends it), so it is passed in; the other forms still
-  /// get it at the bottom from the request form.
-  final TextEditingController? landmark;
+  /// Whether the pickup/delivery group (relief only) follows the sections.
+  final bool fulfillment;
 
-  /// Barangay names for the patient address search. Empty leaves only
-  /// "Other" (free text).
-  final List<String> barangays;
+  /// Inline errors by field key; only `preferred_date` is read here.
+  final Map<String, String> errors;
+
+  /// Lets the form scroll the date field into view when it has an error.
+  final Key? dateKey;
+
+  /// Whether each section carries its own small heading. A step that already
+  /// has a numbered title leaves them off.
+  final bool labels;
 
   const ServiceFormFields({
     super.key,
     required this.data,
     required this.onChanged,
-    required this.appState,
     required this.filipino,
-    this.ambulanceDestinations = const [],
-    this.landmark,
-    this.barangays = const [],
+    this.sectionIndex,
+    this.fulfillment = true,
+    this.errors = const {},
+    this.dateKey,
+    this.labels = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
-    return switch (data) {
-      AmbulanceFormData form => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FormSection(
-              label: tr(f, 'form_section.patient'),
-              children: [
-                // Off by default — see AmbulanceFormData.setPatientIsAccountHolder.
-                // Checking it fills the name below once; the field stays fully
-                // editable either way.
-                _CheckRow(
-                  label: 'Patient is myself',
-                  value: form.patientIsAccountHolder,
-                  onChanged: (checked) {
-                    form.setPatientIsAccountHolder(checked);
-                    onChanged();
-                  },
-                ),
-                AppTextField(
-                  label: 'Patient name',
-                  hint: 'e.g. Maria Santos',
-                  controller: form.patient,
-                ),
-                AppTextField(
-                  label: 'Age',
-                  hint: 'e.g. 62',
-                  keyboard: TextInputType.number,
-                  controller: form.age,
-                ),
-                // Off by default — see AmbulanceFormData.setPatientAddressIsMyAddress.
-                // The patient may live elsewhere, so this is a confirmation,
-                // not an assumption.
-                _CheckRow(
-                  label: 'Same as my address',
-                  value: form.patientAddressIsMyAddress,
-                  onChanged: (checked) {
-                    form.setPatientAddressIsMyAddress(checked, barangays);
-                    onChanged();
-                  },
-                ),
-                ..._addressFields(
-                  label: 'Patient address',
-                  barangay: form.patientBarangay,
-                  onBarangay: (value) => form.patientBarangay = value,
-                  field: form.patientAddress,
-                ),
-                AppTextField.phone(
-                  label: 'Contact number',
-                  controller: form.patientContact,
-                ),
-              ],
-            ),
-            FormSection(
-              label: tr(f, 'form_section.trip'),
-              children: [
-                // Off by default — see AmbulanceFormData.setPickupIsMyAddress.
-                // Separate from the patient-address checkbox above: the
-                // pickup point and the patient's address are often the same,
-                // but not always.
-                _CheckRow(
-                  label: 'Same as my address',
-                  value: form.pickupIsMyAddress,
-                  onChanged: (checked) {
-                    form.setPickupIsMyAddress(checked);
-                    onChanged();
-                  },
-                ),
-                // Same list as To; "Other" is a free-text pickup location.
-                AppSearchField(
-                  label: 'From',
-                  hint: 'Search or pick Other',
-                  value: form.pickupChoice,
-                  items: [...ambulanceDestinations, AmbulanceFormData.pickupOther],
-                  onChanged: (choice) {
-                    form.setPickupChoice(choice);
-                    onChanged();
-                  },
-                ),
-                if (form.pickupChoice == AmbulanceFormData.pickupOther)
-                  AppTextField(
-                    label: 'Pickup location',
-                    hint: 'e.g. Purok 3, San Fabian',
-                    controller: form.pickup,
-                  ),
-                if (landmark != null)
-                  AppTextField(
-                    label: 'Landmark (optional)',
-                    hint: 'e.g. beside the chapel',
-                    controller: landmark!,
-                  ),
-                AppSearchField(
-                  label: 'To',
-                  hint: 'Search or pick Others',
-                  value: form.destinationChoice,
-                  items: [...ambulanceDestinations, AmbulanceFormData.destinationOthers],
-                  onChanged: (choice) {
-                    form.setDestinationChoice(choice);
-                    onChanged();
-                  },
-                ),
-                if (form.destinationChoice == AmbulanceFormData.destinationOthers)
-                  AppTextField(
-                    label: 'Destination',
-                    hint: 'e.g. Echague District Hospital',
-                    controller: form.destination,
-                  ),
-              ],
-            ),
-            FormSection(
-              label: tr(f, 'form_section.condition'),
-              children: [
-                AppTextField(
-                  label: 'Medical diagnosis',
-                  hint: "Briefly describe the patient's condition",
-                  lines: 3,
-                  controller: form.diagnosis,
-                ),
-              ],
-            ),
-            FormSection(
-              label: tr(f, 'form_section.relatives'),
-              children: [
-                // Composed from the same AppTextField every other row uses —
-                // the repeater is layout around existing inputs, not a new
-                // shared component.
-                for (var i = 0; i < form.relatives.length; i++)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: AppTextField(
-                          label: i == 0 ? 'Relative 1 (required)' : 'Relative ${i + 1}',
-                          hint: 'e.g. Juan Dela Cruz',
-                          controller: form.relatives[i],
-                        ),
-                      ),
-                      // Nudged down so it sits against the input rather than
-                      // the label above it. Not on a lone row: removing the only
-                      // relative just blanks it, and the X narrowed the field.
-                      if (form.relatives.length > 1)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 22, left: 4),
-                          child: IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                            color: AppColors.inkFaint,
-                            tooltip: 'Remove relative ${i + 1}',
-                            onPressed: () {
-                              form.removeRelative(i);
-                              onChanged();
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                if (form.relatives.length < AmbulanceFormData.maxRelatives)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        form.addRelative();
-                        onChanged();
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: Text(
-                        'Add relative',
-                        style: AppText.display(size: 12, weight: FontWeight.w600),
-                      ),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.green700,
-                        padding: const EdgeInsets.only(right: 8),
-                        minimumSize: const Size(0, 44),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            FormSection(
-              label: tr(f, 'ambulance_schedule.title'),
-              children: [
-                AmbulanceScheduleField(
-                  form: form,
-                  appState: appState,
-                  filipino: filipino,
-                  onChanged: onChanged,
-                ),
-              ],
-            ),
-          ],
-        ),
-      // One branch for the road, relief and generic forms, which were three
-      // near-identical Columns. Each field renders from its own spec entry —
-      // the same entry that decides the line it contributes to the
-      // description — so a field cannot appear here and be missing there.
-      StructuredFormData form => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final section in form.spec.sections)
-              FormSection(
-                label: tr(f, section.labelKey),
-                children: [
-                  for (final field in section.fields) ...[
-                    // Off by default — see StructuredFormData.setAddressIsMyAddress.
-                    // Relief goods are often requested for somewhere other
-                    // than the account holder's own address, so this is a
-                    // confirmation, not an assumption.
-                    if (field.key == 'address' && form.hasAddressField)
-                      _CheckRow(
-                        label: 'Same as my address',
-                        value: form.addressIsMyAddress,
-                        onChanged: (checked) {
-                          form.setAddressIsMyAddress(checked);
-                          onChanged();
-                        },
-                      ),
-                    if (field.isDate)
-                      ProgramDateField(
-                        field: field,
-                        value: form.date(field.key),
-                        onPicked: (picked) {
-                          form.setDate(field.key, picked);
-                          onChanged();
-                        },
-                      )
-                    else if (field.isChoice)
-                      AppDropdown(
-                        label: field.label,
-                        items: field.options,
-                        value: form.choice(field.key),
-                        onChanged: (v) {
-                          form.select(field.key, v);
-                          onChanged();
-                        },
-                      )
-                    else
-                      AppTextField(
-                        label: field.label,
-                        hint: field.hint,
-                        lines: field.lines,
-                        keyboard: field.keyboard,
-                        controller: form.field(field.key),
-                        helpText: field.helpText,
-                      ),
-                  ],
-                ],
-              ),
-            // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
-            // 2026-09-18) — a real field on the request, not spec-driven
-            // prose, so it lives outside the section loop above.
-            if (form.offersFulfillment)
-              FormSection(
-                label: 'Pickup or delivery',
-                children: [
-                  AppDropdown(
-                    label: 'How should this reach you?',
-                    items: const ['Pickup', 'Delivery'],
-                    value: form.fulfillmentMethod,
-                    onChanged: (v) {
-                      form.fulfillmentMethod = v;
+    final form = data;
+    // One Column for the road, relief and generic forms. Each field renders
+    // from its own spec entry — the same entry that decides the line it
+    // contributes to the description — so a field cannot appear here and be
+    // missing there.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (index, section) in form.spec.sections.indexed)
+          if (sectionIndex == null || sectionIndex == index)
+          _Group(
+            label: labels && !_repeatsItsField(f, section) ? tr(f, section.labelKey) : null,
+            children: [
+              for (final field in section.fields) ...[
+                // Off by default — see StructuredFormData.setAddressIsMyAddress.
+                // Relief goods are often requested for somewhere other
+                // than the account holder's own address, so this is a
+                // confirmation, not an assumption.
+                if (field.key == 'address' && form.hasAddressField)
+                  _CheckRow(
+                    label: trEn(f, 'Same as my address'),
+                    value: form.addressIsMyAddress,
+                    onChanged: (checked) {
+                      form.setAddressIsMyAddress(checked);
                       onChanged();
                     },
                   ),
-                  if (form.fulfillmentMethod == 'Delivery')
-                    AppTextField(
-                      label: 'Delivery address',
-                      hint: 'Purok / street, barangay',
-                      controller: form.deliveryAddress,
-                    ),
-                ],
+                if (field.isDate)
+                  ProgramDateField(
+                    key: dateKey,
+                    field: field,
+                    errorText: errors[field.key],
+                    filipino: f,
+                    value: form.date(field.key),
+                    onPicked: (picked) {
+                      form.setDate(field.key, picked);
+                      onChanged();
+                    },
+                  )
+                else if (field.isChoice)
+                  AppChoiceList(
+                    label: trEn(f, field.label),
+                    items: field.options,
+                    itemLabel: (option) => trEn(f, option),
+                    value: form.choice(field.key),
+                    onChanged: (v) {
+                      form.select(field.key, v);
+                      onChanged();
+                    },
+                  )
+                else
+                  AppTextField(
+                    label: trEn(f, field.label),
+                    hint: trEn(f, field.hint),
+                    lines: field.lines,
+                    keyboard: field.keyboard,
+                    controller: form.field(field.key),
+                    helpText: field.helpText == null ? null : trEn(f, field.helpText!),
+                  ),
+              ],
+            ],
+          ),
+        // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
+        // 2026-09-18) — a real field on the request, not spec-driven
+        // prose, so it lives outside the section loop above.
+        if (fulfillment && form.offersFulfillment)
+          _Group(
+            label: labels ? trEn(f, 'Pickup or delivery') : null,
+            children: [
+              AppChoiceList(
+                label: trEn(f, 'How should this reach you?'),
+                items: const ['Pickup', 'Delivery'],
+                itemLabel: (option) => trEn(f, option),
+                value: form.fulfillmentMethod,
+                onChanged: (v) {
+                  form.fulfillmentMethod = v;
+                  onChanged();
+                },
               ),
-          ],
-        ),
-    };
+              if (form.fulfillmentMethod == 'Delivery')
+                AppTextField(
+                  label: trEn(f, 'Delivery address'),
+                  hint: trEn(f, 'Purok / street, barangay'),
+                  controller: form.deliveryAddress,
+                ),
+            ],
+          ),
+      ],
+    );
   }
+}
 
-  /// Barangay search plus "Purok / street", or one free-text address field when
-  /// "Other" is picked.
-  List<Widget> _addressFields({
-    required String label,
-    required String? barangay,
-    required ValueChanged<String?> onBarangay,
-    required TextEditingController field,
-  }) {
-    final other = barangay == AmbulanceFormData.barangayOther;
-    return [
-      AppSearchField(
-        label: label,
-        hint: 'Search barangay',
-        value: barangay,
-        items: [...barangays, AmbulanceFormData.barangayOther],
-        onChanged: (value) {
-          onBarangay(value);
-          onChanged();
-        },
-      ),
-      other
-          ? AppTextField(label: 'Full address', hint: 'House no., street, barangay, town', controller: field)
-          : AppTextField(label: 'Purok / street', hint: 'e.g. Purok 3', controller: field),
-    ];
-  }
+/// A one-field section whose heading is the field's own label ("Description" over
+/// "Description"): the heading adds nothing.
+bool _repeatsItsField(bool filipino, ServiceFormSection section) =>
+    section.fields.length == 1 &&
+    !section.fields.first.isChoice &&
+    trEn(filipino, section.fields.first.label) == tr(filipino, section.labelKey);
+
+/// A section with its heading, or just its fields when the step supplies one.
+class _Group extends StatelessWidget {
+  final String? label;
+  final List<Widget> children;
+
+  const _Group({required this.label, required this.children});
+
+  @override
+  Widget build(BuildContext context) =>
+      label == null ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: children) : FormSection(label: label!, children: children);
 }
 
 /// "Same as my address"-style shortcut. Was a [CheckboxListTile], whose own
@@ -373,7 +181,7 @@ class _CheckRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: InkWell(
         onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
           child: Row(
@@ -389,7 +197,7 @@ class _CheckRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Text(label, style: AppText.body(size: 14, color: AppColors.ink))),
+              Expanded(child: Text(label, style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink))),
             ],
           ),
         ),

@@ -27,8 +27,15 @@ class AmbulanceScreen extends StatefulWidget {
   /// Opens the Library, where the emergency hotlines live.
   final VoidCallback? onOpenLibrary;
 
+  /// Leaving the flow (X, or back on step 1): goes to Home.
+  final VoidCallback? onBack;
+
+  /// Lets the shell route Android back into the flow.
+  final GlobalKey<ServiceRequestFormState>? formKey;
+
   const AmbulanceScreen({
     super.key,
+    this.formKey,
     required this.appState,
     required this.user,
     required this.drafts,
@@ -36,6 +43,7 @@ class AmbulanceScreen extends StatefulWidget {
     required this.onOpenNotifications,
     required this.onOpenProfile,
     this.onOpenLibrary,
+    this.onBack,
   });
 
   @override
@@ -108,26 +116,16 @@ class _AmbulanceScreenState extends State<AmbulanceScreen> {
           );
         }
 
-        return ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            AppHeader(
-              onNotificationsTap: widget.onOpenNotifications,
-              onProfileTap: widget.onOpenProfile,
-              filipino: f,
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 110),
-              child: ServiceRequestForm(
-                appState: widget.appState,
-                user: widget.user,
-                service: ambulance,
-                drafts: widget.drafts,
-                onSubmitted: widget.onSubmitted,
-                onOpenHotlines: widget.onOpenLibrary,
-              ),
-            ),
-          ],
+        // The flow brings its own header and footer; the shell hides the nav.
+        return ServiceRequestForm(
+          key: widget.formKey,
+          appState: widget.appState,
+          user: widget.user,
+          service: ambulance,
+          drafts: widget.drafts,
+          onSubmitted: widget.onSubmitted,
+          onOpenHotlines: widget.onOpenLibrary,
+          onExit: widget.onBack,
         );
       },
     );

@@ -15,7 +15,7 @@ class SystemLogController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = SystemLog::with(['admin' => function ($query) {
-            $query->select('admin_id', 'first_name', 'last_name');
+            $query->select('admin_id', 'first_name', 'last_name', 'username');
         }, 'resident:resident_id,first_name,last_name'])
             ->orderBy('created_at', 'desc')
         // Tiebreaker, and it is load-bearing now that this pages. Several log rows
@@ -36,7 +36,7 @@ class SystemLogController extends Controller
             return [
                 'created_at' => $log->created_at,
                 'user' => $log->admin ? [
-                    'name' => $log->admin->first_name.' '.$log->admin->last_name,
+                    'name' => $log->admin->displayName(),
                 ] : ['name' => 'System'],
                 'module' => class_basename($log->auditable_type), // e.g. "Resident" instead of "App\Models\Resident"
                 'action' => $log->action_type,
@@ -84,6 +84,7 @@ class SystemLogController extends Controller
                     // "Juan" and a search for "Dela Cruz" both already found.
                     $admin->where('first_name', 'like', $term)
                         ->orWhere('last_name', 'like', $term)
+                        ->orWhere('username', 'like', $term)
                         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$term]);
                 });
         });

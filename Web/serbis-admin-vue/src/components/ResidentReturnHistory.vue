@@ -3,15 +3,29 @@
   staff can see a pattern before approving a new borrow request. Display only:
   nothing here blocks a request, and the office decides what a pattern means.
 
+  Owns the section's heading row (the title and the count pills share one line
+  on the Account detail board).
+
   Photos live on the private disk, so an <img src> cannot fetch them — each is
   loaded as a blob with the bearer token when staff open it, and revoked when
   the panel moves to another resident or closes.
 -->
 <template>
   <div>
-    <div v-if="loading" class="text-body-2 text-medium-emphasis">Loading returns…</div>
-    <div v-else-if="error" class="text-body-2 text-medium-emphasis" role="status">{{ error }}</div>
-    <div v-else-if="!summary || summary.total === 0" class="empty-returns">
+    <div class="returns-head">
+      <h3 class="returns-title">Equipment returns</h3>
+      <template v-if="summary && summary.total > 0">
+        <StatusPill tag class="count-pill" :label="`${summary.total} returned`" />
+        <StatusPill status="Good" class="count-pill" :label="`${summary.good} good`" />
+        <StatusPill v-if="summary.bad > 0" status="Bad" class="count-pill" :label="`${summary.bad} bad`" />
+        <StatusPill v-else tag class="count-pill" label="0 bad" />
+        <StatusPill v-if="summary.unrecorded > 0" tag class="count-pill" :label="`${summary.unrecorded} not recorded`" />
+      </template>
+    </div>
+
+    <div v-if="loading" class="text-body-2 text-medium-emphasis pt-3">Loading returns…</div>
+    <div v-else-if="error" class="text-body-2 text-medium-emphasis pt-3" role="status">{{ error }}</div>
+    <div v-else-if="!summary || summary.total === 0" class="empty-returns mt-3">
       <v-icon size="20" aria-hidden="true">mdi-package-variant-closed</v-icon>
       <div>
         <div class="text-body-2 font-weight-medium text-high-emphasis">No returned equipment yet.</div>
@@ -19,30 +33,14 @@
       </div>
     </div>
 
-    <template v-else>
-      <div class="d-flex flex-wrap ga-2 mb-4">
-        <span class="cond-pill cond-neutral">{{ summary.total }} returned</span>
-        <span class="cond-pill cond-good">{{ summary.good }} good</span>
-        <span class="cond-pill" :class="summary.bad > 0 ? 'cond-bad' : 'cond-neutral'">{{ summary.bad }} bad</span>
-        <span v-if="summary.unrecorded > 0" class="cond-pill cond-neutral">{{ summary.unrecorded }} not recorded</span>
-      </div>
-
-      <ul class="return-list">
-        <li v-for="row in rows" :key="row.borrow_id" class="return-row">
-          <div class="d-flex justify-space-between align-start ga-3">
-            <div class="text-body-2 font-weight-medium text-high-emphasis">
-              {{ row.item || 'Item' }}<span v-if="row.quantity > 1" class="text-medium-emphasis"> × {{ row.quantity }}</span>
-            </div>
-            <span
-              v-if="row.return_condition"
-              class="cond-pill"
-              :class="row.return_condition === 'Bad' ? 'cond-bad' : 'cond-good'"
-            >{{ row.return_condition }}</span>
-            <span v-else class="cond-pill cond-neutral">Not recorded</span>
+    <ul v-else class="return-list">
+      <li v-for="row in rows" :key="row.borrow_id" class="return-row">
+        <div class="return-main">
+          <div class="return-item">
+            {{ row.item || 'Item' }}<span v-if="row.quantity > 1" class="return-qty"> × {{ row.quantity }}</span>
           </div>
-
-          <div class="text-caption text-medium-emphasis">Returned {{ fmtDate(row.returned_at) }}</div>
-          <p v-if="row.return_condition_note" class="text-body-2 mt-1 mb-0 note">{{ row.return_condition_note }}</p>
+          <div class="return-date">Returned {{ fmtDate(row.returned_at) }}</div>
+          <p v-if="row.return_condition_note" class="return-note">{{ row.return_condition_note }}</p>
 
           <template v-if="row.has_return_photo">
             <v-btn
@@ -68,14 +66,18 @@
               class="mt-1"
             ></v-img>
           </template>
-        </li>
-      </ul>
-    </template>
+        </div>
+
+        <StatusPill v-if="row.return_condition" class="flex-none" :status="row.return_condition" :label="row.return_condition" />
+        <StatusPill v-else tag class="flex-none" label="Not recorded" />
+      </li>
+    </ul>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import StatusPill from '@/components/StatusPill.vue'
 import { authHeaders, fmtDate } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 
@@ -182,6 +184,29 @@ onBeforeUnmount(releasePhotos)
 </script>
 
 <style scoped>
+/* Heading and count pills on one line, a rule under them (the board's section
+   header). A bad return is warning-toned, not error-toned: it is information
+   for the office, not an alarm. */
+.returns-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+.returns-title {
+  margin: 0 auto 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.count-pill { padding: 2px 10px; }
+.flex-none { flex: none; }
+
 .empty-returns {
   display: flex;
   align-items: center;
@@ -192,23 +217,21 @@ onBeforeUnmount(releasePhotos)
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .return-list { list-style: none; padding: 0; margin: 0; }
-.return-row { padding: 10px 0; border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
-.return-row:first-child { border-top: 0; padding-top: 0; }
-.note { white-space: pre-wrap; word-break: break-word; }
-
-/* Tinted pills with the -strong token for text, like the status pills beside
-   them. A bad return is warning-toned, not error-toned: it is information for
-   the office, not an alarm. */
-.cond-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  white-space: nowrap;
+.return-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
-.cond-good { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
-.cond-bad { background: rgba(var(--v-theme-warning), 0.14); color: rgb(var(--v-theme-warning-strong)); }
-.cond-neutral { background: rgba(var(--v-theme-on-surface), 0.08); color: rgba(var(--v-theme-on-surface), 0.82); }
+.return-main { min-width: 0; }
+.return-item { font-size: 14px; line-height: 20px; font-weight: 700; }
+.return-qty { font-weight: 400; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.return-date {
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.return-note { margin: 4px 0 0; font-size: 14px; line-height: 20px; white-space: pre-wrap; word-break: break-word; }
 </style>

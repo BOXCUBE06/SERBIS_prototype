@@ -188,6 +188,16 @@ class VehicleController extends Controller
             ], 422);
         }
 
+        // The FK is RESTRICT now (2026_10_02_100000): any request, past ones
+        // included, keeps its unit. Refused here rather than as a 500.
+        $referencing = ServiceRequest::where('vehicle_id', $vehicle->vehicle_id)->count();
+
+        if ($referencing > 0) {
+            return response()->json([
+                'message' => "Cannot delete this unit: {$referencing} service request(s) reference it. Set it to Maintenance instead.",
+            ], 422);
+        }
+
         $vehicle->delete();
 
         return response()->json(['message' => 'Vehicle successfully deleted']);

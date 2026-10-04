@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken, clearToken } from '../composables/authToken'
+import { clearAll } from '../composables/useCachedFetch'
 import { API_BASE } from '../config/api'
 
 export function useAuth() {
@@ -26,6 +27,7 @@ export function useAuth() {
       // clearToken() removes the expiry stamp too — removing only the token
       // would leave a stale timestamp behind for the next sign-in to inherit.
       clearToken()
+      clearAll()
 
       // Fixed to match your router's path mapping
       router.push('/login') 

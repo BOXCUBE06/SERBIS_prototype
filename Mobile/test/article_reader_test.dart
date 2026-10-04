@@ -72,9 +72,7 @@ void main() {
       await _open(tester, _fixture);
 
       expect(find.text('Fixture Title EN'), findsOneWidget);
-      // The subtitle is upper-cased for display, so the raw string is not
-      // what reaches the screen.
-      expect(find.text('FIXTURE SUBTITLE EN'), findsOneWidget);
+      expect(find.text('Fixture Subtitle EN'), findsOneWidget);
       expect(find.text('EN Heading One'), findsOneWidget);
       expect(find.text('EN body paragraph.'), findsOneWidget);
       expect(find.text('EN Heading Two'), findsOneWidget);

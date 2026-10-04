@@ -53,7 +53,7 @@ class SmsBlastCodeRotationTest extends TestCase
             ->assertOk()
             ->assertJson([
                 'configured' => true,
-                'updated_by' => 'MDRRMO Admin',
+                'updated_by' => 'MDRRMO Admin (admin)',
             ])
             ->json();
 
@@ -111,7 +111,7 @@ class SmsBlastCodeRotationTest extends TestCase
             ->assertOk()
             ->assertJson([
                 'configured' => true,
-                'updated_by' => 'MDRRMO Admin',
+                'updated_by' => 'MDRRMO Admin (admin)',
             ]);
     }
 

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Mail\EquipmentDueTomorrow;
 use App\Models\Barangay;
 use App\Models\Equipment;
 use App\Models\EquipmentBorrowing;
@@ -17,11 +16,9 @@ use Tests\Concerns\FakesFcm;
 use Tests\TestCase;
 
 /**
- * serbis:send-return-reminders — the admin-side email added alongside the
- * existing resident push/SMS (MDRRMO feedback, 2026-09-18). Independent in
- * both directions: a mail failure must not block the resident's own channels
- * from marking a borrowing sent, and SkySMS being unconfigured must not
- * silence this email.
+ * serbis:send-return-reminders no longer emails staff: the addresses were
+ * @serbis.com, a domain nobody owns, and staff now sign in with a username.
+ * Residents keep their own push/SMS reminders.
  */
 class SendReturnRemindersAdminEmailTest extends TestCase
 {
@@ -90,39 +87,11 @@ class SendReturnRemindersAdminEmailTest extends TestCase
         ], $overrides));
     }
 
-    public function test_active_admins_are_emailed_a_summary_of_what_is_due_tomorrow(): void
+    public function test_staff_are_not_emailed_about_what_is_due_tomorrow(): void
     {
         Mail::fake();
         Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
 
-        $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
-
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
-
-        Mail::assertSent(EquipmentDueTomorrow::class, function ($mail) {
-            return $mail->hasTo('ana@test.local') && count($mail->rows) === 1 && $mail->rows[0]['item'] === 'Rubber Boat';
-        });
-    }
-
-    public function test_nothing_due_tomorrow_sends_no_email(): void
-    {
-        Mail::fake();
-        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
-
-        // Due today, not tomorrow — outside this email's scope.
-        $this->released($this->resident(), now()->format('Y-m-d'));
-
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
-
-        Mail::assertNothingSent();
-    }
-
-    public function test_a_deactivated_admin_is_not_emailed(): void
-    {
-        Mail::fake();
-        Http::fake(['skysms.skyio.site/*' => Http::response(['status' => 'success'], 200)]);
-
-        $this->admin->update(['status' => 'Deactivated']);
         $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
 
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
@@ -130,25 +99,9 @@ class SendReturnRemindersAdminEmailTest extends TestCase
         Mail::assertNothingSent();
     }
 
-    /** The independent-failure rule, admin-email direction: SkySMS being down must not silence the office's own copy. */
-    public function test_the_admin_email_still_sends_when_skysms_is_not_configured(): void
+    public function test_the_resident_is_still_reminded_and_marked_sent(): void
     {
         Mail::fake();
-        // No Http::fake for SkySMS and no token configured — SmsGateway::configured() is false.
-        config(['services.skysms.api_key' => null]);
-
-        $this->released($this->resident(), now()->addDay()->format('Y-m-d'));
-
-        // No ambulance booking needed a text, so an unset key is not a failed run.
-        $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
-
-        Mail::assertSent(EquipmentDueTomorrow::class);
-    }
-
-    /** The independent-failure rule, the other direction: a mail failure must not block the resident's own reminder from being marked sent. */
-    public function test_a_mail_failure_does_not_block_the_resident_reminder_from_being_marked_sent(): void
-    {
-        Mail::shouldReceive('to')->andThrow(new \RuntimeException('SMTP connection refused'));
         $this->configureFcm();
         Http::fake(['fcm.googleapis.com/*' => $this->fcmAccepts()]);
 
@@ -159,5 +112,6 @@ class SendReturnRemindersAdminEmailTest extends TestCase
         $this->artisan('serbis:send-return-reminders')->assertExitCode(0);
 
         $this->assertNotNull($borrowing->fresh()->return_reminder_sent_at);
+        Mail::assertNothingSent();
     }
 }

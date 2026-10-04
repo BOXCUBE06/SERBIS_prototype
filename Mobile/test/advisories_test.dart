@@ -70,6 +70,8 @@ Future<void> _pumpSheet(
         advisoriesError: advisoriesError,
         requests: requests,
         filipino: filipino,
+        // The fixtures are dated August 2026; keep them inside the 30-day window.
+        now: DateTime.utc(2026, 8, 10),
       ),
     ),
   ));
@@ -181,7 +183,7 @@ void main() {
       // Verbatim, untranslated and untruncated: the instruction to act on is
       // often the last line.
       expect(find.text('Evacuate low-lying areas before 6 PM.'), findsOneWidget);
-      expect(find.text('San Fabian'), findsOneWidget);
+      expect(find.textContaining('San Fabian'), findsOneWidget);
       expect(find.text('No advisories have been sent to you.'), findsNothing);
     });
 
@@ -239,7 +241,7 @@ void main() {
       await _pumpSheet(tester, filipino: true);
 
       expect(find.text('Wala pang abisong ipinadala sa iyo.'), findsOneWidget);
-      expect(find.text('MGA ABISO NG MDRRMO'), findsOneWidget);
+      expect(find.text('Mga abiso ng MDRRMO'), findsOneWidget);
     });
   });
 }

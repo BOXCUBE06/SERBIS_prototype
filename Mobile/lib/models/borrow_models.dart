@@ -1,8 +1,7 @@
 
 library serbis.models.borrow;
 
-import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../state/translations.dart';
 
 /// A row from `GET /api/equipments` — the catalogue a resident borrows from.
 /// Read-only here: writing stock belongs to the admin panel.
@@ -60,6 +59,9 @@ BorrowStatus borrowStatusFromText(String statusText) {
 }
 
 extension BorrowStatusX on BorrowStatus {
+  /// [label] in the resident's language.
+  String labelFor(bool filipino) => trEn(filipino, label);
+
   String get label {
     switch (this) {
       case BorrowStatus.pending:
@@ -74,42 +76,6 @@ extension BorrowStatusX on BorrowStatus {
         return 'Not approved';
       case BorrowStatus.cancelled:
         return 'Cancelled by you';
-    }
-  }
-
-  Color get bg {
-    switch (this) {
-      case BorrowStatus.pending:
-        return AppColors.amber50;
-      case BorrowStatus.approved:
-        return AppColors.blue50;
-      case BorrowStatus.released:
-        return AppColors.blue50;
-      case BorrowStatus.returned:
-        return AppColors.green50;
-      case BorrowStatus.denied:
-        return AppColors.red50;
-      // Neutral, not red: the resident withdrew this themselves, so it is not
-      // a refusal and must not read like one beside a Denied row.
-      case BorrowStatus.cancelled:
-        return AppColors.grey50;
-    }
-  }
-
-  Color get fg {
-    switch (this) {
-      case BorrowStatus.pending:
-        return AppColors.amber600;
-      case BorrowStatus.approved:
-        return AppColors.blue600;
-      case BorrowStatus.released:
-        return AppColors.blue600;
-      case BorrowStatus.returned:
-        return AppColors.green700;
-      case BorrowStatus.denied:
-        return AppColors.red600;
-      case BorrowStatus.cancelled:
-        return AppColors.inkMuted;
     }
   }
 
@@ -156,6 +122,12 @@ class BorrowRequest {
   final DateTime? releasedAt;
   final DateTime? returnedAt;
 
+  /// `Pickup` or `Delivery`; null on rows filed before the column existed.
+  final String? fulfillmentMethod;
+
+  /// Last change on the row. A cancelled row's last change is the cancel.
+  final DateTime? updatedAt;
+
   /// The item's name at the moment this row was built. Resolved against the
   /// catalogue the same way `ServiceRequest.serviceName` is: `POST`'s 201
   /// returns the row unloaded, with no `equipment` relation embedded, so a
@@ -189,6 +161,8 @@ class BorrowRequest {
     this.createdAt,
     this.releasedAt,
     this.returnedAt,
+    this.fulfillmentMethod,
+    this.updatedAt,
     this.equipmentName,
     this.hasReleasePhoto = false,
     this.hasReturnPhoto = false,
@@ -201,6 +175,7 @@ class BorrowRequest {
     DateTime? dueDate,
     DateTime? releasedAt,
     DateTime? returnedAt,
+    DateTime? updatedAt,
     String? equipmentName,
   }) {
     return BorrowRequest(
@@ -215,6 +190,8 @@ class BorrowRequest {
       createdAt: createdAt,
       releasedAt: releasedAt ?? this.releasedAt,
       returnedAt: returnedAt ?? this.returnedAt,
+      fulfillmentMethod: fulfillmentMethod,
+      updatedAt: updatedAt ?? this.updatedAt,
       equipmentName: equipmentName ?? this.equipmentName,
       hasReleasePhoto: hasReleasePhoto,
       hasReturnPhoto: hasReturnPhoto,
@@ -253,6 +230,8 @@ class BorrowRequest {
       createdAt: _parseInstant(json['created_at']),
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
+      fulfillmentMethod: json['fulfillment_method'] as String?,
+      updatedAt: _parseInstant(json['updated_at']),
       equipmentName: equipmentName,
       hasReleasePhoto: json['has_release_photo'] == true,
       hasReturnPhoto: json['has_return_photo'] == true,
@@ -279,6 +258,8 @@ extension BorrowRequestCache on BorrowRequest {
         'created_at': createdAt?.toIso8601String(),
         'released_at': releasedAt?.toIso8601String(),
         'returned_at': returnedAt?.toIso8601String(),
+        'fulfillment_method': fulfillmentMethod,
+        'updated_at': updatedAt?.toIso8601String(),
         'equipment_name': equipmentName,
         'has_release_photo': hasReleasePhoto,
         'has_return_photo': hasReturnPhoto,
@@ -308,6 +289,8 @@ extension BorrowRequestCache on BorrowRequest {
       createdAt: _parseInstant(json['created_at']),
       releasedAt: _parseInstant(json['released_at']),
       returnedAt: _parseInstant(json['returned_at']),
+      fulfillmentMethod: json['fulfillment_method'] as String?,
+      updatedAt: _parseInstant(json['updated_at']),
       equipmentName: json['equipment_name'] as String?,
       hasReleasePhoto: json['has_release_photo'] == true,
       hasReturnPhoto: json['has_return_photo'] == true,

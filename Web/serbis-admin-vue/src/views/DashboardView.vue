@@ -3,15 +3,8 @@
 
     <div class="dash-band d-flex justify-space-between align-start flex-wrap ga-3">
       <div class="min-width-0">
+        <div class="dash-overline">{{ today }}</div>
         <h2 class="dash-title">Welcome back, {{ adminFirstName || 'there' }}</h2>
-        <!-- Only once every list has arrived: a half-loaded count would read as a calm shift. -->
-        <p v-if="summary" class="dash-summary content-in">
-          <template v-for="(part, i) in summary" :key="i">
-            <b v-if="part.tone" :key="part.text" class="count-chip value-in" :class="`tone-${part.tone}`">{{ part.text }}</b>
-            <template v-else>{{ part.text }}</template>
-          </template>
-        </p>
-        <p v-else-if="loading" class="dash-summary" aria-hidden="true"><span class="skel skel-summary"></span></p>
       </div>
       <div class="d-flex align-center flex-wrap ga-3">
         <!-- The bell carries the activity log and the follow-up calls. An account
@@ -90,55 +83,63 @@
     <!-- A grid, not v-col: four or five cards depending on what the account can read. -->
     <div v-else-if="kpis.length > 0" class="kpi-grid mb-2 content-in" :style="{ '--kpi-count': kpis.length }">
       <v-card v-for="k in kpis" :key="k.label" :to="k.to" elevation="0" class="dash-card kpi-card h-100" :class="{ 'kpi-link': k.to }">
-        <v-avatar :color="k.accent" variant="tonal" size="40" rounded="lg" class="flex-shrink-0">
-          <v-icon :color="k.accent" size="20">{{ k.icon }}</v-icon>
-        </v-avatar>
-        <div class="min-width-0">
+        <span class="kpi-tile" :class="`kpi-tile--${k.accent}`"><v-icon size="22">{{ k.icon }}</v-icon></span>
+        <div class="kpi-main">
           <div class="kpi-label">{{ k.label }}</div>
-          <div class="kpi-value" :class="`tone-${k.tone}`"><span :key="k.value" class="value-in">{{ k.value }}</span></div>
+          <div class="kpi-valuerow">
+            <span class="kpi-value" :class="`tone-${k.tone}`"><span :key="k.value" class="value-in">{{ k.value }}</span></span>
+            <span v-if="k.total != null" class="kpi-total">/ {{ k.total }}</span>
+          </div>
+          <div v-if="k.total" class="kpi-bar"><span :class="`kpi-bar--${k.accent}`" :style="{ width: `${Math.round((k.value / k.total) * 100)}%` }"></span></div>
+          <!-- Units on trips: the ongoing-trips count, a link to the trip log
+               when the account may open it. Not nested in a card link. -->
+          <router-link v-if="k.caption && k.captionTo" :to="k.captionTo" class="kpi-caption kpi-caption--link">{{ k.caption }}</router-link>
+          <div v-else-if="k.caption" class="kpi-caption">{{ k.caption }}</div>
         </div>
       </v-card>
     </div>
 
     <!-- Everything open, one tab per kind of work. A row opens that request on
          its own page. Only open items; the full history lives on each page. -->
-    <v-row class="mb-2"><v-col cols="12">
-    <v-card elevation="0" class="dash-card dash-panel">
-      <div class="panel-head">
-        <div class="dash-card-title">Open Requests</div>
-        <div class="dash-card-subtitle">{{ currentTab.hint }}</div>
+    <section class="open-requests">
+      <div class="open-head">
+        <div>
+          <h2 class="open-title">Open requests</h2>
+          <div class="open-sub">{{ currentTab.hint }}</div>
+        </div>
+        <router-link :to="currentTab.to" class="open-link">View all requests</router-link>
       </div>
 
-      <v-tabs v-model="queueTab" color="primary" density="compact" height="48" hide-slider class="dash-tabs px-4">
-        <v-tab v-for="t in QUEUE_TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">
-          {{ t.title }}
-          <span v-if="loading" class="skel skel-pill ml-2" aria-hidden="true"></span>
-          <v-chip v-else size="x-small" class="ml-2 font-weight-bold" variant="tonal" :color="queueTab === t.value ? 'primary' : undefined">{{ tabCounts[t.value] }}</v-chip>
-        </v-tab>
-      </v-tabs>
-      <v-divider></v-divider>
+      <v-alert v-if="loadError" type="warning" variant="tonal" density="compact">{{ loadError }}</v-alert>
 
-      <v-alert v-if="loadError" type="warning" variant="tonal" density="compact" class="ma-4">{{ loadError }}</v-alert>
-
-      <!-- Keyed on load and tab, so each new body mounts and fades in. -->
-      <v-data-table
-        :key="loading ? 'loading' : queueTab"
-        v-model:sort-by="sortBy"
-        v-model:page="page"
+      <!-- The shared board table: tabs with counts, the table, the footer and
+           pager. Sorting is the table's own, starting oldest first. -->
+      <DataTablePage
+        compact
+        filter-bar
+        board-table
+        :row-height="56"
+        class="queue-table"
+        :searchable="false"
+        :loading="loading"
+        :tabs="queueTabs"
+        :status="queueTab"
+        @update:status="queueTab = $event"
         :headers="headers"
         :items="visibleRows"
         item-value="key"
-        :items-per-page="PAGE_SIZE"
+        :sort-by="sortBy"
         must-sort
-        hide-default-footer
+        :page="page"
+        @update:page="page = $event"
+        :items-per-page="PAGE_SIZE"
+        :items-per-page-options="[PAGE_SIZE]"
+        :result-noun="currentTab.noun"
+        range-summary
         :row-props="() => ({ class: 'queue-row' })"
         :no-data-text="currentTab.empty"
-        class="queue-table table-fade"
         @click:row="(_event, { item }) => openRow(item)"
       >
-        <template v-if="loading" #body>
-          <SkeletonRows :rows="PAGE_SIZE" :columns="headers.length" />
-        </template>
         <template #item.filedAt="{ item }">
           <div class="cell-primary" :title="fmtFiled(item.filedAt)">{{ fmtFiled(item.filedAt) }}</div>
           <div v-if="item.note" class="cell-secondary" :class="`wait-${item.noteTone}`" :title="item.note">{{ item.note }}</div>
@@ -151,19 +152,15 @@
         <template #item.type="{ item }">
           <div class="d-flex align-center ga-2 min-width-0">
             <v-icon size="16" class="text-medium-emphasis">{{ KIND_ICONS[item.kind] }}</v-icon>
-            <span class="cell-primary" :title="item.type">{{ item.type }}</span>
+            <span class="cell-type" :title="item.type">{{ item.type }}</span>
             <v-chip v-if="item.shortStock" size="x-small" color="error" variant="tonal" class="font-weight-bold" :title="`${item.onHand} on hand`">Short stock</v-chip>
           </div>
         </template>
         <template #item.status="{ item }">
-          <StatusPill :status="item.status" solid class="status-badge" />
+          <StatusPill :status="item.status" />
         </template>
-      </v-data-table>
-      <div class="queue-pager d-flex justify-center pa-3">
-        <v-pagination v-if="pageCount > 1" v-model="page" :length="pageCount" :total-visible="5" density="comfortable" rounded="circle"></v-pagination>
-      </div>
-    </v-card>
-    </v-col></v-row>
+      </DataTablePage>
+    </section>
 
     <DashboardCharts :history="history" :top="top" :loading="loading" />
 
@@ -175,15 +172,14 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StatusPill from '@/components/StatusPill.vue'
 import DashboardCharts from '@/components/DashboardCharts.vue'
-import SkeletonRows from '@/components/SkeletonRows.vue'
+import DataTablePage from '@/components/DataTablePage.vue'
 import '@/components/dashboard.css'
-import { API_BASE } from '@/config/api'
-import { authHeaders, waitTone } from '@/composables/adminUi'
+import { pluralize, waitTone } from '@/composables/adminUi'
+import { useCachedFetch } from '@/composables/useCachedFetch'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName } from '@/composables/requestDisplay'
 import { useCurrentAdmin, adminFirstName } from '@/composables/useCurrentAdmin'
-import { welcomeSentence } from '@/composables/dashboardWelcome'
 import { DAY_MS } from '@/composables/dashboardTrends'
 
 const router = useRouter()
@@ -207,16 +203,18 @@ const units = ref(null)
 const trips = ref(null)
 // { available, total } across all responders, from the dashboard payload.
 const responders = ref(null)
-const loading = ref(true)
+// Skeletons only while something has nothing cached; a revisit paints the last numbers
+// at once and swaps them when the refetch lands.
+const { get, loading } = useCachedFetch()
 const loadError = ref('')
 // Which lists arrived. A 403 or 500 on one must not read as "nothing open".
 const loaded = reactive({ services: false, borrowings: false })
 
 const QUEUE_TABS = [
-  { value: 'services', title: 'Services', test: (r) => r.kind === 'service', hint: 'Resident requests still open', empty: 'No open service requests' },
-  { value: 'ambulance', title: 'Ambulance', test: (r) => r.kind === 'ambulance' && r.status !== 'Booked', hint: 'Ambulance dispatch requests not yet closed', empty: 'No active dispatch requests' },
-  { value: 'bookings', title: 'Bookings', test: (r) => r.kind === 'ambulance' && r.status === 'Booked', hint: 'Scheduled ambulance bookings', empty: 'No scheduled bookings' },
-  { value: 'borrowing', title: 'Borrowing', test: (r) => r.kind === 'borrow', hint: 'Open equipment loans', empty: 'No open loans' },
+  { value: 'services', title: 'Services', test: (r) => r.kind === 'service', hint: 'Resident requests still open, oldest first', empty: 'No open service requests', to: '/manage-requests', noun: 'services' },
+  { value: 'ambulance', title: 'Ambulance', test: (r) => r.kind === 'ambulance' && r.status !== 'Booked', hint: 'Ambulance dispatch requests not yet closed', empty: 'No active dispatch requests', to: '/conduction-requests', noun: 'requests' },
+  { value: 'bookings', title: 'Bookings', test: (r) => r.kind === 'ambulance' && r.status === 'Booked', hint: 'Scheduled ambulance bookings', empty: 'No scheduled bookings', to: '/conduction-requests', noun: 'bookings' },
+  { value: 'borrowing', title: 'Borrowing', test: (r) => r.kind === 'borrow', hint: 'Open equipment loans', empty: 'No open loans', to: '/borrowings', noun: 'loans' },
 ]
 const KIND_ICONS = { service: 'mdi-clipboard-text-outline', ambulance: 'mdi-ambulance', borrow: 'mdi-toolbox-outline' }
 const KIND_ROUTES = { service: '/manage-requests', ambulance: '/conduction-requests', borrow: '/borrowings' }
@@ -228,10 +226,10 @@ const page = ref(1)
 const sortBy = ref([{ key: 'filedAt', order: 'asc' }])
 
 const headers = [
-  { title: 'Time Filed', key: 'filedAt', sortable: true, width: '22%' },
-  { title: 'Head of the Family', key: 'name', sortable: true, width: '26%' },
-  { title: 'Request Type', key: 'type', sortable: true, width: '34%' },
-  { title: 'Status', key: 'status', sortable: true, width: '18%' },
+  { title: 'Time filed', key: 'filedAt', sortable: true, width: '24%' },
+  { title: 'Head of the family', key: 'name', sortable: true },
+  { title: 'Request type', key: 'type', sortable: false },
+  { title: 'Status', key: 'status', sortable: false },
 ]
 
 // A tab change is a new list; page 3 of the last one would be blank.
@@ -242,7 +240,7 @@ watch(queueTab, () => { page.value = 1 })
 const SERVICE_TERMINAL = new Set(['Resolved', 'Cancelled', 'Disapproved'])
 const BORROW_TERMINAL = new Set(BORROWING_STATUSES.filter((s) => s.terminal).map((s) => s.status))
 
-const fmtFiled = (ms) => new Date(ms).toLocaleString('en-PH', {
+const fmtFiled = (ms) => new Date(ms).toLocaleString('en-US', {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
 })
 
@@ -252,7 +250,7 @@ const waitNote = (status, ms) => {
     return { note: '', noteTone: 'muted' }
   }
   const days = Math.max(0, Math.floor((Date.now() - ms) / DAY_MS))
-  return { note: `${days}d waiting`, noteTone: waitTone(days) }
+  return { note: `${pluralize(days, 'day')} waiting`, noteTone: waitTone(days) }
 }
 
 // due_date is a bare calendar date; new Date('2026-08-10') would parse as UTC
@@ -301,68 +299,69 @@ const borrowRow = (b) => {
     type: item,
     status: b.status,
     overdue: late,
-    ...(late ? { note: `${daysPastDue(b.due_date)}d overdue`, noteTone: 'error' } : waitNote(b.status, filedAt)),
+    ...(late ? { note: `${pluralize(daysPastDue(b.due_date), 'day')} overdue`, noteTone: 'error' } : waitNote(b.status, filedAt)),
   }
 }
 
-// One authed GET that is allowed to fail: an account without the section is
-// answered 403, and its queue is simply missing that kind of row.
-const fetchList = async (path) => {
-  try {
-    const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() })
-    if (!res.ok) return null
-    const body = await res.json()
-    const list = body.data || body
-    return Array.isArray(list) ? list : null
-  } catch {
-    return null
-  }
+const list = (body) => {
+  const rows = body.data || body
+  return Array.isArray(rows) ? rows : null
 }
+
+// What each request last returned: undefined until it answers, null if it failed.
+const src = { dash: undefined, services: undefined, borrowings: undefined, trips: undefined }
+
+const apply = () => {
+  const { dash, services, borrowings, trips: tripList } = src
+  if (dash) {
+    systemLogs.value = dash.systemLogs || []
+    followUps.value = dash.followUps || []
+    responders.value = dash.responders ?? null
+    units.value = dash.units ?? null
+    top.value = dash.charts?.pieByPeriod?.month ?? null
+  }
+  trips.value = tripList ?? null
+  rows.value = [
+    ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
+    ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
+  ]
+  history.value = (services || []).map((r) => ({
+    filedAt: new Date(r.created_at).getTime(),
+    resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
+  }))
+  loaded.services = !!services
+  loaded.borrowings = !!borrowings
+}
+
+// A list is allowed to fail: an account without the section is answered 403, and
+// its queue is simply missing that kind of row.
+const pull = (key, path, select) =>
+  get(path, { onData: (body) => { src[key] = select(body); apply() } })
+    .catch(() => { src[key] = null; apply() })
 
 const fetchDashboardData = async () => {
-  loading.value = true
   loadError.value = ''
   try {
-    const [dash, services, borrowings, tripList] = await Promise.all([
-      fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() }),
-      fetchList('/admin/service-requests'),
-      fetchList('/borrowings'),
-      fetchList('/conduction-requests'),
+    await Promise.all([
+      get('/admin/dashboard', { onData: (body) => { src.dash = body; apply() } }),
+      pull('services', '/admin/service-requests', list),
+      pull('borrowings', '/borrowings', list),
+      pull('trips', '/conduction-requests', list),
     ])
-    if (!dash.ok) throw new Error('Network response error')
-
-    const data = await dash.json()
-    systemLogs.value = data.systemLogs || []
-    followUps.value = data.followUps || []
-    responders.value = data.responders ?? null
-    units.value = data.units ?? null
-    trips.value = tripList
-    top.value = data.charts?.pieByPeriod?.month ?? null
-
-    rows.value = [
-      ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
-      ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
-    ]
-    history.value = (services || []).map((r) => ({
-      filedAt: new Date(r.created_at).getTime(),
-      resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
-    }))
-    loaded.services = services !== null
-    loaded.borrowings = borrowings !== null
     const missing = [!loaded.services && 'resident requests and ambulance bookings', !loaded.borrowings && 'equipment loans'].filter(Boolean)
     if (missing.length > 0) loadError.value = `Could not load ${missing.join(' or ')}. The list below is incomplete.`
   } catch (error) {
     console.error('Failed to load dashboard:', error)
     loadError.value = 'The dashboard could not be loaded.'
-  } finally {
-    loading.value = false
   }
 }
 
 const currentTab = computed(() => QUEUE_TABS.find((t) => t.value === queueTab.value))
 const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.value, rows.value.filter((r) => t.test(r)).length])))
 const visibleRows = computed(() => rows.value.filter((r) => currentTab.value.test(r)))
-const pageCount = computed(() => Math.ceil(visibleRows.value.length / PAGE_SIZE))
+// The shared table's tabs, with the counts it shows.
+const queueTabs = computed(() => QUEUE_TABS.map((t) => ({ value: t.value, label: t.title, count: tabCounts.value[t.value] })))
+const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
 // Each page opens the request itself from ?request=<id>.
 const rowLink = (item) => ({ path: KIND_ROUTES[item.kind], query: { request: item.id } })
@@ -373,20 +372,13 @@ const overdueRows = computed(() => rows.value.filter((r) => r.overdue))
 // Left the office and not back yet, per the trip log.
 const tripsOut = computed(() => (trips.value || []).filter((t) => t.departed_office_at && !t.returned_office_at).length)
 
-const summary = computed(() => {
-  if (loading.value || loadError.value) return null
-  const open = (kind, status) => rows.value.filter((r) => r.kind === kind && r.status === status).length
-  return welcomeSentence({
-    trips: tripsOut.value,
-    overdue: overdueRows.value.length,
-    ambulance: open('ambulance', 'Pending'),
-  })
-})
+// Ambulance requests still waiting on staff (the count the welcome band used to show).
+const pendingAmbulance = computed(() => rows.value.filter((r) => r.kind === 'ambulance' && r.status === 'Pending').length)
 
 // Which cards this account gets, known before anything loads: the server always
-// sends units and responders; trips and overdue need their section. The
+// sends units and responders; pending requests and overdue need their section. The
 // skeleton counts this, the real cards read it.
-const kpiShown = computed(() => ({ units: true, responders: true, trips: can('ambulance'), overdue: can('borrowings') }))
+const kpiShown = computed(() => ({ units: true, responders: true, pending: can('ambulance'), overdue: can('borrowings') }))
 const kpiCount = computed(() => Object.values(kpiShown.value).filter(Boolean).length)
 
 // Number colour: red for a problem, amber for nothing left to send out.
@@ -394,12 +386,12 @@ const kpis = computed(() => {
   const link = (section, to) => (can(section) ? to : undefined)
   const emptyTone = (free) => (free === 0 ? 'warning' : 'default')
   const items = []
-  if (kpiShown.value.units && units.value) items.push({ label: 'Available Units', icon: 'mdi-ambulance', accent: 'primary', value: `${units.value.free}/${units.value.total}`, tone: emptyTone(units.value.free), to: link('vehicles', '/vehicles') })
-  if (kpiShown.value.responders && responders.value) items.push({ label: 'Available Responders', icon: 'mdi-account-hard-hat', accent: 'info', value: `${responders.value.available}/${responders.value.total}`, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
-  if (kpiShown.value.trips && trips.value) items.push({ label: 'Ongoing Trips', icon: 'mdi-map-marker-path', accent: 'slate', value: tripsOut.value, tone: 'default', to: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
+  if (kpiShown.value.units && units.value) items.push({ label: 'Available units', icon: 'mdi-ambulance', accent: 'primary', value: units.value.free, total: units.value.total, tone: emptyTone(units.value.free), caption: trips.value ? `${tripsOut.value} on trips` : '', captionTo: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
+  if (kpiShown.value.responders && responders.value) items.push({ label: 'Available responders', icon: 'mdi-account-hard-hat', accent: 'info', value: responders.value.available, total: responders.value.total, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
+  if (kpiShown.value.pending && loaded.services) items.push({ label: 'Pending ambulance requests', icon: 'mdi-clock-outline', accent: 'warning', value: pendingAmbulance.value, tone: 'default', to: link('ambulance', '/conduction-requests') })
   if (kpiShown.value.overdue && loaded.borrowings) {
     const n = overdueRows.value.length
-    items.push({ label: 'Overdue Borrowing', icon: 'mdi-alert-circle-outline', accent: 'error', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
+    items.push({ label: 'Overdue borrowing', icon: 'mdi-alert-circle-outline', accent: 'error', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
   }
   return items
 })
@@ -560,68 +552,18 @@ onMounted(fetchDashboardData)
 .min-width-0 {
   min-width: 0;
 }
-.dash-panel {
-  padding: 0 !important;
-  overflow: hidden;
-}
-.panel-head {
-  padding: var(--dash-pad) var(--dash-pad) 8px;
-}
-
-.dash-tabs :deep(.v-tab) {
-  height: 34px;
-  align-self: center;
-  min-width: 0;
-  margin-right: 4px;
-  border-radius: 999px;
-}
-.dash-tabs :deep(.v-tab--selected) {
-  background: rgba(var(--v-theme-primary), 0.12);
-  color: rgb(var(--v-theme-primary-strong));
-}
-
-.queue-table :deep(th) {
-  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 6%, rgb(var(--v-theme-surface))) !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--dash-muted) !important;
-  white-space: nowrap;
-}
-/* Fixed columns and a fixed row height, so no tab or page reflows the card.
-   The wrapper reserves header + PAGE_SIZE rows; the pager slot is always there. */
-.queue-table {
-  --v-table-row-height: 52px;
-}
-.queue-table :deep(table) {
-  table-layout: fixed;
-}
-.queue-table :deep(.v-table__wrapper) {
-  min-height: calc(var(--v-table-header-height, 56px) + 5 * var(--v-table-row-height));
-}
-.queue-table :deep(td) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  height: var(--v-table-row-height);
-}
-.queue-pager {
-  min-height: 64px;
-}
-.queue-table :deep(.queue-row) {
-  cursor: pointer;
-}
-.queue-table :deep(.queue-row:hover > td) {
-  background: rgba(var(--v-theme-primary), 0.06);
-}
-/* Inset shadow, not a border: the row keeps its size when the accent appears. */
-.queue-table :deep(.queue-row:hover > td:first-child) {
-  box-shadow: inset 3px 0 0 rgb(var(--v-theme-primary));
-}
+/* Open requests (Dashboard board): a section header, then the shared table. */
+.open-requests { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.open-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.open-title { margin: 0; font-size: 18.72px; line-height: 28px; font-weight: 600; }
+.open-sub { font-size: 14px; line-height: 20px; color: var(--dash-muted); }
+.open-link { font-size: 14px; font-weight: 700; color: rgb(var(--v-theme-primary-strong)); text-decoration: none; }
+.open-link:hover { text-decoration: underline; }
+.queue-table :deep(.queue-row) { cursor: pointer; }
+.cell-type { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cell-primary {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--dash-text);
 }
 .cell-primary,
@@ -631,6 +573,7 @@ onMounted(fetchDashboardData)
 }
 .cell-secondary {
   font-size: 12px;
+  line-height: 16px;
   font-weight: 400;
 }
 .row-link {
@@ -651,9 +594,40 @@ onMounted(fetchDashboardData)
 .wait-error {
   color: var(--dash-bad);
 }
-/* One width for every status, so the column reads as a column. */
-.status-badge {
-  min-width: 96px;
-  justify-content: center;
+/* KPI cards (Dashboard board): 44px tile, uppercase label, 32px value, thin bar. */
+.kpi-card { align-items: flex-start; gap: 16px; }
+.kpi-grid { gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.kpi-main { flex: 1; min-width: 0; }
+.kpi-tile {
+  flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px;
+  background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong));
 }
+.kpi-tile--info { background: rgba(21, 95, 168, 0.12); color: #155FA8; }
+.kpi-tile--warning { background: rgba(245, 124, 0, 0.14); color: #8A4B00; }
+.kpi-caption { margin-top: 6px; font-size: 12px; line-height: 16px; color: var(--dash-muted); }
+.kpi-caption--link { display: block; text-decoration: none; }
+.kpi-caption--link:hover { text-decoration: underline; color: rgb(var(--v-theme-primary-strong)); }
+.kpi-caption--link:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; border-radius: 4px; }
+/* A card that is a link lifts a little on hover; keyboard focus is the outline below. */
+.kpi-link { transition: box-shadow var(--motion-hover) ease; }
+.kpi-link:hover { box-shadow: 0 2px 4px rgba(var(--v-theme-on-surface), 0.06), 0 10px 24px rgba(var(--v-theme-on-surface), 0.12) !important; }
+.kpi-tile--error { background: rgba(211, 47, 47, 0.12); color: #B3261E; }
+.kpi-label { font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.06em; }
+.kpi-valuerow { display: flex; align-items: baseline; gap: 4px; margin-top: 4px; }
+.kpi-value { margin-top: 0; font-size: 32px; line-height: 40px; }
+.kpi-total { font-size: 16px; font-weight: 600; color: var(--dash-muted); }
+.kpi-bar { height: 6px; margin-top: 10px; border-radius: 999px; background: rgba(var(--v-theme-on-surface), 0.08); overflow: hidden; }
+.kpi-bar span { display: block; height: 100%; border-radius: 999px; background: rgb(var(--v-theme-primary)); }
+.kpi-bar .kpi-bar--info { background: #1976D2; }
+
+/* Welcome band: the board's gradient, an overline, and three attention chips. */
+.dash-band {
+  padding: 28px 32px;
+  background: linear-gradient(120deg, #0A2620 0%, #12403A 100%);
+  color: #fff;
+}
+.dash-overline { font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }
+.dash-title { margin: 4px 0 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.48px; color: #fff; }
+.band-btn { width: 44px; height: 44px; border: 1px solid rgba(255, 255, 255, 0.4) !important; border-radius: 50% !important; color: #fff; }
+.band-avatar { background: rgba(255, 255, 255, 0.16); color: #fff; }
 </style>

@@ -1,7 +1,26 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
     <div class="w-100">
-    <PageHeader title="Text Blast (SMS)" />
+    <PageHeader title="Text blast">
+      <!-- SkySMS has no balance lookup. The figure is the credits left after the
+           last message that went out, so it says "as of". Out of credits is the
+           one case that stops every send, so it is the one that is loud. -->
+      <template v-slot:subtitle>
+        <template v-if="balance.available">
+          {{ balance.remaining }} SMS credits left<template v-if="balance.asOf"> as of {{ balance.asOf }}</template>
+        </template>
+        <span v-else-if="balance.outOfCredits" class="font-weight-bold text-error" role="alert">{{ balance.message }}</span>
+        <template v-else-if="balance.checked && balance.message">{{ balance.message }}</template>
+        <template v-else>The credit balance appears after the next message is sent.</template>
+      </template>
+      <!-- Reachable from the header rather than buried in a settings page —
+           the two people who know the code are the ones who need this. -->
+      <template v-slot:actions>
+        <v-btn variant="flat" height="40" class="outline-btn text-none" @click="openManageCode">
+          <v-icon start size="16">mdi-key-outline</v-icon>Text blast code
+        </v-btn>
+      </template>
+    </PageHeader>
 
     <!-- Form left, history right from 1360px; one column below that. The
          other admin pages fill the width, but a short form stretched across
@@ -9,48 +28,24 @@
          capped and the history, which is the data worth reading, takes the rest. -->
     <div class="blast-layout">
 
-        <v-card elevation="0" rounded="xl" class="blast-card fade-in">
-          <div class="blast-head border-b bg-surface d-flex flex-wrap align-center gap-4">
-            <v-avatar color="red-lighten-5" size="44" class="rounded-lg blast-avatar">
-              <v-icon color="error" size="24">mdi-bullhorn-outline</v-icon>
-            </v-avatar>
-            <!-- Reachable from the header rather than buried in a settings page —
-                 the two people who know the code are the ones who need this. -->
-            <v-btn
-              variant="outlined" color="primary" size="small" class="text-none flex-shrink-0"
-              prepend-icon="mdi-key-outline"
-              @click="openManageCode"
-            >Text blast code</v-btn>
-
-            <!-- Pushed right, and deliberately quiet. The balance is context for
-                 a decision, not a call to action — except when the account is
-                 out of credits, which is the one case that stops every send.
-
-                 SkySMS has no balance lookup. The figure is the credits left
-                 after the last message that went out, so it says "as of". -->
-            <div class="ml-auto text-right flex-shrink-0">
-              <template v-if="balance.available">
-                <div class="text-h6 font-weight-bold text-high-emphasis" style="white-space: nowrap;">{{ balance.remaining }}</div>
-                <div class="text-caption text-medium-emphasis" style="white-space: nowrap;">SMS credits left</div>
-                <div v-if="balance.asOf" class="text-caption text-medium-emphasis" style="white-space: nowrap;">as of {{ balance.asOf }}</div>
-              </template>
-              <div
-                v-else-if="balance.outOfCredits"
-                class="text-caption font-weight-bold text-error"
-                style="max-width: 200px;"
-                role="alert"
-              >
-                {{ balance.message }}
-              </div>
-              <div v-else-if="balance.checked" class="text-caption text-medium-emphasis" style="max-width: 180px;">
-                {{ balance.message }}
-              </div>
-            </div>
+        <v-card elevation="0" rounded="xl" class="blast-card blast-card--compose fade-in">
+          <div class="d-flex align-center gap-3">
+            <span class="blast-tile"><v-icon size="22">mdi-bullhorn-outline</v-icon></span>
+            <h2 class="blast-title">New blast</h2>
           </div>
 
-          <v-card-text class="blast-body">
+          <v-card-text class="pa-0">
+            <!-- Errors get the slim ResNotice banner; success and the unconfirmed
+                 warning keep the alert. -->
+            <NoticeBanner
+              v-if="alert.show && alert.type === 'error'"
+              tone="error" icon="mdi-close-circle-outline" dismissible class="mb-4"
+              @dismiss="alert.show = false"
+            >
+              <p>{{ alert.message }}</p>
+            </NoticeBanner>
             <v-alert
-              v-if="alert.show"
+              v-else-if="alert.show"
               :type="alert.type"
               variant="tonal"
               class="mb-4"
@@ -62,14 +57,23 @@
               <span class="font-weight-medium">{{ alert.message }}</span>
             </v-alert>
 
-            <v-form ref="form" @submit.prevent="sendSmsBlast">
+            <v-form ref="form" class="blast-form" @submit.prevent="sendSmsBlast">
               
               <!-- The audience is exactly the active, opted-in residents:
                    SmsController::sendBlast filters status = Active AND
                    sms_opt_in AND a non-null phone number, so "every
                    resident" would overstate who actually receives this. -->
-              <div class="mb-2">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Target Audience</div>
+              <div>
+                <div class="blast-label-row">
+                  <span class="blast-label">Target audience</span>
+                  <span class="blast-label-actions">
+                    <button type="button" :disabled="allBarangaysSelected" @click="selectedBarangays = barangays.map((b) => b.barangay_id)">Select all</button>
+                    <button type="button" :disabled="selectedBarangays.length === 0" @click="selectedBarangays = []">Clear</button>
+                  </span>
+                </div>
+                <!-- The chips collapse to the first few and a count; the full
+                     list is the dropdown, and each shown chip still removes
+                     its barangay. -->
                 <v-select
                   v-model="selectedBarangays"
                   :items="barangays"
@@ -77,19 +81,24 @@
                   item-value="barangay_id"
                   :loading="barangaysLoading"
                   multiple
-                  chips
-                  closable-chips
                   placeholder="Select one or more barangays"
                   variant="outlined"
                   density="compact"
                   hide-details="auto"
                   rounded="lg"
-                  color="error"
-                  bg-color="grey-lighten-5"
-                  class="font-weight-medium"
+                  color="primary"
+                  class="blast-audience"
                   :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
                   :error-messages="fieldErrors.barangays"
                 >
+                  <template #selection="{ item, index }">
+                    <v-chip
+                      v-if="index < AUDIENCE_CHIPS" size="small" closable class="audience-chip"
+                      @click:close="selectedBarangays = selectedBarangays.filter((id) => id !== item.value)"
+                      @mousedown.stop
+                    >{{ item.title || barangayNameOf(selectedBarangays[index]) }}</v-chip>
+                    <v-chip v-else-if="index === AUDIENCE_CHIPS" size="small" class="audience-chip audience-chip--more">+{{ selectedBarangays.length - AUDIENCE_CHIPS }} more</v-chip>
+                  </template>
                   <!-- The old duplicate panel had a Select All and the rewrite
                        that swapped a hardcoded list for real GET /barangays rows
                        dropped it. Deliberately NOT the old implementation: that
@@ -102,7 +111,7 @@
                         <v-checkbox-btn
                           :model-value="allBarangaysSelected"
                           :indeterminate="someBarangaysSelected"
-                          color="error"
+                          color="primary"
                         ></v-checkbox-btn>
                       </template>
                       <template #subtitle>
@@ -112,10 +121,11 @@
                     <v-divider class="mt-2"></v-divider>
                   </template>
                 </v-select>
+                <div class="blast-caption">{{ selectedBarangays.length }} of {{ barangays.length }} barangays selected</div>
               </div>
 
-              <div class="mb-2">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Message Template</div>
+              <div>
+                <div class="blast-label">Message template</div>
                 <v-select
                   v-model="selectedTemplate"
                   :items="templates"
@@ -126,27 +136,24 @@
                   density="compact"
                   hide-details="auto"
                   rounded="lg"
-                  color="error"
-                  bg-color="grey-lighten-5"
+                  color="primary"
                   clearable
-                  class="font-weight-medium"
                   @update:model-value="applyTemplate"
                 ></v-select>
               </div>
 
               <div>
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-1">Message Content</div>
+                <div class="blast-label">Message content</div>
                 <v-textarea
                   v-model="message"
                   placeholder="e.g., MDRRMO Alert: Flood warning in your area. Evacuate to higher ground immediately."
                   variant="outlined"
                   density="compact"
                   rounded="lg"
-                  color="error"
-                  bg-color="grey-lighten-5"
-                  rows="3"
+                  color="primary"
+                  rows="4"
                   counter="160"
-                  class="font-weight-medium text-body-1"
+                  class="blast-textarea"
                   :rules="[
                     v => !!v || 'A message is required.',
                     v => v.length <= 160 || 'Message exceeds the standard 160 SMS character limit.',
@@ -162,11 +169,11 @@
                    it was fetched, but the roll can change before Send; the
                    segment count is derived from the GSM 03.38 tables because
                    SkySMS has no sandbox to confirm it against. -->
-              <div class="mt-1 pa-3 rounded-lg bg-grey-lighten-5 border">
+              <div class="blast-reach">
                 <div class="d-flex align-center justify-space-between flex-wrap gap-3">
                   <div class="d-flex align-center gap-2">
-                    <v-icon size="20" class="text-medium-emphasis">mdi-account-group-outline</v-icon>
-                    <span class="text-body-2 font-weight-medium">
+                    <v-icon size="18" class="text-medium-emphasis">mdi-account-group-outline</v-icon>
+                    <span class="text-body-2">
                       <template v-if="selectedBarangays.length === 0">
                         <span class="text-medium-emphasis">Pick a barangay to see how many residents this reaches</span>
                       </template>
@@ -177,24 +184,22 @@
                         <span class="text-warning">{{ recipientCountError }}</span>
                       </template>
                       <template v-else>
-                        <strong>{{ recipientCount }}</strong>
-                        {{ recipientCount === 1 ? 'recipient' : 'recipients' }}
+                        <strong>{{ pluralize(recipientCount, 'recipient') }}</strong>
                       </template>
                     </span>
                   </div>
 
                   <div class="d-flex align-center gap-2">
-                    <v-icon size="20" class="text-medium-emphasis">mdi-message-text-outline</v-icon>
-                    <span class="text-body-2 font-weight-medium">
-                      <strong>{{ sms.segments }}</strong>
-                      {{ sms.segments === 1 ? 'segment' : 'segments' }}
-                      <span class="text-medium-emphasis">· {{ sms.units }}/{{ sms.capacity }} {{ sms.encoding }}</span>
+                    <v-icon size="18" class="text-medium-emphasis">mdi-message-text-outline</v-icon>
+                    <span class="text-body-2">
+                      <strong>{{ pluralize(sms.segments, 'segment') }}</strong>
+                      <span class="text-medium-emphasis">· {{ sms.units }} / {{ sms.capacity }} {{ sms.encoding }}</span>
                     </span>
                   </div>
                 </div>
 
-                <div v-if="billedUnits !== null" class="text-caption text-medium-emphasis mt-2">
-                  About {{ billedUnits.toLocaleString() }} SMS {{ billedUnits === 1 ? 'unit' : 'units' }} for this blast
+                <div v-if="billedUnits !== null" class="text-medium-emphasis">
+                  About {{ pluralize(billedUnits, 'SMS unit') }} for this blast
                   ({{ recipientCount.toLocaleString() }} × {{ sms.segments }}).
                 </div>
 
@@ -242,25 +247,22 @@
                   </span>
                 </v-alert>
               </div>
-              <div class="pt-3 mt-3 border-t">
+              <div>
                 <v-btn
                   color="primary"
                   variant="flat"
-                  rounded="lg"
-                  class="text-none font-weight-bold w-100"
-                  size="large"
+                  class="send-btn text-none w-100"
                   height="48"
                   type="submit"
                   :loading="loading"
                   :disabled="!!messageLink"
-                  elevation="2"
                 >
-                  <v-icon start size="20" class="mr-2">mdi-send</v-icon>
+                  <v-icon start size="18">mdi-send</v-icon>
                   <!-- "Send", not "Dispatch". Dispatch means sending a vehicle
                        everywhere else in this panel (Ambulance Dispatch
                        Requests, Approve & Dispatch); reusing it for SMS blurs
                        the one word the desk uses for a physical response. -->
-                  <span class="text-subtitle-1 font-weight-bold">Send Blast</span>
+                  <span>Send blast</span>
                 </v-btn>
               </div>
             </v-form>
@@ -274,21 +276,21 @@
              every send, and a stuck message will not resolve faster for being
              polled. -->
         <v-card elevation="0" rounded="xl" class="blast-card fade-in">
-          <div class="blast-row border-b d-flex align-center gap-3">
-            <v-icon color="primary" size="28">mdi-message-check-outline</v-icon>
+          <div class="blast-pad blast-history-head d-flex align-start gap-4">
             <div>
-              <div class="text-h6 font-weight-bold">Recent blasts</div>
-              <div class="text-caption text-medium-emphasis">
+              <h2 class="blast-title">Recent blasts</h2>
+              <p class="blast-sub">
                 Queued means SkySMS accepted it and billed the credits. A message is delivered only when it shows Sent.
-              </div>
+              </p>
             </div>
             <v-btn
-              variant="outlined" color="primary" size="small" class="text-none ml-auto flex-shrink-0"
+              variant="flat" height="40" class="outline-btn text-none ml-auto flex-shrink-0"
               prepend-icon="mdi-refresh"
-              :loading="deliveries.loading"
-              @click="fetchDeliveries"
-            >Refresh list</v-btn>
+              :disabled="refreshAll.running"
+              @click="refreshAllDeliveries"
+            >{{ refreshAll.running && refreshAll.total ? `Checking ${refreshAll.done} of ${refreshAll.total}` : 'Refresh all' }}</v-btn>
           </div>
+          <div v-if="refreshAll.message" class="blast-pad text-error" role="status">{{ refreshAll.message }}</div>
 
           <v-card-text class="pa-0">
             <div v-if="deliveries.error" class="blast-pad text-error" role="alert">{{ deliveries.error }}</div>
@@ -300,49 +302,43 @@
               v-for="row in deliveries.rows" :key="row.sms_log_id"
               class="blast-row delivery-row"
             >
-              <div class="d-flex flex-wrap align-start gap-3">
-                <div style="flex: 1 1 240px; min-width: 0;">
-                  <div class="text-body-2 font-weight-bold">
-                    {{ row.barangay }}
-                    <span class="font-weight-regular text-medium-emphasis"> · {{ formatWhen(row.created_at) }} · {{ row.sender }}</span>
-                  </div>
-                  <div class="text-body-2 text-medium-emphasis text-truncate" :title="row.message">{{ row.message }}</div>
+              <div class="delivery-main">
+                <div class="delivery-line"><b>{{ row.barangay }}</b> <span class="delivery-muted">· {{ formatWhen(row.created_at) }} · {{ row.sender }}</span></div>
+                <p class="delivery-text">{{ row.message }}</p>
+
+                <!-- The four states SkySMS documents are always drawn, zero
+                     included and outlined, so a missing chip never reads as "not
+                     tracked". Unconfirmed and Other appear only when there is
+                     one: they are not delivery states, they are things to look at. -->
+                <div class="d-flex flex-wrap gap-2 mt-2-5">
+                  <StatusPill
+                    v-for="state in visibleStates(row)" :key="state.key"
+                    :status="state.pill"
+                    :outline="row.counts[state.key] === 0"
+                    :label="`${row.counts[state.key]} ${state.label}`"
+                  />
                 </div>
 
-                <v-tooltip :disabled="row.checkable" location="top" text="No SkySMS message ids were stored for this blast, so its delivery can't be checked.">
-                  <template #activator="{ props: tip }">
-                    <span v-bind="tip" class="blast-check flex-shrink-0">
-                      <v-btn
-                        variant="tonal" size="small" class="text-none"
-                        prepend-icon="mdi-cloud-sync-outline"
-                        :disabled="!row.checkable"
-                        :loading="!!checking[row.sms_log_id]"
-                        @click="checkDelivery(row)"
-                      >Check status</v-btn>
-                    </span>
-                  </template>
-                </v-tooltip>
+                <div class="delivery-checked">
+                  <template v-if="row.delivery_checked_at">Checked {{ formatWhen(row.delivery_checked_at) }}</template>
+                  <template v-else>Not checked yet. The numbers above are what was recorded when it was sent.</template>
+                  <span v-if="notes[row.sms_log_id]" role="status"> {{ notes[row.sms_log_id] }}</span>
+                </div>
               </div>
 
-              <!-- The four states SkySMS documents are always drawn, zero
-                   included and muted, so a missing chip never reads as "not
-                   tracked". Unconfirmed and Other appear only when there is
-                   one: they are not delivery states, they are things to look at. -->
-              <div class="d-flex flex-wrap gap-2 mt-3">
-                <v-chip
-                  v-for="state in visibleStates(row)" :key="state.key"
-                  size="small" class="font-weight-bold"
-                  :color="row.counts[state.key] > 0 ? state.color : undefined"
-                  :variant="row.counts[state.key] > 0 ? 'tonal' : 'outlined'"
-                  :class="{ 'text-medium-emphasis': row.counts[state.key] === 0 }"
-                >{{ row.counts[state.key] }} {{ state.label }}</v-chip>
-              </div>
-
-              <div class="text-caption text-medium-emphasis mt-2">
-                <template v-if="row.delivery_checked_at">Checked {{ formatWhen(row.delivery_checked_at) }}.</template>
-                <template v-else>Not checked yet. The numbers above are what was recorded when it was sent.</template>
-                <span v-if="notes[row.sms_log_id]" role="status"> {{ notes[row.sms_log_id] }}</span>
-              </div>
+              <v-tooltip :disabled="row.checkable" location="top" text="No SkySMS message ids were stored for this blast, so its delivery can't be checked.">
+                <template #activator="{ props: tip }">
+                  <span v-bind="tip" class="blast-check flex-shrink-0">
+                    <v-btn
+                      variant="flat" height="36" class="check-btn text-none"
+                      prepend-icon="mdi-refresh"
+                      :disabled="!row.checkable"
+                      :loading="!!checking[row.sms_log_id]"
+                      @click="checkDelivery(row)"
+                    >Check status</v-btn>
+                  </span>
+                </template>
+              </v-tooltip>
             </div>
           </v-card-text>
         </v-card>
@@ -354,123 +350,33 @@
          before it spends anything. Holding this section only opened the page,
          so the code proves the sender was told it, not that they are any
          particular admin. -->
-    <v-dialog v-model="confirmDialog.open" max-width="520" persistent>
-      <v-card rounded="lg">
-        <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
-          <span>Confirm this blast</span>
-          <v-btn
-            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
-            :disabled="loading" @click="cancelSend"
-          ></v-btn>
-        </v-card-title>
-        <v-card-text class="px-6">
-          <p class="text-body-1 mb-3">{{ confirmDialog.summary }}</p>
-          <p v-if="confirmDialog.cost" class="text-body-2 text-medium-emphasis mb-4">{{ confirmDialog.cost }}</p>
-          <v-text-field
-            v-model="confirmDialog.code"
-            label="Text blast code"
-            placeholder="Enter the 6-digit code"
-            type="text"
-            inputmode="numeric"
-            maxlength="6"
-            variant="outlined"
-            density="comfortable"
-            rounded="lg"
-            autocomplete="off"
-            :error-messages="fieldErrors.code"
-            :disabled="loading"
-            @keyup.enter="confirmSend"
-          ></v-text-field>
-        </v-card-text>
-        <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
-          <v-btn
-            variant="outlined" color="primary"
-            class="text-none font-weight-bold"
-            height="44"
-            :disabled="loading"
-            @click="cancelSend"
-          >Cancel</v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            class="text-none font-weight-bold px-6"
-            height="44"
-            :loading="loading"
-            :disabled="loading"
-            @click="confirmSend"
-          >Send Blast</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <EditDialog
+      :model-value="confirmDialog.open"
+      title="Confirm this blast"
+      confirm-label="Send blast"
+      busy-label="Sending"
+      done-label="Sent"
+      :fields="confirmFields"
+      :form="confirmDialog"
+      :field-errors="fieldErrors"
+      :loading="loading"
+      @update:model-value="(open) => (open ? (confirmDialog.open = true) : cancelSend())"
+      @save="confirmSend"
+    />
 
     <!-- Rotation requires the current code, so no admin can reset it without
          already knowing it (MDRRMO feedback, 2026-09-19). -->
-    <v-dialog v-model="manageCodeDialog.open" max-width="480" persistent>
-      <v-card rounded="lg">
-        <v-card-title class="d-flex justify-space-between align-center text-h6 font-weight-bold pt-5 px-6">
-          <span>Text blast code</span>
-          <v-btn
-            icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
-            :disabled="manageCodeDialog.loading" @click="closeManageCode"
-          ></v-btn>
-        </v-card-title>
-        <v-card-text class="px-6">
-          <p class="text-body-2 text-medium-emphasis mb-4">
-            <template v-if="codeStatus.configured">Last set by {{ codeStatus.updatedBy }} on {{ codeStatus.updatedAtLabel }}.</template>
-            <template v-else>No code has been set yet — no admin can send a blast until one is.</template>
-          </p>
-          <v-text-field
-            v-model="manageCodeDialog.currentCode"
-            label="Current code"
-            placeholder="Leave the code with someone who knows it"
-            type="text"
-            inputmode="numeric"
-            maxlength="6"
-            variant="outlined"
-            density="comfortable"
-            rounded="lg"
-            autocomplete="off"
-            class="mb-2"
-            :error-messages="manageCodeDialog.errors.currentCode"
-            :disabled="manageCodeDialog.loading"
-          ></v-text-field>
-          <v-text-field
-            v-model="manageCodeDialog.newCode"
-            label="New code"
-            placeholder="6 digits"
-            type="text"
-            inputmode="numeric"
-            maxlength="6"
-            variant="outlined"
-            density="comfortable"
-            rounded="lg"
-            autocomplete="off"
-            :error-messages="manageCodeDialog.errors.newCode"
-            :disabled="manageCodeDialog.loading"
-            @keyup.enter="rotateBlastCode"
-          ></v-text-field>
-        </v-card-text>
-        <v-card-actions class="px-6 pb-5 d-flex justify-end gap-3">
-          <v-btn
-            variant="outlined" color="primary"
-            class="text-none font-weight-bold"
-            height="44"
-            :disabled="manageCodeDialog.loading"
-            @click="closeManageCode"
-          >Cancel</v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            class="text-none font-weight-bold px-6"
-            height="44"
-            :loading="manageCodeDialog.loading"
-            @click="rotateBlastCode"
-          >Set code</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <EditDialog
+      v-model="manageCodeDialog.open"
+      title="Text blast code"
+      confirm-label="Set code"
+      :note="codeStatus.configured ? `Last set by ${codeStatus.updatedBy} on ${codeStatus.updatedAtLabel}.` : 'No code has been set yet — no admin can send a blast until one is.'"
+      :fields="codeFields"
+      :form="manageCodeDialog"
+      :field-errors="manageCodeDialog.errors"
+      :loading="manageCodeDialog.loading"
+      @save="rotateBlastCode"
+    />
   </v-container>
 </template>
 
@@ -479,7 +385,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { describeSms, findLink, nameCharacter, toGsmSafe } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
+import { pluralize } from '@/composables/adminUi'
 import PageHeader from '@/components/PageHeader.vue'
+import NoticeBanner from '@/components/NoticeBanner.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import EditDialog from '@/components/EditDialog.vue'
 
 const message = ref('')
 const loading = ref(false)
@@ -497,6 +407,23 @@ const alert = ref({
 // The send confirmation. `code` lives only as long as the dialog is open —
 // cleared on cancel, on a successful send, and on any failure that closes it.
 const confirmDialog = ref({ open: false, summary: '', cost: '', code: '' })
+
+// The target field shows this many barangays as chips, then "+N more".
+const AUDIENCE_CHIPS = 3
+// The chip's label from the selected id, not from the slot's item: the selection
+// slot's item shape differs between Vuetify versions, the model and the list do not.
+const barangayNameOf = (id) => barangays.value.find((b) => b.barangay_id === id)?.barangay_name ?? ''
+
+// What the confirm dialog says: who it reaches, what it spends, then the code
+// the server checks before it sends anything (the code is masked, as on the board).
+const confirmFields = computed(() => [
+  { key: 'summary', text: confirmDialog.value.summary, strong: true },
+  ...(confirmDialog.value.cost ? [{ key: 'cost', text: confirmDialog.value.cost }] : []),
+  {
+    key: 'code', label: 'Text blast code', required: true, type: 'password', placeholder: 'Enter the 6-digit code',
+    inputmode: 'numeric', maxlength: 6, autocomplete: 'off', hint: 'Enter the code to send.',
+  },
+])
 
 // One key per dialog-open, sent as Idempotency-Key so a resubmit (retry after
 // a dropped response, or a double click that slipped past the loading guard)
@@ -794,19 +721,23 @@ const deliveries = ref({ rows: [], loading: false, error: '' })
 const checking = ref({})
 const notes = ref({})
 
+// `pill` is the StatusPill accent each count is tinted with.
 const DELIVERY_STATES = [
-  { key: 'queued', label: 'Queued', color: 'info', always: true },
-  { key: 'pending', label: 'Pending', color: 'warning', always: true },
-  { key: 'sent', label: 'Sent', color: 'success', always: true },
-  { key: 'failed', label: 'Failed', color: 'error', always: true },
-  { key: 'unconfirmed', label: 'Unconfirmed', color: 'warning', always: false },
-  { key: 'other', label: 'Other status', color: 'warning', always: false },
+  { key: 'queued', label: 'Queued', pill: 'Queued', always: true },
+  { key: 'pending', label: 'Pending', pill: 'Pending', always: true },
+  { key: 'sent', label: 'Sent', pill: 'Sent', always: true },
+  { key: 'failed', label: 'Failed', pill: 'Failed', always: true },
+  { key: 'unconfirmed', label: 'Unconfirmed', pill: 'Pending', always: false },
+  { key: 'other', label: 'Other status', pill: 'Pending', always: false },
 ]
 
 const visibleStates = (row) =>
   DELIVERY_STATES.filter(state => state.always || row.counts[state.key] > 0)
 
-const formatWhen = (value) => (value ? new Date(value).toLocaleString() : '')
+// "Sep 21, 2026, 6:11 AM"
+const formatWhen = (value) => (value
+  ? new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  : '')
 
 const fetchDeliveries = async () => {
   deliveries.value.loading = true
@@ -844,11 +775,40 @@ const checkDelivery = async (row) => {
       note = `${data.not_found} recipient(s) are not in SkySMS's list yet, so they still show what was recorded at send.`
     }
     notes.value = { ...notes.value, [row.sms_log_id]: note }
+    return data.checked
   } catch (error) {
     notes.value = { ...notes.value, [row.sms_log_id]: error.message }
+    return false
   } finally {
     checking.value = { ...checking.value, [row.sms_log_id]: false }
   }
+}
+
+// Refresh all: reload the list, then check every blast that still has Queued or
+// Pending messages (Sent and Failed are final), a few at a time. The per-row
+// call is the same one the Check status button makes.
+const CHECK_CONCURRENCY = 3
+const refreshAll = ref({ running: false, done: 0, total: 0, message: '' })
+const stillChanging = (row) => row.checkable && (row.counts.queued > 0 || row.counts.pending > 0)
+
+const refreshAllDeliveries = async () => {
+  refreshAll.value = { running: true, done: 0, total: 0, message: '' }
+  await fetchDeliveries()
+
+  const queue = deliveries.value.rows.filter((row) => stillChanging(row))
+  refreshAll.value.total = queue.length
+  let failed = 0
+
+  const worker = async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
+      if (!(await checkDelivery(row))) failed++
+      refreshAll.value.done++
+    }
+  }
+  await Promise.all(Array.from({ length: CHECK_CONCURRENCY }, worker))
+
+  refreshAll.value.running = false
+  if (failed) refreshAll.value.message = `${failed} ${failed === 1 ? 'blast' : 'blasts'} could not be checked`
 }
 
 onMounted(() => {
@@ -860,9 +820,12 @@ onMounted(() => {
 const sendSmsBlast = async () => {
   clearFieldErrors()
 
-  const { valid } = await form.value.validate()
+  const { valid, errors } = await form.value.validate()
   if (!valid) {
-    alert.value = { show: true, type: 'error', message: 'Please correct the highlighted fields.' }
+    // Name what is wrong (the rules' own messages) rather than pointing at
+    // fields that may be off screen; the old sentence is the fallback.
+    const named = (errors ?? []).flatMap((e) => e.errorMessages ?? []).join(' ')
+    alert.value = { show: true, type: 'error', message: named || 'Please correct the highlighted fields.' }
     return
   }
 
@@ -982,7 +945,7 @@ const fetchCodeStatus = async () => {
     codeStatus.value = {
       configured: !!data.configured,
       updatedBy: data.updated_by || '',
-      updatedAtLabel: data.updated_at ? new Date(data.updated_at).toLocaleString() : '',
+      updatedAtLabel: formatWhen(data.updated_at),
     }
   } catch {
     // Swallowed like the balance lookup above — a failed status read must not
@@ -997,6 +960,12 @@ const manageCodeDialog = ref({
   loading: false,
   errors: { currentCode: '', newCode: '' },
 })
+
+// Six digits, masked with the eye toggle; the server does the real checking.
+const codeFields = [
+  { key: 'currentCode', label: 'Current code', type: 'password', placeholder: 'Leave the code with someone who knows it', inputmode: 'numeric', maxlength: 6, autocomplete: 'off' },
+  { key: 'newCode', label: 'New code', type: 'password', placeholder: '6 digits', inputmode: 'numeric', maxlength: 6, autocomplete: 'off' },
+]
 
 const openManageCode = () => {
   manageCodeDialog.value = {
@@ -1056,54 +1025,156 @@ const rotateBlastCode = async () => {
 </script>
 
 <style scoped>
-/* Both cards share one border and the panel's newer card shape (see
-   ServicesConfigView's .table-card). Padding is one pair of variables so the
-   header, the form body and the history rows always agree, and it steps down
-   with the shell: 32px, 24px once the drawer becomes an overlay, 16px on a
-   phone. */
+/* Both cards: the board's 24px radius and shadow. The compose card pads itself
+   (24px, 18px between its parts); the history card pads its own header and rows. */
 .blast-card {
-  --blast-x: 32px;
-  --blast-y: 20px;
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.08) !important;
   overflow: hidden;
   min-width: 0;
 }
-.blast-pad { padding: var(--blast-x); }
-.blast-row { padding: var(--blast-y) var(--blast-x); }
-/* The send form is the page's whole job and has to fit a desktop viewport
-   without scrolling, so its header and body use tighter vertical padding than
-   the shared blast-pad (the history card keeps that). The horizontal padding
-   stays on the shared variable so the two cards' text still lines up. */
-.blast-head { padding: 12px var(--blast-x); }
-.blast-body { padding: 16px var(--blast-x) 20px; }
+.blast-card--compose { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+.blast-pad { padding: 24px; }
+.blast-history-head { border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
+.blast-row { padding: 18px 24px; }
 
+/* Two columns that each take at least 380px, else one. */
 .blast-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  gap: 20px;
   align-items: start;
   width: 100%;
 }
 
-/* 1360px is where the history gets 540px or more once the form takes its 440.
-   The form column stops growing at 600px: past that it only makes the message
-   box wider than any SMS needs. */
-@media (min-width: 1360px) {
-  .blast-layout { grid-template-columns: clamp(440px, 40%, 600px) minmax(0, 1fr); }
+.blast-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary-strong));
 }
+.blast-title { margin: 0; font-size: 18.72px; line-height: 28px; font-weight: 600; }
+.blast-sub {
+  margin: 2px 0 0;
+  max-width: 560px;
+  font-size: 14px;
+  line-height: 20px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.blast-form { display: flex; flex-direction: column; gap: 18px; }
 
-@media (max-width: 959px) {
-  .blast-card { --blast-x: 24px; }
+/* Target audience: Select all / Clear on the label row, a few chips and a count
+   in the field, the tally underneath (TextBlastFilled board). */
+.blast-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.blast-label-row .blast-label { margin-bottom: 0; }
+.blast-label-actions { display: inline-flex; gap: 4px; }
+.blast-label-actions button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(var(--v-theme-primary-strong));
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.blast-label-actions button:disabled { opacity: 0.45; cursor: default; }
+.blast-audience :deep(.v-field__input) { min-height: 44px; padding: 6px 10px; gap: 6px; }
+.audience-chip {
+  height: 28px !important;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  font-size: 13px;
+}
+.audience-chip--more {
+  padding: 0 12px;
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary-strong));
+  font-weight: 700;
+}
+.blast-caption {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.blast-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+/* Fields: 10px radius, 14px text; the textarea is at least 112px tall. */
+.blast-card :deep(.v-field) { border-radius: 10px; font-size: 14px; }
+.blast-textarea :deep(textarea) { min-height: 112px; line-height: 20px; }
+.blast-reach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-on-surface), 0.035);
+  font-size: 14px;
+  line-height: 20px;
+}
+.send-btn {
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28);
+}
+.send-btn :deep(.v-icon--start) { margin-inline-end: 10px; }
+
+/* Outlined buttons: Text blast code, Refresh all (40px) and Check status (36px). */
+.outline-btn,
+.check-btn {
+  padding: 0 16px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.14);
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-primary-strong));
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.outline-btn { border-radius: 12px; }
+.check-btn { padding: 0 14px; border-radius: 10px; font-size: 13px; }
+.outline-btn :deep(.v-icon--start),
+.check-btn :deep(.v-icon--start) { margin-inline-end: 8px; font-size: 16px; }
+
+/* History rows: the blast's lines on the left, Check status on the right. */
+.delivery-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+.delivery-main { min-width: 0; }
+.delivery-line,
+.delivery-text { font-size: 14px; line-height: 20px; }
+.delivery-text { margin: 4px 0 0; }
+.delivery-muted { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.mt-2-5 { margin-top: 10px; }
+.delivery-checked {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 @media (max-width: 599px) {
-  .blast-card { --blast-x: 16px; --blast-y: 16px; }
-  .blast-avatar { display: none !important; }
   .blast-check, .blast-check :deep(.v-btn) { width: 100%; }
 }
-
-.delivery-row + .delivery-row { border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
 
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }

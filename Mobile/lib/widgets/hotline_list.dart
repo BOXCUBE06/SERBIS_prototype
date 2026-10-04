@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../data/hotlines.dart';
 import '../theme/app_theme.dart';
+import 'request_summary.dart' show SummaryCard;
+import 'shared_widgets.dart';
 
 /// Every hotline, each number its own `tel:` row. Shared by the Library card
 /// and the pre-login [HotlinesPage].
 ///
 /// Contact name once, then every number that reaches it as its own tappable
-/// row — a contact with several lines (the rescue hotline: landline, Globe,
+/// 48dp row — a contact with several lines (the rescue hotline: landline, Globe,
 /// Smart, Sun) is not one action, it is "pick the one that reaches you and
 /// dial that one".
 class HotlineList extends StatelessWidget {
@@ -19,44 +21,47 @@ class HotlineList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final hotline in hotlines)
+        for (var i = 0; i < hotlines.length; i++) ...[
+          if (i > 0) const Divider(height: 1, thickness: 1, color: AppColors.cardDivider),
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(hotline.labelFor(filipino: filipino),
-                    style: AppText.display(size: 12.5, weight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                for (final n in hotline.numbers) _numberRow(n),
+                Text(
+                  hotlines[i].labelFor(filipino: filipino),
+                  style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600),
+                ),
+                for (final n in hotlines[i].numbers) _numberRow(n),
               ],
             ),
           ),
+        ],
       ],
     );
   }
 
   Widget _numberRow(HotlineNumber n) {
     return InkWell(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: () => callHotlineNumber(n.number),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
             Expanded(
               child: Text(
                 n.label == null ? n.number : '${n.label} · ${n.number}',
-                style: AppText.display(
-                    size: 12.5,
-                    weight: FontWeight.w700,
-                    color: AppColors.green700),
+                style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w700, color: AppColors.green700),
               ),
             ),
-            const SizedBox(width: 6),
-            const Icon(Icons.call_rounded, size: 13, color: AppColors.green700),
+            const SizedBox(width: 8),
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Icon(Icons.call_rounded, size: 20, color: AppColors.green700),
+            ),
           ],
         ),
       ),
@@ -74,10 +79,29 @@ class HotlinesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Emergency Hotlines')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
-        children: [HotlineList(hotlines: hotlines, filipino: false)],
+      backgroundColor: AppColors.paper,
+      body: Column(
+        children: [
+          TabHeaderBar(
+            title: 'Emergency hotlines',
+            subtitle: 'Tap a number to call',
+            filipino: false,
+            onBack: () => Navigator.of(context).maybePop(),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: SummaryCard(children: [HotlineList(hotlines: hotlines, filipino: false)]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

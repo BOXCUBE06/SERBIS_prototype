@@ -337,6 +337,15 @@ class AmbulanceFormData extends ServiceFormData {
   /// [metaLines], never folded into prose.
   DateTime? scheduledAt;
 
+  /// True once the resident has typed or picked anything, so leaving the flow
+  /// asks before throwing it away. The prefilled contact counts only if edited.
+  bool get isDirty =>
+      [patient, age, patientAddress, pickup, destination, diagnosis].any((c) => c.text.trim().isNotEmpty) ||
+      relativeNames.isNotEmpty ||
+      patientContact.text.trim() != contactNumber.trim() ||
+      patientBarangay != null ||
+      scheduledAt != null;
+
   /// The relative names actually typed in, in order, blanks removed.
   List<String> get relativeNames => relatives
       .map((controller) => controller.text.trim())

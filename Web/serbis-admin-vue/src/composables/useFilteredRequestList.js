@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { API_BASE } from '@/config/api'
+import { requestBarangayName } from '@/composables/requestDisplay'
 
 export function useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn, decorate }) {
   // The full list, so a barangay with no requests yet is still pickable. The
@@ -11,7 +12,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
     .catch(() => {})
 
   const barangayOptions = computed(() => {
-    const names = new Set([...allBarangays.value, ...requests.value.map(r => r.resident?.barangay?.barangay_name).filter(Boolean)])
+    const names = new Set([...allBarangays.value, ...requests.value.map(r => requestBarangayName(r)).filter(Boolean)])
     return ['All', ...Array.from(names).sort()]
   })
 
@@ -34,7 +35,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
     return requests.value.filter(r => {
       if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) {return false}
 
-      if (filters.barangay !== 'All' && (r.resident?.barangay?.barangay_name || '') !== filters.barangay) {return false}
+      if (filters.barangay !== 'All' && requestBarangayName(r) !== filters.barangay) {return false}
 
       if (filters.unit !== 'All') {
         const unit = r.vehicle?.unit_identifier || ''
@@ -44,7 +45,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
       if (!searchLower) {return true}
       return requesterName(r).toLowerCase().includes(searchLower) ||
              (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
-             (r.resident?.barangay?.barangay_name || '').toLowerCase().includes(searchLower) ||
+             requestBarangayName(r).toLowerCase().includes(searchLower) ||
              (r.resident?.phone_number || r.walk_in_contact_number || '').includes(searchLower) ||
              String(r.request_id ?? '').toLowerCase().includes(searchLower)
     }).map(r => ({

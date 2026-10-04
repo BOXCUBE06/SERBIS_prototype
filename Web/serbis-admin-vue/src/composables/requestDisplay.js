@@ -28,7 +28,7 @@ export const requesterName = (item) =>
   item?.resident ? residentName(item.resident) : (item?.walk_in_name || 'Unknown requester')
 
 // null for walk-ins: no account, so no type.
-const ACCOUNT_TYPE_LABELS = { head_of_family: 'Household', barangay: 'Barangay', organization: 'Org' }
+const ACCOUNT_TYPE_LABELS = { head_of_family: 'Head of the Family', barangay: 'Barangay', organization: 'Org' }
 export const requesterAccountType = (item) => ACCOUNT_TYPE_LABELS[item?.resident?.account_type] || null
 
 // Walk-ins store one free-text walk_in_name, so split on the last space.
@@ -47,8 +47,13 @@ export const requesterInitials = (item) => {
 
 export const requesterPhone = (item) => displayPhone(item?.resident?.phone_number) || item?.walk_in_contact_number || 'N/A'
 
+// The barangay the request was filed under; the resident's current one only
+// for a response that predates the column. A resident can move since.
+export const requestBarangayName = (item) =>
+  item?.barangay?.barangay_name || item?.resident?.barangay?.barangay_name || ''
+
 export const requesterBarangay = (item) => {
-  if (item?.resident) {return item.resident.barangay?.barangay_name || 'Unknown Barangay'}
+  if (item?.resident) {return requestBarangayName(item) || 'Unknown Barangay'}
   return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'
 }
 
@@ -88,11 +93,11 @@ export function useDescriptionLines(selectedRequest) {
 export function useSelection(selectedRequest, selectedIds, itemId) {
   const isSelected = (item) => selectedRequest.value && itemId(selectedRequest.value) === itemId(item)
 
-  const toggleSelect = (item) => {
-    const id = itemId(item)
-    if (selectedIds.has(id)) {selectedIds.delete(id)}
-    else {selectedIds.add(id)}
+  // The table's own select-all hands back the whole ticked list; mirror it into the Set.
+  const setSelected = (ids) => {
+    selectedIds.clear()
+    ids.forEach((id) => selectedIds.add(id))
   }
 
-  return { isSelected, toggleSelect }
+  return { isSelected, setSelected }
 }

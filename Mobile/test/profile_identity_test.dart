@@ -27,6 +27,12 @@ class _FakeApi extends ApiService {
 
   @override
   Future<List<int>?> fetchProfilePhoto(String residentId) async => null;
+
+  @override
+  Future<List<Map<String, dynamic>>> getBarangays() async => [
+        {'barangay_id': 1, 'barangay_name': 'San Fabian'},
+        {'barangay_id': 2, 'barangay_name': 'San Miguel'},
+      ];
 }
 
 /// The screen takes the whole resident now, so the old `name` string is split
@@ -81,8 +87,8 @@ void main() {
 
     expect(find.text('Juan Delacruz'), findsNothing);
     expect(find.text('Echague, Isabela'), findsNothing);
-    // Name, number and barangay all say so rather than guessing.
-    expect(find.text('Not on file'), findsNWidgets(3));
+    // Name, and the number-and-barangay line, both say so rather than guessing.
+    expect(find.text('Not on file'), findsNWidgets(2));
   });
 
   testWidgets('real values render as themselves', (tester) async {
@@ -94,18 +100,17 @@ void main() {
     );
 
     expect(find.text('Maria Santos'), findsOneWidget);
-    // Stored as E.164, shown the way a person writes it.
-    expect(find.text('09171234567'), findsOneWidget);
-    expect(find.text('San Fabian'), findsOneWidget);
+    // Stored as E.164, shown the way a person writes it, beside the barangay.
+    expect(find.text('09171234567 · San Fabian'), findsOneWidget);
     expect(find.text('Not on file'), findsNothing);
   });
 
-  testWidgets('the details sheet edits the name and street but never the barangay',
+  testWidgets('the details sheet edits the name, street and barangay but never the number',
       (tester) async {
     // This sheet was read-only while PATCH /me did not exist — offering an edit
-    // the backend could not perform is what the original bug was. The endpoint
-    // shipped, so the edit is real now; what must not come back is a writable
-    // barangay, which is the field a request is dispatched on.
+    // the backend could not perform is what the original bug was. The barangay
+    // is editable now that each request keeps the one it was filed under; the
+    // number still moves only through its own two-step flow.
     await _pumpProfile(
       tester,
       name: 'Maria Santos',
@@ -113,41 +118,36 @@ void main() {
       address: 'San Fabian',
     );
 
-    await tester.tap(find.text('Account details'));
+    await tester.tap(find.text('Edit my details'));
     await tester.pumpAndSettle();
 
-    // First, middle, last and street/purok — and nothing for the barangay or
-    // the number, which moves through its own two-step flow.
-    expect(find.byType(TextField), findsNWidgets(4));
-    expect(find.byType(DropdownButton<String>), findsNothing);
+    // First, middle, last, the barangay search and street/purok.
+    expect(find.byType(TextField), findsNWidgets(5));
+    expect(find.byType(DropdownMenu<String>), findsOneWidget);
+    expect(find.widgetWithText(TextField, '09171234567'), findsNothing);
     expect(find.text('Save changes'), findsOneWidget);
-
-    // The barangay is still shown, still read-only, and now says why.
-    expect(find.text('San Fabian'), findsWidgets);
-    expect(
-      find.text(
-        'Contact MDRRMO to change your barangay — it is what your requests are dispatched on.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Call MDRRMO to change your barangay.'), findsNothing);
   });
 
-  testWidgets('the sheet marks a missing barangay rather than blanking it',
+  testWidgets('the card marks a missing barangay rather than blanking it',
       (tester) async {
     // Only the barangay is missing, so it is the only thing that can produce a
-    // "Not on file" — twice, once on the card and once in the sheet. A default
-    // creeping back in for this field alone drops the count to zero.
+    // "Not on file". A default creeping back in for this field drops it.
     await _pumpProfile(
       tester,
       name: 'Maria Santos',
       phone: '+639171234567',
     );
 
-    await tester.tap(find.text('Account details'));
-    await tester.pumpAndSettle();
+    expect(find.text('09171234567 · Not on file'), findsOneWidget);
 
+    // The sheet's picker starts empty, asking, rather than guessing one.
+    await tester.tap(find.text('Edit my details'));
+    await tester.pumpAndSettle();
     expect(find.text('Barangay'), findsOneWidget);
-    expect(find.text('Not on file'), findsNWidgets(2));
+    final search = tester.widget<TextField>(
+        find.descendant(of: find.byType(DropdownMenu<String>), matching: find.byType(TextField)));
+    expect(search.controller?.text ?? '', isEmpty);
   });
 
   testWidgets('the avatar edit badge opens a real photo sheet', (tester) async {
@@ -217,7 +217,7 @@ void main() {
     expect(find.text('Notifications'), findsNothing);
 
     // The section the pair lived in is still gone, not emptied — the surviving
-    // switch is a row inside Account settings, not a Notifications section.
-    expect(find.text('Account settings'), findsOneWidget);
+    // switch is a row inside Settings, not a Notifications section.
+    expect(find.text('Settings'), findsOneWidget);
   });
 }

@@ -41,6 +41,7 @@ Route::middleware('throttle:api')->group(function () {
     // own 'mfa' limiter (keyed on challenge_id) rather than 'login' — see the
     // comment on RateLimiter::for('mfa', ...) in AppServiceProvider.
     Route::post('/admin/login/verify', [AuthController::class, 'adminLoginVerify'])->middleware('throttle:mfa');
+    Route::post('/admin/login/resend', [AuthController::class, 'adminResendLoginCode'])->middleware('throttle:mfa');
     Route::post('/resident/login/verify', [AuthController::class, 'residentLoginVerify'])->middleware('throttle:mfa');
     Route::post('/resident/login/resend', [AuthController::class, 'resendLoginCode'])->middleware('throttle:mfa');
     // Resident sign-up for the mobile app. Its own 'register' limiter: every
@@ -79,8 +80,8 @@ Route::middleware('throttle:api')->group(function () {
         // limiter, per the 'sms-blast' note in AppServiceProvider.
         Route::post('/admin/change-password', [AuthController::class, 'adminChangePassword'])
             ->middleware('throttle:password-change');
-        // Resident-scoped profile edit. Cannot touch barangay_id, status or role —
-        // see the controller for why each one is excluded.
+        // Resident-scoped profile edit. barangay_id is accepted for Head of the
+        // Family accounts only; status and role never — see the controller.
         Route::patch('/me', [AuthController::class, 'updateMe']);
         // Moving the phone number, which is the login: the current password and
         // a code texted to the NEW number, in two steps. Limited per resident —
@@ -218,9 +219,6 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     Route::middleware('section:files')->group(function () {
         Route::get('/admin/info-materials', [InfoMaterialController::class, 'index']);
         Route::post('/admin/info-materials', [InfoMaterialController::class, 'store']);
-        // Admin-only, unlike the read above: residents see the flag, only the
-        // office sets it.
-        Route::patch('/admin/info-materials/{id}/verify', [InfoMaterialController::class, 'verify']);
         Route::delete('/admin/info-materials/{id}', [InfoMaterialController::class, 'destroy']);
     });
 

@@ -6,7 +6,6 @@ use App\Http\Controllers\Concerns\SendsResidentCodes;
 use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
 use App\Rules\PhoneAvailable;
-use App\Services\Totp;
 use App\Support\PhoneNumber;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -547,22 +546,29 @@ class AuthController extends Controller
             'first_name' => 'sometimes|required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'last_name' => 'sometimes|required|string|max:255',
-            // Purok/street. Unlike barangay_id below, this is exactly the kind
-            // of self-correctable detail a profile edit is for — MDRRMO
-            // dispatches on the barangay relation, not on this string.
+            // Purok/street: a self-correctable detail nothing is grouped on.
             'street_address' => 'sometimes|nullable|string|max:255',
             // The resident's own notification preference. Writable here — unlike
             // the columns below — because it decides only what this account
             // receives, and there is nobody else who should be deciding it.
             'sms_opt_in' => 'sometimes|required|boolean',
+            // A household that moved. Each request keeps the barangay it was
+            // filed under (tbl_service_request.barangay_id), so this only
+            // changes where new requests and SMS blasts go.
+            'barangay_id' => 'sometimes|required|integer|exists:tbl_barangay,barangay_id',
         ]);
+
+        // A barangay hall or organization is tied to its barangay (one hall
+        // account per barangay), so only MDRRMO moves those.
+        if (array_key_exists('barangay_id', $validated) && ! $user->isHeadOfFamily()) {
+            throw ValidationException::withMessages([
+                'barangay_id' => 'Only a Head of the Family account can change its barangay here. Please contact MDRRMO.',
+            ]);
+        }
 
         // Assigned key by key, never a splat of $validated. Columns absent from
         // the rules above and that must stay that way:
         //
-        //   barangay_id  every service request is dispatched on it, so a resident
-        //                who could move themselves could redirect their own
-        //                dispatch. Changing barangay is an MDRRMO operation.
         //   status       an Inactive account could otherwise activate itself and
         //                opt an unverified number into billed SMS.
         //   photo        it is a storage path now, not a value anyone types.
@@ -570,7 +576,7 @@ class AuthController extends Controller
         //   password     a change needs the current password, which is a separate
         //                endpoint, not a field on a profile PATCH.
         //   phone_number the login; see the note above.
-        foreach (['first_name', 'middle_name', 'last_name', 'street_address'] as $field) {
+        foreach (['first_name', 'middle_name', 'last_name', 'street_address', 'barangay_id'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $user->{$field} = $validated[$field];
             }
@@ -605,12 +611,21 @@ class AuthController extends Controller
     // Endpoint specifically for the Web Frontend
     public function adminLogin(Request $request)
     {
+        // Staff sign in with a username now. An old client still sending the
+        // email is told so rather than shown "wrong credentials".
+        if ($request->has('email_address') && ! $request->filled('username')) {
+            return response()->json([
+                'message' => 'Sign in with your username instead of your email.',
+                'errors' => ['username' => ['Sign in with your username instead of your email.']],
+            ], 422);
+        }
+
         $request->validate([
-            'email_address' => 'required|email',
+            'username' => 'required|string|max:30',
             'password' => 'required',
         ]);
 
-        $admin = User::where('email_address', $request->email_address)->first();
+        $admin = User::where('username', strtolower(trim($request->username)))->first();
 
         if (! $admin || ! Hash::check($request->password, $admin->password)) {
             return response()->json([
@@ -630,24 +645,45 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // MFA disabled for admin for now (2026-08-30) — the TOTP QR-enrollment
-        // step locked an admin out with no recovery path. adminLoginVerify and
-        // the Totp service are left in place, unused, so this is cheap to turn
-        // back on once a replacement (email/SMS code, or TOTP + recovery codes)
-        // is decided. See serbis-status memory for the options considered.
+        // Two-step sign-in is a switch (ADMIN_MFA_ENABLED, off by default). The
+        // TOTP version (2026-08-30) locked an admin out with no recovery path;
+        // this one texts a code to tbl_user.phone_number, and a super admin can
+        // change any staff number from Staff Accounts or `staff:set-phone`.
+        // The Totp service is left in place, unused.
+        if (! config('serbis.admin_mfa_enabled')) {
+            return response()->json([
+                'token' => $this->issueAdminToken($admin),
+                'role' => 'admin',
+                'user' => $admin,
+                'sections' => $admin->allowedSections(),
+            ]);
+        }
+
+        // After the password and the active check, so it tells nobody
+        // anything they had not already proved. Refuses this one account only.
+        if (PhoneNumber::normalize((string) $admin->phone_number) === '') {
+            return response()->json([
+                'message' => 'Ask a super admin to add your mobile number.',
+                'code' => 'phone_missing',
+            ], 403);
+        }
+
+        $login = $this->sendLoginCode($admin, null);
+
+        if ($login['delivery'] === 'failed') {
+            return $this->smsUnavailable();
+        }
+
         return response()->json([
-            'token' => $this->issueAdminToken($admin),
-            'role' => 'admin',
-            'user' => $admin,
-            'sections' => $admin->allowedSections(),
-        ]);
+            'message' => 'Enter the code we just sent to finish signing in.',
+            'code' => 'mfa_required',
+            'challenge_id' => $login['challenge_id'],
+        ] + $this->loginDeliveryFields($admin, $login), 403);
     }
 
     /**
-     * Second half of admin login: the TOTP code comes back here. The first
-     * code an admin ever submits both signs them in and marks them enrolled —
-     * there is no separate "confirm enrollment" step, because a correct code
-     * is already proof the authenticator app was set up correctly.
+     * Second half of admin login: the code texted to the staff member's
+     * number comes back here. Same checks as residentLoginVerify().
      */
     public function adminLoginVerify(Request $request)
     {
@@ -673,16 +709,20 @@ class AuthController extends Controller
         }
 
         $admin = User::find($challenge['id']);
+        $bypassed = $this->otpBypassMatches((string) $request->code);
 
-        if (! $admin || ! app(Totp::class)->verify($admin->admin_id, (string) $request->code)) {
+        if (! $admin || (! $bypassed && ! Hash::check((string) $request->code, $challenge['code_hash'] ?? ''))) {
             return response()->json([
-                'message' => 'That code is not right. Check your authenticator app and try again.',
+                'message' => 'That code is not right, or it has expired. Ask for a new one.',
                 'code' => 'invalid_code',
             ], 422);
         }
 
+        if ($bypassed) {
+            $this->logOtpBypassUse($admin);
+        }
+
         Cache::forget("mfa:challenge:{$request->challenge_id}");
-        app(Totp::class)->markEnrolled($admin->admin_id);
 
         return response()->json([
             'token' => $this->issueAdminToken($admin),
@@ -980,13 +1020,24 @@ class AuthController extends Controller
      */
     public function resendLoginCode(Request $request)
     {
+        return $this->resendChallengeCode($request, 'resident');
+    }
+
+    /** Same as resendLoginCode(), for a staff member's sign-in code. */
+    public function adminResendLoginCode(Request $request)
+    {
+        return $this->resendChallengeCode($request, 'admin');
+    }
+
+    private function resendChallengeCode(Request $request, string $type)
+    {
         $request->validate([
             'challenge_id' => 'required|string|max:64',
         ]);
 
         $challenge = Cache::get("mfa:challenge:{$request->challenge_id}");
 
-        if (! is_array($challenge) || ($challenge['type'] ?? null) !== 'resident') {
+        if (! is_array($challenge) || ($challenge['type'] ?? null) !== $type) {
             return response()->json([
                 'message' => 'That login attempt has expired. Please log in again.',
                 'code' => 'mfa_challenge_expired',
@@ -1003,16 +1054,16 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $resident = Resident::find($challenge['id']);
+        $account = $type === 'admin' ? User::find($challenge['id']) : Resident::find($challenge['id']);
 
-        if (! $resident) {
+        if (! $account) {
             return response()->json([
                 'message' => 'That login attempt has expired. Please log in again.',
                 'code' => 'mfa_challenge_expired',
             ], 422);
         }
 
-        $login = $this->sendLoginCode($resident, $request->challenge_id);
+        $login = $this->sendLoginCode($account, $request->challenge_id);
 
         if ($login['delivery'] === 'failed') {
             return $this->smsUnavailable();
@@ -1021,17 +1072,17 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'A new code is on its way.',
             'code' => 'code_sent',
-        ] + $this->loginDeliveryFields($resident, $login), 200);
+        ] + $this->loginDeliveryFields($account, $login), 200);
     }
 
     /**
      * Sends (or resends, against an existing challenge id) a login code for a
-     * resident and stores its hash in the challenge — never in the pending
-     * sign-up entry, which belongs to the signup gate alone.
+     * resident or a staff member and stores its hash in the challenge — never
+     * in the pending sign-up entry, which belongs to the signup gate alone.
      *
      * @return array{delivery: string, challenge_id: string}
      */
-    private function sendLoginCode(Resident $resident, ?string $challengeId): array
+    private function sendLoginCode(Resident|User $account, ?string $challengeId): array
     {
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         // sent_at is a Unix timestamp and NOT a Carbon. config/cache.php sets
@@ -1044,7 +1095,11 @@ class AuthController extends Controller
         $extra = ['code_hash' => Hash::make($code), 'sent_at' => now()->getTimestamp()];
 
         if ($challengeId === null) {
-            $challengeId = $this->issueMfaChallenge('resident', $resident->resident_id, $extra);
+            $challengeId = $this->issueMfaChallenge(
+                $account instanceof User ? 'admin' : 'resident',
+                $account->getKey(),
+                $extra,
+            );
         } else {
             $challenge = Cache::get("mfa:challenge:{$challengeId}", []);
             Cache::put(
@@ -1055,12 +1110,12 @@ class AuthController extends Controller
         }
 
         $delivery = $this->sendOtpText(
-            (string) $resident->phone_number,
+            (string) $account->phone_number,
             "Your SERBIS login code is {$code}. It expires in 5 minutes.",
         );
 
         if ($delivery === 'failed') {
-            // No cooldown for a text that never went out, so the resident can
+            // No cooldown for a text that never went out, so the person can
             // try again straight away; the challenge itself lapses in five
             // minutes.
             Cache::put(
@@ -1096,13 +1151,22 @@ class AuthController extends Controller
     /**
      * @param  array{delivery: string, challenge_id: string}  $login
      */
-    private function loginDeliveryFields(Resident $resident, array $login): array
+    private function loginDeliveryFields(Resident|User $account, array $login): array
     {
-        return $this->deliveryFields(
-            (string) $resident->phone_number,
+        $fields = $this->deliveryFields(
+            (string) $account->phone_number,
             $login['delivery'],
             $this->mfaResendWait(Cache::get("mfa:challenge:{$login['challenge_id']}")),
         );
+
+        // The panel shows "sent to 0917•••4567". Staff only; the app already
+        // renders the last four from `sent_to`.
+        if ($account instanceof User) {
+            $local = PhoneNumber::display((string) $account->phone_number);
+            $fields['sent_to_masked'] = substr($local, 0, 4).'•••'.substr($local, -4);
+        }
+
+        return $fields;
     }
 
     public function logout(Request $request)

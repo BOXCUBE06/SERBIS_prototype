@@ -1,12 +1,14 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
     <div class="w-100">
-      <PageHeader title="Documents" />
+      <PageHeader title="Documents">
+        <template v-slot:subtitle>{{ pluralize(files.length, 'material') }}</template>
+      </PageHeader>
 
       <!-- Dropzone: one row, so the list starts without scrolling. -->
       <div
         v-if="!staged"
-        class="dropzone mb-4"
+        class="dropzone mb-5"
         :class="{ 'dropzone--active': dragActive }"
         role="button"
         tabindex="0"
@@ -18,9 +20,11 @@
         @dragleave.prevent="dragActive = false"
         @drop.prevent="onDrop"
       >
-        <v-icon size="20" color="primary">mdi-cloud-upload-outline</v-icon>
-        <span class="text-body-2 font-weight-medium text-high-emphasis">Drop a file here, or click to browse</span>
-        <span class="text-caption text-medium-emphasis">PDF or images — max 10 MB. This is what residents will download.</span>
+        <span class="dropzone__tile"><v-icon size="22">mdi-cloud-upload-outline</v-icon></span>
+        <span class="dropzone__text">
+          <span class="dropzone__title">Drop a file here, or click to browse</span>
+          <span class="dropzone__hint">PDF or images, up to 10 MB. Residents download what you upload here.</span>
+        </span>
         <!-- Kept in step with InfoMaterialController::store's `mimes:` rule.
              Word and ZIP were dropped there because these files are served
              by public URL from the agency's own origin; offering them here
@@ -40,7 +44,7 @@
         variant="tonal"
         color="primary"
         rounded="lg"
-        class="pa-4 mb-4 staging-card"
+        class="pa-4 mb-5 staging-card"
       >
         <div class="d-flex align-center gap-3">
           <v-icon :color="getFileIconColor(staged.ext)" size="40">{{ getFileIcon(staged.ext) }}</v-icon>
@@ -87,8 +91,11 @@
            footer. A row or a card opens the file in a new tab. -->
       <DataTablePage
         compact
+        filter-bar
         collapse-mobile
+        :row-height="56"
         class="materials-table"
+        :class="{ 'is-grid': view === 'grid' }"
         :tabs="typeTabs"
         :status="typeFilter"
         @update:status="typeFilter = $event"
@@ -112,19 +119,18 @@
         @click:row="(_event, { item }) => openFile(item)"
       >
         <template v-slot:filters>
-          <v-select
-            v-model="dateFilter"
-            :items="dateFilters"
-            item-title="label"
-            item-value="value"
-            label="Uploaded"
-            variant="outlined" density="compact" hide-details rounded="lg"
-          ></v-select>
-          <v-btn-toggle v-model="view" mandatory divided density="compact" variant="outlined" rounded="lg" class="view-toggle" aria-label="View">
-            <v-btn value="table" icon="mdi-view-list" aria-label="Table view"></v-btn>
-            <v-btn value="grid" icon="mdi-view-grid-outline" aria-label="Grid view"></v-btn>
-          </v-btn-toggle>
+          <FilterSelect v-model="dateFilter" :items="dateFilters" label="Uploaded" />
+          <div role="group" aria-label="View" class="view-toggle">
+            <button type="button" aria-label="List view" :aria-pressed="view === 'table'" :class="{ 'is-on': view === 'table' }" @click="view = 'table'">
+              <v-icon size="18">mdi-format-list-bulleted</v-icon>
+            </button>
+            <button type="button" aria-label="Grid view" :aria-pressed="view === 'grid'" :class="{ 'is-on': view === 'grid' }" @click="view = 'grid'">
+              <v-icon size="18">mdi-view-grid-outline</v-icon>
+            </button>
+          </div>
         </template>
+
+        <template v-slot:summary>{{ pluralize(visibleFiles.length, 'material') }}</template>
 
         <template v-if="view === 'grid'" v-slot:content>
           <div v-if="firstLoad" class="file-grid" aria-hidden="true">
@@ -139,25 +145,17 @@
               :url="f.full_url"
               :image="category(f.file_type) === 'image'"
               :icon="getFileIcon(f.file_type)"
-              :meta="`${formatBytes(f.file_size, 1)} · ${relativeDate(f.created_at)}`"
-              :verified="!!f.verified"
-              :verified-by="verifiedBy(f)"
-              :busy="verifying === f.files_id"
+              :ext="(f.file_type || 'file').toUpperCase()"
+              :meta="`${formatBytes(f.file_size, 1)} · ${fmtDate(f.created_at)}`"
               @open="openFile(f)"
               @download="openFile(f)"
-              @verify="onToggleVerified(f, !f.verified)"
               @delete="askDelete(f)"
             />
           </div>
         </template>
 
         <template v-slot:item.title="{ item }">
-          <PersonCell
-            :name="item.title"
-            :secondary="(item.file_type || 'file').toUpperCase()"
-            :icon="getFileIcon(item.file_type)"
-            size="36"
-          />
+          <PersonCell :name="item.title" :initials="(item.file_type || 'file').toUpperCase()" square tinted size="36" />
         </template>
 
         <template v-slot:item.file_type="{ item }">
@@ -169,31 +167,7 @@
         </template>
 
         <template v-slot:item.created_at="{ item }">
-          <span class="text-body-2 text-medium-emphasis">{{ relativeDate(item.created_at) }}</span>
-        </template>
-
-        <!-- Switch rather than a button pair: this is one state with two
-             directions, and a mistaken click has to be undoable. Who verified it
-             sits beside it on one line (MDRRMO feedback, 2026-09-18); the row is
-             a fixed height, so it truncates. Clicks stop here, a row opens the file. -->
-        <template v-slot:item.verified="{ item }">
-          <div class="d-flex align-center gap-2 min-w-0" @click.stop @keydown.stop>
-            <v-switch
-              :model-value="item.verified"
-              :loading="verifying === item.files_id"
-              :disabled="verifying === item.files_id"
-              :aria-label="`Mark ${item.title} as verified`"
-              color="success"
-              density="compact"
-              hide-details
-              inset
-              class="flex-grow-0"
-              @update:model-value="value => onToggleVerified(item, value)"
-            ></v-switch>
-            <span v-if="verifiedBy(item)" class="text-caption text-medium-emphasis cell-truncate" :title="verifiedBy(item)">
-              {{ verifiedBy(item) }}
-            </span>
-          </div>
+          <span class="text-body-2 text-medium-emphasis file-size">{{ fmtDate(item.created_at) }}</span>
         </template>
 
         <template v-slot:item.actions="{ item }">
@@ -226,42 +200,6 @@
       </v-card>
     </v-dialog>
 
-    <!-- Verify: who -->
-    <v-dialog v-model="verifyDialog" max-width="440">
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="text-h6 font-weight-bold text-high-emphasis">Mark as verified</v-card-title>
-        <v-card-text class="text-body-2 text-medium-emphasis">
-          <div class="mb-4">
-            Enter the name and role of the person who checked
-            <strong class="text-high-emphasis">{{ pendingVerify?.title }}</strong>.
-          </div>
-          <v-text-field
-            v-model="verifyName"
-            label="Name *" placeholder="e.g. Dr. Ana Reyes"
-            variant="outlined" density="comfortable" class="mb-2"
-            :error-messages="verifyErrors.name"
-            @update:model-value="verifyErrors.name = ''"
-          ></v-text-field>
-          <v-text-field
-            v-model="verifyRole"
-            label="Role *" placeholder="e.g. MDRRMO Medical Officer"
-            variant="outlined" density="comfortable"
-            :error-messages="verifyErrors.role"
-            @update:model-value="verifyErrors.role = ''"
-          ></v-text-field>
-        </v-card-text>
-        <v-card-actions class="px-4 pb-4">
-          <v-spacer></v-spacer>
-          <v-btn variant="outlined" color="primary" class="text-none" @click="cancelVerify" :disabled="verifying === pendingVerify?.files_id">Cancel</v-btn>
-          <v-btn
-            color="success" variant="flat" rounded="lg" class="text-none font-weight-bold"
-            :loading="verifying === pendingVerify?.files_id"
-            @click="confirmVerify"
-          >Mark verified</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <!-- Feedback -->
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="bottom right" rounded="lg">
       {{ snackbar.text }}
@@ -276,8 +214,11 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
+import { fmtDate, pluralize } from '@/composables/adminUi'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import RowActions from '@/components/RowActions.vue'
 import FileCard from '@/components/FileCard.vue'
@@ -286,10 +227,8 @@ const API = `${API_BASE}/admin/info-materials`
 
 const files = ref([])
 const search = ref('')
-const loadingList = ref(true)
-// Skeleton rows on the first load only; a refetch dims the rows it already has.
-const firstLoad = computed(() => loadingList.value && files.value.length === 0)
-const refreshing = computed(() => loadingList.value && files.value.length > 0)
+// Skeleton rows only while nothing is cached; a revisit shows the last list and dims it while it refreshes.
+const { get, loading: firstLoad, refreshing } = useCachedFetch()
 
 // Upload staging
 const fileInput = ref(null)
@@ -317,10 +256,10 @@ const typeFilters = [
 
 const dateFilter = ref('all')
 const dateFilters = [
-  { label: 'Any time', value: 'all' },
-  { label: 'Today', value: 'today' },
-  { label: 'This week', value: 'week' },
-  { label: 'This month', value: 'month' },
+  { title: 'Any time', value: 'all' },
+  { title: 'Today', value: 'today' },
+  { title: 'This week', value: 'week' },
+  { title: 'This month', value: 'month' },
 ]
 
 // Earliest created_at that passes the current date filter (null = no limit).
@@ -379,7 +318,7 @@ const emptyText = computed(() => (files.value.length > 0 ? 'No materials match y
 
 // Date is the only filter that is not the tabs or search, so it is the only chip.
 const activeFilters = computed(() => (
-  dateFilter.value === 'all' ? [] : [{ key: 'date', label: `Uploaded: ${dateFilters.find((d) => d.value === dateFilter.value)?.label}` }]
+  dateFilter.value === 'all' ? [] : [{ key: 'date', label: `Uploaded: ${dateFilters.find((d) => d.value === dateFilter.value)?.title}` }]
 ))
 const clearFilter = () => { dateFilter.value = 'all' }
 
@@ -409,18 +348,16 @@ watch([search, typeFilter, dateFilter], () => { page.value = 1 })
 
 // A row or a card opens the file in a new tab, the same as Download.
 const openFile = (item) => window.open(item.full_url, '_blank', 'noopener')
-const verifiedBy = (item) => (item.verified && item.verified_by_name ? [item.verified_by_name, item.verified_by_role].filter(Boolean).join(', ') : '')
 
-// Fixed-layout table; identity gets the room. Type and Size go on a phone
-// (see DataTablePage's collapseMobile).
+// Fixed-layout table; identity gets the room, the middle columns share the rest.
+// Type and Size go on a phone (see DataTablePage's collapseMobile).
 const HIDE_SM = { class: 'dtp-hide-sm' }
 const materialHeaders = [
   { title: 'File', key: 'title', width: '38%' },
-  { title: 'Type', key: 'file_type', width: '130px', value: (item) => typeLabel(item.file_type), headerProps: HIDE_SM, cellProps: HIDE_SM },
-  { title: 'Size', key: 'file_size', width: '90px', headerProps: HIDE_SM, cellProps: HIDE_SM },
-  { title: 'Uploaded', key: 'created_at', width: '130px' },
-  { title: 'Verified', key: 'verified', width: '230px', value: (item) => (item.verified ? 1 : 0) },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '88px' },
+  { title: 'Type', key: 'file_type', value: (item) => typeLabel(item.file_type), headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Size', key: 'file_size', headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Uploaded', key: 'created_at' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '120px' },
 ]
 
 // The badge on the file cell prints the raw extension; this column prints what
@@ -444,15 +381,6 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
-const relativeDate = (iso) => {
-  const then = new Date(iso)
-  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000)
-  if (days <= 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days} days ago`
-  return then.toLocaleDateString()
-}
-
 const getFileIcon = (ext) => ({
   pdf: 'mdi-file-pdf-box',
   doc: 'mdi-file-word-box',
@@ -473,21 +401,21 @@ const getFileIconColor = (ext) => ({
   zip: 'warning',
 }[ext?.toLowerCase()] || 'secondary')
 
-const fetchFiles = async () => {
-  loadingList.value = true
+const fetchFiles = async (fresh = false) => {
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to fetch materials')
-    files.value = Array.isArray(data) ? data : (data.data || [])
+    await get('/admin/info-materials', {
+      fresh,
+      onData: (data) => { files.value = Array.isArray(data) ? data : (data.data || []) },
+    })
   } catch (error) {
     console.error('Failed to fetch materials:', error)
     files.value = []
     notify(error.message || 'Could not load materials', 'error')
-  } finally {
-    loadingList.value = false
   }
 }
+
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/admin/info-materials'); return fetchFiles(true) }
 
 // --- Upload flow ---
 const pickFile = () => fileInput.value?.click()
@@ -537,7 +465,7 @@ const publish = () => {
     uploading.value = false
     if (xhr.status >= 200 && xhr.status < 300) {
       clearStaged()
-      await fetchFiles()
+      await reload()
       notify('Published — residents can now download it')
     } else {
       let msg = 'Upload failed'
@@ -547,89 +475,6 @@ const publish = () => {
   })
   xhr.addEventListener('error', () => { uploading.value = false; apiError.value = 'Network error during upload' })
   xhr.send(payload)
-}
-
-// --- Verified flag ---
-// Holds the files_id being written so only that row's switch shows the wait,
-// rather than the whole table going busy for a one-row change.
-const verifying = ref(null)
-
-// Verifying names who; unverifying does not need to ask anything, same as
-// before this existed.
-const verifyDialog = ref(false)
-const pendingVerify = ref(null)
-const verifyName = ref('')
-const verifyRole = ref('')
-const verifyErrors = ref({ name: '', role: '' })
-
-const onToggleVerified = (item, value) => {
-  if (!value) {
-    setVerified(item, false)
-    return
-  }
-
-  pendingVerify.value = item
-  verifyName.value = ''
-  verifyRole.value = ''
-  verifyErrors.value = { name: '', role: '' }
-  verifyDialog.value = true
-}
-
-const cancelVerify = () => {
-  verifyDialog.value = false
-  pendingVerify.value = null
-}
-
-const confirmVerify = async () => {
-  // Both are required: the mark names who checked the file, or it means nothing.
-  verifyErrors.value = {
-    name: verifyName.value.trim() ? '' : 'Name is required.',
-    role: verifyRole.value.trim() ? '' : 'Role is required.',
-  }
-  if (verifyErrors.value.name || verifyErrors.value.role) return
-
-  const item = pendingVerify.value
-  verifyDialog.value = false
-  await setVerified(item, true, {
-    verified_by_name: verifyName.value.trim(),
-    verified_by_role: verifyRole.value.trim(),
-  })
-  pendingVerify.value = null
-}
-
-const setVerified = async (item, value, extra = {}) => {
-  verifying.value = item.files_id
-  const previous = { verified: item.verified, verified_by_name: item.verified_by_name, verified_by_role: item.verified_by_role }
-
-  // Flipped up front so the switch does not sit on its old position while the
-  // request is in flight; put back if the write fails.
-  item.verified = value
-  if (value) {
-    item.verified_by_name = extra.verified_by_name
-    item.verified_by_role = extra.verified_by_role
-  } else {
-    item.verified_by_name = null
-    item.verified_by_role = null
-  }
-
-  try {
-    const res = await fetch(`${API}/${item.files_id}/verify`, {
-      method: 'PATCH',
-      // Content-Type spelled out here: getHeaders() leaves it off on purpose
-      // for the FormData upload, and without it this JSON body never parses.
-      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ verified: value, ...extra }),
-    })
-    if (!res.ok) throw new Error('Could not update the verified mark')
-    notify(value ? 'Material marked verified' : 'Verified mark removed')
-  } catch (error) {
-    item.verified = previous.verified
-    item.verified_by_name = previous.verified_by_name
-    item.verified_by_role = previous.verified_by_role
-    notify(error.message || 'Could not update the verified mark', 'error')
-  } finally {
-    verifying.value = null
-  }
 }
 
 // --- Delete flow ---
@@ -644,7 +489,7 @@ const confirmDelete = async () => {
       headers: getHeaders(),
     })
     if (!res.ok) throw new Error('Delete failed')
-    await fetchFiles()
+    await reload()
     notify('Material deleted')
     deleteDialog.value = false
   } catch (error) {
@@ -662,39 +507,75 @@ onMounted(fetchFiles)
 .gap-3 { gap: 12px; }
 .min-w-0 { min-width: 0; }
 
-/* Dropzone: a single row (icon, text, hint), wrapping on a narrow screen. */
+/* Dropzone, from the ResDropzone board: icon tile, a bold line and a muted one. */
 .dropzone {
   display: flex;
   align-items: center;
-  gap: 8px 12px;
-  flex-wrap: wrap;
-  min-height: 48px;
-  padding: 8px 16px;
-  border: 1px dashed rgba(var(--v-theme-on-surface), 0.3);
-  border-radius: 12px;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1.5px dashed rgba(var(--v-theme-primary), 0.5);
+  border-radius: 16px;
   cursor: pointer;
-  transition: background-color var(--motion-base) var(--ease-out), border-color var(--motion-base) var(--ease-out);
-  background-color: rgba(var(--v-theme-on-surface), 0.02);
+  transition: background-color var(--motion-base) var(--ease-out);
+  background-color: rgba(var(--v-theme-primary), 0.05);
 }
 .dropzone:hover,
+.dropzone--active { background-color: rgba(var(--v-theme-primary), 0.09); }
 .dropzone:focus-visible {
-  background-color: rgba(var(--v-theme-primary), 0.06);
-  border-color: rgb(var(--v-theme-primary));
-  outline: none;
+  outline: 3px solid rgba(var(--v-theme-primary), 0.4);
+  outline-offset: 2px;
 }
-.dropzone--active {
-  background-color: rgba(var(--v-theme-primary), 0.12);
-  border-color: rgb(var(--v-theme-primary));
+.dropzone__tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary-strong));
 }
+.dropzone__text { flex: 1; min-width: 0; }
+.dropzone__title,
+.dropzone__hint { display: block; font-size: 14px; line-height: 20px; }
+.dropzone__title { font-weight: 700; }
+.dropzone__hint { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 
 .staging-card { border: 1px solid rgba(var(--v-theme-primary), 0.4); }
 
 /* Table: fixed layout keeps the columns stable whatever the file titles are;
    below the floor it scrolls, on a phone (collapseMobile) the floor goes. */
-.materials-table :deep(.dtp-table table) { min-width: 760px; }
+.materials-table :deep(.dtp-table table) { min-width: 880px; }
 @media (max-width: 599px) {
   .materials-table :deep(.dtp-table table) { min-width: 0; }
 }
+/* Board table: 12px gutters, 24px at the card's edges, a .08 rule under each row. */
+.materials-table :deep(.dtp-table th),
+.materials-table :deep(.dtp-table td) { padding-left: 12px !important; padding-right: 12px !important; }
+.materials-table :deep(.dtp-table th:first-child),
+.materials-table :deep(.dtp-table td:first-child) { padding-left: 24px !important; }
+.materials-table :deep(.dtp-table th:last-child),
+.materials-table :deep(.dtp-table td:last-child) { padding-right: 24px !important; }
+.materials-table :deep(.dtp-table tbody td) { border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
+.materials-table.dtp-compact :deep(.dtp-table tbody tr:hover) { background: rgba(var(--v-theme-on-surface), 0.025); }
+/* Search 320px and the 10px field radius, per the toolbar board. */
+.materials-table.dtp-board :deep(.dtp-search) { flex: 0 0 320px; width: 320px; }
+.materials-table :deep(.dtp-toolbar .v-field) { border-radius: 10px; }
+/* File cell: the mark sits 12px from the title. */
+.materials-table :deep(.person-cell > .icon-tile) { margin-right: 12px !important; }
+/* Row actions: 40px square buttons, 10px radius, 18px icons; download at .6, delete at full red. */
+.materials-table :deep(.row-actions__inline .v-btn) { width: 40px; height: 40px; border-radius: 10px; }
+.materials-table :deep(.row-actions__inline .v-icon) { font-size: 18px; }
+.materials-table :deep(.row-actions__inline .v-btn:not(.row-action-delete)) { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.materials-table :deep(.row-action-delete) { opacity: 1; }
+/* The footer reads at 14px here, not the compact lists' 13px. */
+.materials-table.dtp-compact :deep(.dtp-footer),
+.materials-table.dtp-compact :deep(.dtp-footer .text-body-2),
+.materials-table.dtp-compact :deep(.dtp-footer .v-field__input),
+.materials-table.dtp-compact :deep(.dtp-footer .v-btn) { font-size: 0.875rem !important; }
+/* Grid view: the cards sit on the page, the count under them, no card behind. */
+.materials-table.is-grid :deep(.dtp-card) { background: transparent; box-shadow: none; border-radius: 0; overflow: visible; }
+.materials-table.is-grid :deep(.dtp-footer) { padding: 20px 0 0 !important; }
 .file-size { font-variant-numeric: tabular-nums; }
 .cell-truncate {
   display: block;
@@ -703,21 +584,41 @@ onMounted(fetchFiles)
   white-space: nowrap;
 }
 
-/* Grid: as many 200px-plus columns as fit. */
+/* Grid: as many 240px-plus columns as fit. */
 .file-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: 16px;
-  padding: 4px 0;
 }
 .file-grid__skeleton {
   height: 200px;
-  border-radius: 12px;
+  border-radius: 24px;
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
 .file-grid__empty { padding: 48px 16px; text-align: center; }
 
-.view-toggle { flex: none; height: 40px; }
+/* List / grid switch: one bordered group, pushed to the bar's right edge. */
+.view-toggle {
+  display: inline-flex;
+  margin-left: auto;
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.14);
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
+}
+.view-toggle button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  border: 0;
+  background: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: pointer;
+}
+.view-toggle button:first-child { border-right: 1px solid rgba(var(--v-theme-on-surface), 0.14); }
+.view-toggle button.is-on { background: rgba(var(--v-theme-primary), 0.14); color: rgb(var(--v-theme-primary-strong)); }
+.view-toggle button:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: -2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .dropzone { transition: none; }

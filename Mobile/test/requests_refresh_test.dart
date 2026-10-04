@@ -192,6 +192,8 @@ void main() {
           appState: state,
           onOpenNotifications: () {},
           onOpenProfile: () {},
+          onOpenMyLoans: () {},
+          onBrowseServices: () {},
         ),
       ),
     ));
@@ -231,6 +233,8 @@ void main() {
           appState: state,
           onOpenNotifications: () {},
           onOpenProfile: () {},
+          onOpenMyLoans: () {},
+          onBrowseServices: () {},
         ),
       ),
     ));

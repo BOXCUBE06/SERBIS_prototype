@@ -130,21 +130,25 @@ class VehicleDeleteGuardTest extends TestCase
         $this->assertStringContainsString("#{$pending->request_id}", $response->json('message'));
     }
 
-    public function test_a_request_already_in_the_past_does_not_block_the_delete(): void
+    // The vehicle FK is RESTRICT (2026_10_02_100000): a past or cancelled
+    // request still references its unit, so the delete is refused, not a 500.
+    public function test_a_request_already_in_the_past_still_blocks_the_delete(): void
     {
         $this->requestOn(Carbon::now('UTC')->subDays(3));
 
-        $this->deleteJson("/api/vehicles/{$this->vehicle->getKey()}")->assertOk();
+        $this->deleteJson("/api/vehicles/{$this->vehicle->getKey()}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot delete this unit: 1 service request(s) reference it. Set it to Maintenance instead.');
 
-        $this->assertNull(Vehicle::find($this->vehicle->getKey()));
+        $this->assertNotNull(Vehicle::find($this->vehicle->getKey()));
     }
 
-    public function test_a_cancelled_future_request_does_not_block_the_delete(): void
+    public function test_a_cancelled_future_request_still_blocks_the_delete(): void
     {
         $this->requestOn(Carbon::now('UTC')->addDays(3), 'Cancelled');
 
-        $this->deleteJson("/api/vehicles/{$this->vehicle->getKey()}")->assertOk();
+        $this->deleteJson("/api/vehicles/{$this->vehicle->getKey()}")->assertStatus(422);
 
-        $this->assertNull(Vehicle::find($this->vehicle->getKey()));
+        $this->assertNotNull(Vehicle::find($this->vehicle->getKey()));
     }
 }

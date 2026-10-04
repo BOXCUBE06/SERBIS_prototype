@@ -1,0 +1,149 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Models\AmbulanceBooking;
+use App\Models\ConductionRequest;
+use App\Models\Equipment;
+use App\Models\EquipmentBorrowing;
+use App\Models\Resident;
+use App\Models\Responder;
+use App\Models\ServiceRequest;
+use App\Models\Vehicle;
+use App\Support\AnalyticsCache;
+use App\Traits\ResolvesUploadDisks;
+use Database\Seeders\RequestDataSeeder;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * LOCAL ONLY. Deletes every service request, ambulance booking, trip record and
+ * equipment borrowing, generates a fresh set (RequestDataSeeder), then puts
+ * stock, fleet and responder status back in line with what was generated.
+ * Residents, users, barangays, services and the equipment catalogue are kept.
+ */
+class ReseedRequestData extends Command
+{
+    use ResolvesUploadDisks;
+
+    protected $signature = 'serbis:reseed-requests
+        {--seed=1 : Random seed; the same seed gives the same data}
+        {--force : Skip the confirmation}';
+
+    protected $description = 'LOCAL ONLY: wipe all request and borrowing data and generate a fresh realistic set';
+
+    /** The only databases this may run against: the local one and the test suite's. */
+    private const DATABASES = ['serbis_test_db', 'serbis_phpunit'];
+
+    /** Children before parents. */
+    private const TABLES = [
+        'tbl_conduction_request_people',
+        'tbl_conduction_requests',
+        'tbl_request_responders',
+        'tbl_service_request_relatives',
+        'tbl_ambulance_bookings',
+        'tbl_service_request',
+        'tbl_equipment_borrowing',
+    ];
+
+    private const LOGGED = [ServiceRequest::class, AmbulanceBooking::class, ConductionRequest::class, EquipmentBorrowing::class];
+
+    /** Upload folders only requests and borrowings write to. */
+    private const FILE_DIRS = ['valid-ids', 'site-photos', 'letters', 'borrowing-photos'];
+
+    public function handle(): int
+    {
+        $database = config('database.connections.'.config('database.default').'.database');
+
+        if (app()->environment('production')) {
+            $this->error('Refusing to run in production.');
+
+            return self::FAILURE;
+        }
+        if (! in_array($database, self::DATABASES, true)) {
+            $this->error("Refusing to run against '{$database}'; only ".implode(', ', self::DATABASES).'.');
+
+            return self::FAILURE;
+        }
+        if (! Schema::hasColumn('tbl_service_request', 'barangay_id')) {
+            $this->error('tbl_service_request.barangay_id is missing. Run php artisan migrate first.');
+
+            return self::FAILURE;
+        }
+        if (! $this->option('force') && ! $this->confirm("Delete all service requests, ambulance bookings and borrowings in {$database}?")) {
+            return self::FAILURE;
+        }
+
+        // Nothing may leave this machine: SMS (SkySMS) and push (FCM) both go through Http.
+        Http::preventStrayRequests();
+        config(['serbis.sms_fake' => true]);
+
+        $residentsBefore = Resident::orderBy('resident_id')->pluck('barangay_id', 'resident_id')->all();
+
+        DB::transaction(function () {
+            foreach (self::TABLES as $table) {
+                DB::table($table)->delete();
+            }
+            DB::table('tbl_system_logs')->whereIn('auditable_type', self::LOGGED)->delete();
+        });
+
+        // After commit: DDL commits on MySQL, and files cannot be rolled back.
+        foreach (self::TABLES as $table) {
+            DB::statement("ALTER TABLE {$table} AUTO_INCREMENT = 1");
+        }
+        foreach (self::FILE_DIRS as $dir) {
+            Storage::disk(self::privateDisk())->deleteDirectory($dir);
+        }
+
+        $seeder = new RequestDataSeeder;
+        $seeder->seed = (int) $this->option('seed');
+        $seeder->setCommand($this)->run();
+
+        $this->reconcileStock();
+        $this->reconcileFleet();
+        AnalyticsCache::flush();
+
+        if (Resident::orderBy('resident_id')->pluck('barangay_id', 'resident_id')->all() !== $residentsBefore) {
+            $this->error('Residents did not end in the barangays they started in.');
+
+            return self::FAILURE;
+        }
+
+        foreach ([...self::TABLES, 'tbl_system_logs'] as $table) {
+            $this->line(str_pad($table, 32).DB::table($table)->count());
+        }
+        $this->info('Distinct barangays on requests: '.DB::table('tbl_service_request')->distinct()->count('barangay_id'));
+
+        return self::SUCCESS;
+    }
+
+    /** available = total - quantity out on Released loans (the rule serbis:report-equipment-stock checks). */
+    private function reconcileStock(): void
+    {
+        $out = DB::table('tbl_equipment_borrowing')->where('status', 'Released')->whereNotNull('equipment_id')
+            ->groupBy('equipment_id')->selectRaw('equipment_id, SUM(quantity) as qty')->pluck('qty', 'equipment_id');
+
+        foreach (Equipment::all() as $item) {
+            $item->update(['available_quantity' => $item->total_quantity - (int) ($out[$item->equipment_id] ?? 0)]);
+        }
+    }
+
+    /** A unit or responder is busy exactly when a Responding request holds it. Maintenance is left alone. */
+    private function reconcileFleet(): void
+    {
+        $responding = ServiceRequest::where('status', 'Responding');
+        $busyUnits = (clone $responding)->whereNotNull('vehicle_id')->pluck('vehicle_id')->all();
+        $busyCrew = DB::table('tbl_request_responders')->whereIn('request_id', (clone $responding)->select('request_id')->toBase())
+            ->pluck('responder_id')->all();
+
+        foreach (Vehicle::where('status', '!=', 'Maintenance')->get() as $unit) {
+            $unit->update(['status' => in_array($unit->vehicle_id, $busyUnits) ? 'Dispatched' : 'Available']);
+        }
+        foreach (Responder::where('status', '!=', 'off_duty')->get() as $responder) {
+            $responder->update(['status' => in_array($responder->responder_id, $busyCrew) ? 'deployed' : 'available']);
+        }
+    }
+}

@@ -2,6 +2,7 @@ library serbis.screens.service_request_form;
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/request_models.dart';
 import '../models/service_forms.dart';
@@ -10,15 +11,24 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/ambulance_steps.dart';
 import '../widgets/form_section.dart';
+import '../widgets/form_steps.dart';
 import '../widgets/service_form_fields.dart';
 import '../widgets/service_widgets.dart';
 import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 
+/// The relief form's three steps. English keys for [trEn].
+const reliefStepNames = ['Household', 'Assistance and delivery', 'ID and review'];
+
 /// One service's form, from its title to the Submit button, as a column with no
-/// scroll of its own: the host (a service page, or the Ambulance tab) supplies
-/// the header and the list it scrolls in.
+/// scroll of its own: the host (a service page) supplies the header and the
+/// list it scrolls in.
+///
+/// The ambulance is the exception: it fills its host (the Ambulance tab) as a
+/// five-step flow with its own header and footer, and submits from the last
+/// step. The shell routes Android back to [ServiceRequestFormState.handleBack].
 ///
 /// It owns the three jobs only a form can do: keep the resident's answers in
 /// [ServiceDrafts], check them, and submit.
@@ -38,6 +48,13 @@ class ServiceRequestForm extends StatefulWidget {
   /// Opens the Library's hotlines, from the ambulance safety notice.
   final VoidCallback? onOpenHotlines;
 
+  /// The form was closed: X or back on the ambulance's step 1, or back on the
+  /// first step of any other form.
+  final VoidCallback? onExit;
+
+  /// The header bell, on the forms that draw their own header.
+  final VoidCallback? onOpenNotifications;
+
   const ServiceRequestForm({
     super.key,
     required this.appState,
@@ -47,13 +64,15 @@ class ServiceRequestForm extends StatefulWidget {
     required this.onSubmitted,
     this.onServiceUnavailable,
     this.onOpenHotlines,
+    this.onExit,
+    this.onOpenNotifications,
   });
 
   @override
-  State<ServiceRequestForm> createState() => _ServiceRequestFormState();
+  State<ServiceRequestForm> createState() => ServiceRequestFormState();
 }
 
-class _ServiceRequestFormState extends State<ServiceRequestForm> {
+class ServiceRequestFormState extends State<ServiceRequestForm> {
   /// The ambulance form's destination dropdown (MDRRMO feedback, 2026-09-19).
   /// A local copy, for the reason the catalogue used to be one — `setState` is
   /// what makes the fetch visible on screen.
@@ -71,6 +90,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
   /// True while the multipart POST is in flight, so the button can show a
   /// spinner and refuse repeat taps.
   bool _submitting = false;
+
+  final _idKey = GlobalKey();
+  final _letterKey = GlobalKey();
+  final _dateKey = GlobalKey();
 
   ServiceDrafts get _drafts => widget.drafts;
   ServiceCatalogItem get _service => widget.service;
@@ -128,8 +151,29 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
   Future<void> _pickValidId() async {
     final picked = await _pickImage();
     if (picked != null) {
-      setState(() => _drafts.validId = picked);
+      setState(() {
+        _drafts.validId = picked;
+        _errors = const {};
+      });
     }
+  }
+
+  /// Camera capture for the valid ID. Downscaled so a phone photo stays under
+  /// the server's 2 MB cap.
+  Future<void> _takeValidIdPhoto() async {
+    final shot = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1600,
+      imageQuality: 80,
+    );
+    if (shot == null) return;
+    final bytes = await shot.readAsBytes();
+    final name = shot.name.contains('.') ? shot.name : '${shot.name}.jpg';
+    if (!mounted) return;
+    setState(() {
+      _drafts.validId = fp.PlatformFile(name: name, size: bytes.length, bytes: bytes);
+      _errors = const {};
+    });
   }
 
   Future<void> _pickSitePhoto() async {
@@ -148,7 +192,10 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     if (result == null || result.files.isEmpty) {
       return;
     }
-    setState(() => _drafts.letter = result.files.first);
+    setState(() {
+      _drafts.letter = result.files.first;
+      _errors = const {};
+    });
   }
 
   Future<fp.PlatformFile?> _pickImage() async {
@@ -163,6 +210,15 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     return result.files.first;
   }
 
+  /// Shows [errors] under their fields and scrolls the first one into view.
+  void _refuse(Map<String, String> errors, GlobalKey field) {
+    setState(() => _errors = errors);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = field.currentContext;
+      if (target != null) Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 200));
+    });
+  }
+
   Future<void> _submit() async {
     // The multipart upload carries a photo and has a 30-second timeout. Without
     // this guard every extra tap in that window filed another live request in
@@ -173,12 +229,11 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
 
     final service = _service;
     final attachments = _attachmentsFor(service.formKind);
+    final fil = widget.appState.language == AppLanguage.filipino;
 
     if (attachments == ServiceAttachments.standard &&
         (_drafts.validId == null || _drafts.validId!.bytes == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please attach a photo of your valid ID before submitting.')),
-      );
+      _refuse({'validId': trEn(fil, 'Attach a photo of a valid ID.')}, _idKey);
       return;
     }
 
@@ -189,30 +244,8 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
     // the account, where `phone_number` is required at registration and NOT
     // NULL, so there is nothing left to be blank.
 
-    // The same three the server requires for an ambulance request, and only
-    // those — refused here so the resident is told which field is missing
-    // instead of reading a 422 the app would surface as a generic failure.
-    // Everything else on this form is optional on purpose: a resident may not
-    // have the address or the diagnosis to hand, and admin verification
-    // confirms those by phone.
-    if (form is AmbulanceFormData) {
-      final missing = <String>[
-        if (form.patient.text.trim().isEmpty) 'the patient name',
-        if (form.destination.text.trim().isEmpty) 'where the ambulance should go',
-        if (form.relativeNames.isEmpty) 'at least one relative going with the patient',
-      ];
-
-      if (missing.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Please fill in ${missing.length > 1 ? '${missing.sublist(0, missing.length - 1).join(', ')} and ${missing.last}' : missing.single}.',
-            ),
-          ),
-        );
-        return;
-      }
-    }
+    // The ambulance's required fields (the three the server requires) are
+    // checked step by step in _stepErrors, before Submit can be reached.
 
     // The programs are booked for a day and need the office's lead time, so the
     // date and the letter are checked here; the server checks them again.
@@ -224,20 +257,19 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         final earliest = DateTime(today.year, today.month, today.day)
             .add(Duration(days: dateField.minDaysAhead));
         if (picked == null || picked.isBefore(earliest)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(picked == null
-                ? 'Please choose a preferred date.'
-                : 'Choose a date at least ${dateField.minDaysAhead} days from today.')),
-          );
+          _refuse({
+            dateField.key: picked == null
+                ? trEn(fil, 'Please choose a preferred date.')
+                : trEn(fil, 'Choose a date at least {n} days from today.')
+                    .replaceAll('{n}', '${dateField.minDaysAhead}'),
+          }, _dateKey);
           return;
         }
       }
 
       if (form.spec.attachments == ServiceAttachments.letterRequired &&
           (_drafts.letter == null || _drafts.letter!.bytes == null)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please attach your request letter before submitting.')),
-        );
+        _refuse({'letter': trEn(fil, 'Please attach your request letter before submitting.')}, _letterKey);
         return;
       }
     }
@@ -293,12 +325,6 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
         sitePhotoFileName:
             sendsSitePhoto && _drafts.sitePhoto?.bytes != null ? _drafts.sitePhoto?.name : null,
         landmark: _drafts.landmark.text.trim().isEmpty ? null : _drafts.landmark.text.trim(),
-        // Plumbed through three layers and sent by nothing until now. For an
-        // unscheduled ambulance request the server still claims a unit
-        // immediately, same as before; a scheduled one ignores this
-        // entirely and re-checks availability under a lock at approval
-        // instead — sending it here is harmless either way.
-        requiredVehicleType: service.formKind == ServiceFormKind.ambulance ? 'Ambulance' : null,
         // Relief goods only (StructuredFormData.offersFulfillment) — pickup/
         // delivery beyond equipment borrowing, MDRRMO feedback, 2026-09-18.
         fulfillmentMethod: form is StructuredFormData && form.offersFulfillment
@@ -346,6 +372,11 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
       _drafts.sitePhoto = null;
       _drafts.letter = null;
       _drafts.landmark.clear();
+      // Filed: the next ambulance request starts on a blank step 1, and a
+      // stepped form is back on its first so Back leaves the page.
+      if (service.formKind == ServiceFormKind.ambulance) _drafts.discardAmbulance();
+      _step = 0;
+      _errors = const {};
     });
 
     // A mutable local is not promoted inside a closure, and the sheet's builder
@@ -372,84 +403,347 @@ class _ServiceRequestFormState extends State<ServiceRequestForm> {
   @override
   Widget build(BuildContext context) {
     final f = widget.appState.language == AppLanguage.filipino;
-    final service = _service;
-    final kind = service.formKind;
-    final attachments = _attachmentsFor(kind);
-    final description = service.displayDescription(f);
+    if (_service.formKind == ServiceFormKind.ambulance) return _buildAmbulance(f);
+    return _buildStructured(f);
+  }
 
+  bool get _isRelief => _service.formKind == ServiceFormKind.relief;
+
+  /// Relief is three steps; every other structured form is one page.
+  List<String> get _structuredSteps => _isRelief ? reliefStepNames : const ['Details'];
+
+  StructuredFormData get _structuredForm => _drafts.formFor(_service.formKind) as StructuredFormData;
+
+  /// Header, the showing step (scrolls on its own), footer. The same shape as
+  /// the ambulance flow, under the shared title header instead of its own.
+  Widget _buildStructured(bool f) {
+    final steps = _structuredSteps;
+    final stepped = steps.length > 1;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(title: service.displayName(f)),
-        if (description.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Text(
-              description,
-              style: AppText.body(size: 14, color: AppColors.inkMuted, height: 1.5),
-            ),
-          ),
-        if (kind == ServiceFormKind.ambulance)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: SafetyNotice(filipino: f, onViewHotlines: widget.onOpenHotlines),
-          ),
-        ServiceFormFields(
-          data: _drafts.formFor(kind),
-          onChanged: () => setState(() {}),
-          appState: widget.appState,
-          ambulanceDestinations: _ambulanceDestinations,
-          barangays: _barangays,
-          landmark: kind == ServiceFormKind.ambulance ? _drafts.landmark : null,
+        TabHeaderBar(
+          title: _service.displayName(f),
+          subtitle: stepped
+              ? '${trEn(f, 'Step {n} of {total}').replaceAll('{n}', '${_step + 1}').replaceAll('{total}', '${steps.length}')}'
+                  ' · ${trEn(f, steps[_step])}'
+              : tr(f, 'services.subtitle'),
           filipino: f,
+          onBack: handleBack,
+          onNotifications: widget.onOpenNotifications,
         ),
-        FormSection(
-          label: tr(f, 'form_section.attachments'),
-          children: [
-            if (attachments != ServiceAttachments.standard)
-              AttachmentUploadField(
-                label: attachments == ServiceAttachments.letterRequired
-                    ? 'Request letter (required)'
-                    : 'Supporting document (optional)',
-                hint: 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)',
-                fileName: _drafts.letter?.name,
-                onTap: _pickLetter,
-                onClear: attachments == ServiceAttachments.letterOptional
-                    ? () => setState(() => _drafts.letter = null)
-                    : null,
-              )
-            else ...[
-              AttachmentUploadField(
-                label: 'Valid ID (required)',
-                hint: 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)',
-                fileName: _drafts.validId?.name,
-                onTap: _pickValidId,
-              ),
-              if (kind != ServiceFormKind.ambulance)
-                AttachmentUploadField(
-                  label: 'Site photo (optional)',
-                  hint: 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)',
-                  fileName: _drafts.sitePhoto?.name,
-                  onTap: _pickSitePhoto,
-                  onClear: () => setState(() => _drafts.sitePhoto = null),
+        Expanded(
+          child: ListView(
+            // A new key per step, so each step opens at its top.
+            key: ValueKey(_step),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, AppSpacing.xl),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (stepped) ...[
+                        FormStepProgress(step: _step, total: steps.length),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      ..._structuredBody(f),
+                      if (_submitFailed && _step == steps.length - 1) SubmitErrorCard(filipino: f, onRetry: _submit),
+                    ],
+                  ),
                 ),
+              ),
             ],
-          ],
-        ),
-        if (kind != ServiceFormKind.ambulance) ...[
-          const SizedBox(height: 12),
-          AppTextField(
-            label: 'Landmark (optional)',
-            hint: 'e.g. beside the chapel',
-            controller: _drafts.landmark,
           ),
+        ),
+        FormStepFooter(
+          step: _step,
+          stepNames: steps,
+          filipino: f,
+          submitting: _submitting,
+          onBack: handleBack,
+          onNext: _nextStructured,
+        ),
+      ],
+    );
+  }
+
+  void _nextStructured() {
+    if (_step == _structuredSteps.length - 1) {
+      _submit();
+    } else {
+      _goToStep(_step + 1);
+    }
+  }
+
+  List<Widget> _structuredBody(bool f) {
+    final form = _structuredForm;
+    final description = _service.displayDescription(f);
+    final intro = description.isEmpty
+        ? const <Widget>[]
+        : [
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: Text(
+                description,
+                style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkMuted, height: 1.5),
+              ),
+            ),
+          ];
+
+    if (!_isRelief) {
+      return [
+        ...intro,
+        ServiceFormFields(
+          data: form,
+          onChanged: () => setState(() => _errors = const {}),
+          filipino: f,
+          errors: _errors,
+          dateKey: _dateKey,
+        ),
+        FormSection(label: tr(f, 'form_section.attachments'), children: _attachmentFields(f)),
+        _landmarkField(f),
+      ];
+    }
+
+    return switch (_step) {
+      0 => [
+          ...intro,
+          NumberedCard(number: 1, title: trEn(f, reliefStepNames[0]), children: [
+            ServiceFormFields(
+              data: form,
+              onChanged: () => setState(() {}),
+              filipino: f,
+              sectionIndex: 0,
+              fulfillment: false,
+              labels: false,
+            ),
+          ]),
         ],
-        if (_submitFailed) SubmitErrorCard(filipino: f, onRetry: _submit),
-        const SizedBox(height: 6),
-        AppButton(
-          label: tr(f, 'common.submit_request'),
-          onPressed: _submit,
-          loading: _submitting,
+      1 => [
+          NumberedCard(number: 2, title: trEn(f, reliefStepNames[1]), children: [
+            ServiceFormFields(
+              data: form,
+              onChanged: () => setState(() {}),
+              filipino: f,
+              sectionIndex: 1,
+              labels: false,
+            ),
+          ]),
+        ],
+      _ => [
+          NumberedCard(number: 3, title: trEn(f, reliefStepNames[2]), children: [
+            ..._attachmentFields(f),
+            _landmarkField(f),
+          ]),
+          ..._reliefReview(f, form),
+        ],
+    };
+  }
+
+  /// The uploads a kind of service asks for, each with its inline error.
+  List<Widget> _attachmentFields(bool f) {
+    final attachments = _attachmentsFor(_service.formKind);
+    if (attachments != ServiceAttachments.standard) {
+      return [
+        KeyedSubtree(
+          key: _letterKey,
+          child: AttachmentUploadField(
+            label: attachments == ServiceAttachments.letterRequired
+                ? trEn(f, 'Request letter (required)')
+                : trEn(f, 'Supporting document (optional)'),
+            hint: trEn(f, 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)'),
+            filipino: f,
+            fileName: _drafts.letter?.name,
+            errorText: _errors['letter'],
+            onTap: _pickLetter,
+            onClear: attachments == ServiceAttachments.letterOptional
+                ? () => setState(() => _drafts.letter = null)
+                : null,
+          ),
+        ),
+      ];
+    }
+    return [
+      KeyedSubtree(
+        key: _idKey,
+        child: AttachmentUploadField(
+          label: trEn(f, 'Valid ID (required)'),
+          hint: trEn(f, 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)'),
+          filipino: f,
+          fileName: _drafts.validId?.name,
+          errorText: _errors['validId'],
+          onTap: _pickValidId,
+        ),
+      ),
+      AttachmentUploadField(
+        label: trEn(f, 'Site photo (optional)'),
+        hint: trEn(f, 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)'),
+        filipino: f,
+        fileName: _drafts.sitePhoto?.name,
+        onTap: _pickSitePhoto,
+        onClear: () => setState(() => _drafts.sitePhoto = null),
+      ),
+    ];
+  }
+
+  Widget _landmarkField(bool f) => Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: AppTextField(
+          label: trEn(f, 'Landmark (optional)'),
+          hint: trEn(f, 'e.g. beside the chapel'),
+          controller: _drafts.landmark,
+        ),
+      );
+
+  /// What the resident entered on the first two relief steps, each card with
+  /// Edit back to its step. Row labels are the form's own field labels.
+  List<Widget> _reliefReview(bool f, StructuredFormData form) {
+    final none = trEn(f, 'Not given');
+    String or(String value) => value.trim().isEmpty ? none : value.trim();
+    String text(String key) => or(form.field(key).text);
+    String label(String key) => trEn(f, form.spec.fields.firstWhere((field) => field.key == key).label);
+    final delivery = form.fulfillmentMethod == 'Delivery';
+    final cards = [
+      [
+        for (final key in const ['household_head', 'address', 'household_size']) (label(key), text(key)),
+      ],
+      [
+        (label('assistance'), trEn(f, form.choice('assistance'))),
+        (trEn(f, 'How should this reach you?'), trEn(f, form.fulfillmentMethod)),
+        if (delivery) (trEn(f, 'Delivery address'), or(form.deliveryAddress.text)),
+      ],
+    ];
+    return [
+      for (var i = 0; i < cards.length; i++)
+        AmbulanceReviewCard(
+          title: trEn(f, reliefStepNames[i]),
+          rows: cards[i],
+          filipino: f,
+          onEdit: () => _goToStep(i),
+        ),
+    ];
+  }
+
+  /// Ambulance only: which of the five steps is showing, and the inline
+  /// errors the last Next found on it.
+  int _step = 0;
+  Map<String, String> _errors = const {};
+
+  AmbulanceFormData get _ambulanceForm => _drafts.formFor(ServiceFormKind.ambulance) as AmbulanceFormData;
+
+  void _goToStep(int step) => setState(() {
+        _step = step;
+        _errors = const {};
+      });
+
+  /// Checks only the showing step. Same three fields the server requires,
+  /// plus the valid ID.
+  Map<String, String> _stepErrors(bool f) {
+    final form = _ambulanceForm;
+    return switch (_step) {
+      0 when form.patient.text.trim().isEmpty => {'patient': trEn(f, 'Enter the patient name.')},
+      1 when form.destination.text.trim().isEmpty => {'destination': trEn(f, 'Enter where the ambulance should go.')},
+      2 when form.relativeNames.isEmpty => {
+          'relative': trEn(f, 'Name at least one relative going with the patient.')
+        },
+      3 when _drafts.validId?.bytes == null => {'validId': trEn(f, 'Attach a photo of a valid ID.')},
+      _ => const {},
+    };
+  }
+
+  void _next(bool f) {
+    final errors = _stepErrors(f);
+    if (errors.isNotEmpty) {
+      setState(() => _errors = errors);
+      return;
+    }
+    if (_step == ambulanceStepNames.length - 1) {
+      _submit();
+    } else {
+      _goToStep(_step + 1);
+    }
+  }
+
+  /// Android back (routed here by the shell) and the footer's Back.
+  void handleBack() => _step > 0
+      ? _goToStep(_step - 1)
+      : _service.formKind == ServiceFormKind.ambulance
+          ? _exit()
+          : widget.onExit?.call();
+
+  /// True while Back would move to an earlier step rather than leave the form.
+  bool get canStepBack => _step > 0;
+
+  /// X, or back on step 1: ask before discarding anything entered, then leave.
+  Future<void> _exit() async {
+    if (_ambulanceForm.isDirty || _drafts.landmark.text.trim().isNotEmpty) {
+      final f = widget.appState.language == AppLanguage.filipino;
+      final discard = await showConfirmDialog(
+        context,
+        title: trEn(f, 'Discard this request?'),
+        body: trEn(f, 'What you entered will be cleared.'),
+        keepLabel: trEn(f, 'Keep editing'),
+        confirmLabel: trEn(f, 'Discard'),
+      );
+      if (!discard || !mounted) return;
+      _drafts.discardAmbulance();
+      setState(() {
+        _step = 0;
+        _errors = const {};
+        _submitFailed = false;
+      });
+    }
+    widget.onExit?.call();
+  }
+
+  /// Header, the showing step (scrolls on its own), footer.
+  Widget _buildAmbulance(bool f) {
+    return Column(
+      children: [
+        AmbulanceStepHeader(step: _step, filipino: f, onClose: _exit),
+        Expanded(
+          child: ListView(
+            // A new key per step, so each step opens at its top.
+            key: ValueKey(_step),
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, AppSpacing.xl),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: Column(
+                    children: [
+                      AmbulanceStepFields(
+                        step: _step,
+                        form: _ambulanceForm,
+                        appState: widget.appState,
+                        filipino: f,
+                        onChanged: () => setState(() {}),
+                        destinations: _ambulanceDestinations,
+                        barangays: _barangays,
+                        landmark: _drafts.landmark,
+                        errors: _errors,
+                        validIdName: _drafts.validId?.name,
+                        onTakePhoto: _takeValidIdPhoto,
+                        onChooseFile: _pickValidId,
+                        onOpenHotlines: widget.onOpenHotlines,
+                        onEdit: _goToStep,
+                      ),
+                      if (_submitFailed && _step == ambulanceStepNames.length - 1)
+                        SubmitErrorCard(filipino: f, onRetry: _submit),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        AmbulanceStepFooter(
+          step: _step,
+          filipino: f,
+          submitting: _submitting,
+          onBack: handleBack,
+          onNext: () => _next(f),
         ),
       ],
     );

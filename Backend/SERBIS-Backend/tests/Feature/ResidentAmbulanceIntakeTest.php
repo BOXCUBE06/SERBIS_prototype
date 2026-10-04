@@ -115,6 +115,27 @@ class ResidentAmbulanceIntakeTest extends TestCase
         $this->assertNull($booking->condition_notes);
     }
 
+    public function test_an_unscheduled_request_leaves_the_unit_for_mdrrmo_to_assign(): void
+    {
+        // Old apps still send required_vehicle_type; it must not claim a unit.
+        $unit = Vehicle::create(['unit_identifier' => 'AMB-01', 'type' => 'Ambulance', 'status' => 'Available']);
+
+        $this->actingAs($this->resident)
+            ->postJson('/api/service-requests', $this->payload(['required_vehicle_type' => 'Ambulance']))
+            ->assertStatus(201);
+
+        $this->assertNull(ServiceRequest::first()->vehicle_id);
+        $this->assertSame('Pending', ServiceRequest::first()->status);
+        $this->assertSame('Available', $unit->fresh()->status);
+    }
+
+    public function test_an_unscheduled_request_files_even_with_no_unit_free(): void
+    {
+        $this->actingAs($this->resident)
+            ->postJson('/api/service-requests', $this->payload())
+            ->assertStatus(201);
+    }
+
     public function test_a_missing_patient_name_is_rejected(): void
     {
         $this->actingAs($this->resident)

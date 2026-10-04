@@ -39,6 +39,12 @@ class AppTextField extends StatelessWidget {
   /// beyond their [hint].
   final String? helpText;
 
+  /// Draws a red asterisk after the label. Display only; callers validate.
+  final bool isRequired;
+
+  /// Small grey line under the input.
+  final String? note;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -53,6 +59,8 @@ class AppTextField extends StatelessWidget {
     this.obscure = false,
     this.suffixIcon,
     this.helpText,
+    this.isRequired = false,
+    this.note,
   });
 
   /// The phone field, spelled once instead of at each of the call sites that
@@ -101,6 +109,7 @@ class AppTextField extends StatelessWidget {
               // Flexible: at this size a long label wraps instead of pushing the
               // help icon off the edge of a 320dp screen.
               Flexible(child: Text(label, style: AppText.fieldLabel())),
+              if (isRequired) const RequiredMark(),
               if (helpText != null) ...[
                 const SizedBox(width: 4),
                 Tooltip(
@@ -122,75 +131,95 @@ class AppTextField extends StatelessWidget {
             inputFormatters: inputFormatters,
             enabled: enabled,
             obscureText: obscure,
-            style: AppText.body(size: 14),
+            style: AppText.body(size: AppTextSize.bodyLg),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+              hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
               errorText: errorText,
-              errorStyle: AppText.body(size: 11, color: AppColors.red600),
+              errorStyle: AppText.body(size: AppTextSize.small, color: AppColors.red600),
               suffixIcon: suffixIcon,
               counterText: '',
+              // 48dp single-line fields.
+              constraints: lines == 1 ? const BoxConstraints(minHeight: 48) : null,
               filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              fillColor: AppColors.fieldFill,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
               disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.fieldBorder),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
               ),
               errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
               focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
             ),
           ),
+          if (note != null) FieldNote(note!),
         ],
       ),
     );
   }
 }
 
-/// The app's labelled dropdown. Was `_Dropdown` in the services screen.
-/// Generic over the value so a dropdown can carry the object it selects rather
-/// than its label. The service picker needs that: two services could be given
-/// the same name in the admin panel, and a `List<String>` would make them the
-/// same option. Existing `List<String>` call sites infer `T = String` and are
-/// unchanged.
-class AppDropdown<T> extends StatelessWidget {
-  final String label;
-  final List<T> items;
-  final T value;
-  final ValueChanged<T> onChanged;
+/// " *" after a required field's label.
+class RequiredMark extends StatelessWidget {
+  const RequiredMark({super.key});
 
-  /// How to print an item. Defaults to `toString()`, which is what the
-  /// `List<String>` callers were already relying on.
-  final String Function(T)? itemLabel;
+  @override
+  Widget build(BuildContext context) =>
+      Text(' *', style: AppText.fieldLabel().copyWith(color: AppColors.red600));
+}
 
-  const AppDropdown({
+/// Small grey line under a field.
+class FieldNote extends StatelessWidget {
+  final String text;
+  const FieldNote(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.xs),
+        child: Text(text, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4)),
+      );
+}
+
+/// A short list of answers drawn open, one 48dp row each, instead of a popup
+/// menu: every option is visible without a tap and the chosen one is marked by
+/// more than colour. For the long lists (barangays, hospitals) use
+/// [AppSearchField].
+class AppChoiceList extends StatelessWidget {
+  /// Null when the surrounding sheet already says what is being chosen.
+  final String? label;
+  final List<String> items;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  /// How to print an item; the value itself is what [onChanged] reports.
+  final String Function(String)? itemLabel;
+
+  const AppChoiceList({
     super.key,
-    required this.label,
+    this.label,
     required this.items,
     required this.value,
     required this.onChanged,
     this.itemLabel,
   });
-
-  String _label(T item) => itemLabel?.call(item) ?? '$item';
 
   @override
   Widget build(BuildContext context) {
@@ -199,31 +228,65 @@ class AppDropdown<T> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.fieldLabel()),
-          const SizedBox(height: AppSpacing.xs),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.line, width: 1.5),
+          if (label != null) ...[
+            Text(label!, style: AppText.fieldLabel()),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _row(item, item == value),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<T>(
-                value: value,
-                isExpanded: true,
-                icon: const Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
-                style: AppText.body(size: 14, color: AppColors.ink),
-                items: items
-                    .map((i) => DropdownMenuItem<T>(value: i, child: Text(_label(i))))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) onChanged(v);
-                },
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String item, bool selected) {
+    return Semantics(
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      button: true,
+      child: Material(
+        color: selected ? AppColors.greenSelected : AppColors.fieldFill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: BorderSide(
+            color: selected ? AppColors.green700 : AppColors.fieldBorder,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: InkWell(
+          onTap: () => onChanged(item),
+          canRequestFocus: false,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                    size: 22,
+                    color: selected ? AppColors.green700 : AppColors.inkFaint,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      itemLabel?.call(item) ?? item,
+                      style: AppText.body(
+                        size: AppTextSize.bodyLg,
+                        weight: selected ? FontWeight.w600 : FontWeight.w400,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -241,6 +304,11 @@ class AppSearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final IconData? icon;
 
+  /// How to show an item. The value itself is what [onChanged] reports.
+  final String Function(String)? itemLabel;
+
+  final bool isRequired;
+
   const AppSearchField({
     super.key,
     this.label,
@@ -249,13 +317,15 @@ class AppSearchField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.icon,
+    this.itemLabel,
+    this.isRequired = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: const BorderSide(color: AppColors.fieldBorder),
     );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -263,7 +333,10 @@ class AppSearchField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (label != null) ...[
-            Text(label!, style: AppText.fieldLabel()),
+            Row(children: [
+              Flexible(child: Text(label!, style: AppText.fieldLabel())),
+              if (isRequired) const RequiredMark(),
+            ]),
             const SizedBox(height: AppSpacing.xs),
           ],
           DropdownMenu<String>(
@@ -277,12 +350,12 @@ class AppSearchField extends StatelessWidget {
             menuHeight: 280,
             hintText: hint,
             leadingIcon: icon == null ? null : Icon(icon, size: 18, color: AppColors.inkFaint),
-            textStyle: AppText.body(size: 14, color: AppColors.ink),
+            textStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink),
             inputDecorationTheme: InputDecorationTheme(
               filled: true,
-              fillColor: AppColors.surface,
-              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              fillColor: AppColors.fieldFill,
+              hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               border: border,
               enabledBorder: border,
               focusedBorder: border.copyWith(
@@ -290,7 +363,7 @@ class AppSearchField extends StatelessWidget {
               ),
             ),
             dropdownMenuEntries: [
-              for (final item in items) DropdownMenuEntry(value: item, label: item),
+              for (final item in items) DropdownMenuEntry(value: item, label: itemLabel?.call(item) ?? item),
             ],
             onSelected: (selected) {
               if (selected != null) onChanged(selected);

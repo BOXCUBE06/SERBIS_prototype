@@ -42,6 +42,7 @@ class _FakeApi extends ApiService {
     String? streetAddress,
     bool? smsOptIn,
     String? currentPassword,
+    int? barangayId,
   }) async {
     calls.add({
       'first_name': firstName,
@@ -141,7 +142,7 @@ void main() {
     await _open(tester, smsOptIn: true);
 
     expect(_switch(tester).value, isTrue);
-    expect(find.text('On — MDRRMO text blasts are sent to your number.'),
+    expect(find.text('On'),
         findsOneWidget);
   });
 
@@ -153,7 +154,7 @@ void main() {
     // The off copy says the whole truth: no blast at all. There is no exemption
     // in SmsController, so anything softer here would be a promise the backend
     // does not keep.
-    expect(find.text('Off — you will not receive any MDRRMO text blast.'),
+    expect(find.text('Off'),
         findsOneWidget);
   });
 
@@ -202,7 +203,7 @@ void main() {
     // The row now shows the refreshed profile the shell was handed, not the
     // value the screen optimistically set — there is no local copy to diverge.
     expect(_switch(tester).value, isFalse);
-    expect(find.text('Off — you will not receive any MDRRMO text blast.'),
+    expect(find.text('Off'),
         findsOneWidget);
   });
 
@@ -223,7 +224,7 @@ void main() {
     // failed request is the old bug: a resident told they opted out while the
     // blast still reaches them.
     expect(_switch(tester).value, isTrue);
-    expect(find.text('On — MDRRMO text blasts are sent to your number.'),
+    expect(find.text('On'),
         findsOneWidget);
   });
 
@@ -267,6 +268,16 @@ void main() {
 
       expect(body.containsKey('sms_opt_in'), isFalse);
       expect(body, {'first_name': 'Maria'});
+    });
+
+    test('a barangay move goes out as barangay_id, and only when set', () {
+      expect(ApiService.buildProfileUpdateBody(barangayId: 2), {'barangay_id': 2});
+      expect(ApiService.buildProfileUpdateBody(firstName: 'Maria').containsKey('barangay_id'), isFalse);
+    });
+
+    test('AppUser reads barangay_id from the profile', () {
+      expect(AppUser.fromJson({'barangay_id': 7}).barangayId, 7);
+      expect(AppUser.fromJson(const {}).barangayId, isNull);
     });
   });
 

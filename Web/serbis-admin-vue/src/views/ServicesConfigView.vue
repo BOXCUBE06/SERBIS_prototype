@@ -1,6 +1,8 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <PageHeader title="Manage Services" />
+    <PageHeader title="Manage services">
+      <template v-slot:subtitle>{{ pluralize(services.length, 'service') }} · {{ services.filter((s) => s.is_active).length }} active</template>
+    </PageHeader>
 
     <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 w-100" density="compact" rounded="lg">
       {{ apiError }}
@@ -11,7 +13,11 @@
 
     <div class="w-100">
       <DataTablePage
+        :refreshing="refreshing"
         compact
+        filter-bar
+        board-table
+        :row-height="56"
         collapse-mobile
         @click:row="(_event, { item }) => openEdit(item)"
         :tabs="statusTabs"
@@ -35,13 +41,10 @@
         @clear-all="clearFilter"
       >
         <template v-slot:filters>
-          <v-select
-            v-model="categoryFilter"
-            :items="categoryOptions"
-            label="Category"
-            variant="outlined" density="compact" hide-details rounded="lg"
-          ></v-select>
+          <FilterSelect v-model="categoryFilter" :items="categoryOptions" label="Category" />
         </template>
+
+        <template v-slot:summary>{{ pluralize(filteredServices.length, 'service') }}</template>
 
         <template v-slot:item.service_name="{ item }">
           <div class="service-cell">
@@ -60,7 +63,7 @@
         </template>
 
         <template v-slot:item.status="{ item }">
-          <StatusChip :status="item.is_active ? 'Active' : 'Deactivated'" :label="statusLabel(item)" />
+          <StatusPill :status="item.is_active ? 'Active' : 'Deactivated'" :label="statusLabel(item)" />
         </template>
 
         <template v-slot:item.actions="{ item }">
@@ -76,64 +79,21 @@
     </div>
 
     <!-- Edit -->
-    <v-dialog v-model="modal.show" max-width="560" persistent>
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
-          <div>
-            <div class="text-h6 font-weight-bold text-high-emphasis">Edit service</div>
-            <div v-if="modal.addedOn" class="text-body-2 text-medium-emphasis">Added {{ modal.addedOn }}</div>
-          </div>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
-        </v-card-title>
-
-        <v-card-text class="px-6 py-2">
-          <v-alert v-if="modal.error" type="error" variant="tonal" density="comfortable" rounded="lg" class="mb-4" role="alert">
-            {{ modal.error }}
-          </v-alert>
-
-          <!-- Fixed once a service exists (ServiceController::update refuses a
-               change): the app names services from its own translations, and
-               the category drives dispatch and vehicle mapping. -->
-          <dl class="service-facts mb-2">
-            <dt class="text-body-2 text-medium-emphasis">Service</dt>
-            <dd class="text-body-1 font-weight-bold text-high-emphasis">{{ form.service_name }}</dd>
-            <dt class="text-body-2 text-medium-emphasis">Category</dt>
-            <dd class="text-body-1 text-high-emphasis">{{ categories[form.category]?.label ?? form.category }}</dd>
-          </dl>
-          <p class="text-body-2 text-medium-emphasis mb-4">The name and category are fixed; only the description can be changed.</p>
-
-          <v-textarea
-            v-model="form.description"
-            label="Description"
-            placeholder="When this service applies and what the MDRRMO provides"
-            hint="Optional, but it helps residents pick the right service"
-            persistent-hint
-            rows="3"
-            auto-grow
-            variant="outlined"
-            density="comfortable"
-            rounded="lg"
-          ></v-textarea>
-        </v-card-text>
-
-        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="text-none font-weight-bold" :disabled="modal.loading" @click="closeModal">
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            height="48"
-            class="px-6 text-none font-weight-bold"
-            :loading="modal.loading"
-            @click="saveService"
-          >
-            Save changes
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- Name and category are fixed once a service exists (ServiceController::update
+         refuses a change): the app names services from its own translations, and
+         the category drives dispatch and vehicle mapping. -->
+    <EditDialog
+      v-model="modal.show"
+      title="Edit service"
+      confirm-label="Save changes"
+      :width="520"
+      :note="modal.addedOn ? `Added ${modal.addedOn}` : ''"
+      :fields="editFields"
+      :form="form"
+      :error="modal.error"
+      :loading="modal.loading"
+      @save="saveService"
+    />
 
     <!-- Disable confirm. Enabling needs none: it only makes a service requestable again. -->
     <v-dialog v-model="disableDialog.show" max-width="420">
@@ -159,10 +119,14 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
-import StatusChip from '@/components/StatusChip.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
+import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
+import { pluralize } from '@/composables/adminUi'
 
 const API = `${API_BASE}/services`
 
@@ -253,13 +217,16 @@ const toggleExtra = (item) => ({
   disabled: togglingId.value === idOf(item),
 })
 
-const fetchServices = async () => {
+const { get, refreshing } = useCachedFetch()
+
+const fetchServices = async (fresh = false) => {
   apiError.value = ''
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to load services')
-    services.value = Array.isArray(data) ? data : (data.data || [])
+    await get('/services', {
+      ttl: REFERENCE_TTL_MS,
+      fresh,
+      onData: (data) => { services.value = Array.isArray(data) ? data : (data.data || []); initialLoad.value = false },
+    })
   } catch (error) {
     apiError.value = error.message
   } finally {
@@ -267,12 +234,21 @@ const fetchServices = async () => {
   }
 }
 
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/services'); return fetchServices(true) }
+
+// Only the description is editable; the other rows are read-only (see the dialog).
+const editFields = [
+  { key: 'service_name', label: 'Service', readonly: true },
+  { key: 'category', label: 'Category', readonly: true, display: (v) => categories[v]?.label ?? v },
+  { key: 'fixed-note', text: 'The name and category are fixed; only the description can be changed.' },
+  { key: 'description', label: 'Description', type: 'textarea', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.' },
+]
+
 const openEdit = (item) => {
   form.value = { service_name: item.service_name || '', description: item.description || '', category: item.category || 'relief' }
   modal.value = { show: true, loading: false, error: '', targetId: idOf(item), addedOn: formatDate(item.created_at) }
 }
-
-const closeModal = () => { modal.value.show = false }
 
 const saveService = async () => {
   modal.value.loading = true
@@ -290,7 +266,7 @@ const saveService = async () => {
       const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
       throw new Error(msg)
     }
-    await fetchServices()
+    await reload()
     modal.value.show = false
     notify('Service updated')
   } catch (error) {
@@ -311,7 +287,7 @@ const setActive = async (item, isActive) => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.message || 'Failed to update the service')
-    await fetchServices()
+    await reload()
     notify(isActive ? 'Service enabled' : 'Service disabled')
     return true
   } catch (error) {
@@ -340,23 +316,14 @@ onMounted(fetchServices)
 <style scoped>
 .gap-3 { gap: 12px; }
 
-.service-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: 16px;
-  row-gap: 4px;
-  align-items: baseline;
-}
-.service-facts dd { margin: 0; }
-
-/* Two lines inside the 48px compact row: the name, then the description
+/* Two lines inside the 56px row: the name, then the description (12/16)
    clamped to one line with the full text on the cell's title. */
-.service-cell { min-width: 0; line-height: 1.25; }
+.service-cell { min-width: 0; }
 .service-name,
 .service-desc {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.service-desc { font-size: 0.8125rem !important; }
+.service-desc { font-size: 12px !important; line-height: 16px; }
 </style>

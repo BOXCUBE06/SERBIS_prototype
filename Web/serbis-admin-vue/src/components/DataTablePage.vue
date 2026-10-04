@@ -20,7 +20,7 @@
     border
     rounded="lg"
     class="data-table-page bg-surface pa-4"
-    :class="{ 'dtp-compact': compact, 'dtp-collapse': collapseMobile }"
+    :class="{ 'dtp-compact': compact, 'dtp-collapse': collapseMobile, 'dtp-board': filterBar, 'dtp-boardtable': boardTable }"
     :style="{
       '--dtp-row-height': ROW_HEIGHT + 'px',
       '--dtp-header-height': HEADER_HEIGHT + 'px',
@@ -37,7 +37,8 @@
       class="mb-4"
     />
 
-    <div class="dtp-toolbar d-flex align-center gap-3 mb-3">
+    <!-- On the board layout an empty toolbar would still take a 20px gap. -->
+    <div v-if="!filterBar || searchable || $slots.filters || $slots.actions || sortHint" class="dtp-toolbar d-flex align-center gap-3 mb-3" :class="{ 'filter-bar': filterBar }">
       <v-text-field
         v-if="searchable"
         :model-value="search"
@@ -56,7 +57,9 @@
         <slot name="filters" />
       </div>
 
-      <div v-if="$slots.actions" class="dtp-actions ml-auto d-flex align-center gap-2">
+      <div v-if="$slots.actions || sortHint" class="dtp-actions ml-auto d-flex align-center gap-2">
+        <!-- "Sorted by: …": the page's default order, or the header sort the user chose. -->
+        <span v-if="sortHint" class="text-caption text-medium-emphasis">{{ sortText }}</span>
         <slot name="actions" />
       </div>
     </div>
@@ -88,6 +91,9 @@
 
     <slot name="before-table" />
 
+    <!-- The card: just the table and its footer. On the board layout (filterBar)
+         the tabs, filter bar and chips above sit on the page, not in here. -->
+    <div class="dtp-card">
     <!-- `content` replaces the table (a grid view, say) and keeps the toolbar,
          tabs, filter chips and footer around it; the caller renders the page's
          rows itself from the same page / items-per-page. -->
@@ -104,7 +110,8 @@
         :page="page"
         :item-value="itemValue"
         hide-default-footer
-        :sort-by="sortBy"
+        v-model:sort-by="sortState"
+        :must-sort="mustSort"
         :show-select="selectable"
         select-strategy="page"
         :model-value="selected"
@@ -156,13 +163,15 @@
         ></v-pagination>
       </div>
     </div>
+    </div>
   </v-card>
 </template>
 
 <script setup>
-import { computed, useSlots } from 'vue'
+import { computed, ref, useSlots } from 'vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
+import { pluralize } from '@/composables/adminUi'
 
 const props = defineProps({
   searchable: { type: Boolean, default: true },
@@ -212,6 +221,27 @@ const props = defineProps({
   // fixed layout is dropped so that column keeps its width, and any header
   // carrying `headerProps/cellProps: { class: 'dtp-hide-sm' }` is hidden.
   collapseMobile: { type: Boolean, default: false },
+
+  // The compact 36px filter bar (styles/filter-bar.css) for the toolbar row.
+  // Resident Requests first; the other lists keep the taller fields for now.
+  filterBar: { type: Boolean, default: false },
+
+  // Footer text as "Showing 1 to 10 of 15 units" instead of a bare count.
+  rangeSummary: { type: Boolean, default: false },
+
+  // The "Sorted by: …" text for the page's default order, shown at the right of the
+  // toolbar. A header sort the user picks replaces it until the sort is cleared.
+  sortHint: { type: String, default: '' },
+
+  // Row height in px; the two-line person rows (Accounts) need 56.
+  rowHeight: { type: Number, default: 48 },
+
+  // The board's table finish (12px gutters, 24px at the card edges, a .08 rule
+  // per row, 40px row actions, 14px footer, 320px search). Use with filterBar.
+  boardTable: { type: Boolean, default: false },
+
+  // A header toggles ascending and descending, never off, so the list always has a sort.
+  mustSort: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -234,6 +264,31 @@ const slots = useSlots()
 // (Service Vehicles' columns arrive with its data).
 const forwardSlotNames = () => Object.keys(slots).filter((name) => !OWN_SLOTS.has(name))
 
+// The table's sort, seeded from `sortBy`. Held here (v-model) so the hint can follow it;
+// the table sorts exactly as before.
+const sortState = ref([...props.sortBy])
+
+const DATE_KEY = /(?:_at|date|time|filed|scheduled|due|returned|departed|submitted|created|resolved)$/i
+// What each direction is called for the column's kind: dates newest/oldest, numbers
+// lowest/highest, everything else A–Z / Z–A.
+const sortWord = (header, order) => {
+  const sample = props.items.map((item) => {
+    const v = typeof header.value === 'function' ? header.value(item) : item?.[header.value ?? header.key]
+    return v ?? item?.[header.key]
+  }).find((v) => v !== null && v !== undefined && v !== '')
+  const asc = order !== 'desc'
+  if (DATE_KEY.test(String(header.key)) || sample instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(String(sample))) return asc ? 'oldest' : 'newest'
+  if (typeof sample === 'number') return asc ? 'lowest' : 'highest'
+  return asc ? 'A–Z' : 'Z–A'
+}
+const sortText = computed(() => {
+  const [first] = sortState.value
+  const header = first && props.headers.find((h) => h.key === first.key)
+  const isDefault = JSON.stringify(sortState.value) === JSON.stringify(props.sortBy)
+  if (!header || isDefault) return props.sortHint
+  return `Sorted by: ${header.title} (${sortWord(header, first.order)})`
+})
+
 const pageCount = computed(() => Math.max(1, Math.ceil(props.items.length / props.itemsPerPage)))
 // Compact lists hide the pager and page size while everything fits the smallest
 // page size, so a short list has no controls that do nothing.
@@ -243,7 +298,7 @@ const showRowsPerPage = computed(() => !props.compact || props.items.length > Ma
 // content is the layout shift this component exists to remove. The table
 // area reserves a full page of rows even when the page is partial or empty,
 // so switching tabs or filters never moves the footer.
-const ROW_HEIGHT = 48
+const ROW_HEIGHT = computed(() => props.rowHeight)
 const HEADER_HEIGHT = 44
 // Compact lists reserve only the rows they show (at least one, for the empty
 // message), so a short list has no dead space; the footer still holds still
@@ -253,7 +308,7 @@ const rowsShown = computed(() => {
   const onPage = props.items.length - (props.page - 1) * props.itemsPerPage
   return Math.min(props.itemsPerPage, Math.max(onPage, 1))
 })
-const tableBodyHeight = computed(() => rowsShown.value * ROW_HEIGHT)
+const tableBodyHeight = computed(() => rowsShown.value * ROW_HEIGHT.value)
 const tableMinHeight = computed(() => tableBodyHeight.value + HEADER_HEIGHT)
 
 // A smaller page size can strand the current page past the new last page.
@@ -262,7 +317,14 @@ const onItemsPerPage = (value) => {
   emit('update:page', 1)
 }
 
-const defaultSummary = computed(() => `${props.items.length} ${props.resultNoun}`)
+const defaultSummary = computed(() => {
+  const total = props.items.length
+  if (!props.rangeSummary) return `${total} ${props.resultNoun}`
+  if (!total) return `No ${props.resultNoun}`
+  const from = (props.page - 1) * props.itemsPerPage + 1
+  // `resultNoun` is the plural ("units"); pluralize takes the singular.
+  return `Showing ${from} to ${Math.min(total, props.page * props.itemsPerPage)} of ${pluralize(total, props.resultNoun.replace(/s$/, ''))}`
+})
 
 // Internal key for the search chip; never collides with a caller's own keys.
 const SEARCH_FILTER_KEY = '__search'
@@ -316,6 +378,42 @@ const clearAll = () => {
   flex: 0 0 88px;
   width: 88px;
 }
+/* Board layout (filterBar): the card holds only the table and its footer. The
+   tabs, filter bar and chips sit above it on the page background, 20px apart.
+   Values are the canvas boards' (Requests, AmbBookings, EqActive). */
+.data-table-page.dtp-board {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible;
+}
+/* The children carry their own mb-* from the shared layout; the gap replaces them. */
+.dtp-board > :not(.dtp-card) { margin: 0 !important; }
+.dtp-board > .segmented-tabs { align-self: flex-start; }
+.dtp-board > .dtp-filter-row { min-height: 0; }
+.dtp-board > .dtp-toolbar { gap: 8px; }
+.dtp-board .dtp-search { flex: 0 0 300px; width: 300px; max-width: 100%; }
+.dtp-board .dtp-card {
+  border-radius: 24px;
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.dtp-board .dtp-footer { padding: 14px 24px !important; }
+/* After the .dtp-filters rule above, same specificity: the selects size to
+   their label and value instead of the 128-200px clamp. */
+.data-table-page.dtp-board .dtp-filters :deep(.v-input) {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 200px;
+  max-width: 100%;
+}
+
 /* Below 1280 the floors no longer fit one row; wrap rather than overflow. */
 @media (max-width: 1279px) {
   .data-table-page .dtp-toolbar {
@@ -395,7 +493,7 @@ const clearAll = () => {
 }
 .dtp-table :deep(thead th) {
   height: var(--dtp-header-height) !important;
-  font-size: 0.72rem !important;
+  font-size: 0.75rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -408,6 +506,12 @@ const clearAll = () => {
 .dtp-table :deep(tbody td) {
   height: var(--dtp-row-height) !important;
   overflow: hidden;
+  font-size: 0.875rem;
+}
+/* Txn no. column, same size and no wrap on every list. */
+.dtp-table :deep(.txn) {
+  font-size: 13px;
+  white-space: nowrap;
 }
 /* Empty result: the lone no-data cell fills the whole reserved body. */
 .dtp-table :deep(tr.v-data-table-rows-no-data td) {
@@ -419,6 +523,26 @@ const clearAll = () => {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
 }
+/* boardTable: values from the ResTable / ResToolbar boards. */
+.dtp-boardtable .dtp-search { flex: 0 0 320px; width: 320px; }
+.dtp-boardtable .dtp-toolbar :deep(.v-field) { border-radius: 10px; }
+.dtp-boardtable .dtp-table :deep(th),
+.dtp-boardtable .dtp-table :deep(td) { padding-left: 12px !important; padding-right: 12px !important; }
+.dtp-boardtable .dtp-table :deep(th:first-child),
+.dtp-boardtable .dtp-table :deep(td:first-child) { padding-left: 24px !important; }
+.dtp-boardtable .dtp-table :deep(th:last-child),
+.dtp-boardtable .dtp-table :deep(td:last-child) { padding-right: 24px !important; }
+.dtp-boardtable .dtp-table :deep(tbody td) { border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
+.dtp-boardtable.dtp-compact .dtp-table :deep(tbody tr:hover) { background: rgba(var(--v-theme-on-surface), 0.025); }
+.dtp-boardtable .dtp-table :deep(.row-actions__inline .v-btn) { width: 40px; height: 40px; border-radius: 10px; }
+.dtp-boardtable .dtp-table :deep(.row-actions__inline .v-icon) { font-size: 18px; }
+.dtp-boardtable .dtp-table :deep(.row-actions__inline .v-btn:not(.row-action-delete)) { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+.dtp-boardtable .dtp-table :deep(.row-action-delete) { opacity: 1; }
+.dtp-boardtable.dtp-compact .dtp-footer,
+.dtp-boardtable.dtp-compact .dtp-footer :deep(.text-body-2),
+.dtp-boardtable.dtp-compact .dtp-footer :deep(.v-field__input),
+.dtp-boardtable.dtp-compact .dtp-footer :deep(.v-btn) { font-size: 0.875rem !important; }
+
 /* Vuetify hides the sort arrow until hover; keep it visible on every sortable
    column so sortability is discoverable, full strength once sorted. */
 .dtp-table :deep(.v-data-table-header__sort-icon) {

@@ -3,84 +3,72 @@
     v-model="isOpen"
     :permanent="!mobile"
     :temporary="mobile"
-    width="260"
+    width="272"
     class="modern-drawer"
   >
     <div class="d-flex flex-column h-100 sidebar-shell">
 
-      <div class="sidebar-header d-flex align-center justify-space-between mb-2 mt-2 px-4">
-        <div class="d-flex align-center">
-          <span class="brand-tile"><img :src="logoUrl" alt="" width="40" height="40"></span>
-          <div class="brand-text">
-            <span class="brand-word text-h6 text-white tracking-widest">SERBIS</span>
-            <span class="brand-sub text-white-50">MDRRMO Echague</span>
-          </div>
+      <div class="sidebar-header">
+        <span class="brand-tile"><img :src="logoUrl" alt="" width="40" height="40"></span>
+        <div class="brand-text">
+          <span class="brand-word">SERBIS</span>
+          <span class="brand-sub">MDRRMO Echague</span>
         </div>
         <v-btn
           :icon="theme.global.name.value === 'dark' ? 'mdi-weather-sunny' : 'mdi-weather-night'"
-          size="small"
           variant="text"
-          color="grey-lighten-1"
+          class="theme-btn"
           :aria-label="theme.global.name.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
           @click="toggle"
         ></v-btn>
       </div>
 
-      <div ref="navScrollEl" class="nav-scroll px-4">
-        <template v-for="(group, gi) in menu" :key="group.key">
+      <nav ref="navScrollEl" class="nav-scroll" aria-label="Main">
+        <div v-for="group in menu" :key="group.key">
           <button
             type="button"
-            class="group-toggle text-caption font-weight-medium text-white-50 mb-1 px-2 tracking-widest"
-            :class="{ 'mt-3': gi > 0 }"
+            class="group-toggle"
             :aria-expanded="!collapsed.includes(group.key)"
             :aria-controls="`nav-group-${group.key}`"
             @click="toggleGroup(group.key)"
           >
             {{ group.label }}
-            <v-icon size="16" class="group-chevron" :class="{ 'is-collapsed': collapsed.includes(group.key) }">mdi-chevron-down</v-icon>
+            <v-icon size="14" class="group-chevron" :class="{ 'is-collapsed': collapsed.includes(group.key) }">mdi-chevron-down</v-icon>
           </button>
-          <v-list v-show="!collapsed.includes(group.key)" :id="`nav-group-${group.key}`" bg-color="transparent" density="compact" nav class="px-0">
+          <v-list v-show="!collapsed.includes(group.key)" :id="`nav-group-${group.key}`" bg-color="transparent" density="compact" nav class="nav-list">
             <v-list-item
               v-for="item in group.items"
               :key="item.to"
               :to="item.to"
               class="nav-item"
-              rounded="pill"
               active-class="active-nav-item"
-              slim
+              :aria-current="isCurrent(item.to) ? 'page' : undefined"
               :ripple="false"
             >
               <template v-slot:prepend>
-                <v-avatar rounded="circle" size="32" class="nav-icon-avatar" color="transparent">
-                  <v-icon size="18" color="grey-lighten-1">{{ item.icon }}</v-icon>
-                </v-avatar>
+                <v-icon size="20" class="nav-icon">{{ item.icon }}</v-icon>
               </template>
-              <v-list-item-title class="font-weight-medium text-body-2 text-grey-lighten-1 nav-label">
-                {{ item.title }}
-              </v-list-item-title>
+              <v-list-item-title class="nav-label">{{ item.title }}</v-list-item-title>
             </v-list-item>
           </v-list>
-        </template>
-      </div>
+        </div>
+      </nav>
 
-      <div class="sidebar-footer px-4 pb-4">
-        <v-card
-          color="rgba(255, 255, 255, 0.03)"
-          border="0"
-          class="pa-2 d-flex align-center profile-card"
-          style="cursor: pointer"
-          @click="showLogoutDialog = true"
-        >
-          <v-avatar size="32" color="rgba(255, 255, 255, 0.1)" class="mr-2 avatar-soft">
-            <v-icon color="white" size="small">mdi-account-outline</v-icon>
-          </v-avatar>
-          <div style="min-width: 0;">
-            <div class="text-caption font-weight-bold text-white text-truncate">MDRRMO Admin</div>
-            <div class="text-white-50 text-truncate" style="font-size: 0.65rem !important;">Echague Panel</div>
+      <div class="sidebar-footer">
+        <div class="profile-card">
+          <span class="profile-avatar"><v-icon size="18">mdi-account-outline</v-icon></span>
+          <div class="profile-text">
+            <div class="profile-name">MDRRMO Admin</div>
+            <div class="profile-sub">Echague Panel</div>
           </div>
-          <v-spacer></v-spacer>
-          <v-icon color="white-50" size="small" class="logout-icon">mdi-logout</v-icon>
-        </v-card>
+          <v-tooltip text="Sign out" location="top">
+            <template v-slot:activator="{ props: tip }">
+              <button v-bind="tip" type="button" class="sign-out" aria-label="Sign out" @click="showLogoutDialog = true">
+                <v-icon size="18">mdi-logout</v-icon>
+              </button>
+            </template>
+          </v-tooltip>
+        </div>
       </div>
     </div>
   </v-navigation-drawer>
@@ -124,6 +112,9 @@ const { theme, toggle } = useAppTheme()
 const navScrollEl = ref<HTMLElement | null>(null)
 const route = useRoute()
 const router = useRouter()
+
+// The link the page is on, for aria-current (the sub-pages of a section count).
+const isCurrent = (to: string) => route.path === to || route.path.startsWith(`${to}/`)
 
 function scrollActiveIntoView() {
   navScrollEl.value?.querySelector('.active-nav-item')?.scrollIntoView({ block: 'nearest' })
@@ -187,9 +178,6 @@ onMounted(() => { loadCurrentAdmin() })
    duplicate here (this file is scoped, App.vue's copy is global and already
    matched this element by class name regardless). One definition, theme-aware. */
 
-.tracking-widest { letter-spacing: 0.1em; text-transform: uppercase; }
-.text-white-50 { color: rgba(255, 255, 255, 0.5) !important; }
-
 /* One scroll region between a pinned header and a pinned footer, instead of
    two independently-clippable v-lists — see the P0 sidebar audit finding
    (2026-09-15). Vuetify forces `.v-navigation-drawer .v-list{overflow:hidden}`
@@ -204,6 +192,11 @@ onMounted(() => { loadCurrentAdmin() })
 .nav-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  /* Clear space under the brand block's divider, 16px above the footer's. */
+  padding: 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -217,53 +210,75 @@ onMounted(() => { loadCurrentAdmin() })
   border-radius: 3px;
 }
 
-/* Tightened from the default compact item height so more of the 13 items
-   fit before .nav-scroll needs to scroll at all — same value in both
-   sections since they share this rule. */
-.nav-scroll :deep(.v-list-item) {
-  min-height: 38px;
-  margin-bottom: 2px;
-}
-
+/* Group heading (Sidebar board): 32px, 11px/700, .08em, 62% white. */
 .group-toggle {
   display: flex; align-items: center; justify-content: space-between;
-  width: 100%; border: 0; background: none; cursor: pointer; text-align: left;
-  border-radius: 6px;
+  width: 100%; height: 32px; padding: 0 12px; border: 0; border-radius: 8px;
+  background: transparent; color: rgba(255, 255, 255, 0.62); cursor: pointer; text-align: left;
+  font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
 }
+.group-toggle:hover { color: #fff; }
 .group-toggle:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
 .group-chevron { transition: transform var(--motion-fast) var(--ease-out); }
 .group-chevron.is-collapsed { transform: rotate(-90deg); }
 
-/* 40px tile; the source is 2000px, so it only ever scales down. */
-.brand-tile {
-  width: 40px; height: 40px; flex: none; margin-right: 12px;
-  border-radius: 10px; overflow: hidden;
+/* Brand block: logo circle, name, theme toggle, a hairline under it. */
+.sidebar-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* 40px circle on white; the source is 2000px, so it only ever scales down. */
+.brand-tile { width: 40px; height: 40px; flex: none; border-radius: 50%; overflow: hidden; background: #fff; }
 .brand-tile img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.brand-text { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
-.brand-word { font-weight: 800; }
-.brand-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
-
-.nav-item, .nav-icon-avatar, .nav-label, .profile-card, .logout-icon, .avatar-soft {
-  transition: all var(--motion-base) var(--ease-out) !important;
+.brand-text { flex: 1; min-width: 0; }
+.brand-word { display: block; font-size: 16px; line-height: 20px; font-weight: 800; letter-spacing: 0.08em; color: #fff; }
+.brand-sub {
+  display: block; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: rgba(255, 255, 255, 0.62);
 }
+.theme-btn { flex: none; width: 36px !important; height: 36px !important; border-radius: 10px !important; color: rgba(255, 255, 255, 0.8) !important; }
+.theme-btn :deep(.v-icon) { font-size: 18px; }
 
-.nav-item:hover:not(.active-nav-item) {
-  background-color: rgba(255, 255, 255, 0.04) !important;
+/* Nav items: 40px, 10px radius, 12px padding, 20px icons, 14px text. Active is a
+   green tint with a brighter icon, no bar; hover is a white wash. Vuetify's own
+   overlay, prepend spacing and dimmed icon are switched off. */
+.nav-list { padding: 0 !important; margin: 2px 0 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-item {
+  height: 40px; min-height: 40px !important; margin: 0 !important;
+  padding: 0 12px !important; border-radius: 10px !important;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
-.nav-item:hover:not(.active-nav-item) .nav-icon-avatar { background-color: rgba(255, 255, 255, 0.05) !important; }
-.nav-item:hover:not(.active-nav-item) .nav-label,
-.nav-item:hover:not(.active-nav-item) .v-icon { color: #fff !important; }
+.nav-item :deep(.v-list-item__overlay) { display: none; }
+.nav-item :deep(.v-list-item__spacer) { display: none; }
+.nav-item :deep(.v-list-item__prepend) { width: auto; }
+.nav-item :deep(.v-list-item__prepend > .v-icon) { margin-inline-end: 12px; opacity: 1; }
+.nav-icon { color: rgba(255, 255, 255, 0.7); }
+.nav-label { font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, 0.84); }
+.nav-item:hover:not(.active-nav-item) { background-color: rgba(255, 255, 255, 0.08) !important; }
+.active-nav-item { background-color: rgba(52, 195, 154, 0.18) !important; }
+.active-nav-item .nav-label { color: #fff; font-weight: 700; }
+.active-nav-item .nav-icon { color: #34c39a; }
 
-.active-nav-item {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%) !important;
+/* Account card: pinned under the scrolling nav, with its own hairline. */
+.sidebar-footer { padding: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.profile-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 10px 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.08);
 }
-/* Colour only marks active: weight, transform and borders all change box
-   metrics and make the row shift on click. */
-.active-nav-item .nav-label, .active-nav-item .v-icon { color: #fff !important; }
-
-.profile-card { border-radius: 12px !important; border: 1px solid rgba(255, 255, 255, 0.02) !important; }
-.profile-card:hover { background-color: rgba(255, 255, 255, 0.06) !important; border-color: rgba(255, 255, 255, 0.1) !important; transform: translateY(-2px); }
-.profile-card:hover .logout-icon { color: #ef4444 !important; transform: translateX(2px); }
-.profile-card:hover .avatar-soft { transform: scale(1.05); }
+.profile-avatar {
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px;
+  border-radius: 50%; background: rgba(255, 255, 255, 0.14); color: #fff;
+}
+.profile-text { flex: 1; min-width: 0; }
+.profile-name { font-size: 14px; line-height: 20px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.profile-sub { font-size: 12px; line-height: 16px; color: rgba(255, 255, 255, 0.62); }
+/* Sign out: white at 80%, red only on hover. */
+.sign-out {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px;
+  border: 0; border-radius: 10px; background: transparent; color: rgba(255, 255, 255, 0.8); cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.sign-out:hover { background: rgba(241, 101, 101, 0.18); color: #ffb4b4; }
+.sign-out:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
 </style>

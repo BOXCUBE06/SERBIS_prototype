@@ -209,12 +209,12 @@ class DemoSeeder extends Seeder
 
     private function staff(): void
     {
-        DB::table('tbl_user')->where('email_address', 'admin@serbis.com')->update(['is_super_admin' => 1]);
+        DB::table('tbl_user')->where('username', 'admin')->update(['is_super_admin' => 1]);
 
-        foreach ([['Maria Elena', 'Pascual', 'maria.pascual@serbis.com'], ['Ramil', 'Cabacungan', 'ramil.cabacungan@serbis.com']] as [$first, $last, $email]) {
+        foreach ([['Maria Elena', 'Pascual', 'maria.pascual'], ['Ramil', 'Cabacungan', 'ramil.cabacungan']] as [$first, $last, $username]) {
             DB::table('tbl_user')->insert([
                 'first_name' => $first, 'last_name' => $last, 'role' => 'Admin', 'status' => 'Active',
-                'email_address' => $email, 'password' => Hash::make('password123'),
+                'username' => $username, 'password' => Hash::make('password123'),
                 'created_at' => $this->now->subDays(120), 'updated_at' => $this->now->subDays(120),
             ]);
         }

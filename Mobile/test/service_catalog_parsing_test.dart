@@ -49,7 +49,7 @@ void main() {
       expect(item.id, 1);
       expect(item.code, 'road-clearing');
       expect(item.name, 'Road Clearing');
-      expect(item.displayName(false), 'Road Clearing');
+      expect(item.displayName(false), 'Road clearing');
       expect(
         item.displayDescription(false),
         'Clearing roads of debris and obstacles after natural calamities.',
@@ -63,7 +63,7 @@ void main() {
       // hold in its translations table.
       final item = ServiceCatalogItem.fromJson(englishRow());
 
-      expect(item.displayName(true), 'Paglinis ng Daan');
+      expect(item.displayName(true), 'Paglinis ng daan');
       expect(item.displayDescription(true),
           'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.');
       // The English column is untouched underneath.
@@ -82,8 +82,8 @@ void main() {
         'description_localized': 'SERVER BLURB',
       });
 
-      expect(item.displayName(true), 'Paglinis ng Daan');
-      expect(item.displayName(false), 'Road Clearing');
+      expect(item.displayName(true), 'Paglinis ng daan');
+      expect(item.displayName(false), 'Road clearing');
       expect(item.displayDescription(true),
           'Paglilinis ng mga daan mula sa debris at balakid pagkatapos ng kalamidad.');
     });

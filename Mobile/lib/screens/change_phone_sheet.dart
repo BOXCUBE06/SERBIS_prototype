@@ -11,6 +11,7 @@ import '../state/translations.dart';
 import '../state/verification_delivery.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/form_steps.dart';
 import '../widgets/shared_widgets.dart';
 
 /// Moving the mobile number, which is also the login.
@@ -219,15 +220,15 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 14),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.red50,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Text(
         text,
         key: const Key('change-phone-error'),
-        style: AppText.body(size: 12, color: AppColors.red600, height: 1.4),
+        style: AppText.body(size: AppTextSize.body, color: AppColors.red600, height: 1.4),
       ),
     );
   }
@@ -236,13 +237,11 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_tr('phonechange.title'), style: AppText.display(size: 18)),
-        const SizedBox(height: 8),
         Text(
           _tr('profile.phone_locked'),
-          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.md),
         AppTextField.phone(
           label: _tr('phonechange.new_number'),
           controller: _phone,
@@ -264,8 +263,8 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
               _passwordHidden
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
-              size: 18,
-              color: AppColors.inkFaint,
+              size: 22,
+              color: AppColors.inkMuted,
             ),
           ),
         ),
@@ -289,14 +288,12 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_tr('phonechange.code_title'), style: AppText.display(size: 18)),
-        const SizedBox(height: 8),
         Text(
           '${_tr('phonechange.sent_to')} $ending. ${_tr('phonechange.enter_below')}',
           key: const Key('change-phone-sent-line'),
-          style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+          style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(
           label: _tr('phonechange.code'),
           hint: '123456',
@@ -308,7 +305,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
           enabled: !_busy,
         ),
         if (_notice != null) ...[
-          Text(_notice!, style: const TextStyle(color: AppColors.green700)),
+          Text(_notice!, style: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.green700)),
           const SizedBox(height: 8),
         ],
         if (_delivery?.unknown == true)
@@ -317,7 +314,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
             child: Text(
               _tr('phonechange.unknown_hint'),
               key: const Key('delivery-unknown-hint'),
-              style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.4),
+              style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.4),
             ),
           ),
         if (_formError != null) _banner(_formError!),
@@ -330,6 +327,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
         Center(
           child: TextButton(
             onPressed: canResend ? _resend : null,
+            style: TextButton.styleFrom(minimumSize: const Size(88, 48)),
             child: Text(
               _resendIn > 0
                   ? '${_tr('phonechange.resend_in')} ${_resendIn}s'
@@ -343,37 +341,31 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-            _codeStep ? _codeStepView() : _numberStep(),
-            const SizedBox(height: 8),
-            AppButton(
-              label: _tr('common.cancel'),
-              style: AppButtonStyle.outline,
-              onPressed: _busy ? null : () => Navigator.pop(context),
-            ),
-          ],
-        ),
+    final f = widget.filipino;
+    return SheetFrame(
+      title: _codeStep ? _tr('phonechange.code_title') : _tr('phonechange.title'),
+      scrollable: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Two steps, said once and drawn once, so a resident who sees a code
+          // field knows the number step is behind them.
+          Text(
+            trEn(f, 'Step {n} of {total}').replaceAll('{n}', _codeStep ? '2' : '1').replaceAll('{total}', '2'),
+            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          FormStepProgress(step: _codeStep ? 1 : 0, total: 2),
+          const SizedBox(height: AppSpacing.lg),
+          _codeStep ? _codeStepView() : _numberStep(),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: _tr('common.cancel'),
+            style: AppButtonStyle.outline,
+            onPressed: _busy ? null : () => Navigator.pop(context),
+          ),
+        ],
       ),
     );
   }

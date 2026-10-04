@@ -57,43 +57,41 @@ extension ReqStatusX on ReqStatus {
 
   Color get bg {
     if (this == ReqStatus.review) {
-      return AppColors.blue50;
+      return AppStatus.info.bg;
     }
-    // The violet already in the palette on the animal-rescue badge. Booked has
-    // to be told apart from Scheduled at a glance -- they are adjacent states
-    // and amber is taken -- and the theme carries no sixth semantic hue.
+    // Violet: Booked must read apart from Scheduled, and amber is taken.
     if (this == ReqStatus.booked) {
-      return const Color(0xFFEDE7F6);
+      return AppStatus.booked.bg;
     }
     if (this == ReqStatus.scheduled) {
-      return AppColors.amber50;
+      return AppStatus.pending.bg;
     }
     if (this == ReqStatus.completed) {
-      return AppColors.green50;
+      return AppStatus.success.bg;
     }
     if (this == ReqStatus.disapproved) {
-      return AppColors.red50;
+      return AppStatus.danger.bg;
     }
-    return AppColors.grey50;
+    return AppStatus.neutral.bg;
   }
 
   Color get fg {
     if (this == ReqStatus.review) {
-      return AppColors.blue600;
+      return AppStatus.info.fg;
     }
     if (this == ReqStatus.booked) {
-      return const Color(0xFF6A1B9A);
+      return AppStatus.booked.fg;
     }
     if (this == ReqStatus.scheduled) {
-      return AppColors.amber600;
+      return AppStatus.pending.fg;
     }
     if (this == ReqStatus.completed) {
-      return AppColors.green700;
+      return AppStatus.success.fg;
     }
     if (this == ReqStatus.disapproved) {
-      return AppColors.red600;
+      return AppStatus.danger.fg;
     }
-    return AppColors.inkFaint;
+    return AppStatus.neutral.fg;
   }
 }
 
@@ -479,6 +477,18 @@ String formatBookingConfirmationTime(DateTime at, bool filipino) {
       '$hour12:$minute $period';
 }
 
+const _weekdayAbbrev = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// A progress step's time: "Tue, Sep 30, 1:11 AM". English, like the others.
+String formatStepTime(DateTime at) {
+  final local = at.toLocal();
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  return '${_weekdayAbbrev[local.weekday - 1]}, ${_monthAbbrev[local.month - 1]} ${local.day}, '
+      '$hour12:$minute $period';
+}
+
 /// Renders a calendar day with no clock: "Sep 12, 2026".
 ///
 /// A loan's due date is a day, not an instant, so [formatBookingConfirmationTime]
@@ -495,18 +505,19 @@ String formatDueDate(DateTime at) {
 /// borrower and staff read the same urgency off the same date. Both
 /// midnights are taken locally, same as the panel's `dueDelta`. [now]
 /// defaults to the device clock and is injectable for tests.
-String dueLabel(DateTime due, [DateTime? now]) {
+String dueLabel(DateTime due, [DateTime? now, bool filipino = false]) {
   final today = now ?? DateTime.now();
   final todayMidnight = DateTime(today.year, today.month, today.day);
   final dueMidnight = DateTime(due.year, due.month, due.day);
   final delta = dueMidnight.difference(todayMidnight).inDays;
   if (delta < 0) {
     final overdueDays = -delta;
-    return '$overdueDays day${overdueDays == 1 ? '' : 's'} overdue';
+    return trEn(filipino, overdueDays == 1 ? '{n} day overdue' : '{n} days overdue')
+        .replaceAll('{n}', '$overdueDays');
   }
-  if (delta == 0) return 'Due today';
-  if (delta == 1) return 'Due tomorrow';
-  return 'Due in $delta days';
+  if (delta == 0) return trEn(filipino, 'Due today');
+  if (delta == 1) return trEn(filipino, 'Due tomorrow');
+  return trEn(filipino, 'Due in {n} days').replaceAll('{n}', '$delta');
 }
 
 /// Same tiering as [dueLabel] and the same reason it stays English rather
@@ -515,16 +526,16 @@ String dueLabel(DateTime due, [DateTime? now]) {
 /// time. Never called once a booking is already overdue: [ServiceRequest]'s
 /// own display logic gates this behind `!isOverdue`, which is the box that
 /// covers the past-due case with its own message.
-String scheduledCountdownLabel(DateTime scheduledAt, [DateTime? now]) {
+String scheduledCountdownLabel(DateTime scheduledAt, [DateTime? now, bool filipino = false]) {
   final today = now ?? DateTime.now();
   final todayMidnight = DateTime(today.year, today.month, today.day);
   final local = scheduledAt.toLocal();
   final schedMidnight = DateTime(local.year, local.month, local.day);
   final delta = schedMidnight.difference(todayMidnight).inDays;
 
-  if (delta <= 0) return 'Scheduled today';
-  if (delta == 1) return 'Scheduled tomorrow';
-  return 'Scheduled in $delta days';
+  if (delta <= 0) return trEn(filipino, 'Scheduled today');
+  if (delta == 1) return trEn(filipino, 'Scheduled tomorrow');
+  return trEn(filipino, 'Scheduled in {n} days').replaceAll('{n}', '$delta');
 }
 
 /// Who's handling the request — only ever present on a Booked/Responding row
@@ -610,6 +621,10 @@ class ServiceRequest {
   /// record. Null when there was no trip or it arrived.
   final String? noArrivalReason;
 
+  /// The ambulance booking's destination; the API sends it flat on every row
+  /// (null for anything that is not a booking). Home titles a trip with it.
+  final String? destination;
+
   const ServiceRequest({
     this.id,
     this.serviceId,
@@ -628,6 +643,7 @@ class ServiceRequest {
     this.scheduledAt,
     this.responders = const [],
     this.noArrivalReason,
+    this.destination,
   });
 
   /// True once a Booked slot's own window has passed with nobody moving the
@@ -831,6 +847,7 @@ class ServiceRequest {
       scheduledAt: scheduledAt,
       responders: responders,
       noArrivalReason: noArrivalReason,
+      destination: destination,
     );
   }
 
@@ -899,6 +916,7 @@ class ServiceRequest {
               .toList() ??
           const [],
       noArrivalReason: json['no_arrival_reason'] as String?,
+      destination: json['destination'] as String?,
     );
   }
 }
@@ -926,6 +944,7 @@ extension ServiceRequestCache on ServiceRequest {
         'service_category': serviceCategory,
         'scheduled_at': scheduledAt?.toIso8601String(),
         'no_arrival_reason': noArrivalReason,
+        'destination': destination,
       };
 
   /// Rebuilds a cached row, or returns null for an entry this version of the
@@ -973,6 +992,7 @@ extension ServiceRequestCache on ServiceRequest {
       // ordinary unscheduled request instead of failing to parse.
       scheduledAt: _parseTimestamp(json['scheduled_at']),
       noArrivalReason: json['no_arrival_reason'] as String?,
+      destination: json['destination'] as String?,
     );
   }
 }

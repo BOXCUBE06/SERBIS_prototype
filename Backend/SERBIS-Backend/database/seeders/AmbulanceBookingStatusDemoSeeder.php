@@ -83,7 +83,7 @@ class AmbulanceBookingStatusDemoSeeder extends Seeder
 
         $removed = self::purge();
 
-        $admin = User::where('email_address', 'admin@serbis.com')->first();
+        $admin = User::where('username', 'admin')->first();
 
         $sanFabian = $barangays['San Fabian'];
         $sanMiguel = $barangays['San Miguel'];

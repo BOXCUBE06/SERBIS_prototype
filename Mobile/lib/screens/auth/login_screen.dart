@@ -8,6 +8,7 @@ import '../../state/api_service.dart';
 import '../../state/account_store.dart';
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_layout.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -157,195 +158,102 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
+    return AuthPage(
+      header: const AppHeader(),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const AppHeader(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Welcome back',
-                      style: AppText.display(size: 21),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Log in to submit and track your service requests.',
-                      textAlign: TextAlign.center,
-                      style: AppText.body(
-                          size: 12.5, color: AppColors.inkMuted, height: 1.5),
-                    ),
-                    const SizedBox(height: 16),
-                    const ServicePurposeNote(),
-                    if (widget.infoMessage != null) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.green50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.check_circle_outline_rounded,
-                                size: 18, color: AppColors.green700),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(widget.infoMessage!,
-                                  style: AppText.body(
-                                      size: 12.5,
-                                      color: AppColors.green900,
-                                      height: 1.5)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 24),
-                    AuthTextField(
-                      label: 'Mobile number',
-                      hint: '09XXXXXXXXX',
-                      controller: _phoneCtrl,
-                      keyboard: TextInputType.phone,
-                      prefixIcon: Icons.phone_outlined,
-                      maxLength: PhoneNumber.maxLength,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
-                      ],
-                      validator: (v) {
-                        final val = (v ?? '').trim();
-                        if (val.isEmpty) return 'Enter your mobile number';
-                        if (!PhoneNumber.isValid(val)) {
-                          return 'Enter a valid mobile number';
-                        }
-                        return null;
-                      },
-                    ),
-                    AuthTextField(
-                      label: 'Password',
-                      hint: '',
-                      controller: _passCtrl,
-                      obscure: true,
-                      prefixIcon: Icons.lock_outline_rounded,
-                      validator: (v) =>
-                          (v ?? '').isEmpty ? 'Enter your password' : null,
-                    ),
-                    if (_blockedMessage != null)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.red600.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: AppColors.red600.withValues(alpha: 0.35)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.block_rounded,
-                                size: 18, color: AppColors.red600),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(_blockedMessage!,
-                                  style: AppText.body(
-                                      size: 13,
-                                      color: AppColors.red600,
-                                      height: 1.45)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (_formError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.error_outline_rounded,
-                                size: 16, color: AppColors.red600),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(_formError!,
-                                  style: AppText.body(
-                                      size: 12.5,
-                                      color: AppColors.red600,
-                                      height: 1.4)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: GestureDetector(
-                        onTap: () => widget.onForgotPassword(_phoneCtrl.text.trim()),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text('Forgot password?',
-                              style: AppText.display(
-                                  size: 12,
-                                  weight: FontWeight.w600,
-                                  color: AppColors.green700)),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-                    AppButton(
-                        label: 'Log in',
-                        loading: _loading,
-                        // Null disables it — AppButton already treats a null
-                        // onPressed as disabled, the same path `loading` uses.
-                        // This is what removes the retry rather than merely
-                        // discouraging it.
-                        onPressed: _blockedMessage == null ? _submit : null),
-                    const SizedBox(height: 18),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("Don't have an account?",
-                            style: AppText.body(
-                                size: 12.5, color: AppColors.inkMuted)),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: widget.onGoToRegister,
-                          child: Text('Register',
-                              style: AppText.display(
-                                  size: 12.5,
-                                  weight: FontWeight.w700,
-                                  color: AppColors.green700)),
-                        ),
-                      ],
-                    ),
-                    // Hotlines need no account: reachable before signing in.
-                    if (widget.onOpenHotlines != null)
-                      Center(
-                        child: TextButton.icon(
-                          onPressed: widget.onOpenHotlines,
-                          icon: const Icon(Icons.call_rounded,
-                              size: 16, color: AppColors.red600),
-                          label: Text('Emergency hotlines',
-                              style: AppText.display(
-                                  size: 12.5,
-                                  weight: FontWeight.w700,
-                                  color: AppColors.red600)),
-                        ),
-                      ),
-                  ],
-                ),
+            Semantics(
+              header: true,
+              child: Text(
+                'Welcome back',
+                style: AppText.display(size: AppTextSize.headline, color: AppColors.sectionInk),
+                textAlign: TextAlign.center,
               ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              'Log in to submit and track your service requests.',
+              textAlign: TextAlign.center,
+              style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            const ServicePurposeNote(),
+            if (widget.infoMessage != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              InlineNotice(text: widget.infoMessage!, tone: NoticeTone.success),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            AuthTextField(
+              label: 'Mobile number',
+              hint: '09XXXXXXXXX',
+              controller: _phoneCtrl,
+              keyboard: TextInputType.phone,
+              prefixIcon: Icons.phone_outlined,
+              maxLength: PhoneNumber.maxLength,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+              ],
+              validator: (v) {
+                final val = (v ?? '').trim();
+                if (val.isEmpty) return 'Enter your mobile number';
+                if (!PhoneNumber.isValid(val)) {
+                  return 'Enter a valid mobile number';
+                }
+                return null;
+              },
+            ),
+            AuthTextField(
+              label: 'Password',
+              hint: '',
+              controller: _passCtrl,
+              obscure: true,
+              prefixIcon: Icons.lock_outline_rounded,
+              validator: (v) => (v ?? '').isEmpty ? 'Enter your password' : null,
+            ),
+            if (_blockedMessage != null)
+              InlineNotice(text: _blockedMessage!, icon: Icons.block_rounded),
+            if (_formError != null) InlineNotice(text: _formError!),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AuthLink(
+                label: 'Forgot password?',
+                onPressed: () => widget.onForgotPassword(_phoneCtrl.text.trim()),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Log in',
+              loading: _loading,
+              // Null disables it — AppButton already treats a null onPressed as
+              // disabled, the same path `loading` uses. This is what removes the
+              // retry rather than merely discouraging it.
+              onPressed: _blockedMessage == null ? _submit : null,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text("Don't have an account?", style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted)),
+                AuthLink(label: 'Register', onPressed: widget.onGoToRegister),
+              ],
+            ),
+            // Hotlines need no account: reachable before signing in.
+            if (widget.onOpenHotlines != null)
+              Center(
+                child: TextButton.icon(
+                  onPressed: widget.onOpenHotlines,
+                  style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
+                  icon: const Icon(Icons.call_rounded, size: 20, color: AppColors.red600),
+                  label: Text(
+                    'Emergency hotlines',
+                    style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.red600),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

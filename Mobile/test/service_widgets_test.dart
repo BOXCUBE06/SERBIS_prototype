@@ -20,6 +20,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/theme/app_theme.dart';
+import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
 import 'package:serbis/widgets/service_widgets.dart';
 
 Future<void> _pump(WidgetTester tester, Widget child) async {
@@ -290,6 +291,34 @@ void main() {
       expect(find.textContaining('SR-2026-0043'), findsOneWidget);
       expect(find.textContaining('{ref}'), findsNothing);
       expect(find.text('Tingnan sa Track'), findsOneWidget);
+    });
+
+    testWidgets('says it in a status box, and a booking adds its time in a second one', (tester) async {
+      await _pump(
+        tester,
+        ConfirmationSheet(
+          refNo: 'SR-9',
+          filipino: false,
+          onViewTrack: () {},
+          scheduledAt: DateTime(2026, 10, 12, 15, 30),
+        ),
+      );
+
+      expect(find.byType(StatusBox), findsNWidgets(2));
+      expect(find.text('Scheduled for'), findsOneWidget);
+      expect(find.text('Oct 12, 2026, 3:30 PM'), findsOneWidget);
+    });
+
+    testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(body: ConfirmationSheet(refNo: 'SR-1', filipino: false, onViewTrack: () {})),
+      ));
+
+      expect(tester.getSize(find.byType(StatusBox)).width, lessThanOrEqualTo(600));
     });
 
     testWidgets('the button hands the resident to the Track tab', (tester) async {

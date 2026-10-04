@@ -18,6 +18,7 @@ import 'screens/ambulance_screen.dart';
 import 'screens/awaiting_approval_screen.dart';
 import 'screens/borrow_equipment_screen.dart';
 import 'screens/service_drafts.dart';
+import 'screens/service_request_form.dart';
 import 'screens/services_screen.dart';
 import 'screens/track_screen.dart';
 import 'screens/unavailable_tab_screen.dart';
@@ -470,6 +471,20 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   /// leaving a form page (or the Ambulance tab) and coming back loses nothing.
   late final ServiceDrafts _drafts = ServiceDrafts(widget.user);
 
+  /// The ambulance flow, so Android back can step it back instead of leaving.
+  final _ambulanceForm = GlobalKey<ServiceRequestFormState>();
+  final _borrowScreen = GlobalKey<BorrowEquipmentScreenState>();
+
+  /// The request Track should scroll to; Track clears it once there.
+  final _trackFocus = ValueNotifier<int?>(null);
+
+  /// The Ambulance tab is showing its flow (not a loading or unavailable
+  /// screen), which takes the whole screen: no bottom nav.
+  bool get _ambulanceFlowShowing =>
+      _index == _ambulanceTab &&
+      !widget.user.isAwaitingApproval &&
+      _appState.services.any((s) => s.formKind == ServiceFormKind.ambulance);
+
   Timer? _poll;
   bool _foreground = true;
   bool _showingOffline = false;
@@ -498,6 +513,14 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     _appState.loadMaterials();
     // Cached list first, then the server; the built-in list until either lands.
     _appState.loadHotlines();
+    // Home's "Your requests" lists open loans too, so they cannot wait for a
+    // visit to the Borrow tab.
+    if (!widget.user.isAwaitingApproval && _appState.borrowingAllowed) {
+      _appState.hydrateBorrowRequests();
+      _appState.loadBorrowRequests(silent: true);
+    }
+    // The bell's dot compares against when the sheet was last opened.
+    _appState.loadNotificationsSeen();
   }
 
   @override
@@ -516,6 +539,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _appState.removeListener(_onAppStateChanged);
     _user.dispose();
+    _trackFocus.dispose();
     _drafts.dispose();
     super.dispose();
   }
@@ -607,6 +631,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     });
   }
 
+  /// A loan's row on Home or Track: the Borrow tab, on My requests. After the
+  /// frame, because a tab never opened before is only built on it.
+  void _openMyLoans() {
+    _goTo(_borrowTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _borrowScreen.currentState?.showMyRequests());
+  }
+
   void _openProfilePage() {
     if (_profileOpen) return;
     _profileOpen = true;
@@ -656,15 +687,32 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     ));
   }
 
-  void _openNotifications() => NotificationsSheet.show(
-        context,
-        filipino: _appState.language == AppLanguage.filipino,
-        // A copy: the sheet must not hold the store's mutable list, which a
-        // poll landing behind the sheet would mutate underneath it (M30).
-        requests: [..._appState.requests],
-        advisories: [..._appState.advisories],
-        advisoriesError: _appState.advisoriesError,
-      );
+  /// A row in the bell sheet: the Track tab, scrolled to that request. The
+  /// sheet may have been opened from a page above the tabs (Profile, Library),
+  /// so those pages close first.
+  void _openRequest(ServiceRequest request) {
+    final shell = ModalRoute.of(context);
+    Navigator.of(context).popUntil((route) => route == shell);
+    _goTo(_trackTab);
+    _trackFocus.value = request.id;
+  }
+
+  void _openNotifications() {
+    NotificationsSheet.show(
+      context,
+      filipino: _appState.language == AppLanguage.filipino,
+      // A copy: the sheet must not hold the store's mutable list, which a
+      // poll landing behind the sheet would mutate underneath it (M30).
+      requests: [..._appState.requests],
+      advisories: [..._appState.advisories],
+      advisoriesError: _appState.advisoriesError,
+      // Before the mark below, or nothing would ever be "New".
+      seenAt: _appState.notificationsSeenAt,
+      onOpenRequest: _openRequest,
+    );
+    // Opening the sheet is what reads it: the dot goes off now.
+    _appState.markNotificationsSeen();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -708,6 +756,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                 onOpenServices: () => _goTo(_servicesTab),
                 onOpenService: _openService,
                 onOpenBorrow: () => _goTo(_borrowTab),
+                onOpenMyLoans: _openMyLoans,
               ),
           deps: widget.user),
       slot(
@@ -715,6 +764,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           (_) => widget.user.isAwaitingApproval
               ? awaitingApproval()
               : AmbulanceScreen(
+                  formKey: _ambulanceForm,
                   appState: _appState,
                   user: widget.user,
                   drafts: _drafts,
@@ -722,6 +772,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                   onOpenNotifications: onOpenNotifications,
                   onOpenProfile: onOpenProfile,
                   onOpenLibrary: _openLibraryPage,
+                  onBack: () => _goTo(_homeTab),
                 ),
           deps: widget.user),
       slot(
@@ -751,6 +802,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           );
         }
         return BorrowEquipmentScreen(
+          key: _borrowScreen,
           appState: _appState,
           user: widget.user,
           embedded: true,
@@ -764,17 +816,22 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                 appState: _appState,
                 onOpenNotifications: onOpenNotifications,
                 onOpenProfile: onOpenProfile,
+                onOpenMyLoans: _openMyLoans,
+                onBrowseServices: () => _goTo(_servicesTab),
+                focusRequest: _trackFocus,
               )),
     ];
 
     // Back from any other tab returns to Home before it leaves the app, as the
     // Material navigation guidance asks. A page pushed above the tabs (Profile,
     // a service form) takes the back press first, so this only sees it when the
-    // tabs are showing.
+    // tabs are showing. The ambulance flow steps back first.
     return PopScope(
       canPop: _index == _homeTab,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goTo(_homeTab);
+        if (didPop) return;
+        final flow = _index == _ambulanceTab ? _ambulanceForm.currentState : null;
+        flow != null ? flow.handleBack() : _goTo(_homeTab);
       },
       child: Scaffold(
         extendBody: true,
@@ -799,11 +856,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         // the labels are words.
         bottomNavigationBar: ListenableBuilder(
           listenable: _appState,
-          builder: (_, __) => AppBottomNav(
-            index: _index,
-            onTap: _goTo,
-            filipino: _appState.language == AppLanguage.filipino,
-          ),
+          builder: (_, __) => _ambulanceFlowShowing
+              ? const SizedBox.shrink()
+              : AppBottomNav(
+                  index: _index,
+                  onTap: _goTo,
+                  filipino: _appState.language == AppLanguage.filipino,
+                ),
         ),
       ),
     );

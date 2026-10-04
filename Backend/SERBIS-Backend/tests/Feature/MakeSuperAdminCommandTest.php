@@ -19,8 +19,8 @@ class MakeSuperAdminCommandTest extends TestCase
         $target = $this->makeStaff('boss@serbis.com');
         $other = $this->makeStaff('other@serbis.com');
 
-        $this->artisan('staff:make-super-admin', ['email' => 'boss@serbis.com'])
-            ->expectsOutputToContain('boss@serbis.com is now a super admin.')
+        $this->artisan('staff:make-super-admin', ['username' => 'boss'])
+            ->expectsOutputToContain('boss is now a super admin.')
             ->assertExitCode(0);
 
         $this->assertTrue($target->fresh()->isSuperAdmin());
@@ -31,7 +31,7 @@ class MakeSuperAdminCommandTest extends TestCase
     {
         $this->makeStaff('boss@serbis.com');
 
-        $this->artisan('staff:make-super-admin', ['email' => 'boss@serbis.com'])
+        $this->artisan('staff:make-super-admin', ['username' => 'boss'])
             ->expectsOutputToContain('Connected to')
             ->assertExitCode(0);
     }
@@ -40,7 +40,7 @@ class MakeSuperAdminCommandTest extends TestCase
     {
         $this->makeSuperAdmin('boss@serbis.com');
 
-        $this->artisan('staff:make-super-admin', ['email' => 'boss@serbis.com'])
+        $this->artisan('staff:make-super-admin', ['username' => 'boss'])
             ->expectsOutputToContain('already a super admin')
             ->assertExitCode(0);
 
@@ -51,8 +51,8 @@ class MakeSuperAdminCommandTest extends TestCase
     {
         $this->makeStaff('boss@serbis.com');
 
-        $this->artisan('staff:make-super-admin', ['email' => 'nobody@serbis.com'])
-            ->expectsOutputToContain('No staff account with that address.')
+        $this->artisan('staff:make-super-admin', ['username' => 'nobody'])
+            ->expectsOutputToContain('No staff account with that username.')
             ->assertExitCode(1);
 
         $this->assertSame(0, User::activeSuperAdminCount());
@@ -62,7 +62,7 @@ class MakeSuperAdminCommandTest extends TestCase
     {
         $closed = $this->makeStaff('closed@serbis.com', ['status' => 'Inactive']);
 
-        $this->artisan('staff:make-super-admin', ['email' => 'closed@serbis.com'])
+        $this->artisan('staff:make-super-admin', ['username' => 'closed'])
             ->expectsOutputToContain('deactivated')
             ->assertExitCode(1);
 
@@ -73,7 +73,7 @@ class MakeSuperAdminCommandTest extends TestCase
     {
         $account = $this->makeLimitedStaff(['sms'], 'boss@serbis.com');
 
-        $this->artisan('staff:make-super-admin', ['email' => 'boss@serbis.com'])->assertExitCode(0);
+        $this->artisan('staff:make-super-admin', ['username' => 'boss'])->assertExitCode(0);
 
         $this->assertSame(['sms'], $account->fresh()->permissions);
     }

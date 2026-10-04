@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Barangay;
 use App\Models\Resident;
+use App\Models\ServiceRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -12,8 +13,8 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * DELETE /api/barangays/{id} — a barangay still named by a resident or an SMS
- * blast answers 422 with a count instead of the foreign key's 500.
+ * DELETE /api/barangays/{id} — a barangay still named by a resident, a service
+ * request or an SMS blast answers 422 with a count instead of the foreign key's 500.
  */
 class BarangayDeleteGuardTest extends TestCase
 {
@@ -80,6 +81,28 @@ class BarangayDeleteGuardTest extends TestCase
         $this->deleteJson("/api/barangays/{$this->barangay->barangay_id}")
             ->assertStatus(422)
             ->assertJsonPath('message', 'Cannot delete — 1 SMS blast(s) still reference this barangay.');
+
+        $this->assertNotNull(Barangay::find($this->barangay->barangay_id));
+    }
+
+    public function test_a_request_filed_there_blocks_the_delete_after_the_resident_moves(): void
+    {
+        $elsewhere = Barangay::create(['barangay_name' => 'San Miguel']);
+        $resident = Resident::create([
+            'barangay_id' => $this->barangay->barangay_id,
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'phone_number' => '09171111111',
+            'password' => Hash::make('Password123'),
+            'status' => 'Active',
+        ]);
+        ServiceRequest::create(['resident_id' => $resident->getKey(), 'status' => 'Pending']);
+        // Nobody lives there now; the request still points at it.
+        $resident->update(['barangay_id' => $elsewhere->barangay_id]);
+
+        $this->deleteJson("/api/barangays/{$this->barangay->barangay_id}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot delete — 1 service request(s) were filed under this barangay.');
 
         $this->assertNotNull(Barangay::find($this->barangay->barangay_id));
     }

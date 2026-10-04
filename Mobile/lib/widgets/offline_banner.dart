@@ -44,7 +44,7 @@ class OfflineBanner extends StatelessWidget {
                   children: [
                     Text(
                       tr(filipino, 'offline.title'),
-                      style: AppText.display(size: 12.5, weight: FontWeight.w700, color: AppColors.red600),
+                      style: AppText.display(size: AppTextSize.small, weight: FontWeight.w700, color: AppColors.red600),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -52,7 +52,7 @@ class OfflineBanner extends StatelessWidget {
                           ? tr(filipino, 'offline.never_updated')
                           : '${tr(filipino, 'offline.last_updated')} '
                               '${formatTimelineTime(at, filipino)}',
-                      style: AppText.body(size: 11.5, color: const Color(0xFF7A3527), height: 1.4),
+                      style: AppText.body(size: AppTextSize.small, color: const Color(0xFF7A3527), height: 1.4),
                     ),
                   ],
                 ),
@@ -83,7 +83,7 @@ class StaleDataNote extends StatelessWidget {
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         children: [
@@ -96,7 +96,7 @@ class StaleDataNote extends StatelessWidget {
                   : '${tr(filipino, 'offline.saved_copy')} · '
                       '${tr(filipino, 'offline.last_updated')} '
                       '${formatTimelineTime(at, filipino)}',
-              style: AppText.body(size: 11.5, color: AppColors.inkMuted),
+              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
             ),
           ),
         ],

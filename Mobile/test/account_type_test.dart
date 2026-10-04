@@ -117,11 +117,11 @@ void main() {
   });
 
   group('the top of Home', () {
-    testWidgets('names an individual and their type', (tester) async {
+    testWidgets('greets an individual by name, with no type line', (tester) async {
       await _pumpHome(tester, AppUser.fromJson(_json(status: 'Active')));
 
-      expect(find.text('INDIVIDUAL'), findsOneWidget);
       expect(find.text('Ian Uy'), findsOneWidget);
+      expect(find.textContaining('Head of the Family'), findsNothing);
     });
 
     testWidgets('names an organization, with its contact person underneath', (tester) async {
@@ -130,9 +130,8 @@ void main() {
         AppUser.fromJson(_json(type: 'organization', organization: 'Isabela State University', status: 'Active')),
       );
 
-      expect(find.text('ORGANIZATION'), findsOneWidget);
       expect(find.text('Isabela State University'), findsOneWidget);
-      expect(find.text('Ian Uy'), findsOneWidget);
+      expect(find.text('Organization · Ian Uy'), findsOneWidget);
       expect(find.text('Awaiting MDRRMO approval'), findsNothing);
     });
 
@@ -143,13 +142,13 @@ void main() {
       );
 
       expect(find.text('Awaiting MDRRMO approval'), findsOneWidget);
-      expect(find.text('Borrow Equipment'), findsNothing);
+      expect(find.text('Borrow equipment'), findsNothing);
     });
 
     testWidgets('an active user still gets the help tiles', (tester) async {
       await _pumpHome(tester, AppUser.fromJson(_json(status: 'Active')));
 
-      expect(find.text('Borrow Equipment'), findsOneWidget);
+      expect(find.text('Borrow equipment'), findsOneWidget);
     });
   });
 

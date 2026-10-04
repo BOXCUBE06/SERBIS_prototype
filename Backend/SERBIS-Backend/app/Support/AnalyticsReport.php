@@ -150,12 +150,10 @@ class AnalyticsReport
             ->where('tbl_service_request.created_at', '>=', $this->from)
             ->where('tbl_service_request.created_at', '<', $this->to)
             ->when($this->serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $this->serviceId))
-            // A walk-in records no barangay anywhere, so filtering by barangay
-            // legitimately excludes it. The inner join is correct here and is
-            // not the bug BarangayRequestCounts exists to fix.
+            // The barangay the request was filed under, not the resident's
+            // current one. A walk-in has none, so the filter excludes it.
             ->when($this->barangayId, fn ($q) => $q
-                ->join('tbl_residents', 'tbl_service_request.resident_id', '=', 'tbl_residents.resident_id')
-                ->where('tbl_residents.barangay_id', $this->barangayId));
+                ->where('tbl_service_request.barangay_id', $this->barangayId));
     }
 
     /** Monday-first day labels, paired with the four-block day split below. */
@@ -318,11 +316,15 @@ class AnalyticsReport
                 'tbl_service_request.created_at',
                 'tbl_service_request.first_responded_at',
                 'tbl_service_request.resolved_at',
+                'tbl_service_request.status',
             ])
             ->get();
 
         $responseHours = [];
-        $resolutionDays = [];
+        // resolved_at is stamped on every terminal status, so this holds every closed request.
+        $closedDays = [];
+        // The median is time to a real resolution: a cancellation or a refusal is not one.
+        $resolvedDays = [];
 
         foreach ($rows as $row) {
             $created = CarbonImmutable::parse($row->created_at, 'UTC');
@@ -332,7 +334,12 @@ class AnalyticsReport
             }
 
             if ($row->resolved_at !== null) {
-                $resolutionDays[] = $created->diffInMinutes(CarbonImmutable::parse($row->resolved_at, 'UTC')) / 1440;
+                $days = $created->diffInMinutes(CarbonImmutable::parse($row->resolved_at, 'UTC')) / 1440;
+                $closedDays[] = $days;
+
+                if ($row->status === 'Resolved') {
+                    $resolvedDays[] = $days;
+                }
             }
         }
 
@@ -342,14 +349,15 @@ class AnalyticsReport
                 'n' => count($responseHours),
             ],
             'resolution' => [
-                'medianDays' => $this->median($resolutionDays),
-                'n' => count($resolutionDays),
+                'medianDays' => $this->median($resolvedDays),
+                'n' => count($resolvedDays),
             ],
-            'histogram' => $this->resolutionHistogram($resolutionDays),
+            // Unchanged: every closed request, as before.
+            'histogram' => $this->resolutionHistogram($closedDays),
             'coverage' => [
                 'requests' => $rows->count(),
                 'withFirstResponse' => count($responseHours),
-                'withResolution' => count($resolutionDays),
+                'withResolution' => count($closedDays),
             ],
         ];
     }
@@ -407,14 +415,10 @@ class AnalyticsReport
         // scoping it to a range would hide the oldest ones — the only ones
         // that matter here.
         $rows = DB::table('tbl_service_request')
-            // Table-qualified: the barangay filter below joins tbl_residents,
-            // which also has a `status` column, and an unqualified name there
-            // is a 1052 rather than a wrong answer.
             ->whereNotIn('tbl_service_request.status', ServiceRequest::TERMINAL_STATUSES)
             ->when($serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $serviceId))
-            ->when($barangayId, fn ($q) => $q
-                ->join('tbl_residents', 'tbl_service_request.resident_id', '=', 'tbl_residents.resident_id')
-                ->where('tbl_residents.barangay_id', $barangayId))
+            // The request's own barangay, as filed.
+            ->when($barangayId, fn ($q) => $q->where('tbl_service_request.barangay_id', $barangayId))
             ->select('tbl_service_request.created_at')
             ->get();
 

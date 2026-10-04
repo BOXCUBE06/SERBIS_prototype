@@ -4,6 +4,8 @@ import '../models/advisory.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'borrow_request_widgets.dart' show StatusBox, serviceStatusBox;
+import 'request_summary.dart' show SummaryCard;
 
 class AppHeader extends StatelessWidget {
   final VoidCallback? onNotificationsTap;
@@ -31,10 +33,10 @@ class AppHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 40, 14, 20),
+      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.headerTop, 14, 20),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
       ),
       child: Stack(
         clipBehavior: Clip.none,
@@ -45,7 +47,7 @@ class AppHeader extends StatelessWidget {
             child: Container(
               width: 200,
               height: 200,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(.05)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .05)),
             ),
           ),
           Positioned(
@@ -56,14 +58,14 @@ class AppHeader extends StatelessWidget {
               height: 160,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(.08)),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
               ),
             ),
           ),
           Row(
             children: [
               if (onBack != null) ...[
-                _HeaderButton(
+                HeaderButton(
                   icon: Icons.arrow_back_rounded,
                   label: tr(filipino, 'nav.back'),
                   onTap: onBack!,
@@ -77,9 +79,9 @@ class AppHeader extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(.14)),
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: Colors.white.withValues(alpha: .14)),
                       ),
                       alignment: Alignment.center,
                       child: const Icon(Icons.shield_outlined, color: Colors.white, size: 19),
@@ -89,16 +91,16 @@ class AppHeader extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('SERBIS', style: AppText.display(size: 17, color: Colors.white, letterSpacing: .5)),
+                          Text('SERBIS', style: AppText.display(size: AppTextSize.title, color: Colors.white, letterSpacing: .5)),
                           const SizedBox(height: 2),
                           Text(
                             'ECHAGUE MDRRMO',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppText.display(
-                              size: 10,
+                              size: AppTextSize.caption,
                               weight: FontWeight.w500,
-                              color: Colors.white.withOpacity(.85),
+                              color: Colors.white.withValues(alpha: .85),
                               letterSpacing: 2,
                             ),
                           ),
@@ -114,13 +116,13 @@ class AppHeader extends StatelessWidget {
               // permanent indicator teaches residents to ignore the one that
               // will matter.
               if (onNotificationsTap != null)
-                _HeaderButton(
+                HeaderButton(
                   icon: Icons.notifications_outlined,
                   label: tr(filipino, 'nav.notifications'),
                   onTap: onNotificationsTap!,
                 ),
               if (onProfileTap != null)
-                _HeaderButton(
+                HeaderButton(
                   icon: Icons.person_outline_rounded,
                   label: tr(filipino, 'nav.profile'),
                   onTap: onProfileTap!,
@@ -135,12 +137,16 @@ class AppHeader extends StatelessWidget {
 
 /// A 36dp glass circle inside a 48dp touch target — the drawn size is what the
 /// header was designed around, the target is what a thumb needs.
-class _HeaderButton extends StatelessWidget {
+class HeaderButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _HeaderButton({required this.icon, required this.label, required this.onTap});
+  /// Small amber dot on the circle: something new behind this button. The
+  /// caller decides from real state; [label] should say so too.
+  final bool dot;
+
+  const HeaderButton({super.key, required this.icon, required this.label, required this.onTap, this.dot = false});
 
   @override
   Widget build(BuildContext context) {
@@ -161,11 +167,31 @@ class _HeaderButton extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(.10),
-                border: Border.all(color: Colors.white.withOpacity(.30)),
+                color: Colors.white.withValues(alpha: .10),
+                border: Border.all(color: Colors.white.withValues(alpha: .30)),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 18, color: Colors.white),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, size: 18, color: Colors.white),
+                  if (dot)
+                    Positioned(
+                      key: const ValueKey('header-button-dot'),
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.amberDot,
+                          border: Border.all(color: AppColors.green700, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -174,6 +200,140 @@ class _HeaderButton extends StatelessWidget {
   }
 }
 
+/// The green header of the tab screens: a title with a one-line subtitle that
+/// folds away as the list scrolls, plus bell and profile. A page opened from a
+/// tab passes [onBack] for a back arrow ahead of the title.
+class TabHeader extends SliverPersistentHeaderDelegate {
+  static const maxHeight = 128.0;
+  static const minHeight = 96.0;
+
+  final String title;
+  final String subtitle;
+  final bool filipino;
+  final VoidCallback? onNotifications;
+  final VoidCallback? onProfile;
+  final VoidCallback? onBack;
+
+  const TabHeader({
+    required this.title,
+    required this.subtitle,
+    required this.filipino,
+    this.onNotifications,
+    this.onProfile,
+    this.onBack,
+  });
+
+  @override
+  double get maxExtent => maxHeight;
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  bool shouldRebuild(TabHeader old) => old.title != title || old.subtitle != subtitle || old.filipino != filipino;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return TabHeaderBar(
+      title: title,
+      subtitle: subtitle,
+      filipino: filipino,
+      onNotifications: onNotifications,
+      onProfile: onProfile,
+      onBack: onBack,
+      // 0 fully open, 1 fully collapsed.
+      collapse: (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0),
+    );
+  }
+}
+
+/// [TabHeader] as a plain widget, for a screen that is a column rather than a
+/// scrolling list (a form with a pinned footer). [collapse] is the delegate's
+/// scroll fold, 0 open to 1 folded; a column leaves it at 0.
+class TabHeaderBar extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool filipino;
+  final VoidCallback? onNotifications;
+  final VoidCallback? onProfile;
+  final VoidCallback? onBack;
+  final double collapse;
+
+  const TabHeaderBar({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.filipino,
+    this.onNotifications,
+    this.onProfile,
+    this.onBack,
+    this.collapse = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    final t = collapse;
+    // The gradient runs edge to edge; the content keeps to the same 600dp
+    // column as the cards below, so on a wide screen the title lines up with them.
+    final inset = ((MediaQuery.sizeOf(context).width - 600) / 2).clamp(0.0, double.infinity);
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(inset + (onBack == null ? AppLayout.gutter : 8), AppLayout.headerTop, inset + 14, 20 - 12 * t),
+      decoration: const BoxDecoration(
+        gradient: AppColors.headerGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
+      ),
+      child: Row(
+        children: [
+          if (onBack != null) HeaderButton(icon: Icons.arrow_back_rounded, label: tr(f, 'nav.back'), onTap: onBack!),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.display(
+                      size: AppTextSize.headline - (AppTextSize.headline - AppTextSize.title) * t,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                ClipRect(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    heightFactor: 1 - t,
+                    child: Opacity(
+                      opacity: 1 - t,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.body(size: AppTextSize.small, color: Colors.white.withValues(alpha: .85)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onNotifications != null)
+            HeaderButton(icon: Icons.notifications_outlined, label: tr(f, 'nav.notifications'), onTap: onNotifications!),
+          if (onProfile != null)
+            HeaderButton(icon: Icons.person_outline_rounded, label: tr(f, 'nav.profile'), onTap: onProfile!),
+        ],
+      ),
+    );
+  }
+}
 
 /// What SERBIS is, on the two screens where the reader does not know yet.
 ///
@@ -231,7 +391,7 @@ class ServicePurposeNote extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.green50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,13 +399,13 @@ class ServicePurposeNote extends StatelessWidget {
           Text(
             _lead,
             style: AppText.body(
-                size: 12.5, color: AppColors.green900, height: 1.45),
+                size: AppTextSize.small, color: AppColors.green900, height: 1.45),
           ),
           const SizedBox(height: 3),
           Text(
             _leadEnglish,
             style: AppText.body(
-                size: 11.5, color: AppColors.inkMuted, height: 1.4),
+                size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
           ),
           const SizedBox(height: 10),
           for (final (icon, filipino, english) in _capabilities)
@@ -270,12 +430,12 @@ class ServicePurposeNote extends StatelessWidget {
                         Text(
                           filipino,
                           style: AppText.body(
-                              size: 12, color: AppColors.ink, height: 1.35),
+                              size: AppTextSize.small, color: AppColors.ink, height: 1.35),
                         ),
                         Text(
                           english,
                           style: AppText.body(
-                              size: 11, color: AppColors.inkFaint, height: 1.35),
+                              size: AppTextSize.caption, color: AppColors.inkFaint, height: 1.35),
                         ),
                       ],
                     ),
@@ -294,34 +454,51 @@ class SectionHeader extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction});
+  /// A small status after the title, e.g. the "Saved" pill. Ignored when an
+  /// [actionLabel] is set.
+  final Widget? trailing;
+
+  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction, this.trailing});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Flexible, not Expanded: a short title still sits next to its action
           // instead of being pushed apart. Without it the Row demanded the
           // title's natural width and "Subaybayan ang Iyong mga Kahilingan"
           // overflowed by 22px at 360, striped banner and all.
           Flexible(
-            child: Text(title, style: AppText.display(size: 16, color: AppColors.green900)),
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk),
+              ),
+            ),
           ),
           if (actionLabel != null) ...[
             const SizedBox(width: 12),
             // The action is the smaller target and must stay tappable, so it
             // keeps its width and the title wraps around it.
-            GestureDetector(
-              onTap: onAction,
-              child: Text(
-                actionLabel!,
-                style: AppText.display(size: 12, weight: FontWeight.w600, color: AppColors.green700),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                // Tighter than the default 12: the Filipino "Tingnan lahat (5)"
+                // overflowed this row by 3px at 320dp.
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                foregroundColor: AppColors.green700,
+                textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
               ),
+              child: Text(actionLabel!),
             ),
+          ] else if (trailing != null) ...[
+            const SizedBox(width: 12),
+            trailing!,
           ],
         ],
       ),
@@ -345,15 +522,9 @@ class AppCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.green900.withOpacity(.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: AppShadow.card,
       ),
       child: leftAccent == null
           ? Padding(padding: padding, child: child)
@@ -361,7 +532,7 @@ class AppCard extends StatelessWidget {
               children: [
                 Container(width: 4, decoration: BoxDecoration(
                   color: leftAccent,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(AppRadius.xl)),
                 )),
                 Expanded(child: Padding(padding: padding, child: child)),
               ],
@@ -385,7 +556,7 @@ class IconBadge extends StatelessWidget {
     required this.fg,
     this.size = 38,
     this.iconSize = 18,
-    this.radius = 11,
+    this.radius = AppRadius.md,
   });
 
   @override
@@ -418,10 +589,10 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
       child: Text(
         (label ?? status.labelFor(filipino)).toUpperCase(),
-        style: AppText.display(size: 10.5, weight: FontWeight.w700, color: fg ?? status.fg, letterSpacing: .5),
+        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: fg ?? status.fg, letterSpacing: .5),
       ),
     );
   }
@@ -461,28 +632,40 @@ class OfflinePill extends StatelessWidget {
       label = filipino ? 'I-download' : 'Download';
     }
 
-    return GestureDetector(
-      onTap: loading ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(20)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            loading
-                ? const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
-                  )
-                : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 12, color: AppColors.green700),
-            const SizedBox(width: 4),
-            Text(
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: AppColors.green50, borderRadius: BorderRadius.circular(AppRadius.xl)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          loading
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
+                )
+              : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 14, color: AppColors.green700),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
               label,
-              style: AppText.display(size: 10, weight: FontWeight.w700, color: AppColors.green700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+
+    // Only a pill that does something needs the 44dp reach.
+    if (onTap == null) return pill;
+    return InkWell(
+      onTap: loading ? null : onTap,
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: Center(widthFactor: 1, child: pill),
       ),
     );
   }
@@ -531,7 +714,7 @@ class AppButton extends StatelessWidget {
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: AppText.display(size: 13, weight: FontWeight.w600, color: fg),
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: fg),
                 ),
               ),
             ],
@@ -548,8 +731,9 @@ class AppButton extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.green700,
               foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               elevation: 0,
             ),
             child: child,
@@ -563,8 +747,9 @@ class AppButton extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.ink,
               side: const BorderSide(color: AppColors.line),
+              minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
             child: child,
           ),
@@ -577,8 +762,9 @@ class AppButton extends StatelessWidget {
             style: TextButton.styleFrom(
               backgroundColor: AppColors.red50,
               foregroundColor: AppColors.red600,
+              minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
             child: child,
           ),
@@ -635,10 +821,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
             validator: widget.validator,
             maxLength: widget.maxLength,
             inputFormatters: widget.inputFormatters,
-            style: AppText.body(size: 14),
+            style: AppText.body(size: AppTextSize.bodyLg),
             decoration: InputDecoration(
               hintText: widget.hint,
-              hintStyle: AppText.body(size: 14, color: AppColors.inkFaint),
+              hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
               counterText: '',
               prefixIcon: widget.prefixIcon != null
                   ? Icon(widget.prefixIcon, size: 18, color: AppColors.inkFaint)
@@ -656,25 +842,25 @@ class _AuthTextFieldState extends State<AuthTextField> {
               filled: true,
               fillColor: AppColors.surface,
               contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              errorStyle: AppText.body(size: 11, color: AppColors.red600),
+              errorStyle: AppText.body(size: AppTextSize.small, color: AppColors.red600),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.line, width: 1.5),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.line, width: 1.5),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.green600, width: 1.5),
               ),
               errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
               focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
               ),
             ),
@@ -688,6 +874,118 @@ class _AuthTextFieldState extends State<AuthTextField> {
 /// A request still in flight has no server reference number yet, so the copy
 /// has to read naturally without one rather than printing a bare `#`.
 String _refSuffix(String refNo) => refNo.isEmpty ? '' : ' #$refNo';
+
+/// The app's confirm-or-keep dialog: a question, one line on what happens, and
+/// two 48dp actions. While [busy] the confirm button keeps its label and gains
+/// a spinner, so the resident still reads what they tapped.
+class ConfirmDialog extends StatelessWidget {
+  final String title;
+  final String body;
+  final String keepLabel;
+  final String confirmLabel;
+  final bool busy;
+  final VoidCallback? onKeep;
+  final VoidCallback? onConfirm;
+
+  /// Red confirm for something that cannot be taken back (cancel, log out);
+  /// green for a change that is just worth a second look.
+  final bool destructive;
+
+  const ConfirmDialog({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.keepLabel,
+    required this.confirmLabel,
+    this.busy = false,
+    this.onKeep,
+    this.onConfirm,
+    this.destructive = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = destructive ? AppColors.red50 : AppColors.green50;
+    final fg = destructive ? AppColors.red600 : AppColors.green700;
+    return AlertDialog(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+      title: Semantics(
+        header: true,
+        child: Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.sectionInk)),
+      ),
+      content: Text(body, style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5)),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      // Two long Filipino labels stack rather than overflow on a narrow phone.
+      actionsOverflowDirection: VerticalDirection.down,
+      actions: [
+        TextButton(
+          onPressed: onKeep,
+          style: TextButton.styleFrom(minimumSize: const Size(88, 48)),
+          child: Text(
+            keepLabel,
+            style: AppText.display(
+              size: AppTextSize.body,
+              weight: FontWeight.w600,
+              color: onKeep == null ? AppColors.inkFaint : AppColors.inkMuted,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: onConfirm,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(88, 48),
+            backgroundColor: bg,
+            foregroundColor: fg,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (busy) ...[
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Text(
+                  confirmLabel,
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: fg),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Asks [title] and resolves to true only when the resident confirms.
+Future<bool> showConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required String keepLabel,
+  required String confirmLabel,
+  bool destructive = true,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => ConfirmDialog(
+      title: title,
+      body: body,
+      keepLabel: keepLabel,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+      onKeep: () => Navigator.pop(ctx, false),
+      onConfirm: () => Navigator.pop(ctx, true),
+    ),
+  );
+  return confirmed == true;
+}
 
 /// [onConfirmed] must resolve to `true` only once the server has accepted the
 /// cancellation. The success message waits for it — the previous version fired
@@ -767,50 +1065,16 @@ class _CancelDialogState extends State<_CancelDialog> {
     final f = widget.filipino;
     return PopScope(
       canPop: !_busy,
-      child: AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
-          style: AppText.display(size: 16),
-        ),
-        content: Text(
-          f
-              ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
-              : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
-          style: AppText.body(size: 13, color: AppColors.inkMuted, height: 1.5),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: _busy ? null : () => Navigator.pop(context),
-            child: Text(
-              f ? 'Panatilihin' : 'Keep request',
-              style: AppText.display(
-                size: 13,
-                weight: FontWeight.w600,
-                color: _busy ? AppColors.inkFaint : AppColors.inkMuted,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: _busy ? null : _confirm,
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.red50,
-              foregroundColor: AppColors.red600,
-            ),
-            child: _busy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.red600),
-                  )
-                : Text(
-                    f ? 'Kanselahin' : 'Cancel request',
-                    style: AppText.display(size: 13, weight: FontWeight.w600, color: AppColors.red600),
-                  ),
-          ),
-        ],
+      child: ConfirmDialog(
+        title: f ? 'Kanselahin ang kahilingan?' : 'Cancel request?',
+        body: f
+            ? 'Sigurado ka bang ikakansela ang kahilingan${_refSuffix(widget.refNo)}? Hindi na maibabalik ang aksyon na ito.'
+            : 'Are you sure you want to cancel request${_refSuffix(widget.refNo)}? This action cannot be undone.',
+        keepLabel: f ? 'Panatilihin' : 'Keep request',
+        confirmLabel: f ? 'Kanselahin' : 'Cancel request',
+        busy: _busy,
+        onKeep: _busy ? null : () => Navigator.pop(context),
+        onConfirm: _busy ? null : _confirm,
       ),
     );
   }
@@ -826,15 +1090,129 @@ void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool i
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
-      content: Text(message, style: AppText.display(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+      content: Text(message, style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: Colors.white)),
       backgroundColor: isError ? AppColors.red600 : AppColors.green900,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.fromLTRB(22, 0, 22, 90),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      margin: const EdgeInsets.fromLTRB(AppLayout.gutter, 0, AppLayout.gutter, AppLayout.snackBarClearance),
       // Failures need longer on screen than confirmations.
       duration: Duration(seconds: isError ? 4 : 2),
     ),
   );
+}
+
+/// The frame every bottom sheet shares: rounded top, a grab handle, a heading, a
+/// 600dp column and the bottom safe area. [scrollable] wraps the content in a
+/// scroll view, for a sheet that holds a form.
+class SheetFrame extends StatelessWidget {
+  final String? title;
+  final Widget child;
+  final bool scrollable;
+
+  const SheetFrame({super.key, this.title, required this.child, this.scrollable = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
+          ),
+        ),
+        if (title != null) ...[
+          Semantics(
+            header: true,
+            child: Text(title!, style: AppText.display(size: AppTextSize.headline, color: AppColors.sectionInk)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        child,
+      ],
+    );
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
+      ),
+      padding: EdgeInsets.fromLTRB(AppLayout.gutter, 14, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
+      child: Align(
+        alignment: Alignment.topCenter,
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: scrollable ? SingleChildScrollView(child: body) : body,
+        ),
+      ),
+    );
+  }
+}
+
+/// A sheet's top: grab handle, title, an optional one-line subtitle and a 44dp
+/// close. For the sheets whose body scrolls under a fixed header (the bell,
+/// Edit my details), which [SheetFrame] cannot do.
+class SheetHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final bool filipino;
+
+  const SheetHeader({super.key, required this.title, this.subtitle, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(AppRadius.pill)),
+          ),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: Text(title, style: AppText.display(size: AppTextSize.headline, color: AppColors.sectionInk)),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(subtitle!, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              tooltip: tr(filipino, 'common.close'),
+              icon: const Icon(Icons.close_rounded, size: 22, color: AppColors.ink),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.grey50,
+                minimumSize: const Size(44, 44),
+                fixedSize: const Size(44, 44),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 /// The bell sheet.
@@ -847,6 +1225,9 @@ void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool i
 /// They are now. The blasts the agency texted this resident come first, above
 /// the request updates: a warning outranks a status change, and burying one
 /// under "Request resolved" is the failure mode this sheet exists to avoid.
+///
+/// Requests are the last 30 days only, split at [seenAt] into "New" and
+/// "Earlier". Each row opens the request in Track, where the full card is.
 class NotificationsSheet extends StatelessWidget {
   final bool filipino;
   final List<ServiceRequest> requests;
@@ -856,12 +1237,27 @@ class NotificationsSheet extends StatelessWidget {
   /// those two look identical on screen and mean opposite things.
   final String? advisoriesError;
 
+  /// When the sheet was last opened, read before this opening marks it. Null
+  /// counts every request as new, the same rule the bell's dot uses.
+  final DateTime? seenAt;
+
+  /// Opens a request in Track. The sheet closes itself first.
+  final ValueChanged<ServiceRequest>? onOpenRequest;
+
+  /// The 30-day window is measured from this; tests pass a fixed one.
+  final DateTime? now;
+
+  static const recentWindow = Duration(days: 30);
+
   const NotificationsSheet({
     super.key,
     this.filipino = false,
     this.requests = const [],
     this.advisories = const [],
     this.advisoriesError,
+    this.seenAt,
+    this.onOpenRequest,
+    this.now,
   });
 
   static void show(
@@ -870,6 +1266,8 @@ class NotificationsSheet extends StatelessWidget {
     List<ServiceRequest> requests = const [],
     List<Advisory> advisories = const [],
     String? advisoriesError,
+    DateTime? seenAt,
+    ValueChanged<ServiceRequest>? onOpenRequest,
   }) {
     showModalBottomSheet(
       context: context,
@@ -880,130 +1278,133 @@ class NotificationsSheet extends StatelessWidget {
         requests: requests,
         advisories: advisories,
         advisoriesError: advisoriesError,
+        seenAt: seenAt,
+        onOpenRequest: onOpenRequest,
       ),
     );
   }
 
-  /// Newest movement first — that is the order a notification list is read in.
-  /// A request with no timestamps sorts last rather than to the top.
-  List<ServiceRequest> get _ordered {
-    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
-    return [...requests]..sort((a, b) {
-        final left = a.updatedAt ?? a.createdAt ?? epoch;
-        final right = b.updatedAt ?? b.createdAt ?? epoch;
-        return right.compareTo(left);
-      });
+  static DateTime? _movedAt(ServiceRequest r) => r.updatedAt ?? r.createdAt;
+
+  /// Moved within the window, newest movement first. A request with no
+  /// timestamp cannot be placed in the window, so it is left to Track.
+  List<ServiceRequest> get _recent {
+    final since = (now ?? DateTime.now()).subtract(recentWindow);
+    return requests.where((r) => _movedAt(r)?.isAfter(since) ?? false).toList()
+      ..sort((a, b) => _movedAt(b)!.compareTo(_movedAt(a)!));
   }
+
+  bool _isNew(ServiceRequest r) => seenAt == null || _movedAt(r)!.isAfter(seenAt!);
 
   @override
   Widget build(BuildContext context) {
+    final f = filipino;
+    final recent = _recent;
+    final fresh = recent.where(_isNew).toList();
+    final earlier = recent.where((r) => !_isNew(r)).toList();
+
+    Widget capped(Widget child) => Align(
+          alignment: Alignment.topCenter,
+          heightFactor: 1,
+          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600), child: child),
+        );
+
+    Widget rows(List<ServiceRequest> list, {required bool unread}) => SummaryCard(children: [
+          for (final r in list)
+            _RequestUpdateRow(
+              request: r,
+              filipino: f,
+              unread: unread,
+              onTap: onOpenRequest == null
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                      onOpenRequest!(r);
+                    },
+            ),
+        ]);
+
     return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: AppColors.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: const EdgeInsets.fromLTRB(22, 14, 22, 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+          Container(
+            padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 12, AppLayout.gutter, 14),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.cardBorder)),
             ),
+            child: capped(SheetHeader(
+              title: tr(f, 'nav.notifications'),
+              subtitle: tr(f, 'notif.subtitle'),
+              filipino: f,
+            )),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(filipino ? 'Mga Abiso' : 'Notifications', style: AppText.display(size: 18)),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.green700),
-                style: IconButton.styleFrom(backgroundColor: AppColors.green50, padding: const EdgeInsets.all(6)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // Bounded so a resident with a long history gets a scrollable sheet
-          // instead of one that runs off the screen. Both sections share the
-          // one scroll view — two independently scrolling lists in a sheet is
-          // how the advisory section ends up a 40-pixel window.
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * .6,
-            ),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                _SectionLabel(text: tr(filipino, 'notif.advisories')),
-                if (advisoriesError != null)
-                  // Never "no advisories" on a failed fetch. The wording says
-                  // outright that silence here is not an all-clear.
-                  _AdvisoryNotice(
-                    text: tr(filipino, 'notif.adv_failed'),
-                    icon: Icons.wifi_off_rounded,
-                    bg: AppColors.red50,
-                    fg: AppColors.red600,
-                  )
-                else if (advisories.isEmpty)
-                  _AdvisoryNotice(
-                    text: tr(filipino, 'notif.adv_none'),
-                    icon: Icons.campaign_outlined,
-                    bg: AppColors.green50,
-                    fg: AppColors.green700,
-                  )
-                else
-                  for (final advisory in advisories)
-                    _AdvisoryTile(advisory: advisory, filipino: filipino),
-                const SizedBox(height: 14),
-                _SectionLabel(text: tr(filipino, 'notif.your_requests')),
-                if (requests.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.green50,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.green50),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.green700),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          tr(filipino, 'notif.empty_title'),
-                          style: AppText.display(size: 15, color: AppColors.green900),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          tr(filipino, 'notif.empty_body'),
-                          style: AppText.body(size: 12.5, color: AppColors.green900, height: 1.6),
-                        ),
+          // Bounded so a long history scrolls inside the sheet instead of running
+          // off the screen. Both sections share the one scroll view — two
+          // independently scrolling lists in a sheet is how the advisory section
+          // ends up a 40-pixel window.
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * .6),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, AppSpacing.sm),
+                children: [
+                  capped(Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SectionLabel(text: tr(f, 'notif.advisories')),
+                      if (advisoriesError != null)
+                        // Never "no advisories" on a failed fetch. The wording says
+                        // outright that silence here is not an all-clear.
+                        StatusBox(
+                          icon: Icons.wifi_off_rounded,
+                          bg: AppColors.red50,
+                          fg: AppColors.red600,
+                          title: tr(f, 'notif.adv_failed_title'),
+                          next: tr(f, 'notif.adv_failed'),
+                        )
+                      else if (advisories.isEmpty)
+                        _MutedLine(text: tr(f, 'notif.adv_none'))
+                      else
+                        for (final advisory in advisories) _AdvisoryTile(advisory: advisory, filipino: f),
+                      const SizedBox(height: AppSpacing.lg),
+                      if (recent.isEmpty) ...[
+                        _SectionLabel(text: tr(f, 'notif.your_requests')),
+                        _MutedLine(text: tr(f, 'notif.requests_none')),
                       ],
-                    ),
-                  )
-                else
-                  for (final request in _ordered)
-                    _RequestUpdateTile(request: request, filipino: filipino),
-              ],
+                      if (fresh.isNotEmpty) ...[
+                        _SectionLabel(text: tr(f, 'notif.new')),
+                        rows(fresh, unread: true),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      if (earlier.isNotEmpty) ...[
+                        _SectionLabel(text: tr(f, 'notif.earlier')),
+                        rows(earlier, unread: false),
+                      ],
+                    ],
+                  )),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          // Says what this list is and is not, so nobody reads it as more than
-          // it covers.
-          Text(
-            tr(filipino, 'notif.scope_note'),
-            style: AppText.body(size: 11.5, color: AppColors.inkMuted, height: 1.5),
+          // Says what this list covers and what it does not, so nobody reads it
+          // as more than that.
+          Padding(
+            padding: EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.sm, AppLayout.gutter, 16 + MediaQuery.paddingOf(context).bottom),
+            child: capped(Text(
+              tr(f, 'notif.scope_note'),
+              textAlign: TextAlign.center,
+              style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5),
+            )),
           ),
         ],
       ),
@@ -1019,54 +1420,29 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text.toUpperCase(),
-        style: AppText.display(size: 11, weight: FontWeight.w700, color: AppColors.inkMuted),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Semantics(
+        header: true,
+        child: Text(text, style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk)),
       ),
     );
   }
 }
 
-/// The "none sent" and "could not load" states. Same shape, different colour
-/// and wording, so neither can be mistaken for the other at a glance.
-class _AdvisoryNotice extends StatelessWidget {
+/// An empty section, said in one quiet line rather than a coloured box.
+class _MutedLine extends StatelessWidget {
   final String text;
-  final IconData icon;
-  final Color bg;
-  final Color fg;
 
-  const _AdvisoryNotice({
-    required this.text,
-    required this.icon,
-    required this.bg,
-    required this.fg,
-  });
+  const _MutedLine({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: fg),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: AppText.body(size: 12, color: AppColors.ink, height: 1.5),
-            ),
-          ),
-        ],
-      ),
-    );
+    return Text(text, style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5));
   }
 }
 
+/// One advisory the agency texted this resident: marked by its megaphone and
+/// the heading above it, never by colour alone.
 class _AdvisoryTile extends StatelessWidget {
   final Advisory advisory;
   final bool filipino;
@@ -1076,55 +1452,36 @@ class _AdvisoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final at = advisory.sentAt;
+    final barangay = advisory.barangay?.trim() ?? '';
+    final meta = [
+      at == null ? tr(filipino, 'notif.adv_date_unknown') : formatTimelineTime(at, filipino),
+      if (barangay.isNotEmpty) barangay,
+    ].join(' · ');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 14, AppSpacing.lg, 14),
       decoration: BoxDecoration(
-        color: AppColors.red50,
-        // Not colour alone: an advisory is marked by its own border and its
-        // megaphone as well as its tint.
-        border: Border.all(color: AppColors.red600, width: 1.2),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.cardBorder),
+        borderRadius: BorderRadius.circular(18),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const IconBadge(
-            icon: Icons.campaign_rounded,
-            bg: AppColors.surface,
-            fg: AppColors.red600,
-            size: 36,
-            iconSize: 17,
-            radius: 10,
+          Row(
+            children: [
+              const Icon(Icons.campaign_rounded, size: 20, color: AppColors.amberInk),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: Text(meta, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted))),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  at == null
-                      ? tr(filipino, 'notif.adv_date_unknown')
-                      : formatTimelineTime(at, filipino),
-                  style: AppText.body(size: 11, color: AppColors.inkFaint),
-                ),
-                const SizedBox(height: 4),
-                // The agency's own words, unmodified and never truncated: the
-                // instruction a resident has to act on is often the last line.
-                Text(
-                  advisory.message,
-                  style: AppText.body(size: 12.5, color: AppColors.ink, height: 1.5),
-                ),
-                if (advisory.barangay != null && advisory.barangay!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    advisory.barangay!,
-                    style: AppText.body(size: 11, color: AppColors.inkMuted),
-                  ),
-                ],
-              ],
-            ),
+          const SizedBox(height: 6),
+          // The agency's own words, unmodified and never truncated: the
+          // instruction a resident has to act on is often the last line.
+          Text(
+            advisory.message,
+            style: AppText.body(size: AppTextSize.bodyLg, color: AppColors.ink, height: 1.5),
           ),
         ],
       ),
@@ -1132,59 +1489,102 @@ class _AdvisoryTile extends StatelessWidget {
   }
 }
 
-class _RequestUpdateTile extends StatelessWidget {
+/// One of the resident's own requests, compact: title, reference and when it
+/// last moved, and its status as a one-line pill in Track's wording.
+class _RequestUpdateRow extends StatelessWidget {
   final ServiceRequest request;
   final bool filipino;
+  final bool unread;
+  final VoidCallback? onTap;
 
-  const _RequestUpdateTile({required this.request, required this.filipino});
+  const _RequestUpdateRow({required this.request, required this.filipino, required this.unread, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final f = filipino;
     final at = request.updatedAt ?? request.createdAt;
+    // Same title and colours as the box on the Track card this row opens.
+    final status = serviceStatusBox(request, f);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconBadge(
-            icon: request.displayIcon,
-            bg: request.status.bg,
-            fg: request.status.fg,
-            size: 36,
-            iconSize: 17,
-            radius: 10,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  request.displayTitle(filipino),
-                  style: AppText.display(size: 13, weight: FontWeight.w600),
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 72),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: unread
+                    ? Semantics(
+                        label: tr(f, 'notif.unread'),
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(color: AppColors.blue600, shape: BoxShape.circle),
+                        ),
+                      )
+                    : const SizedBox(width: 10),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(request.displayTitle(f), style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (request.refNo.isNotEmpty) request.refNo,
+                        at == null ? tr(f, 'timeline.time_unknown') : formatTimelineTime(at, f),
+                      ].join(' · '),
+                      style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+                    ),
+                    const SizedBox(height: 6),
+                    _StatusPill(label: status.title, bg: status.bg, fg: status.fg),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  at == null
-                      ? tr(filipino, 'timeline.time_unknown')
-                      : formatTimelineTime(at, filipino),
-                  style: AppText.body(size: 11, color: AppColors.inkFaint),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  request.refNo.isEmpty
-                      ? request.statusLabelFor(filipino)
-                      : '${request.statusLabelFor(filipino)} · ${request.refNo}',
-                  style: AppText.body(size: 12, color: AppColors.inkMuted, height: 1.5),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color bg;
+  final Color fg;
+
+  const _StatusPill({required this.label, required this.bg, required this.fg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: fg, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: fg),
             ),
           ),
         ],

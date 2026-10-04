@@ -152,7 +152,7 @@ void main() {
       home: HotlinesPage(hotlines: [Hotline.fromJson(_row('BFP', number: '(02) 426-3812'))!]),
     ));
 
-    expect(find.text('Emergency Hotlines'), findsOneWidget);
+    expect(find.text('Emergency hotlines'), findsOneWidget);
     expect(find.text('BFP'), findsOneWidget);
     expect(find.text('Globe · (02) 426-3812'), findsOneWidget);
   });
