@@ -97,6 +97,13 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
     && echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf \
     && a2enconf servername
 
+# Debian's default mod_deflate list has no application/json, so every API response went
+# out uncompressed (the admin queue list is ~900 kB raw, ~60 kB gzipped).
+RUN a2enmod deflate \
+    && echo 'AddOutputFilterByType DEFLATE application/json' > /etc/apache2/conf-available/serbis-deflate.conf \
+    && a2enconf serbis-deflate \
+    && apache2ctl configtest
+
 WORKDIR /var/www/html
 COPY --from=vendor /app /var/www/html
 
