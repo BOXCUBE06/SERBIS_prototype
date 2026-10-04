@@ -7,18 +7,18 @@ use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
- * GET /api/admin/dashboard — the map, the barangay ranking and the category
- * breakdown each got their own Today/Week/Month/All-time filter (previously
- * a single shared toggle drove only the hero card and the trend chart; these
- * three were silently always all-time). The point of these tests is that a
+ * GET /api/admin/dashboard — the "Most requested" ranking has its own
+ * Today/Week/Month/All-time filter. The point of these tests is that a
  * request placed outside a period's window is excluded from that period but
  * still counted under 'all' — a bug here would count everything as 'today'
  * or nothing as 'all', both of which would look fine on an empty dev DB.
+ * Days are Manila days: created_at is UTC, and a UTC midnight is 08:00 there.
  */
 class AnalyticsDashboardTest extends TestCase
 {
@@ -77,52 +77,69 @@ class AnalyticsDashboardTest extends TestCase
         return $req;
     }
 
+    private function servicesIn(string $period): int
+    {
+        return array_sum($this->getJson('/api/admin/dashboard')->assertOk()->json("charts.pieByPeriod.{$period}.services.data"));
+    }
+
     public function test_a_request_outside_the_week_window_is_excluded_from_week_but_counted_in_all(): void
     {
         $this->requestDatedAt(now()->subDays(20));
 
-        $response = $this->getJson('/api/admin/dashboard')->assertOk();
-
-        $weekTotal = collect($response->json('mapDataByPeriod.week'))->sum('requests');
-        $allTotal = collect($response->json('mapDataByPeriod.all'))->sum('requests');
-
-        $this->assertSame(0, $weekTotal);
-        $this->assertSame(1, $allTotal);
+        $this->assertSame(0, $this->servicesIn('week'));
+        $this->assertSame(1, $this->servicesIn('all'));
     }
 
     public function test_a_request_from_today_is_counted_in_every_period(): void
     {
         $this->requestDatedAt(now());
 
-        $response = $this->getJson('/api/admin/dashboard')->assertOk();
-
         foreach (['today', 'week', 'month', 'all'] as $period) {
-            $total = collect($response->json("mapDataByPeriod.{$period}"))->sum('requests');
-            $this->assertSame(1, $total, "expected 1 request counted in period '{$period}'");
+            $this->assertSame(1, $this->servicesIn($period), "expected 1 request counted in period '{$period}'");
         }
     }
 
-    public function test_pie_data_is_scoped_the_same_way_as_the_map(): void
+    public function test_the_day_starts_at_manila_midnight_not_utc_midnight(): void
     {
-        $this->requestDatedAt(now()->subDays(20));
+        // 12:00 UTC on 10 Sep is 20:00 in Manila.
+        Carbon::setTestNow('2026-09-10 12:00:00');
 
-        $response = $this->getJson('/api/admin/dashboard')->assertOk();
+        // 01:00 Manila on the 10th: the previous UTC date, but office-today.
+        $this->requestDatedAt(Carbon::parse('2026-09-09 17:00:00'));
+        // 23:00 Manila on the 9th: office-yesterday.
+        $this->requestDatedAt(Carbon::parse('2026-09-09 15:00:00'));
 
-        $weekServices = collect($response->json('charts.pieByPeriod.week.services.data'))->sum();
-        $allServices = collect($response->json('charts.pieByPeriod.all.services.data'))->sum();
-
-        $this->assertSame(0, $weekServices);
-        $this->assertSame(1, $allServices);
+        $this->assertSame(1, $this->servicesIn('today'));
+        $this->assertSame(2, $this->servicesIn('week'));
     }
 
-    public function test_all_four_periods_are_present_for_both_map_and_pie(): void
+    public function test_a_request_with_no_service_is_ranked_as_others_not_dropped(): void
+    {
+        $this->requestDatedAt(now());
+        $other = $this->requestDatedAt(now());
+        $other->service_id = null;
+        $other->saveQuietly();
+
+        $services = $this->getJson('/api/admin/dashboard')->assertOk()->json('charts.pieByPeriod.all.services');
+
+        $this->assertSame(2, array_sum($services['data']));
+        $this->assertContains('Others', $services['labels']);
+    }
+
+    public function test_all_four_periods_are_present_for_the_pie(): void
     {
         $response = $this->getJson('/api/admin/dashboard')->assertOk();
 
         foreach (['today', 'week', 'month', 'all'] as $period) {
-            $this->assertIsArray($response->json("mapDataByPeriod.{$period}"));
             $this->assertIsArray($response->json("charts.pieByPeriod.{$period}.services.data"));
             $this->assertIsArray($response->json("charts.pieByPeriod.{$period}.items.data"));
         }
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
     }
 }

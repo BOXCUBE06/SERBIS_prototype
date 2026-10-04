@@ -31,7 +31,7 @@ class AnalyticsCache
      * after a deploy with every card and list dropped or, worse, leaking; a new
      * key strands it and lets it expire on its own.
      */
-    public const DASHBOARD_KEY = 'analytics:dashboard:v2';
+    public const DASHBOARD_KEY = 'analytics:dashboard:v3';
 
     public const TTL_SECONDS = 300;
 

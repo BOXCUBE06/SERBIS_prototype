@@ -21,8 +21,7 @@ use Tests\TestCase;
 
 /**
  * GET /api/admin/dashboard is one cached payload for every admin. What an admin
- * sees of it is cut down after the cache read: the cards and lists that link to
- * a page they cannot open, and every list that names a person.
+ * sees of it is cut down after the cache read: every list that names a person.
  */
 class DashboardSectionStrippingTest extends TestCase
 {
@@ -88,63 +87,20 @@ class DashboardSectionStrippingTest extends TestCase
         return $this->getJson('/api/admin/dashboard')->assertOk();
     }
 
-    private function titles($response): array
-    {
-        return collect($response->json('kpiStats'))->pluck('title')->all();
-    }
-
     public function test_an_admin_holding_only_the_dashboard_sees_the_aggregates_and_nobody_named(): void
     {
         $response = $this->dashboardAs([AdminSections::DASHBOARD]);
 
-        $this->assertSame([], $response->json('kpiStats'));
-        $this->assertSame([], $response->json('serviceRequests'));
-        $this->assertSame([], $response->json('borrowRequests'));
         $this->assertSame([], $response->json('systemLogs'));
         $this->assertSame([], $response->json('followUps'));
 
         // Aggregates with no one in them stay.
         $this->assertNotEmpty($response->json('charts'));
-        $this->assertArrayHasKey('aging', $response->json());
-        $this->assertArrayHasKey('mapDataByPeriod', $response->json());
 
         foreach (self::PRIVATE_NAMES as $name) {
             $this->assertStringNotContainsString($name, $response->getContent());
         }
         $this->assertStringNotContainsString('+639171234567', $response->getContent());
-    }
-
-    public function test_each_card_appears_only_for_the_section_it_links_to(): void
-    {
-        $this->assertSame(['Total Residents'], $this->titles($this->dashboardAs([AdminSections::DASHBOARD, AdminSections::RESIDENTS])));
-        $this->assertSame(['Pending Service Requests'], $this->titles($this->dashboardAs([AdminSections::DASHBOARD, AdminSections::REQUESTS])));
-        $this->assertSame(['Pending Borrow Requests'], $this->titles($this->dashboardAs([AdminSections::DASHBOARD, AdminSections::BORROWINGS])));
-        $this->assertSame(['Available Vehicles'], $this->titles($this->dashboardAs([AdminSections::DASHBOARD, AdminSections::VEHICLES])));
-    }
-
-    public function test_the_recent_request_list_follows_the_board_the_admin_holds(): void
-    {
-        $requests = $this->dashboardAs([AdminSections::DASHBOARD, AdminSections::REQUESTS])->json('serviceRequests');
-        $this->assertSame(['Road Clearing'], collect($requests)->pluck('type')->all());
-
-        $ambulance = $this->dashboardAs([AdminSections::DASHBOARD, AdminSections::AMBULANCE])->json('serviceRequests');
-        $this->assertSame(['Ambulance/Medical Response'], collect($ambulance)->pluck('type')->all());
-
-        $both = $this->dashboardAs([AdminSections::DASHBOARD, AdminSections::REQUESTS, AdminSections::AMBULANCE])->json('serviceRequests');
-        $this->assertCount(2, $both);
-    }
-
-    public function test_the_marker_used_to_cut_the_list_never_reaches_the_client(): void
-    {
-        $body = $this->dashboardAs([AdminSections::DASHBOARD, AdminSections::REQUESTS, AdminSections::AMBULANCE])->getContent();
-
-        $this->assertStringNotContainsString('"section"', $body);
-    }
-
-    public function test_recent_borrowings_need_the_borrowings_section(): void
-    {
-        $this->assertCount(0, $this->dashboardAs([AdminSections::DASHBOARD, AdminSections::REQUESTS])->json('borrowRequests'));
-        $this->assertCount(1, $this->dashboardAs([AdminSections::DASHBOARD, AdminSections::BORROWINGS])->json('borrowRequests'));
     }
 
     public function test_the_activity_feed_needs_the_logs_section(): void
@@ -171,12 +127,6 @@ class DashboardSectionStrippingTest extends TestCase
 
         $response = $this->getJson('/api/admin/dashboard')->assertOk();
 
-        $this->assertEqualsCanonicalizing(
-            ['Total Residents', 'Pending Service Requests', 'Pending Borrow Requests', 'Available Vehicles'],
-            $this->titles($response)
-        );
-        $this->assertCount(2, $response->json('serviceRequests'));
-        $this->assertCount(1, $response->json('borrowRequests'));
         $this->assertNotEmpty($response->json('systemLogs'));
         $this->assertCount(1, $response->json('followUps'));
     }
@@ -187,9 +137,8 @@ class DashboardSectionStrippingTest extends TestCase
 
         $response = $this->getJson('/api/admin/dashboard')->assertOk();
 
-        $this->assertCount(4, $response->json('kpiStats'));
-        $this->assertCount(2, $response->json('serviceRequests'));
-        $this->assertCount(1, $response->json('borrowRequests'));
+        $this->assertNotEmpty($response->json('systemLogs'));
+        $this->assertCount(1, $response->json('followUps'));
     }
 
     public function test_one_admins_narrow_view_does_not_narrow_the_next_admins(): void
@@ -202,8 +151,8 @@ class DashboardSectionStrippingTest extends TestCase
         Sanctum::actingAs($this->makeSuperAdmin());
         $response = $this->getJson('/api/admin/dashboard')->assertOk();
 
-        $this->assertCount(4, $response->json('kpiStats'));
-        $this->assertCount(2, $response->json('serviceRequests'));
+        $this->assertNotEmpty($response->json('systemLogs'));
+        $this->assertCount(1, $response->json('followUps'));
     }
 
     public function test_the_dashboard_itself_still_needs_its_section(): void

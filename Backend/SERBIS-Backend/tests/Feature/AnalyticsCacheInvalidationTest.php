@@ -69,35 +69,30 @@ class AnalyticsCacheInvalidationTest extends TestCase
         $this->actingAs($this->admin);
     }
 
-    private function pendingCount(): int
+    private function requestTotal(): int
     {
-        $stats = $this->getJson('/api/admin/dashboard')->assertOk()->json('kpiStats');
+        $data = $this->getJson('/api/admin/dashboard')->assertOk()->json('charts.pieByPeriod.all.services.data');
 
-        foreach ($stats as $stat) {
-            if ($stat['title'] === 'Pending Service Requests') {
-                return (int) str_replace(',', '', $stat['value']);
-            }
-        }
-
-        $this->fail('Pending Service Requests card is missing from the payload');
+        return array_sum($data);
     }
 
-    public function test_a_status_change_is_visible_on_the_next_dashboard_read(): void
+    public function test_a_new_request_is_visible_on_the_next_dashboard_read(): void
     {
-        $request = ServiceRequest::create([
+        $payload = [
             'resident_id' => $this->resident->getKey(),
             'service_id' => $this->service->getKey(),
             'description' => 'Blocked road',
             'status' => 'Pending',
-        ]);
+        ];
+        ServiceRequest::create($payload);
 
         // Warms the cache. Without invalidation this value is what the second
         // read returns as well.
-        $this->assertSame(1, $this->pendingCount());
+        $this->assertSame(1, $this->requestTotal());
 
-        $request->update(['status' => 'Responding']);
+        ServiceRequest::create($payload);
 
-        $this->assertSame(0, $this->pendingCount(), 'the dashboard must not serve a count from before the write');
+        $this->assertSame(2, $this->requestTotal(), 'the dashboard must not serve a count from before the write');
     }
 
     public function test_a_write_to_any_counted_model_invalidates_the_dashboard_key(): void

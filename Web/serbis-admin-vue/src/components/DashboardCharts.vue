@@ -30,14 +30,17 @@
       <div class="chart-head">
         <div>
           <div class="chart-title">Most requested</div>
-          <div class="chart-sub">{{ view === 'services' ? 'Requests by service' : 'Times borrowed by item' }}, last 30 days</div>
+          <div class="chart-sub">{{ view === 'services' ? 'Requests by service' : 'Times borrowed by item' }}, {{ periodNote }}</div>
         </div>
-        <SegmentedTabs v-model="view" tonal dense aria-label="Most requested" :items="[{ value: 'services', label: 'Services' }, { value: 'items', label: 'Equipment' }]" />
+        <div class="chart-filters">
+          <SegmentedTabs v-model="period" tonal dense aria-label="Period" :items="PERIODS" />
+          <SegmentedTabs v-model="view" tonal dense aria-label="Most requested" :items="[{ value: 'services', label: 'Services' }, { value: 'items', label: 'Equipment' }]" />
+        </div>
       </div>
       <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
-      <div v-else-if="ranked.length === 0" class="empty content-in">Nothing in the last 30 days</div>
+      <div v-else-if="ranked.length === 0" class="empty content-in">Nothing {{ periodNote }}</div>
       <!-- A ranked list: each bar is the share of the top entry, the number sits at its end. -->
-      <ol v-else :key="view" class="rank-list content-in">
+      <ol v-else :key="`${period}-${view}`" class="rank-list content-in">
         <li v-for="r in ranked" :key="r.label">
           <span class="rank-name">{{ r.label }}</span>
           <span class="rank-track"><span class="rank-bar" :style="{ width: `${Math.round((r.value / rankMax) * 100)}%` }"></span></span>
@@ -60,7 +63,7 @@ import { useChartTheme, withAlpha } from '@/composables/useChartTheme'
 const props = defineProps({
   // Every service request: { filedAt, resolvedAt } in ms, resolvedAt null while open.
   history: { type: Array, default: () => [] },
-  // Last-30-days ranking from /admin/dashboard: { services, items }, each { labels, data }.
+  // Ranking per period from /admin/dashboard: { today|week|month|all: { services, items } }, each { labels, data }.
   top: { type: Object, default: null },
   loading: { type: Boolean, default: false },
 })
@@ -142,8 +145,17 @@ const crosshair = computed(() => ({
 
 const TOP = 8
 const view = ref('services')
+// Windows are Manila days on the server: today, rolling 7 and 30 days, everything.
+const PERIODS = [
+  { value: 'today', label: 'Today', note: 'today' },
+  { value: 'week', label: '7 days', note: 'last 7 days' },
+  { value: 'month', label: '30 days', note: 'last 30 days' },
+  { value: 'all', label: 'All time', note: 'all time' },
+]
+const period = ref('month')
+const periodNote = computed(() => PERIODS.find((p) => p.value === period.value).note)
 const ranked = computed(() => {
-  const t = props.top?.[view.value]
+  const t = props.top?.[period.value]?.[view.value]
   return (t?.labels ?? []).map((label, i) => ({ label, value: t.data[i] })).slice().sort((a, b) => b.value - a.value).slice(0, TOP)
 })
 
@@ -172,6 +184,7 @@ const rankMax = computed(() => Math.max(1, ...ranked.value.map((r) => r.value)))
 .chart-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
 .chart-title { font-size: 18.72px; line-height: 28px; font-weight: 600; }
 .chart-sub { font-size: 14px; line-height: 20px; color: var(--dash-muted); }
+.chart-filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .chart-legend { display: flex; gap: 16px; font-size: 13px; font-weight: 600; }
 .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend i { display: block; width: 18px; height: 3px; border-radius: 2px; }

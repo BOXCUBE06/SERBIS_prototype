@@ -318,7 +318,7 @@ const apply = () => {
     followUps.value = dash.followUps || []
     responders.value = dash.responders ?? null
     units.value = dash.units ?? null
-    top.value = dash.charts?.pieByPeriod?.month ?? null
+    top.value = dash.charts?.pieByPeriod ?? null
   }
   trips.value = tripList ?? null
   rows.value = [
