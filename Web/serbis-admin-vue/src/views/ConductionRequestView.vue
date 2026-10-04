@@ -603,6 +603,7 @@ import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import AmbulanceRequestQueue from '@/components/AmbulanceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import ResponderCombobox from '@/components/ResponderCombobox.vue'
@@ -767,18 +768,26 @@ const getHeaders = () => ({
   Accept: 'application/json',
 })
 
+const { get } = useCachedFetch()
+
+// A trip write also moves the booking it links to and the unit it uses.
+const invalidateTrips = () => {
+  invalidate('/conduction-requests')
+  invalidate('/admin/service-requests')
+  invalidate('/vehicles')
+}
+
 const fetchData = async () => {
   reloading.value = true
   try {
-    const res = await fetch(`${API_BASE}/conduction-requests`, { headers: getHeaders() })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
-    const data = await res.json()
-    if (!Array.isArray(data)) throw new Error('The server returned an unexpected response')
-    items.value = data
-    loadError.value = ''
+    await get('/conduction-requests', {
+      onData: (data) => {
+        if (!Array.isArray(data)) throw new Error('The server returned an unexpected response')
+        items.value = data
+        loadError.value = ''
+        initialLoad.value = false
+      },
+    })
   } catch (error) {
     // Full-pane loadError card below is the only notification here — a
     // snackbar on top of it duplicated the same message (ui-audit finding #3).
@@ -809,14 +818,12 @@ const bookingsLoading = ref(false)
 const fetchBookings = async () => {
   bookingsLoading.value = true
   try {
-    const res = await fetch(`${API_BASE}/admin/service-requests`, { headers: getHeaders() })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
-    const data = await res.json()
-    bookings.value = (data.data || data).filter(r => r.service?.code === AMBULANCE_SERVICE_CODE)
-    bookingsError.value = ''
+    await get('/admin/service-requests', {
+      onData: (data) => {
+        bookings.value = (data.data || data).filter(r => r.service?.code === AMBULANCE_SERVICE_CODE)
+        bookingsError.value = ''
+      },
+    })
   } catch (error) {
     // Shown above the booking search, never blocking: filing standalone must
     // still work. Silent, an empty search read as "nothing to link".
@@ -848,14 +855,9 @@ const vehiclesLoading = ref(false)
 const fetchVehicles = async () => {
   vehiclesLoading.value = true
   try {
-    const res = await fetch(`${API_BASE}/vehicles`, { headers: getHeaders() })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
-    const data = await res.json()
-    vehicles.value = data.data || data
-    vehiclesError.value = ''
+    await get('/vehicles', {
+      onData: (data) => { vehicles.value = data.data || data; vehiclesError.value = '' },
+    })
   } catch (error) {
     // Shown above the fleet picker, never blocking: the free-text name still
     // files. Silent, staff typed a name the double-booking guard cannot check.
@@ -1036,6 +1038,7 @@ const handleDispatchBooking = (booking) => {
 // AmbulanceRequestQueue.vue just did.
 const handleOpenTripRecord = async (conductionRequestId) => {
   if (!conductionRequestId) return
+  invalidateTrips()
   await fetchData()
   const record = items.value.find(i => i.conduction_request_id === conductionRequestId)
   if (!record) return
@@ -1095,6 +1098,7 @@ const submitCreate = async () => {
       const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
       throw new Error(firstError || errData.message || 'Failed to file the request')
     }
+    invalidateTrips()
     await fetchData()
     createDialog.value.open = false
     notify('Ambulance trip record filed')
@@ -1215,10 +1219,8 @@ const onDidNotArrive = (ticked) => {
 // side either way — this only shapes what the two pickers offer.
 const responders = ref([]) // [{name, position}]
 const fetchResponders = async () => {
-  try {
-    const res = await fetch(`${API_BASE}/responder-names`, { headers: getHeaders() })
-    if (res.ok) responders.value = await res.json()
-  } catch { /* driver list stays empty; passenger combobox still allows free typing */ }
+  // driver list stays empty on failure; passenger combobox still allows free typing
+  await get('/responder-names', { ttl: REFERENCE_TTL_MS, onData: (data) => { responders.value = data } }).catch(() => null)
 }
 
 // Driver is a strict pick from Responders (MDRRMO feedback: a trip's driver
@@ -1340,6 +1342,7 @@ const submitTripLog = async () => {
       throw new Error(firstError || errData.message || 'Failed to save the trip log')
     }
     const updated = await res.json()
+    invalidateTrips()
     await fetchData()
     selected.value = updated
     tripLog.value.open = false

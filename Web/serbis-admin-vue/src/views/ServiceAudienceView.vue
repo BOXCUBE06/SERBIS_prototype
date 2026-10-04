@@ -15,6 +15,7 @@
 
     <div class="w-100">
       <DataTablePage
+        :refreshing="refreshing"
         compact
         class="choice-grid"
         :searchable="false"
@@ -62,6 +63,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ACCOUNT_TYPE_ITEMS } from '@/composables/accountType'
 import { authHeaders, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 
@@ -88,14 +90,17 @@ const summary = computed(() => {
   return `${plural(services, 'service')} · ${plural(rows.value.length - services, 'app feature')}`
 })
 
+const { get, refreshing } = useCachedFetch()
+
 const load = async () => {
   apiError.value = ''
   try {
-    const res = await fetch(`${API_BASE}/service-audience`, { headers: authHeaders() })
-    if (!res.ok) throw new Error('Could not load the service audience.')
-    rows.value = (await res.json()).data
-  } catch (error) {
-    apiError.value = error.message || 'Could not load the service audience.'
+    await get('/service-audience', {
+      ttl: REFERENCE_TTL_MS,
+      onData: (body) => { rows.value = body.data; initialLoad.value = false },
+    })
+  } catch {
+    apiError.value = 'Could not load the service audience.'
   } finally {
     initialLoad.value = false
   }
@@ -125,6 +130,7 @@ const toggle = async (row, type, checked) => {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.errors?.account_types?.[0] || body.message || 'Could not save that change.')
     row.account_types = body.account_types
+    invalidate('/service-audience')
     notify(`Saved: ${row.name}`)
   } catch (error) {
     row.account_types = before

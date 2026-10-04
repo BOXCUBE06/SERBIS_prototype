@@ -132,6 +132,7 @@ import { ref, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import { useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
 
@@ -223,28 +224,31 @@ const listUrl = (path, page) => {
   const term = (search.value || '').trim()
   if (term) params.set('search', term)
 
-  return `${API_BASE}${path}?${params.toString()}`
+  return `${path}?${params.toString()}`
+}
+
+const { get } = useCachedFetch()
+
+const takeSystem = (data) => {
+  systemLogs.value = data.data || []
+  // Fall back to the row count when meta is absent, so a server that has
+  // not been updated yet still renders its rows instead of an empty table
+  // with a zero-page pager.
+  systemTotal.value = data.meta?.total ?? systemLogs.value.length
+}
+
+const takeSms = (data) => {
+  smsLogs.value = data.data || []
+  smsTotal.value = data.meta?.total ?? smsLogs.value.length
 }
 
 const fetchLogs = async () => {
   loading.value = true
   try {
-    const [systemRes, smsRes] = await Promise.all([
-      fetch(listUrl('/logs/system', systemPage.value), { headers: getHeaders() }),
-      fetch(listUrl('/logs/sms', smsPage.value), { headers: getHeaders() })
+    await Promise.all([
+      get(listUrl('/logs/system', systemPage.value), { onData: takeSystem }),
+      get(listUrl('/logs/sms', smsPage.value), { onData: takeSms }),
     ])
-
-    const systemData = await systemRes.json()
-    const smsData = await smsRes.json()
-
-    systemLogs.value = systemData.data || []
-    smsLogs.value = smsData.data || []
-
-    // Fall back to the row count when meta is absent, so a server that has
-    // not been updated yet still renders its rows instead of an empty table
-    // with a zero-page pager.
-    systemTotal.value = systemData.meta?.total ?? systemLogs.value.length
-    smsTotal.value = smsData.meta?.total ?? smsLogs.value.length
   } catch (error) {
     console.error('Failed to fetch logs:', error)
   } finally {

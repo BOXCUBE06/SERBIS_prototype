@@ -449,7 +449,7 @@ import { initials as computeInitials } from '@/composables/adminUi'
 import { ASSIGNABLE_SECTIONS, SECTION_GROUPS } from '@/composables/adminSections'
 import { getToken } from '@/composables/authToken'
 import { useRowNumbers } from '@/composables/rowNumber'
-import { loadCurrentAdmin } from '@/composables/useCurrentAdmin'
+import { loadCurrentAdmin, adminId as myId } from '@/composables/useCurrentAdmin'
 import { API_BASE } from '@/config/api'
 import PageHeader from '@/components/PageHeader.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
@@ -461,7 +461,6 @@ const rowNumber = useRowNumbers(admins, 'admin_id')
 const initialLoad = ref(true)
 const apiError = ref('')
 const busyId = ref(null)
-const myId = ref(null)
 const showPassword = ref(false)
 const liveMessage = ref('')
 
@@ -615,19 +614,6 @@ const fetchAdmins = async () => {
     apiError.value = error.message
   } finally {
     initialLoad.value = false
-  }
-}
-
-/** Which row is the signed-in admin, so the panel can refuse to close it. */
-const fetchMe = async () => {
-  try {
-    const res = await fetch(`${API_BASE}/me`, { headers: getHeaders() })
-    if (!res.ok) return
-    const data = await res.json()
-    myId.value = data?.user?.admin_id ?? null
-  } catch {
-    // Not fatal: the server refuses a self-close regardless. This only decides
-    // whether the button is disabled before the round trip.
   }
 }
 
@@ -828,7 +814,8 @@ const reactivate = async (item) => {
 }
 
 onMounted(() => {
-  fetchMe()
+  // Which row is the signed-in admin: read once per session, not refetched here.
+  loadCurrentAdmin()
   fetchAdmins()
 })
 </script>

@@ -159,6 +159,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import { transactionNo } from '@/composables/requestDisplay'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -181,10 +182,8 @@ const statusMeta = {
 }
 
 const vehicles = ref([])
-const loading = ref(false)
-// Skeleton rows on the first load only; a refetch dims the rows it already has.
-const firstLoad = computed(() => loading.value && vehicles.value.length === 0)
-const refreshing = computed(() => loading.value && vehicles.value.length > 0)
+// Skeleton rows only while nothing is cached; a revisit shows the last list and dims it while it refreshes.
+const { get, loading: firstLoad, refreshing } = useCachedFetch()
 const apiError = ref('')
 const search = ref('')
 const typeFilter = ref('All')
@@ -290,18 +289,17 @@ const getVehicleIcon = (type) => ({
   boat: 'mdi-ferry',
 }[type?.toLowerCase()] || 'mdi-car')
 
-const fetchVehicles = async () => {
-  loading.value = true
+const fetchVehicles = async ({ fresh = false } = {}) => {
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to fetch fleet data')
-    vehicles.value = (Array.isArray(data) ? data : (data.data || [])).map((v) => ({ ...v, status: formatStatus(v.status) }))
+    await get('/vehicles', {
+      fresh,
+      onData: (data) => {
+        apiError.value = ''
+        vehicles.value = (Array.isArray(data) ? data : (data.data || [])).map((v) => ({ ...v, status: formatStatus(v.status) }))
+      },
+    })
   } catch (error) {
     apiError.value = error.message
-    vehicles.value = []
-  } finally {
-    loading.value = false
   }
 }
 
@@ -320,6 +318,7 @@ const executeStatusChange = async () => {
     const res = await fetch(`${API}/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: newStatus }) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.errors?.status?.[0] || data.message || 'Failed to update status')
+    invalidate('/vehicles')
     vehicle.status = newStatus
     statusDialog.value.show = false
     const conflicts = data.conflicting_bookings?.length || 0
@@ -380,7 +379,8 @@ const saveVehicle = async () => {
   try {
     const res = await fetch(url, { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) })
     if (!res.ok) throw new Error(await applyServerErrors(res))
-    await fetchVehicles()
+    invalidate('/vehicles')
+    await fetchVehicles({ fresh: true })
     formDialog.value.show = false
     notify(editing ? 'Unit updated' : 'Unit added')
   } catch (error) {
@@ -399,7 +399,8 @@ const confirmDelete = async () => {
   try {
     const res = await fetch(`${API}/${id}`, { method: 'DELETE', headers: getHeaders() })
     if (!res.ok) throw new Error('Delete failed')
-    await fetchVehicles()
+    invalidate('/vehicles')
+    await fetchVehicles({ fresh: true })
     deleteDialog.value.show = false
     notify('Unit deleted')
   } catch (error) {

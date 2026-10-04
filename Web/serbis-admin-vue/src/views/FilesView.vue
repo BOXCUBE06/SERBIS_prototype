@@ -276,6 +276,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -286,10 +287,8 @@ const API = `${API_BASE}/admin/info-materials`
 
 const files = ref([])
 const search = ref('')
-const loadingList = ref(true)
-// Skeleton rows on the first load only; a refetch dims the rows it already has.
-const firstLoad = computed(() => loadingList.value && files.value.length === 0)
-const refreshing = computed(() => loadingList.value && files.value.length > 0)
+// Skeleton rows only while nothing is cached; a revisit shows the last list and dims it while it refreshes.
+const { get, loading: firstLoad, refreshing } = useCachedFetch()
 
 // Upload staging
 const fileInput = ref(null)
@@ -473,21 +472,21 @@ const getFileIconColor = (ext) => ({
   zip: 'warning',
 }[ext?.toLowerCase()] || 'secondary')
 
-const fetchFiles = async () => {
-  loadingList.value = true
+const fetchFiles = async (fresh = false) => {
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to fetch materials')
-    files.value = Array.isArray(data) ? data : (data.data || [])
+    await get('/admin/info-materials', {
+      fresh,
+      onData: (data) => { files.value = Array.isArray(data) ? data : (data.data || []) },
+    })
   } catch (error) {
     console.error('Failed to fetch materials:', error)
     files.value = []
     notify(error.message || 'Could not load materials', 'error')
-  } finally {
-    loadingList.value = false
   }
 }
+
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/admin/info-materials'); return fetchFiles(true) }
 
 // --- Upload flow ---
 const pickFile = () => fileInput.value?.click()
@@ -537,7 +536,7 @@ const publish = () => {
     uploading.value = false
     if (xhr.status >= 200 && xhr.status < 300) {
       clearStaged()
-      await fetchFiles()
+      await reload()
       notify('Published — residents can now download it')
     } else {
       let msg = 'Upload failed'
@@ -621,6 +620,7 @@ const setVerified = async (item, value, extra = {}) => {
       body: JSON.stringify({ verified: value, ...extra }),
     })
     if (!res.ok) throw new Error('Could not update the verified mark')
+    invalidate('/admin/info-materials')
     notify(value ? 'Material marked verified' : 'Verified mark removed')
   } catch (error) {
     item.verified = previous.verified
@@ -644,7 +644,7 @@ const confirmDelete = async () => {
       headers: getHeaders(),
     })
     if (!res.ok) throw new Error('Delete failed')
-    await fetchFiles()
+    await reload()
     notify('Material deleted')
     deleteDialog.value = false
   } catch (error) {

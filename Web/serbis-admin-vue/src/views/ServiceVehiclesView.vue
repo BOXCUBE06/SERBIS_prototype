@@ -15,6 +15,7 @@
 
     <div class="w-100">
       <DataTablePage
+        :refreshing="refreshing"
         compact
         class="choice-grid"
         :searchable="false"
@@ -58,6 +59,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { authHeaders, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 
@@ -84,16 +86,17 @@ const headers = computed(() => {
   ]
 })
 
+const { get, refreshing } = useCachedFetch()
+
 const load = async () => {
   apiError.value = ''
   try {
-    const res = await fetch(`${API_BASE}/service-vehicle-types`, { headers: authHeaders() })
-    if (!res.ok) throw new Error('Could not load the service vehicles.')
-    const body = await res.json()
-    rows.value = body.data
-    types.value = body.types
-  } catch (error) {
-    apiError.value = error.message || 'Could not load the service vehicles.'
+    await get('/service-vehicle-types', {
+      ttl: REFERENCE_TTL_MS,
+      onData: (body) => { rows.value = body.data; types.value = body.types; initialLoad.value = false },
+    })
+  } catch {
+    apiError.value = 'Could not load the service vehicles.'
   } finally {
     initialLoad.value = false
   }
@@ -115,6 +118,7 @@ const toggle = async (row, type, checked) => {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.message || 'Could not save that change.')
     row.vehicle_types = body.vehicle_types
+    invalidate('/service-vehicle-types')
     notify(`Saved: ${row.name}`)
   } catch (error) {
     row.vehicle_types = before

@@ -445,6 +445,7 @@ import BarangayDemand from '@/components/BarangayDemand.vue'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, useCachedFetch } from '@/composables/useCachedFetch'
 // Side effect only: sets the chart font default, which this page's own charts need too.
 import '@/composables/useChartTheme'
 
@@ -560,16 +561,14 @@ const queryString = () => {
   return params.toString()
 }
 
+const { get } = useCachedFetch()
+
 const fetchReport = async () => {
   loading.value = true
   error.value = ''
 
   try {
-    const response = await fetch(`${API_BASE}/admin/analytics?${queryString()}`, { headers: authHeaders() })
-
-    if (!response.ok) throw new Error(`Request failed (${response.status})`)
-
-    report.value = await response.json()
+    await get(`/admin/analytics?${queryString()}`, { onData: (data) => { report.value = data } })
   } catch {
     // The sections read their own error prop from this, so one failed fetch
     // does not leave stale numbers on screen looking current.
@@ -581,25 +580,15 @@ const fetchReport = async () => {
 }
 
 const fetchFilterOptions = async () => {
-  try {
-    const [barangayResponse, serviceResponse] = await Promise.all([
-      fetch(`${API_BASE}/barangays`, { headers: authHeaders() }),
-      fetch(`${API_BASE}/services`, { headers: authHeaders() }),
-    ])
-
-    if (barangayResponse.ok) barangays.value = await barangayResponse.json()
-
-    if (serviceResponse.ok) {
-      // /services answers {data: [...]} while /barangays answers a bare
-      // array. Three response envelopes are already in use across this API;
-      // do not assume a shape here.
-      const payload = await serviceResponse.json()
-      services.value = payload.data ?? payload
-    }
-  } catch {
-    // A filter list that fails to load leaves "All" selected, which is the
-    // correct default anyway — not worth failing the page over.
-  }
+  // A filter list that fails to load leaves "All" selected, which is the
+  // correct default anyway — not worth failing the page over.
+  await Promise.all([
+    // /services answers {data: [...]} while /barangays answers a bare
+    // array. Three response envelopes are already in use across this API;
+    // do not assume a shape here.
+    get('/barangays', { ttl: REFERENCE_TTL_MS, onData: (data) => { barangays.value = data } }),
+    get('/services', { ttl: REFERENCE_TTL_MS, onData: (data) => { services.value = data.data ?? data } }),
+  ].map((request) => request.catch(() => null)))
 }
 
 // A custom range with only one end filled is not yet a range, so it must not

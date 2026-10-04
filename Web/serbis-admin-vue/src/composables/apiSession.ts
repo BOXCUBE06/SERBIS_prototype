@@ -14,6 +14,7 @@
 
 import type { Router } from 'vue-router'
 import { clearToken } from './authToken'
+import { clearAll } from './useCachedFetch'
 import { can, firstAllowedPath, loadCurrentAdmin } from './useCurrentAdmin'
 import { API_BASE } from '../config/api'
 
@@ -72,6 +73,7 @@ export function installSessionExpiryHandler(router: Router): void {
     // The token is gone as far as the server is concerned; drop it here too so
     // the router guard cannot bounce the visitor straight back out of /login.
     clearToken()
+    clearAll()
 
     if (router.currentRoute.value.path !== '/login') {
       router.push({ path: '/login', query: { expired: '1' } })

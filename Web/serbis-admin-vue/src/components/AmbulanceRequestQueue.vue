@@ -6,6 +6,7 @@
 
       <DataTablePage
         :loading="initialLoad"
+        :refreshing="refreshing"
         class="request-table"
         v-model:search="search"
         search-placeholder="Search by transaction number, name, barangay..."
@@ -1122,8 +1123,8 @@ const checkWalkInAvailability = async () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, listAbortController, fetchData, fetchRequests, selectRequest } =
-  useRequestFetch({ isAmbulance: true, getHeaders, initialLoad, apiError, formData, selectedRequest, loadAttachments })
+const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, selectRequest } =
+  useRequestFetch({ isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments })
 
 const reasonDialog = ref(emptyReasonDialog())
 

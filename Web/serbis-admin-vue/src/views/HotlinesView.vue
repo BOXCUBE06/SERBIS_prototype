@@ -20,6 +20,7 @@
 
     <div class="w-100">
       <DataTablePage
+        :refreshing="refreshing"
         compact
         class="hotline-table"
         :searchable="false"
@@ -112,6 +113,7 @@
 import { onMounted, ref } from 'vue'
 import { authHeaders, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 
@@ -132,18 +134,25 @@ const required = (v) => !!(v && String(v).trim()) || 'Required'
 // same set EmergencyHotlineController accepts, so landlines like (078) 324-5410 still fit.
 const phoneChars = (v) => (v || '').replace(/[^0-9()+\- ]/g, '')
 
-const load = async () => {
+const { get, refreshing } = useCachedFetch()
+
+const load = async (fresh = false) => {
   apiError.value = ''
   try {
-    const res = await fetch(`${API_BASE}/hotlines`, { headers: authHeaders() })
-    if (!res.ok) throw new Error('Could not load the hotlines.')
-    rows.value = await res.json()
-  } catch (error) {
-    apiError.value = error.message || 'Could not load the hotlines.'
+    await get('/hotlines', {
+      ttl: REFERENCE_TTL_MS,
+      fresh,
+      onData: (body) => { rows.value = body; initialLoad.value = false },
+    })
+  } catch {
+    apiError.value = 'Could not load the hotlines.'
   } finally {
     initialLoad.value = false
   }
 }
+
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/hotlines'); return load(true) }
 
 // The fields the API accepts, so a row can be sent back whole (PUT).
 const payloadOf = (h) => ({
@@ -173,7 +182,7 @@ const move = async (index, step) => {
   moving.value = true
   try {
     await Promise.all([put(a), put(b)])
-    await load()
+    await reload()
   } catch (error) {
     notify(error.message, 'error')
   } finally {
@@ -229,7 +238,7 @@ const save = async () => {
     if (!res.ok) throw new Error(body.message || 'Could not save the hotline.')
     formDialog.value.show = false
     notify(`Saved: ${body.label}`)
-    await load()
+    await reload()
   } catch (error) {
     formDialog.value.error = error.message
   } finally {
@@ -247,7 +256,7 @@ const confirmDelete = async () => {
     if (!res.ok) throw new Error('Could not delete the hotline.')
     deleteDialog.value.show = false
     notify(`Deleted: ${hotline.label}`)
-    await load()
+    await reload()
   } catch (error) {
     notify(error.message, 'error')
   } finally {

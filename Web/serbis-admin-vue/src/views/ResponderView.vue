@@ -155,6 +155,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -170,10 +171,8 @@ const PILL_KEY = { available: 'Available', deployed: 'Deployed', off_duty: 'Off 
 const statusChoices = STATUSES.map((s) => ({ value: s, label: statusLabel(s), status: PILL_KEY[s] }))
 
 const responders = ref([])
-const loading = ref(false)
-// Skeleton rows on the first load only; a refetch dims the rows it already has.
-const firstLoad = computed(() => loading.value && responders.value.length === 0)
-const refreshing = computed(() => loading.value && responders.value.length > 0)
+// Skeleton rows only while nothing is cached; a revisit shows the last list and dims it while it refreshes.
+const { get, loading: firstLoad, refreshing } = useCachedFetch()
 const apiError = ref('')
 const search = ref('')
 const statusFilter = ref('All')
@@ -258,20 +257,19 @@ const headers = [
   { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
 ]
 
-const fetchResponders = async () => {
-  loading.value = true
+const fetchResponders = async (fresh = false) => {
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to fetch responders')
-    responders.value = Array.isArray(data) ? data : (data.data || [])
+    await get('/responders', {
+      fresh,
+      onData: (data) => { responders.value = Array.isArray(data) ? data : (data.data || []) },
+    })
   } catch (error) {
     apiError.value = error.message
-    responders.value = []
-  } finally {
-    loading.value = false
   }
 }
+
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/responders'); return fetchResponders(true) }
 
 const promptStatusChange = (responder, newStatus) => {
   if (newStatus === responder.status) return
@@ -285,6 +283,7 @@ const executeStatusChange = async () => {
   try {
     const res = await fetch(`${API}/${responder.responder_id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: newStatus }) })
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to update status')
+    invalidate('/responders')
     responder.status = newStatus
     statusDialog.value.show = false
     notify(`${responder.name} set to ${statusLabel(newStatus)}`)
@@ -337,7 +336,7 @@ const saveResponder = async () => {
   try {
     const res = await fetch(url, { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) })
     if (!res.ok) throw new Error(await applyServerErrors(res))
-    await fetchResponders()
+    await reload()
     formDialog.value.show = false
     notify(editing ? 'Responder updated' : 'Responder added')
   } catch (error) {
@@ -359,7 +358,7 @@ const uploadPhoto = async (file) => {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.message || 'Photo upload failed')
     form.value.photo_url = data.photo_url
-    await fetchResponders()
+    await reload()
     notify('Photo updated')
   } catch (error) {
     notify(error.message, 'error')
@@ -376,7 +375,7 @@ const confirmDelete = async () => {
   try {
     const res = await fetch(`${API}/${responder.responder_id}`, { method: 'DELETE', headers: getHeaders() })
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Delete failed')
-    await fetchResponders()
+    await reload()
     deleteDialog.value.show = false
     notify('Responder deleted')
   } catch (error) {

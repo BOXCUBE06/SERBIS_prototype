@@ -1,7 +1,6 @@
 import { ref, type Ref } from 'vue'
 
-import { authHeaders } from './adminUi'
-import { API_BASE } from '../config/api'
+import { useCachedFetch } from './useCachedFetch'
 
 /**
  * The borrowings list, fetched once and shared by every view that needs it.
@@ -19,6 +18,9 @@ import { API_BASE } from '../config/api'
  */
 export type BorrowingRow = Record<string, any>
 
+// Shared with the Dashboard, which reads the same URL: one fetch fills both.
+const { get } = useCachedFetch()
+
 const rows: Ref<BorrowingRow[]> = ref([])
 const loadError = ref('')
 const initialLoad = ref(true)
@@ -35,22 +37,19 @@ async function fetchRows(): Promise<void> {
   reloading.value = true
 
   try {
-    const res = await fetch(`${API_BASE}/borrowings`, { headers: authHeaders() })
-
     // A non-2xx used to fall straight through: `res.json()` on an error body
     // assigns whatever came back to the list, so a 401 or a 500 rendered as an
-    // empty board rather than as a failure.
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
+    // empty board rather than as a failure. get() throws on those.
+    await get('/borrowings', {
+      onData: (data) => {
+        const list = (data as { data?: unknown }).data || data
+        if (!Array.isArray(list)) throw new Error('The server returned an unexpected response')
 
-    const data = await res.json()
-    const list = data.data || data
-    if (!Array.isArray(list)) throw new Error('The server returned an unexpected response')
-
-    rows.value = list
-    loadError.value = ''
+        rows.value = list
+        loadError.value = ''
+        initialLoad.value = false
+      },
+    })
   } catch (error) {
     console.error('Failed to fetch borrowings:', error)
     loadError.value = (error as Error).message || 'Could not reach the server'

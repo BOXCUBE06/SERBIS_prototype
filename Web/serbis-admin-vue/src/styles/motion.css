@@ -55,7 +55,7 @@
 
 /* Route change: the new page rises 4px as it fades in; the old one only fades. */
 .page-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
-.page-leave-active { transition: opacity var(--motion-fast) var(--ease-out); }
+.page-leave-active { transition: opacity 60ms var(--ease-out); }
 .page-enter-from { opacity: 0; transform: translateY(4px); }
 .page-leave-to { opacity: 0; }
 

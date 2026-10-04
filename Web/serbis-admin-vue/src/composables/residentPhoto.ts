@@ -9,17 +9,21 @@
  * That route needs an Authorization header, and an `<img>` element does not
  * send one. So the bytes are fetched here and handed to the template as an
  * object URL. Object URLs are held until `releaseResidentPhotos()` runs —
- * revoking one that a `<v-img>` is still showing blanks the avatar, so release
- * happens on unmount rather than per row.
+ * revoking one that a `<v-img>` is still showing blanks the avatar, so they are
+ * kept across page visits and released only when the session ends (clearAll in
+ * useCachedFetch: logout, 401, a different token).
  */
 
 import { getToken } from './authToken'
+import { onClear } from './useCachedFetch'
 import { API_BASE } from '../config/api'
 
-const urls = new Map<string, string>()
+// `version` is the resident row's updated_at: a changed row refetches its photo, so a
+// photo replaced on another admin's screen does not stay stale here.
+const urls = new Map<string, { url: string; version: string }>()
 const inflight = new Map<string, Promise<string | null>>()
 
-async function load(id: string): Promise<string | null> {
+async function load(id: string, version: string): Promise<string | null> {
   const response = await fetch(`${API_BASE}/residents/${id}/photo`, {
     headers: { Authorization: `Bearer ${getToken()}`, Accept: '*/*' },
   })
@@ -30,7 +34,7 @@ async function load(id: string): Promise<string | null> {
   if (!response.ok) return null
 
   const url = URL.createObjectURL(await response.blob())
-  urls.set(id, url)
+  urls.set(id, { url, version })
   return url
 }
 
@@ -39,16 +43,18 @@ async function load(id: string): Promise<string | null> {
  * calls for the same id reuse the first result, including while it is still in
  * flight — a table redraw must not refetch one image per row.
  */
-export function residentPhotoUrl(id: string | number): Promise<string | null> {
+export function residentPhotoUrl(id: string | number, version = ''): Promise<string | null> {
   const key = String(id)
 
   const cached = urls.get(key)
-  if (cached) return Promise.resolve(cached)
+  if (cached?.version === version) return Promise.resolve(cached.url)
+  // Superseded copy: dropped now, but a `<v-img>` may still be showing it for a beat.
+  if (cached) forgetResidentPhoto(key)
 
   const pending = inflight.get(key)
   if (pending) return pending
 
-  const request = load(key)
+  const request = load(key, version)
     .catch(() => null)
     .finally(() => inflight.delete(key))
 
@@ -59,18 +65,17 @@ export function residentPhotoUrl(id: string | number): Promise<string | null> {
 /** Drops a single resident's cached image, so the next read refetches it. */
 export function forgetResidentPhoto(id: string | number): void {
   const key = String(id)
-  const url = urls.get(key)
-  if (url) {
-    URL.revokeObjectURL(url)
+  const cached = urls.get(key)
+  if (cached) {
+    URL.revokeObjectURL(cached.url)
     urls.delete(key)
   }
 }
 
-/**
- * Revokes every object URL. Without this each visit to the resident list would
- * leak one blob per resident for the life of the tab.
- */
+/** Revokes every object URL: they are held for the session, so this runs when it ends. */
 export function releaseResidentPhotos(): void {
-  for (const url of urls.values()) URL.revokeObjectURL(url)
+  for (const { url } of urls.values()) URL.revokeObjectURL(url)
   urls.clear()
 }
+
+onClear(releaseResidentPhotos)

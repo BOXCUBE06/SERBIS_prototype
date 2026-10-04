@@ -11,6 +11,7 @@
 
     <div class="w-100">
       <DataTablePage
+        :refreshing="refreshing"
         compact
         collapse-mobile
         @click:row="(_event, { item }) => openEdit(item)"
@@ -159,6 +160,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusChip from '@/components/StatusChip.vue'
@@ -253,19 +255,25 @@ const toggleExtra = (item) => ({
   disabled: togglingId.value === idOf(item),
 })
 
-const fetchServices = async () => {
+const { get, refreshing } = useCachedFetch()
+
+const fetchServices = async (fresh = false) => {
   apiError.value = ''
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to load services')
-    services.value = Array.isArray(data) ? data : (data.data || [])
+    await get('/services', {
+      ttl: REFERENCE_TTL_MS,
+      fresh,
+      onData: (data) => { services.value = Array.isArray(data) ? data : (data.data || []); initialLoad.value = false },
+    })
   } catch (error) {
     apiError.value = error.message
   } finally {
     initialLoad.value = false
   }
 }
+
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/services'); return fetchServices(true) }
 
 const openEdit = (item) => {
   form.value = { service_name: item.service_name || '', description: item.description || '', category: item.category || 'relief' }
@@ -290,7 +298,7 @@ const saveService = async () => {
       const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
       throw new Error(msg)
     }
-    await fetchServices()
+    await reload()
     modal.value.show = false
     notify('Service updated')
   } catch (error) {
@@ -311,7 +319,7 @@ const setActive = async (item, isActive) => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.message || 'Failed to update the service')
-    await fetchServices()
+    await reload()
     notify(isActive ? 'Service enabled' : 'Service disabled')
     return true
   } catch (error) {

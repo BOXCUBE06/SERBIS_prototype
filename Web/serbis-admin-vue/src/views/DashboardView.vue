@@ -177,8 +177,8 @@ import StatusPill from '@/components/StatusPill.vue'
 import DashboardCharts from '@/components/DashboardCharts.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
 import '@/components/dashboard.css'
-import { API_BASE } from '@/config/api'
-import { authHeaders, waitTone } from '@/composables/adminUi'
+import { waitTone } from '@/composables/adminUi'
+import { useCachedFetch } from '@/composables/useCachedFetch'
 import { BORROWING_STATUSES } from '@/composables/borrowingStatus'
 import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName } from '@/composables/requestDisplay'
@@ -207,7 +207,9 @@ const units = ref(null)
 const trips = ref(null)
 // { available, total } across all responders, from the dashboard payload.
 const responders = ref(null)
-const loading = ref(true)
+// Skeletons only while something has nothing cached; a revisit paints the last numbers
+// at once and swaps them when the refetch lands.
+const { get, loading } = useCachedFetch()
 const loadError = ref('')
 // Which lists arrived. A 403 or 500 on one must not read as "nothing open".
 const loaded = reactive({ services: false, borrowings: false })
@@ -305,57 +307,56 @@ const borrowRow = (b) => {
   }
 }
 
-// One authed GET that is allowed to fail: an account without the section is
-// answered 403, and its queue is simply missing that kind of row.
-const fetchList = async (path) => {
-  try {
-    const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() })
-    if (!res.ok) return null
-    const body = await res.json()
-    const list = body.data || body
-    return Array.isArray(list) ? list : null
-  } catch {
-    return null
-  }
+const list = (body) => {
+  const rows = body.data || body
+  return Array.isArray(rows) ? rows : null
 }
 
+// What each request last returned: undefined until it answers, null if it failed.
+const src = { dash: undefined, services: undefined, borrowings: undefined, trips: undefined }
+
+const apply = () => {
+  const { dash, services, borrowings, trips: tripList } = src
+  if (dash) {
+    systemLogs.value = dash.systemLogs || []
+    followUps.value = dash.followUps || []
+    responders.value = dash.responders ?? null
+    units.value = dash.units ?? null
+    top.value = dash.charts?.pieByPeriod?.month ?? null
+  }
+  trips.value = tripList ?? null
+  rows.value = [
+    ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
+    ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
+  ]
+  history.value = (services || []).map((r) => ({
+    filedAt: new Date(r.created_at).getTime(),
+    resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
+  }))
+  loaded.services = !!services
+  loaded.borrowings = !!borrowings
+}
+
+// A list is allowed to fail: an account without the section is answered 403, and
+// its queue is simply missing that kind of row.
+const pull = (key, path, select) =>
+  get(path, { onData: (body) => { src[key] = select(body); apply() } })
+    .catch(() => { src[key] = null; apply() })
+
 const fetchDashboardData = async () => {
-  loading.value = true
   loadError.value = ''
   try {
-    const [dash, services, borrowings, tripList] = await Promise.all([
-      fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() }),
-      fetchList('/admin/service-requests'),
-      fetchList('/borrowings'),
-      fetchList('/conduction-requests'),
+    await Promise.all([
+      get('/admin/dashboard', { onData: (body) => { src.dash = body; apply() } }),
+      pull('services', '/admin/service-requests', list),
+      pull('borrowings', '/borrowings', list),
+      pull('trips', '/conduction-requests', list),
     ])
-    if (!dash.ok) throw new Error('Network response error')
-
-    const data = await dash.json()
-    systemLogs.value = data.systemLogs || []
-    followUps.value = data.followUps || []
-    responders.value = data.responders ?? null
-    units.value = data.units ?? null
-    trips.value = tripList
-    top.value = data.charts?.pieByPeriod?.month ?? null
-
-    rows.value = [
-      ...(services || []).filter((r) => !SERVICE_TERMINAL.has(r.status)).map((r) => serviceRow(r)),
-      ...(borrowings || []).filter((b) => !BORROW_TERMINAL.has(b.status)).map((b) => borrowRow(b)),
-    ]
-    history.value = (services || []).map((r) => ({
-      filedAt: new Date(r.created_at).getTime(),
-      resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
-    }))
-    loaded.services = services !== null
-    loaded.borrowings = borrowings !== null
     const missing = [!loaded.services && 'resident requests and ambulance bookings', !loaded.borrowings && 'equipment loans'].filter(Boolean)
     if (missing.length > 0) loadError.value = `Could not load ${missing.join(' or ')}. The list below is incomplete.`
   } catch (error) {
     console.error('Failed to load dashboard:', error)
     loadError.value = 'The dashboard could not be loaded.'
-  } finally {
-    loading.value = false
   }
 }
 

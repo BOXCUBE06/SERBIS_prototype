@@ -14,6 +14,7 @@
       <!-- A list, not a card grid: the availability column reads straight down,
            and sorting on it puts whatever is running out at the top. -->
       <DataTablePage
+        :refreshing="refreshing"
         compact
         collapse-mobile
         @click:row="(_event, { item }) => openEdit(item)"
@@ -128,6 +129,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -223,18 +225,23 @@ const itemIcon = (name) => {
   return 'mdi-package-variant-closed'
 }
 
-const fetchEquipments = async () => {
+const { get, refreshing } = useCachedFetch()
+
+const fetchEquipments = async (fresh = false) => {
   try {
-    const res = await fetch(API, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to load inventory')
-    equipments.value = data.data || data
+    await get('/equipments', {
+      fresh,
+      onData: (data) => { equipments.value = data.data || data; initialLoad.value = false },
+    })
   } catch (error) {
     apiError.value = error.message
   } finally {
     initialLoad.value = false
   }
 }
+
+// After a write: drop the cached list, then fetch past it.
+const reload = () => { invalidate('/equipments'); return fetchEquipments(true) }
 
 const openAdd = () => {
   form.value = { item_name: '', total_quantity: 1, available_quantity: 1, status: 'Available' }
@@ -276,7 +283,7 @@ const saveEquipment = async () => {
       const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
       throw new Error(msg)
     }
-    await fetchEquipments()
+    await reload()
     modal.value.show = false
     notify(editing ? 'Equipment updated' : 'Equipment added')
   } catch (error) {
@@ -293,7 +300,7 @@ const confirmDelete = async () => {
   try {
     const res = await fetch(`${API}/${item.equipment_id || item.id}`, { method: 'DELETE', headers: getHeaders() })
     if (!res.ok) throw new Error('Delete failed')
-    await fetchEquipments()
+    await reload()
     deleteDialog.value.show = false
     notify('Equipment deleted')
   } catch (error) {

@@ -6,6 +6,7 @@
 
       <DataTablePage
         :loading="initialLoad"
+        :refreshing="refreshing"
         class="request-table"
         v-model:search="search"
         search-placeholder="Search by transaction number, name, service, barangay..."
@@ -623,6 +624,7 @@ import ExportMenu from '@/components/ExportMenu.vue'
 import { requesterName, requesterNameParts, requesterAccountType, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
+import { REFERENCE_TTL_MS, useCachedFetch } from '@/composables/useCachedFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
 import { useUpdateStatus } from '@/composables/useUpdateStatus'
 import { useResolveDialog } from '@/composables/useResolveDialog'
@@ -689,8 +691,8 @@ const openCreateDialog = () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, responders, listAbortController, fetchData, fetchRequests, selectRequest } =
-  useRequestFetch({ isAmbulance: false, getHeaders, initialLoad, apiError, formData, selectedRequest, loadAttachments })
+const { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest } =
+  useRequestFetch({ isAmbulance: false, initialLoad, apiError, formData, selectedRequest, loadAttachments })
 
 const reasonDialog = ref(emptyReasonDialog())
 
@@ -857,14 +859,19 @@ const toggleResponder = async (responder) => {
 }
 
 const vehicleTypesByService = ref({})
+const { get } = useCachedFetch()
+// Optional: without it the vehicle picker falls back to every non-ambulance unit.
 const fetchVehicleTypes = async () => {
   try {
-    const res = await fetch(`${API_BASE}/service-vehicle-types`, { headers: getHeaders(), signal: listAbortController.signal })
-    if (!res.ok) return
-    const body = await res.json()
-    vehicleTypesByService.value = Object.fromEntries((body.data || []).map(row => [row.code, row.vehicle_types]))
+    await get('/service-vehicle-types', {
+      ttl: REFERENCE_TTL_MS,
+      onData: (body) => {
+        if (listAbortController.signal.aborted) return
+        vehicleTypesByService.value = Object.fromEntries((body.data || []).map(row => [row.code, row.vehicle_types]))
+      },
+    })
   } catch (error) {
-    if (error.name !== 'AbortError') console.error('Failed to fetch vehicle types:', error)
+    if (!listAbortController.signal.aborted) console.error('Failed to fetch vehicle types:', error)
   }
 }
 

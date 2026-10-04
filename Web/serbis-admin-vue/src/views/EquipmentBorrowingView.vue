@@ -751,6 +751,7 @@ import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -1200,23 +1201,14 @@ const fetchData = () => load()
 // Failures here are non-fatal to the page — the filters just fall back to
 // showing only "All items"/"All barangays" until they load, same as any
 // other list this app fetches for a picker rather than for primary content.
+const { get } = useCachedFetch()
+
 const fetchMasterLists = async () => {
-  try {
-    const [equipRes, barangayRes] = await Promise.all([
-      fetch(`${API_BASE}/equipments`, { headers: getHeaders() }),
-      fetch(`${API_BASE}/barangays`, { headers: getHeaders() }),
-    ])
-    if (equipRes.ok) {
-      const data = await equipRes.json()
-      equipmentMaster.value = data.data || data
-    }
-    if (barangayRes.ok) {
-      const data = await barangayRes.json()
-      barangayMaster.value = data.data || data
-    }
-  } catch (error) {
-    console.error('Failed to fetch equipment/barangay master lists:', error)
-  }
+  const take = (target) => (data) => { target.value = data.data || data }
+  await Promise.all([
+    get('/equipments', { ttl: REFERENCE_TTL_MS, onData: take(equipmentMaster) }),
+    get('/barangays', { ttl: REFERENCE_TTL_MS, onData: take(barangayMaster) }),
+  ].map((request) => request.catch((error) => console.error('Failed to fetch equipment/barangay master lists:', error))))
 }
 
 const openDetail = (item) => {
@@ -1351,6 +1343,7 @@ const confirmRemovePhoto = async () => {
     }
 
     const updated = await res.json()
+    invalidate('/borrowings')
 
     // Same in-place patch the upload does, so the card redraws without closing
     // the panel: clear the cached blob's record id or the loader would keep
@@ -1397,6 +1390,7 @@ const uploadHandoverPhoto = async (record, stage, file) => {
       throw new Error(errData.message || 'Failed to upload the photo')
     }
     const updated = await res.json()
+    invalidate('/borrowings')
     // Patch the open record in place so the photo appears without closing the
     // panel, then force a re-fetch of the blob by clearing the cached id.
     if (selectedRecord.value && (selectedRecord.value.borrow_id || selectedRecord.value.id) === id) {
@@ -1535,6 +1529,8 @@ const updateStatus = async (record, newStatus, extra = {}) => {
       const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
       throw new Error(firstError || errData.message || 'Failed to update status')
     }
+    invalidate('/borrowings')
+    invalidate('/equipments')
     await fetchData()
     notify(`Request marked ${newStatus}`)
     actionDialog.value.open = false

@@ -129,7 +129,7 @@
              contact for a barangay or organization. The avatar is the account's
              (its photo, else its initials). -->
         <template v-slot:item.last_name="{ item }">
-          <PersonCell :name="item.last_name" :initials="initials(item)" :photo="photoUrls[idOf(item)]" />
+          <PersonCell v-intersect.once="() => ensurePhoto(item)" :name="item.last_name" :initials="initials(item)" :photo="photoUrls[idOf(item)]" />
         </template>
 
         <template v-slot:item.first_name="{ item }">
@@ -551,7 +551,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { authHeaders } from '@/composables/adminUi'
 import {
   accountInitials,
@@ -562,11 +562,7 @@ import {
 } from '@/composables/accountName'
 import { getToken } from '@/composables/authToken'
 import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
-import {
-  forgetResidentPhoto,
-  releaseResidentPhotos,
-  residentPhotoUrl,
-} from '@/composables/residentPhoto'
+import { forgetResidentPhoto, residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   ACCOUNT_TYPE,
   ACCOUNT_TYPE_FILTER_ITEMS,
@@ -581,6 +577,7 @@ import {
   residentStatusLabel,
 } from '@/composables/residentStatus'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import ResidentDetailPanel from '@/components/ResidentDetailPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PurokSelect from '@/components/PurokSelect.vue'
@@ -876,10 +873,9 @@ const rowProps = ({ item }) => {
   }
 }
 
-const fetchResidents = async () => {
-  const res = await fetch(`${API_BASE}/residents`, { headers: getHeaders() })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.message || 'Failed to load residents')
+const { get } = useCachedFetch()
+
+const applyResidents = (data) => {
   residents.value = data.data || data
   // Keep the open panel in step with the refreshed list. Residents are keyed
   // resident_id, never id — comparing on `id` silently left stale data on screen.
@@ -887,28 +883,36 @@ const fetchResidents = async () => {
     const id = idOf(selectedResident.value)
     selectedResident.value = residents.value.find((r) => idOf(r) === id) || null
   }
-  loadPhotos()
+  refreshPhotos()
+  initialLoad.value = false
 }
 
-// Not awaited by fetchResidents: the table is useful the moment the rows land,
-// and an avatar that arrives a beat later is not worth blocking it for.
-const loadPhotos = () => {
-  for (const resident of residents.value) {
-    if (!resident.has_photo) continue
+const fetchResidents = () => get('/residents', { onData: applyResidents })
 
-    const id = idOf(resident)
-    residentPhotoUrl(id).then((url) => {
-      if (url) photoUrls.value = { ...photoUrls.value, [id]: url }
-    })
+// After a write: drop the cached list, then fetch past it.
+const reloadResidents = () => { invalidate('/residents'); return fetchResidents() }
+
+// Photos load for the rows on screen only (v-intersect on the avatar), and the
+// blobs outlive the page (residentPhoto.ts). Not awaited: the table is useful the
+// moment the rows land, and an avatar that arrives a beat later is not worth
+// blocking it for.
+const ensurePhoto = (item) => {
+  if (!item.has_photo) return
+
+  const id = idOf(item)
+  residentPhotoUrl(id, item.updated_at).then((url) => {
+    if (url && photoUrls.value[id] !== url) photoUrls.value = { ...photoUrls.value, [id]: url }
+  })
+}
+
+// A refetch can bring a newer updated_at: re-check only the avatars already drawn.
+const refreshPhotos = () => {
+  for (const resident of residents.value) {
+    if (photoUrls.value[idOf(resident)]) ensurePhoto(resident)
   }
 }
 
-const fetchBarangays = async () => {
-  const res = await fetch(`${API_BASE}/barangays`, { headers: getHeaders() })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.message || 'Failed to load barangays')
-  barangays.value = data.data || data
-}
+const fetchBarangays = () => get('/barangays', { ttl: REFERENCE_TTL_MS, onData: (data) => { barangays.value = data.data || data } })
 
 const loadAll = async () => {
   apiError.value = ''
@@ -983,7 +987,7 @@ const changePhoto = async (method, file) => {
     // Drop the cached image first, or the row and the profile keep showing the old one.
     forgetResidentPhoto(id)
     delete photoUrls.value[id]
-    await fetchResidents()
+    await reloadResidents()
     notify(file ? 'Photo saved' : 'Photo removed')
   } catch (error) {
     photoError.value = error.message
@@ -1091,7 +1095,7 @@ const saveUser = async () => {
       { method: editing ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload) },
     )
     if (!res.ok) throw new Error(await applyServerErrors(res))
-    await fetchResidents()
+    await reloadResidents()
     closeModal()
     notify(editing ? 'Profile updated' : 'Account created')
   } catch (error) {
@@ -1158,7 +1162,7 @@ const toggleStatus = async (item, forcedNext = null) => {
   statusToggleLoading.value = true
   try {
     await putStatus(item, next)
-    await fetchResidents()
+    await reloadResidents()
     if (next === RESIDENT_STATUS.active) {
       notify(isOrganization ? 'Organization approved' : 'Account activated')
     } else {
@@ -1207,7 +1211,7 @@ const runBulk = async () => {
     }
   }
   try {
-    await fetchResidents()
+    await reloadResidents()
   } catch (error) {
     notify(error.message, 'error')
   }
@@ -1230,7 +1234,7 @@ const confirmDelete = async () => {
     forgetResidentPhoto(idOf(item))
     delete photoUrls.value[idOf(item)]
     selectedResident.value = null
-    await fetchResidents()
+    await reloadResidents()
     deleteDialog.value.show = false
     notify('Account deleted')
   } catch (error) {
@@ -1241,9 +1245,6 @@ const confirmDelete = async () => {
 }
 
 onMounted(loadAll)
-// One blob per resident would otherwise survive every visit to this view for
-// the life of the tab.
-onUnmounted(releaseResidentPhotos)
 </script>
 
 <style scoped>

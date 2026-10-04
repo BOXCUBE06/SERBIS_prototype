@@ -157,6 +157,7 @@ import { authHeaders, fmtDate } from '@/composables/adminUi'
 import { BORROWING_STATUSES, statusAccent, statusIcon } from '@/composables/borrowingStatus'
 import { useRowNumbers } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
+import { REFERENCE_TTL_MS, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
 
@@ -186,24 +187,22 @@ const loadError = ref('')
 const initialLoad = ref(true)
 const reloading = ref(false)
 
-const load = async () => {
+const { get } = useCachedFetch()
+
+const takeRows = (data) => {
+  const list = data.data || data
+  if (!Array.isArray(list)) throw new Error('The server returned an unexpected response')
+
+  rows.value = list
+  loadError.value = ''
+  initialLoad.value = false
+}
+
+const load = async (fresh = false) => {
   reloading.value = true
 
   try {
-    const res = await fetch(`${API_BASE}/procurement/other-equipment`, { headers: authHeaders() })
-
-    // A non-2xx used to fall straight through and render as an empty list.
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.message || `Request failed (${res.status})`)
-    }
-
-    const data = await res.json()
-    const list = data.data || data
-    if (!Array.isArray(list)) throw new Error('The server returned an unexpected response')
-
-    rows.value = list
-    loadError.value = ''
+    await get('/procurement/other-equipment', { ttl: REFERENCE_TTL_MS, fresh, onData: takeRows })
   } catch (error) {
     console.error('Failed to fetch procurement rows:', error)
     loadError.value = error.message || 'Could not reach the server'
@@ -257,7 +256,8 @@ const headers = [
   { title: 'Request status', key: 'status', width: 170 },
 ]
 
-const refresh = () => load()
+// The refresh button asks for the live list, not the cached one.
+const refresh = () => load(true)
 
 onMounted(load)
 </script>
