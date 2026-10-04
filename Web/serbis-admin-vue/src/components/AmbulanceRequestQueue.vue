@@ -1,15 +1,15 @@
 <template>
-  <v-container fluid class="dashboard-bg" :class="{ 'pa-0': !standalone }">
+  <v-container fluid class="dashboard-bg pa-0">
     <div class="d-flex flex-column w-100">
-
-      <PageHeader v-if="standalone" title="Ambulance Bookings" />
 
       <DataTablePage
         :loading="initialLoad"
         :refreshing="refreshing"
         class="request-table"
+        compact
+        filter-bar
         v-model:search="search"
-        search-placeholder="Search by transaction number, name, barangay..."
+        search-placeholder="Search name or transaction no."
         :tabs="statusTabItems"
         :status="filters.status"
         @update:status="filters.status = $event"
@@ -21,9 +21,8 @@
         @update:page="page = $event"
         :items-per-page="itemsPerPage"
         @update:items-per-page="itemsPerPage = $event"
-        result-noun="requests"
         :row-props="(ctx) => ({
-          class: [`row-${(ctx.item.status || 'Pending').toLowerCase()}`, isSelected(ctx.item) ? 'row-selected' : ''],
+          class: isSelected(ctx.item) ? 'row-selected' : '',
           role: 'button',
           tabindex: 0,
           'aria-current': isSelected(ctx.item) ? 'true' : undefined,
@@ -36,6 +35,7 @@
       >
         <template v-slot:filters>
           <RequestFiltersBar
+            compact
             v-model:barangay="filters.barangay"
             v-model:unit="filters.unit"
             :barangay-options="barangayOptions"
@@ -44,28 +44,10 @@
         </template>
 
         <template v-slot:actions>
-          <v-btn
-            color="primary"
-            variant="outlined"
-            class="text-none font-weight-bold"
-            height="40"
-            @click="openDayView"
-          >
-            <v-icon start size="small">mdi-calendar-clock</v-icon>
-            Day View
-          </v-btn>
-          <ExportMenu type="booking" :rows="filteredAndSortedRequests" :selected-ids="selectedIds" />
-          <v-btn
-            color="secondary"
-            variant="flat"
-            class="text-none font-weight-bold text-white"
-            height="40"
-            @click="openCreateDialog"
-          >
-            <v-icon start size="small">mdi-account-plus-outline</v-icon>
-            Log Service Request
-          </v-btn>
+          <span class="text-caption text-medium-emphasis">{{ sortCaption }}</span>
         </template>
+
+        <template v-slot:summary>{{ summary }}</template>
 
         <template v-if="selectedIds.size > 0" v-slot:before-table>
           <div class="d-flex align-center justify-space-between px-4 py-2 subtle-surface rounded-lg mb-3">
@@ -98,42 +80,22 @@
         </template>
 
         <template v-slot:item.request_id="{ item }">
-          <span class="text-truncate d-block row-date mono">{{ transactionNo(item.request_id) }}</span>
+          <span class="mono txn">{{ transactionNo(item.request_id) }}</span>
         </template>
 
-        <template v-slot:item.created_at="{ item }">
-          <span class="text-truncate d-block row-date">{{ item._dateSubmitted }}</span>
-        </template>
-
+        <!-- The pill, then one line on the wait (Pending) or the countdown (Booked). -->
         <template v-slot:item.status="{ item }">
           <div class="status-col-pill d-flex flex-column align-start ga-1">
             <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
-            <StatusPill
-              v-if="pendingWaitLabel(item.status, item.created_at)"
-              small
-              status="Pending"
-              :label="pendingWaitLabel(item.status, item.created_at)"
-            />
+            <span v-if="timelineLine(item)" class="text-caption" :class="timelineLine(item).class">{{ timelineLine(item).text }}</span>
           </div>
         </template>
 
         <template v-slot:item.scheduled_at="{ item }">
-          <div class="scheduled-cell">
-            <template v-if="item.scheduled_at">
-              <div class="d-flex align-center">
-                <v-icon size="12" class="mr-1 flex-shrink-0" :color="isBookingOverdue(item.status, item.scheduled_at) ? 'error' : undefined">mdi-calendar-clock</v-icon>
-                <span class="row-date" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">{{ formatDateTime(item.scheduled_at) }}</span>
-              </div>
-              <StatusPill
-                v-if="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
-                small
-                class="mt-1"
-                :status="isBookingOverdue(item.status, item.scheduled_at) ? 'Disapproved' : 'Booked'"
-                :label="bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)"
-              />
-            </template>
-            <span v-else class="text-medium-emphasis">—</span>
+          <div v-if="item.scheduled_at" class="d-flex align-center tabular" :class="{ 'text-error font-weight-bold': isBookingOverdue(item.status, item.scheduled_at) }">
+            <v-icon size="12" class="mr-1 flex-shrink-0">mdi-calendar-clock</v-icon>{{ formatDateTime(item.scheduled_at) }}
           </div>
+          <span v-else class="text-medium-emphasis">—</span>
         </template>
 
         <template v-slot:item._requesterName="{ item }">
@@ -156,7 +118,7 @@
         <template v-slot:item._unit="{ item }">
           <div class="d-flex flex-column ga-1">
             <span v-if="item._unit" class="text-truncate d-block">{{ item._unit }}</span>
-            <v-chip v-else size="x-small" variant="tonal" label>Unassigned</v-chip>
+            <span v-else class="text-medium-emphasis">Unassigned</span>
             <v-chip
               v-if="needsNewUnit(item)"
               size="x-small" color="warning" variant="tonal" label
@@ -165,279 +127,249 @@
           </div>
         </template>
 
+        <template v-slot:item.chevron>
+          <v-icon size="18" class="text-medium-emphasis">mdi-chevron-right</v-icon>
+        </template>
       </DataTablePage>
 
-      <v-dialog
+      <DetailDrawer
         :model-value="!!selectedRequest"
-        @update:model-value="(v) => { if (!v) selectedRequest = null }"
-        max-width="min(820px, 95vw)"
-        class="detail-modal"
+        @update:model-value="(v) => { if (!v) closeDrawer() }"
+        eyebrow="Ambulance request"
+        :name="selectedRequest ? requesterName(selectedRequest) : ''"
+        :initials="selectedRequest ? requesterInitials(selectedRequest) : ''"
+        :secondary="drawerSecondary"
+        :status-text="statusLine.text"
+        :status-text-class="statusLine.class"
       >
-        <v-card v-if="selectedRequest" rounded="lg" elevation="6" class="d-flex flex-column detail-modal-card">
-          <DetailDialogHeader
-            :name="requesterName(selectedRequest)"
-            :initials="requesterInitials(selectedRequest)"
-            :secondary="requesterBarangay(selectedRequest)"
-            :wait-days="waitDays"
-            @close="selectedRequest = null"
-          >
-            <template v-slot:status>
-              <StatusPill :status="outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)" />
-            </template>
-            <template v-slot:actions><ExportMenu type="booking" :row="selectedRequest" /></template>
-          </DetailDialogHeader>
+        <template v-if="picker.open" #panel>
+          <PickerDrawer
+            single
+            title="Select a unit"
+            :subtitle="pickerSubtitle"
+            :items="pickerItems"
+            :selected="formData.vehicle_id ? [formData.vehicle_id] : []"
+            empty-text="No free unit. Units are on a trip, booked at the same time, under maintenance, or set aside for other services."
+            :error="apiError"
+            @toggle="(item) => { formData.vehicle_id = item.id }"
+            @back="closePicker"
+            @done="donePicker"
+          />
+        </template>
 
-          <v-divider></v-divider>
+        <template #status>
+          <StatusPill v-if="selectedRequest" :status="outcomeLabel(selectedRequest.status || 'Pending', respondingTrip?.no_arrival_reason)" />
+        </template>
+        <template #actions>
+          <ExportMenu v-if="selectedRequest" icon type="booking" :row="selectedRequest" />
+        </template>
 
-          <div class="pa-6 overflow-y-auto flex-grow-1">
-            <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact" closable @click:close="apiError = ''">{{ apiError }}</v-alert>
+        <template v-if="selectedRequest">
+          <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact" closable @click:close="apiError = ''">{{ apiError }}</v-alert>
 
-            <v-alert
-              v-if="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
-              :type="isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at) ? 'warning' : 'info'"
-              variant="tonal"
-              class="mb-4"
-              density="compact"
-              :title="bookingCountdownLabel(selectedRequest.status, selectedRequest.scheduled_at, selectedRequest.approved_at)"
-            >
-              {{ isBookingOverdue(selectedRequest.status, selectedRequest.scheduled_at)
-                ? 'Scheduled time has passed and this booking is still open. Dispatch, reschedule, or resolve it.'
-                : `Scheduled for ${formatDateTime(selectedRequest.scheduled_at)}.` }}
-            </v-alert>
+          <section class="detail-section">
+            <h3 class="sect-label">Request</h3>
+            <dl class="kv">
+              <dt>Service</dt><dd class="font-weight-bold">{{ selectedRequest.service?.service_name || 'Other' }}</dd>
+              <dt>Transaction</dt><dd class="mono">{{ transactionNo(selectedRequest.request_id) }}</dd>
+              <dt>Submitted</dt><dd>{{ formatDateTime(selectedRequest.created_at) }}</dd>
+              <template v-if="selectedRequest.scheduled_at">
+                <dt>Scheduled</dt>
+                <dd>
+                  {{ formatDateTime(selectedRequest.scheduled_at) }}
+                  <template v-if="selectedRequest.scheduled_end"> to {{ formatTime(selectedRequest.scheduled_end) }}</template>
+                </dd>
+              </template>
+              <template v-if="selectedRequest.approved_at">
+                <dt>Approved</dt><dd>{{ formatDateTime(selectedRequest.approved_at) }}</dd>
+              </template>
+              <dt>Phone</dt>
+              <dd>
+                <a v-if="requesterPhone(selectedRequest) !== 'N/A'" :href="`tel:${requesterPhone(selectedRequest)}`" class="phone-link">{{ requesterPhone(selectedRequest) }}</a>
+                <span v-else class="text-medium-emphasis">{{ NOT_RECORDED }}</span>
+              </dd>
+            </dl>
+          </section>
 
-            <div class="detail-cols">
-              <section class="detail-section">
-                <h3 class="sect-label">Request</h3>
-                <dl class="kv">
-                  <dt>Service</dt><dd class="font-weight-bold">{{ selectedRequest.service?.service_name || 'Other' }}</dd>
-                  <dt>Transaction</dt><dd class="mono">{{ transactionNo(selectedRequest.request_id) }}</dd>
-                  <dt>Submitted</dt><dd>{{ formatDateTime(selectedRequest.created_at) }}</dd>
-                  <template v-if="selectedRequest.scheduled_at">
-                    <dt>Scheduled</dt>
-                    <dd>
-                      {{ formatDateTime(selectedRequest.scheduled_at) }}
-                      <template v-if="selectedRequest.scheduled_end"> – {{ formatTime(selectedRequest.scheduled_end) }}</template>
-                    </dd>
-                  </template>
-                  <template v-if="selectedRequest.approved_at">
-                    <dt>Approved</dt><dd>{{ formatDateTime(selectedRequest.approved_at) }}</dd>
-                  </template>
-                </dl>
-              </section>
+          <section v-if="selectedRequest.pickup_location || selectedRequest.landmark || selectedRequest.destination" class="detail-section">
+            <h3 class="sect-label">Route</h3>
+            <dl class="kv">
+              <dt>Pickup</dt><dd>{{ selectedRequest.pickup_location || selectedRequest.landmark || NOT_RECORDED }}</dd>
+              <template v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)">
+                <dt>Landmark</dt><dd>{{ selectedRequest.landmark }}</dd>
+              </template>
+              <dt>Destination</dt><dd>{{ selectedRequest.destination || NOT_RECORDED }}</dd>
+            </dl>
+          </section>
 
-              <section class="detail-section">
-                <h3 class="sect-label">Assignment</h3>
-                <dl class="kv">
-                  <dt>Unit</dt>
-                  <dd :class="{ 'text-medium-emphasis': !assignedUnit }">
-                    {{ assignedUnit ? `${vehicleName(assignedUnit)} (${assignedUnit.type || 'Unit'})` : 'None assigned' }}
-                    <v-btn v-if="isPendingRequest" size="x-small" variant="tonal" color="primary" class="text-none ml-2" @click="vehicleModal.isOpen = true">
-                      {{ formData.vehicle_id ? 'Change' : 'Select' }}
-                    </v-btn>
-                  </dd>
-                </dl>
-                <div v-if="isPendingRequest && !formData.vehicle_id" id="dispatch-gate" class="text-caption text-medium-emphasis mt-2">
-                  Select a unit to enable Approve &amp; Dispatch.
-                </div>
-              </section>
+          <section v-if="selectedRequest.patient_name" class="detail-section">
+            <h3 class="sect-label">Patient</h3>
+            <dl class="kv">
+              <dt>Name</dt><dd class="font-weight-bold">{{ selectedRequest.patient_name }}</dd>
+              <dt>Age</dt><dd>{{ selectedRequest.patient_age ?? NOT_RECORDED }}</dd>
+              <dt>Address</dt><dd>{{ selectedRequest.patient_address || NOT_RECORDED }}</dd>
+              <dt>Condition</dt><dd>{{ selectedRequest.condition_notes || NOT_RECORDED }}</dd>
+            </dl>
+          </section>
+
+          <section v-else class="detail-section">
+            <h3 class="sect-label">Description</h3>
+            <div class="description-box">
+              <template v-if="descriptionLines.length > 0">
+                <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
+              </template>
+              <span v-else class="text-medium-emphasis">No description provided by the Head of the Family.</span>
             </div>
+          </section>
 
-            <section v-if="selectedRequest.pickup_location || selectedRequest.landmark || selectedRequest.destination" class="detail-section">
-              <h3 class="sect-label">Route</h3>
-              <dl class="kv">
-                <dt>Pickup</dt><dd>{{ selectedRequest.pickup_location || selectedRequest.landmark || 'N/A' }}</dd>
-                <template v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)">
-                  <dt>Landmark</dt><dd>{{ selectedRequest.landmark }}</dd>
-                </template>
-                <dt>Destination</dt><dd>{{ selectedRequest.destination || 'N/A' }}</dd>
-              </dl>
-            </section>
+          <section v-if="attachments.length > 0" class="detail-section">
+            <h3 class="sect-label">Attachments</h3>
+            <div class="d-flex flex-wrap gap-3 attachments-row">
+              <div v-for="a in attachments" :key="a.key">
+                <v-skeleton-loader v-if="a.state.loading" type="image" height="140" width="180" class="rounded-lg"></v-skeleton-loader>
+                <v-alert v-else-if="a.state.error" type="error" variant="tonal" density="compact" class="attachment-error">{{ a.state.error }}</v-alert>
+                <a
+                  v-else-if="a.state.url && a.state.type === 'application/pdf'"
+                  :href="a.state.url"
+                  target="_blank"
+                  rel="noopener"
+                  class="attachment-tile attachment-tile--file rounded-lg"
+                  :aria-label="`Open the ${a.label.toLowerCase()} (PDF) in a new tab`"
+                >
+                  <v-icon size="40" color="primary">mdi-file-pdf-box</v-icon>
+                  <span class="text-body-2 font-weight-bold mt-1">Open PDF</span>
+                </a>
+                <button
+                  v-else-if="a.state.url"
+                  type="button"
+                  class="attachment-tile rounded-lg"
+                  :aria-label="`View the ${a.label.toLowerCase()} full size`"
+                  @click="openLightbox(a)"
+                >
+                  <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
+                  <span class="attachment-badge" aria-hidden="true">
+                    <v-icon size="16">mdi-magnify-plus-outline</v-icon>
+                  </span>
+                  <span class="attachment-scrim" aria-hidden="true">
+                    <v-icon size="18">mdi-magnify-plus-outline</v-icon>
+                    View
+                  </span>
+                </button>
+                <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
+              </div>
+            </div>
+          </section>
 
-            <section v-if="selectedRequest.patient_name" class="detail-section">
-              <h3 class="sect-label">Patient</h3>
-              <dl class="kv">
-                <dt>Patient</dt><dd>{{ selectedRequest.patient_name }}</dd>
-                <dt>Age</dt><dd>{{ selectedRequest.patient_age ?? 'N/A' }}</dd>
-                <dt>Address</dt><dd>{{ selectedRequest.patient_address || 'N/A' }}</dd>
-                <dt>Condition</dt><dd>{{ selectedRequest.condition_notes || 'N/A' }}</dd>
-              </dl>
-            </section>
-
-            <section v-else class="detail-section">
-              <h3 class="sect-label">Description</h3>
-              <v-card variant="outlined" class="pa-4 text-body-2 rounded-lg subtle-surface" style="border-color: rgba(var(--v-theme-on-surface), 0.08);">
-                <template v-if="descriptionLines.length > 0">
-                  <div v-for="(line, i) in descriptionLines" :key="i" class="description-line">{{ line }}</div>
-                </template>
-                <template v-else>No description provided by the Head of the Family.</template>
-              </v-card>
-            </section>
-
-            <section class="detail-section">
-              <h3 class="sect-label">Contact</h3>
-              <dl class="kv"><dt>Phone</dt><dd>{{ requesterPhone(selectedRequest) }}</dd></dl>
-            </section>
-
-            <section v-if="closedLabel" class="detail-section">
-              <h3 class="sect-label">Outcome</h3>
-              <dl class="kv">
-                <dt>{{ closedLabel }}</dt><dd>{{ formatDateTime(selectedRequest.resolved_at) }}</dd>
-                <template v-if="selectedRequest.status === 'Disapproved' && selectedRequest.remarks">
-                  <dt>Reason</dt><dd>{{ selectedRequest.remarks }}</dd>
-                </template>
-              </dl>
-            </section>
-
-            <section class="detail-section">
-              <h3 class="sect-label">Trip record</h3>
-              <v-alert :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
-                <template v-if="respondingTrip">
-                  <div class="text-body-2">
-                    {{ tripDriverNames || 'No driver recorded yet' }}
-                    <template v-if="respondingTrip.arrived_destination_at"> &bull; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
-                  </div>
-                  <div v-if="respondingTrip.no_arrival_reason" class="text-body-2 text-warning">
-                    <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>No arrival: {{ respondingTrip.no_arrival_reason }}
-                  </div>
-                  <div class="text-caption text-medium-emphasis mb-2">
-                    Odometer: {{ respondingTrip.odometer_start ?? '—' }} → {{ respondingTrip.odometer_end ?? '—' }}
+          <section class="detail-section">
+            <div class="d-flex justify-space-between align-center mb-2">
+              <h3 class="sect-label mb-0">Assignment</h3>
+              <!-- Booked: the link in the heading. Pending has its button in the card. -->
+              <v-btn
+                v-if="isBooked"
+                variant="text" color="primary-strong" density="comfortable" class="text-none font-weight-bold px-1"
+                :loading="scheduledAvailabilityLoading" @click="openAssignUnitModal"
+              >{{ selectedRequest.vehicle_id ? 'Reassign' : 'Select unit' }}</v-btn>
+            </div>
+            <!-- Closed before a unit was sent: one dashed line, nothing to show. -->
+            <div v-if="isClosedUnassigned" class="assign-empty">
+              {{ selectedRequest.status === 'Disapproved' ? 'Not assigned. Disapproved before a unit was sent.' : 'Not assigned.' }}
+            </div>
+            <template v-else>
+              <div class="assign-box">
+                <div class="assign-row">
+                  <div class="min-width-0">
+                    <div class="text-caption text-medium-emphasis">Unit</div>
+                    <div :class="{ 'text-medium-emphasis': !assignedUnit }">
+                      {{ assignedUnit ? `${vehicleName(assignedUnit)} · ${assignedUnit.type || 'Unit'}` : 'None assigned' }}
+                    </div>
                   </div>
                   <v-btn
-                    variant="outlined" size="small" class="text-none font-weight-bold"
-                    @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
-                  >Open Trip Record</v-btn>
-                </template>
-                <div v-else-if="selectedRequest.status === 'Responding'" class="text-body-2">
-                  No trip record found for this request.
-                </div>
-                <div v-else-if="selectedRequest.status === 'Resolved'" class="text-body-2">
-                  This request resolved with no trip record on file — likely older data.
-                </div>
-                <div v-else-if="['Disapproved', 'Cancelled'].includes(selectedRequest.status)" class="text-body-2">
-                  Closed before a trip was ever started.
-                </div>
-                <div v-else class="text-body-2">
-                  No trip record yet — one is created automatically once this request is dispatched.
-                </div>
-              </v-alert>
-            </section>
-
-            <section class="detail-section" v-if="attachments.length > 0">
-              <h3 class="sect-label">Attachments</h3>
-              <div class="d-flex flex-wrap gap-3 attachments-row">
-                <div v-for="a in attachments" :key="a.key">
-                  <v-skeleton-loader
-                    v-if="a.state.loading"
-                    type="image"
-                    height="140"
-                    width="180"
-                    class="rounded-lg"
-                  ></v-skeleton-loader>
-                  <v-alert
-                    v-else-if="a.state.error"
-                    type="error"
-                    variant="tonal"
-                    density="compact"
-                    class="attachment-error"
-                  >{{ a.state.error }}</v-alert>
-                  <a
-                    v-else-if="a.state.url && a.state.type === 'application/pdf'"
-                    :href="a.state.url"
-                    target="_blank"
-                    rel="noopener"
-                    class="attachment-tile attachment-tile--file rounded-lg"
-                    :aria-label="`Open the ${a.label.toLowerCase()} (PDF) in a new tab`"
-                  >
-                    <v-icon size="40" color="primary">mdi-file-pdf-box</v-icon>
-                    <span class="text-body-2 font-weight-bold mt-1">Open PDF</span>
-                  </a>
-                  <button
-                    v-else-if="a.state.url"
-                    type="button"
-                    class="attachment-tile rounded-lg"
-                    :aria-label="`View the ${a.label.toLowerCase()} full size`"
-                    @click="openLightbox(a)"
-                  >
-                    <v-img :src="a.state.url" :alt="a.alt" cover height="140" width="180"></v-img>
-                    <span class="attachment-badge" aria-hidden="true">
-                      <v-icon size="16">mdi-magnify-plus-outline</v-icon>
-                    </span>
-                    <span class="attachment-scrim" aria-hidden="true">
-                      <v-icon size="18">mdi-magnify-plus-outline</v-icon>
-                      View
-                    </span>
-                  </button>
-                  <div class="text-caption text-medium-emphasis mt-1">{{ a.label }}</div>
+                    v-if="isPendingRequest"
+                    color="primary-strong" variant="outlined" height="40" class="text-none font-weight-bold flex-shrink-0"
+                    @click="picker.open = true"
+                  >{{ formData.vehicle_id ? 'Change' : 'Select unit' }}</v-btn>
                 </div>
               </div>
-            </section>
-          </div>
+              <div v-if="needsNewUnit(selectedRequest)" class="text-caption text-warning-strong mt-2">{{ needsNewUnitTooltip(selectedRequest) }}</div>
+              <div v-if="needsUnitToDispatch" id="dispatch-gate" class="text-caption text-medium-emphasis mt-2">
+                {{ isPendingRequest ? 'Pick a unit to enable Approve &amp; dispatch.' : 'Pick a unit to enable Dispatch.' }}
+              </div>
+            </template>
+          </section>
 
-          <div v-if="showActions" class="detail-footer d-flex align-center flex-wrap gap-3 px-6 py-4">
-            <template v-if="selectedRequest.status === 'Pending' || !selectedRequest.status">
-              <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
-                Disapprove
-              </v-btn>
-              <v-spacer></v-spacer>
+          <section v-if="closedLabel" class="detail-section">
+            <h3 class="sect-label">Outcome</h3>
+            <dl class="kv">
+              <dt>{{ closedLabel }}</dt><dd>{{ formatDateTime(selectedRequest.resolved_at) || NOT_RECORDED }}</dd>
+              <template v-if="selectedRequest.status === 'Disapproved' && selectedRequest.remarks">
+                <dt>Reason</dt><dd>{{ selectedRequest.remarks }}</dd>
+              </template>
+            </dl>
+          </section>
+
+          <section class="detail-section">
+            <h3 class="sect-label">Trip record</h3>
+            <v-alert v-if="respondingTrip" :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
+              <div class="text-body-2 font-weight-bold">
+                {{ tripDriverNames || 'No driver recorded' }}
+                <template v-if="respondingTrip.arrived_destination_at"> &middot; arrived {{ formatDateTime(respondingTrip.arrived_destination_at) }}</template>
+              </div>
+              <div v-if="respondingTrip.no_arrival_reason" class="text-body-2">No arrival: {{ respondingTrip.no_arrival_reason }}</div>
+              <div class="text-body-2 mb-2">{{ odometerNote }}</div>
               <v-btn
-                color="secondary"
-                variant="flat"
-                class="text-none font-weight-bold text-white"
-                height="40"
-                :loading="loading"
-                :disabled="!formData.vehicle_id"
-                :aria-describedby="!formData.vehicle_id ? 'dispatch-gate' : undefined"
-                @click="openReason('approve')"
-              >
-                Approve & Dispatch
-              </v-btn>
-            </template>
-            <template v-else-if="selectedRequest.status === 'Responding'">
-              <v-spacer></v-spacer>
-              <v-btn color="success" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="openResolveConfirm">
-                Mark as Resolved
-              </v-btn>
-            </template>
-            <template v-else-if="selectedRequest.status === 'Booked'">
-              <template v-if="!selectedRequest.vehicle_id">
-                <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
-                  Reject
-                </v-btn>
-                <v-spacer></v-spacer>
-                <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="openReschedule">
-                  Reschedule
-                </v-btn>
-                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" :loading="scheduledAvailabilityLoading" @click="openAssignUnitModal">
-                  Approve &amp; Assign Unit
-                </v-btn>
-              </template>
-              <template v-else>
-                <!-- Same unit picker "Approve & Assign Unit" opens (openAssignUnitModal
-                     already limits it to units free for this exact scheduled window,
-                     via AmbulanceAvailability), submitted the same way (approveBooking
-                     -> approve(), which already supports re-approving with a different
-                     unit — see its $wasAlreadyApproved handling). Shown for every Booked
-                     request that already has a unit, not just when it needs one — staff
-                     may want to swap for other reasons too; the branch above covers the
-                     unassigned case. -->
-                <v-btn
-                  variant="outlined" color="primary" class="text-none font-weight-bold" height="40"
-                  :loading="scheduledAvailabilityLoading" @click="openAssignUnitModal"
-                >
-                  Reassign unit
-                </v-btn>
-                <v-spacer></v-spacer>
-                <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="openReschedule">
-                  Reschedule
-                </v-btn>
-                <v-btn color="secondary" variant="flat" class="text-none font-weight-bold text-white" height="40" @click="emit('dispatch-booking', selectedRequest)">
-                  Dispatch
-                </v-btn>
-              </template>
-            </template>
+                variant="outlined" color="primary-strong" height="40" class="text-none font-weight-bold"
+                @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
+              >Open trip record</v-btn>
+            </v-alert>
+            <div v-else class="assign-empty">{{ noTripText }}</div>
+          </section>
+
+          <!-- Booked only: Pending has Disapprove in the footer, closed requests are done. -->
+          <div v-if="isBooked" class="pt-2">
+            <v-btn variant="text" color="error" class="text-none font-weight-bold px-1" :loading="loading" @click="openReason('disapprove')">
+              Disapprove this booking
+            </v-btn>
           </div>
-        </v-card>
-      </v-dialog>
+        </template>
+
+        <!-- Pending: Disapprove, Approve & dispatch. Booked: Reschedule, Dispatch. Responding: resolve. Closed: none. -->
+        <template v-if="isPendingRequest" #footer>
+          <v-btn color="error" variant="outlined" class="text-none font-weight-bold" height="40" :loading="loading" @click="openReason('disapprove')">
+            Disapprove
+          </v-btn>
+          <v-spacer></v-spacer>
+          <v-btn
+            color="primary" variant="flat" class="text-none font-weight-bold" height="40"
+            :loading="loading"
+            :disabled="!formData.vehicle_id"
+            :aria-describedby="!formData.vehicle_id ? 'dispatch-gate' : undefined"
+            @click="openReason('approve')"
+          >
+            Approve &amp; dispatch
+          </v-btn>
+        </template>
+        <template v-else-if="isBooked" #footer>
+          <v-btn variant="outlined" color="primary-strong" class="text-none font-weight-bold" height="40" @click="openReschedule">
+            Reschedule
+          </v-btn>
+          <v-spacer></v-spacer>
+          <!-- UI-only gate: the booking write path does not require a unit to dispatch. -->
+          <v-btn
+            color="primary" variant="flat" class="text-none font-weight-bold" height="40"
+            :disabled="!selectedRequest.vehicle_id"
+            :aria-describedby="!selectedRequest.vehicle_id ? 'dispatch-gate' : undefined"
+            @click="emit('dispatch-booking', selectedRequest)"
+          >
+            Dispatch
+          </v-btn>
+        </template>
+        <template v-else-if="selectedRequest?.status === 'Responding'" #footer>
+          <v-spacer></v-spacer>
+          <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="openResolveConfirm">
+            Mark as resolved
+          </v-btn>
+        </template>
+      </DetailDrawer>
     </div>
 
     <v-dialog v-model="lightbox.open" max-width="900">
@@ -454,117 +386,6 @@
             max-height="70vh"
           ></v-img>
         </v-card-text>
-      </v-card>
-    </v-dialog>
-
-    <v-dialog v-model="vehicleModal.isOpen" max-width="600" :persistent="selectedRequest?.status === 'Booked'">
-      <v-card rounded="lg" elevation="6">
-        <v-card-title class="pa-4 border-b d-flex justify-space-between align-center">
-          <span class="text-h6 font-weight-bold">
-            {{ selectedRequest?.status === 'Booked' ? 'Approve & Assign Unit' : 'Available Vehicles' }}
-          </span>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="vehicleModal.isOpen = false"></v-btn>
-        </v-card-title>
-
-        <v-alert v-if="selectedRequest?.status === 'Booked' && apiError" type="error" variant="tonal" density="compact" class="ma-4 mb-0">{{ apiError }}</v-alert>
-
-        <v-card-text class="pa-0 subtle-surface" style="max-height: 400px; overflow-y: auto;">
-          <div v-if="scheduledAvailabilityLoading" class="pa-4">
-            <v-skeleton-loader type="list-item-avatar-two-line" v-for="n in 3" :key="n" class="mb-1"></v-skeleton-loader>
-          </div>
-
-          <v-list v-else-if="selectedRequest?.status === 'Booked'" bg-color="transparent" class="py-0">
-            <template v-if="bookingUnitOptions.length > 0">
-              <v-list-item
-                v-for="opt in bookingUnitOptions"
-                :key="opt.vehicle.vehicle_id"
-                class="vehicle-option px-4 py-3"
-                :active="formData.vehicle_id === opt.vehicle.vehicle_id"
-                :disabled="!opt.available"
-                @click="selectVehicle(opt.vehicle.vehicle_id)"
-              >
-                <template v-slot:prepend>
-                  <v-avatar
-                    :color="formData.vehicle_id === opt.vehicle.vehicle_id ? 'success' : undefined"
-                    :variant="formData.vehicle_id === opt.vehicle.vehicle_id ? 'flat' : 'tonal'"
-                    size="42"
-                    class="mr-3"
-                  >
-                    <v-icon :color="formData.vehicle_id === opt.vehicle.vehicle_id ? 'white' : undefined">{{ vehicleIcon(opt.vehicle.type) }}</v-icon>
-                  </v-avatar>
-                </template>
-
-                <v-list-item-title class="font-weight-bold text-body-1">{{ vehicleName(opt.vehicle) }}</v-list-item-title>
-                <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
-                  <template v-if="opt.available">
-                    {{ opt.vehicle.type }}<template v-if="opt.vehicle.specification"> &bull; {{ opt.vehicle.specification }}</template>
-                  </template>
-                  <template v-else>{{ opt.reason }}</template>
-                </v-list-item-subtitle>
-
-                <template v-slot:append>
-                  <v-icon v-if="formData.vehicle_id === opt.vehicle.vehicle_id" color="success">mdi-check-circle</v-icon>
-                </template>
-              </v-list-item>
-            </template>
-            <div v-else class="pa-6 text-center text-medium-emphasis">
-              <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
-              <div class="text-h6 font-weight-bold">No Ambulance Units</div>
-              <div class="text-body-2">The fleet has no Ambulance unit at all yet.</div>
-            </div>
-          </v-list>
-
-          <v-list v-else-if="availableVehicles.length > 0" bg-color="transparent" class="py-0">
-            <v-list-item
-              v-for="v in availableVehicles"
-              :key="v.vehicle_id"
-              class="vehicle-option px-4 py-3"
-              :active="formData.vehicle_id === v.vehicle_id"
-              @click="selectVehicle(v.vehicle_id)"
-            >
-              <template v-slot:prepend>
-                <v-avatar
-                  :color="formData.vehicle_id === v.vehicle_id ? 'success' : undefined"
-                  :variant="formData.vehicle_id === v.vehicle_id ? 'flat' : 'tonal'"
-                  size="42"
-                  class="mr-3"
-                >
-                  <v-icon :color="formData.vehicle_id === v.vehicle_id ? 'white' : undefined">{{ vehicleIcon(v.type) }}</v-icon>
-                </v-avatar>
-              </template>
-
-              <v-list-item-title class="font-weight-bold text-body-1">{{ vehicleName(v) }}</v-list-item-title>
-              <v-list-item-subtitle class="text-caption text-uppercase font-weight-bold">
-                {{ v.type }}<template v-if="v.specification"> &bull; {{ v.specification }}</template>
-              </v-list-item-subtitle>
-
-              <template v-slot:append>
-                <v-icon v-if="formData.vehicle_id === v.vehicle_id" color="success">mdi-check-circle</v-icon>
-              </template>
-            </v-list-item>
-          </v-list>
-          <div v-else class="pa-6 text-center text-medium-emphasis">
-            <v-icon size="48" class="mb-3">mdi-car-off</v-icon>
-            <div class="text-h6 font-weight-bold">No Vehicles Available</div>
-            <div class="text-body-2">
-              No free unit of a type this service uses. Units are either dispatched, under maintenance, or of a type set aside for other services.
-            </div>
-          </div>
-        </v-card-text>
-
-        <v-card-actions v-if="selectedRequest?.status === 'Booked'" class="pa-4 border-t d-flex justify-end gap-3">
-          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" :disabled="loading" @click="vehicleModal.isOpen = false">Cancel</v-btn>
-          <v-btn
-            color="secondary"
-            variant="flat"
-            class="text-none font-weight-bold text-white"
-            :disabled="!formData.vehicle_id"
-            :loading="loading"
-            @click="approveBooking"
-          >
-            Approve
-          </v-btn>
-        </v-card-actions>
       </v-card>
     </v-dialog>
 
@@ -664,7 +485,7 @@
     <v-dialog v-model="rescheduleDialog.open" max-width="440" persistent>
       <v-card rounded="lg">
         <v-card-title class="d-flex justify-space-between align-center text-subtitle-1 font-weight-bold pa-5 pb-2 text-high-emphasis">
-          <span>Reschedule booking</span>
+          <span class="text-h6 font-weight-bold">Reschedule booking</span>
           <v-btn
             icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close"
             :disabled="loading" @click="rescheduleDialog.open = false"
@@ -678,7 +499,7 @@
           <DateTimePickerField
             :model-value="rescheduleDialog.form.scheduled_at"
             type="datetime-local"
-            label="New scheduled time"
+            label="Starts"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -698,8 +519,8 @@
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
             label="Reason for the change"
-            placeholder="e.g. Unit committed to an earlier transport"
-            hint="Required — this is what the Head of the Family sees, and what the log records."
+            placeholder="The Head of the Family sees this message"
+            hint="Required. The Head of the Family sees this and the activity log records it."
             persistent-hint
             variant="outlined"
             rows="2"
@@ -712,9 +533,9 @@
         <v-card-actions class="px-5 pb-5 pt-0 justify-end gap-3">
           <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="rescheduleDialog.open = false">Cancel</v-btn>
           <v-btn
-            color="secondary"
+            color="primary"
             variant="flat"
-            class="px-6 text-none font-weight-bold text-white"
+            class="px-6 text-none font-weight-bold"
             height="44"
             :loading="loading"
             @click="submitReschedule"
@@ -986,14 +807,14 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, authHeaders } from '@/composables/adminUi'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, waitTone, authHeaders } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
-import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
-import DetailDialogHeader from '@/components/DetailDialogHeader.vue'
+import DetailDrawer from '@/components/DetailDrawer.vue'
+import PickerDrawer from '@/components/PickerDrawer.vue'
 import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
@@ -1004,10 +825,6 @@ import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
 import { useUpdateStatus } from '@/composables/useUpdateStatus'
 import { useResolveDialog } from '@/composables/useResolveDialog'
 import { emptyReasonDialog, useReasonActions } from '@/composables/useReasonActions'
-
-defineProps({
-  standalone: { type: Boolean, default: true },
-})
 
 const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-created'])
 
@@ -1025,7 +842,8 @@ const itemsPerPage = ref(10)
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
 const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
-const vehicleModal = ref({ isOpen: false })
+// The unit picker opens inside the drawer, replacing its body.
+const picker = reactive({ open: false })
 const selectedRequest = ref(null)
 const selectedIds = reactive(new Set())
 
@@ -1164,7 +982,7 @@ const reasonCopy = computed(() => {
         : {
             ...note,
             title: 'Approve without a vehicle',
-            body: `This approves the request for ${what} and marks it Responding. No vehicle is assigned — cancel and use Select Vehicle first if one is going out.`,
+            body: `This approves the request for ${what} and marks it Responding. No vehicle is assigned — cancel and use Select unit first if one is going out.`,
             placeholder: 'e.g. Our team will visit your address this afternoon',
             confirm: 'Approve',
           }
@@ -1195,7 +1013,16 @@ const reasonCopy = computed(() => {
 const CLOSED_LABELS = { Resolved: 'Resolved on', Disapproved: 'Disapproved on', Cancelled: 'Cancelled on' }
 const closedLabel = computed(() => CLOSED_LABELS[selectedRequest.value?.status] || null)
 
-const waitDays = computed(() => (selectedRequest.value?.status === 'Pending' ? openWaitDays(selectedRequest.value?.status, selectedRequest.value?.created_at) : null))
+const NOT_RECORDED = 'Not recorded'
+const WAIT_CLASS = { muted: 'text-medium-emphasis', warning: 'text-warning-strong', error: 'text-error' }
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+const time = (d) => (d ? new Date(d).getTime() : 0)
+// "17 hours", "3 days": hours under a day, days after.
+const elapsed = (from, to = Date.now()) => {
+  const hours = Math.max(0, Math.floor((time(to) - time(from)) / 36e5))
+  return hours < 24 ? plural(Math.max(hours, 1), 'hour') : plural(Math.floor(hours / 24), 'day')
+}
+const shortDateTime = (d) => (d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
 
 const isPendingRequest = computed(() => !selectedRequest.value?.status || selectedRequest.value.status === 'Pending')
@@ -1206,12 +1033,85 @@ watch(() => formData.value.vehicle_id, () => { apiError.value = '' })
 const tripDriverNames = computed(() =>
   (respondingTrip.value?.people || []).filter(p => p.role === 'driver').map(p => p.name).join(', ')
 )
-const tripRecordAlertType = computed(() => {
-  if (respondingTrip.value) {
-    return respondingTrip.value.trip_status === 'Completed' ? 'success' : 'warning'
-  }
-  return ['Responding', 'Resolved'].includes(selectedRequest.value?.status) ? 'warning' : 'info'
+const tripRecordAlertType = computed(() => (respondingTrip.value?.trip_status === 'Completed' ? 'success' : 'warning'))
+// The odometer is optional on the trip log, so a blank is a fact to show, not an error.
+const odometerNote = computed(() => {
+  const t = respondingTrip.value
+  if (t?.odometer_start == null && t?.odometer_end == null) return 'Odometer not recorded.'
+  return `Odometer ${t.odometer_start ?? NOT_RECORDED} to ${t.odometer_end ?? NOT_RECORDED}`
 })
+const NO_TRIP_TEXT = {
+  Responding: 'No trip record found for this request.',
+  Resolved: 'Resolved with no trip record on file. Likely older data.',
+  Disapproved: 'Closed before a trip was started.',
+  Cancelled: 'Closed before a trip was started.',
+}
+const noTripText = computed(() => NO_TRIP_TEXT[selectedRequest.value?.status] || 'No trip record yet. One is created when you dispatch.')
+
+const isBooked = computed(() => selectedRequest.value?.status === 'Booked')
+const isClosedUnassigned = computed(() => !!closedLabel.value && !selectedRequest.value.vehicle)
+const needsUnitToDispatch = computed(() =>
+  (isPendingRequest.value && !formData.value.vehicle_id) || (isBooked.value && !selectedRequest.value.vehicle_id))
+
+const drawerSecondary = computed(() => {
+  const r = selectedRequest.value
+  if (!r) return ''
+  return isWalkIn(r) ? 'No account' : `Requester · ${requesterBarangay(r)}`
+})
+
+// The one line under the status pill in the drawer.
+const statusLine = computed(() => {
+  const r = selectedRequest.value
+  const none = { text: '', class: null }
+  if (!r) return none
+  const status = r.status || 'Pending'
+  if (status === 'Pending') {
+    return { text: `Waiting ${elapsed(r.created_at)}`, class: WAIT_CLASS[waitTone(openWaitDays(status, r.created_at) ?? 0)] }
+  }
+  if (status === 'Booked') {
+    if (!r.scheduled_at) return none
+    const when = `Scheduled ${shortDateTime(r.scheduled_at)}`
+    return isBookingOverdue(status, r.scheduled_at)
+      ? { text: `${when} · ${elapsed(r.scheduled_at)} late, not dispatched`, class: 'text-error' }
+      : { text: `${when} · in ${elapsed(Date.now(), r.scheduled_at)}`, class: null }
+  }
+  if (status === 'Responding') return { text: r.first_responded_at ? `Responding since ${shortDateTime(r.first_responded_at)}` : `Filed ${shortDateTime(r.created_at)}`, class: null }
+  return r.resolved_at ? { text: `${status} ${shortDateTime(r.resolved_at)}`, class: null } : none
+})
+
+// The same idea for a list row: the wait while Pending, the countdown while Booked.
+const timelineLine = (item) => {
+  const wait = pendingWaitLabel(item.status, item.created_at)
+  if (wait) return { text: wait, class: WAIT_CLASS[waitTone(openWaitDays(item.status, item.created_at) ?? 0)] }
+  const eta = bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)
+  return eta ? { text: eta, class: isBookingOverdue(item.status, item.scheduled_at) ? 'text-error' : 'text-medium-emphasis' } : null
+}
+
+const closeDrawer = () => {
+  picker.open = false
+  selectedRequest.value = null
+}
+
+const pickerItems = computed(() => availableVehicles.value.map((v) => ({
+  id: v.vehicle_id,
+  name: vehicleName(v),
+  secondary: [v.type, v.specification].filter(Boolean).join(' · '),
+  icon: vehicleIcon(v.type),
+  status: 'Available',
+})))
+const pickerSubtitle = computed(() => `${plural(pickerItems.value.length, 'unit')} free for this request. Busy units are hidden.`)
+// A Booked pick is saved on Done (it re-approves with the new unit); a Pending one is a draft until Approve.
+const donePicker = () => {
+  if (isBooked.value && formData.value.vehicle_id && formData.value.vehicle_id !== selectedRequest.value.vehicle_id) return approveBooking()
+  picker.open = false
+}
+const closePicker = () => {
+  if (isBooked.value) formData.value.vehicle_id = selectedRequest.value.vehicle_id || null
+  picker.open = false
+}
+
+// Every tab keeps the shared order: Pending first on All, then newest first.
+const sortCaption = computed(() => (filters.status === 'All' ? 'Pending first, then newest first' : 'Newest first'))
 
 const statusTabs = ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
@@ -1224,7 +1124,7 @@ const unitOptions = computed(() => {
   return ['All', 'Unassigned', ...pool.map(v => v.unit_identifier)]
 })
 
-const HEADER_WIDTH_TOTAL = 96
+const HEADER_WIDTH_TOTAL = 92
 const tableHeaders = computed(() => {
   const columns = [
     // minWidth fits "TXN-000000" in the mono face plus sort icon, so the ID never ellipsizes.
@@ -1234,13 +1134,13 @@ const tableHeaders = computed(() => {
     { title: 'Barangay', key: '_secondary', width: 11 },
     { title: 'Scheduled', key: 'scheduled_at', width: 15 },
     { title: 'Unit', key: '_unit', width: 9, sortable: false },
-    { title: 'Submitted', key: 'created_at', width: 11 },
     { title: 'Status', key: 'status', width: 12, sortable: false },
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
     { title: '', key: 'select', sortable: false, width: '48px' },
     ...columns.map(c => ({ ...c, width: `${Math.round(c.width * scale * 10) / 10}%` })),
+    { title: '', key: 'chevron', sortable: false, width: '40px' },
   ]
 })
 
@@ -1285,7 +1185,7 @@ const fetchScheduledAvailability = async (req) => {
 const openAssignUnitModal = async () => {
   apiError.value = ''
   await fetchScheduledAvailability(selectedRequest.value)
-  vehicleModal.value.isOpen = true
+  picker.open = true
 }
 
 const availableVehicles = computed(() => {
@@ -1295,27 +1195,6 @@ const availableVehicles = computed(() => {
       .filter(Boolean)
   }
   return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
-})
-
-const bookingUnitOptions = computed(() => {
-  const freeIds = new Set(scheduledAvailability.value.map(u => u.vehicle_id))
-
-  return vehicles.value
-    .filter(v => v.type === 'Ambulance')
-    .map(v => ({
-      vehicle: v,
-      available: freeIds.has(v.vehicle_id),
-      // Status wins over the window check — a Dispatched/Maintenance unit is
-      // excluded from availableAmbulances() regardless of the window, so
-      // "already booked" would be misleading for it.
-      reason: freeIds.has(v.vehicle_id)
-        ? null
-        : v.status === 'Maintenance' || v.status === 'Dispatched'
-          ? v.status
-          : 'Already booked for this window',
-    }))
-    .slice()
-    .sort((a, b) => Number(b.available) - Number(a.available))
 })
 
 const residentOptions = computed(() => residents.value
@@ -1335,21 +1214,26 @@ const { barangayOptions, requestCounts, filteredAndSortedRequests, emptyListMess
     requesterName,
     secondaryFn: requesterBarangay,
     decorate: (r) => ({
-      _dateSubmitted: formatDate(r.created_at),
       _phone: requesterPhone(r),
     }),
   })
 
-const showActions = computed(() =>
-  selectedRequest.value && (
-    selectedRequest.value.status === 'Pending'
-    || !selectedRequest.value.status
-    || selectedRequest.value.status === 'Responding'
-    || selectedRequest.value.status === 'Booked'
-  )
-)
+const summary = computed(() => {
+  const total = filteredAndSortedRequests.value.length
+  const noun = filters.status === 'All' ? 'requests' : filters.status.toLowerCase()
+  if (!total) return `No ${noun}`
+  const from = (page.value - 1) * itemsPerPage.value + 1
+  return `Showing ${from} to ${Math.min(total, page.value * itemsPerPage.value)} of ${total} ${noun}`
+})
 
-const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+// The page header's line: how many wait, and how long the oldest has.
+const subtitle = computed(() => {
+  const pending = requestCounts.value.Pending
+  if (!pending) return 'No pending requests'
+  const longest = Math.max(...requests.value.filter((r) => (r.status || 'Pending') === 'Pending').map((r) => openWaitDays('Pending', r.created_at) ?? 0))
+  return `${pending} pending${longest ? ` · the longest has waited ${plural(longest, 'day')}` : ''}`
+})
+
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 const formatTime = (dateStr) => new Date(dateStr).toLocaleTimeString(undefined, { timeStyle: 'short' })
 
@@ -1359,13 +1243,6 @@ const selectRequestById = (id) => {
   search.value = ''
   filters.status = 'All'
   selectRequest(item)
-}
-
-const selectVehicle = (id) => {
-  formData.value.vehicle_id = id
-  if (selectedRequest.value?.status !== 'Booked') {
-    vehicleModal.value.isOpen = false
-  }
 }
 
 const getSelectedVehicleName = () => getVehicleNameById(vehicles.value, formData.value.vehicle_id)
@@ -1391,7 +1268,7 @@ const approveBooking = async () => {
     }
 
     await fetchRequests()
-    vehicleModal.value.isOpen = false
+    picker.open = false
   } catch (error) {
     apiError.value = error.message
   } finally {
@@ -1656,7 +1533,8 @@ onMounted(async () => {
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())
 
-defineExpose({ selectRequestById })
+// The page header (ConductionRequestView) draws these actions and the subtitle.
+defineExpose({ selectRequestById, rows: filteredAndSortedRequests, selectedIds, openDayView, openCreateDialog, subtitle })
 </script>
 
 <style scoped src="@/styles/request-table.css"></style>
@@ -1669,27 +1547,8 @@ defineExpose({ selectRequestById })
 .gap-4 { gap: 16px; }
 .min-width-0 { min-width: 0; }
 
-.detail-modal-card {
-  max-height: 90vh;
-}
-
-.soft-card {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
-}
-
 .subtle-surface {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
-}
-
-.vehicle-option {
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-}
-.vehicle-option:last-child { border-bottom: none; }
-.vehicle-option:hover { background-color: rgba(var(--v-theme-primary), 0.06); }
-
-.cursor-pointer {
-  cursor: pointer;
 }
 
 .description-line + .description-line {
@@ -1879,5 +1738,34 @@ defineExpose({ selectRequestById })
 .v-theme--dark .day-view-segment {
   background: rgba(167, 139, 250, 0.18);
   color: #A78BFA;
+}
+
+/* Board type: Txn no. in mono, dates in tabular figures. */
+.txn { font-size: 13px; white-space: nowrap; }
+.tabular { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.request-table :deep(tbody tr.row-selected) { background-color: rgba(var(--v-theme-primary), 0.08); }
+
+.description-box {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  font-size: 15px;
+  line-height: 22px;
+}
+.phone-link { color: rgb(var(--v-theme-primary-strong)); font-weight: 600; text-decoration: none; }
+
+.assign-box { border: 1px solid rgba(var(--v-theme-on-surface), 0.14); border-radius: 12px; }
+.assign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.assign-empty {
+  padding: 14px 16px;
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.2);
+  border-radius: 12px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>

@@ -1,49 +1,40 @@
+<!--
+  Barangay and Unit selects for the request lists. `compact` is the 36px
+  filter bar (styles/filter-bar.css): the name moves into the field as a
+  prefix, since a floating label does not fit 36px. The status filter is the
+  tab strip above, so there is no Status select.
+-->
 <template>
-  <v-select
-    v-if="statusOptions"
-    :model-value="status"
-    @update:model-value="$emit('update:status', $event)"
-    :items="statusOptions"
-    label="Status"
-    variant="outlined"
-    density="compact"
-    hide-details
-    rounded="lg"
-    class="filter-field"
-  ></v-select>
   <v-select
     :model-value="barangay"
     @update:model-value="$emit('update:barangay', $event)"
     :items="barangayOptions"
-    label="Barangay"
-    variant="outlined"
-    density="compact"
-    hide-details
-    rounded="lg"
-    class="filter-field"
+    v-bind="field('Barangay')"
   ></v-select>
   <v-select
     :model-value="unit"
     @update:model-value="$emit('update:unit', $event)"
     :items="unitOptions"
-    label="Unit"
-    variant="outlined"
-    density="compact"
-    hide-details
-    rounded="lg"
-    class="filter-field"
+    v-bind="field('Unit')"
   ></v-select>
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   barangay: { type: String, required: true },
   unit: { type: String, required: true },
   barangayOptions: { type: Array, required: true },
   unitOptions: { type: Array, required: true },
-  // Only the Resident queue passes these, and only while its All tab is active.
-  status: { type: String, default: 'All' },
-  statusOptions: { type: Array, default: null },
+  compact: { type: Boolean, default: false },
 })
-defineEmits(['update:barangay', 'update:unit', 'update:status'])
+defineEmits(['update:barangay', 'update:unit'])
+
+const field = (name) => ({
+  variant: 'outlined',
+  density: 'compact',
+  hideDetails: true,
+  rounded: 'lg',
+  'aria-label': name,
+  ...(props.compact ? { prefix: name, class: 'filter-bar__select' } : { label: name, class: 'filter-field' }),
+})
 </script>

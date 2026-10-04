@@ -20,7 +20,7 @@
     border
     rounded="lg"
     class="data-table-page bg-surface pa-4"
-    :class="{ 'dtp-compact': compact, 'dtp-collapse': collapseMobile }"
+    :class="{ 'dtp-compact': compact, 'dtp-collapse': collapseMobile, 'dtp-board': filterBar }"
     :style="{
       '--dtp-row-height': ROW_HEIGHT + 'px',
       '--dtp-header-height': HEADER_HEIGHT + 'px',
@@ -37,7 +37,7 @@
       class="mb-4"
     />
 
-    <div class="dtp-toolbar d-flex align-center gap-3 mb-3">
+    <div class="dtp-toolbar d-flex align-center gap-3 mb-3" :class="{ 'filter-bar': filterBar }">
       <v-text-field
         v-if="searchable"
         :model-value="search"
@@ -88,6 +88,9 @@
 
     <slot name="before-table" />
 
+    <!-- The card: just the table and its footer. On the board layout (filterBar)
+         the tabs, filter bar and chips above sit on the page, not in here. -->
+    <div class="dtp-card">
     <!-- `content` replaces the table (a grid view, say) and keeps the toolbar,
          tabs, filter chips and footer around it; the caller renders the page's
          rows itself from the same page / items-per-page. -->
@@ -156,6 +159,7 @@
         ></v-pagination>
       </div>
     </div>
+    </div>
   </v-card>
 </template>
 
@@ -212,6 +216,10 @@ const props = defineProps({
   // fixed layout is dropped so that column keeps its width, and any header
   // carrying `headerProps/cellProps: { class: 'dtp-hide-sm' }` is hidden.
   collapseMobile: { type: Boolean, default: false },
+
+  // The compact 36px filter bar (styles/filter-bar.css) for the toolbar row.
+  // Resident Requests first; the other lists keep the taller fields for now.
+  filterBar: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -316,6 +324,42 @@ const clearAll = () => {
   flex: 0 0 88px;
   width: 88px;
 }
+/* Board layout (filterBar): the card holds only the table and its footer. The
+   tabs, filter bar and chips sit above it on the page background, 20px apart.
+   Values are the canvas boards' (Requests, AmbBookings, EqActive). */
+.data-table-page.dtp-board {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible;
+}
+/* The children carry their own mb-* from the shared layout; the gap replaces them. */
+.dtp-board > :not(.dtp-card) { margin: 0 !important; }
+.dtp-board > .segmented-tabs { align-self: flex-start; }
+.dtp-board > .dtp-filter-row { min-height: 0; }
+.dtp-board > .dtp-toolbar { gap: 8px; }
+.dtp-board .dtp-search { flex: 0 0 300px; width: 300px; max-width: 100%; }
+.dtp-board .dtp-card {
+  border-radius: 24px;
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.dtp-board .dtp-footer { padding: 14px 24px !important; }
+/* After the .dtp-filters rule above, same specificity: the selects size to
+   their label and value instead of the 128-200px clamp. */
+.data-table-page.dtp-board .dtp-filters :deep(.v-input) {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 200px;
+  max-width: 100%;
+}
+
 /* Below 1280 the floors no longer fit one row; wrap rather than overflow. */
 @media (max-width: 1279px) {
   .data-table-page .dtp-toolbar {

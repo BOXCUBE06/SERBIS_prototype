@@ -1,24 +1,43 @@
 <template>
-  <!-- Scrolls with the page like every other list route. Each tab's actions
-       live in its own DataTablePage panel, not this header. -->
+  <!-- Scrolls with the page like every other list route. The header's actions
+       follow the tab: the bookings queue's on Bookings, the trip log's own on Trip logs. -->
   <v-container fluid class="bg-background">
-    <PageHeader
-      title="Ambulance Dispatch Requests"
-    />
+    <PageHeader title="Ambulance Dispatch" class="mb-5">
+      <template #subtitle>{{ activeTab === 'bookings' ? bookingsQueueRef?.subtitle : tripSubtitle }}</template>
+      <template #actions>
+        <template v-if="activeTab === 'bookings'">
+          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" prepend-icon="mdi-calendar-clock" @click="bookingsQueueRef?.openDayView()">
+            Day view
+          </v-btn>
+          <ExportMenu type="booking" :rows="bookingsQueueRef?.rows ?? []" :selected-ids="bookingsQueueRef?.selectedIds ?? NO_IDS" />
+          <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" prepend-icon="mdi-plus" @click="bookingsQueueRef?.openCreateDialog()">
+            Log service request
+          </v-btn>
+        </template>
+        <template v-else>
+          <ExportMenu type="trip" :rows="filteredItems" :selected-ids="selectedIds" show-selection />
+          <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" prepend-icon="mdi-plus" @click="openCreate()">
+            New trip record
+          </v-btn>
+        </template>
+      </template>
+    </PageHeader>
 
     <!-- Bookings: the resident-facing request/approval flow, filtered to
          Ambulance/Medical Response — moved here from Resident Requests so
          staff have one place for everything ambulance. Trip Logs: the
          dispatch record itself, unchanged, for a unit that is actually
          rolling. -->
-    <v-tabs v-model="activeTab" color="primary" class="mb-5">
-      <v-tab value="bookings" class="text-none font-weight-bold">Bookings</v-tab>
-      <v-tab value="trip-logs" class="text-none font-weight-bold">Trip Logs</v-tab>
-    </v-tabs>
+    <SegmentedTabs
+      v-model="activeTab"
+      switch-style
+      :items="[{ value: 'bookings', label: 'Bookings' }, { value: 'trip-logs', label: 'Trip logs' }]"
+      class="mb-5"
+    />
 
     <v-window v-model="activeTab">
       <v-window-item value="bookings">
-        <AmbulanceRequestQueue ref="bookingsQueueRef" :standalone="false" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
+        <AmbulanceRequestQueue ref="bookingsQueueRef" @dispatch-booking="handleDispatchBooking" @open-trip-record="handleOpenTripRecord" @trip-record-created="fetchData" />
       </v-window-item>
 
       <v-window-item value="trip-logs">
@@ -43,10 +62,12 @@
              <style> for the scroll threshold). -->
         <DataTablePage
           v-else
+          compact
+          filter-bar
           :loading="initialLoad"
           :refreshing="reloading"
           v-model:search="search"
-          search-placeholder="Patient, origin or destination"
+          search-placeholder="Search patient, origin or destination"
           :tabs="statusTabItems"
           :status="statusFilter"
           @update:status="statusFilter = $event"
@@ -67,23 +88,8 @@
           @click:row="(_e, { item }) => openDetail(item)"
         >
           <template v-slot:filters>
-            <DateTimePickerField v-model="dateFrom" type="date" label="Departed from" variant="outlined" density="compact" hide-details rounded="lg" class="filter-field"></DateTimePickerField>
-            <DateTimePickerField v-model="dateTo" type="date" label="Departed to" variant="outlined" density="compact" hide-details rounded="lg" class="filter-field"></DateTimePickerField>
-            <v-select v-model="vehicleFilter" :items="vehicleFilterOptions" label="Vehicle" variant="outlined" density="compact" hide-details rounded="lg" class="filter-field"></v-select>
-          </template>
-
-          <template v-slot:actions>
-            <ExportMenu type="trip" :rows="filteredItems" :selected-ids="selectedIds" show-selection />
-            <v-btn
-              color="primary"
-              variant="flat"
-              class="text-none font-weight-bold"
-              height="40"
-              @click="openCreate()"
-            >
-              <v-icon start size="small">mdi-plus</v-icon>
-              Ambulance Trip Record
-            </v-btn>
+            <v-select v-model="vehicleFilter" :items="vehicleFilterOptions" prefix="Unit" aria-label="Unit" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+            <v-select v-model="departedRange" :items="DEPARTED_RANGES" prefix="Departed" aria-label="Departed" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
           </template>
 
           <template v-slot:item.select="{ item }">
@@ -103,12 +109,8 @@
             />
           </template>
 
-          <template v-slot:item.trip="{ item }">
-            <span class="text-body-2 cell-truncate">{{ item.origin }} <v-icon size="12" class="mx-1">mdi-arrow-right</v-icon> {{ item.destination }}</span>
-          </template>
-
           <template v-slot:item.service_request_id="{ item }">
-            <span class="text-body-2 mono">{{ item.service_request_id ? transactionNo(item.service_request_id) : '—' }}</span>
+            <span class="mono txn">{{ item.service_request_id ? transactionNo(item.service_request_id) : '—' }}</span>
           </template>
 
           <template v-slot:item.vehicle_label="{ item }">
@@ -116,15 +118,19 @@
           </template>
 
           <template v-slot:item.departed_office_at="{ item }">
-            <span class="text-body-2">{{ fmtDateTime(item.departed_office_at) || '—' }}</span>
+            <span class="text-body-2 tabular" :class="{ 'text-medium-emphasis': !item.departed_office_at }">{{ fmtDateTime(item.departed_office_at) || 'Not yet' }}</span>
           </template>
 
           <template v-slot:item.returned_office_at="{ item }">
-            <span class="text-body-2">{{ fmtDateTime(item.returned_office_at) || '—' }}</span>
+            <span class="text-body-2 tabular" :class="{ 'text-medium-emphasis': !item.returned_office_at }">{{ fmtDateTime(item.returned_office_at) || 'Not yet' }}</span>
           </template>
 
           <template v-slot:item.trip_status="{ item }">
             <StatusPill small :status="pillStatus(item)" :label="outcomeLabel(tripStatusLabel(item.trip_status), item.no_arrival_reason)" />
+          </template>
+
+          <template v-slot:item.chevron>
+            <v-icon size="18" class="text-medium-emphasis">mdi-chevron-right</v-icon>
           </template>
 
           <template v-slot:no-data>
@@ -137,268 +143,276 @@
       </v-window-item>
     </v-window>
 
-    <!-- Create -->
-    <v-dialog v-model="createDialog.open" max-width="720" scrollable persistent>
-      <v-card rounded="lg">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <div>
-            <span class="text-h6 font-weight-bold text-high-emphasis">Ambulance Trip Record</span>
-            <!-- Prefilled from the booking's own structured columns
-                 (ServiceRequestController::adminStore()) — nothing here is
-                 locked, so this is a note to the operator, not a guarantee. -->
-            <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis">
-              Linked to booking No. {{ createDialog.form.service_request_id ? transactionNo(createDialog.form.service_request_id) : '' }} — prefilled from the booking, check every field before filing.
+    <!-- New trip record -->
+    <DetailDrawer
+      v-model="createDialog.open"
+      persistent
+      eyebrow="New trip record"
+      name="Ambulance trip record"
+      initials="+"
+      secondary="Log a trip that was not booked through the app, or link one that was."
+    >
+      <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
+
+      <v-form ref="createForm">
+        <!-- C6: the one way this form ever links to a booking, whether
+             reached by typing here or by the Dispatch button (which just
+             pre-selects this same field — see openCreate). Left empty on
+             purpose is the legitimate walk-up-emergency case: a trip
+             record with no booking behind it at all. -->
+        <v-alert v-if="bookingsError" type="warning" variant="tonal" border="start" density="compact" class="mb-2">
+          Could not load approved requests to link: {{ bookingsError }}
+          <template v-slot:append>
+            <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="bookingsLoading" @click="fetchBookings">Retry</v-btn>
+          </template>
+        </v-alert>
+        <v-autocomplete
+          :model-value="createDialog.form.service_request_id"
+          @update:model-value="onLinkBooking"
+          :items="bookingOptions"
+          label="Link to an approved request (optional)"
+          placeholder="Search by name or date"
+          variant="outlined"
+          density="comfortable"
+          clearable
+          class="mb-2"
+        ></v-autocomplete>
+        <!-- Prefilled from the booking's own structured columns
+             (ServiceRequestController::adminStore()) — nothing here is
+             locked, so this is a note to the operator, not a guarantee. -->
+        <div v-if="createDialog.form.service_request_id" class="text-caption text-medium-emphasis mb-4">
+          Linked to booking {{ transactionNo(createDialog.form.service_request_id) }}. Prefilled from the booking, so check every field before saving.
+        </div>
+
+        <section class="detail-section">
+          <h3 class="sect-label">Patient</h3>
+          <v-row density="compact">
+            <v-col cols="12" sm="8">
+              <v-text-field v-model="createDialog.form.patient_name" label="Name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+            </v-col>
+            <v-col cols="6" sm="4">
+              <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-text-field v-model="createDialog.form.patient_address" label="Address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+            </v-col>
+          </v-row>
+        </section>
+
+        <section class="detail-section">
+          <h3 class="sect-label">Trip</h3>
+          <v-row density="compact">
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="createDialog.form.origin" label="From" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="createDialog.form.destination" label="To" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+            </v-col>
+            <v-col v-if="vehiclesError" cols="12">
+              <v-alert type="warning" variant="tonal" border="start" density="compact">
+                Could not load the fleet list: {{ vehiclesError }}
+                <template v-slot:append>
+                  <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="vehiclesLoading" @click="fetchVehicles">Retry</v-btn>
+                </template>
+              </v-alert>
+            </v-col>
+            <!-- A linked booking runs on its own approved unit; the server
+                 ignores any other, so it is shown, not picked. -->
+            <v-col v-if="createDialog.form.service_request_id" cols="12">
+              <v-text-field
+                :model-value="tripVehicleLabel(createDialog.form)"
+                label="Assigned unit"
+                variant="outlined"
+                density="comfortable"
+                readonly
+              ></v-text-field>
+            </v-col>
+            <v-col v-else cols="12">
+              <v-select
+                v-model="createDialog.form.vehicle_id"
+                :items="vehicleOptions"
+                label="Fleet unit"
+                variant="outlined"
+                density="comfortable"
+                clearable
+                @update:model-value="onSelectFleetVehicle"
+              ></v-select>
+            </v-col>
+            <!-- Fallback only, shown while no fleet unit is picked above —
+                 see the comment on onSelectFleetVehicle. Not the default:
+                 the picker is, since it is what the double-booking guard
+                 below can actually check. -->
+            <v-col v-if="!createDialog.form.vehicle_id && !createDialog.form.service_request_id" cols="12">
+              <v-text-field
+                v-model="createDialog.form.vehicle"
+                label="Other vehicle (not in the fleet)"
+                placeholder="Alicia MDRRMO Ambulance"
+                variant="outlined"
+                density="comfortable"
+              ></v-text-field>
+            </v-col>
+          </v-row>
+        </section>
+
+        <section class="detail-section">
+          <h3 class="sect-label">Crew</h3>
+          <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
+              <v-btn
+                variant="outlined" color="primary"
+                size="small"
+                density="compact"
+                class="text-none"
+                prepend-icon="mdi-plus"
+                :disabled="createDialog.form[group.field].length >= group.max"
+                @click="addPerson(group.field)"
+              >
+                Add {{ group.singular }}
+              </v-btn>
+            </div>
+            <div
+              v-for="(_n, idx) in createDialog.form[group.field]"
+              :key="idx"
+              class="d-flex align-center gap-2 mb-2"
+            >
+              <v-autocomplete
+                v-if="group.field === 'drivers'"
+                v-model="createDialog.form[group.field][idx]"
+                :items="driverOptionsFor(createDialog.form[group.field][idx])"
+                item-title="title"
+                item-value="value"
+                :label="`${group.singular} ${idx + 1}`"
+                placeholder="Select a responder"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+              >
+                <template v-slot:item="{ item, props }">
+                  <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
+                </template>
+              </v-autocomplete>
+              <ResponderCombobox
+                v-else-if="group.field === 'authorized_passengers'"
+                v-model="createDialog.form[group.field][idx]"
+                :items="passengerOptionsFor(createDialog.form.drivers)"
+                :label="`${group.singular} ${idx + 1}`"
+              />
+              <v-text-field
+                v-else
+                v-model="createDialog.form[group.field][idx]"
+                :label="`${group.singular} ${idx + 1}`"
+                placeholder="Full name"
+                variant="outlined"
+                density="compact"
+                hide-details
+              ></v-text-field>
+              <v-btn
+                v-if="idx > 0 || group.min < 1"
+                icon="mdi-close"
+                variant="outlined" color="error"
+                size="small"
+                :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                @click="removePerson(group.field, idx)"
+              ></v-btn>
+            </div>
+            <div v-if="createDialog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+              Up to {{ group.max }} {{ group.label.toLowerCase() }}.
             </div>
           </div>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
-        </v-card-title>
-        <v-card-text class="pa-6" style="max-height: 70vh;">
-          <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
+        </section>
+      </v-form>
 
-          <v-form ref="createForm">
-            <!-- C6: the one way this form ever links to a booking, whether
-                 reached by typing here or by the Dispatch button (which just
-                 pre-selects this same field — see openCreate). Left empty on
-                 purpose is the legitimate walk-up-emergency case: a trip
-                 record with no booking behind it at all. -->
-            <v-alert v-if="bookingsError" type="warning" variant="tonal" border="start" density="compact" class="mb-2">
-              Could not load approved requests to link: {{ bookingsError }}
-              <template v-slot:append>
-                <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="bookingsLoading" @click="fetchBookings">Retry</v-btn>
-              </template>
-            </v-alert>
-            <v-autocomplete
-              :model-value="createDialog.form.service_request_id"
-              @update:model-value="onLinkBooking"
-              :items="bookingOptions"
-              label="Link to approved service request (optional)"
-              placeholder="Search by name or date"
-              variant="outlined"
-              density="comfortable"
-              clearable
-              class="mb-4"
-            ></v-autocomplete>
-
-            <h3 class="section-title">Patient</h3>
-            <v-row density="compact">
-              <v-col cols="12" sm="8">
-                <v-text-field v-model="createDialog.form.patient_name" label="Patient name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
-              </v-col>
-              <v-col cols="6" sm="4">
-                <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="8">
-                <v-text-field v-model="createDialog.form.patient_address" label="Patient address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
-              </v-col>
-              <v-col cols="12">
-                <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
-              </v-col>
-            </v-row>
-
-            <h3 class="section-title">Trip</h3>
-            <v-row density="compact">
-              <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.origin" label="From:" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="6">
-                <v-text-field v-model="createDialog.form.destination" label="To:" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
-              </v-col>
-              <v-col v-if="vehiclesError" cols="12">
-                <v-alert type="warning" variant="tonal" border="start" density="compact">
-                  Could not load the fleet list: {{ vehiclesError }}
-                  <template v-slot:append>
-                    <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="vehiclesLoading" @click="fetchVehicles">Retry</v-btn>
-                  </template>
-                </v-alert>
-              </v-col>
-              <!-- A linked booking runs on its own approved unit; the server
-                   ignores any other, so it is shown, not picked. -->
-              <v-col v-if="createDialog.form.service_request_id" cols="12" sm="6">
-                <v-text-field
-                  :model-value="tripVehicleLabel(createDialog.form)"
-                  label="Assigned unit"
-                  variant="outlined"
-                  density="comfortable"
-                  readonly
-                ></v-text-field>
-              </v-col>
-              <v-col v-else cols="12" sm="6">
-                <v-select
-                  v-model="createDialog.form.vehicle_id"
-                  :items="vehicleOptions"
-                  label="Fleet unit"
-                  variant="outlined"
-                  density="comfortable"
-                  clearable
-                  @update:model-value="onSelectFleetVehicle"
-                ></v-select>
-              </v-col>
-              <!-- Fallback only, shown while no fleet unit is picked above —
-                   see the comment on onSelectFleetVehicle. Not the default:
-                   the picker is, since it is what the double-booking guard
-                   below can actually check. -->
-              <v-col v-if="!createDialog.form.vehicle_id && !createDialog.form.service_request_id" cols="12">
-                <v-text-field
-                  v-model="createDialog.form.vehicle"
-                  label="Vehicle name (not in the fleet — e.g. mutual aid)"
-                  placeholder="Alicia MDRRMO Ambulance"
-                  variant="outlined"
-                  density="comfortable"
-                ></v-text-field>
-              </v-col>
-            </v-row>
-
-            <h3 class="section-title">Personnel</h3>
-            <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
-              <div class="d-flex align-center justify-space-between mb-1">
-                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-                <v-btn
-                  variant="outlined" color="primary"
-                  size="small"
-                  density="compact"
-                  class="text-none"
-                  prepend-icon="mdi-plus"
-                  :disabled="createDialog.form[group.field].length >= group.max"
-                  @click="addPerson(group.field)"
-                >
-                  Add {{ group.singular }}
-                </v-btn>
-              </div>
-              <div
-                v-for="(_n, idx) in createDialog.form[group.field]"
-                :key="idx"
-                class="d-flex align-center gap-2 mb-2"
-              >
-                <v-autocomplete
-                  v-if="group.field === 'drivers'"
-                  v-model="createDialog.form[group.field][idx]"
-                  :items="driverOptionsFor(createDialog.form[group.field][idx])"
-                  item-title="title"
-                  item-value="value"
-                  :label="`${group.singular} ${idx + 1}`"
-                  placeholder="Select a responder"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                  clearable
-                >
-                  <template v-slot:item="{ item, props }">
-                    <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
-                  </template>
-                </v-autocomplete>
-                <ResponderCombobox
-                  v-else-if="group.field === 'authorized_passengers'"
-                  v-model="createDialog.form[group.field][idx]"
-                  :items="passengerOptionsFor(createDialog.form.drivers)"
-                  :label="`${group.singular} ${idx + 1}`"
-                />
-                <v-text-field
-                  v-else
-                  v-model="createDialog.form[group.field][idx]"
-                  :label="`${group.singular} ${idx + 1}`"
-                  placeholder="Full name"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                ></v-text-field>
-                <v-btn
-                  v-if="idx > 0 || group.min < 1"
-                  icon="mdi-close"
-                  variant="outlined" color="error"
-                  size="small"
-                  :aria-label="`Remove ${group.singular} ${idx + 1}`"
-                  @click="removePerson(group.field, idx)"
-                ></v-btn>
-              </div>
-              <div v-if="createDialog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
-                Up to {{ group.max }} {{ group.label.toLowerCase() }}.
-              </div>
-            </div>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
-          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitCreate">
-            File request
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+      <template #footer>
+        <v-spacer></v-spacer>
+        <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="createDialog.open = false">Cancel</v-btn>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="submitCreate">
+          Save trip record
+        </v-btn>
+      </template>
+    </DetailDrawer>
 
     <!-- Detail -->
-    <v-dialog v-model="detail.open" max-width="800" scrollable>
-      <v-card rounded="lg" v-if="selected">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <div class="d-flex align-center gap-3">
-            <span class="text-h6 font-weight-bold text-high-emphasis">{{ selected.patient_name }}</span>
-            <StatusPill :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
-          </div>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close details" @click="detail.open = false"></v-btn>
-        </v-card-title>
-        <v-card-text class="pa-6" style="max-height: 65vh;">
-          <!-- Only ever present on a trip dispatched from a resident's own
-               booking — a walk-in trip log, still the common case, carries no
-               service_request_id and shows none of this. -->
-          <v-alert
-            v-if="selected.service_request_id"
-            type="info"
-            variant="tonal"
-            density="compact"
-            border="start"
-            class="mb-4"
-          >
-            <div class="d-flex align-center justify-space-between gap-3 flex-wrap">
-              <div>
-                <div class="text-caption text-uppercase font-weight-bold">Linked booking</div>
-                <div class="text-body-2">
-                  Booking No. {{ selected.service_request_id ? transactionNo(selected.service_request_id) : '' }}
-                  <template v-if="selected.service_request?.scheduled_at">
-                    — scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}
-                  </template>
-                  <template v-if="selected.service_request?.status"> ({{ selected.service_request.status }})</template>
+    <DetailDrawer
+      v-model="detail.open"
+      eyebrow="Trip record"
+      :name="selected?.patient_name || 'Unnamed patient'"
+      :initials="nameInitials(selected?.patient_name)"
+      secondary="Trip record"
+      :status-text="selected?.departed_office_at ? `Left the office ${fmtDateTime(selected.departed_office_at)}` : 'Not departed yet'"
+    >
+      <template #status>
+        <StatusPill v-if="selected" :status="pillStatus(selected)" :label="outcomeLabel(tripStatusLabel(selected.trip_status), selected.no_arrival_reason)" />
+      </template>
+
+      <template v-if="selected">
+        <!-- Only ever present on a trip dispatched from a resident's own
+             booking — a walk-in trip log, still the common case, carries no
+             service_request_id and shows none of this. -->
+        <section v-if="selected.service_request_id" class="detail-section">
+          <h3 class="sect-label">Linked booking</h3>
+          <div class="assign-box">
+            <div class="assign-row">
+              <div class="min-width-0">
+                <div class="mono">{{ transactionNo(selected.service_request_id) }}</div>
+                <div class="text-body-2 text-medium-emphasis">
+                  <template v-if="selected.service_request?.scheduled_at">Scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}</template>
+                  <template v-if="selected.service_request?.status"> {{ selected.service_request.status }}</template>
                 </div>
               </div>
-              <!-- The reverse of Bookings' own "Open Trip Record" (item 7 of
-                   the layout redesign) — this link used to only go one way.
-                   Text was there to read, nothing to click. -->
+              <!-- The reverse of Bookings' own "Open trip record": this link used to only go one way. -->
               <v-btn
-                variant="outlined" size="small" class="text-none font-weight-bold flex-shrink-0"
+                color="primary-strong" variant="outlined" height="40" class="text-none font-weight-bold flex-shrink-0"
                 @click="openBooking(selected.service_request_id)"
-              >Open Booking</v-btn>
+              >Open booking</v-btn>
             </div>
-          </v-alert>
+          </div>
+        </section>
 
-          <h3 class="section-title">Patient</h3>
-          <v-row>
-            <v-col cols="6"><div class="field-label">Age</div><div class="field-value">{{ selected.patient_age ?? 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Contact number</div><div class="field-value">{{ selected.patient_contact_number }}</div></v-col>
-            <v-col cols="12"><div class="field-label">Address</div><div class="field-value">{{ selected.patient_address || 'N/A' }}</div></v-col>
-            <v-col cols="12"><div class="field-label">Medical diagnosis</div><div class="field-value">{{ selected.medical_diagnosis || 'N/A' }}</div></v-col>
-          </v-row>
+        <section class="detail-section">
+          <h3 class="sect-label">Patient</h3>
+          <dl class="kv">
+            <dt>Contact</dt><dd>{{ selected.patient_contact_number || NOT_RECORDED }}</dd>
+            <dt>Age</dt><dd>{{ selected.patient_age ?? NOT_RECORDED }}</dd>
+            <dt>Address</dt><dd>{{ selected.patient_address || NOT_RECORDED }}</dd>
+            <dt>Diagnosis</dt><dd>{{ selected.medical_diagnosis || NOT_RECORDED }}</dd>
+          </dl>
+        </section>
 
-          <h3 class="section-title">Route &amp; vehicle</h3>
-          <v-row>
-            <v-col cols="6"><div class="field-label">From</div><div class="field-value">{{ selected.origin || 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">To</div><div class="field-value">{{ selected.destination || 'N/A' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Vehicle</div><div class="field-value">{{ selectedVehicleLabel }}<span v-if="selectedVehicleUnverified" class="text-caption text-medium-emphasis"> · fleet list unavailable</span></div></v-col>
+        <section class="detail-section">
+          <h3 class="sect-label">Route and vehicle</h3>
+          <dl class="kv">
+            <dt>Pickup</dt><dd>{{ selected.origin || NOT_RECORDED }}</dd>
+            <dt>Destination</dt><dd>{{ selected.destination || NOT_RECORDED }}</dd>
+            <dt>Vehicle</dt>
+            <dd>{{ selectedVehicleLabel }}<span v-if="selectedVehicleUnverified" class="text-caption text-medium-emphasis"> · fleet list unavailable</span></dd>
             <!-- The fleet has no plate column, so a fleet-linked trip has no
                  plate to show; the free-text one belongs to the unlinked case. -->
-            <v-col v-if="!selected.vehicle_id" cols="6"><div class="field-label">Plate no.</div><div class="field-value">{{ selected.plate_no || 'N/A' }}</div></v-col>
-          </v-row>
+            <template v-if="!selected.vehicle_id"><dt>Plate no.</dt><dd>{{ selected.plate_no || NOT_RECORDED }}</dd></template>
+          </dl>
+        </section>
 
-          <h3 class="section-title">Crew</h3>
-          <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
-            <div class="field-label">{{ group.label }}</div>
-            <div v-if="peopleByRole(group.role).length > 0" class="field-value">
-              {{ peopleByRole(group.role).map(p => p.name).join(', ') }}
-            </div>
-            <div v-else class="text-caption text-medium-emphasis">None recorded</div>
-          </div>
+        <section class="detail-section">
+          <h3 class="sect-label">Crew</h3>
+          <dl class="kv">
+            <template v-for="group in personnelGroups" :key="group.field">
+              <dt>{{ group.label }}</dt>
+              <dd :class="{ 'text-medium-emphasis': peopleByRole(group.role).length === 0 }">
+                {{ peopleByRole(group.role).map(p => p.name).join(', ') || 'None recorded' }}
+              </dd>
+            </template>
+          </dl>
+        </section>
 
-          <h3 class="section-title">Timeline</h3>
+        <section class="detail-section">
+          <h3 class="sect-label">Timeline</h3>
           <v-timeline density="compact" align="start" side="end" truncate-line="both" class="trip-timeline">
             <v-timeline-item
               v-for="step in timelineSteps"
@@ -406,190 +420,184 @@
               :dot-color="step.at || step.done ? step.color : 'grey-lighten-1'"
               size="x-small"
             >
-              <div class="field-label">{{ step.label }}</div>
-              <div v-if="step.at || !step.done" class="field-value mb-0">{{ step.at ? fmtDateTime(step.at) : '—' }}</div>
+              <div class="font-weight-bold">{{ step.label }}</div>
+              <div v-if="step.at || !step.done" :class="{ 'text-medium-emphasis': !step.at }">{{ step.at ? fmtDateTime(step.at) : 'Pending' }}</div>
               <div v-if="step.note" class="text-body-2 text-medium-emphasis">{{ step.note }}</div>
             </v-timeline-item>
           </v-timeline>
+        </section>
 
-          <v-row class="mt-1">
-            <v-col cols="6"><div class="field-label">Odometer at departure</div><div class="field-value">{{ selected.odometer_start ?? '—' }}</div></v-col>
-            <v-col cols="6"><div class="field-label">Odometer on return</div><div class="field-value">{{ selected.odometer_end ?? '—' }}</div></v-col>
-            <v-col cols="12" v-if="selected.others"><div class="field-label">Others</div><div class="field-value">{{ selected.others }}</div></v-col>
-          </v-row>
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-0 d-flex justify-end border-t">
-          <v-btn variant="outlined" class="px-6 text-none font-weight-bold" height="44" prepend-icon="mdi-printer-outline" @click="printTrip(selected)">
-            Print
-          </v-btn>
-          <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" @click="openTripLog(selected)">
-            {{ tripLogAction(selected) }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+        <section class="detail-section">
+          <h3 class="sect-label">Odometer and notes</h3>
+          <dl class="kv">
+            <dt>At departure</dt><dd>{{ selected.odometer_start ?? NOT_RECORDED }}</dd>
+            <dt>On return</dt><dd>{{ selected.odometer_end ?? NOT_RECORDED }}</dd>
+            <template v-if="selected.others"><dt>Others</dt><dd>{{ selected.others }}</dd></template>
+          </dl>
+        </section>
+      </template>
+
+      <template v-if="selected" #footer>
+        <v-btn variant="outlined" color="primary-strong" class="text-none font-weight-bold" height="40" prepend-icon="mdi-printer-outline" @click="printTrip(selected)">
+          Print
+        </v-btn>
+        <v-spacer></v-spacer>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" @click="openTripLog(selected)">
+          {{ tripLogAction(selected) }}
+        </v-btn>
+      </template>
+    </DetailDrawer>
 
     <!-- Trip log -->
-    <v-dialog v-model="tripLog.open" max-width="960" scrollable persistent>
-      <v-card rounded="lg">
-        <v-card-title class="pa-6 pb-2 text-subtitle-1 font-weight-bold text-high-emphasis border-b">
-          {{ tripLog.title }}
-        </v-card-title>
-        <v-card-text class="pa-6" style="max-height: 70vh;">
-          <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
+    <DetailDrawer
+      v-model="tripLog.open"
+      persistent
+      :eyebrow="tripLog.title"
+      :name="tripLog.target?.patient_name || 'Unnamed patient'"
+      :initials="nameInitials(tripLog.target?.patient_name)"
+      secondary="Trip record"
+      :status-text="tripLog.target?.service_request_id ? transactionNo(tripLog.target.service_request_id) : ''"
+    >
+      <template #status>
+        <StatusPill v-if="tripLog.target" :status="pillStatus(tripLog.target)" :label="outcomeLabel(tripStatusLabel(tripLog.target.trip_status), tripLog.target.no_arrival_reason)" />
+      </template>
 
-          <!-- Two columns at md+: checkpoints/odometer on the left, personnel
-               on the right — the same width this content needed to stop
-               scrolling on a 600px-wide dialog (MDRRMO feedback,
-               2026-09-18). Stacks to one column below md. -->
-          <v-row>
-            <v-col cols="12" md="6">
-              <!-- Chronological: leave, arrive (or turn back), leave, return. Each
-                   checkpoint has a Now button so a time is one click while the
-                   crew is on the radio. -->
-              <h3 class="section-title">Departure</h3>
-              <v-row density="compact">
-                <v-col v-for="[field, label] in checkpointFields(['departed_office_at'])" :key="field" cols="12">
-                  <div class="d-flex align-center gap-2">
-                    <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
-                    <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
-                  </div>
-                </v-col>
-                <v-col cols="12">
-                  <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
-                </v-col>
-              </v-row>
+      <v-alert v-if="tripLog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ tripLog.error }}</v-alert>
 
-              <h3 class="section-title">Destination</h3>
-              <v-row density="compact">
-                <v-col cols="12">
-                  <!-- Ticking clears both destination checkpoints (the server refuses
-                       them beside a reason) and asks for the reason instead. -->
-                  <v-checkbox
-                    :model-value="tripLog.form.did_not_arrive"
-                    @update:model-value="onDidNotArrive"
-                    label="Did not reach destination"
-                    density="compact"
-                    hide-details
-                  ></v-checkbox>
-                </v-col>
-                <v-col v-if="tripLog.form.did_not_arrive" cols="12">
-                  <v-textarea
-                    v-model="tripLog.form.no_arrival_reason"
-                    label="Reason (required)"
-                    placeholder="e.g. Patient had already been taken by a relative"
-                    variant="outlined"
-                    density="comfortable"
-                    rows="2"
-                  ></v-textarea>
-                </v-col>
-                <v-col v-for="[field, label] in checkpointFields(tripLog.form.did_not_arrive ? [] : ['arrived_destination_at', 'departed_destination_at'])" :key="field" cols="12">
-                  <div class="d-flex align-center gap-2">
-                    <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
-                    <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
-                  </div>
-                </v-col>
-              </v-row>
+      <!-- Chronological: leave, arrive (or turn back), leave, return. Each
+           checkpoint has a Now button so a time is one click while the
+           crew is on the radio. -->
+      <section class="detail-section">
+        <h3 class="sect-label">Departure</h3>
+        <div v-for="[field, label] in checkpointFields(['departed_office_at'])" :key="field" class="d-flex align-center gap-2 mb-3">
+          <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+          <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+        </div>
+        <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
+      </section>
 
-              <h3 class="section-title">Return</h3>
-              <v-row density="compact">
-                <v-col v-for="[field, label] in checkpointFields(['returned_office_at'])" :key="field" cols="12">
-                  <div class="d-flex align-center gap-2">
-                    <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
-                    <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
-                  </div>
-                </v-col>
-                <v-col cols="12">
-                  <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
-                </v-col>
-                <v-col cols="12">
-                  <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
-                </v-col>
-              </v-row>
-            </v-col>
+      <section class="detail-section">
+        <h3 class="sect-label">Destination</h3>
+        <!-- Ticking clears both destination checkpoints (the server refuses
+             them beside a reason) and asks for the reason instead. -->
+        <v-checkbox
+          :model-value="tripLog.form.did_not_arrive"
+          @update:model-value="onDidNotArrive"
+          label="Did not reach destination"
+          density="compact"
+          hide-details
+        ></v-checkbox>
+        <v-textarea
+          v-if="tripLog.form.did_not_arrive"
+          v-model="tripLog.form.no_arrival_reason"
+          label="Reason (required)"
+          placeholder="e.g. Patient had already been taken by a relative"
+          variant="outlined"
+          density="comfortable"
+          rows="2"
+          class="mt-2"
+        ></v-textarea>
+        <div v-for="[field, label] in checkpointFields(tripLog.form.did_not_arrive ? [] : ['arrived_destination_at', 'departed_destination_at'])" :key="field" class="d-flex align-center gap-2 mt-3">
+          <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+          <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+        </div>
+      </section>
 
-            <v-col cols="12" md="6">
-              <!-- All three PEOPLE_FIELDS roles, same pattern as the create
-                   dialog's own Personnel section (personnelGroups) — see
-                   ConductionRequestController::tripLog(). A stub created by
-                   Approve & Dispatch (C5's bridge) always starts with none of
-                   them, and a driver is required before this request can
-                   resolve. -->
-              <h3 class="section-title">Personnel</h3>
-              <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
-                <div class="d-flex align-center justify-space-between mb-1">
-                  <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-                  <v-btn
-                    variant="outlined" color="primary"
-                    size="small"
-                    density="compact"
-                    class="text-none"
-                    prepend-icon="mdi-plus"
-                    :disabled="tripLog.form[group.field].length >= group.max"
-                    @click="addTripPerson(group.field)"
-                  >
-                    Add {{ group.singular }}
-                  </v-btn>
-                </div>
-                <div
-                  v-for="(_n, idx) in tripLog.form[group.field]"
-                  :key="idx"
-                  class="d-flex align-center gap-2 mb-2"
-                >
-                  <v-autocomplete
-                    v-if="group.field === 'drivers'"
-                    v-model="tripLog.form[group.field][idx]"
-                    :items="driverOptionsFor(tripLog.form[group.field][idx])"
-                    item-title="title"
-                    item-value="value"
-                    :label="`${group.singular} ${idx + 1}`"
-                    placeholder="Select a responder"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    clearable
-                  >
-                    <template v-slot:item="{ item, props }">
-                      <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
-                    </template>
-                  </v-autocomplete>
-                  <ResponderCombobox
-                    v-else-if="group.field === 'authorized_passengers'"
-                    v-model="tripLog.form[group.field][idx]"
-                    :items="passengerOptionsFor(tripLog.form.drivers)"
-                    :label="`${group.singular} ${idx + 1}`"
-                  />
-                  <v-text-field
-                    v-else
-                    v-model="tripLog.form[group.field][idx]"
-                    :label="`${group.singular} ${idx + 1}`"
-                    placeholder="Full name"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                  ></v-text-field>
-                  <v-btn
-                    v-if="idx > 0 || group.min < 1"
-                    icon="mdi-close"
-                    variant="outlined" color="error"
-                    size="small"
-                    :aria-label="`Remove ${group.singular} ${idx + 1}`"
-                    @click="removeTripPerson(group.field, idx)"
-                  ></v-btn>
-                </div>
-                <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
-                  Up to {{ group.max }} {{ group.label.toLowerCase() }}.
-                </div>
-              </div>
-            </v-col>
-          </v-row>
-        </v-card-text>
-        <v-card-actions class="px-6 pb-6 pt-0 d-flex justify-end gap-3">
-          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="tripLog.open = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" class="px-6 text-none font-weight-bold" height="44" :loading="loading" @click="submitTripLog">Save trip log</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+      <section class="detail-section">
+        <h3 class="sect-label">Return</h3>
+        <div v-for="[field, label] in checkpointFields(['returned_office_at'])" :key="field" class="d-flex align-center gap-2 mb-3">
+          <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+          <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+        </div>
+        <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
+      </section>
+
+      <!-- All three PEOPLE_FIELDS roles, same pattern as the new-record
+           drawer's Crew section (personnelGroups) — see
+           ConductionRequestController::tripLog(). A stub created by
+           Approve & Dispatch (C5's bridge) always starts with none of
+           them, and a driver is required before this request can
+           resolve. -->
+      <section class="detail-section">
+        <h3 class="sect-label">Crew</h3>
+        <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
+          <div class="d-flex align-center justify-space-between mb-1">
+            <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
+            <v-btn
+              variant="outlined" color="primary"
+              size="small"
+              density="compact"
+              class="text-none"
+              prepend-icon="mdi-plus"
+              :disabled="tripLog.form[group.field].length >= group.max"
+              @click="addTripPerson(group.field)"
+            >
+              Add {{ group.singular }}
+            </v-btn>
+          </div>
+          <div
+            v-for="(_n, idx) in tripLog.form[group.field]"
+            :key="idx"
+            class="d-flex align-center gap-2 mb-2"
+          >
+            <v-autocomplete
+              v-if="group.field === 'drivers'"
+              v-model="tripLog.form[group.field][idx]"
+              :items="driverOptionsFor(tripLog.form[group.field][idx])"
+              item-title="title"
+              item-value="value"
+              :label="`${group.singular} ${idx + 1}`"
+              placeholder="Select a responder"
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+            >
+              <template v-slot:item="{ item, props }">
+                <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
+              </template>
+            </v-autocomplete>
+            <ResponderCombobox
+              v-else-if="group.field === 'authorized_passengers'"
+              v-model="tripLog.form[group.field][idx]"
+              :items="passengerOptionsFor(tripLog.form.drivers)"
+              :label="`${group.singular} ${idx + 1}`"
+            />
+            <v-text-field
+              v-else
+              v-model="tripLog.form[group.field][idx]"
+              :label="`${group.singular} ${idx + 1}`"
+              placeholder="Full name"
+              variant="outlined"
+              density="compact"
+              hide-details
+            ></v-text-field>
+            <v-btn
+              v-if="idx > 0 || group.min < 1"
+              icon="mdi-close"
+              variant="outlined" color="error"
+              size="small"
+              :aria-label="`Remove ${group.singular} ${idx + 1}`"
+              @click="removeTripPerson(group.field, idx)"
+            ></v-btn>
+          </div>
+          <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
+            Up to {{ group.max }} {{ group.label.toLowerCase() }}.
+          </div>
+        </div>
+      </section>
+
+      <section class="detail-section">
+        <h3 class="sect-label">Notes</h3>
+        <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+      </section>
+
+      <template #footer>
+        <v-spacer></v-spacer>
+        <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="closeTripLog">Cancel</v-btn>
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="submitTripLog">Save trip log</v-btn>
+      </template>
+    </DetailDrawer>
 
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3500" location="bottom right" rounded="lg">
       {{ snackbar.text }}
@@ -609,8 +617,11 @@ import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import ResponderCombobox from '@/components/ResponderCombobox.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import DetailDrawer from '@/components/DetailDrawer.vue'
+import '@/components/detail-dialog.css'
 import ExportMenu from '@/components/ExportMenu.vue'
 import { useSelection, transactionNo } from '@/composables/requestDisplay'
 
@@ -619,6 +630,8 @@ import { useSelection, transactionNo } from '@/composables/requestDisplay'
 const activeTab = ref('bookings')
 
 const ALL_STATUS = 'All'
+const NOT_RECORDED = 'Not recorded'
+const NO_IDS = new Set()
 // Filtering still compares the raw trip_status value (matchesStatus below is
 // unchanged) -- only the label shown on the tab/badge moves to
 // tripStatusLabel() (adminUi.ts), so the underlying value stays exactly what
@@ -641,8 +654,8 @@ const tabLabel = (s) => (s === NO_ARRIVAL ? s : tripStatusLabel(s))
 // have no minimum; either can go to zero.
 const personnelGroups = [
   { field: 'drivers', role: 'driver', label: 'Drivers', singular: 'driver', min: 1, max: 20 },
-  { field: 'authorized_passengers', role: 'passenger', label: 'Authorized Passengers', singular: 'passenger', min: 0, max: 2 },
-  { field: 'patient_relatives', role: 'relative', label: 'Patient / Relatives', singular: 'relative', min: 0, max: 2 },
+  { field: 'authorized_passengers', role: 'passenger', label: 'Passengers', singular: 'passenger', min: 0, max: 2 },
+  { field: 'patient_relatives', role: 'relative', label: 'Relatives', singular: 'relative', min: 0, max: 2 },
 ]
 // An empty driver slot is null, not '' — v-autocomplete treats '' as a picked
 // value. The other two fields are free-text and keep ''.
@@ -672,13 +685,13 @@ const nameInitials = (name) => {
 // names the cell slot.
 const headers = [
   { title: '', key: 'select', sortable: false, width: '48px' },
-  { title: 'Booking No.', key: 'service_request_id', width: '12%' },
-  { title: 'Patient', key: 'patient', value: 'patient_name', width: '19%' },
-  { title: 'From → To', key: 'trip', value: (r) => `${r.origin || ''} ${r.destination || ''}`, width: '21%' },
-  { title: 'Vehicle', key: 'vehicle_label', value: (r) => tripVehicleLabel(r), width: '11%' },
-  { title: 'Departed', key: 'departed_office_at', width: '13%' },
-  { title: 'Returned', key: 'returned_office_at', width: '13%' },
-  { title: 'Status', key: 'trip_status', width: '11%' },
+  { title: 'Booking no.', key: 'service_request_id', width: '14%' },
+  { title: 'Patient', key: 'patient', value: 'patient_name', width: '26%' },
+  { title: 'Vehicle', key: 'vehicle_label', value: (r) => tripVehicleLabel(r), width: '14%' },
+  { title: 'Departed', key: 'departed_office_at', width: '16%' },
+  { title: 'Returned', key: 'returned_office_at', width: '16%' },
+  { title: 'Status', key: 'trip_status', width: '10%' },
+  { title: '', key: 'chevron', sortable: false, width: '40px' },
 ]
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
@@ -698,16 +711,22 @@ const matchesSearch = (r) => {
 const tabOf = (r) => (r.no_arrival_reason ? NO_ARRIVAL : r.trip_status)
 const matchesStatus = (r) => statusFilter.value === ALL_STATUS || tabOf(r) === statusFilter.value
 
-// Date range on the day the unit left (filed day if it has not left yet), and
+// Presets on the day the unit left (filed day if it has not left yet), and
 // one unit. Both compare in the office's local day, which is the viewer's.
-const dateFrom = ref('')
-const dateTo = ref('')
+const DEPARTED_RANGES = ['Any time', 'Today', 'Last 7 days', 'Last 30 days']
+const RANGE_DAYS = { 'Today': 0, 'Last 7 days': 6, 'Last 30 days': 29 }
+const departedRange = ref(DEPARTED_RANGES[0])
 const vehicleFilter = ref(ALL_STATUS)
 const localDay = (iso) => toInputValue(iso).slice(0, 10)
+const rangeStart = computed(() => {
+  const back = RANGE_DAYS[departedRange.value]
+  if (back === undefined) return ''
+  const d = new Date()
+  d.setDate(d.getDate() - back)
+  return toInputValue(d).slice(0, 10)
+})
 const matchesDateAndVehicle = (r) => {
-  const day = localDay(r.departed_office_at || r.created_at)
-  if (dateFrom.value && day < dateFrom.value) return false
-  if (dateTo.value && day > dateTo.value) return false
+  if (rangeStart.value && localDay(r.departed_office_at || r.created_at) < rangeStart.value) return false
   return vehicleFilter.value === ALL_STATUS || r.vehicle_id === vehicleFilter.value
 }
 const filteredItems = computed(() => items.value.filter((r) => matchesSearch(r) && matchesStatus(r) && matchesDateAndVehicle(r)))
@@ -735,20 +754,24 @@ const statusTabItems = computed(() => {
 const activeFilters = computed(() => {
   const out = []
   if (statusFilter.value !== ALL_STATUS) out.push({ key: 'status', label: `Status: ${tabLabel(statusFilter.value)}` })
-  if (dateFrom.value) out.push({ key: 'dateFrom', label: `From: ${dateFrom.value}` })
-  if (dateTo.value) out.push({ key: 'dateTo', label: `To: ${dateTo.value}` })
-  if (vehicleFilter.value !== ALL_STATUS) out.push({ key: 'vehicle', label: `Vehicle: ${vehicleFilterOptions.value.find((o) => o.value === vehicleFilter.value)?.title}` })
+  if (departedRange.value !== DEPARTED_RANGES[0]) out.push({ key: 'departed', label: `Departed: ${departedRange.value}` })
+  if (vehicleFilter.value !== ALL_STATUS) out.push({ key: 'vehicle', label: `Unit: ${vehicleFilterOptions.value.find((o) => o.value === vehicleFilter.value)?.title}` })
   return out
 })
 const clearFilter = (key) => {
   if (key === 'status') statusFilter.value = ALL_STATUS
-  if (key === 'dateFrom') dateFrom.value = ''
-  if (key === 'dateTo') dateTo.value = ''
+  if (key === 'departed') departedRange.value = DEPARTED_RANGES[0]
   if (key === 'vehicle') vehicleFilter.value = ALL_STATUS
 }
 const clearAllFilters = () => {
-  for (const key of ['status', 'dateFrom', 'dateTo', 'vehicle']) clearFilter(key)
+  for (const key of ['status', 'departed', 'vehicle']) clearFilter(key)
 }
+
+// The page header's line on the Trip logs tab.
+const tripSubtitle = computed(() => {
+  const rolling = items.value.filter((r) => r.trip_status === 'In transit').length
+  return `${rolling} in progress · ${items.value.length} trip records in total`
+})
 
 // StatusPill's :status prop wants an accent-table key (Booked/Responding/
 // Resolved/'Resolved — no arrival') -- sharedStatusLabel() already maps a
@@ -760,7 +783,7 @@ const pillStatus = (item) => {
 }
 
 watch(search, () => { page.value = 1 })
-watch([statusFilter, dateFrom, dateTo, vehicleFilter], () => { page.value = 1 })
+watch([statusFilter, departedRange, vehicleFilter], () => { page.value = 1 })
 
 const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
@@ -872,7 +895,7 @@ const vehicleOptions = computed(() => ambulanceVehicles.value.map(v => ({
   title: fleetUnitLabel(v),
   value: v.vehicle_id,
 })))
-const vehicleFilterOptions = computed(() => [{ title: 'All units', value: ALL_STATUS }, ...vehicleOptions.value])
+const vehicleFilterOptions = computed(() => [{ title: 'All', value: ALL_STATUS }, ...vehicleOptions.value])
 // Table cell: the unit's short name, else the free-text one for a unit outside the fleet.
 const tripVehicleLabel = (t) => {
   if (!t.vehicle_id) return t.vehicle || '—'
@@ -888,8 +911,8 @@ const selectedFleetUnit = computed(() => {
 })
 const selectedVehicleLabel = computed(() => {
   const trip = selected.value
-  if (!trip) return 'N/A'
-  if (!trip.vehicle_id) return trip.vehicle || 'N/A'
+  if (!trip) return NOT_RECORDED
+  if (!trip.vehicle_id) return trip.vehicle || NOT_RECORDED
   const unit = selectedFleetUnit.value
   return unit ? fleetUnitLabel(unit) : (trip.vehicle || `Unit #${trip.vehicle_id}`)
 })
@@ -1129,14 +1152,14 @@ const timelineSteps = computed(() => {
   const t = selected.value
   if (!t) return []
   return [
-    { label: 'Departed office', at: t.departed_office_at, color: 'primary' },
+    { label: 'Left the office', at: t.departed_office_at, color: 'primary' },
     ...(t.no_arrival_reason
       ? [{ label: 'Did not reach destination', done: true, note: t.no_arrival_reason, color: 'warning' }]
       : [
           { label: 'Arrived at destination', at: t.arrived_destination_at, color: 'primary' },
-          { label: 'Departed destination', at: t.departed_destination_at, color: 'primary' },
+          { label: 'Left destination', at: t.departed_destination_at, color: 'primary' },
         ]),
-    { label: 'Returned to office', at: t.returned_office_at, color: 'success' },
+    { label: 'Back at the office', at: t.returned_office_at, color: 'success' },
   ]
 })
 
@@ -1151,11 +1174,11 @@ const emptyTripLogForm = () => ({
 })
 const addTripPerson = (field) => { tripLog.value.form[field].push(blankPerson(field)) }
 const removeTripPerson = (field, idx) => { tripLog.value.form[field].splice(idx, 1) }
-const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '' })
+const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: null, title: '', fromDetail: false })
 
 // The button that opens the dialog and the dialog's own title read the same
 // record, so they come from one place rather than two copies that can drift.
-const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete Trip Log')
+const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete trip log')
 
 // The API sends an ISO instant with an offset; <input type="datetime-local">
 // wants 'YYYY-MM-DDTHH:mm' with none. new Date() resolves the offset and the
@@ -1168,8 +1191,12 @@ const toInputValue = (iso) => {
 }
 
 const openTripLog = (record) => {
+  // Opened from the detail drawer: swap it out, and come back to it on close.
+  const fromDetail = detail.value.open
+  detail.value.open = false
   tripLog.value = {
     open: true,
+    fromDetail,
     error: '',
     target: record,
     // Captured at open time so the title stays put while the form is edited.
@@ -1192,11 +1219,16 @@ const openTripLog = (record) => {
   }
 }
 
+const closeTripLog = () => {
+  tripLog.value.open = false
+  if (tripLog.value.fromDetail) detail.value.open = true
+}
+
 const CHECKPOINTS = [
-  ['departed_office_at', 'Departed office'],
+  ['departed_office_at', 'Left the office'],
   ['arrived_destination_at', 'Arrived at destination'],
-  ['departed_destination_at', 'Departed destination'],
-  ['returned_office_at', 'Returned to office'],
+  ['departed_destination_at', 'Left destination'],
+  ['returned_office_at', 'Back at the office'],
 ]
 const checkpointFields = (fields) => CHECKPOINTS.filter(([field]) => fields.includes(field))
 const setNow = (field) => { tripLog.value.form[field] = toInputValue(new Date()) }
@@ -1345,7 +1377,7 @@ const submitTripLog = async () => {
     invalidateTrips()
     await fetchData()
     selected.value = updated
-    tripLog.value.open = false
+    closeTripLog()
     notify('Trip log saved')
   } catch (error) {
     tripLog.value.error = error.message
@@ -1365,30 +1397,18 @@ onMounted(() => {
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 
-.section-title {
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgb(var(--v-theme-primary-strong));
-  margin: 20px 0 10px;
-}
-.section-title:first-child { margin-top: 0; }
+.txn { font-size: 13px; white-space: nowrap; }
+.tabular { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.field-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+.assign-box { border: 1px solid rgba(var(--v-theme-on-surface), 0.14); border-radius: 12px; }
+.assign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
 }
-.field-value {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: rgb(var(--v-theme-on-surface));
-  margin-bottom: 8px;
-}
-
+.min-width-0 { min-width: 0; }
 
 /* Status pills: components/StatusPill.vue now, driven by pillStatus() above via composables/statusPill.ts's shared accent table -- was a locally duplicated .status-pill/.pill-* CSS block. */
 

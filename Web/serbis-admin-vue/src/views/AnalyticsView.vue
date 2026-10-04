@@ -1,111 +1,104 @@
 <template>
   <v-container fluid class="analytics-bg">
 
-    <PageHeader
-      title="Analytics"
-    />
+    <PageHeader title="Analytics">
+      <!-- Reconciled against the same helper the Dashboard uses, so the two
+           pages cannot report different totals for the same window. -->
+      <template v-if="report" #subtitle>
+        {{ report.range.from }} to {{ report.range.to }} ({{ report.range.timezone }})
+        &bull; {{ report.totals.serviceRequests.toLocaleString() }}
+        {{ report.totals.serviceRequests === 1 ? 'request' : 'requests' }} in range
+        <template v-if="report.totals.walkIn > 0">
+          &bull; {{ report.totals.walkIn.toLocaleString() }} walk-in (no barangay)
+        </template>
+      </template>
+    </PageHeader>
 
-    <!-- Filter bar. Governs every section below, so it sits above all of them
-         and stays put while the page scrolls — the alternative is scrolling
-         back up to change a range you are in the middle of reading. -->
-    <v-card elevation="0" rounded="xl" class="soft-card mb-6 filter-bar">
-      <v-card-text class="py-4">
-        <div class="d-flex flex-wrap align-center gap-4">
-          <v-btn-toggle
-            v-model="preset"
-            mandatory
-            variant="outlined"
-            color="primary"
-            density="compact"
-            divided
-            rounded="lg"
-          >
-            <v-btn value="month" size="small" class="text-none font-weight-bold px-3">This month</v-btn>
-            <v-btn value="quarter" size="small" class="text-none font-weight-bold px-3">This quarter</v-btn>
-            <v-btn value="year" size="small" class="text-none font-weight-bold px-3">This year</v-btn>
-            <v-btn value="custom" size="small" class="text-none font-weight-bold px-3">Custom</v-btn>
-          </v-btn-toggle>
+    <!-- One compact row of 36px controls (styles/filter-bar.css). Each select
+         shows its own "All …" value, so it needs no floating label. -->
+    <div class="filter-bar mb-2">
+      <v-btn-toggle
+        v-model="preset"
+        mandatory
+        variant="outlined"
+        color="primary"
+        density="compact"
+        divided
+        rounded="lg"
+        class="range-toggle"
+        aria-label="Date range"
+      >
+        <v-btn value="month" class="text-none font-weight-bold px-3">This month</v-btn>
+        <v-btn value="quarter" class="text-none font-weight-bold px-3">This quarter</v-btn>
+        <v-btn value="year" class="text-none font-weight-bold px-3">This year</v-btn>
+        <v-btn value="custom" class="text-none font-weight-bold px-3">Custom</v-btn>
+      </v-btn-toggle>
 
-          <template v-if="preset === 'custom'">
-            <v-text-field
-              v-model="customFrom"
-              type="date"
-              label="From"
-              density="compact"
-              variant="outlined"
-              hide-details
-              class="date-field"
-            />
-            <v-text-field
-              v-model="customTo"
-              type="date"
-              label="To"
-              density="compact"
-              variant="outlined"
-              hide-details
-              class="date-field"
-            />
-          </template>
+      <template v-if="preset === 'custom'">
+        <v-text-field
+          v-model="customFrom"
+          type="date"
+          aria-label="From"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="filter-bar__select"
+        />
+        <v-text-field
+          v-model="customTo"
+          type="date"
+          aria-label="To"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="filter-bar__select"
+        />
+      </template>
 
-          <v-select
-            v-model="barangayId"
-            :items="barangayOptions"
-            item-title="label"
-            item-value="value"
-            label="Barangay"
-            aria-label="Barangay"
-            density="compact"
-            variant="outlined"
-            hide-details
-            class="filter-field"
-          />
+      <v-select
+        v-model="barangayId"
+        :items="barangayOptions"
+        item-title="label"
+        item-value="value"
+        aria-label="Barangay"
+        density="compact"
+        variant="outlined"
+        hide-details
+        class="filter-bar__select filter-select"
+      />
 
-          <v-select
-            v-model="serviceId"
-            :items="serviceOptions"
-            item-title="label"
-            item-value="value"
-            label="Service"
-            aria-label="Service"
-            density="compact"
-            variant="outlined"
-            hide-details
-            class="filter-field"
-          />
+      <v-select
+        v-model="serviceId"
+        :items="serviceOptions"
+        item-title="label"
+        item-value="value"
+        aria-label="Service"
+        density="compact"
+        variant="outlined"
+        hide-details
+        class="filter-bar__select filter-select"
+      />
 
-          <v-btn
-            v-if="hasFilters"
-            variant="outlined"
-            size="small"
-            color="primary"
-            class="text-none font-weight-bold"
-            @click="clearFilters"
-          >
-            Clear
-          </v-btn>
-        </div>
+      <v-btn
+        v-if="hasFilters"
+        variant="text"
+        color="primary"
+        height="36"
+        class="text-none font-weight-bold"
+        @click="clearFilters"
+      >
+        Clear
+      </v-btn>
+    </div>
 
-        <!-- Selecting Custom does not fetch until both dates are set, because
-             the server reads a half-filled range as no range and answers with
-             the quarter. Saying so beats leaving the previous range's caption
-             on screen asserting a window the controls no longer show. -->
-        <div v-if="awaitingCustomRange" class="text-caption text-medium-emphasis mt-3">
-          Pick a start and an end date to apply a custom range. Showing
-          {{ report ? `${report.range.from} to ${report.range.to}` : 'nothing' }} until then.
-        </div>
-
-        <!-- Reconciled against the same helper the Dashboard uses, so the two
-             pages cannot report different totals for the same window. -->
-        <div v-else-if="report" class="text-caption text-medium-emphasis mt-3">
-          {{ report.range.from }} to {{ report.range.to }} ({{ report.range.timezone }})
-          &bull; {{ report.totals.serviceRequests.toLocaleString() }}
-          {{ report.totals.serviceRequests === 1 ? 'request' : 'requests' }} in range
-          <template v-if="report.totals.walkIn > 0">
-            &bull; {{ report.totals.walkIn.toLocaleString() }} walk-in (no barangay)
-          </template>
-        </div>
-      </v-card-text>
-    </v-card>
+    <!-- Selecting Custom does not fetch until both dates are set, because
+         the server reads a half-filled range as no range and answers with
+         the quarter. Saying so beats leaving the previous range's caption
+         on screen asserting a window the controls no longer show. -->
+    <div v-if="awaitingCustomRange" class="text-caption text-medium-emphasis mb-2">
+      Pick a start and an end date to apply a custom range. Showing
+      {{ report ? `${report.range.from} to ${report.range.to}` : 'nothing' }} until then.
+    </div>
 
     <v-alert
       v-if="error && !loading"
@@ -122,9 +115,30 @@
       </div>
     </v-alert>
 
-    <v-tabs v-model="tab" color="primary" class="mb-4">
-      <v-tab v-for="t in TABS" :key="t.value" :value="t.value" class="text-none font-weight-bold">{{ t.title }}</v-tab>
-    </v-tabs>
+    <SegmentedTabs v-model="tab" :items="TABS" tonal class="mt-2 mb-5" />
+
+    <!-- The answer first, then the numbers behind it, then the charts as
+         evidence. All derived from the report already on screen. -->
+    <div v-if="report" :class="{ 'is-dim': refreshing }">
+      <section v-if="finding" class="finding mb-4" aria-labelledby="finding-label">
+        <div class="finding__icon" aria-hidden="true">
+          <v-icon :icon="finding.icon" size="20" />
+        </div>
+        <div class="min-w-0">
+          <h3 id="finding-label" class="section-label">What stands out</h3>
+          <p class="finding__lead">{{ finding.lead }}</p>
+          <p v-if="finding.detail" class="finding__detail">{{ finding.detail }}</p>
+        </div>
+      </section>
+
+      <div v-if="kpis.length > 0" class="kpi-grid mb-4">
+        <v-card v-for="k in kpis" :key="k.title" elevation="0" class="dash-card">
+          <div class="kpi-title">{{ k.title }}</div>
+          <div class="kpi-value">{{ k.value }}</div>
+          <div class="kpi-note">{{ k.note }}</div>
+        </v-card>
+      </div>
+    </div>
 
     <template v-if="tab === 'demand'">
     <!-- 1. When demand arrives, split into two ordinary bar charts instead of
@@ -442,6 +456,8 @@ import PageHeader from '@/components/PageHeader.vue'
 import AnalyticsSection from '@/components/AnalyticsSection.vue'
 import ChartDataTable from '@/components/ChartDataTable.vue'
 import BarangayDemand from '@/components/BarangayDemand.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
+import '@/components/dashboard.css'
 import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
@@ -489,10 +505,10 @@ const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#19a371', '#be8100', '#d16f94', '#0
 const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
 
 const TABS = [
-  { value: 'demand', title: 'Demand' },
-  { value: 'barangays', title: 'Barangays' },
-  { value: 'operations', title: 'Operations' },
-  { value: 'equipment', title: 'Equipment & Vehicles' },
+  { value: 'demand', label: 'Demand' },
+  { value: 'barangays', label: 'Barangays' },
+  { value: 'operations', label: 'Operations' },
+  { value: 'equipment', label: 'Equipment & Vehicles' },
 ]
 const tab = ref('demand')
 
@@ -656,6 +672,164 @@ const loans = computed(() => report.value?.loans ?? {
 const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
+})
+
+const turnaround = computed(() => report.value?.turnaround ?? { resolution: { medianDays: null, n: 0 } })
+
+/* ---------------------------------------------------------------------------
+ * "What stands out" and the KPI cards. Read only from the report above; a
+ * figure the report does not carry is left out rather than estimated.
+ * ------------------------------------------------------------------------ */
+
+const DAY_NAMES = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
+
+const sum = (values) => values.reduce((a, b) => a + (b || 0), 0)
+const pct = (n, of) => (of > 0 ? Math.round((n / of) * 100) : null)
+const count = (n, one, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`
+const days = (d) => {
+  if (d === null || d === undefined) return '—'
+  return d < 1 ? count(Math.max(1, Math.round(d * 24)), 'hour') : `${d.toFixed(1)} days`
+}
+/** Index and value of the largest entry, or null when everything is zero. */
+const top = (values) => {
+  const max = Math.max(0, ...values)
+  return max > 0 ? { index: values.indexOf(max), value: max } : null
+}
+const statusTotal = (status) => sum(outcomes.value.series.find(s => s.label === status)?.data ?? [])
+
+const closed = computed(() => {
+  const n = statusTotal('Resolved') + statusTotal('Cancelled') + statusTotal('Disapproved')
+  return { n, of: outcomes.value.total, pct: pct(n, outcomes.value.total) }
+})
+const tripTotal = computed(() => sum(selectedVehicleTrips.value.map(v => v.trips)))
+
+const finding = computed(() => {
+  if (!report.value) return null
+
+  if (tab.value === 'demand') {
+    const day = top(demand.value.days.data)
+    const block = top(demand.value.timeOfDay.data)
+    if (!day || !block) return null
+    const dayName = DAY_NAMES[demand.value.days.labels[day.index]] ?? demand.value.days.labels[day.index]
+    const service = top(volume.value.series.map(s => sum(s.data)))
+    const months = volume.value.labels.map((_, i) => sum(volume.value.series.map(s => s.data[i])))
+    return {
+      icon: 'mdi-chart-bar',
+      lead: `Most requests arrive in the ${demand.value.timeOfDay.labels[block.index].toLowerCase()} (${pct(block.value, demand.value.total)}%), and ${dayName} is the busiest day at ${pct(day.value, demand.value.total)}%.`,
+      detail: [
+        service && `${volume.value.series[service.index].label} is the most requested service: ${service.value} of ${volume.value.total}.`,
+        months.length > 1 && `Requests went from ${months[0]} in ${volume.value.labels[0]} to ${months.at(-1)} in ${volume.value.labels.at(-1)}.`,
+      ].filter(Boolean).join(' '),
+    }
+  }
+
+  if (tab.value === 'operations') {
+    if (outcomes.value.total === 0 && aging.value.total === 0) return null
+    // Under a day plus 1-3 days: the buckets AnalyticsReport::openRequestAging returns first.
+    const recent = (aging.value.data[0] ?? 0) + (aging.value.data[1] ?? 0)
+    let lead = `${closed.value.pct}% of requests filed in this range are closed, and ${recent} of the ${aging.value.total} still open were filed in the last 3 days.`
+    if (closed.value.of === 0) {
+      lead = `No requests were filed in this range; ${count(aging.value.total, 'request')} from earlier ${aging.value.total === 1 ? 'is' : 'are'} still open.`
+    } else if (aging.value.total === 0) {
+      lead = `${closed.value.pct}% of requests filed in this range are closed, and nothing is waiting right now.`
+    }
+    return {
+      icon: 'mdi-check-circle-outline',
+      lead,
+      detail: [
+        aging.value.oldestDays > 0 && `The oldest open request has waited ${count(aging.value.oldestDays, 'day')}.`,
+        closed.value.of > 0 && `${pct(statusTotal('Cancelled'), closed.value.of)}% were cancelled and ${pct(statusTotal('Disapproved'), closed.value.of)}% disapproved.`,
+      ].filter(Boolean).join(' '),
+    }
+  }
+
+  if (tab.value === 'equipment') {
+    const items = equipmentUtilization.value.items
+    const item = top(items.map(i => i.timesBorrowed))
+    const unit = top(selectedVehicleTrips.value.map(v => v.trips))
+    if (!item && !unit) return null
+    const zero = equipmentUtilization.value.zeroBorrowCount
+    const late = loans.value.returnedLate
+    return {
+      icon: 'mdi-package-variant-closed',
+      lead: item
+        ? `${items[item.index].label} is borrowed most: ${item.value} of ${equipmentUtilization.value.total} loans (${pct(item.value, equipmentUtilization.value.total)}%)${zero > 0 ? `, while ${zero} of ${items.length} items were not borrowed at all` : ''}.`
+        : `No equipment was borrowed in this range.`,
+      detail: [
+        unit && `${selectedVehicleTrips.value[unit.index].label} made ${pct(unit.value, tripTotal.value)}% of vehicle trips.`,
+        late.of > 0 && `${late.count} of ${late.of} returned loans came back after the due date.`,
+      ].filter(Boolean).join(' '),
+    }
+  }
+
+  // Barangays. These counts include equipment loans, as the map does.
+  const rows = barangayCoverage.value.barangays
+  const place = top(rows.map(b => b.requests))
+  if (!place) return null
+  const active = rows.filter(b => b.requests > 0).length
+  return {
+    icon: 'mdi-map-marker-radius-outline',
+    lead: `${rows[place.index].name} files the most: ${place.value} of ${barangayCoverage.value.totalRequests} requests and loans (${pct(place.value, barangayCoverage.value.totalRequests)}%).`,
+    detail: [
+      `${active} of ${rows.length} barangays filed at least one.`,
+      barangayCoverage.value.walkIn > 0 && `${count(barangayCoverage.value.walkIn, 'walk-in')} carry no barangay.`,
+    ].filter(Boolean).join(' '),
+  }
+})
+
+/** Open now ignores the date range but not Service or Barangay, so the note says which applies. */
+const openNote = computed(() => {
+  const label = (options, id) => options.find(o => o.value === id)?.label
+  const scope = [
+    serviceId.value === ALL ? null : label(serviceOptions.value, serviceId.value),
+    barangayId.value === ALL ? null : label(barangayOptions.value, barangayId.value),
+  ].filter(Boolean).join(' in ')
+  const oldest = aging.value.total > 0 ? `Oldest ${count(aging.value.oldestDays, 'day')}.` : 'None waiting.'
+  return scope ? `Open requests for ${scope}, any date. ${oldest}` : `All open requests, any date. ${oldest}`
+})
+
+const kpis = computed(() => {
+  if (!report.value) return []
+  const open = aging.value.total
+  const closedCard = {
+    title: 'Closed',
+    value: closed.value.pct === null ? '—' : `${closed.value.pct}%`,
+    note: `${closed.value.n} of ${closed.value.of} resolved, cancelled or disapproved`,
+  }
+
+  if (tab.value === 'demand') {
+    const walkIn = report.value.totals.walkIn
+    return [
+      { title: 'Requests filed', value: report.value.totals.serviceRequests.toLocaleString(), note: walkIn > 0 ? `${walkIn} walk-in (no barangay)` : 'In the selected range' },
+      closedCard,
+      { title: 'Median time to resolve', value: days(turnaround.value.resolution.medianDays), note: turnaround.value.resolution.n > 0 ? `Resolved requests only, ${count(turnaround.value.resolution.n, 'request')}` : 'No resolved requests in this range' },
+      { title: 'Open now', value: open.toLocaleString(), note: openNote.value },
+    ]
+  }
+
+  if (tab.value === 'operations') {
+    const resolved = statusTotal('Resolved')
+    return [
+      closedCard,
+      { title: 'Resolved', value: resolved.toLocaleString(), note: closed.value.of > 0 ? `${pct(resolved, closed.value.of)}% of all requests filed` : 'No requests in this range' },
+      { title: 'Open now', value: open.toLocaleString(), note: 'Pending, booked or responding, any filing date' },
+      { title: 'Oldest open', value: open > 0 ? count(aging.value.oldestDays, 'day') : '—', note: open > 0 ? 'Still pending, booked or responding' : 'Nothing is waiting' },
+    ]
+  }
+
+  if (tab.value === 'equipment') {
+    const items = equipmentUtilization.value.items
+    const unused = items.filter(i => i.timesBorrowed === 0).map(i => i.label)
+    const late = loans.value.returnedLate
+    return [
+      { title: 'Equipment loans', value: equipmentUtilization.value.total.toLocaleString(), note: `Across ${items.length - unused.length} of ${items.length} catalogue items` },
+      { title: 'Returned late', value: late.percent === null ? '—' : `${late.percent}%`, note: `${late.count} of ${late.of} returned in this range` },
+      { title: 'Items never borrowed', value: `${unused.length} of ${items.length}`, note: unused.length > 0 ? unused.slice(0, 3).join(', ') + (unused.length > 3 ? ` and ${unused.length - 3} more` : '') : 'Every item was borrowed' },
+      { title: 'Vehicle trips', value: tripTotal.value.toLocaleString(), note: `Across ${count(selectedVehicleTrips.value.filter(v => v.trips > 0).length, 'vehicle')}` },
+    ]
+  }
+
+  return []
 })
 
 const seriesPalette = computed(() => (isDark.value ? SERIES_DARK : SERIES_LIGHT))
@@ -839,6 +1013,17 @@ defineExpose({ fetchReport })
 <style scoped>
 .analytics-bg {
   background-color: rgb(var(--v-theme-background));
+  /* The Dashboard's card tokens (components/dashboard.css), so KPI cards here
+     are the same 24px-radius, soft-shadow cards. */
+  --dash-text: rgb(var(--v-theme-on-surface));
+  --dash-muted: rgba(var(--v-theme-on-surface), 0.62);
+  --dash-radius: 24px;
+  --dash-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
+  --dash-pad: 20px;
+}
+/* on-surface is light in the dark theme, so the same shadow would glow. */
+.v-theme--dark .analytics-bg {
+  --dash-shadow: 0 1px 2px rgba(var(--v-shadow-color), 0.4), 0 4px 14px rgba(var(--v-shadow-color), 0.25);
 }
 
 /* Vuetify's x-small button default (0.625rem/10px) falls under an 11px
@@ -847,36 +1032,16 @@ defineExpose({ fetchReport })
   font-size: 0.6875rem;
 }
 
-.soft-card {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  box-shadow: 0 1px 2px rgba(var(--v-theme-on-surface), 0.04), 0 4px 14px rgba(var(--v-theme-on-surface), 0.08);
+/* Service names run long; 160px (filter-bar__select) clips most of them. */
+.filter-select {
+  width: 200px;
 }
 
-/* Sticky so the controls stay reachable while reading a section far down the
-   page. z-index keeps it above the cards it scrolls over. */
-.filter-bar {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background-color: rgb(var(--v-theme-surface));
-}
-
-/* Not on a phone: the bar stacks to ~254px there, which is 27% of a 430px
-   viewport permanently occupied by controls that are set once and then read
-   past. It scrolls away with the rest instead. */
-@media (max-width: 599px) {
-  .filter-bar {
-    position: static;
-  }
-}
-
-/* The range toggle wraps onto a second line when it outgrows the card; it
-   must not scroll. Vuetify gives v-btn-group a fixed 36px height, so an
+/* The range toggle wraps onto a second line when it outgrows the row; it
+   must not scroll. Vuetify gives v-btn-group a fixed height, so an
    overflow-x scrollbar renders INSIDE that box and leaves a 17px content
-   strip — the four buttons measured 93x17 at 430px while measuring a correct
-   36px at 1280. Wrapping keeps every button at full height and needs no
-   horizontal gesture on a phone. */
-.filter-bar :deep(.v-btn-group) {
+   strip. Wrapping keeps every button at full height. */
+.range-toggle {
   flex-shrink: 0;
   flex-wrap: wrap;
   height: auto;
@@ -884,13 +1049,86 @@ defineExpose({ fetchReport })
 }
 
 /* min-height, not height: Vuetify writes an INLINE `height: auto` on every
-   button inside a v-btn-group, which no stylesheet rule can outrank. With
-   the group wrapped and no vertical padding on the button, auto resolves to
-   the text box alone and each button measured 17px tall. min-height is not
-   set inline, so it is the one lever that reaches. */
-.filter-bar :deep(.v-btn-group .v-btn) {
+   button inside a v-btn-group, which no stylesheet rule can outrank. */
+.range-toggle :deep(.v-btn) {
   flex-shrink: 0;
   min-height: 36px;
+}
+
+/* "What stands out": a primary tint, the heading in primary-strong (AA on the
+   tint in both themes), the finding itself at the section-title size. */
+.finding {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: rgba(var(--v-theme-primary), 0.10);
+}
+.finding__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+.section-label {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary-strong));
+}
+.finding__lead {
+  margin: 4px 0 0;
+  font-size: 18.72px;
+  line-height: 28px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+}
+.finding__detail {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+}
+
+.kpi-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.kpi-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+}
+.kpi-value {
+  margin-top: 8px;
+  font-size: 36px;
+  line-height: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--dash-text);
+}
+.kpi-note {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dash-muted);
+}
+
+/* A filter change keeps the old figures on screen, dimmed, until the new ones land. */
+.is-dim {
+  opacity: 0.55;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 /* Vuetify signals focus only with a 12%-opacity overlay, which measured
@@ -906,18 +1144,6 @@ defineExpose({ fetchReport })
 
 .gap-4 {
   gap: 16px;
-}
-
-/* A max-width alone collapses these to ~100px inside a flex row (see the
-   PageHeader note on the same trap). Both need a real width. */
-.filter-field {
-  width: 190px;
-  max-width: 100%;
-}
-
-.date-field {
-  width: 170px;
-  max-width: 100%;
 }
 
 .subtle-surface {

@@ -43,7 +43,7 @@
   reads as noise).
 -->
 <template>
-  <div class="page-header d-flex justify-space-between align-center flex-wrap gap-3">
+  <div class="page-header d-flex justify-space-between align-center flex-wrap">
     <div class="min-w-0">
       <!-- The wrapper only exists when there is a badge, so every other page's
            header keeps exactly the markup it had. -->
@@ -57,7 +57,7 @@
       </div>
     </div>
 
-    <div v-if="$slots.actions" class="d-flex align-center flex-wrap gap-3">
+    <div v-if="$slots.actions" class="page-actions d-flex align-center flex-wrap">
       <slot name="actions" />
     </div>
   </div>
@@ -77,5 +77,11 @@ defineProps({
 .page-header {
   min-height: 48px;
   margin-bottom: 24px;
+  gap: 12px;
 }
+/* 12px between the buttons (there was no gap rule behind the old class). */
+.page-actions { gap: 12px; }
+/* Title and subtitle stack with no space between: 36px and 20px line boxes. */
+.page-title,
+.page-subtitle { margin: 0; }
 </style>

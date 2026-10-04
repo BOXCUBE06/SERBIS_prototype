@@ -16,7 +16,7 @@
 }
 .filter-bar .v-input { flex: 0 0 auto; }
 .filter-bar__search { width: 280px; max-width: 100%; }
-.filter-bar__select { width: 160px; max-width: 100%; }
+.filter-bar__select { width: auto; min-width: 200px; max-width: 100%; }
 
 .filter-bar .v-field {
   --v-input-control-height: 36px;
@@ -28,3 +28,17 @@
 .filter-bar .v-field__prepend-inner,
 .filter-bar .v-field__append-inner,
 .filter-bar .v-field__clearable { padding-top: 0; align-items: center; }
+
+/* The inline label ("Barangay") sits on the value's line. Vuetify gives the
+   prefix its own top/bottom padding and a 56px min-height, which put it below
+   the value once the field is 36px. */
+.filter-bar .v-text-field__prefix {
+  align-items: center;
+  min-height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 0.875rem;
+  opacity: 1;
+}
+.filter-bar .v-field__input { align-items: center; }
+.filter-bar .v-select__selection { font-weight: 600; }
