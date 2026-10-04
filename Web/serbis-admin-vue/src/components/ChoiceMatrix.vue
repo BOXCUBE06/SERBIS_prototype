@@ -43,7 +43,7 @@
                   :checked="r.checks[i]"
                   :disabled="r.busy"
                   :aria-label="`${r.name}, ${c}`"
-                  @change="(e) => { emit('toggle', r, i, e.target.checked); e.target.checked = r.checks[i] }"
+                  @change="(e: Event) => { const box = e.target as HTMLInputElement; emit('toggle', r, i, box.checked); box.checked = r.checks[i] }"
                 />
               </td>
             </tr>

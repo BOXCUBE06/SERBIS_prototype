@@ -13,7 +13,7 @@
     <div v-if="total > 0" class="table-footer__controls">
       <label class="table-footer__per">
         <span>Rows per page</span>
-        <select :value="perPage" aria-label="Rows per page" @change="(e) => emit('update:per-page', Number(e.target.value))">
+        <select :value="perPage" aria-label="Rows per page" @change="(e: Event) => emit('update:per-page', Number((e.target as HTMLSelectElement).value))">
           <option v-for="n in options" :key="n" :value="n">{{ n }}</option>
         </select>
       </label>
@@ -25,7 +25,7 @@
             type="button"
             :class="{ 'is-current': p === page }"
             :aria-current="p === page ? 'page' : undefined"
-            @click="emit('update:page', p)"
+            @click="emit('update:page', Number(p))"
           >{{ p }}</button>
         </template>
       </nav>

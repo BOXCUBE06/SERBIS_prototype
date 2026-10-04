@@ -87,7 +87,7 @@
               ></v-text-field>
               <v-text-field
                 :model-value="n.number"
-                @input="(e) => (n.number = e.target.value = f.sanitize ? f.sanitize(e.target.value) : e.target.value)"
+                @input="(e: Event) => { const el = e.target as HTMLInputElement; n.number = el.value = f.sanitize ? f.sanitize(el.value) : el.value }"
                 placeholder="Number *"
                 aria-label="Number"
                 :inputmode="f.inputmode"
@@ -97,7 +97,7 @@
                 variant="outlined" density="compact" rounded="lg" hide-details="auto"
               ></v-text-field>
               <!-- At least one number: the first row cannot be removed. -->
-              <v-btn v-if="i > 0" icon="mdi-close" variant="text" size="small" class="edit-dialog__remove" aria-label="Remove number" @click="form[f.key].splice(i, 1)"></v-btn>
+              <v-btn v-if="Number(i) > 0" icon="mdi-close" variant="text" size="small" class="edit-dialog__remove" aria-label="Remove number" @click="form[f.key].splice(i, 1)"></v-btn>
               <span v-else class="edit-dialog__remove"></span>
             </div>
           </div>
