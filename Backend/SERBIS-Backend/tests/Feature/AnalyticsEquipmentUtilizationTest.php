@@ -55,13 +55,13 @@ class AnalyticsEquipmentUtilizationTest extends TestCase
         $this->actingAs($this->admin);
     }
 
-    private function borrowAt(Equipment $equipment, string $utc, int $quantity = 1): EquipmentBorrowing
+    private function borrowAt(Equipment $equipment, string $utc, int $quantity = 1, string $status = 'Released'): EquipmentBorrowing
     {
         $borrowing = EquipmentBorrowing::create([
             'resident_id' => $this->resident->getKey(),
             'equipment_id' => $equipment->getKey(),
             'quantity' => $quantity,
-            'status' => 'Pending',
+            'status' => $status,
         ]);
 
         DB::table('tbl_equipment_borrowing')
@@ -111,6 +111,21 @@ class AnalyticsEquipmentUtilizationTest extends TestCase
         $this->assertSame(0, $byLabel['Chainsaw']['timesBorrowed']);
         $this->assertSame(2, $report['total']);
         $this->assertSame(1, $report['zeroBorrowCount']);
+    }
+
+    public function test_only_loans_that_left_the_shelf_are_counted(): void
+    {
+        $boat = Equipment::create(['item_name' => 'Rubber Boat', 'total_quantity' => 4, 'available_quantity' => 4, 'status' => 'Available']);
+
+        $this->borrowAt($boat, '2026-09-05 00:00:00', 1, 'Released');
+        $this->borrowAt($boat, '2026-09-06 00:00:00', 1, 'Returned');
+        foreach (['Pending', 'Approved', 'Denied', 'Cancelled'] as $status) {
+            $this->borrowAt($boat, '2026-09-07 00:00:00', 1, $status);
+        }
+
+        $report = $this->report(['preset' => 'custom', 'from' => '2026-09-01', 'to' => '2026-09-30'])['equipmentUtilization'];
+
+        $this->assertSame(2, $report['items'][0]['timesBorrowed']);
     }
 
     public function test_a_status_change_is_visible_on_the_next_read(): void

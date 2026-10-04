@@ -498,6 +498,8 @@ class AnalyticsReport
         $borrowed = DB::table('tbl_equipment_borrowing')
             ->where('created_at', '>=', $this->from)
             ->where('created_at', '<', $this->to)
+            // Only loans that left the shelf; Pending, Denied and Cancelled never did.
+            ->whereIn('status', ['Released', 'Returned'])
             ->whereNotNull('equipment_id')
             ->groupBy('equipment_id')
             ->selectRaw('equipment_id, COUNT(*) as times, COALESCE(SUM(quantity), 0) as qty')
@@ -546,7 +548,7 @@ class AnalyticsReport
             ->get();
 
         $daysOut = [];
-        $returnedCount = 0;
+        $returnedWithDue = 0;
         $lateCount = 0;
 
         foreach ($rows as $row) {
@@ -555,15 +557,15 @@ class AnalyticsReport
                     ->diffInMinutes(CarbonImmutable::parse($row->returned_at, 'UTC')) / 1440;
             }
 
-            if ($row->returned_at !== null) {
-                $returnedCount++;
+            // Late is only defined against a due date, so a loan without one
+            // stays out of the denominator as well as the numerator.
+            if ($row->returned_at !== null && $row->due_date !== null) {
+                $returnedWithDue++;
 
-                if ($row->due_date !== null) {
-                    $returnedDate = CarbonImmutable::parse($row->returned_at, 'UTC')->timezone(self::OFFICE_TIMEZONE)->toDateString();
+                $returnedDate = CarbonImmutable::parse($row->returned_at, 'UTC')->timezone(self::OFFICE_TIMEZONE)->toDateString();
 
-                    if ($returnedDate > $row->due_date) {
-                        $lateCount++;
-                    }
+                if ($returnedDate > $row->due_date) {
+                    $lateCount++;
                 }
             }
         }
@@ -575,8 +577,8 @@ class AnalyticsReport
             ],
             'returnedLate' => [
                 'count' => $lateCount,
-                'of' => $returnedCount,
-                'percent' => $returnedCount > 0 ? (int) round(($lateCount / $returnedCount) * 100) : null,
+                'of' => $returnedWithDue,
+                'percent' => $returnedWithDue > 0 ? (int) round(($lateCount / $returnedWithDue) * 100) : null,
             ],
             'currentlyOverdue' => $this->currentlyOverdueLoans(),
         ];

@@ -406,7 +406,7 @@
                 {{ loans.returnedLate.percent === null ? '—' : `${loans.returnedLate.percent}%` }}
               </div>
               <div class="text-caption text-medium-emphasis">
-                {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned in this range
+                {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned with a due date in this range
               </div>
             </div>
           </div>
@@ -757,7 +757,7 @@ const finding = computed(() => {
         : `No equipment was borrowed in this range.`,
       detail: [
         unit && `${selectedVehicleTrips.value[unit.index].label} made ${pct(unit.value, tripTotal.value)}% of vehicle trips.`,
-        late.of > 0 && `${late.count} of ${late.of} returned loans came back after the due date.`,
+        late.of > 0 && `${late.count} of ${late.of} returned loans with a due date came back after it.`,
       ].filter(Boolean).join(' '),
     }
   }
@@ -823,7 +823,7 @@ const kpis = computed(() => {
     const late = loans.value.returnedLate
     return [
       { title: 'Equipment loans', value: equipmentUtilization.value.total.toLocaleString(), note: `Across ${items.length - unused.length} of ${items.length} catalogue items` },
-      { title: 'Returned late', value: late.percent === null ? '—' : `${late.percent}%`, note: `${late.count} of ${late.of} returned in this range` },
+      { title: 'Returned late', value: late.percent === null ? '—' : `${late.percent}%`, note: `${late.count} of ${late.of} returned with a due date in this range` },
       { title: 'Items never borrowed', value: `${unused.length} of ${items.length}`, note: unused.length > 0 ? unused.slice(0, 3).join(', ') + (unused.length > 3 ? ` and ${unused.length - 3} more` : '') : 'Every item was borrowed' },
       { title: 'Vehicle trips', value: tripTotal.value.toLocaleString(), note: `Across ${count(selectedVehicleTrips.value.filter(v => v.trips > 0).length, 'vehicle')}` },
     ]
