@@ -112,8 +112,6 @@ class AnalyticsReport
                 'barangay_id' => $this->barangayId,
                 'service_id' => $this->serviceId,
             ],
-            // From the shared helper, so this page and the dashboard cannot
-            // report different totals for the same window.
             'totals' => $this->totals(),
             'demand' => $this->demandByWeekdayHour(),
             'volume' => $this->volumeByMonth(),
@@ -130,13 +128,19 @@ class AnalyticsReport
 
     private function totals(): array
     {
-        $counts = BarangayRequestCounts::forWindow($this->from, $this->to);
+        $requests = (int) $this->scoped()->count();
+
+        // A walk-in is a request with no barangay, so a barangay filter leaves none.
+        $walkIn = (int) $this->scoped()->whereNull('tbl_service_request.barangay_id')->count();
+
+        // Loans carry no service, so a service filter leaves none.
+        $loans = $this->serviceId ? 0 : (int) $this->borrowingsScoped()->count();
 
         return [
-            'combined' => $counts['total'],
-            'walkIn' => $counts['walkIn'],
-            'barangayLinked' => $counts['total'] - $counts['walkIn'],
-            'serviceRequests' => (int) $this->scoped()->count(),
+            'combined' => $requests + $loans,
+            'walkIn' => $walkIn,
+            'barangayLinked' => $requests + $loans - $walkIn,
+            'serviceRequests' => $requests,
         ];
     }
 
